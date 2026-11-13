@@ -96,6 +96,7 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
       "resettable": [
         "dispatcher",
       ],
+      "retentionMs": 604800000,
     },
     "id": "im-session-commands",
   },

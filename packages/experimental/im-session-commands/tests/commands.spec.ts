@@ -3,10 +3,14 @@
  * `/status`, `/help`, dsh command passthrough, permissions, locale and the redelivery contract of the core waterfall.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { h } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-im/src/api.ts'
-import { ImChatKey } from '@deepseek-ai/dsh-im/src/api.ts'
+import type { ImMessageEvent, ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-im/src/api.ts'
+import { ImChatKey, ImMessageKey, ImSourceId } from '@deepseek-ai/dsh-im/src/api.ts'
 import { BY } from '../src/commands.ts'
+import { Config } from '../src/config.ts'
+import * as sessionCommandsPlugin from '../src/index.ts'
 import { COMPOSITION, delivery } from '../../im/tests/support/sessions-harness.ts'
 import {
   bootCommands, cleanAll, inbound, CHAT, THREAD, type CommandsHarness,
@@ -171,6 +175,43 @@ describe('/stop', () => {
     await agent.whenIdle()
     expect(text(harness)).toBe('已停止 1 个会话。')
     expect(harness.outcome(message.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+    keep()
+  })
+
+  it('replays the original /stop reply and outcome when store.settle fails after stopping the session', async () => {
+    const harness = await bootCommands()
+    const shared = await ensureShared(harness)
+    const keep = harness.base.model.gate()
+    const agent = await running(harness, shared)
+
+    const settle = harness.store.settle.bind(harness.store)
+    let failOnce = true
+    vi.spyOn(harness.store, 'settle').mockImplementation(async (key, outcome) => {
+      if (failOnce) {
+        failOnce = false
+        throw new Error('settle blip')
+      }
+      return settle(key, outcome)
+    })
+
+    const stopMsg = inbound('/stop')
+    await harness.receive(stopMsg)
+    await agent.whenIdle()
+    expect(harness.outcome(stopMsg.id)).toBeUndefined()
+    expect(harness.replies).toHaveLength(1)
+    expect(text(harness)).toBe('已停止 1 个会话。')
+
+    // The session is now idle; pumping the pending `/stop` replays the persisted reply instead of recomputing
+    // `'没有正在运行的会话。'` (which would fail `ImSender` with an `operationId` conflict and wedge the chat).
+    harness.intake.pump()
+    await harness.intake.idle()
+    expect(harness.replies).toHaveLength(1)
+    expect(harness.outcome(stopMsg.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+
+    // Subsequent messages in the chat drain normally behind the settled command.
+    const followUp = inbound('/status')
+    await harness.receive(followUp)
+    expect(harness.outcome(followUp.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
     keep()
   })
 })
@@ -481,5 +522,166 @@ describe('lifecycle', () => {
     expect(signals[0]!.aborted).toBe(false)
     await harness.close()
     expect(signals[0]!.aborted).toBe(true)
+  })
+
+  it('replays persisted command receipts across restarts and prunes receipts older than retentionMs', async () => {
+    const first = await bootCommands({ commands: { retentionMs: 60_000 } })
+    const shared = await ensureShared(first)
+    const expiredHelp = inbound('/help')
+    await first.receive(expiredHelp)
+
+    const keep = first.base.model.gate()
+    const agent = await running(first, shared)
+    const settle = first.store.settle.bind(first.store)
+    let failOnce = true
+    vi.spyOn(first.store, 'settle').mockImplementation(async (key, outcome) => {
+      if (failOnce) {
+        failOnce = false
+        throw new Error('crash before settle')
+      }
+      return settle(key, outcome)
+    })
+
+    const pendingStop = inbound('/stop')
+    await first.receive(pendingStop)
+    await agent.whenIdle()
+    keep()
+    expect(first.outcome(pendingStop.id)).toBeUndefined()
+
+    const commandsTable = first.base.pool.media.get('im_session_commands')?.tables.get('commands')
+    const expiredKey = ImMessageKey('fake:bot', expiredHelp.id)
+    const stopKey = ImMessageKey('fake:bot', pendingStop.id)
+    expect(commandsTable?.has(expiredKey)).toBe(true)
+    expect(commandsTable?.has(stopKey)).toBe(true)
+    commandsTable?.set(expiredKey, {
+      ...(commandsTable.get(expiredKey) as Record<string, unknown>),
+      createdAt: 0,
+    })
+    await first.close()
+
+    const second = await bootCommands({
+      pool: first.base.pool,
+      root: first.base.root,
+      commands: { retentionMs: 60_000 },
+    })
+    second.intake.pump()
+    await second.intake.idle()
+
+    const reopenedTable = second.base.pool.media.get('im_session_commands')?.tables.get('commands')
+    expect(reopenedTable?.has(expiredKey)).toBe(false)
+    expect(reopenedTable?.has(stopKey)).toBe(true)
+    expect(second.outcome(pendingStop.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+    expect(text(second)).toBe('已停止 1 个会话。')
+  })
+
+  it('serializes concurrent dispatches of one message key and recovers after a reply failure', async () => {
+    const harness = await bootCommands()
+    await ensureShared(harness)
+    const seenReplies: unknown[] = []
+    let releaseFirstReply!: () => void
+    const firstReplyGate = new Promise<void>((resolve) => { releaseFirstReply = resolve })
+    let calls = 0
+
+    const makeEvent = (
+      key: string,
+      commandName: string,
+      replyImpl: (content: unknown) => Promise<{ status: 'confirmed' }>,
+    ): ImMessageEvent => ({
+      message: {
+        key: ImMessageKey('fake:bot', key),
+        seq: 1,
+        chat: { key: CHAT_KEY, bot: 'fake:bot', ref: CHAT, source: ImSourceId('team') },
+        sender: { id: 'user-1', name: 'User', self: false },
+        content: h('message', h.text(`/${commandName}`)),
+        text: `/${commandName}`,
+        mentions: { self: true, all: false, users: [] },
+        addressed: true,
+        command: { name: commandName, rawInput: '' },
+        time: 1000,
+        via: 'platform',
+      },
+      source: { id: 'team', bot: 'fake:bot', writable: true, store: 'all' },
+      bot: harness.bot,
+      reply: replyImpl,
+      send: replyImpl,
+      deliver: async () => {},
+    })
+
+    const concurrentEvent = makeEvent('m-concurrent', 'status', async (content) => {
+      calls++
+      if (calls === 1) await firstReplyGate
+      seenReplies.push(content)
+      return { status: 'confirmed' }
+    })
+    const firstRun = harness.ctx.waterfall('im/message', concurrentEvent, async () => ({ kind: 'ignored' }))
+    const secondRun = harness.ctx.waterfall('im/message', concurrentEvent, async () => ({ kind: 'ignored' }))
+    await vi.waitFor(() => { expect(calls).toBe(1) })
+    releaseFirstReply()
+    const [out1, out2] = await Promise.all([firstRun, secondRun])
+    expect(out1.kind).toBe('handled')
+    expect(out2.kind).toBe('handled')
+    expect(seenReplies).toHaveLength(2)
+    expect(seenReplies[0]).toEqual(seenReplies[1])
+
+    // A transient reply rejection releases the message chain cleanly so the next attempt replays the saved receipt.
+    let failReply = true
+    const flakyEvent = makeEvent('m-flaky-reply', 'status', async () => {
+      if (failReply) {
+        failReply = false
+        throw new Error('network down')
+      }
+      return { status: 'confirmed' }
+    })
+    await expect(harness.ctx.waterfall('im/message', flakyEvent, async () => ({ kind: 'ignored' })))
+      .rejects.toThrow(/network down/)
+    await expect(harness.ctx.waterfall('im/message', flakyEvent, async () => ({ kind: 'ignored' })))
+      .resolves.toMatchObject({ kind: 'handled', by: BY })
+  })
+
+  it('propagates receipt-store open failures to both plugin startup and waiting dispatches', async () => {
+    const base = await bootCommands()
+    const ctx = new Context()
+    let enteredOpen!: () => void
+    const openEntered = new Promise<void>((resolve) => { enteredOpen = resolve })
+    let rejectOpen!: (error: Error) => void
+    const openGate = new Promise<never>((_resolve, reject) => { rejectOpen = reject })
+    ctx.provide('im', { sessions: { forChat: () => [] } })
+    ctx.provide('commands', { list: () => [] })
+    ctx.provide('agents', {} as Context['agents'])
+    ctx.provide('storageDomain', {
+      open: async () => {
+        enteredOpen()
+        return openGate
+      },
+    })
+
+    const mounting = ctx.plugin(sessionCommandsPlugin, Config({}))
+    await openEntered
+    const earlyEvent: ImMessageEvent = {
+      message: {
+        key: ImMessageKey('fake:bot', 'm-early-fail'),
+        seq: 1,
+        chat: { key: CHAT_KEY, bot: 'fake:bot', ref: CHAT, source: ImSourceId('team') },
+        sender: { id: 'user-1', name: 'User', self: false },
+        content: h('message', h.text('/help')),
+        text: '/help',
+        mentions: { self: true, all: false, users: [] },
+        addressed: true,
+        command: { name: 'help', rawInput: '' },
+        time: 1000,
+        via: 'platform',
+      },
+      source: { id: 'team', bot: 'fake:bot', writable: true, store: 'all' },
+      bot: base.bot,
+      reply: async () => ({ status: 'confirmed' }),
+      send: async () => ({ status: 'confirmed' }),
+      deliver: async () => {},
+    }
+    const earlyDispatch = ctx.waterfall('im/message', earlyEvent, async () => ({ kind: 'ignored' }))
+
+    rejectOpen(new Error('receipt db offline'))
+    await expect(mounting).rejects.toThrow(/receipt db offline/)
+    await expect(earlyDispatch).rejects.toThrow(/receipt db offline/)
+    await ctx.fiber.dispose()
   })
 })

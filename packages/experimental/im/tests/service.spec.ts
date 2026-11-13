@@ -434,6 +434,118 @@ describe('ImService facade', () => {
     expect(nonLoader.service.status().sources).toHaveLength(1)
   })
 
+  it('gates satori/receive while storage domains are opening and rejects frames when startup fails', async () => {
+    const base = await boot({ withoutStart: true, config: { sources: SOURCES } })
+    const ctx = base.ctx
+    await ctx.plugin(Satori)
+    await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    ctx.provide('attachments', { saveImages: async () => [] } as never)
+    const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+
+    const realOpen = ctx.storageDomain.open.bind(ctx.storageDomain)
+    let enteredOpen!: () => void
+    const entered = new Promise<void>((resolve) => { enteredOpen = resolve })
+    let releaseOpen!: () => void
+    const openGate = new Promise<void>((resolve) => { releaseOpen = resolve })
+    const openSpy = vi.spyOn(ctx.storageDomain, 'open').mockImplementationOnce(async (spec) => {
+      enteredOpen()
+      await openGate
+      return realOpen(spec)
+    })
+
+    const mounting = ctx.plugin(ImService, Config({ sources: SOURCES }))
+    await entered
+
+    let acked = false
+    const receiving = deliver(bot, inbound('m-during-open')).then(() => { acked = true })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(acked).toBe(false)
+
+    releaseOpen()
+    await Promise.all([mounting, receiving])
+    expect(acked).toBe(true)
+    expect(ctx.im.store.get(ImMessageKey('fake:bot', 'm-during-open'))?.text).toBe('hello m-during-open')
+    openSpy.mockRestore()
+    await base.close()
+
+    // When domain startup fails, any frame waiting on the receive gate rejects rather than acknowledging unstored input.
+    const failedBase = await boot({ withoutStart: true, config: { sources: SOURCES } })
+    const failedCtx = failedBase.ctx
+    await failedCtx.plugin(Satori)
+    await failedCtx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    failedCtx.provide('attachments', { saveImages: async () => [] } as never)
+    const failedBot = failedCtx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+    let enteredFail!: () => void
+    const failEntered = new Promise<void>((resolve) => { enteredFail = resolve })
+    let rejectOpen!: (error: Error) => void
+    const failGate = new Promise<never>((_resolve, reject) => { rejectOpen = reject })
+    vi.spyOn(failedCtx.storageDomain, 'open').mockImplementationOnce(async () => {
+      enteredFail()
+      return failGate
+    })
+
+    const failingMount = failedCtx.plugin(ImService, Config({ sources: SOURCES }))
+    await failEntered
+    const failingReceive = deliver(failedBot, inbound('m-failed-open'))
+    rejectOpen(new Error('disk offline'))
+
+    await expect(failingMount).rejects.toThrow(/disk offline/)
+    await expect(failingReceive).rejects.toMatchObject({
+      errors: [expect.objectContaining({ message: 'disk offline' })],
+    })
+    await failedBase.close()
+  })
+
+  it('cancels pending composition release and suppresses recovery when disposed before the Loader settles', async () => {
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => { settle = resolve })
+    const key = `conv:${CHAT}`
+    const sessionId = sessionIdOf(key, 0)
+    const first = await mount({
+      beforeMount: async (ctx) => {
+        provideByName(ctx, 'loader', { await: () => settled })
+        const domain = await ctx.storageDomain.open(imSessionsDomain)
+        await domain.table('sessions').put(key, {
+          key,
+          owner: 'conversation',
+          sessionId,
+          generation: 0,
+          composition: COMPOSITION,
+          bindings: [{ chat: CHAT, writable: true, home: true }],
+          createdAt: 1000,
+          lastActiveAt: 1000,
+        })
+        await domain.table('deliveries').put(`${sessionId}|evt-teardown`, {
+          session: sessionId,
+          delivery: { id: 'evt-teardown', mode: 'followup', content: [{ type: 'text', text: 'do not run' }] },
+          createdAt: 1000,
+          admitted: false,
+        })
+        await domain.close()
+      },
+    })
+    const disposing = first.base.ctx.fiber.dispose()
+    settle()
+    await disposing
+    await new Promise(resolve => setTimeout(resolve, 15))
+    expect(first.base.model.requests).toEqual([])
+
+    let rejectSettled!: (error: Error) => void
+    const rejected = new Promise<void>((_resolve, reject) => { rejectSettled = reject })
+    const warnings: string[] = []
+    const second = await mount({
+      beforeMount: async (ctx) => {
+        vi.spyOn(ctx.logger, 'warn').mockImplementation((fmt: unknown) => { warnings.push(String(fmt)) })
+        provideByName(ctx, 'loader', { await: () => rejected })
+      },
+    })
+    const disposingSecond = second.base.ctx.fiber.dispose()
+    rejectSettled(new Error('teardown'))
+    await disposingSecond
+    await new Promise(resolve => setTimeout(resolve, 15))
+    expect(warnings.some(msg => msg.includes('although the composition did not settle'))).toBe(false)
+  })
+
   it('unmounts its service when the plugin is disposed', async () => {
     const { base } = await mount()
     expect(base.ctx.im).toBeDefined()

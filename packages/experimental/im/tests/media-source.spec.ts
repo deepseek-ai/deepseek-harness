@@ -25,7 +25,6 @@ describe('isPublicAddress', () => {
       '1.1.1.1',
       '2606:4700:4700::1111',
       '64:ff9b::5db8:d822',
-      '64:ff9b:1:ff::5db8:d822',
       // Teredo `2001::/32` carrying 93.184.216.34 (`5db8:d822` XOR `ffff:ffff` = `a247:27dd`).
       '2001:0:4136:e378:8000:63bf:a247:27dd',
       '2002:5db8:d822::1',
@@ -52,11 +51,14 @@ describe('isPublicAddress', () => {
       'fe80::1',
       '::ffff:127.0.0.1',
       '::ffff:10.0.0.1',
-      // IPv6 forms that route to an embedded IPv4 address, judged by that address.
+      // IPv6 forms that route to an embedded IPv4 address, plus the RFC 8215 local-use NAT64 `64:ff9b:1::/48` range
+      // (which allows `/48`–`/96` translation prefixes such as `/64`-encoded 127.0.0.1 `64:ff9b:1:0:7f:0:100:0`).
       '64:ff9b::a9fe:a9fe',
       '64:ff9b::127.0.0.1',
+      '64:ff9b:1:ff::5db8:d822',
       '64:ff9b:1:ff::a9fe:a9fe',
       '64:ff9b:1::7f00:1',
+      '64:ff9b:1:0:7f:0:100:0',
       // Teredo `2001::/32` carrying 10.0.2.3 (`0a00:0203` XOR `ffff:ffff` = `f5ff:fdfc`) and 127.0.0.1 (`80ff:fffe`).
       '2001:0:4136:e378:8000:63bf:f5ff:fdfc',
       '2001::ffff:ffff:80ff:fffe',

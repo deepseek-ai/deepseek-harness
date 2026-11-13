@@ -195,7 +195,7 @@ export class ImSender {
       await this.reserve()
       // The platform stream is opened only once the receipt is reserved: a refusal (a conflict, a full store) must
       // not leave a platform stream nobody closes.
-      const stream = this.botOf(chat).stream(target, options)
+      const stream = this.botOf(chat).stream(target, { ...options, idempotencyKey: options.idempotencyKey ?? id })
       const pending: StoredReceipt = {
         chat, ...options.session === undefined ? {} : { session: options.session },
         digest: fingerprint(undefined, options), status: 'pending', createdAt: Date.now(),
@@ -323,7 +323,7 @@ export class ImSender {
     const deadline = this.deadline(options.signal)
     try {
       if (deadline.signal.aborted) return { status: 'failed', error: CANCELLED }
-      const key = options.idempotencyKey ?? (options.operationId === undefined ? undefined : options.operationId.slice(0, 32))
+      const key = options.idempotencyKey ?? options.operationId
       const result = await bot.send(target, content, {
         ...options, ...key === undefined ? {} : { idempotencyKey: key }, signal: deadline.signal,
       })

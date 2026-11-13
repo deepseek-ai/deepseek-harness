@@ -134,9 +134,12 @@ describe('IM bundle rows', () => {
     ])
   })
 
-  it('inserts Host rows only, without an application entry or profile override', () => {
+  it('inserts Host rows only and gates both platform adapters on the IM host', () => {
     expect((patches() as PatchList[]).every(patch => patch.id === undefined && patch.insert !== undefined)).toBe(true)
-    expect(rows().every(row => row.inject === undefined)).toBe(true)
+    expect(rows().filter(row => row.inject !== undefined).map(row => [row.id, row.inject])).toEqual([
+      ['im-feishu', ['im']],
+      ['im-qq', ['im']],
+    ])
   })
 
   it('ships the Lark application with card streaming and the QQ adapter switched off', () => {
@@ -297,6 +300,8 @@ describe('IM bundle Loader composition', () => {
     const bot = booted.ctx.satori.bots[0]
     expect(bot).toBeInstanceOf(FakeAdapter)
     expect(bot?.id).toBe('fake:bot')
+    // `im-feishu` declares `inject: [im]` in `cordis.patch.yml`, so the adapter activates only after `im` provides `ctx.im`.
+    expect(booted.applied.indexOf('im')).toBeLessThan(booted.applied.indexOf('im-feishu'))
   })
 
   it('holds pending commands and persisted deliveries until the real bundle rows and IM tools have settled', async () => {
@@ -400,14 +405,39 @@ describe('IM bundle Loader composition', () => {
     })
     await sessionsDomain.close()
 
+    const realOpen = facility.open.bind(facility)
+    vi.spyOn(facility, 'open').mockImplementation(async (spec) => {
+      if (spec.name === 'im_messages') await new Promise(resolve => setTimeout(resolve, 15))
+      return realOpen(spec)
+    })
+    let imReadyAtAdapterConnect = false
+
     const modules = new Map<string, unknown>([
       ['@deepseek-ai/cordis-plugin-http', Http],
       ['@deepseek-ai/cordis-plugin-im-core', Satori],
       ['@deepseek-ai/cordis-plugin-im-markdown', Markdown],
       ['fixture:fake-adapter', {
         name: 'im-feishu',
-        apply: (child: Context) => {
-          child.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'cli_fake' })
+        inject: ['satori'],
+        apply: async (child: Context) => {
+          imReadyAtAdapterConnect = child.get('im') !== undefined
+          await child.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'cli_fake' })
+          const connectedBot = child.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+          await connectedBot.receive(connectedBot.session({
+            type: 'message',
+            id: 'evt-connect',
+            timestamp: 1001,
+            message: {
+              id: 'm-on-connect',
+              chat: { id: 'chat-cmd', type: 'group' },
+              sender: { id: 'user-1', name: 'User' },
+              content: h('message', h.text('/status')),
+              mentions: { self: true, all: false, users: [] },
+              time: 1001,
+              referrer: undefined,
+              raw: null,
+            },
+          }))
         },
       }],
       ['@deepseek-ai/cordis-plugin-im-adapter-qq', { name: 'im-qq', apply: () => {} }],
@@ -451,6 +481,10 @@ describe('IM bundle Loader composition', () => {
       by: 'session-commands',
       sessions: [dispatcherGen0],
     })
+    expect(imReadyAtAdapterConnect).toBe(true)
+    await vi.waitFor(() => {
+      expect(ctx.im.store.state(ImMessageKey('fake:bot', 'm-on-connect'))?.outcome?.kind).toBe('handled')
+    })
     expect(model.requests).toHaveLength(1)
     const toolNames = (model.requests[0]?.tools ?? []).map(tool => tool.name)
     expect(toolNames).toContain('im_send')
@@ -464,6 +498,11 @@ describe('IM bundle command routing', () => {
     context = ctx
     const replies: unknown[] = []
     const reached: string[] = []
+    await ctx.plugin(Storage)
+    ctx.storage.backend.register('memory', new MemoryStorageBackend(new MemoryMediaPool()))
+    const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
+    ctx.storage.mount('domain', facility)
+    ctx.provide('storageDomain', facility)
     installStandIn(ctx, 'im', { sessions: { forChat: () => [], stop: async () => true } })
     installStandIn(ctx, 'commands', { list: () => [] })
     ctx.provide('agents', {} as Context['agents'])
@@ -476,6 +515,7 @@ describe('IM bundle command routing', () => {
     await ctx.plugin(SessionCommands, CommandsConfig({ allow: 'all', admins: [], passthrough: ['compact'], resettable: ['dispatcher'], locale: 'zh' }))
     const event = {
       message: {
+        key: ImMessageKey('fake:bot', 'm-help'),
         command: { name: 'help', rawInput: '' },
         addressed: true,
         chat: { key: 'fake:bot|chat' },

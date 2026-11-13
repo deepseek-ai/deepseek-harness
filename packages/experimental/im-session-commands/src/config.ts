@@ -2,10 +2,12 @@
 import z from '@deepseek-ai/schemastery'
 import type { SessionCommandsLocale } from './locale.ts'
 
+const DAY_MS = 86_400_000
+
 /** Who may run a privileged command (`/stop`, `/clear`, `/new`, passthrough). */
 export type SessionCommandAllow = 'all' | 'admins'
 
-/** Operator configuration of the slash commands: who may act, which names pass through, and the reply language. */
+/** Operator configuration of the slash commands: who may act, which names pass through, reply language, and receipt retention. */
 export interface SessionCommandsConfig {
   /** `all` lets every sender act; `admins` restricts privileged commands to {@link admins}. */
   allow: SessionCommandAllow
@@ -20,6 +22,8 @@ export interface SessionCommandsConfig {
   resettable: string[]
   /** Reply language; `zh` by default. */
   locale: SessionCommandsLocale
+  /** How long completed command receipts are kept for idempotent redelivery replay (ms). */
+  retentionMs: number
 }
 
 /** Validated operator configuration. */
@@ -29,6 +33,7 @@ export const Config = z.object({
   passthrough: z.array(z.string()).default(['compact']),
   resettable: z.array(z.string()).default(['dispatcher']),
   locale: z.union(['zh', 'en']).default('zh'),
+  retentionMs: z.natural().min(1).default(7 * DAY_MS),
 })
 
 /** The resolved configuration shape the validated `Config` schema produces. */

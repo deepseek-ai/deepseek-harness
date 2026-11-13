@@ -37,8 +37,12 @@
     # mode. `callbacks` accepts `card.action.trigger` so card buttons work.
     # Leaving `allowAtAll` unset already declares `@所有人` mentions; only an
     # explicit `false` renders them as text, for a tenant that forbids @all.
+    # `inject: [im]` holds the platform connection until durable intake has
+    # opened its stores and registered `satori/receive`.
     - id: im-feishu
       name: '@deepseek-ai/cordis-plugin-im-adapter-lark'
+      inject:
+        - im
       isolate:
         http: im
       config:
@@ -53,6 +57,8 @@
     - id: im-qq
       name: '@deepseek-ai/cordis-plugin-im-adapter-qq'
       disabled: true
+      inject:
+        - im
       isolate:
         http: im
       config:

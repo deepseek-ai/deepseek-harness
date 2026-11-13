@@ -398,6 +398,19 @@ describe('ImSender.send', () => {
     expect(stub.sends).toHaveLength(0)
   })
 
+  it('forwards full operationIds as distinct idempotency keys even when they share a long prefix', async () => {
+    const { sender, stub } = await boot()
+    const opFirst = 'session-commands:reply:lark:cli_example|om_first'
+    const opSecond = 'session-commands:reply:lark:cli_example|om_second'
+    expect(opFirst.slice(0, 32)).toBe(opSecond.slice(0, 32))
+
+    await sender.send(STUB_CHAT, h.text('stopped 1'), { operationId: opFirst })
+    await sender.send(STUB_CHAT, h.text('nothing running'), { operationId: opSecond })
+    await sender.send(STUB_CHAT, h.text('explicit'), { operationId: 'op-explicit', idempotencyKey: 'caller-key' })
+
+    expect(stub.sends.map(call => call.options.idempotencyKey)).toEqual([opFirst, opSecond, 'caller-key'])
+  })
+
   it('refuses a chat that was never admitted', async () => {
     const { sender } = await boot()
     await expect(sender.send(ImChatKey('fake:bot', 'elsewhere'), h.text('hello')))
@@ -526,13 +539,21 @@ describe('ImSender.stream', () => {
   })
 
   it('records the outcome of a streamed publication and refuses a replayed operation id', async () => {
-    const { sender, pool } = await boot()
-    const stream = await sender.stream(CHAT, { operationId: 'op-stream' })
-    expect(receiptsOf(pool).get('op-stream')?.status).toBe('pending')
+    const { bot, sender, pool } = await boot()
+    const streamSpy = vi.spyOn(bot, 'stream')
+    const opStream = 'stream:reply:lark:cli_example|om_first'
+    const stream = await sender.stream(CHAT, { operationId: opStream })
+    expect(streamSpy.mock.calls[0]?.[1]?.idempotencyKey).toBe(opStream)
+    expect(receiptsOf(pool).get(opStream)?.status).toBe('pending')
     await stream.close(h.text('final'))
-    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-stream')?.status).toBe('confirmed') })
-    await expect(sender.stream(CHAT, { operationId: 'op-stream' }))
+    await vi.waitFor(() => { expect(receiptsOf(pool).get(opStream)?.status).toBe('confirmed') })
+    await expect(sender.stream(CHAT, { operationId: opStream }))
       .rejects.toThrow(/already opened a stream/)
+
+    const explicit = await sender.stream(CHAT, { operationId: 'op-stream-explicit', idempotencyKey: 'custom-stream-key' })
+    expect(streamSpy.mock.calls[1]?.[1]?.idempotencyKey).toBe('custom-stream-key')
+    await explicit.close(h.text('done'))
+    streamSpy.mockRestore()
   })
 
   it('records an aborted stream as uncertain', async () => {

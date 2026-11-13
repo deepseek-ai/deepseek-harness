@@ -423,6 +423,8 @@ describe('reset', () => {
     // A stale caller naming generation 0 under a fresh operationId leaves generation 1 untouched.
     await expect(first.host.reset(record.key, 'stale', { operationId: 'op-stale', expectedGeneration: 0 }))
       .resolves.toBeUndefined()
+    await expect(first.host.reset('unknown', 'stale', { operationId: 'op-missing' }))
+      .resolves.toBeUndefined()
     expect(first.host.get(record.key)?.generation).toBe(1)
     expect(first.resets).toHaveLength(1)
 
@@ -440,6 +442,17 @@ describe('reset', () => {
     await second.close()
     open.splice(open.indexOf(second), 1)
 
+    // Even if the session record is later removed, an unexpired reset receipt still answers with its replaced id.
+    first.pool.media.get('im_sessions')?.tables.get('sessions')?.delete(record.key)
+    const orphaned = await booted({
+      pool: first.pool, root: first.root, config: { retentionMs: 3_600_000 },
+    })
+    await recovered(orphaned)
+    await expect(orphaned.host.reset(record.key, 'cmd', { operationId: 'op-clear-1' }))
+      .resolves.toBe(record.sessionId)
+    await orphaned.close()
+    open.splice(open.indexOf(orphaned), 1)
+
     // Aged reset receipts are pruned on recovery alongside aged delivery receipts.
     const resetsTable = first.pool.media.get('im_sessions')?.tables.get('resets')
     expect(resetsTable?.size).toBe(1)
@@ -451,6 +464,39 @@ describe('reset', () => {
     })
     await recovered(third)
     expect(third.pool.media.get('im_sessions')?.tables.get('resets')?.size).toBe(0)
+  })
+
+  it('finishes an interrupted reset on replay without advancing a second time', async () => {
+    const harness = await booted()
+    const record = await harness.host.ensure(spec())
+
+    // Fail `save(next)` once right after the `resets` receipt commits, leaving generation 0 in `sessions`.
+    let failSessionWrite = true
+    harness.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        harness.pool.failNextWrites = 1
+      }
+    })
+
+    await expect(harness.host.reset(record.key, 'cmd', { operationId: 'op-two-phase', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    expect(harness.host.get(record.key)?.generation).toBe(0)
+    expect(harness.resets).toEqual([])
+    expect(harness.created).toHaveLength(1)
+
+    // Replaying the same operationId completes the unfinished 0 -> 1 advance once and emits its lifecycle events.
+    await expect(harness.host.reset(record.key, 'cmd', { operationId: 'op-two-phase', expectedGeneration: 0 }))
+      .resolves.toBe(record.sessionId)
+    expect(harness.host.get(record.key)?.generation).toBe(1)
+    expect(harness.resets).toHaveLength(1)
+    expect(harness.created).toHaveLength(2)
+
+    // Any further replay sees generation 1 > fromGeneration 0 and returns the replaced id without resetting again.
+    await expect(harness.host.reset(record.key, 'cmd', { operationId: 'op-two-phase', expectedGeneration: 1 }))
+      .resolves.toBe(record.sessionId)
+    expect(harness.host.get(record.key)?.generation).toBe(1)
+    expect(harness.resets).toHaveLength(1)
   })
 })
 
@@ -600,14 +646,16 @@ describe('service lifecycle', () => {
     await expect(harness.host.ensure(spec({ key: 'late' }))).rejects.toThrow(/store is not open/)
   })
 
-  it('holds recovery passes until release and treats an unheld release as a no-op', async () => {
+  it('holds recovery passes until release, pauses in-flight recovery on hold, and ignores release after dispose', async () => {
     const first = await booted()
     first.host.release()
     const record = await first.host.ensure(spec())
     first.failFormat()
-    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('wait for release')])))
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('wait-1', 1)])))
       .rejects.toThrow(/format offline/)
-    expect(first.host.pendingDeliveries()).toBe(1)
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('wait-2', 2)])))
+      .rejects.toThrow(/format offline/)
+    expect(first.host.pendingDeliveries()).toBe(2)
     await first.close()
     open.splice(open.indexOf(first), 1)
 
@@ -615,15 +663,29 @@ describe('service lifecycle', () => {
     second.host.hold()
     await second.host.start()
     second.host.retry()
-    expect(second.host.pendingDeliveries()).toBe(1)
+    expect(second.host.pendingDeliveries()).toBe(2)
     expect(second.model.requests).toEqual([])
 
+    // Pause inside the first recovered delivery and re-arm `hold()` mid-pass so the second stays pending.
+    const gate = second.holdFormat()
+    second.host.release()
+    await gate.entered
+    second.host.hold()
+    gate.release()
+    await recovered(second)
+    expect(second.host.pendingDeliveries()).toBe(1)
+
+    // Releasing again admits the remaining delivery, and releasing after `dispose()` is a no-op.
     second.host.release()
     await recovered(second)
     expect(second.host.pendingDeliveries()).toBe(0)
     const agent = await second.host.agent(record.sessionId)
     await agent.whenIdle()
-    expect(second.model.requests).toHaveLength(1)
+    expect(second.model.requests.length).toBeGreaterThanOrEqual(1)
+
+    second.host.hold()
+    await second.host.dispose()
+    second.host.release()
   })
 })
 

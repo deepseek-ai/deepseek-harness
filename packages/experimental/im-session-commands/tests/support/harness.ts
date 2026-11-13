@@ -14,6 +14,7 @@ import {
   type ImSourceConfig,
 } from '@deepseek-ai/dsh-im/src/api.ts'
 import { Config as ImConfigSchema } from '@deepseek-ai/dsh-im/src/config.ts'
+import { ImError } from '@deepseek-ai/dsh-im/src/error.ts'
 import { ImIntake } from '@deepseek-ai/dsh-im/src/intake.ts'
 import { ImStore } from '@deepseek-ai/dsh-im/src/store.ts'
 import {
@@ -68,7 +69,7 @@ export async function bootCommands(
   const store = new ImStore(ctx, imConfig)
   await store.start()
   const replies: Reply[] = []
-  const seenReplyOps = new Set<string>()
+  const seenReplyOps = new Map<string, string>()
   const intake = new ImIntake(ctx, imConfig, store, {
     event: (message, source) => event(bot, message, source, replies, seenReplyOps),
   })
@@ -95,13 +96,22 @@ function event(
   message: ImMessage,
   source: ImSourceConfig,
   replies: Reply[],
-  seenReplyOps: Set<string>,
+  seenReplyOps: Map<string, string>,
 ): ImMessageEvent {
   const reply = (content: Fragment, options?: unknown): Promise<ImSendResult> => {
     const operationId = (options as { operationId?: string } | undefined)?.operationId
     if (operationId !== undefined) {
-      if (seenReplyOps.has(operationId)) return Promise.resolve({ status: 'confirmed' } as ImSendResult)
-      seenReplyOps.add(operationId)
+      const digest = JSON.stringify(content)
+      const previous = seenReplyOps.get(operationId)
+      if (previous !== undefined) {
+        if (previous !== digest) {
+          return Promise.reject(
+            new ImError('conflict', `IM operation ${operationId} was already used for a different publication.`),
+          )
+        }
+        return Promise.resolve({ status: 'confirmed' } as ImSendResult)
+      }
+      seenReplyOps.set(operationId, digest)
     }
     replies.push({ content, options })
     return Promise.resolve({ status: 'confirmed' } as ImSendResult)

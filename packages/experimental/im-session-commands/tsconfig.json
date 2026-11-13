@@ -27,6 +27,9 @@
       "path": "../../interaction/commands"
     },
     {
+      "path": "../../storage/storage-domain"
+    },
+    {
       "path": "../im"
     }
   ]

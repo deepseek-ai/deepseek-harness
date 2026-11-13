@@ -135,11 +135,27 @@ export class ImService extends Service implements ImApi {
     // registered. Both holds are armed before `sessions.start()` opens the store.
     this.intake.hold()
     this.sessions.hold()
+    // Arm the receive gate before awaiting storage open: an adapter that delivers a frame while the stores are still
+    // opening waits on `ready` and withholds its platform ACK until the message is durably stored (or rejects when
+    // startup fails).
+    let openReceive!: () => void
+    let failReceive!: (error: unknown) => void
+    const receiveReady = new Promise<void>((resolve, reject) => {
+      openReceive = resolve
+      failReceive = reject
+    })
+    receiveReady.catch(() => {})
+    const offReceive = ctx.on('satori/receive', async (session) => {
+      await receiveReady
+      await this.intake.receive(session)
+    })
     try {
       await this.store.start()
       await this.sessions.start()
       await this.sender.start()
     } catch (error) {
+      offReceive()
+      failReceive(error)
       // A load that fails halfway releases what it already opened, newest first: the domain facility keeps a handle
       // until its owner closes it, so an unfinished load would make every later reload fail with `already-open
       // im_messages`. The hosted agents are released first because `sessions.start()` opens them, and a secondary
@@ -159,20 +175,7 @@ export class ImService extends Service implements ImApi {
       }
       throw error
     }
-    let releaseTimer: ReturnType<typeof setTimeout> | undefined
-    let warnTimer: ReturnType<typeof setTimeout> | undefined
-    yield async () => {
-      clearTimeout(releaseTimer)
-      clearTimeout(warnTimer)
-      clearInterval(this.timer)
-      await this.intake.dispose()
-      await this.outputs.dispose()
-      await this.agentHost.disposeAll()
-      await this.sender.dispose()
-      await this.sessions.dispose()
-      await this.store.dispose()
-    }
-    ctx.on('satori/receive', session => this.intake.receive(session))
+    openReceive()
     ctx.on('send', (bot, result) => {
       void this.intake.outbound(bot, result).catch((error: unknown) => {
         ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
@@ -190,10 +193,27 @@ export class ImService extends Service implements ImApi {
         })
       })
     }
+    let closing = false
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined
+    let warnTimer: ReturnType<typeof setTimeout> | undefined
+    yield async () => {
+      closing = true
+      this.sessions.hold()
+      clearTimeout(releaseTimer)
+      clearTimeout(warnTimer)
+      clearInterval(this.timer)
+      await this.intake.dispose()
+      await this.outputs.dispose()
+      await this.agentHost.disposeAll()
+      await this.sender.dispose()
+      await this.sessions.dispose()
+      await this.store.dispose()
+    }
     // Schedule release on a macrotask once the composition settles so nested `ctx.inject` registrations (such as
     // `im_read_file` inside `applyTools`) finish before any recovered turn or inbound dispatch runs.
     const release = (): void => {
       clearTimeout(warnTimer)
+      if (closing) return
       releaseTimer = setTimeout(() => {
         this.intake.release()
         this.sessions.release()
@@ -214,6 +234,7 @@ export class ImService extends Service implements ImApi {
       void loader.await().then(
         () => { release() },
         (error: unknown) => {
+          if (closing) return
           ctx.logger.warn('IM dispatch starts although the composition did not settle: %s', String(error))
           release()
         },

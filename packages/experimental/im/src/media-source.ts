@@ -77,16 +77,16 @@ for (const [network, prefix] of [
 }
 
 for (const [network, prefix] of [
-  ['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
+  ['::', 128], ['::1', 128], ['64:ff9b:1::', 48], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
 ] as const) {
   NON_PUBLIC.addSubnet(network, prefix, 'ipv6')
 }
 
 /**
  * Whether an address is outside every range {@link RefusedSourceError} protects.
- * @param address - an IPv4 or IPv6 address. An IPv4-mapped address is judged by its IPv4 part, and so are the IPv6
- *   forms that route to an embedded IPv4 address (NAT64 `64:ff9b::/96` and `64:ff9b:1::/48`, Teredo `2001::/32`, 6to4
- *   `2002::/16`, IPv4-compatible `::/96`).
+ * @param address - an IPv4 or IPv6 address. Local-use ranges (including RFC 8215 NAT64 `64:ff9b:1::/48`) are refused
+ *   directly; an IPv4-mapped address is judged by its IPv4 part, and so are the IPv6 forms that route to an embedded
+ *   IPv4 address (NAT64 `64:ff9b::/96`, Teredo `2001::/32`, 6to4 `2002::/16`, IPv4-compatible `::/96`).
  * @returns false for a non-public address, and for a value that is not an address at all.
  */
 export function isPublicAddress(address: string): boolean {
@@ -99,9 +99,9 @@ export function isPublicAddress(address: string): boolean {
 }
 
 /**
- * The IPv4 address an IPv6 one routes to, for the forms that carry one: well-known NAT64 `64:ff9b::/96` and RFC 8215
- * local-use NAT64 `64:ff9b:1::/48`, Teredo `2001::/32` (whose client IPv4 in bits 96-127 is bitwise-inverted),
- * IPv4-compatible `::/96` (`::127.0.0.1`), and 6to4 `2002::/16` (bits 16-47).
+ * The IPv4 address an IPv6 one routes to, for the forms that carry one at fixed bit positions: well-known NAT64
+ * `64:ff9b::/96`, Teredo `2001::/32` (whose client IPv4 in bits 96-127 is bitwise-inverted), IPv4-compatible `::/96`
+ * (`::127.0.0.1`), and 6to4 `2002::/16` (bits 16-47).
  * @param address - a valid IPv6 address.
  * @returns the embedded IPv4 address in dotted form, or undefined for an address that carries none.
  */
@@ -112,7 +112,6 @@ function embeddedIPv4(address: string): string | undefined {
   const dotted = (a: number, b: number) => `${a >> 8}.${a & 0xff}.${b >> 8}.${b & 0xff}`
   if (first === 0x2002) return dotted(second, third)
   if (first === 0x2001 && second === 0) return dotted(high ^ 0xffff, low ^ 0xffff)
-  if (first === 0x64 && second === 0xff9b && third === 1) return dotted(high, low)
   const middle = groups.slice(2, 6).every(group => group === 0)
   if (first === 0x64 && second === 0xff9b && middle) return dotted(high, low)
   if (first === 0 && second === 0 && middle) return dotted(high, low)
