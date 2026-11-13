@@ -36,6 +36,7 @@ kind: "package-reference"
     passthrough: [compact]
     resettable: [dispatcher]
     locale: zh
+    retentionMs: 604800000
 ```
 
 | 字段 | 默认值 | 含义 |
@@ -45,6 +46,7 @@ kind: "package-reference"
 | `passthrough` | `['compact']` | 转发给 `ctx.commands` 执行的命令名列表 |
 | `resettable` | `['dispatcher']` | 允许被 `/clear` 与 `/new` 重置的会话 `owner` 名称列表 |
 | `locale` | `'zh'` | 命令回复语言（`'zh'` 或 `'en'`） |
+| `retentionMs` | 7 天 | 已记录命令回执的最短保留时间 |
 
 完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-im-session-commands)。
 
@@ -73,7 +75,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-`SessionCommands` 协调三个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）与 `ctx.agents`（读取活动 agent 的运行状态与收件箱队列）。重置调用传入由 `message.key` 派生的 `operationId` 与当前 `expectedGeneration`，使未决的 `/clear` 或 `/new` 在重新派发时既不会重复推进代次也不会误重置新代次。所有命令回复均通过带消息幂等 `operationId` 的 `event.reply` 发送（引用原消息并在其所属话题线程内回复），并返回 `{ kind: 'handled', by: 'session-commands', sessions }`，由消息存储记录处理结果并忽略平台重投。
+`SessionCommands` 协调四个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）、`ctx.agents`（读取活动 agent 的运行状态与收件箱队列）与 `ctx.storageDomain`（`im_session_commands` 存储域）。执行按 `message.key` 串行化。首次执行某条命令时，`SessionCommands` 先计算应答（重置调用传入由 `message.key` 派生的 `operationId` 与当前 `expectedGeneration`，使未决的 `/clear` 或 `/new` 重跑时既不会重复推进代次也不会误重置后续代次），在调用 `event.reply` 前将回复文本与目标会话列表写入 `im_session_commands`，随后返回 `{ kind: 'handled', by: 'session-commands', sessions }`。若重试或重启在命令已执行后再次进入 `im/message`，插件直接用已存回执调用 `event.reply` 并返回原会话列表，不会在已变更的会话状态上重新求值；已完成回执在超过 `retentionMs` 后过期清理。
 
 目标会话从 `ctx.im.sessions.forChat(chat)` 中选取：若消息位于某个话题线程内，且存在限定在该线程（`binding.thread === message.thread.id`）的会话，则仅以这些线程会话为目标；否则以绑定到该聊天的所有会话为目标。`/clear` 与 `/new` 会进一步筛选出 `binding.home === true` 且 `record.owner` 在 `resettable` 列表中的会话。
 
@@ -81,8 +83,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口；注册前置 `im/message` 监听器，并在插件卸载时中止进行中的透传命令 |
-| [`src/commands.ts`](src/commands.ts) | 权限检查、目标会话筛选、内置命令处理与透传命令转发 |
+| [`src/index.ts`](src/index.ts) | 插件入口；注册前置 `im/message` 监听器、打开 `im_session_commands` 存储域，并在插件卸载时中止进行中的透传命令 |
+| [`src/commands.ts`](src/commands.ts) | 权限检查、目标会话筛选、持久化命令回执、内置命令处理与透传命令转发 |
 | [`src/locale.ts`](src/locale.ts) | `zh` 与 `en` 回复文案表、`{count}` 占位符替换与相对时间格式化 |
 | [`src/config.ts`](src/config.ts) | 配置 schema 与默认值 |
 

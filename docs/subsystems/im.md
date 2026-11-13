@@ -54,12 +54,13 @@ Reads are governed by the deployment rather than by IM: the filesystem sandbox f
 
 `MessageSourceMap.im` records `kind: 'im'` and `form: 'relay'`, so readers can tell external chat input apart from owner input (`kind: 'user'`). It grants no authority. Each hosted delivery has a stable id from which the session host derives the inserted message id.
 
-The IM host persists state in three storage domains alongside the Session logs:
+IM packages persist state in four storage domains alongside the Session logs:
 - `im_messages` ([`state.ts`](../../packages/experimental/im/src/state.ts)): deduplicated platform event digests, stored messages with their dispatch state and outcome, and per-chat metadata and sequence counters.
 - `im_sessions` ([`sessions.ts`](../../packages/experimental/im/src/sessions.ts)): hosted session records (owner, composition, bindings, output renderer, generation), pending delivery intents, and idempotent reset receipts.
 - `im_receipts` ([`send.ts`](../../packages/experimental/im/src/send.ts)): outbound publication receipts keyed by `operationId`.
+- `im_session_commands` ([`commands.ts`](../../packages/experimental/im-session-commands/src/commands.ts)): handled slash-command reply and target-session receipts keyed by message key.
 
-Before marking a delivery intent admitted, the session host checks the target session's log for an existing inbox insertion with the derived message id, preventing duplicate insertions across restarts. Event deduplication records and reset receipts expire after `retentionMs`.
+Before marking a delivery intent admitted, the session host checks the target session's log for an existing inbox insertion with the derived message id, preventing duplicate insertions across restarts. Event deduplication records, reset receipts, and command receipts expire after their configured `retentionMs`.
 
 ## Cordis API
 

@@ -79,7 +79,7 @@ QQ 适配器条目（`im-qq`）默认关闭。如需启用 QQ，请设置环境�
 <details>
 <summary>实现细节——点击展开</summary>
 
-[组合包补丁](cordis.patch.yml) 插入 HTTP（`im-http`）、Satori 核心（`im-core`）、把回答所用的 `<markdown>` 元素渲染成各平台原生标记的插件（`im-markdown`）、飞书适配器（`im-feishu`）、QQ 适配器（`im-qq`，默认禁用）、IM 宿主（`im`）以及斜杠命令（`im-session-commands`）。`im-http` 与各 IM 条目通过 `isolate: { http: im }` 隔离 `http` 服务，避免与 profile 上的其他 `http` 服务冲突。它不声明应用入口，也不覆盖 profile 中的任何条目。由于 `dsh-im` 在全局挂载了 `im_*` 工具，共享会话使用的预设无需声明额外插件条目。
+[组合包补丁](cordis.patch.yml) 插入 HTTP（`im-http`）、Satori 核心（`im-core`）、把回答所用的 `<markdown>` 元素渲染成各平台原生标记的插件（`im-markdown`）、飞书适配器（`im-feishu`）、QQ 适配器（`im-qq`，默认禁用）、IM 宿主（`im`）以及斜杠命令（`im-session-commands`）。`im-http` 与各 IM 条目通过 `isolate: { http: im }` 隔离 `http` 服务，避免与 profile 上的其他 `http` 服务冲突。两个适配器条目均声明 `inject: [im]`，确保在 `ctx.im` 激活前不会建立平台连接或确认事件。它不声明应用入口，也不覆盖 profile 中的任何条目。由于 `dsh-im` 在全局挂载了 `im_*` 工具，共享会话使用的预设无需声明额外插件条目。
 
 </details>
 

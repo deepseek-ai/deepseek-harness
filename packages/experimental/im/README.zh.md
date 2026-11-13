@@ -148,7 +148,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器。入站派发与持久化投递恢复都会等待组装稳定后才放行——在 Loader 下指 `loader.await()` 完成后的宏任务（等待超过 `compositionWarnMs` 时记录告警），手工组装时指下一个宏任务——使监听 `im/message` 的插件与嵌套注入的 `im_*` 工具先完成挂载：其间到达的帧照常入库并确认，放行后与待恢复投递一并处理。
+[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它先注册 `satori/receive` 监听器（使存储打开期间到达的帧等待入库就绪，避免未落盘即返回 ACK），再依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，随后注册 `send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器。入站派发与持久化投递恢复都会等待组装稳定后才放行——在 Loader 下指 `loader.await()` 完成后的宏任务（等待超过 `compositionWarnMs` 时记录告警），手工组装时指下一个宏任务——使监听 `im/message` 的插件与嵌套注入的 `im_*` 工具先完成挂载：其间到达的帧照常入库并确认，放行后与待恢复投递一并处理。
 
 | 模块 | 职责 |
 |---|---|

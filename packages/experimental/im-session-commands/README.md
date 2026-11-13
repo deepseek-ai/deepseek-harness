@@ -36,6 +36,7 @@ Mount `@deepseek-ai/dsh-im-session-commands` alongside `@deepseek-ai/dsh-im`. Be
     passthrough: [compact]
     resettable: [dispatcher]
     locale: zh
+    retentionMs: 604800000
 ```
 
 | Field | Default | Meaning |
@@ -45,6 +46,7 @@ Mount `@deepseek-ai/dsh-im-session-commands` alongside `@deepseek-ai/dsh-im`. Be
 | `passthrough` | `['compact']` | Command names forwarded to `ctx.commands` |
 | `resettable` | `['dispatcher']` | Session `owner` names that `/clear` and `/new` are allowed to reset |
 | `locale` | `'zh'` | Reply language (`'zh'` or `'en'`) |
+| `retentionMs` | 7 days | Minimum age before recorded command receipts expire |
 
 See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-im-session-commands) for the complete schema.
 
@@ -73,7 +75,7 @@ The plugin handles a message only when `message.addressed` is `true` and `messag
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`SessionCommands` coordinates three services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), and `ctx.agents` (live agent status and inbox queue inspection). Resets pass an `operationId` derived from `message.key` and `expectedGeneration` so re-dispatching an unsettled `/clear` or `/new` neither advances a subsequent generation nor resets twice. Every command reply uses `event.reply` with a message-keyed `operationId`, quoting the triggering message in its thread, and returns `{ kind: 'handled', by: 'session-commands', sessions }` so the message store records the outcome and ignores platform redeliveries.
+`SessionCommands` coordinates four services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), `ctx.agents` (live agent status and inbox queue inspection), and `ctx.storageDomain` (the `im_session_commands` domain). Execution is serialized per `message.key`. On the first run of a command, `SessionCommands` computes the answer (passing a message-keyed `operationId` and `expectedGeneration` on resets so re-running an unsettled `/clear` or `/new` neither advances a later generation nor resets twice), writes the reply text and target session list to `im_session_commands` before calling `event.reply`, and returns `{ kind: 'handled', by: 'session-commands', sessions }`. If a retry or restart re-enters `im/message` after the command already ran, the recorded receipt is replayed into `event.reply` and returned directly without recomputing against mutated session state; settled receipts expire after `retentionMs`.
 
 Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the message arrived in a thread and at least one session bound to the chat is confined to that thread (`binding.thread === message.thread.id`), only those thread-bound sessions are targeted; otherwise all sessions bound to the chat are targeted. `/clear` and `/new` further filter targets to sessions where `binding.home === true` and `resettable` includes `record.owner`.
 
@@ -81,8 +83,8 @@ Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the messag
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry; registers the prepended `im/message` listener and aborts in-flight passthrough calls on dispose |
-| [`src/commands.ts`](src/commands.ts) | Permission checks, target session selection, built-in command handlers, and passthrough execution |
+| [`src/index.ts`](src/index.ts) | Plugin entry; registers the prepended `im/message` listener, opens `im_session_commands`, and aborts in-flight passthrough calls on dispose |
+| [`src/commands.ts`](src/commands.ts) | Permission checks, target session selection, durable command receipts, built-in command handlers, and passthrough execution |
 | [`src/locale.ts`](src/locale.ts) | `zh` and `en` reply templates, `{count}` substitution, and relative time formatting |
 | [`src/config.ts`](src/config.ts) | Configuration schema and defaults |
 

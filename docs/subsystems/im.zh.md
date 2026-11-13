@@ -54,12 +54,13 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 
 `MessageSourceMap.im` 包含 `kind: 'im'` 与 `form: 'relay'`，使读取方能够区分外部聊天输入与所有者输入（`kind: 'user'`）。它不授予任何权限。每次托管投递都有稳定的投递 id，会话宿主据此派生写入的消息 id。
 
-IM 宿主在 Session 日志之外使用三个独立的存储域保存持久化状态：
+IM 各包在 Session 日志之外使用四个独立的存储域保存持久化状态：
 - `im_messages`（[`state.ts`](../../packages/experimental/im/src/state.ts)）：平台事件去重摘要、已存消息及其派发状态与结果，以及各聊天的身份信息与当前递增序号。
 - `im_sessions`（[`sessions.ts`](../../packages/experimental/im/src/sessions.ts)）：托管会话记录（归属插件、agent 配置、聊天绑定、输出渲染器、代次）、待写入收件箱的投递记录以及幂等重置回执。
 - `im_receipts`（[`send.ts`](../../packages/experimental/im/src/send.ts)）：按 `operationId` 索引的发送回执。
+- `im_session_commands`（[`commands.ts`](../../packages/experimental/im-session-commands/src/commands.ts)）：按消息键索引的已处理斜杠命令回复与目标会话回执。
 
-会话宿主在将投递标记为完成后，会先在目标会话的持久化日志中检查是否已存在对应消息 id 的收件箱插入记录，从而避免重启恢复时重复写入。事件去重记录与重置回执在超过 `retentionMs` 后过期清理。
+会话宿主在将投递标记为完成后，会先在目标会话的持久化日志中检查是否已存在对应消息 id 的收件箱插入记录，从而避免重启恢复时重复写入。事件去重记录、重置回执与命令回执在超过各自配置的 `retentionMs` 后过期清理。
 
 ## Cordis API
 

@@ -79,7 +79,7 @@ When the `im` row activates, it holds both persisted delivery recovery and new m
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). `im-http` and the IM rows isolate `http` under `isolate: { http: im }` so the bundle's transport does not collide with another `http` service on the profile. It declares no application entry and overrides no row of the profile. Because `dsh-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
+The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). `im-http` and the IM rows isolate `http` under `isolate: { http: im }` so the bundle's transport does not collide with another `http` service on the profile. Both adapter rows declare `inject: [im]` so neither opens a platform connection or acknowledges events before `ctx.im` is active. It declares no application entry and overrides no row of the profile. Because `dsh-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
 
 </details>
 

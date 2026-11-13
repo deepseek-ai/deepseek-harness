@@ -2039,11 +2039,11 @@ export type ImDeliveryMode = 'steer' | 'followup' | 'inject'
 
 ## `@deepseek-ai/dsh-im-session-commands`
 
-- `inject`: `im` · `commands` · `agents`
-- `source`: [`packages/experimental/im-session-commands/src/config.ts:9`](../packages/experimental/im-session-commands/src/config.ts)
+- `inject`: `im` · `commands` · `agents` · `storageDomain`
+- `source`: [`packages/experimental/im-session-commands/src/config.ts:11`](../packages/experimental/im-session-commands/src/config.ts)
 
 ```ts config-catalog
-/** Operator configuration of the slash commands: who may act, which names pass through, and the reply language. */
+/** Operator configuration of the slash commands: who may act, which names pass through, reply language, and receipt retention. */
 export interface SessionCommandsConfig {
   /** `all` lets every sender act; `admins` restricts privileged commands to {@link admins}. */
   allow: SessionCommandAllow
@@ -2058,6 +2058,8 @@ export interface SessionCommandsConfig {
   resettable: string[]
   /** Reply language; `zh` by default. */
   locale: SessionCommandsLocale
+  /** How long completed command receipts are kept for idempotent redelivery replay (ms). */
+  retentionMs: number
 }
 
 /** Who may run a privileged command (`/stop`, `/clear`, `/new`, passthrough). */
