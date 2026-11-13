@@ -28,7 +28,9 @@ vi.mock('../../../../apps/desktop/src/preload-mandatory-overlay.ts', () => ({ in
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); desktopIpc.invoke.mockReset(); desktopIpc.on.mockReset() })
 
-const HOLES = ['conversation.hero.workspace.directoryFlow', 'sidebar.workspaces.directoryFlow'] as const
+const HOLES = [
+  'conversation.hero.workspace.directoryFlow', 'sidebar.workspaces.directoryFlow', 'workspace.picker.directoryFlow',
+] as const
 
 async function bench(allows: (action: string) => boolean = () => true) {
   const ctx = new Context()
@@ -69,7 +71,7 @@ describe('directory-picker-native client half', () => {
     await b.ctx.fiber.dispose()
   })
 
-  it('fills both directory-flow holes for declarations before or after apply, and leaves with its fiber', async () => {
+  it('fills all three directory-flow holes for declarations before or after apply, and leaves with its fiber', async () => {
     const before = await bench()
     before.declare()
     const fiber = before.ctx.plugin({ inject: [...inject], apply })
@@ -105,15 +107,14 @@ describe('directory-picker-native client half', () => {
     process.on('uncaughtException', onUnhandled)
     try {
       // The rival subscribes first, so synchronous declaration notifications
-      // let it occupy the pair before this provider's waiting injection runs.
-      b.slots.inject(HOLES[0], () => b.slots.inject(HOLES[1], function* () {
-        yield b.slots.register({ name: HOLES[0] } as never, () => null)
-        yield b.slots.register({ name: HOLES[1] } as never, () => null)
-      }))
+      // let it occupy the set before this provider's waiting injection runs.
+      b.slots.inject(HOLES[0], () => b.slots.inject(HOLES[1], () => b.slots.inject(HOLES[2], function* () {
+        for (const hole of HOLES) yield b.slots.register({ name: hole } as never, () => null)
+      })))
       await b.ctx.plugin({ inject: [...inject], apply }).await()
       b.declare()
       await new Promise(resolve => setTimeout(resolve, 20))
-      // The rival keeps both holes; this provider rolled back wholesale and
+      // The rival keeps every hole; this provider rolled back wholesale and
       // surfaced the conflict on the fail-loud channel — no partial mix.
       for (const hole of HOLES) expect(b.slots.entries(hole)).toHaveLength(1)
       expect(rejections.map(String).join('\n')).toContain('already has a registration')
@@ -133,6 +134,27 @@ describe('directory-picker-native client half', () => {
     } finally {
       process.off('unhandledRejection', onUnhandled)
       process.off('uncaughtException', onUnhandled)
+    }
+  })
+
+  it('rolls back the earlier registrations when the Factory hole is already occupied', async () => {
+    const b = await bench()
+    b.declare()
+    // Foreign occupant in the LAST registered hole: the hero and sidebar
+    // registrations already landed when the third one throws.
+    b.slots.register({ name: HOLES[2] } as never, () => null)
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown): void => { rejections.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const fiber = b.ctx.plugin({ inject: [...inject], apply })
+      await expect(fiber.await()).rejects.toThrow(/already has a registration/)
+      expect(b.slots.entries(HOLES[0])).toHaveLength(0)
+      expect(b.slots.entries(HOLES[1])).toHaveLength(0)
+      expect(b.slots.entries(HOLES[2])).toHaveLength(1)
+    } finally {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      process.off('unhandledRejection', onUnhandled)
     }
   })
 

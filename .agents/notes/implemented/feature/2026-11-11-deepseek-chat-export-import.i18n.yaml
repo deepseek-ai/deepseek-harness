@@ -1,0 +1,61 @@
+# Bilingual-pair consistency record for 2026-11-11-deepseek-chat-export-import.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-11-deepseek-chat-export-import.md
+/agent-note-import-deepseek-website-chat-exports:
+  en: 28f67da94fa101de
+  zh: e532503740e4516e
+/agent-note-import-deepseek-website-chat-exports/problem:
+  en: bb08ceef4dc54b8b
+  zh: ff1a4235fadd19ee
+/agent-note-import-deepseek-website-chat-exports/decision:
+  en: d80db86d5c5fb6c0
+  zh: 786606a16d47635c
+/agent-note-import-deepseek-website-chat-exports/decision/user-flow:
+  en: 3bb8080e42c2da26
+  zh: eb67425c1715df6f
+/agent-note-import-deepseek-website-chat-exports/decision/package-layout:
+  en: 08f6a8305084e5b3
+  zh: 779f957ba5193525
+/agent-note-import-deepseek-website-chat-exports/decision/host-route-and-remote:
+  en: ff13a60cd73612a1
+  zh: a0e625b6d7e05041
+/agent-note-import-deepseek-website-chat-exports/decision/reading-the-export:
+  en: 5069430168c5ae98
+  zh: dc086ec1f236be9a
+/agent-note-import-deepseek-website-chat-exports/decision/selecting-the-conversations:
+  en: 4628cc1e25d90a26
+  zh: 8649b3e0b0210510
+/agent-note-import-deepseek-website-chat-exports/decision/linearizing-the-message-tree-selectbranch:
+  en: 4ee78fb3a40ded8e
+  zh: 3fda20e2db2cd37d
+/agent-note-import-deepseek-website-chat-exports/decision/message-chain-to-session-events-convertconversation:
+  en: 542149b99f8d3ea5
+  zh: c0fa9f8c545d54a2
+/agent-note-import-deepseek-website-chat-exports/decision/fragment-mapping:
+  en: 98282c93efe3d169
+  zh: 3b79663b9020ad7e
+/agent-note-import-deepseek-website-chat-exports/decision/reply-status-mapping:
+  en: a2ce8fc69fb38cd3
+  zh: b65234fce7922b96
+/agent-note-import-deepseek-website-chat-exports/decision/session-writes:
+  en: b4d436e605cb2a24
+  zh: e48735e9db5099ca
+/agent-note-import-deepseek-website-chat-exports/decision/client:
+  en: 382e0c201bcde038
+  zh: 710f67a5b0d89dc4
+/agent-note-import-deepseek-website-chat-exports/decision/realization:
+  en: 8803b6ec2edc20e3
+  zh: 43dfee5ffcfff4a2
+/agent-note-import-deepseek-website-chat-exports/decision/images:
+  en: 3c185fa06a8c0af3
+  zh: d51787e832337107
+/agent-note-import-deepseek-website-chat-exports/decision/testing:
+  en: 7644a5531582a3d4
+  zh: a8153a60ca46815d
+/agent-note-import-deepseek-website-chat-exports/alternatives-considered:
+  en: 94b324f44acde29b
+  zh: 549bdc73ae18a23a
+/agent-note-import-deepseek-website-chat-exports/consequences:
+  en: ecbbfb4a245d89c9
+  zh: 400f4469bf352ea0

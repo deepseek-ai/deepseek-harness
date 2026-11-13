@@ -1,0 +1,70 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/deepseek-chat-import/README.md
+/:
+  en: 68134bddc70ca270
+  zh: 56bbe0a3794ad728
+/deepseek-ai-dsh-deepseek-chat-import:
+  en: 25b748a601692e3b
+  zh: 5c639272cfca4a71
+/deepseek-ai-dsh-deepseek-chat-import/summary:
+  en: f06a7cd3d343e196
+  zh: ecb02ff15f6440c2
+/deepseek-ai-dsh-deepseek-chat-import/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: 44c7102c1efbf197
+/deepseek-ai-dsh-deepseek-chat-import/use-this-package:
+  en: d03624fa0de6f49f
+  zh: 785f75ed1ca4e7f7
+/deepseek-ai-dsh-deepseek-chat-import/use-this-package/import-a-chat-export:
+  en: b7c739f34052a302
+  zh: e39bdb3d4f41fbc7
+/deepseek-ai-dsh-deepseek-chat-import/use-this-package/configuration:
+  en: beea8ad32b34feb4
+  zh: 267e1ede6fd13b7b
+/deepseek-ai-dsh-deepseek-chat-import/use-this-package/import-results:
+  en: cc7e1dbbff7fcbf1
+  zh: f11aeec38ce7d23f
+/deepseek-ai-dsh-deepseek-chat-import/use-this-package/failures:
+  en: 4902099a5445983d
+  zh: 32cbb073284032b9
+/deepseek-ai-dsh-deepseek-chat-import/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: e15901d8462ec7c7
+/deepseek-ai-dsh-deepseek-chat-import/understand-the-implementation/modules:
+  en: 29729f79e3034582
+  zh: 15b9cb9842b7ee37
+/deepseek-ai-dsh-deepseek-chat-import/understand-the-implementation/upload:
+  en: e8515279f51bac3a
+  zh: 12e0d7960a2625c1
+/deepseek-ai-dsh-deepseek-chat-import/understand-the-implementation/event-mapping:
+  en: 05ade59232b3604b
+  zh: 3174025d9eb3173b
+/deepseek-ai-dsh-deepseek-chat-import/understand-the-implementation/writes:
+  en: 9c5d86f4f1e864f5
+  zh: 9e884134234b89c8
+/deepseek-ai-dsh-deepseek-chat-import/further-exploration:
+  en: f71d6e6824792caf
+  zh: ac6ff901fad93a6e
+/deepseek-ai-dsh-deepseek-chat-import/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-deepseek-chat-import/model-experience/imported-history:
+  en: 9cdfa5c1981e07c4
+  zh: 89aa74f317ed5862
+/deepseek-ai-dsh-deepseek-chat-import/model-experience/imported-history/what-the-model-sees:
+  en: 8c7f74983502dea6
+  zh: 3ce28fe38df55485
+/deepseek-ai-dsh-deepseek-chat-import/model-experience/imported-history/token-effect:
+  en: 4089ec9e1b4dff0d
+  zh: 39019590c45a13a1
+/deepseek-ai-dsh-deepseek-chat-import/model-experience/imported-history/kv-cache-effect:
+  en: e1e24cae9826663a
+  zh: dfe9c44dba9edd8d
+/deepseek-ai-dsh-deepseek-chat-import/known-limitations-and-deferred-work:
+  en: 73fe50a3fda57690
+  zh: 22f4f4b867d56b71
+/deepseek-ai-dsh-deepseek-chat-import/known-limitations-and-deferred-work/dev-note:
+  en: c48fda408d6da0e1
+  zh: 4c484c202694553c

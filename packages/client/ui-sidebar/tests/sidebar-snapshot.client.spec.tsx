@@ -72,6 +72,18 @@ describe('sidebar shell snapshots', () => {
     await runtime.dispose()
   })
 
+  it('renders the New-session content through the unoccupied session-action HOC layer', async () => {
+    const { runtime } = await bench({ locale: 'en' })
+    const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, drawer: false })
+    const layer = slot.container.querySelector('[data-slot="sidebar.session.action"]')
+    // With no occupant the layer renders the owner's content unchanged, so the
+    // capsule keeps its box and no wrapper element joins the row.
+    expect(layer?.children).toHaveLength(1)
+    expect(layer?.firstElementChild?.getAttribute('aria-label')).toBe('New session')
+    expect(layer?.firstElementChild?.tagName).toBe('BUTTON')
+    await runtime.dispose()
+  })
+
   it('renders the collapsed rail after the crossfade settles, in place', async () => {
     const { runtime } = await bench({ locale: 'en' })
     const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, drawer: false })
