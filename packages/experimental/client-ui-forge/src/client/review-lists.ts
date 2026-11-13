@@ -1,9 +1,10 @@
 /**
- * What the review page's list column shows from the Host's list frames: one section per list with the items that match
- * the search, the hint each item carries, the repositories the lists name, and the failure each section reports.
+ * What the review page's list column shows from the Host's list frames: one section per list with its items and the
+ * text they are searched by, the hint each item carries, the repositories the lists name, and the failure each section reports.
  */
 
 import type { ChangeRequestSummary, ForgeFailure, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { SearchKeys } from '@deepseek-ai/dsh-util-text-search'
 import type { ForgeReviewFrame } from '../types.ts'
 import type { ForgePanelKey } from './locales.ts'
 import { toneOf, type ChangeRequestTone } from './status.ts'
@@ -25,7 +26,7 @@ export interface ReviewItem {
 export interface ReviewSection {
   /** The list. */
   readonly filter: ForgeViewerFilter
-  /** Items matching the search, most recently updated first; null before any host read the list. */
+  /** Items most recently updated first; null before any host read the list. */
   readonly items: readonly ReviewItem[] | null
   /** Size of the whole list summed over the hosts read. */
   readonly total: number
@@ -46,13 +47,11 @@ export interface ReviewRepository {
 /**
  * Build the list sections from one frame.
  * @param frame - the latest frame, or undefined before the first.
- * @param query - search text; matches the title, the number, the repository, and the author, ignoring case.
  * @param directOnly - whether the review-requested list leaves out requests made only of one of the user's teams.
- * @returns one section per list some host offers, in page order.
+ * @returns one section per list some host offers, in page order, each with every item most recently updated first.
  */
-export function reviewSections(frame: ForgeReviewFrame | undefined, query: string, directOnly: boolean): readonly ReviewSection[] {
+export function reviewSections(frame: ForgeReviewFrame | undefined, directOnly: boolean): readonly ReviewSection[] {
   if (frame === undefined) return []
-  const needle = query.trim().toLowerCase()
   const sections: ReviewSection[] = []
   for (const filter of REVIEW_FILTERS) {
     const lists = frame.hosts.flatMap((host) => {
@@ -72,7 +71,7 @@ export function reviewSections(frame: ForgeReviewFrame | undefined, query: strin
       items ??= []
       for (const summary of list.items) {
         if (filter === 'review-requested' && directOnly && summary.viewerRequest !== null && summary.viewerRequest.team !== null) continue
-        if (needle === '' || matches(summary, needle)) items.push({ summary, forge: host.forge, host: host.host })
+        items.push({ summary, forge: host.forge, host: host.host })
       }
     }
     items?.sort((left, right) => Date.parse(right.summary.updatedAt) - Date.parse(left.summary.updatedAt))
@@ -81,12 +80,15 @@ export function reviewSections(frame: ForgeReviewFrame | undefined, query: strin
   return sections
 }
 
-function matches(summary: ChangeRequestSummary, needle: string): boolean {
-  const { repository, number } = summary.ref
-  return summary.title.toLowerCase().includes(needle)
-    || `#${number}`.includes(needle) || String(number) === needle
-    || `${repository.owner}/${repository.name}`.toLowerCase().includes(needle)
-    || (summary.author?.login.toLowerCase().includes(needle) ?? false)
+/**
+ * The text a listed change request is searched by under the client search rule: its title, number, repository, and
+ * author each match as a substring or a word-start fuzzy subsequence.
+ * @param item - the listed change request.
+ * @returns the search keys.
+ */
+export function reviewSearchKeys(item: ReviewItem): SearchKeys {
+  const { repository, number } = item.summary.ref
+  return { fuzzy: [item.summary.title, `#${number}`, `${repository.owner}/${repository.name}`, item.summary.author?.login] }
 }
 
 /**

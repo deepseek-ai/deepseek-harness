@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import {
-  descriptionMarkdown, pastedUrl, REVIEW_FILTERS, reviewHint, reviewRepositories, reviewSections, summaryTone,
+  descriptionMarkdown, pastedUrl, REVIEW_FILTERS, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
 } from '../src/client/review-lists.ts'
 import { createReviewStore } from '../src/client/review-store.ts'
 import { ref } from './client-fixtures.client.ts'
@@ -25,7 +26,7 @@ function urls(sections: ReturnType<typeof reviewSections>): Record<string, reado
 
 describe('reviewSections', () => {
   it('shows no section before the first frame', () => {
-    expect(reviewSections(undefined, '', false)).toEqual([])
+    expect(reviewSections(undefined, false)).toEqual([])
   })
 
   it('shows one section per offered list in page order, newest first, summing totals over hosts and marking cut lists', () => {
@@ -36,7 +37,7 @@ describe('reviewSections', () => {
     const sections = reviewSections(frame(
       host({ 'authored': list([older, newer], { total: 5 }), 'review-requested': list([requested]) }),
       host({ authored: list([middle]) }, { forge: 'gitlab', host: 'gitlab.example' }),
-    ), '', false)
+    ), false)
     expect(REVIEW_FILTERS).toEqual(['review-requested', 'authored', 'involved'])
     expect(sections.map(section => section.filter)).toEqual(['review-requested', 'authored'])
     expect(sections[1]?.items?.map(item => [item.summary.ref.number, item.forge, item.host])).toEqual([
@@ -52,7 +53,7 @@ describe('reviewSections', () => {
         involved: list([summary(1)], { failure: { code: 'rate-limited', message: 'slow down' } }), authored: failedList('unauthenticated'),
       }),
       host({ involved: failedList('unavailable'), authored: failedList('unavailable') }, { host: 'ghe.example' }),
-    ), '', false)
+    ), false)
     expect(urls(sections)).toEqual({ authored: null, involved: ['https://github.com/octo/demo/pull/1'] })
     expect(sections.map(section => section.failure)).toEqual([
       { host: 'github.com', forge: 'github', failure: { code: 'unauthenticated', message: 'down' } },
@@ -66,30 +67,35 @@ describe('reviewSections', () => {
     const direct = summary(2, { viewerRequest: { team: null }, updatedAt: '2026-10-08T00:00:00Z' })
     const none = summary(3, { updatedAt: '2026-10-07T00:00:00Z' })
     const lists = frame(host({ 'review-requested': list([team, direct, none]), 'authored': list([team]) }))
-    expect(urls(reviewSections(lists, '', true))).toEqual({
+    expect(urls(reviewSections(lists, true))).toEqual({
       'review-requested': ['https://github.com/octo/demo/pull/2', 'https://github.com/octo/demo/pull/3'],
       'authored': ['https://github.com/octo/demo/pull/1'],
     })
-    expect(reviewSections(lists, '', false)[0]?.items).toHaveLength(3)
+    expect(reviewSections(lists, false)[0]?.items).toHaveLength(3)
   })
 
-  it('matches the search text in the title, the number, the repository, and the author, ignoring case and surrounding space', () => {
+  it('offers the title, the number, the repository, and the author to the shared list search', () => {
     const parser = summary(11, { title: 'Fix the Parser' })
     const widgets = inRepository(22, 'Acme', 'Widgets', { title: 'Tidy up' })
     const mona = summary(33, { title: 'Docs', author: { login: 'Mona', avatarUrl: null, bot: true } })
     const hidden = summary(44, { title: 'Hidden author', author: null })
     const lists = frame(host({ involved: list([parser, widgets, mona, hidden]) }))
-    const search = (query: string): (number | undefined)[] | undefined =>
-      reviewSections(lists, query, false)[0]?.items?.map(item => item.summary.ref.number)
+    const [section] = reviewSections(lists, false)
+    const index = new TextSearchIndex(section?.items ?? [], reviewSearchKeys)
+    const search = (query: string): number[] => index.search(query).map(item => item.summary.ref.number)
     expect(search(' PARSER ')).toEqual([11])
     expect(search('#22')).toEqual([22])
     expect(search('22')).toEqual([22])
     expect(search('acme/wid')).toEqual([22])
     expect(search('mon')).toEqual([33])
+    // A fuzzy subsequence from a word start finds a title, as the client search rule lets it.
+    expect(search('tdy')).toEqual([22])
+    expect(search('fix docs')).toEqual([])
     expect(search('zzz')).toEqual([])
     expect(search('   ')).toEqual([11, 22, 33, 44])
-    // The total stays the whole list's size while the search narrows the items.
-    expect(reviewSections(lists, 'zzz', false)[0]?.total).toBe(4)
+    // The section keeps every item and the whole list's size; the search only narrows what shows.
+    expect(section).toMatchObject({ total: 4 })
+    expect(section?.items).toHaveLength(4)
   })
 })
 

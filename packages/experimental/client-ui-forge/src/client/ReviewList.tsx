@@ -3,7 +3,7 @@
  * and one foldable section per list with its items, empty state, and failure.
  */
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, HoverCard, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconFlatListOutlineRegular, IconFolderCloseRegular,
@@ -11,6 +11,7 @@ import {
   Input, Menu, titleMarqueeClass, Tooltip, useTitleMarquee, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { ChecksRollup, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeReviewFrame } from '../types.ts'
 import { formatAgo, formatShortAgo } from './format.ts'
@@ -18,7 +19,8 @@ import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import {
-  pastedUrl, reviewHint, reviewRepositories, reviewSections, summaryTone, type ReviewItem, type ReviewRepository, type ReviewSection,
+  pastedUrl, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
+  type ReviewItem, type ReviewRepository, type ReviewSection,
 } from './review-lists.ts'
 import type { ReviewView } from './review-store.ts'
 import css from './ReviewPage.module.css'
@@ -317,7 +319,10 @@ function SectionFailure({ section, copyText, t }: {
 export function ReviewList(props: ReviewListProps): ReactNode {
   const { frame, stopped, selected, query, folded, refreshing, now, view } = props
   const { onSelect, onSearch, onFold, onRefresh, onRetry, copyText, t } = props
-  const sections = reviewSections(frame, query, props.directOnly)
+  const { directOnly } = props
+  // Each section with its search index, rebuilt when the lists change; a blank search returns a list as built.
+  const sections = useMemo(() => reviewSections(frame, directOnly).map(section =>
+    ({ section, index: new TextSearchIndex(section.items ?? [], reviewSearchKeys) })), [frame, directOnly])
   const pasted = pastedUrl(query)
   const qualified = reviewRepositories(frame).length > 1
   let body: ReactNode
@@ -342,10 +347,10 @@ export function ReviewList(props: ReviewListProps): ReactNode {
       </div>
     )
   } else {
-    body = sections.map((section) => {
+    body = sections.map(({ section, index }) => {
       const title = t(SECTION[section.filter])
       const open = folded[section.filter] !== true
-      const shown = section.items ?? []
+      const shown = index.search(query)
       return (
         <section key={section.filter} className={css.section} data-forge-review-section={section.filter}>
           <button type="button" className={css.sectionHeader} aria-expanded={open} onClick={() => { onFold(section.filter) }}>

@@ -83,6 +83,9 @@
       "path": "../../util/values"
     },
     {
+      "path": "../../util/text-search"
+    },
+    {
       "path": "../../util/workspace-path"
     },
     {
