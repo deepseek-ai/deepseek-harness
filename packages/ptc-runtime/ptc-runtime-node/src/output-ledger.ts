@@ -53,29 +53,11 @@ export class OutputLedger {
   /** Keep an ordered prefix after reserving bytes for the completion or diagnostic. */
   private retain(output: PtcOutput[], terminalBytes: number): Pick<PtcRunResult, 'output' | 'outputTruncated'> {
     const retained: PtcOutput[] = []
-    let retainedBytes = 2
-    const logBudget = this.maxBytes - terminalBytes
+    const ledger = new OutputLedger(this.maxBytes - terminalBytes)
     for (const entry of output) {
-      const separatorBytes = retained.length > 0 ? 1 : 0
-      const availableBytes = logBudget - retainedBytes - separatorBytes
-      const bytes = entryBytes(entry, availableBytes)
-      if (bytes !== undefined) {
-        retained.push(entry)
-        retainedBytes += bytes + separatorBytes
-        continue
-      }
-      this.truncated = true
-      if (entry.type === 'image') break
-      const prefix = truncateJsonStringBytes(entry.text, availableBytes)
-      if (prefix.length > 0) {
-        const prefixBytes = jsonStringBytesUpTo(prefix, availableBytes)
-        /* v8 ignore next -- truncateJsonStringBytes guarantees its returned prefix fits the same budget. */
-        if (prefixBytes === undefined) throw new Error('output ledger produced an oversized log prefix')
-        retained.push({ type: 'text', text: prefix })
-        retainedBytes += prefixBytes + separatorBytes
-      }
-      break
+      if (!ledger.admit(entry, retained)) break
     }
+    this.truncated ||= ledger.truncated
     return { output: retained, ...this.truncated ? { outputTruncated: true } : {} }
   }
 }
