@@ -69,7 +69,7 @@ Put these rows in the profile's own `cordis.patch.yml`, or pass the file with `-
 
 Each message delivered to the shared session carries an `<im-chat key="…" />` header naming its chat, and the session answers in that chat with `im_reply` or `im_send`. The session publishes nothing else: no turn renderer is mounted, so a user sees an answer only when the agent calls `im_send`, `im_reply`, or `im_send_file`. `delivery: steer` (the default) delivers messages that arrive during a running turn into that turn's next step, `followup` queues a new turn, and `inject` adds context without waking an idle session. Users in the chat can send `/stop` to cancel the running turn, `/clear` or `/new` to reset the shared session from its home chat, `/status` to inspect session state, `/help` to list commands, and `/compact` to compact the session history (all handled by [`session-commands`](../im-session-commands/README.md)).
 
-When the `im` row activates, it recovers pending deliveries from its storage domains before it admits new messages. Disposing the profile shuts down the adapters, agents, and storage domains.
+When the `im` row activates, it holds both persisted delivery recovery and new message dispatch until the Loader settles so `im_*` tools and `im-session-commands` finish mounting first. Disposing the profile shuts down the adapters, agents, and storage domains.
 
 -----
 
@@ -79,7 +79,7 @@ When the `im` row activates, it recovers pending deliveries from its storage dom
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). It declares no application entry and overrides no row of the profile. Because `dsh-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
+The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). `im-http` and the IM rows isolate `http` under `isolate: { http: im }` so the bundle's transport does not collide with another `http` service on the profile. It declares no application entry and overrides no row of the profile. Because `dsh-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
 
 </details>
 

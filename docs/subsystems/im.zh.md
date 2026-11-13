@@ -26,6 +26,7 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImDelivery` | 持久化投递记录：幂等 id、投递模式、模型消息内容或待格式化的已存消息列表、触发消息、是否下载媒体以及可选头部文本 |
 | `ImDeliveryMode` | 投递模式：`steer` 加入正在运行的轮次或启动新轮次，`followup` 排队等待下一轮，`inject` 仅注入上下文而不唤醒空闲 agent |
 | `ImSessions` | 托管会话管理接口：`ensure`、`get`、`list`、`forChat`、`deliver`、`reset`、`bind`、`agent`、`of`、`stop` 与 `trigger` |
+| `ImResetOptions` | 会话重置选项：持久化回执幂等键 `operationId` 与乐观并发代次校验 `expectedGeneration` |
 | `ImSendOptions` | 消息发送选项：回执幂等键 `operationId`、被引用消息键、目标话题线程，以及用于权限校验和归属记录的 `session` |
 | `ImSendResult` | 发送结果（`confirmed`、`failed`、`uncertain` 或 `partial`），附带平台消息句柄、渲染报告、已存自身消息与错误信息 |
 | `ImHistory` | 按聊天内 `seq` 读取历史的接口：`after`、`before`、`get` 与 `latest` |
@@ -55,10 +56,10 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 
 IM 宿主在 Session 日志之外使用三个独立的存储域保存持久化状态：
 - `im_messages`（[`state.ts`](../../packages/experimental/im/src/state.ts)）：平台事件去重摘要、已存消息及其派发状态与结果，以及各聊天的身份信息与当前递增序号。
-- `im_sessions`（[`sessions.ts`](../../packages/experimental/im/src/sessions.ts)）：托管会话记录（归属插件、agent 配置、聊天绑定、输出渲染器、代次）以及待写入收件箱的投递记录。
+- `im_sessions`（[`sessions.ts`](../../packages/experimental/im/src/sessions.ts)）：托管会话记录（归属插件、agent 配置、聊天绑定、输出渲染器、代次）、待写入收件箱的投递记录以及幂等重置回执。
 - `im_receipts`（[`send.ts`](../../packages/experimental/im/src/send.ts)）：按 `operationId` 索引的发送回执。
 
-会话宿主在将投递标记为完成后，会先在目标会话的持久化日志中检查是否已存在对应消息 id 的收件箱插入记录，从而避免重启恢复时重复写入。事件去重记录在超过 `retentionMs` 后过期清理。
+会话宿主在将投递标记为完成后，会先在目标会话的持久化日志中检查是否已存在对应消息 id 的收件箱插入记录，从而避免重启恢复时重复写入。事件去重记录与重置回执在超过 `retentionMs` 后过期清理。
 
 ## Cordis API
 

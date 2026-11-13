@@ -26,6 +26,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImDelivery` | Durable delivery intent: idempotency id, delivery mode, content or stored messages to format, trigger message, optional media download flag, and optional header |
 | `ImDeliveryMode` | Delivery mode: `steer` joins a running turn or starts one, `followup` queues a turn, `inject` adds context without waking an idle agent |
 | `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
+| `ImResetOptions` | Session reset options: durable receipt `operationId` and optimistic `expectedGeneration` guard |
 | `ImSendOptions` | Outbound publication options: receipt `operationId`, quoted message key, target thread, and the session used for grant checks and attribution |
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |
 | `ImHistory` | Per-chat history queries by `seq`: `after`, `before`, `get`, and `latest` |
@@ -55,10 +56,10 @@ Reads are governed by the deployment rather than by IM: the filesystem sandbox f
 
 The IM host persists state in three storage domains alongside the Session logs:
 - `im_messages` ([`state.ts`](../../packages/experimental/im/src/state.ts)): deduplicated platform event digests, stored messages with their dispatch state and outcome, and per-chat metadata and sequence counters.
-- `im_sessions` ([`sessions.ts`](../../packages/experimental/im/src/sessions.ts)): hosted session records (owner, composition, bindings, output renderer, generation) and pending delivery intents.
+- `im_sessions` ([`sessions.ts`](../../packages/experimental/im/src/sessions.ts)): hosted session records (owner, composition, bindings, output renderer, generation), pending delivery intents, and idempotent reset receipts.
 - `im_receipts` ([`send.ts`](../../packages/experimental/im/src/send.ts)): outbound publication receipts keyed by `operationId`.
 
-Before marking a delivery intent admitted, the session host checks the target session's log for an existing inbox insertion with the derived message id, preventing duplicate insertions across restarts. Event deduplication records expire after `retentionMs`.
+Before marking a delivery intent admitted, the session host checks the target session's log for an existing inbox insertion with the derived message id, preventing duplicate insertions across restarts. Event deduplication records and reset receipts expire after `retentionMs`.
 
 ## Cordis API
 

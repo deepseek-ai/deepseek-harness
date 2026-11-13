@@ -73,7 +73,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-`SessionCommands` 协调三个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）与 `ctx.agents`（读取活动 agent 的运行状态与收件箱队列）。所有命令回复均通过 `event.reply` 发送（引用原消息并在其所属话题线程内回复），并返回 `{ kind: 'handled', by: 'session-commands', sessions }`，由消息存储记录处理结果，防止平台重投事件时重复执行。
+`SessionCommands` 协调三个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）与 `ctx.agents`（读取活动 agent 的运行状态与收件箱队列）。重置调用传入由 `message.key` 派生的 `operationId` 与当前 `expectedGeneration`，使未决的 `/clear` 或 `/new` 在重新派发时既不会重复推进代次也不会误重置新代次。所有命令回复均通过带消息幂等 `operationId` 的 `event.reply` 发送（引用原消息并在其所属话题线程内回复），并返回 `{ kind: 'handled', by: 'session-commands', sessions }`，由消息存储记录处理结果并忽略平台重投。
 
 目标会话从 `ctx.im.sessions.forChat(chat)` 中选取：若消息位于某个话题线程内，且存在限定在该线程（`binding.thread === message.thread.id`）的会话，则仅以这些线程会话为目标；否则以绑定到该聊天的所有会话为目标。`/clear` 与 `/new` 会进一步筛选出 `binding.home === true` 且 `record.owner` 在 `resettable` 列表中的会话。
 

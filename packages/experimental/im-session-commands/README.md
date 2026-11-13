@@ -73,7 +73,7 @@ The plugin handles a message only when `message.addressed` is `true` and `messag
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`SessionCommands` coordinates three services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), and `ctx.agents` (live agent status and inbox queue inspection). Every command reply uses `event.reply`, quoting the triggering message in its thread, and returns `{ kind: 'handled', by: 'session-commands', sessions }` so the message store records the outcome and ignores platform redeliveries.
+`SessionCommands` coordinates three services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), and `ctx.agents` (live agent status and inbox queue inspection). Resets pass an `operationId` derived from `message.key` and `expectedGeneration` so re-dispatching an unsettled `/clear` or `/new` neither advances a subsequent generation nor resets twice. Every command reply uses `event.reply` with a message-keyed `operationId`, quoting the triggering message in its thread, and returns `{ kind: 'handled', by: 'session-commands', sessions }` so the message store records the outcome and ignores platform redeliveries.
 
 Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the message arrived in a thread and at least one session bound to the chat is confined to that thread (`binding.thread === message.thread.id`), only those thread-bound sessions are targeted; otherwise all sessions bound to the chat are targeted. `/clear` and `/new` further filter targets to sessions where `binding.home === true` and `resettable` includes `record.owner`.
 

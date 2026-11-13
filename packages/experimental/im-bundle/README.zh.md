@@ -69,7 +69,7 @@ QQ 适配器条目（`im-qq`）默认关闭。如需启用 QQ，请设置环境�
 
 每条投递到共享会话的消息都附带标明来源聊天的 `<im-chat key="…" />` 头部，会话通过 `im_reply` 或 `im_send` 在该聊天中作答。会话不会发布其他内容：由于没有挂载轮次渲染器，只有 agent 调用 `im_send`、`im_reply` 或 `im_send_file` 时用户才会看到回答。默认的 `delivery: steer` 会将轮次运行期间收到的新消息在下一步注入当前轮次，`followup` 会排队启动新轮次，`inject` 仅添加上下文而不唤醒空闲会话。聊天成员可发送 `/stop` 停止当前轮次，在共享会话的 home 聊天中发送 `/clear` 或 `/new` 重置会话上下文，发送 `/status` 查看会话状态，发送 `/help` 列出可用命令，发送 `/compact` 压缩会话历史（均由 [`session-commands`](../im-session-commands/README.zh.md) 处理）。
 
-`im` 条目激活时，会先从存储域恢复待处理的投递，再接纳新消息。释放该 profile 时会依次关闭适配器连接、活动 agent 与存储域。
+`im` 条目激活时，会将待恢复投递与新消息派发一并暂缓至 Loader 组装稳定，确保 `im_*` 工具与 `im-session-commands` 先完成挂载。释放该 profile 时会依次关闭适配器连接、活动 agent 与存储域。
 
 -----
 
@@ -79,7 +79,7 @@ QQ 适配器条目（`im-qq`）默认关闭。如需启用 QQ，请设置环境�
 <details>
 <summary>实现细节——点击展开</summary>
 
-[组合包补丁](cordis.patch.yml) 插入 HTTP（`im-http`）、Satori 核心（`im-core`）、把回答所用的 `<markdown>` 元素渲染成各平台原生标记的插件（`im-markdown`）、飞书适配器（`im-feishu`）、QQ 适配器（`im-qq`，默认禁用）、IM 宿主（`im`）以及斜杠命令（`im-session-commands`）。它不声明应用入口，也不覆盖 profile 中的任何条目。由于 `dsh-im` 在全局挂载了 `im_*` 工具，共享会话使用的预设无需声明额外插件条目。
+[组合包补丁](cordis.patch.yml) 插入 HTTP（`im-http`）、Satori 核心（`im-core`）、把回答所用的 `<markdown>` 元素渲染成各平台原生标记的插件（`im-markdown`）、飞书适配器（`im-feishu`）、QQ 适配器（`im-qq`，默认禁用）、IM 宿主（`im`）以及斜杠命令（`im-session-commands`）。`im-http` 与各 IM 条目通过 `isolate: { http: im }` 隔离 `http` 服务，避免与 profile 上的其他 `http` 服务冲突。它不声明应用入口，也不覆盖 profile 中的任何条目。由于 `dsh-im` 在全局挂载了 `im_*` 工具，共享会话使用的预设无需声明额外插件条目。
 
 </details>
 

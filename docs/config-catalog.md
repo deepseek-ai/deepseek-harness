@@ -482,7 +482,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:105`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -1912,6 +1912,11 @@ export interface ImConfig {
   retryIntervalMs: number
   /** Deadline of one platform request this service makes (a message re-read, the text of a quoted reply), ms. */
   platformTimeoutMs: number
+  /**
+   * Delay in ms before logging a warning when the Loader composition has not settled and IM intake and delivery
+   * recovery remain held (default 30 s).
+   */
+  compositionWarnMs: number
   /** Inbound media admission: whether admitted images and files are downloaded for the model, and their bounds. */
   media: {
     /** Download admitted images and files so the model can read them; `false` keeps only their labels. */
@@ -1951,6 +1956,8 @@ export interface ImConfig {
     maxHistoryItems: number
     /** Maximum members one `im_members` call lists, across platform pages (default 200). */
     maxMembers: number
+    /** Maximum platform roster pages one `im_members` call reads before stopping (default 10). */
+    maxMemberPages: number
     /**
      * Session-relative directory `im_read_file` writes a downloaded file into (default
      * `.dsh/im`); the path a chat file is staged at stays inside the working directory so

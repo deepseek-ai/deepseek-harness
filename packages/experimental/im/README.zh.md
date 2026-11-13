@@ -52,15 +52,16 @@ kind: "package-reference"
 | `sources[].users` | 任意发送者 | 允许接纳的平台用户 id 白名单 |
 | `sources[].writable` | `false` | 托管会话是否可以向该规则接纳的聊天发送消息 |
 | `sources[].store` | `'all'` | `'all'` 保存所有消息；`'addressed'` 仅保存提及机器人的消息 |
-| `retentionMs` | 30 天 | 已处理完成的消息、事件摘要与投递记录的最短保留时间 |
+| `retentionMs` | 30 天 | 已处理完成的消息、事件摘要、投递记录与重置回执的最短保留时间 |
 | `maxRecords` | `10000` | 每个聊天保留的最大消息记录数，以及保留的最大发送回执数 |
 | `maxInputBytes` | 256 KiB | 单条入库消息或投递记录的最大 UTF-8 字节数 |
 | `retryIntervalMs` | 5 秒 | 重新派发待处理消息、重试待完成投递以及清理过期记录的定时间隔 |
+| `compositionWarnMs` | 30 秒 | 入站派发与会话恢复等待 Loader 组装稳定期间输出告警日志的阈值 |
 | `platformTimeoutMs` | 30 秒 | 单次平台请求的截止时间：卡片或合并转发的回读，以及引用回复的原文 |
 | `media.download` / `media.maxBytes` / `media.maxItems` / `media.timeoutMs` | `true` / 10 MiB / 9 / 30 秒 | 是否将入站图片与文件下载为附件、单条字节上限、单条消息下载数量上限，以及单次入站抓取的截止时间 |
 | `media.source.file` / `media.source.internal` | `false` / `false` | 收到的消息是否可让本机抓取 `file:` 源，以及是否可抓取主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 源 |
 | `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 秒 | 为另一执行世界的文件内联字节时的大小上限，以及单次发送超时时间 |
-| `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.maxMembers` / `tools.fileDir` | `false` / 64 KiB / 50 / 200 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数、单次 `im_members` 最多列出的成员数（最多读取十页平台结果），以及 `im_read_file` 暂存下载文件的会话内相对目录 |
+| `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.maxMembers` / `tools.maxMemberPages` / `tools.fileDir` | `false` / 64 KiB / 50 / 200 / 10 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数、单次 `im_members` 最多列出的成员数与最多读取的平台页数，以及 `im_read_file` 暂存下载文件的会话内相对目录 |
 | `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）、`restrict`（不限制工具）与 `prompt`（`im:dispatcher`，order 81） |
 
 不匹配任何规则的聊天消息既不会入库也不会发出事件。完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-im)。
@@ -71,7 +72,7 @@ kind: "package-reference"
 
 事件里带的信息不够读时，入站会再读一次：卡片到达时只是平台愿意描述的那层投影，合并转发到达时只有容器本身；这两种情况都改用平台读回的内容——卡片的 JSON，以及容器和它携带的转发条目。读回来会把消息推过 `maxInputBytes` 时不采用它：超过该上限的消息整条都不会入库，事件里那个引用比丢掉这条消息更有价值。
 
-派发循环对每条待处理消息触发一次 `im/message` 事件链：不同聊天之间并行派发，同一聊天内部按 `seq` 顺序逐条派发。事件链结束后，存储层记录 `handled`（含处理插件名与可选会话 id 列表）或 `ignored`。如果监听器抛出异常，消息保持 `pending` 状态，并在下一个 `retryIntervalMs` 周期或进程重启后重新派发。因此监听器必须保证幂等：会话投递按投递 `id` 去重，消息发送按 `operationId` 去重。过期清理只删除已完成的消息与回执；处于 `pending` 的消息和未决回执不会自动过期。`ctx.im.status()` 返回已挂载机器人、来源规则、托管会话、待处理计数与最近处理结果的诊断快照。
+派发循环对每条待处理消息触发一次 `im/message` 事件链：不同聊天之间并行派发，同一聊天内部按 `seq` 顺序逐条派发。事件链结束后，存储层记录 `handled`（含处理插件名与可选会话 id 列表）或 `ignored`。如果监听器抛出异常，消息保持 `pending` 状态，并在下一个 `retryIntervalMs` 周期或进程重启后重新派发。因此监听器必须保证幂等：会话投递按投递 `id` 去重，会话重置按 `operationId` 去重，消息发送按 `operationId` 去重。过期清理只删除已完成的消息与回执；处于 `pending` 的消息和未决回执不会自动过期。`ctx.im.status()` 返回已挂载机器人、来源规则、托管会话、待处理计数与最近处理结果的诊断快照。
 
 ### 托管会话
 
@@ -83,7 +84,7 @@ kind: "package-reference"
 | `get(keyOrId)` / `list(filter)` | 按键或 `sessionId` 获取记录，或按 `owner`、`chat`、`parent` 过滤列表 |
 | `forChat(chat)` | 列出绑定到指定聊天的所有会话 |
 | `deliver(target, delivery)` | 持久化记录投递意图，并写入目标会话收件箱（支持 `steer`、`followup`、`inject`） |
-| `reset(key, reason)` | 取消并释放当前 agent，删除未入箱的投递记录，并递增 `generation` |
+| `reset(key, reason, options?)` | 取消并释放当前 agent，删除未入箱的投递记录，递增 `generation` 并返回被替换的 `SessionId`（传入 `options.operationId` 时记录持久化重置回执，`options.expectedGeneration` 已不匹配时跳过） |
 | `bind(target, bindings)` | 替换会话的聊天绑定列表 |
 | `stop(target)` | 取消会话当前正在运行的轮次；若无运行中轮次则返回 `false` |
 | `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent` |
@@ -120,7 +121,7 @@ kind: "package-reference"
 
 当环境中存在 `tools` 与 `systemPrompt` 服务时，本包会注册 `im_read`、`im_history`、`im_members`、`im_read_image`、`im_read_file`、`im_send`、`im_reply` 以及 `im_send_file`（需同时存在 `fs` 与 `workingDirectory`）。若设置 `tools.readOnly: true`，则仅注册五个读取工具（`im_read`、`im_history`、`im_members`、`im_read_image`、`im_read_file`）。
 
-`im_members` 列出平台报告的聊天成员，跨页合计不超过 `tools.maxMembers`，可选的 `query` 只保留名字包含该文本的成员；一次调用最多读取十页平台结果，因此在大群里一个无人匹配的 `query` 不会读完整份花名册。每个条目带有提及所指向的平台用户 id、显示名，以及可直接粘贴的 markdown `<at user_id="ou_…">名字</at>`——markdown 会把这个标签解析为词汇表的 `at` 元素，正是它通知到对方。适配器未实现成员读取的平台返回 `unavailable`。
+`im_members` 列出平台报告的聊天成员，跨页合计不超过 `tools.maxMembers`，可选的 `query` 只保留名字包含该文本的成员；一次调用最多读取 `tools.maxMemberPages` 页平台结果（每页最多请求 100 条），因此在大群里一个无人匹配的 `query` 不会读完整份花名册。每个条目带有提及所指向的平台用户 id、显示名，以及可直接粘贴的 markdown `<at user_id="ou_…">名字</at>`——markdown 会把这个标签解析为 `at` 元素，正是它通知到对方。适配器未实现成员读取的平台返回 `unavailable`。
 
 每个工具通过 `sessions.of(agent.session.id)` 解析调用方所属的托管会话，并检查该会话及其托管祖先的聊天绑定。省略 `chat` 参数时默认使用 `home` 绑定。所有发送类工具都会用 `sha256(sessionId + '\0' + toolCallId)` 生成 `operationId`，因此重放工具调用会直接返回已记录的回执，不会重复发送。工具返回的 JSON 文本受 `tools.maxReadBytes` 限制。
 
@@ -147,7 +148,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，恢复待处理投递，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器。由于监听 `im/message` 的插件在本服务之后挂载，组装完成之前它不派发任何消息——在 Loader 下指 Loader 不再有待完成的导入或生命周期任务，手工组装时指下一个宏任务：其间到达的帧照常入库并确认，与上一次运行留下的待处理消息一起派发。
+[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器。入站派发与持久化投递恢复都会等待组装稳定后才放行——在 Loader 下指 `loader.await()` 完成后的宏任务（等待超过 `compositionWarnMs` 时记录告警），手工组装时指下一个宏任务——使监听 `im/message` 的插件与嵌套注入的 `im_*` 工具先完成挂载：其间到达的帧照常入库并确认，放行后与待恢复投递一并处理。
 
 | 模块 | 职责 |
 |---|---|
@@ -287,11 +288,11 @@ You are the default IM session: you receive every message that addresses the bot
 - **`reset` 会更换 `sessionId`** — 重置会话会递增 `generation` 并生成新的 `sessionId`，因此指向旧 `sessionId` 的外部记录（如后台任务归属记录）不会自动迁移到新会话。
 - **流式输出不跨重启续传** — 若进程在轮次运行中途重启，已发出的流式消息会停留在最后一次更新的状态，不会在重启后继续更新。
 - **消息格式化仅支持固定样式** — `ctx.im.format` 仅提供 `xml` 与 `line` 两种样式，需要其他格式记录的插件需自行拼装内容。
-- **暂存的文件会多一份副本，远端后端还限制单次写入大小** — `im_read_file` 通过 `ctx.fs.writeBytes` 把已准入的字节写入会话工作目录下 `tools.fileDir`（按聊天键分目录，两个聊天不会写到同一个文件名），投递的消息里只保留持久的 `file` 块。字节写入受传输帧限制的执行文件系统（SSH 辅助进程为 8 MiB）会拒绝更大的元素；附件存储仍然保留它。
+- **暂存的文件会多一份副本，远端后端还限制单次写入大小** — `im_read_file` 通过 `ctx.fs.writeBytes`（挂载的文件系统限制写入时传入该会话解析出的 `ctx.sandboxPolicy`）把已准入的字节写入会话工作目录下 `tools.fileDir`（按聊天键分目录，两个聊天不会写到同一个文件名），投递的消息里只保留持久的 `file` 块。字节写入受传输帧限制的执行文件系统（SSH 辅助进程为 8 MiB）会拒绝更大的元素；附件存储仍然保留它。
 - **读不受限，IM 自身也不加读策略** — `im_send_file` 会发布本进程能打开的任何文件（`cwd` 只用于锚定相对路径，`~` 会展开），托管会话自身的工具也能读到同样的文件：DSH 的文件系统沙箱只围住五个写操作，任何模式下读都放行，shell 的沙箱 profile 也把整个文件系统以只读方式挂载。因此能影响模型的人就能让它读取并发布本进程能读到的任何内容。收窄会话的工具集（`defaultDispatch.restrict`）并不会收窄这个范围：除非按名字撤掉，`im_send_file` 与发布时的抓取依然可用。
 - **发布可能让本机去抓取资源** — 发布内容里的 `file:` 或 `http(s)` 源会在 prepare 阶段由 `ctx.http` 解析，而该服务既没有 scheme 策略也没有地址策略：它既提供本地文件，也能访问内网地址。收到的媒体则按上面更窄的规则处理，两条路径的区别在于谁选择源：会话语义上发布的是本部署允许它触及的范围，而聊天成员的一条消息既到不了本机路径，也到不了主机名解析结果被判为内网的地址——入站抓取不跟随重定向，但在那次解析与抓取之间答案改变的名字（DNS 重绑定）不在这条规则的覆盖范围内。聊天成员仍可通过提示诱导模型在 `im_send` 里写出这类源，这正是发布路径必须是会话决定、而非聊天成员决定的原因。
 - **发布的上传缓存按源计键，本地文件则完全不缓存** — 模型自己在 `im_send` markdown 里写的源按进程工作目录解析；`prepare` 按 bot 用 `sha256(src)` 缓存上传结果，因此两个聊天里相同的相对写法会共用同一份缓存上传。`file:` 源不在此列：同一路径背后的字节会变，因此每次发布该路径都会重新上传。
-- **IM 工具仅限托管会话调用** — 非 `ctx.im.sessions` 托管的普通 agent 调用 `im_*` 工具会返回 `ownership` 错误；未挂载 `fs` 与 `workingDirectory` 的环境不会注册 `im_send_file`。
+- **IM 工具仅限托管会话调用** — 非 `ctx.im.sessions` 托管的普通 agent 调用 `im_*` 工具会返回 `ownership` 错误；`im_read_file` 与 `im_send_file` 仅在挂载了 `fs` 与 `workingDirectory` 时注册（且 `fs.sandboxMode` 已定义时 `im_read_file` 需要 `ctx.sandboxPolicy`）。
 
 <a id="dev-note"></a>
 ### 开发备注
