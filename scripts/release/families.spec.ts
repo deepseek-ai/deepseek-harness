@@ -100,6 +100,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-subagent-oar',
       '@deepseek-ai/dsh-experimental-terminal-bundle',
       '@deepseek-ai/dsh-terminal-panel',
+      '@deepseek-ai/dsh-timeline',
       '@deepseek-ai/dsh-tool-ralph',
       '@deepseek-ai/dsh-tool-session-query',
       '@deepseek-ai/dsh-experimental-tool-subagent-oar',

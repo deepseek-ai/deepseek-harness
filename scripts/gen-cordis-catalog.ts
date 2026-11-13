@@ -183,6 +183,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  timeline: 'experimental session data service internal to the bundle — packages/experimental/timeline/README.md owns its behavior',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',
   invocation: 'not a service: per-call accessor (RemoteInvocation | undefined) the Gateway derives for each Remote call — packages/api/gateway/README.md owns the contract',
@@ -264,6 +265,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'mcp-manager': 'mcp.md',
   'permission-presets': 'permission-presets.md',
   'session': 'session.md',
+  'timeline': 'session.md',
   'settings': 'settings.md',
   'skills': 'skills.md',
   'subagent': 'subagent.md',
