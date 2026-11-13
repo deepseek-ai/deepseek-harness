@@ -2,13 +2,13 @@
 
 [English](working-directory.md) | 中文
 
-Session 的当前目录由 [`dsh-working-directory`](../../packages/session/working-directory/README.zh.md) 拥有。不可变 header 标识原始项目；`working-directory/change` 记录后续目录相关操作使用的有效目录。生成的[持久化目录](../persistence-catalog.zh.md) 拥有事件声明。
+Session 的当前目录由 [`dsh-working-directory`](../../packages/session/working-directory/README.zh.md) 拥有。不可变 header 标识原始项目；`workspace-root/change` 记录后续目录相关操作所用目录的每次移动。生成的[持久化目录](../persistence-catalog.zh.md) 拥有事件声明。
 
 ## 目录选择
 
 `ctx.workingDirectory.get(session)` 读取日志中的值。`ensure(agent)` 验证它，并在目录消失时恢复原始项目。`set(agent, path)` 验证并记录由 Host 操作选定的移动，例如创建工作树、forge 面板或 SDK 请求；模型没有可以移动目录的工具。header 没有目录的 Session 使用配置的运行时回退目录；回退目录不可用时返回错误。
 
-`rootOf(session)` 读取工作区根。服务记录的每次变更都带有 `workspace: true`，根随目录一起移动，因此两者相等。只有当 Session 日志中存在不带该标记的变更时两者才不同，这类变更记录于模型还能移动目录的版本：它只移动目录，根留在原始项目，直到下一次记录的变更。
+`rootOf(session)` 读取工作区根。服务记录的每次变更都是 `workspace-root/change`，根随目录一起移动，因此两者相等。只有当 Session 日志中存在 `working-directory/change` 时两者才不同，这类事件记录于模型还能移动目录的版本：它已标为 deprecated，没有写入方，只移动目录，根留在原始项目，直到下一次记录的变更。
 
 变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。已有终端和持久 shell 保留自己的目录。沙箱可写根目录与项目归属继续绑定原始项目。
 
@@ -30,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 One owner for each Session's directory, its workspace root, and their model-visible changes.
 
-A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a change without the `workspace` marker.
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a `working-directory/change`.
 
 ```ts cordis-catalog
 /**
@@ -43,7 +43,7 @@ get(session: Session): string
 /**
  * Read the committed workspace root without filesystem I/O.
  * @param session - Session whose root is requested.
- * @returns the directory of the last change that moved the workspace, the original project before any,
+ * @returns the directory of the last `workspace-root/change`, the original project before any,
  * or the deployment default when none is recorded.
  */
 rootOf(session: Session): string

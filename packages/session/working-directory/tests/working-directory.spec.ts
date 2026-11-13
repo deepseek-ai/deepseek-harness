@@ -46,7 +46,7 @@ describe('Session working directories', () => {
     expect(f.ctx.workingDirectory.get(sibling.session)).toBe(f.root)
     expect(f.agent.session.header.cwd).toBe(f.root)
     expect(f.agent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
-      type: 'working-directory/change', data: { cwd: child, workspace: true },
+      type: 'workspace-root/change', data: { cwd: child },
     }))
     const messages = f.harness.claim(f.agent, 'next-step', 1)
     expect(messages).toEqual([expect.objectContaining({
@@ -132,7 +132,7 @@ describe('Session working directories', () => {
     controller.abort(new Error('cancelled directory change'))
     await expect(f.ctx.workingDirectory.set(f.agent, f.root, controller.signal)).rejects.toThrow('cancelled directory change')
     expect(f.ctx.workingDirectory.get(f.agent.session)).toBe(f.root)
-    expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change')).toEqual([])
+    expect(f.agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change')).toEqual([])
   })
 
   it('keeps unchanged reads and changes free of transition notices', async () => {
@@ -160,7 +160,7 @@ describe('Session working directories', () => {
     const fallback = f.ctx.workingDirectory.defaultDirectory
     await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(fallback)
     expect(agent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
-      type: 'working-directory/change', data: { cwd: fallback, workspace: true },
+      type: 'workspace-root/change', data: { cwd: fallback },
     }))
   })
 
@@ -236,8 +236,8 @@ describe('Session working directories', () => {
       release.resolve(undefined)
       await rejection
       await expect(queued).resolves.toBe(join(f.root, 'second'))
-      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
-        .toEqual([expect.objectContaining({ data: { cwd: join(f.root, 'second'), workspace: true } })])
+      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change'))
+        .toEqual([expect.objectContaining({ data: { cwd: join(f.root, 'second') } })])
       expect(f.harness.claim(f.agent, 'next-step', 1)).toHaveLength(1)
     } finally {
       release.resolve(undefined)
@@ -279,7 +279,7 @@ describe('Session working directories', () => {
       await rejection
       await disposal
       expect(disposed).toBe(true)
-      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change')).toEqual([])
+      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change')).toEqual([])
       expect(f.harness.claim(f.agent, 'next-step', 1)).toEqual([])
       await expect(directories.ensure(f.agent)).rejects.toThrow('working-directory service disposed')
       await expect(directories.ensure(f.agent)).rejects.toMatchObject({ name: 'WorkingDirectoryError', code: 'WORKING_DIRECTORY_UNAVAILABLE' })
@@ -310,7 +310,7 @@ describe('Session working directories', () => {
       await f.agent.ctx.fiber.dispose()
       release.resolve(undefined)
       await rejection
-      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change')).toEqual([])
+      expect(f.agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change')).toEqual([])
       await expect(f.ctx.workingDirectory.ensure(f.agent)).rejects.toThrow('inactive context')
       expect(probe).toHaveBeenCalledOnce()
     } finally {

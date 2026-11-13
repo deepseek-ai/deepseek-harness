@@ -55,7 +55,7 @@ describe('Session workspace roots', () => {
     expect(await f.context()).toContain(`Current working directory: ${JSON.stringify(f.root)}.`)
   })
 
-  it('moves the directory and the root together with one marked change per move', async () => {
+  it('moves the directory and the root together with one workspace-root/change per move', async () => {
     await using f = await fixture()
     await expect(f.ctx.workingDirectory.set(f.agent, f.worktree)).resolves.toBe(f.worktree)
     expect(f.ctx.workingDirectory.get(f.agent.session)).toBe(f.worktree)
@@ -67,10 +67,10 @@ describe('Session workspace roots', () => {
     expect(f.ctx.workingDirectory.rootOf(f.agent.session)).toBe(f.outside)
     await expect(f.ctx.workingDirectory.set(f.agent, f.root)).resolves.toBe(f.root)
     expect(f.ctx.workingDirectory.rootOf(f.agent.session)).toBe(f.root)
-    expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change').map(event => event.data)).toEqual([
-      { cwd: f.worktree, workspace: true },
-      { cwd: f.outside, workspace: true },
-      { cwd: f.root, workspace: true },
+    expect(f.agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change').map(event => event.data)).toEqual([
+      { cwd: f.worktree },
+      { cwd: f.outside },
+      { cwd: f.root },
     ])
     expect(await f.context()).toContain(`Current working directory: ${JSON.stringify(f.root)}.`)
   })
@@ -78,7 +78,7 @@ describe('Session workspace roots', () => {
   it('records nothing for a move to the current workspace', async () => {
     await using f = await fixture()
     await expect(f.ctx.workingDirectory.set(f.agent, f.root)).resolves.toBe(f.root)
-    expect(f.agent.session.snapshotEvents().some(event => event.type === 'working-directory/change')).toBe(false)
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'workspace-root/change')).toBe(false)
     expect(f.notices()).toEqual([])
   })
 
@@ -94,29 +94,29 @@ describe('Session workspace roots', () => {
     ])
   })
 
-  it('restores the root from the log, and a change without the marker moves only the directory', async () => {
+  it('restores the root from the log, and a working-directory/change moves only the directory', async () => {
     await using f = await fixture()
     await f.ctx.workingDirectory.set(f.agent, f.worktree)
     const restored = f.ctx.sessions.create(brandString<SessionId>('restored'), { meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents() })
     expect(f.ctx.workingDirectory.rootOf(restored)).toBe(f.worktree)
     expect(f.ctx.sessionProjections.snapshot(restored).values.workspaceRoot).toBe(f.worktree)
 
-    const unmarked = f.ctx.sessions.create(brandString<SessionId>('unmarked'), { meta: { cwd: f.root } })
-    unmarked.append('working-directory/change', { cwd: join(f.worktree, 'src') })
-    expect(f.ctx.workingDirectory.get(unmarked)).toBe(join(f.worktree, 'src'))
-    expect(f.ctx.workingDirectory.rootOf(unmarked)).toBe(f.root)
-    expect(f.ctx.sessionProjections.snapshot(unmarked).values.workspaceRoot).toBe(f.root)
+    const stored = f.ctx.sessions.create(brandString<SessionId>('stored'), { meta: { cwd: f.root } })
+    stored.append('working-directory/change', { cwd: join(f.worktree, 'src') })
+    expect(f.ctx.workingDirectory.get(stored)).toBe(join(f.worktree, 'src'))
+    expect(f.ctx.workingDirectory.rootOf(stored)).toBe(f.root)
+    expect(f.ctx.sessionProjections.snapshot(stored).values.workspaceRoot).toBe(f.root)
   })
 
-  it('moves the root onto a directory recorded without the marker, without a notice', async () => {
+  it('moves the root onto a directory a working-directory/change recorded, without a notice', async () => {
     await using f = await fixture()
-    const agent = await f.harness.create(brandString<SessionId>('unmarked-owner'), {}, { cwd: f.root })
+    const agent = await f.harness.create(brandString<SessionId>('stored-owner'), {}, { cwd: f.root })
     agent.session.append('working-directory/change', { cwd: f.worktree })
     await expect(f.ctx.workingDirectory.set(agent, f.worktree)).resolves.toBe(f.worktree)
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change').map(event => event.data)).toEqual([
-      { cwd: f.worktree },
-      { cwd: f.worktree, workspace: true },
+    expect(agent.session.snapshotEvents().filter(event => event.type.endsWith('/change')).map(event => [event.type, event.data])).toEqual([
+      ['working-directory/change', { cwd: f.worktree }],
+      ['workspace-root/change', { cwd: f.worktree }],
     ])
     expect(noticesOf(f, agent)).toEqual([])
 

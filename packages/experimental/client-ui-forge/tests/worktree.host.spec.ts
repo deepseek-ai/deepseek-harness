@@ -63,19 +63,19 @@ describe('forgeWorktree projection', () => {
     ctx.sessionProjections.onChanged((_session, key, value) => { if (key === 'forgeWorktree') published.push(value) })
 
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
     startTurn(session, 1)
     startStep(session, 1)
     session.append('working-directory/change', { cwd: join(WORKTREE.path, 'packages') })
     const inside = [...published]
-    session.append('working-directory/change', { cwd: WORKTREE.repositoryRoot })
+    session.append('workspace-root/change', { cwd: WORKTREE.repositoryRoot })
     // Shares the worktree's path as a string prefix without lying below it.
-    session.append('working-directory/change', { cwd: `${WORKTREE.path}-sibling` })
+    session.append('workspace-root/change', { cwd: `${WORKTREE.path}-sibling` })
     const outside = [...published]
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
     const returned = state()
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
 
     expect(state()).toBe(returned)
     expect(inside.at(-1)).toEqual(WORKTREE)

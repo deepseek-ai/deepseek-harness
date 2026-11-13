@@ -141,7 +141,7 @@ export class SessionPanel {
    * @param event - committed Session event.
    */
   observe(event: SessionEvent): void {
-    if (event.type === 'working-directory/change') {
+    if (event.type === 'workspace-root/change') {
       this.publish({ ...this.current, directory: event.data.cwd, checkout: { state: 'pending' }, local: null })
       void this.inspect()
     } else if (event.type === 'tool/result' || event.type === 'sandbox/mode') {

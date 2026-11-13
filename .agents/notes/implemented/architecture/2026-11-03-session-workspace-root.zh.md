@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-一个 Session 在一个目录中工作，只有 Host 操作移动它。面向模型的 `working_directory` 工具与委派工具的 `cwd` 参数被移除；模型通过路径和 shell 的单次调用参数 `workdir` 到达子目录。`header.cwd` 仍是不可变的原始项目：Session 身份、工作区归属和恢复目的地。`dsh-working-directory` 拥有该目录。它通过 `set` 或 `ensure` 的恢复记录的每次变更都带有 `workspace: true`，`workspaceRoot` 投影是最近一条带标记变更的目录，在此之前是原始项目。因此从这个版本起启动的每个 Session 中，`rootOf` 都等于 `get`。
+一个 Session 在一个目录中工作，只有 Host 操作移动它。面向模型的 `working_directory` 工具与委派工具的 `cwd` 参数被移除；模型通过路径和 shell 的单次调用参数 `workdir` 到达子目录。`header.cwd` 仍是不可变的原始项目：Session 身份、工作区归属和恢复目的地。`dsh-working-directory` 拥有该目录。它通过 `set` 或 `ensure` 的恢复记录的每次变更都是 `workspace-root/change`，`workspaceRoot` 投影是最近一条这类事件的目录，在此之前是原始项目。因此从这个版本起启动的每个 Session 中，`rootOf` 都等于 `get`。
 
-该标记是可选属性，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-11-working-directory-workspace.zh.md)中。不带标记的变更写于模型还能移动目录的时期，它只移动当前目录，因此已存储的 Session 保持原有的根。
+`workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。已存储的这类事件写于模型还能移动目录的时期，它只移动当前目录，因此已存储的 Session 保持原有的根。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
 
 工作树创建通过 `set` 进入检出目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供给模型，它找到包含 Session 目录的已记录工作树，把 Session 送回其源检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的工作区根或 Host 选定的目录启动。
 
@@ -28,7 +28,9 @@ Status: implemented
 
 **重定位时改写 header。** header 是存储、归属与权限根使用的身份元数据；[工作目录记录](2026-09-13-session-working-directory.zh.md)已否决改写它。
 
-**为工作区移动新增事件类型。** 旧读者遇到未知的必需事件会拒绝重建日志，而可忽略事件只能承载丢失后不影响重建的信息。在现有事件上增加可选属性，旧读者得到的仍是它已经理解的当前目录。
+**在 `working-directory/change` 上增加可选的 `workspace` 标记。** 旧读者忽略该属性，仍能读取所有日志。但服务记录的每次变更都要带一个恒定值，缺少属性成为识别已存储变更的唯一依据；单独的事件为工作区移动命名，并让已存储的事件保持不变。
+
+**通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类，而已存储的模型 `cd` 仍需要一种只移动目录的记录。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
 
 **在调用之间保留 shell 的 `cd`。** 这是一个隐式的光标。在该开发者的 Session 中，68% 的 `cd` 前缀指向 Session 目录之外，30% 指向 Session 目录本身，限制在工作区内的保留只对约 2% 生效。
 
@@ -36,4 +38,4 @@ Status: implemented
 
 ## Consequences
 
-消费方读取一个目录：相对路径用 `get`，属于工作区的一切用 `rootOf`。两者只在含有未标记变更的 Session 中不同，下一次 Host 移动会让它们重新一致。以后增加光标不需要改格式，因为未标记的变更本来就只移动目录。模型不能再进入它通过 shell 创建的检出；进入检出是 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。工作树快照夹具覆盖进入、离开和失去工作树。迁移 Deferred 中列出的消费方是另一项变更。
+消费方读取一个目录：相对路径用 `get`，属于工作区的一切用 `rootOf`。两者只在含有 `working-directory/change` 事件的 Session 中不同，下一次 Host 移动会让它们重新一致。读者继续把该事件折叠为只移动目录的变更，因此以后增加光标不需要改格式。模型不能再进入它通过 shell 创建的检出；进入检出是 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。工作树快照夹具覆盖进入、离开和失去工作树。迁移 Deferred 中列出的消费方是另一项变更。
