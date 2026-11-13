@@ -1,9 +1,10 @@
 import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, type SessionHeader } from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { describe, expect, it, vi } from 'vitest'
 import WorkspaceFiles from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const CAPS = {
   maxBytes: 1024,
@@ -26,9 +27,9 @@ function header(id: SessionId, cwd?: string): SessionHeader {
 
 describe('Workspace Files Session scope lookup', () => {
   it('prefers the recorded workspace root of a live or stored Session over its header directory', async () => {
-    const liveId = SessionId('live-relocated')
-    const coldId = SessionId('cold-relocated')
-    const plainId = SessionId('cold-plain')
+    const liveId = brandString<SessionId>('live-relocated')
+    const coldId = brandString<SessionId>('cold-relocated')
+    const plainId = brandString<SessionId>('cold-plain')
     const liveRoot = resolve('live-workspace')
     const liveWorktree = resolve('live-workspace', '.agents', 'worktrees', 'topic')
     const coldRoot = resolve('cold-workspace')
@@ -66,11 +67,11 @@ describe('Workspace Files Session scope lookup', () => {
   })
 
   it('uses live or stored headers without an Agent and leaves with its plugin', async () => {
-    const liveId = SessionId('live-subagent')
-    const coldId = SessionId('cold-subagent')
-    const fallbackId = SessionId('cold-without-cwd')
-    const liveFallbackId = SessionId('live-without-cwd')
-    const missingId = SessionId('missing')
+    const liveId = brandString<SessionId>('live-subagent')
+    const coldId = brandString<SessionId>('cold-subagent')
+    const fallbackId = brandString<SessionId>('cold-without-cwd')
+    const liveFallbackId = brandString<SessionId>('live-without-cwd')
+    const missingId = brandString<SessionId>('missing')
     const liveRoot = resolve('live-workspace')
     const coldRoot = resolve('cold-workspace')
     const fallbackRoot = resolve('fallback-workspace')

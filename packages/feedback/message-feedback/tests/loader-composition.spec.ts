@@ -6,11 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import MessageFeedbackService from '../src/index.ts'
 import { appendMessageFixture } from './helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 let root: string | undefined
 const contexts: Context[] = []
@@ -71,7 +72,7 @@ describe('message feedback through a real Loader composition', () => {
     expect(remoteMethods(first.messageFeedback).map(marker => marker.method))
       .toEqual(['list', 'put', 'delete'])
 
-    const unowned = first.sessions.create(SessionId('unowned-feedback'))
+    const unowned = first.sessions.create(brandString<SessionId>('unowned-feedback'))
     const unownedFixture = appendMessageFixture(unowned)
     const unownedRequest = {
       sessionId: unowned.id, messageId: unownedFixture.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null,
@@ -84,7 +85,7 @@ describe('message feedback through a real Loader composition', () => {
     await expect(first.messageFeedback.put({ ...unownedRequest, ifVersion: unownedItems.value.items[0]!.version }))
       .rejects.toThrow(/not found/u)
 
-    const session = first.sessions.create(SessionId('loader-feedback'), {
+    const session = first.sessions.create(brandString<SessionId>('loader-feedback'), {
       meta: { cwd: root },
     })
     // The mounted backend routes this published session's `session/event`

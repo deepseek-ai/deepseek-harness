@@ -6,24 +6,24 @@ declare module '@deepseek-ai/dsh-llm' {
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
-import { TeamId, TeamMessageId } from '@deepseek-ai/dsh-agent-team/types'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import {
+import type { TeamId, TeamMessageId } from '@deepseek-ai/dsh-agent-team/types'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type {
   LlmAttemptId,
   MessageId,
   ToolCallId,
-  type AssistantMessage,
-  type AssistantStreamRecord,
-  type ContentBlock,
-  type ImageBlock,
-  type StreamChunk,
-  type TokenUsage,
-  type ToolResultMessage,
-  type UserMessage,
+  AssistantMessage,
+  AssistantStreamRecord,
+  ContentBlock,
+  ImageBlock,
+  StreamChunk,
+  TokenUsage,
+  ToolResultMessage,
+  UserMessage,
 } from '@deepseek-ai/dsh-llm'
-import { RetryId } from '@deepseek-ai/dsh-llm-retry'
-import type {} from '@deepseek-ai/dsh-llm-retry/types'
-import { SessionId, SessionSeq, type SessionEventMap, type SessionEventType } from '@deepseek-ai/dsh-session/types'
+import type { RetryId } from '@deepseek-ai/dsh-llm-retry/types'
+import { type SessionId, SessionSeq, type SessionEventMap, type SessionEventType } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion, triggerSenderOf,
@@ -65,7 +65,7 @@ function liveChunk(turn: number, step: number, chunk: StreamChunk, time?: number
     type: 'assistant/live-chunk',
     seq,
     time: clock,
-    data: { attemptId: LlmAttemptId('attempt-1'), turn, step, chunk },
+    data: { attemptId: brandString<LlmAttemptId>('attempt-1'), turn, step, chunk },
   }
 }
 
@@ -83,7 +83,7 @@ function imageBlock(attachmentId = 'sha256:fixture'): ImageBlock {
   return {
     type: 'image',
     attachment: {
-      attachmentId: AttachmentId(attachmentId),
+      attachmentId: brandString<AttachmentId>(attachmentId),
       mediaType: 'image/png',
       bytes: 1,
       width: 1,
@@ -96,13 +96,13 @@ function userMessage(
   content: readonly ContentBlock[],
   source: UserMessage['source'] = { kind: 'user' },
 ): UserMessage {
-  return { role: 'user', id: MessageId('user-1'), content, source }
+  return { role: 'user', id: brandString<MessageId>('user-1'), content, source }
 }
 
 function assistantMessage(content: readonly ContentBlock[] = []): AssistantMessage {
   return {
     role: 'assistant',
-    id: MessageId('assistant-1'),
+    id: brandString<MessageId>('assistant-1'),
     content,
     source: { kind: 'model', provider: 'deepseek', model: 'deepseek-chat' },
   }
@@ -115,10 +115,10 @@ function toolMessage(
 ): ToolResultMessage {
   return {
     role: 'tool',
-    id: MessageId(`tool-${callId}`),
+    id: brandString<MessageId>(`tool-${callId}`),
     content,
-    source: { kind: 'tool', callId: ToolCallId(callId) },
-    toolCallId: ToolCallId(callId),
+    source: { kind: 'tool', callId: brandString<ToolCallId>(callId) },
+    toolCallId: brandString<ToolCallId>(callId),
     isError,
   }
 }
@@ -140,7 +140,7 @@ function toolCall(
   time: number,
 ): SessionEventLike {
   return event('tool/call', {
-    turn, step, callId: ToolCallId(callId), name, arguments: args,
+    turn, step, callId: brandString<ToolCallId>(callId), name, arguments: args,
   }, time)
 }
 
@@ -161,7 +161,7 @@ function retry(turn: number, step: number, time: number): SessionEventLike {
   return event('llm/retry', {
     turn,
     step,
-    retryId: RetryId('retry-1'),
+    retryId: brandString<RetryId>('retry-1'),
     provider: 'deepseek',
     mode: 'normal',
     policyKey: 'default',
@@ -174,9 +174,9 @@ function retry(turn: number, step: number, time: number): SessionEventLike {
 
 function ptcStart(root: string, sub: string, name: string, args: unknown, time: number): SessionEventLike {
   return event('tool/ptc-dispatch-start', {
-    rootCallId: ToolCallId(root),
-    parentCallId: ToolCallId(root),
-    subCallId: ToolCallId(sub),
+    rootCallId: brandString<ToolCallId>(root),
+    parentCallId: brandString<ToolCallId>(root),
+    subCallId: brandString<ToolCallId>(sub),
     name,
     arguments: args,
   }, time)
@@ -192,9 +192,9 @@ function ptcDispatch(
   isError = false,
 ): SessionEventLike {
   return event('tool/ptc-dispatch', {
-    rootCallId: ToolCallId(root),
-    parentCallId: ToolCallId(root),
-    subCallId: ToolCallId(sub),
+    rootCallId: brandString<ToolCallId>(root),
+    parentCallId: brandString<ToolCallId>(root),
+    subCallId: brandString<ToolCallId>(sub),
     name,
     arguments: args,
     isError,
@@ -588,15 +588,15 @@ describe('assistant timeline and usage', () => {
   it('treats tool-call deltas as tokens only when they carry content', () => {
     const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
     const empty = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('c'), argumentsDelta: '',
     }, 1_010)))
     expect(empty.firstTokenTime).toBeNull()
     const args = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '{"a":1}',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('c'), argumentsDelta: '{"a":1}',
     }, 1_020)))
     expect(args.firstTokenTime).toBe(1_020)
     const named = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), name: 'read', argumentsDelta: '',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('c'), name: 'read', argumentsDelta: '',
     }, 1_030)))
     expect(named.firstTokenTime).toBe(1_030)
     const blockStart = defined(foldEvent(start, liveChunk(2, 1, {
@@ -726,10 +726,10 @@ describe('prompt helper', () => {
 describe('trigger sender helper', () => {
   it('names the teammate that sent a framed message', () => {
     expect(triggerSenderOf(userMessage([imageBlock(), textBlock('Team message from hfai-deploy: update')], {
-      kind: 'team-message', teamId: TeamId('team'), messageId: TeamMessageId('message'), senderId: SessionId('sender'), senderName: 'hfai-deploy',
+      kind: 'team-message', teamId: brandString<TeamId>('team'), messageId: brandString<TeamMessageId>('message'), senderId: brandString<SessionId>('sender'), senderName: 'hfai-deploy',
     }))).toBe('hfai-deploy')
     expect(triggerSenderOf(userMessage([textBlock('Team message from  stack-rebase : go')], {
-      kind: 'team-message', teamId: TeamId('team'), messageId: TeamMessageId('message'), senderId: SessionId('sender'), senderName: 'stack-rebase',
+      kind: 'team-message', teamId: brandString<TeamId>('team'), messageId: brandString<TeamMessageId>('message'), senderId: brandString<SessionId>('sender'), senderName: 'stack-rebase',
     }))).toBe('stack-rebase')
   })
 

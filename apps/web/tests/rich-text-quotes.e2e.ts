@@ -7,7 +7,7 @@ import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { formatSessionReferenceMention } from '@deepseek-ai/dsh-session-reference'
 import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -16,6 +16,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/rich-text-quotes', import.meta.url))
 const BORROWED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.jsonl', import.meta.url))
@@ -29,7 +30,7 @@ const LEGACY_DRAFT = JSON.stringify({ draft: 'Imported plain draft', view: 'chat
 const SOURCE_TEXT = 'Durable source phrase selected from an earlier message and preserved as structured quote metadata.'
 const THINKING_TEXT = 'Settled reasoning source'
 const LITERAL_CREDENTIAL = 'sk-1234567890abcdefghijklmnopqrstuvwxyz'
-const SESSION_MENTION = formatSessionReferenceMention({ sessionId: SessionId(OTHER_ID), label: 'Quote source' })
+const SESSION_MENTION = formatSessionReferenceMention({ sessionId: brandString<SessionId>(OTHER_ID), label: 'Quote source' })
 const DIRECT_SYNTAX_TEXT = [
   `/quoted-demo ${SESSION_MENTION} ${LITERAL_CREDENTIAL} **literal Markdown**`,
   ...Array.from({ length: 80 }, (_, index) => `Quote line ${String(index + 1)} contains preserved text.`),
@@ -559,7 +560,7 @@ describe.skipIf(MODE === 'record')('web e2e: rich-text quotes', () => {
     } finally {
       await page.setViewportSize(viewport)
     }
-    const beforeOffset = scaffold.ctx.agents.get(SessionId(SESSION_ID))!.session.seq
+    const beforeOffset = scaffold.ctx.agents.get(brandString<SessionId>(SESSION_ID))!.session.seq
     const settled = scaffold.whenTurnSettled()
     await page.getByRole('button', { name: 'Send message' }).click()
     const settledSessionId = await settled

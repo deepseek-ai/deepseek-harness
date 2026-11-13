@@ -1,14 +1,15 @@
 /** Changes tab addresses, titles, the tab type definition, and the per-tab store. */
 import { describe, expect, it } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   CHANGES_ID, CHANGES_KIND, changesAddress, changesDefinition, changesTitle, parseChangesAddress,
 } from '../src/client/changes-address.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const SESSION = SessionId('s/1')
+const SESSION = brandString<SessionId>('s/1')
 const URL = 'https://github.com/octo/demo/pull/7'
 
 describe('changes addresses', () => {
@@ -60,7 +61,7 @@ describe('createChangesStore', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'branch', base: null, commits: null, lens: 'all', hideTests: false, split: true, wrap: true, navigated: 1,
+      scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
     })
     store.actions.scoped('tab-1', 'staged')
     store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
@@ -68,10 +69,11 @@ describe('createChangesStore', () => {
     store.actions.toggledWrap('tab-1')
     store.actions.lensed('tab-1', 'interface')
     store.actions.toggledTests('tab-1')
+    store.actions.filtered('tab-1', 'fixture/exports')
     store.actions.navigated('tab-1', 2)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', hideTests: true,
-      split: false, wrap: false, navigated: 2,
+      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
+      hideTests: true, split: false, wrap: false, navigated: 2,
     })
     store.actions.navigated('tab-2', 1)
     store.actions.forget('tab-1')

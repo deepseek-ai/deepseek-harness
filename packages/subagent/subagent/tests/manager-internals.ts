@@ -3,7 +3,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { SubagentRunId, type SubagentResult } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SubagentRunId, SubagentResult } from '../src/types.ts'
 import type { LocalActivation } from '../src/activation.ts'
 import type SubagentManager from '../src/manager.ts'
 
@@ -39,7 +40,7 @@ export function bindSubagentActivation(
   const activation: LocalActivation = {
     kind: 'local',
     childId: child.id,
-    runId: SubagentRunId(`fixture:${child.id}`),
+    runId: brandString<SubagentRunId>(`fixture:${child.id}`),
     provider: 'fixture',
     root,
     ancestors,

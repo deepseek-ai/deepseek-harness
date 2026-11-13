@@ -20,7 +20,7 @@ export { applyIndexInjections } from './apply-injections.ts'
 export { IMAGE_FILE_NAME } from '../image-layout.ts'
 export {
   parsePreviewFixtureManifest, PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
-  type PreviewFixtureManifest, type PreviewFixtureManifestEntry,
+  type PreviewFixtureManifest, type PreviewFixtureManifestEntry, type PreviewLink,
 } from '../fixture-manifest.ts'
 
 /** Transport global the connection plugin reads instead of building an HTTP carrier. */

@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-client-connection'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-workspace'
 import {
   loadOwnerState,
@@ -17,6 +17,7 @@ import { createRelayAuthority } from './relay-authority.ts'
 import { createOwnerShareOperations } from './owner-share-operations.ts'
 import { registerOwnerHttpRoutes } from './owner-http-routes.ts'
 import { createTunnelSupervision } from './tunnel-supervision.ts'
+import { claimOwnerHost, OwnerHostClaimHeldError, type OwnerHostClaim } from './owner-host-claim.ts'
 import { activateSession, createSourceAccess, type SourceAccess } from './source-access.ts'
 import { LiveshareShares } from './share-remote.ts'
 import type { OwnerRelayState } from '../share-api-types.ts'
@@ -161,6 +162,23 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     throw new Error('liveshare-share-host: ownerStateFile must not be empty')
   }
   const ownerState = loadOwnerState(ownerStateFile)
+  // One host owns this state at a time. A second host that restored the same shares would move their
+  // Relay registrations away from the holder, whose next authority read would then fence them and
+  // stop the owner's turn; that host reads the records and publishes nothing.
+  const ownerHostClaim: OwnerHostClaim | undefined = takeOwnerStateClaim(dirname(ownerStateFile))
+  // Re-read on every use: a successor can replace the record while this host runs, and a host that
+  // no longer holds the state must stop registering and changing shares. Both a claim that was never
+  // taken and one whose file no longer names this host answer false.
+  const ownsOwnerState = (): boolean => ownerHostClaim !== undefined && ownerHostClaim.holds()
+  // A host that fails to finish mounting must not leave the claim naming its pid: this effect runs
+  // when the plugin's fiber disposes, including a load that rejects below. The ordinary teardown
+  // releases the claim only once the worker has stopped, so the effect releases only when the host
+  // never reached that teardown; releasing an already-freed claim is a no-op either way.
+  let claimReleasedByTeardown = false
+  if (ownerHostClaim !== undefined) {
+    const claimed = ownerHostClaim
+    ctx.effect(() => () => { if (!claimReleasedByTeardown) claimed.release() })
+  }
   const ownerCredentialFile = config.ownerCredentialFile
     ?? nonEmpty(process.env.LIVESHARE_OWNER_CREDENTIAL_FILE)
     ?? join(dirname(ownerStateFile), OWNER_CREDENTIAL_FILENAME)
@@ -339,6 +357,10 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     disposed: () => disposed,
     accessChanged,
     confinedExecution,
+    // The same record the sandbox reads, with the same rule for an unattributable turn: work this
+    // host cannot place may be the work the ended grant admitted. A turn that has not admitted its
+    // first step yet still reads the previous turn's record; that window is one step wide.
+    turnIsViewerDriven: sessionId => viewerTurns.get(sessionId)?.confined !== false,
   })
 
   /**
@@ -477,8 +499,9 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
 
   // A reader's input is re-checked here rather than before it entered the queue: the step about to run
   // reads the viewer from each entering message's own source, so input admitted under a grant that ended
-  // since is refused before it reaches the model. A shared Session's own turns are not attributed, so the
-  // sandbox on the Session — not this admission check — is what confines them.
+  // since is refused before it reaches the model. This listener also records whether the turn admitted
+  // share-viewer input, which decides both the tool surface the turn runs and whether ending a share's
+  // grant stops it.
   ctx.on('agent/pre-step', async ({ agent, signal, turn }, next) => {
     const decision = await next()
     if (decision.kind !== 'enter') return decision
@@ -516,16 +539,20 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     writeOwnerState(ownerStateFile, relayOverride, ownerState.instanceId, ownerShares, pendingRemovals)
 
   // A restored share keeps its own deadline, so the cancel that stops its running turn when the deadline
-  // passes is armed again from the record rather than remembered anywhere else.
-  for (const share of ownerShares.values()) tunnel.scheduleShareExpiry(share)
+  // passes is armed again from the record rather than remembered anywhere else. Only the holder arms it:
+  // both the record it restored and the shares over its Sessions can be stale, because the holder has
+  // changed them since, so a second host's deadline would end work the holder still serves.
+  if (ownsOwnerState()) {
+    for (const share of ownerShares.values()) tunnel.scheduleShareExpiry(share)
+  }
   // A host that starts with write-mode shares installs their access layers before serving any request for
   // them, so a restored share is never briefly writable without the layer that judges its turns.
   void Promise.all([...ownerShares.values()].flatMap(share =>
     share.sessionIds.map(sessionId => sourceAccess.apply(share, sessionId, undefined, 'restore'))))
   // Reconnecting a share, refreshing its title, and probing or claiming at the Relay all need an address
-  // the owner saved. A host that has none still serves the sharing surfaces and stops its shares' turns
-  // on their deadlines, but contacts no Relay: there is no address to ask, and the dialog states that.
-  if (effectiveRelay !== undefined) {
+  // the owner saved. A host that has none still serves the sharing surfaces, but contacts no Relay: there
+  // is no address to ask, and the dialog states that.
+  if (effectiveRelay !== undefined && ownsOwnerState()) {
     for (const share of ownerShares.values()) tunnel.send({ type: 'add-share', share: tunnel.shareSpec(share, storedCredential) })
     // The shares this profile reconnected with keep their recorded titles until the title folds answer,
     // so the refresh runs beside mounting rather than holding it up.
@@ -567,6 +594,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     relayFetch: relayTransport.fetch,
     ownerShares,
     pendingRemovals,
+    ownerStateHeld: () => !ownsOwnerState(),
     allowedSubjectIds,
     forks,
     viewerRead,
@@ -599,11 +627,13 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     ownerCredentialFile,
     storedCredential: () => storedCredential,
     setStoredCredential: (credential) => { storedCredential = credential },
+    ownerStateHeld: () => !ownsOwnerState(),
     disposed: () => disposed,
   })
 
   // One attempt at startup: a host that restarted with rows still owed delivers them as soon as it can.
-  void tunnel.flushPendingRemovals()
+  // A host that does not own the state must not touch the Relay rows the holder is serving.
+  if (ownsOwnerState()) void tunnel.flushPendingRemovals()
 
   return async () => {
     for (const shareId of ownerShares.keys()) {
@@ -611,8 +641,35 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
       sourceAccess.cancelChildTurns(shareId)
     }
     disposed = true
-    await tunnel.dispose(() => { viewerRead.close() })
-    await relayTransport.close()
+    // The claim goes last: a successor that took it now would register the same shares while this
+    // host's worker is still stopping its registrations, and the handshake it is finishing would
+    // then overwrite the successor's registration.
+    try {
+      await tunnel.dispose(() => { viewerRead.close() })
+      await relayTransport.close()
+    } finally {
+      claimReleasedByTeardown = true
+      ownerHostClaim?.release()
+    }
+  }
+}
+
+/**
+ * Take this host's claim on the owner state directory.
+ *
+ * A second host on the same DSH home reads the shares without publishing them: it must not move the
+ * holder's Relay registrations, and a share operation there would otherwise run against a state
+ * another process is serving.
+ * @param dir - Directory that holds the owner state file.
+ * @returns The held claim, or undefined while another live host holds it.
+ */
+function takeOwnerStateClaim(dir: string): OwnerHostClaim | undefined {
+  try {
+    return claimOwnerHost(dir)
+  } catch (error: unknown) {
+    if (!(error instanceof OwnerHostClaimHeldError)) throw error
+    console.warn(`[liveshare] the owner state is held by dsh pid ${String(error.holderPid)}; this instance reads the shares without registering them`)
+    return undefined
   }
 }
 

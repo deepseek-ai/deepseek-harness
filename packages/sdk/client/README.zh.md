@@ -59,9 +59,12 @@ try {
 
 ### 用 DeepSeekHarness 运行 agent 轮次
 
+下面的示例在运行时导入 `brandString`。请在应用中直接声明 `@deepseek-ai/dsh-brand` 依赖，不要依赖 SDK 的传递依赖；仅测试使用时可以放入开发依赖。
+
 ```ts
 import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 
 await using harness = new DeepSeekHarness({
   profile: 'sdk',
@@ -69,7 +72,7 @@ await using harness = new DeepSeekHarness({
   patches: ['./automation.cordis.yml'],
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
-  reasoningEffort: ReasoningEffortId('max'),
+  reasoningEffort: brandString<ReasoningEffortId>('max'),
   maxTokens: 49_152,
 })
 const result = await harness.run('say hi')

@@ -9,7 +9,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import type { CompactionResult } from './types.ts'
 import type { CompactionCheckpointSource } from './checkpoint.ts'
 

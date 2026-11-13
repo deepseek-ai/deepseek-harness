@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -19,6 +19,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -30,7 +31,7 @@ afterEach(async () => {
 })
 
 async function agent(ctx: Context, cwd: string): Promise<Agent> {
-  const id = SessionId(`str-replace-editor-owner-${callNumber}`)
+  const id = brandString<SessionId>(`str-replace-editor-owner-${callNumber}`)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
@@ -62,7 +63,7 @@ function text(result: { content: { type: string; text?: string }[] }): string {
 function call(ctx: Context, owner: Agent | undefined, args: unknown) {
   return executeToolFixture(ctx, {
     signal: new AbortController().signal,
-    callId: ToolCallId(`str-replace-editor-${++callNumber}`),
+    callId: brandString<ToolCallId>(`str-replace-editor-${++callNumber}`),
     name: 'str_replace_editor',
     arguments: args,
     ...owner === undefined ? {} : { agent: owner },
@@ -512,7 +513,7 @@ describe('tool-str-replace-editor', () => {
     }
     expect(await readFile(ambiguous, 'utf8')).toBe('same same')
 
-    ctx.fs.stat = async () => ({ version: FsVersion('special'), type: 'other' })
+    ctx.fs.stat = async () => ({ version: brandString<FsVersion>('special'), type: 'other' })
     const special = await call(ctx, owner, { command: 'view', path: join(root, 'special') })
     expect(special.isError).toBe(true)
     expect(special.error).toMatchObject({ info: { code: 'FS_NOT_REGULAR_FILE' } })

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { SessionLogOffset, SessionSeq, TOOL_OUTCOME_UNKNOWN, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { createToolResultMessage, createUserMessage, ToolCallId, type ToolSchema } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createToolResultMessage, createUserMessage, type ToolCallId, type ToolSchema } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import {
   applyUserQuestionEvent, foldUserQuestions, isTimedAskUserQuestionSchema, questionsOf, TIMED_WAIT_PARAMETER,
   userQuestionProjectionDefinition,
 } from '../src/projection.ts'
 
-const callId = ToolCallId('call_ask_1')
+const callId = brandString<ToolCallId>('call_ask_1')
 const toolArguments = JSON.stringify({
   questions: [{
     id: 'scope',
@@ -111,9 +112,9 @@ describe('userQuestions projection fold', () => {
   })
 
   it('follows the latest header when the composed tool changes mid-Session', () => {
-    const later = event(3, 'tool/call', { turn: 2, step: 1, callId: ToolCallId('call_ask_2'), name: 'ask_user_question', arguments: toolArguments })
+    const later = event(3, 'tool/call', { turn: 2, step: 1, callId: brandString<ToolCallId>('call_ask_2'), name: 'ask_user_question', arguments: toolArguments })
     expect(foldUserQuestions([legacyHeader, asked, header(2, [timedSchema]), later])).toEqual({
-      active: [{ callId: ToolCallId('call_ask_2'), questions, state: 'open' }], settled: [],
+      active: [{ callId: brandString<ToolCallId>('call_ask_2'), questions, state: 'open' }], settled: [],
     })
     expect(foldUserQuestions([timedHeader, asked, header(2, [legacySchema]), later])).toEqual({
       active: [{ callId, questions, state: 'open' }], settled: [],
@@ -169,9 +170,9 @@ describe('userQuestions projection fold', () => {
   })
 
   it('continues a pending PTC sub-call when only run_code appeared in the request header', () => {
-    const subCallId = ToolCallId('run_1:ptc:1')
+    const subCallId = brandString<ToolCallId>('run_1:ptc:1')
     const dispatchData: SessionEvent<'tool/ptc-dispatch'>['data'] = {
-      rootCallId: ToolCallId('run_1'), parentCallId: ToolCallId('run_1'), subCallId,
+      rootCallId: brandString<ToolCallId>('run_1'), parentCallId: brandString<ToolCallId>('run_1'), subCallId,
       name: 'ask_user_question', arguments: JSON.parse(toolArguments), isError: false,
       content: [{ type: 'text', text: JSON.stringify({ pending: true, callId: subCallId }) }],
     }
@@ -208,10 +209,10 @@ describe('userQuestions projection fold', () => {
     expect(applyUserQuestionEvent(fold, event(5, 'turn/start', { turn: 2 }))).toBe(fold)
     expect(applyUserQuestionEvent(fold, header(5, [timedSchema]))).toBe(fold)
     expect(applyUserQuestionEvent(fold, event(5, 'tool/call', {
-      turn: 1, step: 2, callId: ToolCallId('other'), name: 'bash', arguments: '{}',
+      turn: 1, step: 2, callId: brandString<ToolCallId>('other'), name: 'bash', arguments: '{}',
     }))).toBe(fold)
     expect(applyUserQuestionEvent(fold, event(5, 'tool/call', {
-      turn: 1, step: 2, callId: ToolCallId('broken'), name: 'ask_user_question', arguments: '{not json',
+      turn: 1, step: 2, callId: brandString<ToolCallId>('broken'), name: 'ask_user_question', arguments: '{not json',
     }))).toBe(fold)
     expect(applyUserQuestionEvent(fold, event(5, 'agent/inbox/spliced', {
       target: 'next-step', start: 0, inserted: [createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'hi' }] })],
@@ -220,17 +221,17 @@ describe('userQuestions projection fold', () => {
       source: { kind: 'user' }, content: [{ type: 'text', text: 'hi' }],
     })))).toBe(fold)
     expect(applyUserQuestionEvent(fold, event(5, 'user/message', createUserMessage({
-      source: { kind: 'user-question-reply', callId: ToolCallId('other'), outcome: 'answered' },
+      source: { kind: 'user-question-reply', callId: brandString<ToolCallId>('other'), outcome: 'answered' },
       content: [{ type: 'text', text: '{}' }],
     })))).toBe(fold)
     expect(applyUserQuestionEvent(fold, event(2, 'tool/result', {
       turn: 1, step: 1,
-      message: createToolResultMessage({ callId: ToolCallId('other'), content: [{ type: 'text', text: '{}' }], isError: false }),
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('other'), content: [{ type: 'text', text: '{}' }], isError: false }),
     }))).toBe(fold)
   })
 
   it('tracks several timed calls at once and re-asks under a reused call id in place', () => {
-    const otherId = ToolCallId('call_ask_2')
+    const otherId = brandString<ToolCallId>('call_ask_2')
     const other = event(3, 'tool/call', {
       turn: 1, step: 2, callId: otherId, name: 'ask_user_question',
       arguments: '{"questions":[{"id":"name","question":"Name?"}]}',

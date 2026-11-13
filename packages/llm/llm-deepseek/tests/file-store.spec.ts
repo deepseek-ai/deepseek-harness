@@ -2,21 +2,23 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
-import { DeepSeekFileId } from '../src/file-id.ts'
+import { TimeoutReason } from '@deepseek-ai/dsh-timeout'
+import { DeepSeekFileStore, FILES_API_TIMEOUT, MAX_IMAGE_BYTES } from '../src/file-store.ts'
+import type { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
 
 const REF: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png',
   bytes: 3,
   width: 1,
   height: 1,
 }
 const VERSION: RequestImageAttachment = {
-  variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`),
+  variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`),
   attachment: REF,
   data: Uint8Array.of(1, 2, 3),
   mediaType: 'image/png',
@@ -67,6 +69,133 @@ function uploadFetch(now: () => number = () => NOW) {
 }
 
 describe('DeepSeekFileStore', () => {
+  it('skips 1, 2, 4 and 8 upload-bearing requests between timeouts, and resets after an upload', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-backoff-'))
+    roots.push(dir)
+    const fetch = vi.fn(uploadFetch().fetchImpl)
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    const cached = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'c'.repeat(64)}`) }
+    await store.ensureUploaded(cached, CONNECTION, POLICY)
+    async function expire(image: RequestImageAttachment) {
+      const started = Promise.withResolvers<undefined>()
+      fetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        started.resolve(undefined)
+        init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+      }))
+      const controller = new AbortController()
+      const pending = store.ensureUploaded(image, CONNECTION, POLICY, controller.signal)
+      await started.promise
+      const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+      controller.abort(reason)
+      await expect(pending).rejects.toBe(reason)
+    }
+
+    for (const count of [1, 2, 4, 8]) {
+      await expire(VERSION)
+      const calls = fetch.mock.calls.length
+      for (let i = 0; i < count; i++) {
+        await expect(store.ensureUploaded(cached, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: false })
+        await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY))
+          .rejects.toMatchObject({ code: 'FILES_API_SKIPPED', cause: { code: FILES_API_TIMEOUT } })
+      }
+      expect(fetch).toHaveBeenCalledTimes(calls)
+      await expect(store.ensureUploaded(VERSION, { ...CONNECTION, headers: { 'x-api-key': 'other' } }, POLICY)).resolves.toBeDefined()
+      await expect(store.ensureUploaded(VERSION, { ...CONNECTION, baseURL: 'https://other.example' }, POLICY)).resolves.toBeDefined()
+    }
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    const fresh = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'d'.repeat(64)}`) }
+    await expire(fresh)
+    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
+    // The failed probe starts while the old interval still exists; another image succeeds before it times out.
+    const started = Promise.withResolvers<undefined>()
+    fetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      started.resolve(undefined)
+      init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+    }))
+    const controller = new AbortController()
+    const probe = store.ensureUploaded(fresh, CONNECTION, POLICY, controller.signal)
+    await started.promise
+    const other = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'f'.repeat(64)}`) }
+    await expect(store.ensureUploaded(other, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+    controller.abort(reason)
+    await expect(probe).rejects.toBe(reason)
+    // Two independent requests race for the last skip. The other must upload.
+    const competing = await Promise.allSettled([
+      store.ensureUploaded(fresh, CONNECTION, POLICY), store.ensureUploaded(fresh, CONNECTION, POLICY),
+    ])
+    expect(competing.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'FILES_API_SKIPPED' } })
+    expect(competing.find(result => result.status === 'fulfilled')).toMatchObject({ value: { uploaded: true } })
+  })
+
+  it.each([
+    [503, '{}', 'SERVER'], [200, '{}', 'INVALID_RESPONSE'],
+  ] as const)('retries the next upload after HTTP %i fails with %s', async (status, body, code) => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-http-failure-'))
+    roots.push(dir)
+    const fetch = vi.fn(uploadFetch().fetchImpl).mockResolvedValueOnce(new Response(body, { status }))
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not count a Files deadline reached before the upload starts', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-index-timeout-'))
+    roots.push(dir)
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const lookup = Promise.withResolvers<undefined>()
+    vi.spyOn(index, 'get').mockReturnValueOnce(lookup.promise)
+    const remote = uploadFetch()
+    const store = new DeepSeekFileStore({ index, fetch: remote.fetchImpl, now: () => NOW })
+    const controller = new AbortController()
+    const pending = store.ensureUploaded(VERSION, CONNECTION, POLICY, controller.signal)
+    const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+    controller.abort(reason)
+    lookup.resolve(undefined)
+    await expect(pending).rejects.toBe(reason)
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    expect(remote.uploads()).toBe(1)
+  })
+
+  it('counts overlapping timeouts once and keeps an abandoned response from clearing backoff', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-overlap-'))
+    roots.push(dir)
+    const remote = uploadFetch()
+    const fetch = vi.fn(remote.fetchImpl)
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const writes = Promise.withResolvers<undefined>()
+    let written = 0
+    const commit = index.commit.bind(index)
+    vi.spyOn(index, 'commit').mockImplementation(async (...args) => {
+      const result = await commit(...args)
+      if (++written === 2) writes.resolve(undefined)
+      return result
+    })
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index })
+    const stalled = async (variantId: string) => {
+      const started = Promise.withResolvers<undefined>()
+      const response = Promise.withResolvers<Response>()
+      fetch.mockImplementationOnce(() => { started.resolve(undefined); return response.promise })
+      const image = { ...VERSION, variantId: brandString<ImageVariantId>(variantId) }
+      const controller = new AbortController()
+      const pending = store.ensureUploaded(image, CONNECTION, POLICY, controller.signal)
+      await started.promise
+      return { response, pending, controller }
+    }
+    const first = await stalled(`sha256:${'c'.repeat(64)}`)
+    const second = await stalled(`sha256:${'d'.repeat(64)}`)
+    for (const upload of [first, second]) {
+      const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+      upload.controller.abort(reason)
+      await expect(upload.pending).rejects.toBe(reason)
+      upload.response.resolve(await remote.fetchImpl(CONNECTION.baseURL, { method: 'POST' }))
+    }
+    await writes.promise
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+  })
+
   it('isolates credential values and header kinds while reusing reordered headers', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-credentials-'))
     roots.push(dir)
@@ -169,7 +298,7 @@ describe('DeepSeekFileStore', () => {
     expect(remote.uploads()).toBe(1)
   })
 
-  it('keeps a shared upload alive while another waiter remains', async () => {
+  it.each([new Error('cancel one upload waiter'), new TimeoutReason(FILES_API_TIMEOUT, 20_000)])('keeps a shared upload alive after one waiter exits with %s', async (reason) => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
     const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
@@ -184,6 +313,7 @@ describe('DeepSeekFileStore', () => {
         }, { once: true })
       })
     }) as typeof fetch
+    vi.spyOn(index, 'get').mockResolvedValue(undefined)
     const store = new DeepSeekFileStore({ index, now: () => NOW, fetch: fetchImpl })
     const controller = new AbortController()
 
@@ -192,11 +322,13 @@ describe('DeepSeekFileStore', () => {
     await vi.waitFor(() => {
       expect(fetchImpl).toHaveBeenCalledTimes(1)
     })
-    const reason = new Error('cancel one upload waiter')
     controller.abort(reason)
 
     await expect(cancelled).rejects.toBe(reason)
     expect(uploadSignal?.aborted).toBe(false)
+    if (reason instanceof TimeoutReason) {
+      await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
+    }
     complete?.(new Response(JSON.stringify({
       id: 'file-api-shared',
       type: 'file',
@@ -266,18 +398,11 @@ describe('DeepSeekFileStore', () => {
   it('starts a fresh upload while the cancelled transport is settling', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
+    const firstResponse = Promise.withResolvers<Response>()
     let requests = 0
-    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+    const fetchImpl = vi.fn(() => {
       requests += 1
-      if (requests === 1) {
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
-            queueMicrotask(() => {
-              reject(new Error('upload aborted', { cause: init.signal?.reason }))
-            })
-          }, { once: true })
-        })
-      }
+      if (requests === 1) return firstResponse.promise
       return Promise.resolve(new Response(JSON.stringify({
         id: 'file-api-retry', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
         filename: 'dsh-retry.png', mime_type: 'image/png',
@@ -297,7 +422,12 @@ describe('DeepSeekFileStore', () => {
     const retried = store.ensureUploaded(VERSION, CONNECTION, POLICY)
 
     await expect(cancelled).rejects.toThrow('cancel first')
-    await expect(retried).resolves.toMatchObject({ record: { fileId: 'file-api-retry' } })
+    try {
+      await expect(retried).resolves.toMatchObject({ record: { fileId: 'file-api-retry' } })
+      expect(requests).toBe(2)
+    } finally {
+      firstResponse.reject(new Error('cancelled transport closed'))
+    }
   })
 
   it('rejects a request version above the per-image limit before transport', async () => {
@@ -425,7 +555,7 @@ describe('DeepSeekFileStore', () => {
         scope: deepSeekFileScope(`${CONNECTION.baseURL}/v1`, JSON.stringify(Object.entries(CONNECTION.headers))),
         attachmentId: VERSION.attachment.attachmentId,
         variantId: VERSION.variantId,
-        fileId: DeepSeekFileId('file-api-winner'),
+        fileId: brandString<DeepSeekFileId>('file-api-winner'),
         bytes: 3,
         createdAt: NOW,
         expiresAt: NOW + POLICY.expiresAfterSeconds * 1_000,

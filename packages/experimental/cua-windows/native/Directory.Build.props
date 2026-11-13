@@ -1,0 +1,16 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <BaseOutputPath>$(MSBuildThisFileDirectory).build/$(MSBuildProjectName)/bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

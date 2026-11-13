@@ -1,10 +1,9 @@
 import { Context } from '@deepseek-ai/cordis'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
@@ -89,7 +88,8 @@ async function mounted(
   ctx.provide('commands', { register: () => () => {} } as never)
   if (sessionQuery !== undefined) ctx.provide('sessionQuery', sessionQuery as never)
   if (persistence !== undefined) ctx.provide('sessionPersistence', persistence as SessionPersistence)
-  const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
+  new ConnectionAuthentication(ctx)
+  const connection = new HostConnectionService(ctx, [])
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber
   return {
@@ -139,7 +139,7 @@ describe('Session Markdown Fetch route', () => {
     const sourcePath = '/tmp/project/session.v4.jsonl'
     const stat = vi.fn(async (_id: SessionId, _options?: { readonly signal?: AbortSignal }) => ({
       header: HEADER,
-      revision: SessionPersistenceRevision('test:location'),
+      revision: brandString<SessionPersistenceRevision>('test:location'),
       location: { kind: 'jsonl', path: sourcePath },
     }))
     const { shared, connection, dispose } = await mounted(query(), { stat })
@@ -159,7 +159,7 @@ describe('Session Markdown Fetch route', () => {
   it('omits the source block when metadata has no materialized location', async () => {
     const stat = vi.fn(async () => ({
       header: HEADER,
-      revision: SessionPersistenceRevision('test:no-location'),
+      revision: brandString<SessionPersistenceRevision>('test:no-location'),
     }))
     const { shared, connection, dispose } = await mounted(query(), { stat })
     const response = await shared.fetch(

@@ -2,24 +2,18 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
-import type { PeerId, PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
+import type { PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionInteractions } from './connect-protocol.ts'
-import {
-  RpcId,
-  type ClientRequest,
-  type RpcId as RpcIdType,
-} from './rpc.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ClientRequest, RpcId as RpcIdType } from './rpc.ts'
 import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
 import { isRemoteAuthority, isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
-import type { BrowserAuth } from './browser-auth.ts'
 import { Peer } from './peer.ts'
+import type { ConnectionAuthentication } from './authentication.ts'
 import type {
   PeerAdmission,
-  ConnectionAdmission,
-  ConnectionIndexRequest,
-  ConnectionIndexResponse,
   ConnectionFetchRoute,
   ConnectionFetchHandler,
   HostConnectionFetch,
@@ -27,20 +21,14 @@ import type {
   ConnectionRpcFailure,
   ConnectionRpcHandler,
   ConnectionRpcResult,
-  ConnectionRequestRejection,
   ConnectionTrustRequest,
   HostConnectionHandle,
   HostConnectionRpc,
 } from './rpc.ts'
 
-const INVALID_REQUEST_RPC_ID = RpcId('invalid-request')
+const INVALID_REQUEST_RPC_ID = brandString<RpcIdType>('invalid-request')
 const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
 const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
-
-interface PeerRecord {
-  readonly peer: Peer
-  ownsSocket: boolean
-}
 
 interface ConnectionRpcInterceptor {
   readonly matches: ConnectionRpcEndpointMatcher
@@ -68,9 +56,9 @@ declare module '@deepseek-ai/cordis' {
 
 /** Host Connection service whose channel registrations belong to the caller fiber. */
 export class HostConnectionService extends Service implements HostConnectionHandle {
-  /** The Peer every authenticated browser connection shares. */
+  /** Connection-owned Peer for trusted in-process callers, not network authentication. */
   readonly browserPeer: PeerScope
-  private readonly peers = new Map<PeerId, PeerRecord>()
+  readonly authentication: ConnectionAuthentication
   private readonly owner: Context
   private disposed = false
   private readonly interceptors = new Map<string, ConnectionRpcInterceptor>()
@@ -82,23 +70,29 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * Provide the Host half over the active HTTP server.
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
-   * @param browserAuth - process token and persistent browser-session owner.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
-    private readonly browserAuth: BrowserAuth,
   ) {
     super(ctx, 'connection')
     this.owner = ctx
+    this.authentication = ctx['connection.authentication']
     this.browserPeer = new Peer(ctx, { principal: { kind: 'owner' } })
     ctx.effect(() => async () => {
       this.disposed = true
-      const peers = [this.browserPeer, ...Array.from(this.peers.values(), record => record.peer)]
-      this.peers.clear()
-      await Promise.all(peers.map(peer => peer.dispose()))
+      await this.browserPeer.dispose()
     }, 'client-connection: Peer scopes')
     this.allowsRemoteAuthorities = trustedHosts.some(isRemoteAuthority)
+    ctx.on('webserver/authorize', (request, policy) => {
+      const facts = { ...request, url: request.url.href }
+      if (!this.isTrustedRequest(facts)) return { kind: 'deny', status: 403 }
+      if (policy === 'anonymous') return { kind: 'allow' }
+      const admission = this.authentication.authenticate(facts)
+      return 'rejection' in admission
+        ? { kind: 'deny', status: admission.rejection }
+        : { kind: 'allow', peer: admission.peer }
+    })
   }
 
   /** Generic channel registry scoped to the Context reading this service. */
@@ -119,84 +113,26 @@ export class HostConnectionService extends Service implements HostConnectionHand
     }
   }
 
-  /** Apply the Host/Origin fence and require an authenticated live Peer. */
-  requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
-    const admission = this.admit(request)
-    return 'rejection' in admission ? admission.rejection : undefined
-  }
-
-  /** Browser requests share an owner Peer; API HTTP does not depend on an attached socket. */
+  /** Apply the carrier source policy and accept the first successful provider. */
   admit(request: ConnectionTrustRequest): PeerAdmission {
-    if (!this.isTrusted(request)) return { rejection: 403 }
+    if (!this.isTrustedRequest(request)) return { rejection: 403 }
     if (this.disposed) return { rejection: 401 }
-    const secure = this.owner.get('webServer')?.protocol === 'https:'
-    if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
-    const id = this.browserAuth.authenticateApi(request, secure)
-    const record = id === undefined ? undefined : this.peers.get(id)
-    return record === undefined ? { rejection: 401 } : { peer: record.peer }
+    return this.authentication.authenticate(request)
   }
 
   /** Create one in-process Peer owned by the Context that read this service. */
-  createPeer(options: { readonly principal: Principal; readonly interactions?: ConnectionInteractions }): PeerScope {
+  createPeer(options: {
+    readonly principal: Principal
+    readonly interactions?: ConnectionInteractions
+  }): PeerScope {
+    if (this.disposed) throw new Error('connection: cannot create a Peer after disposal')
     return new Peer(this.ctx, options)
   }
 
-  /** Claim API socket ownership synchronously; callers release on termination or failed upgrade. */
-  admitConnection(request: ConnectionTrustRequest): ConnectionAdmission {
-    const admission = this.admit(request)
-    if ('rejection' in admission) return admission
-    const record = this.peers.get(admission.peer.id)
-    if (record === undefined) return { ...admission, release: () => Promise.resolve() }
-    if (record.ownsSocket) return { rejection: 409 }
-    record.ownsSocket = true
-    let released: Promise<void> | undefined
-    return {
-      peer: record.peer,
-      release: () => {
-        if (released !== undefined) return released
-        this.peers.delete(record.peer.id)
-        released = record.peer.dispose()
-        return released
-      },
-    }
-  }
-
-  private isTrusted(request: ConnectionTrustRequest): boolean {
+  /** Check the deployment's request-source policy without credential verification. */
+  private isTrustedRequest(request: ConnectionTrustRequest): boolean {
     const carrier = this.owner.get('webServer')
     return isTrustedApiRequest(request, this.trustedHosts, carrier?.host, carrier?.protocol ?? 'http:')
-  }
-
-  private publishPeer(interactions: ConnectionInteractions): PeerId {
-    const peer = new Peer(this.owner, { principal: { kind: 'owner' }, interactions })
-    this.peers.set(peer.id, { peer, ownsSocket: false })
-    return peer.id
-  }
-
-  /**
-   * Authenticate and publish a credential before sending the connect redirect.
-   * @param request - launch-token request on /connect.
-   * @param response - response owned to completion.
-   */
-  authorizeConnect(request: ConnectionIndexRequest, response: ConnectionIndexResponse): void {
-    if (!this.isTrusted(request) || this.disposed) {
-      response.writeHead(this.disposed ? 401 : 403)
-      response.end(this.disposed ? 'unauthorized' : 'forbidden')
-      return
-    }
-    this.browserAuth.authorizeConnect(request, response,
-      this.owner.get('webServer')?.protocol === 'https:', interactions => this.publishPeer(interactions))
-  }
-
-  /**
-   * Authenticate an index request; native TLS listeners mint Secure cookies.
-   */
-  authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
-    return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
-  }
-
-  /** Add this process's launch token to the clean application URL. */
-  authenticatedUrl(baseUrl: string): string {
-    return this.browserAuth.authenticatedUrl(baseUrl)
   }
 
   /**
@@ -260,20 +196,17 @@ export class HostConnectionService extends Service implements HostConnectionHand
     const route: WebRoute = {
       kind: 'prefix',
       path: channel,
-      handler: async (req, res) => {
-        const admission = this.admit(req)
-        if ('rejection' in admission) {
-          res.writeHead(admission.rejection)
-          res.end(admission.rejection === 401 ? 'unauthorized' : 'forbidden')
-          return
-        }
-        await bridge(req, res, fetchHandler, admission.peer)
+      auth: 'required',
+      handler: async (req, res, peer) => {
+        if (peer === undefined || res.destroyed) return
+        await bridge(req, res, fetchHandler, peer)
       },
     }
-    return owner.effect(
-      () => owner.webServer.register(route),
-      `client-connection: ${channel} rpc channel`,
-    )
+    return owner.effect(() => {
+      const webServer = owner.get('webServer')
+      if (webServer === undefined) throw new Error('connection: RPC channels require a WebServer')
+      return webServer.register(route)
+    }, `client-connection: ${channel} rpc channel`)
   }
 
   private registerInterceptor(
@@ -350,7 +283,7 @@ function rpcFetchHandler(
 
 function invalidEnvelopeResponse(body: unknown, issues: readonly object[]): Response {
   const rawId = (body as { rpcId?: unknown } | null)?.rpcId
-  const rpcId = typeof rawId === 'string' ? RpcId(rawId) : INVALID_REQUEST_RPC_ID
+  const rpcId = typeof rawId === 'string' ? brandString<RpcIdType>(rawId) : INVALID_REQUEST_RPC_ID
   return errorResponse(rpcId, {
     code: 'gateway/bad-request',
     message: 'invalid client-request message',

@@ -477,21 +477,3 @@ function rawText(data: RawData): string {
   if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8')
   return Buffer.from(data).toString('utf8')
 }
-
-/**
- * Reject an upgrade without transferring socket ownership to ws.
- * @param socket - carrier socket that receives the HTTP rejection.
- * @param status - authentication or browser-trust rejection status.
- */
-export function rejectRemoteStreamUpgrade(socket: Duplex, status: 401 | 403 | 409): void {
-  const reason = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Conflict'
-  const body = reason.toLowerCase()
-  socket.end([
-    `HTTP/1.1 ${String(status)} ${reason}`,
-    'Connection: close',
-    'Content-Type: text/plain; charset=utf-8',
-    `Content-Length: ${String(Buffer.byteLength(body))}`,
-    '',
-    body,
-  ].join('\r\n'))
-}

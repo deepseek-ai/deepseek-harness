@@ -6,7 +6,8 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -52,7 +53,7 @@ it('snapshots the worktree the Session entered, lists paths relative to it, and 
   await ctx.plugin(LocalFileSystem, { cwd: main })
   await ctx.plugin(WorkingDirectoryService, {})
   await ctx.plugin(WorkspaceChanges, {} as WorkspaceChanges.Config)
-  const session = ctx.sessions.create(SessionId('worktree-turns'), { meta: { cwd: main } })
+  const session = ctx.sessions.create(brandString<SessionId>('worktree-turns'), { meta: { cwd: main } })
   const agent = agentFor(ctx, session)
   await ctx.workingDirectory.set(agent, worktree)
 

@@ -192,7 +192,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authenticated browser transport',
     mode: 'core',
     consumers: ['api-gateway', 'host-frontend-static'],
-    note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
+    note: 'Applies source policy and shared HTTP request dispatch; credential verification belongs to ConnectionAuthentication, and API adapters register endpoints and streams.',
+  },
+  {
+    key: 'connection.authentication',
+    pkg: 'client-connection',
+    title: 'Connection authentication provider registry',
+    mode: 'seam',
+    implementations: ['host-authentication-token', 'host-authentication-desktop'],
+    consumers: ['client-connection'],
+    note: 'Tries scope-owned credential verifiers in registration order and returns the first live Peer; transport source policy and business authorization stay with their consumers.',
   },
   {
     key: 'forge',
@@ -267,6 +276,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
     mode: 'core', consumers: ['cua'],
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
+  },
+  {
+    key: 'cuaPrograms', pkg: 'cua', title: 'Computer Use program environments',
+    mode: 'core', consumers: ['cua-mcp'],
+    note: 'The provider owns the retained cua_run_code runtime; a host without a model releases one Agent\'s environment and reads the configured screenshot request target through it.',
   },
   {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
@@ -346,6 +360,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Experimental transcription Remote',
     mode: 'core',
     note: 'Validates bounded browser audio before provider dispatch.',
+  },
+  {
+    key: 'sessionStatus',
+    pkg: 'client-ui-session-status',
+    title: 'Host Session reading records',
+    mode: 'core',
+    consumers: ['client-ui-session-status'],
+    note: 'Stores owner reading acknowledgements and manual unread marks outside Session history; its Client half follows committed changes over Remote, acknowledges loaded completions, and serves the Session status table.',
   },
   {
     key: 'sessionController',
@@ -809,7 +831,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'ptc-runtime',
     title: 'PTC execution seam',
     mode: 'seam',
-    implementations: ['ptc-runtime-node', 'experimental-ptc-runtime-python'],
+    implementations: ['ptc-runtime-node'],
     consumers: ['tool-executor-ptc', 'workflow-ptc'],
     note: 'Runs programs against host-provided async bindings; tool-executor-ptc owns PTC presentation and workflow-ptc owns workflow orchestration.',
   },
@@ -1165,7 +1187,7 @@ type CallSiteIndex = Map<ts.SignatureDeclaration | ts.JSDocSignature, ts.CallExp
  * must appear here — the prefilter drops non-members before any branch runs,
  * so a branch for an unlisted name is silently dead.
  */
-const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'waterfall', 'dispatch'])
+const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'bail', 'waterfall', 'dispatch'])
 
 /**
  * Collect event dispatch/listener relations from real cross-file receiver types.
@@ -1323,7 +1345,7 @@ export class EventRelationCollector {
             const eventNames = this.eventNamesFromCall(node, receiverKind)
             if (method === 'on' || method === 'once') {
               for (const event of eventNames) this.ensure(event).listeners.add(source.pkg)
-            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'waterfall') {
+            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'bail' || method === 'waterfall') {
               for (const event of eventNames) this.addDispatcher(event, source.pkg, method)
             }
           }

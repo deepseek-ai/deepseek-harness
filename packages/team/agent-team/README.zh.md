@@ -147,7 +147,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 ### 浏览器投影
 
-`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均以 `TeamError` `TEAM_STATE_CORRUPT` 报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
 [Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签显示所有者的完整名称，所有者没有名称时显示其 Session id。
 

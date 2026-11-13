@@ -72,7 +72,7 @@ it.skipIf(process.platform === 'win32')('keeps npm tarball bytes when reusing a 
     mkdirSync(output)
     stageCuaHelperPayload(f.payload, packageRoot, identity)
     writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
-      name: '@deepseek-ai/dsh-experimental-cua-macos', version: f.manifest.version, type: 'module',
+      name: '@deepseek-ai/dsh-cua-macos', version: f.manifest.version, type: 'module',
       files: ['lib/index.js', 'native/bin', CUA_MANIFEST],
     }))
     writeFileSync(join(packageRoot, 'lib/index.js'), 'export const provider = "fixture";\n')
@@ -85,7 +85,7 @@ it.skipIf(process.platform === 'win32')('keeps npm tarball bytes when reusing a 
     expect(result.isCanceled).toBe(false)
     expect(result.signal).toBeUndefined()
     expect(result.exitCode, result.stderr).toBe(0)
-    const tarball = join(output, 'deepseek-ai-dsh-experimental-cua-macos-1.0.0.tgz')
+    const tarball = join(output, 'deepseek-ai-dsh-cua-macos-1.0.0.tgz')
     await verifyCuaHelperTarball(tarball, identity)
     return readFileSync(tarball)
   }
@@ -118,15 +118,15 @@ it.skipIf(process.platform === 'win32').each(['source', 'configuration', 'archit
 })
 
 it('keeps company signing outside pull-request release rehearsals', () => {
-  const workflow = readFileSync(resolve('.github/workflows/cua-helper-package.yml'), 'utf8')
+  const workflow = readFileSync(resolve('.github/workflows/cua-helper-package-macos.yml'), 'utf8')
   expect(workflow).toContain('workflow_dispatch:')
   expect(workflow).toContain('workflow_call:')
   expect(workflow).not.toContain('pull_request:')
   expect(workflow).toContain('dsh-mac-package-trial')
   const release = readFileSync(resolve('.github/workflows/release-publish.yml'), 'utf8')
-  expect(release).toContain('needs: cua-helper')
+  expect(release).toContain('needs: cua-helper-macos')
   expect(release).toContain('scripts/cua-helper/stage.ts')
-  expect(readFileSync(resolve('.github/workflows/release.yml'), 'utf8')).not.toContain('cua-helper-package.yml')
+  expect(readFileSync(resolve('.github/workflows/release.yml'), 'utf8')).not.toContain('cua-helper-package-macos.yml')
 })
 
 it.skipIf(process.platform === 'win32')('retains the original build commit and version when consuming identical helper sources', () => {

@@ -10,7 +10,7 @@ The calling Session's current directory selects the source repository. Creation 
 
 The default destination is `<current checkout root>/.agents/worktrees/<name>`. `repositoryRoot` is the top-level directory of the caller’s current checkout; a linked checkout therefore contains its own pool. The service writes a `.gitignore` containing `*` and a trailing newline only when its allocation creates the configured pool directory. Existing files and ignore rules are preserved. The calling Session’s resolved sandbox policy must permit writes to the destination and shared Git administration directory; for a linked checkout the [sandbox policy](sandbox.md) grants that directory before creation writes. Successful Git setup precedes the working-directory change.
 
-`ctx.worktrees.exit(agent)`, which the `exit_worktree` tool calls, returns the Session to the source checkout of the recorded worktree that contains its current directory; the checkout and branch remain. Nested worktrees exit one level at a time. Cancellation or failure can also retain partial artifacts; the error identifies their location. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
+`ctx.worktrees.exit(agent)`, which the `exit_worktree` tool calls, returns the Session to the source checkout of the recorded worktree that contains its current directory; the checkout and branch remain. Nested worktrees exit one level at a time. Cancellation or failure can also retain partial artifacts; the error identifies their location. Worktree failures throw `WorktreeError` with a `WORKTREE_*` code; a failure after allocation keeps the wrapped error's `name` and `code`, and caller cancellation stays an `AbortError`. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
 
 ## Request and result
 
@@ -124,6 +124,8 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
  * @param signal - cancellation of lookup, creation, and working-directory publication.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
+ * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
+ *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
 
@@ -140,6 +142,8 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param signal - cancellation of the restoration.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns the directory and whether the branch was created again.
+ * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
+ *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 
@@ -150,8 +154,9 @@ async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSign
  * @param agent - caller whose current directory lies in a recorded worktree.
  * @param signal - cancellation of directory validation and of the working-directory change.
  * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
- * @throws when no recorded worktree contains the current directory, or the working-directory
- *   service's error when the source checkout no longer exists.
+ * @throws {WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and
+ *   `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service's error when the source
+ *   checkout no longer exists.
  */
 async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>
 

@@ -17,7 +17,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ScopedLayers, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { JobError, JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
+import { JobError, JobRegistry, type JobId } from '@deepseek-ai/dsh-jobs'
 import type {
   JobAppendOptions, JobEvent, JobEvents, JobHandle, JobKind, JobOutcome, JobOutputRead, JobOutputSource,
   JobRead, JobRegisteredData, JobSettleCause, JobSettledData, JobSpec, JobStatus, JobToolCall, JobView,
@@ -26,6 +26,7 @@ import { JobEventHub, JobLayer } from './events.ts'
 import { startPump } from './pump.ts'
 import type { PumpHandle } from './pump.ts'
 import { OutputRing } from './ring.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Timeout code that distinguishes a bounded wait from caller cancellation. */
 export const TASK_WAIT_TIMEOUT = 'TASK_WAIT_TIMEOUT'
@@ -239,7 +240,7 @@ export class LocalJobRegistry extends JobRegistry {
     // Retry a collision while this registry still holds an earlier id.
     let id: JobId
     do {
-      id = JobId(`${spec.kind}-${randomUUID().replaceAll('-', '').slice(0, 16)}`)
+      id = brandString<JobId>(`${spec.kind}-${randomUUID().replaceAll('-', '').slice(0, 16)}`)
     } while (this.store.has(id))
     const toolCall = spec.toolCall === undefined ? undefined : { ...spec.toolCall }
     const ring = new OutputRing()

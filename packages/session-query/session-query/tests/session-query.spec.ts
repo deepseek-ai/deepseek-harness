@@ -1,14 +1,15 @@
 import { createUserMessage, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent, SessionHeader, SessionId as SessionIdType } from '@deepseek-ai/dsh-session'
 import SessionPersistence, {
   SessionPersistenceCorruptionError,
   SessionPersistenceNotFoundError,
-  SessionPersistenceRevision,
+  type SessionPersistenceRevision,
   SessionReadOnlyError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
@@ -23,7 +24,8 @@ import SessionQueryEngine, {
   type SessionEventSurface,
   type SessionQueryErrorCode,
 } from '@deepseek-ai/dsh-session-query'
-import { SessionTitleProviderId, SessionTitleService } from '@deepseek-ai/dsh-session-title'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
+import { SessionTitleService } from '@deepseek-ai/dsh-session-title'
 import { TestSessionQueryEngine } from './test-service.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -42,7 +44,7 @@ function checkpointSource(compactionId: string): CheckpointSource {
 const TITLE_SERVICE_CONFIG = { fallbackMaxWords: 8, fallbackMaxBytes: 64, maxTitleBytes: 256 }
 
 function header(id: string, createdAt = 1, extra: Partial<SessionHeader> = {}): SessionHeader {
-  return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt, isSeeded: false, ...extra }
+  return { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), createdAt, isSeeded: false, ...extra }
 }
 
 function eventLog(text = 'hello'): SessionEvent[] {
@@ -110,7 +112,7 @@ class TestHandle implements SessionHandle {
 }
 
 function entryRevision(entry: { events: SessionEvent[] }): SessionPersistenceRevision {
-  return SessionPersistenceRevision(`events:${entry.events.length}`)
+  return brandString<SessionPersistenceRevision>(`events:${entry.events.length}`)
 }
 
 class TestPersistence extends SessionPersistence {
@@ -400,7 +402,7 @@ describe.each(cancellableExactReads)('$name cancellation', ({ inspects, run }) =
         started.resolve(undefined)
         await release.promise
         active = false
-        return [{ header: structuredClone(persisted), revision: SessionPersistenceRevision('override:0') }]
+        return [{ header: structuredClone(persisted), revision: brandString<SessionPersistenceRevision>('override:0') }]
       }
     }
 
@@ -554,7 +556,7 @@ describe('session-query exact reads', () => {
       messageSeqs: [SessionSeq(7)],
       source: {
         kind: 'provider',
-        provider: SessionTitleProviderId('query-test'),
+        provider: brandString<SessionTitleProviderId>('query-test'),
       },
     })
     await ctx.plugin(TestPersistence)
@@ -589,7 +591,7 @@ describe('session-query exact reads', () => {
     await ctx.plugin(SessionTitleService, TITLE_SERVICE_CONFIG)
     await ctx.plugin(TestPersistence)
     const signal = new AbortController().signal
-    const missing = SessionId('batch-title-missing')
+    const missing = brandString<SessionId>('batch-title-missing')
 
     const results = await ctx.sessionQuery.readTitleSnapshots(
       [second.id, first.id, second.id, missing],
@@ -852,8 +854,8 @@ describe('session-query exact reads', () => {
 
   it('preserves live batch results across missing persistence, listing failure, and late attachment', async () => {
     const liveOnly = await liveContext()
-    const live = liveOnly.sessions.create(SessionId('batch-title-live'))
-    const missing = SessionId('batch-title-no-persistence')
+    const live = liveOnly.sessions.create(brandString<SessionId>('batch-title-live'))
+    const missing = brandString<SessionId>('batch-title-no-persistence')
 
     await expect(liveOnly.sessionQuery.readTitleSnapshots([live.id, live.id])).resolves.toEqual([{
       sessionId: live.id,
@@ -871,7 +873,7 @@ describe('session-query exact reads', () => {
     const late = header('batch-title-late', 2)
     TestPersistence.reset([{ meta: persisted, events: [] }])
     const mixed = await liveContext()
-    const mixedLive = mixed.sessions.create(SessionId('batch-title-mixed-live'))
+    const mixedLive = mixed.sessions.create(brandString<SessionId>('batch-title-mixed-live'))
     await mixed.plugin(TestPersistence)
     TestPersistence.afterList = () => {
       mixed.sessions.create(late.id, { meta: { createdAt: late.createdAt } })
@@ -891,7 +893,7 @@ describe('session-query exact reads', () => {
     TestPersistence.reset()
     TestPersistence.listFailure = new Error('title listing failed')
     const failedList = await liveContext()
-    const survivingLive = failedList.sessions.create(SessionId('batch-title-list-live'))
+    const survivingLive = failedList.sessions.create(brandString<SessionId>('batch-title-list-live'))
     await failedList.plugin(TestPersistence)
 
     await expect(failedList.sessionQuery.readTitleSnapshots([survivingLive.id, missing]))
@@ -907,12 +909,12 @@ describe('session-query exact reads', () => {
 
   it('lists live sessions deterministically and returns detached headers', async () => {
     const ctx = await liveContext()
-    const older = ctx.sessions.create(SessionId('older'), { meta: { createdAt: 1 } })
-    ctx.sessions.create(SessionId('z'), { meta: { createdAt: 2 } })
-    ctx.sessions.create(SessionId('a'), { meta: { createdAt: 2 } })
+    const older = ctx.sessions.create(brandString<SessionId>('older'), { meta: { createdAt: 1 } })
+    ctx.sessions.create(brandString<SessionId>('z'), { meta: { createdAt: 2 } })
+    ctx.sessions.create(brandString<SessionId>('a'), { meta: { createdAt: 2 } })
 
     const records = await ctx.sessionQuery.listSessions()
-    expect(records.map(record => record.header.id)).toEqual([SessionId('a'), SessionId('z'), older.id])
+    expect(records.map(record => record.header.id)).toEqual([brandString<SessionId>('a'), brandString<SessionId>('z'), older.id])
     expect(records.every(record => record.live && !record.persisted)).toBe(true)
     Object.assign(records[2]!.header, { createdAt: 99 })
     expect(older.header.createdAt).toBe(1)
@@ -926,13 +928,13 @@ describe('session-query exact reads', () => {
     TestPersistence.reset()
     const ctx = await liveContext()
     ctx.sessions.create(shared.id, { meta: { createdAt: shared.createdAt } })
-    const liveOnly = ctx.sessions.create(SessionId('format-live'), { meta: { createdAt: 5 } })
+    const liveOnly = ctx.sessions.create(brandString<SessionId>('format-live'), { meta: { createdAt: 5 } })
     await ctx.plugin(TestPersistence)
     const list = vi.spyOn(ctx.sessionPersistence, 'list').mockResolvedValue([
-      { header: historical, revision: SessionPersistenceRevision('historical'), formatStatus: 'migration-required' },
-      { header: current, revision: SessionPersistenceRevision('current'), formatStatus: 'current' },
-      { header: unknown, revision: SessionPersistenceRevision('unknown') },
-      { header: shared, revision: SessionPersistenceRevision('shared'), formatStatus: 'migration-required' },
+      { header: historical, revision: brandString<SessionPersistenceRevision>('historical'), formatStatus: 'migration-required' },
+      { header: current, revision: brandString<SessionPersistenceRevision>('current'), formatStatus: 'current' },
+      { header: unknown, revision: brandString<SessionPersistenceRevision>('unknown') },
+      { header: shared, revision: brandString<SessionPersistenceRevision>('shared'), formatStatus: 'migration-required' },
     ])
     const stat = vi.spyOn(ctx.sessionPersistence, 'stat')
     const open = vi.spyOn(ctx.sessionPersistence, 'open')
@@ -961,7 +963,7 @@ describe('session-query exact reads', () => {
     const durable = header('durable-filter', 1)
     TestPersistence.reset([{ meta: durable, events: eventLog('durable') }])
     const ctx = await liveContext()
-    const live = ctx.sessions.create(SessionId('live-filter'), { meta: { createdAt: 2 } })
+    const live = ctx.sessions.create(brandString<SessionId>('live-filter'), { meta: { createdAt: 2 } })
     live.append(
       'user/message',
       createUserMessage({
@@ -993,7 +995,7 @@ describe('session-query exact reads', () => {
 
   it('classifies current, shadowed, and raw-log-only events through foldSurface', async () => {
     const ctx = await liveContext()
-    const session = ctx.sessions.create(SessionId('surface'))
+    const session = ctx.sessions.create(brandString<SessionId>('surface'))
     session.append('turn/start', { turn: 1 })
     session.append('step/start', { turn: 1, step: 1 })
     const first = session.append(
@@ -1023,7 +1025,7 @@ describe('session-query exact reads', () => {
 
   it('reads a detached current surface with its raw-log capture boundary', async () => {
     const ctx = await liveContext()
-    const session = ctx.sessions.create(SessionId('surface-snapshot'), { meta: { cwd: '/work' } })
+    const session = ctx.sessions.create(brandString<SessionId>('surface-snapshot'), { meta: { cwd: '/work' } })
     const first = session.append(
       'user/message',
       createUserMessage({
@@ -1094,7 +1096,7 @@ describe('session-query exact reads', () => {
 
   it('returns an empty current surface with a null capture boundary', async () => {
     const ctx = await liveContext()
-    const session = ctx.sessions.create(SessionId('empty-surface'))
+    const session = ctx.sessions.create(brandString<SessionId>('empty-surface'))
     await expect(ctx.sessionQuery.readSurface(session.id)).resolves.toMatchObject({
       capturedThroughSeq: null,
       events: [],
@@ -1103,7 +1105,7 @@ describe('session-query exact reads', () => {
 
   it('returns a bounded detached raw-event window and validates the request', async () => {
     const ctx = await liveContext({ readWindowMax: 1 })
-    const session = ctx.sessions.create(SessionId('window'), { meta: { cwd: '/work' } })
+    const session = ctx.sessions.create(brandString<SessionId>('window'), { meta: { cwd: '/work' } })
     session.append('turn/start', { turn: 1 })
     for (const text of ['one', 'two', 'three']) {
       session.append(
@@ -1186,7 +1188,7 @@ describe('session-query exact reads', () => {
   it('keeps known live reads independent from persistence health', async () => {
     TestPersistence.reset()
     const ctx = await liveContext()
-    const live = ctx.sessions.create(SessionId('live'))
+    const live = ctx.sessions.create(brandString<SessionId>('live'))
     live.append('turn/start', { turn: 1 })
     live.append(
       'user/message',
@@ -1208,7 +1210,7 @@ describe('session-query exact reads', () => {
     expect(TestPersistence.listSignals).toEqual([])
     expect(TestPersistence.readSignals).toEqual([])
     await expect(ctx.sessionQuery.listSessions()).rejects.toThrow(expectCode('SESSION_QUERY_PERSISTENCE_FAILED'))
-    await expect(ctx.sessionQuery.listEvents(SessionId('durable'))).rejects.toThrow(expectCode('SESSION_QUERY_PERSISTENCE_FAILED'))
+    await expect(ctx.sessionQuery.listEvents(brandString<SessionId>('durable'))).rejects.toThrow(expectCode('SESSION_QUERY_PERSISTENCE_FAILED'))
   })
 
   it('wraps persisted corruption as SESSION_QUERY_CORRUPT_SESSION with its cause preserved', async () => {
@@ -1233,10 +1235,10 @@ describe('session-query exact reads', () => {
     const durable = header('durable')
     TestPersistence.reset([{ meta: durable, events: eventLog() }])
     const ctx = await liveContext()
-    await expect(ctx.sessionQuery.listEvents(SessionId('absent')))
+    await expect(ctx.sessionQuery.listEvents(brandString<SessionId>('absent')))
       .rejects.toThrow(expectCode('SESSION_QUERY_SESSION_NOT_FOUND'))
     await ctx.plugin(TestPersistence)
-    await expect(ctx.sessionQuery.listEvents(SessionId('absent')))
+    await expect(ctx.sessionQuery.listEvents(brandString<SessionId>('absent')))
       .rejects.toThrow(expectCode('SESSION_QUERY_SESSION_NOT_FOUND'))
 
     TestPersistence.readFailure = 'raw failure'
@@ -1291,7 +1293,7 @@ describe('session-query exact reads', () => {
 
   it('exposes caller-owned observation leases through observeSession', async () => {
     const ctx = await liveContext()
-    const live = ctx.sessions.create(SessionId('observe-live'))
+    const live = ctx.sessions.create(brandString<SessionId>('observe-live'))
 
     using observed = await ctx.sessionQuery.observeSession(live.id)
 

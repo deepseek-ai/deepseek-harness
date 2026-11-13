@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_keep",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"var kept = { value: 42 }; var lateEffects = []; await tools.bash({ command: \\\"echo 42 > kept.txt\\\", description: \\\"Write the retained value to a file\\\" }); void tools.bash({ command: \\\"echo should-not-run\\\", description: \\\"Leave a tool pending until the program ends\\\" }).then(() => lateEffects.push(\\\"then\\\")).catch(() => lateEffects.push(\\\"catch\\\")).finally(() => lateEffects.push(\\\"finally\\\")); kept.value\",\"description\":\"Retain an object and leave a tool pending\"}"
+        "argumentsDelta": "{\"code\":\"var kept = { value: 42 }; var lateEffects = []; await tools.bash({ command: \\\"echo 42 > kept.txt\\\", description: \\\"Write the retained value to a file\\\" }); void tools.bash({ command: \\\"echo should-not-run\\\", description: \\\"Leave a tool pending until the program ends\\\" }).then(() => lateEffects.push(\\\"then\\\")).catch(() => lateEffects.push(\\\"catch\\\")).finally(() => lateEffects.push(\\\"finally\\\")); inspect(kept.value)\",\"description\":\"Retain an object and leave a tool pending\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_keep",
           "name": "run_code",
-          "arguments": "{\"code\":\"var kept = { value: 42 }; var lateEffects = []; await tools.bash({ command: \\\"echo 42 > kept.txt\\\", description: \\\"Write the retained value to a file\\\" }); void tools.bash({ command: \\\"echo should-not-run\\\", description: \\\"Leave a tool pending until the program ends\\\" }).then(() => lateEffects.push(\\\"then\\\")).catch(() => lateEffects.push(\\\"catch\\\")).finally(() => lateEffects.push(\\\"finally\\\")); kept.value\",\"description\":\"Retain an object and leave a tool pending\"}"
+          "arguments": "{\"code\":\"var kept = { value: 42 }; var lateEffects = []; await tools.bash({ command: \\\"echo 42 > kept.txt\\\", description: \\\"Write the retained value to a file\\\" }); void tools.bash({ command: \\\"echo should-not-run\\\", description: \\\"Leave a tool pending until the program ends\\\" }).then(() => lateEffects.push(\\\"then\\\")).catch(() => lateEffects.push(\\\"catch\\\")).finally(() => lateEffects.push(\\\"finally\\\")); inspect(kept.value)\",\"description\":\"Retain an object and leave a tool pending\"}"
         }
       },
       {
@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_isolated",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"({ retained: kept.value, lateEffects })\",\"description\":\"Inspect retained state after a late tool failure\"}"
+        "argumentsDelta": "{\"code\":\"inspect(JSON.stringify(({ retained: kept.value, lateEffects }), null, 2))\",\"description\":\"Inspect retained state after a late tool failure\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_isolated",
           "name": "run_code",
-          "arguments": "{\"code\":\"({ retained: kept.value, lateEffects })\",\"description\":\"Inspect retained state after a late tool failure\"}"
+          "arguments": "{\"code\":\"inspect(JSON.stringify(({ retained: kept.value, lateEffects }), null, 2))\",\"description\":\"Inspect retained state after a late tool failure\"}"
         }
       },
       {
@@ -92,7 +92,7 @@
         "index": 0,
         "id": "call_blocked",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"kept.value\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
+        "argumentsDelta": "{\"code\":\"inspect(kept.value)\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
       },
       {
         "type": "block-end",
@@ -101,7 +101,7 @@
           "type": "tool-call",
           "id": "call_blocked",
           "name": "run_code",
-          "arguments": "{\"code\":\"kept.value\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
+          "arguments": "{\"code\":\"inspect(kept.value)\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
         }
       },
       {
@@ -132,7 +132,7 @@
         "index": 0,
         "id": "call_check",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"({ retained: typeof kept, file: (await tools.bash({ command: \\\"cat kept.txt\\\", description: \\\"Read the saved value after reset\\\" })).stdout.text.trim() })\",\"description\":\"Check cleared variables and completed file effects\"}"
+        "argumentsDelta": "{\"code\":\"inspect(JSON.stringify(({ retained: typeof kept, file: (await tools.bash({ command: \\\"cat kept.txt\\\", description: \\\"Read the saved value after reset\\\" })).stdout.text.trim() }), null, 2))\",\"description\":\"Check cleared variables and completed file effects\"}"
       },
       {
         "type": "block-end",
@@ -141,7 +141,7 @@
           "type": "tool-call",
           "id": "call_check",
           "name": "run_code",
-          "arguments": "{\"code\":\"({ retained: typeof kept, file: (await tools.bash({ command: \\\"cat kept.txt\\\", description: \\\"Read the saved value after reset\\\" })).stdout.text.trim() })\",\"description\":\"Check cleared variables and completed file effects\"}"
+          "arguments": "{\"code\":\"inspect(JSON.stringify(({ retained: typeof kept, file: (await tools.bash({ command: \\\"cat kept.txt\\\", description: \\\"Read the saved value after reset\\\" })).stdout.text.trim() }), null, 2))\",\"description\":\"Check cleared variables and completed file effects\"}"
         }
       },
       {

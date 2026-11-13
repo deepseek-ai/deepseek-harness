@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: '99' }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -111,10 +111,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
   const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture', running: true }
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
-  const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
-  const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
-  const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
-  const panel = { ...window, windowId: 10, title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
+  const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+  const axlessWindow = { ...window, windowId: '8', title: 'AXless canvas' }
+  const transformedWindow = { ...window, windowId: '9', title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
+  const panel = { ...window, windowId: '10', title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
   const windows = () => [window, axlessWindow, transformedWindow, ...(application.panelVisibility === 'closed' ? [] :
     [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
@@ -124,7 +124,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let acquired = false
   let generation = 0
   let observationChanged = false
+  let partialObservation = false
+  let communicationFailure = false
   let malformedScreenshot = false
+  let incompleteInputTargets = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
@@ -135,7 +138,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
+    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
         const denied = params.selector === 'Denied Fixture'
@@ -172,19 +175,35 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
-        refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXRole failed with error -25202. Read fresh state or use a screenshot; do not repeat input automatically')
+      }
+      if (communicationFailure) {
+        communicationFailure = false
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXChildren failed with error -25204. Read fresh state or use a screenshot; do not repeat input automatically')
       }
       for (const id of params.windowId === undefined ? windows().map(window => window.windowId) : [params.windowId]) observedWindows.add(id)
       generation++
-      const axless = params.windowId === 8
+      const axless = params.windowId === '8'
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
+      if (partialObservation) {
+        partialObservation = false
+        const appScope = params.windowId === undefined
+        return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
+          tree: appScope
+            ? 'AX scope=application offsets=UTF-16\n[One child could not be read.]\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"'
+            : 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  [One child could not be read.]\n  - AXStaticText "Readable sibling"',
+          elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
+            identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
+          focusedWindowId: appScope ? null : window.windowId,
+          windows: windows(), truncated: false, hasUnreadableElements: true }
+      }
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
-        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
-        elements: [], windows: windows(), truncated: false,
+        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  [One child could not be read.]\n  - AXStaticText "Floating count: ${application.panelCount}"`,
+        elements: [], windows: windows(), truncated: false, hasUnreadableElements: true,
       }
-      if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
+      if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }
       if (params.maxElements === 1) return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
         tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
@@ -195,7 +214,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         focusedWindowId: window.windowId, windows: windows(), truncated: false }
     }
-    if (params.windowId === 9 && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
+    if (params.windowId === '9' && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
     if (method === 'screenshot' && captureBroker.pendingCapture) {
@@ -235,21 +254,26 @@ function createApplicationState(socket, record, application, captureBroker, conn
         application.hovering = !systemPointerMoved && alternate
       }
       else if (method === 'click' && params.windowId === panel.windowId) application.panelCount++
-      else if (method === 'click' && params.windowId === 8) application.visualCount++
+      else if (method === 'click' && params.windowId === '8') application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
       return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: systemPointerMoved ? 'system-pointer' : 'accessibility', systemPointerMoved } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
+    if (method === 'pressKey' && params.key === 'F4') partialObservation = true
+    if (method === 'pressKey' && params.key === 'F3') communicationFailure = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
+    if (method === 'pressKey' && params.key === 'F6') incompleteInputTargets = true
+    if (incompleteInputTargets && method === 'typeText') refuse('PANEL_NOT_READY', 'File panel recipient discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
     if (method === 'pressKey' && params.key === 'F8') application.panelVisibility = 'visible'
     if (method === 'pressKey' && params.key === 'F7' && application.panelVisibility !== 'closed') application.panelVisibility = 'hidden'
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
-    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = 99 }
+    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = '99' }
     if (method === 'paste') {
+      if (incompleteInputTargets) refuse('UNSUPPORTED', 'Paste menu discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text
       return { dispatched: true }

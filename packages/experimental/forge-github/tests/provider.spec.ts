@@ -699,6 +699,7 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.commits(target, signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.compare(target, 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.mergeBase(target, 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
   // A repository that cannot name a request is refused before its host, as every read refuses it.
   const unsafe = pull(7, { ...demo, host: 'unconfigured.example', owner: 'oc/to' })
   const invalid = 'forge-github: invalid repository "oc/to/demo"'
@@ -706,7 +707,36 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.fileText(unsafe, 'a'.repeat(40), 'file.txt', signal)).rejects.toThrow(invalid)
   await expect(subject.commits(unsafe, signal)).rejects.toThrow(invalid)
   await expect(subject.compare(unsafe, 'a'.repeat(40), 'b'.repeat(40), signal)).rejects.toThrow(invalid)
+  await expect(subject.mergeBase(unsafe, 'a'.repeat(40), 'b'.repeat(40), signal)).rejects.toThrow(invalid)
   expect(gh.calls).toEqual([])
+})
+
+describe('GitHub provider merge bases', () => {
+  const base = 'b'.repeat(40)
+  const head = 'c'.repeat(40)
+
+  it('reads the merge base from the compare page that lists no files', async () => {
+    const gh = fakeGh(() => output(`${'A'.repeat(40)}\n`))
+
+    await expect(provider(gh.run).mergeBase(pull(7, enterprise), base, head, signal)).resolves.toBe('a'.repeat(40))
+    expect(gh.calls).toEqual([
+      ['api', '--hostname', 'ghe.corp.example', '--jq', '.merge_base_commit.sha', `repos/team/svc/compare/${base}...${head}?page=2&per_page=1`],
+    ])
+  })
+
+  it('reports a refused read as a failure and an answer that names no commit as unavailable', async () => {
+    await expect(provider(fakeGh(() => output('', 1, 'gh: No common ancestor (HTTP 404)')).run).mergeBase(pull(7), base, head, signal))
+      .resolves.toMatchObject({ code: 'not-found' })
+    await expect(provider(fakeGh(() => output('null\n')).run).mergeBase(pull(7), base, head, signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'unexpected GitHub response to the merge base read' })
+  })
+
+  it('refuses commits that cannot be inlined without starting gh', async () => {
+    const gh = fakeGh(() => output(''))
+    await expect(provider(gh.run).mergeBase(pull(7), 'main', head, signal)).rejects.toThrow('forge-github: invalid commit "main"')
+    await expect(provider(gh.run).mergeBase(pull(7), base, 'HEAD~1', signal)).rejects.toThrow('forge-github: invalid commit "HEAD~1"')
+    expect(gh.calls).toEqual([])
+  })
 })
 
 describe('GitHub provider overview and viewed marks', () => {

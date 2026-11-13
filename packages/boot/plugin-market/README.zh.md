@@ -81,7 +81,7 @@ Remote 方法如下：
 
 失败使用 `plugin-market/invalid-query`、`plugin-market/invalid-index-url`、`plugin-market/unknown-index`、`plugin-market/fetch-failed` 和 `plugin-market/invalid-index`；最后一种携带违规值的 JSON 路径。
 
-`plugin_market` 工具列出已配置的索引，按索引顺序分页列出某个索引的插件，或在给出 `query` 时按最佳匹配分页列出，或分页列出某个插件的版本。它不需要批准，因为它只读取用户配置的源且不做任何改动；它返回的每个版本都携带要传给 `plugin_manager` 的 `install_bundle` 的 `target` 和 `registry`，`install_bundle` 仍保留自己的批准要求。该工具不能修改索引源。Creator 模式在 `plugin_manager` 旁边保留它的行，该行只在 `pluginMarket` 已挂载时注册工具；其他预设保持禁用。
+`plugin_market` 工具列出已配置的索引，按索引顺序分页列出某个索引的插件，或在给出 `query` 时按最佳匹配分页列出，或分页列出某个插件的版本。它不需要批准，因为它只读取用户配置的源且不做任何改动；它返回的每个版本都携带要传给 `plugin_manager` 的 `install_bundle` 的 `target` 和 `registry`，`install_bundle` 仍保留自己的批准要求。该工具不能修改索引源。缺少参数或分页越界时以带 `INVALID_ARGS` 的 `ToolArgsError` 失败。市场失败以 `PluginMarketError` 交给工具注册表，保留服务的 message，并把其 `RemoteError` 保留为 `cause`：例如 `plugin-market/unknown-index` 变为 `PLUGIN_MARKET_INDEX_NOT_FOUND`，`plugin-market/fetch-failed` 变为 `PLUGIN_MARKET_FETCH_FAILED`，未列出的插件为 `PLUGIN_MARKET_PLUGIN_NOT_FOUND`；其他失败为 `PLUGIN_MARKET_FAILED`。Creator 模式在 `plugin_manager` 旁边保留它的行，该行只在 `pluginMarket` 已挂载时注册工具；其他预设保持禁用。
 
 -----
 
