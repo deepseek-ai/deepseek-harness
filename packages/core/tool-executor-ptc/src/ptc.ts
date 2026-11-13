@@ -15,13 +15,13 @@ import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingFunction, PtcRunFailure, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
-import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
+import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   defineTool, parameterSchemaSpecToJsonSchema, projectToolSchema, RUN_CODE_NAME, TOOL_ABORTED, ToolArgsError,
   ToolContextUnavailableError,
@@ -30,7 +30,7 @@ import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { PtcCalls } from './ptc-calls.ts'
-import { CodeRunFailedError, ToolCallLimitExceededError, type CodeRunErrorCode } from './errors.ts'
+import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
 import type { Config } from './config.ts'
 import type { RunCodeToolOptions } from './run-code.ts'
 import type { ToolDefinition, ToolExecution, ToolExecutionFailure, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -116,29 +116,6 @@ function controlParameters(runtime: PtcRuntime) {
       sandbox_permissions: RUN_CODE_CONTROLS.sandbox_permissions,
       justification: RUN_CODE_CONTROLS.justification,
     },
-  }
-}
-
-/** Classify runtime failures without implying that earlier actions were undone. */
-function classifyRunFailure(kind: PtcRunFailure['kind']): { code: CodeRunErrorCode; guidance: string } {
-  switch (kind) {
-    case 'output-limit':
-      return {
-        code: 'CODE_OUTPUT_LIMIT',
-        guidance: '\nOutput exceeded its limit. Program completion is not confirmed; execution may be partial. '
-          + 'Earlier actions are not rolled back. Inspect current state before any retry. '
-          + 'Reduce inspected output or logs without repeating completed actions.',
-      }
-    case 'invalid-output':
-    case 'exception':
-    case 'timeout':
-    case 'abort':
-    case 'worker-exit':
-    case 'protocol':
-    case 'sandbox-unavailable':
-      return { code: 'CODE_RUN_FAILED', guidance: '' }
-    /* v8 ignore next -- PtcRunFailure['kind'] is closed; this retains compile-time exhaustiveness. */
-    default: return assertNever(kind, 'PtcRunFailure kind')
   }
 }
 
@@ -715,8 +692,13 @@ export function createRunCodeTransport(
                 : `${logsText.endsWith('\n') ? '' : '\n'}File sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
               const failureText = limitError === undefined || limitError.message === result.error.message
                 ? result.error.message : `${limitError.message}\n${result.error.message}`
-              const { code, guidance } = classifyRunFailure(result.error.kind)
-              failure = new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}${guidance}`, code)
+              const outputLimited = result.error.kind === 'output-limit'
+              const guidance = outputLimited
+                ? '\nOutput exceeded its limit. Program completion is not confirmed; execution may be partial. '
+                  + 'Earlier actions are not rolled back. Inspect current state before any retry. '
+                  + 'Reduce inspected output or logs without repeating completed actions.'
+                : ''
+              failure = new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}${guidance}`, outputLimited ? 'CODE_OUTPUT_LIMIT' : 'CODE_RUN_FAILED')
             }
             if (hasImages) inspections.set(exec, {
               failure: {
