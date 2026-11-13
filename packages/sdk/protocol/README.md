@@ -56,6 +56,8 @@ Both wire ends share one method set: client-to-server requests, opt-in server-to
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification` (in-process runs only) |
 
+`session/resume.permissionMode` optionally selects a configured permission preset before restored execution; omission preserves saved permissions. See the [server resume contract](../server/README.md#use-this-package) for persistence and rejection behavior.
+
 `HarnessSdkRequestMap`, `HarnessSdkClientRequestMap`, `HarnessSdkHostRequestMap`, and `HarnessSdkNotificationMap` index these shapes by method name; the package root exports them together with the transport.
 
 `session/wait` accepts `{ sessionId }` for an existing SDK-owned session and returns `{}` after the root stays idle and progressing managed descendant work finishes. Idle descendants with parked input remain resident without blocking this wait. Unknown ids and live Agent failures without a newer committed terminal are rejected. Notifications committed during the wait precede its response on the same transport; raw `session.status` transitions retain their whole-agent meaning.

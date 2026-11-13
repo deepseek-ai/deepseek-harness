@@ -119,6 +119,8 @@ export type { CommandExecution }
 export interface SessionResumeParams {
   /** Persisted session identity; missing or already owned sessions are rejected. */
   sessionId: string
+  /** Configured permission preset to persist before execution; omission retains saved permissions. */
+  permissionMode?: string
 }
 
 /** Wait for an existing SDK session and its managed descendants to finish. */

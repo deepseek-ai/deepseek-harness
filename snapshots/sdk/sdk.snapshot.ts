@@ -953,7 +953,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           await harness.start()
           subscription = harness.client.subscribeSessionTree(sessionId)
           await expect(harness.resumeSession('missing-session')).rejects.toThrow()
-          session = await harness.resumeSession(sessionId)
+          session = await harness.resumeSession(sessionId, { permissionMode: 'read-only' })
           expect(session.id).toBe(sessionId)
         }
         let result: RunResult | undefined

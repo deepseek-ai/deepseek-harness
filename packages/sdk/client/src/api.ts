@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
+import type { SessionResumeParams } from '@deepseek-ai/dsh-sdk-protocol'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 import { createProcessHarnessClient, HarnessClient, isRecord, queryInput, SdkProtocolError } from './client.ts'
 import type { RuntimeProcessOptions } from './launch.ts'
@@ -110,11 +111,12 @@ export class DeepSeekHarness implements AsyncDisposable {
    * Start the runtime and restore a persisted session without sending input.
    * The configured Harness home must contain its history; missing or occupied sessions reject.
    * @param sessionId - exact persisted identity to continue.
+   * @param options - explicit permission preset to persist before execution; omission retains saved permissions.
    * @returns a handle ready to run new prompts on the restored history.
    */
-  async resumeSession(sessionId: string): Promise<HarnessSession> {
+  async resumeSession(sessionId: string, options: Omit<SessionResumeParams, 'sessionId'> = {}): Promise<HarnessSession> {
     await this.start()
-    await this.client.resumeSession(sessionId)
+    await this.client.resumeSession(sessionId, options)
     return new HarnessSession(this, sessionId)
   }
 

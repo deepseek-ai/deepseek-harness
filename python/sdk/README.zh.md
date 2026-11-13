@@ -52,6 +52,8 @@ print(result.final_response)
 
 `harness.resume_session(saved_session_id)` 恢复持久化历史，并返回可调用 `run()` 的 `Session`。请保存原会话 id，并沿用其 `dsh_home` 和工作区。恢复会保留存储的目录、修复最后一个被中断的轮次，且不发送新输入。会话缺失、不可读、不兼容或被占用时会抛出异常，不创建替代会话。`start_session(id)` 只打开惰性句柄，不会请求持久化恢复。此 API 不恢复 shell、浏览器或其他外部进程。
 
+调用 `harness.resume_session(saved_session_id, {"permission_mode": "danger-full-access"})` 可在恢复后的执行开始前覆盖已保存的权限预设；省略选项或传入空字典时保留历史权限。若选项含未知键，或传入的选项既非字典也非 `None`，SDK 会在发送恢复请求前抛出 `TypeError`。所选预设同时更新 sandbox 和审批策略，并持久化供后续恢复使用；该预设必须存在于 profile 的权限服务中。标准 `sdk` profile 提供 `read-only`、`workspace-write` 和 `danger-full-access`。缺少该服务的 profile（如 `sdk-minimal`）会拒绝显式覆盖。已被提醒任务恢复的会话也会拒绝覆盖；请对该运行中会话使用 `/permission`。
+
 ```py
 with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     session = harness.resume_session(saved_session_id)
