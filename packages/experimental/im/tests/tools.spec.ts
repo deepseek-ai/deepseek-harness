@@ -2,16 +2,23 @@
  * `im_*` tools: registration (incl. `readOnly`), the prompt section, read/history/media behaviour, the publishing
  * tools' inputs (operation id, quote, thread), declared `ImError` results and the bounded render text.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { existsSync, realpathSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createRenderReport, h, type Fragment, type MembersPage } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime, { type ToolExecutionMode, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { outsideTempWorkspaceParent } from '../../../../scripts/snapshot-workspace-parent.ts'
 import {
   ImChatKey, ImMessageKey, ImSourceId, type ImBinding, type ImChat, type ImConfig, type ImHistory, type ImMessage,
   type ImOutputRenderer, type ImSendOptions, type ImSendResult, type ImSessionRecord,
@@ -150,7 +157,7 @@ class FakeIm {
   /** Members the platform lists, by chat; a chat it cannot list reports the platform's own refusal. */
   readonly membersByChat = new Map<ImChatKey, { id: string; name?: string }[]>()
 
-  async members(chat: ImChatKey): Promise<MembersPage> {
+  async members(chat: ImChatKey, _cursor?: string, _limit?: number): Promise<MembersPage> {
     const data = this.membersByChat.get(chat)
     if (data === undefined) throw new ImError('unavailable', `Bot fake:bot cannot list the members of ${chat}.`)
     return { data }
@@ -265,7 +272,13 @@ describe('im tool registration', () => {
   })
 
   it('registers only the read tools when the preset is read-only', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
+    const mounted = await mount({
+      config: {
+        tools: {
+          readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
     expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_members', 'im_read_image', 'im_read_file'])
   })
 
@@ -310,7 +323,13 @@ describe('im tool registration', () => {
   })
 
   it('guides a read-only session and a session without chats', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
+    const mounted = await mount({
+      config: {
+        tools: {
+          readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
     expect(await mounted.prompt(fakeAgent(SessionId('im-session')))).toContain('this preset publishes nothing')
     const bareMounted = await mount()
     bareMounted.im.sessions.add('bare', [])
@@ -391,7 +410,7 @@ describe('im_read and im_history', () => {
     expect(value(await mounted.call('im_members', {}))).toMatchObject({ status: 'error', code: 'unavailable' })
   })
 
-  it('stops paging a roster no member of which matches the query', async () => {
+  it('stops paging a roster no member of which matches the query, honouring tools.maxMemberPages', async () => {
     const mounted = await mount()
     let reads = 0
     // A roster that never ends: without a page limit one unmatched query would read it for ever.
@@ -401,6 +420,54 @@ describe('im_read and im_history', () => {
     }
     expect(value(await mounted.call('im_members', { query: '张' }))).toMatchObject({ members: [], total: 0, more: true })
     expect(reads).toBe(10)
+
+    const custom = await mount({
+      config: {
+        tools: {
+          readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 3, fileDir: '.dsh/im',
+        },
+      },
+    })
+    let customReads = 0
+    custom.im.members = async (_chat: ImChatKey, cursor?: string): Promise<MembersPage> => {
+      customReads++
+      return { data: [{ id: `ou_${cursor ?? 0}`, name: '李四' }], next: String(Number(cursor ?? 0) + 1) }
+    }
+    expect(value(await custom.call('im_members', { query: '张' }))).toMatchObject({ members: [], total: 0, more: true })
+    expect(customReads).toBe(3)
+  })
+
+  it('reaches maxMembers above 100 across 100-entry pages and stops once the member bound is full', async () => {
+    const large = await mount({
+      config: {
+        tools: {
+          readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 600, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
+    const limits: (number | undefined)[] = []
+    large.im.members = async (_chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage> => {
+      limits.push(limit)
+      const pageIndex = Number(cursor ?? 0)
+      const size = limit ?? 20
+      const data = Array.from({ length: size }, (_, offset) => ({ id: `ou_${pageIndex}_${offset}`, name: '王五' }))
+      return { data, ...pageIndex < 9 ? { next: String(pageIndex + 1) } : {} }
+    }
+    expect(value(await large.call('im_members', {}))).toMatchObject({ total: 600, more: true })
+    expect(limits).toEqual([100, 100, 100, 100, 100, 100])
+
+    // A single page that carries more matching entries than maxMembers stops mid-page with `more: true`.
+    const small = await mount({
+      config: {
+        tools: {
+          readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 2, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
+    small.im.members = async (): Promise<MembersPage> => ({
+      data: [{ id: 'ou_1', name: '张一' }, { id: 'ou_2', name: '张二' }, { id: 'ou_3', name: '张三' }],
+    })
+    expect(value(await small.call('im_members', { query: '张' }))).toMatchObject({ total: 2, more: true })
   })
 
   it('reports an unknown message as a declared error', async () => {
@@ -455,7 +522,13 @@ describe('im_read and im_history', () => {
   })
 
   it('bounds the rendered text of a read to maxReadBytes', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: false, maxReadBytes: 80, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
+    const mounted = await mount({
+      config: {
+        tools: {
+          readOnly: false, maxReadBytes: 80, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
     expect(textOf(await mounted.call('im_history', {}))).toContain('truncated')
   })
 
@@ -669,6 +742,124 @@ describe('im_read_file', () => {
     expect(failed.isError).toBe(true)
     expect(textOf(failed)).toContain('refused the download')
   })
+
+  it('enforces a session read-only sandbox override even when the deployment default is danger-full-access', async () => {
+    const directory = await mkdtemp(join(outsideTempWorkspaceParent(), '.dsh-im-tools-'))
+    try {
+      const workspace = join(realpathSync.native(directory), 'ws')
+      await mkdir(workspace)
+      const ctx = new Context()
+      contexts.push(ctx)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: workspace })
+      await ctx.plugin(SandboxedFileSystem, { cwd: workspace })
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
+      ctx.provide('workingDirectory', { ensure: async () => workspace } as never)
+      const im = new FakeIm()
+      const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
+      applyTools(ctx, im, config)
+      await new Promise((resolve) => { setTimeout(resolve, 5) })
+
+      im.sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
+      im.media.items.set('1.2', {
+        ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
+      })
+      const session = ctx.sessions.create(SessionId('im-session'), { meta: { cwd: workspace } })
+      setSandboxMode(session, 'read-only')
+
+      const denied = await executeToolFixture(ctx, {
+        name: 'im_read_file',
+        arguments: { id: '1.2' },
+        callId: ToolCallId('im_read_file-ro'),
+        signal: new AbortController().signal,
+        agent: { id: session.id, session } as Agent,
+      })
+      expect(denied.isError).toBe(true)
+      expect(textOf(denied)).toContain('read-only')
+      expect(existsSync(join(workspace, '.dsh'))).toBe(false)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('uses the calling session cwd as the workspace-write boundary instead of the deployment fallback', async () => {
+    const directory = await mkdtemp(join(outsideTempWorkspaceParent(), '.dsh-im-tools-'))
+    try {
+      const root = realpathSync.native(directory)
+      const fallbackDir = join(root, 'fallback')
+      const sessionDir = join(root, 'session-ws')
+      await mkdir(fallbackDir)
+      await mkdir(sessionDir)
+      let currentCwd = sessionDir
+
+      const ctx = new Context()
+      contexts.push(ctx)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: fallbackDir })
+      await ctx.plugin(SandboxedFileSystem, { cwd: fallbackDir })
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
+      ctx.provide('workingDirectory', { ensure: async () => currentCwd } as never)
+      const im = new FakeIm()
+      const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
+      applyTools(ctx, im, config)
+      await new Promise((resolve) => { setTimeout(resolve, 5) })
+
+      im.sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
+      im.media.items.set('1.2', {
+        ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
+      })
+      const session = ctx.sessions.create(SessionId('im-session'), { meta: { cwd: sessionDir } })
+      const agent = { id: session.id, session } as Agent
+
+      // Staging inside the session's own workspace succeeds even though the deployment fallback points elsewhere.
+      const allowed = await executeToolFixture(ctx, {
+        name: 'im_read_file',
+        arguments: { id: '1.2' },
+        callId: ToolCallId('im_read_file-ws-ok'),
+        signal: new AbortController().signal,
+        agent,
+      })
+      expect(allowed.isError).toBe(false)
+      const stagedPath = value(allowed).path as string
+      expect(new Uint8Array(await readFile(stagedPath))).toEqual(data)
+
+      // Staging outside the session's workspace (even under the deployment fallback) is refused by the session policy.
+      currentCwd = fallbackDir
+      const escaped = await executeToolFixture(ctx, {
+        name: 'im_read_file',
+        arguments: { id: '1.2' },
+        callId: ToolCallId('im_read_file-ws-deny'),
+        signal: new AbortController().signal,
+        agent,
+      })
+      expect(escaped.isError).toBe(true)
+      expect(existsSync(join(fallbackDir, '.dsh'))).toBe(false)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses to register im_read_file over a confining filesystem when ctx.sandboxPolicy is absent', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    ctx.provide('fs', { ...fakeFs(), sandboxMode: 'workspace-write' } as never)
+    ctx.provide('workingDirectory', { ensure: async () => '/work' } as never)
+    const im = new FakeIm()
+    const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
+    applyTools(ctx, im, config)
+    await new Promise((resolve) => { setTimeout(resolve, 5) })
+    expect(ctx.tools.get('im_read_file')).toBeUndefined()
+    expect(logged.mock.calls.some(([err]) => String(err).includes('ctx.sandboxPolicy is required'))).toBe(true)
+  })
 })
 
 describe('model-visible surface', () => {
@@ -690,7 +881,13 @@ describe('model-visible surface', () => {
     mounted.im.renderers.add('probe')
     const withRenderer = await mounted.prompt(fakeAgent(SessionId('rendered-pin')))
 
-    const readOnlyMount = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
+    const readOnlyMount = await mount({
+      config: {
+        tools: {
+          readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
     const readOnly = await readOnlyMount.prompt(fakeAgent(SessionId('im-session')))
 
     const bareMount = await mount()

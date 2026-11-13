@@ -93,7 +93,7 @@ describe('ImSessions records', () => {
     const taken = await harness.host.ensure(spec({ key: 'task:taken' }))
     // A session with the derived id already exists outside the IM store.
     await harness.ctx.agents.create({ sessionId: taken.sessionId })
-    await expect(harness.host.reset(taken.key, 'test')).resolves.toBeUndefined()
+    await expect(harness.host.reset(taken.key, 'test')).resolves.toBe(taken.sessionId)
     const fresh = harness.host.get(taken.key)!
     expect(fresh.sessionId).not.toBe(taken.sessionId)
   })
@@ -401,6 +401,57 @@ describe('reset', () => {
     expect(harness.host.pendingDeliveries()).toBe(0)
     slow.mockRestore()
   })
+
+  it('deduplicates resets by operationId across races and restarts, honours expectedGeneration, and prunes aged receipts', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+
+    // Concurrent calls carrying the same operationId collapse on the serial chain: one reset runs, both see the
+    // replaced session id, and a later retry returns the stored receipt from memory.
+    const [firstResult, racingResult] = await Promise.all([
+      first.host.reset(record.key, 'cmd', { operationId: 'op-clear-1', expectedGeneration: 0 }),
+      first.host.reset(record.key, 'cmd', { operationId: 'op-clear-1', expectedGeneration: 0 }),
+    ])
+    expect(firstResult).toBe(record.sessionId)
+    expect(racingResult).toBe(record.sessionId)
+    expect(first.host.get(record.key)?.generation).toBe(1)
+    expect(first.resets).toHaveLength(1)
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-clear-1', expectedGeneration: 0 }))
+      .resolves.toBe(record.sessionId)
+    expect(first.host.get(record.key)?.generation).toBe(1)
+
+    // A stale caller naming generation 0 under a fresh operationId leaves generation 1 untouched.
+    await expect(first.host.reset(record.key, 'stale', { operationId: 'op-stale', expectedGeneration: 0 }))
+      .resolves.toBeUndefined()
+    expect(first.host.get(record.key)?.generation).toBe(1)
+    expect(first.resets).toHaveLength(1)
+
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+
+    // Across a restart, the persisted reset receipt still answers with the replaced session id without resetting again.
+    const second = await booted({
+      pool: first.pool, root: first.root, config: { retentionMs: 3_600_000 },
+    })
+    await recovered(second)
+    await expect(second.host.reset(record.key, 'cmd', { operationId: 'op-clear-1' }))
+      .resolves.toBe(record.sessionId)
+    expect(second.host.get(record.key)?.generation).toBe(1)
+    await second.close()
+    open.splice(open.indexOf(second), 1)
+
+    // Aged reset receipts are pruned on recovery alongside aged delivery receipts.
+    const resetsTable = first.pool.media.get('im_sessions')?.tables.get('resets')
+    expect(resetsTable?.size).toBe(1)
+    for (const [id, stored] of resetsTable ?? []) {
+      resetsTable?.set(id, { ...(stored as Record<string, unknown>), createdAt: 0 })
+    }
+    const third = await booted({
+      pool: first.pool, root: first.root, config: { retentionMs: 3_600_000 },
+    })
+    await recovered(third)
+    expect(third.pool.media.get('im_sessions')?.tables.get('resets')?.size).toBe(0)
+  })
 })
 
 describe('ephemeral sessions', () => {
@@ -547,6 +598,32 @@ describe('service lifecycle', () => {
     harness.host.retry()
     await harness.host.dispose()
     await expect(harness.host.ensure(spec({ key: 'late' }))).rejects.toThrow(/store is not open/)
+  })
+
+  it('holds recovery passes until release and treats an unheld release as a no-op', async () => {
+    const first = await booted()
+    first.host.release()
+    const record = await first.host.ensure(spec())
+    first.failFormat()
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('wait for release')])))
+      .rejects.toThrow(/format offline/)
+    expect(first.host.pendingDeliveries()).toBe(1)
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+
+    const second = await booted({ pool: first.pool, root: first.root, withoutStart: true })
+    second.host.hold()
+    await second.host.start()
+    second.host.retry()
+    expect(second.host.pendingDeliveries()).toBe(1)
+    expect(second.model.requests).toEqual([])
+
+    second.host.release()
+    await recovered(second)
+    expect(second.host.pendingDeliveries()).toBe(0)
+    const agent = await second.host.agent(record.sessionId)
+    await agent.whenIdle()
+    expect(second.model.requests).toHaveLength(1)
   })
 })
 

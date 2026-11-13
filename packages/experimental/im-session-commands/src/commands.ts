@@ -4,6 +4,7 @@
  * cannot act twice.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { Fragment } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-commands'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -70,7 +71,7 @@ export class SessionCommands {
     if (!builtin && !this.passthrough.has(name)) return next()
     const privileged = !builtin || (name !== 'status' && name !== 'help')
     if (privileged && !this.permitted(message)) {
-      await event.reply(this.strings.denied)
+      await this.reply(event, this.strings.denied)
       return this.outcome()
     }
     const chat = message.chat.key
@@ -93,11 +94,11 @@ export class SessionCommands {
     for (const record of this.targets(records, event.message)) {
       if (await this.ctx.im.sessions.stop(record.key)) stopped.push(record.sessionId)
     }
-    await event.reply(stopped.length === 0 ? this.strings.nothingToStop : fill(this.strings.stopped, stopped.length))
+    await this.reply(event, stopped.length === 0 ? this.strings.nothingToStop : fill(this.strings.stopped, stopped.length))
     return this.outcome(stopped)
   }
 
-  /** `/clear`, `/new`: reset the home sessions of this chat whose owner is resettable. */
+  /** `/clear`, `/new`: reset the home sessions of this chat whose owner is resettable, idempotent per message key. */
   private async reset(
     event: ImMessageEvent,
     records: ImSessionRecord[],
@@ -105,24 +106,29 @@ export class SessionCommands {
     name: BuiltinCommandName,
   ): Promise<ImOutcome> {
     const targets = records.filter(record => this.resettable.has(record.owner) && homeOf(record, chat))
-    for (const record of targets) await this.ctx.im.sessions.reset(record.key, `${BY}:/${name}`)
-    await event.reply(targets.length === 0 ? this.strings.nothingToReset : fill(this.strings.reset, targets.length))
-    return this.outcome(targets.map(record => record.sessionId))
+    const replaced: SessionId[] = []
+    const operationId = `${BY}:${event.message.key}`
+    for (const record of targets) {
+      const sessionId = await this.ctx.im.sessions.reset(record.key, `${BY}:/${name}`, {
+        operationId,
+        expectedGeneration: record.generation,
+      })
+      if (sessionId !== undefined) replaced.push(sessionId)
+    }
+    await this.reply(event, replaced.length === 0 ? this.strings.nothingToReset : fill(this.strings.reset, replaced.length))
+    return this.outcome(replaced)
   }
 
   /** `/status`: identity, model, run state, queued input and the age of the last activity. */
   private async status(event: ImMessageEvent, records: ImSessionRecord[], chat: ImChatKey): Promise<ImOutcome> {
-    const home = this.targets(records, event.message).find(record => homeOf(record, chat))
-    if (home === undefined) {
-      await event.reply(this.strings.noSession)
-      return this.outcome()
-    }
+    const home = this.findHome(records, event.message, chat)
+    if (home === undefined) return await this.noSession(event)
     const agent = this.ctx.agents.get(home.sessionId)
     const labels = this.strings.status
     const queued = agent === undefined ? 0 : agent.inbox.nextTurn.length + agent.inbox.nextStep.length
     const state = agent?.status === 'running' ? labels.running : labels.idle
     const line = (label: string, value: string): string => `${label}${this.strings.colon}${value}`
-    await event.reply([
+    await this.reply(event, [
       line(labels.session, home.sessionId),
       line(labels.model, home.composition.model),
       line(labels.state, state),
@@ -136,7 +142,7 @@ export class SessionCommands {
   private async help(event: ImMessageEvent, records: ImSessionRecord[], chat: ImChatKey): Promise<ImOutcome> {
     const lines = [this.strings.helpTitle]
     for (const name of BUILTIN_ORDER) lines.push(`/${name} — ${this.strings.describe[name]}`)
-    const home = this.targets(records, event.message).find(record => homeOf(record, chat))
+    const home = this.findHome(records, event.message, chat)
     if (home === undefined) {
       // Without a session the registry cannot be consulted, so advertise the configured names alone.
       for (const name of this.passthrough) if (!BUILTINS.has(name)) lines.push(`/${name}`)
@@ -146,7 +152,7 @@ export class SessionCommands {
         if (this.passthrough.has(descriptor.name)) lines.push(`/${descriptor.name} — ${descriptor.description}`)
       }
     }
-    await event.reply(lines)
+    await this.reply(event, lines)
     return this.outcome(home === undefined ? undefined : [home.sessionId])
   }
 
@@ -159,21 +165,34 @@ export class SessionCommands {
     rawInput: string,
     next: () => Promise<ImOutcome>,
   ): Promise<ImOutcome> {
-    const home = this.targets(records, event.message).find(record => homeOf(record, chat))
-    if (home === undefined) {
-      await event.reply(this.strings.noSession)
-      return this.outcome()
-    }
+    const home = this.findHome(records, event.message, chat)
+    if (home === undefined) return await this.noSession(event)
     // `agent()` opens (or resumes) the live agent the registry executes against.
     const agent: Agent = await this.ctx.im.sessions.agent(home.sessionId)
     // An unregistered name (or one that vanished between listing and execution) is not this plugin's command.
     const execution = await this.ctx.commands.execute(agent, `/${name}${rawInput}`, [], this.shutdown.signal)
     if (execution === undefined) return next()
-    await event.reply(execution.result.text ?? this.strings.done)
+    await this.reply(event, execution.result.text ?? this.strings.done)
     return this.outcome([home.sessionId])
   }
 
   // -------------------------------------------------------------------------------------------------------------
+
+  /** The chat's home session within the message's target scope, if any. */
+  private findHome(records: ImSessionRecord[], message: ImMessage, chat: ImChatKey): ImSessionRecord | undefined {
+    return this.targets(records, message).find(record => homeOf(record, chat))
+  }
+
+  /** Reply that the chat has no home session yet and report the command handled. */
+  private async noSession(event: ImMessageEvent): Promise<ImOutcome> {
+    await this.reply(event, this.strings.noSession)
+    return this.outcome()
+  }
+
+  /** Publish a command reply deduplicated by the triggering message's key. */
+  private async reply(event: ImMessageEvent, content: Fragment): Promise<void> {
+    await event.reply(content, { operationId: `${BY}:reply:${event.message.key}` })
+  }
 
   /** Sessions bound to the chat, thread-bound ones only when the message is in a thread they own. */
   private targets(records: ImSessionRecord[], message: ImMessage): ImSessionRecord[] {

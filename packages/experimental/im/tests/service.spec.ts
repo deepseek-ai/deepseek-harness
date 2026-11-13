@@ -16,6 +16,7 @@ import {
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
 import { ImService } from '../src/index.ts'
+import { sessionIdOf } from '../src/hosting.ts'
 import { imSessionsDomain } from '../src/sessions.ts'
 import { imDomain } from '../src/state.ts'
 import { ImStore, type ImMessageDraft } from '../src/store.ts'
@@ -40,17 +41,26 @@ const booted: Harness[] = []
  *   stored state the way an earlier process leaves it.
  * @returns the context, the mounted `ctx.im` and the platform fake it runs on.
  */
-async function mount(options: { retryIntervalMs?: number; beforeMount?: (ctx: Context) => Promise<void> } = {}): Promise<Harness> {
+async function mount(options: {
+  retryIntervalMs?: number
+  compositionWarnMs?: number
+  beforeMount?: (ctx: Context) => Promise<void>
+} = {}): Promise<Harness> {
   const retryIntervalMs = options.retryIntervalMs ?? 60_000
+  const configPatch = {
+    sources: SOURCES,
+    retryIntervalMs,
+    ...options.compositionWarnMs === undefined ? {} : { compositionWarnMs: options.compositionWarnMs },
+  }
   // `withoutStart` leaves the harness's own sessions host inert: this context hosts exactly one IM service.
-  const base = await boot({ withoutStart: true, config: { sources: SOURCES, retryIntervalMs } })
+  const base = await boot({ withoutStart: true, config: configPatch })
   const ctx = base.ctx
   await ctx.plugin(Satori)
   await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
   // The media bridge only reaches attachments for images it stores; the facade never saves one here.
   ctx.provide('attachments', { saveImages: async () => [] } as never)
   await options.beforeMount?.(ctx)
-  await ctx.plugin(ImService, Config({ sources: SOURCES, retryIntervalMs }))
+  await ctx.plugin(ImService, Config(configPatch))
   const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
   const harness: Harness = { base, service: ctx.im, bot }
   booted.push(harness)
@@ -341,6 +351,87 @@ describe('ImService facade', () => {
     expect(seen).toEqual([])
     settle()
     await vi.waitFor(() => { expect(seen).toEqual([ImMessageKey('fake:bot', 'm-early')]) })
+  })
+
+  it('holds persisted delivery recovery alongside intake until the Loader settles, with IM tools registered', async () => {
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => { settle = resolve })
+    const key = `conv:${CHAT}`
+    const sessionId = sessionIdOf(key, 0)
+    const { base, service } = await mount({
+      retryIntervalMs: 1,
+      beforeMount: async (ctx) => {
+        provideByName(ctx, 'loader', { await: () => settled })
+        ctx.provide('fs', { resolve: async () => ({}), processPath: () => '', writeBytes: async () => ({}) } as never)
+        ctx.provide('workingDirectory', { ensure: async () => process.cwd() } as never)
+        const domain = await ctx.storageDomain.open(imSessionsDomain)
+        await domain.table('sessions').put(key, {
+          key,
+          owner: 'conversation',
+          sessionId,
+          generation: 0,
+          composition: COMPOSITION,
+          bindings: [{ chat: CHAT, writable: true, home: true }],
+          createdAt: 1000,
+          lastActiveAt: 1000,
+        })
+        await domain.table('deliveries').put(`${sessionId}|evt-recover`, {
+          session: sessionId,
+          delivery: { id: 'evt-recover', mode: 'followup', content: [{ type: 'text', text: 'recover me' }] },
+          createdAt: 1000,
+          admitted: false,
+        })
+        await domain.close()
+      },
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(service.sessions.pendingDeliveries()).toBe(1)
+    expect(base.model.requests).toEqual([])
+
+    settle()
+    await vi.waitFor(() => { expect(base.model.requests).toHaveLength(1) })
+    const agent = await service.sessions.agent(sessionId)
+    await agent.whenIdle()
+    await service.sessions.whenRecovered()
+    expect(service.sessions.pendingDeliveries()).toBe(0)
+    expect(base.model.promptText(0)).toContain('recover me')
+    const toolNames = (base.model.requests[0]?.tools ?? []).map(tool => tool.name)
+    expect(toolNames).toContain('im_send')
+    expect(toolNames).toContain('im_read_file')
+  })
+
+  it('warns when the Loader stays unsettled past compositionWarnMs and releases when it rejects', async () => {
+    let rejectSettled!: (error: Error) => void
+    const settled = new Promise<void>((_resolve, reject) => { rejectSettled = reject })
+    const warnings: string[] = []
+    const { base, bot } = await mount({
+      compositionWarnMs: 10,
+      beforeMount: async (ctx) => {
+        vi.spyOn(ctx.logger, 'warn').mockImplementation((fmt: unknown) => { warnings.push(String(fmt)) })
+        provideByName(ctx, 'loader', { await: () => settled })
+      },
+    })
+    const seen: string[] = []
+    base.ctx.on('im/message', async (event) => {
+      seen.push(event.message.key)
+      return { kind: 'handled', by: 'probe' }
+    })
+    await deliver(bot, inbound('m-warn'))
+    await vi.waitFor(() => {
+      expect(warnings.some(msg => msg.includes('still waiting after %dms'))).toBe(true)
+    })
+    expect(seen).toEqual([])
+
+    rejectSettled(new Error('plugin hang'))
+    await vi.waitFor(() => { expect(seen).toEqual([ImMessageKey('fake:bot', 'm-warn')]) })
+    expect(warnings.some(msg => msg.includes('although the composition did not settle'))).toBe(true)
+
+    // Non-Loader values under the `loader` service name release immediately like a hand-composed context.
+    const nonObject = await mount({ beforeMount: async (ctx) => { provideByName(ctx, 'loader', null) } })
+    const nonLoader = await mount({ beforeMount: async (ctx) => { provideByName(ctx, 'loader', {}) } })
+    expect(nonObject.service.status().sources).toHaveLength(1)
+    expect(nonLoader.service.status().sources).toHaveLength(1)
   })
 
   it('unmounts its service when the plugin is disposed', async () => {

@@ -6,15 +6,21 @@
     # read the IM host stops waiting for (`platformTimeoutMs`) is abandoned,
     # not cancelled, because `Bot.getMessage` takes no signal; this deadline
     # is what eventually ends such a request. It is generous so a large upload
-    # still finishes.
+    # still finishes, and `isolate: { http: im }` confines this `http` service
+    # (and `im-core`'s `satori:` fetch hook) to the IM rows so the rest of the
+    # profile keeps its own `http` defaults.
     - id: im-http
       name: '@deepseek-ai/cordis-plugin-http'
+      isolate:
+        http: im
       config:
         timeout: 120000
 
     # The `satori` service: every adapter below registers its bot here.
     - id: im-core
       name: '@deepseek-ai/cordis-plugin-im-core'
+      isolate:
+        http: im
 
     # Registers the `<markdown>` element and the `markdown` factory every
     # answer the model writes is built from, so each mode receives ordinary
@@ -33,6 +39,8 @@
     # explicit `false` renders them as text, for a tenant that forbids @all.
     - id: im-feishu
       name: '@deepseek-ai/cordis-plugin-im-adapter-lark'
+      isolate:
+        http: im
       config:
         appId: !!js process.env.DSH_FEISHU_APP_ID
         appSecret: !!js process.env.DSH_FEISHU_APP_SECRET
@@ -45,6 +53,8 @@
     - id: im-qq
       name: '@deepseek-ai/cordis-plugin-im-adapter-qq'
       disabled: true
+      isolate:
+        http: im
       config:
         appId: !!js process.env.DSH_QQ_APP_ID
         secret: !!js process.env.DSH_QQ_APP_SECRET
@@ -56,6 +66,8 @@
     # chat.
     - id: im
       name: '@deepseek-ai/dsh-im'
+      isolate:
+        http: im
       config:
         sources: []
 

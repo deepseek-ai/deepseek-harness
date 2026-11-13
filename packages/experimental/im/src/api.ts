@@ -289,6 +289,11 @@ export interface ImConfig {
   retryIntervalMs: number
   /** Deadline of one platform request this service makes (a message re-read, the text of a quoted reply), ms. */
   platformTimeoutMs: number
+  /**
+   * Delay in ms before logging a warning when the Loader composition has not settled and IM intake and delivery
+   * recovery remain held (default 30 s).
+   */
+  compositionWarnMs: number
   /** Inbound media admission: whether admitted images and files are downloaded for the model, and their bounds. */
   media: {
     /** Download admitted images and files so the model can read them; `false` keeps only their labels. */
@@ -328,6 +333,8 @@ export interface ImConfig {
     maxHistoryItems: number
     /** Maximum members one `im_members` call lists, across platform pages (default 200). */
     maxMembers: number
+    /** Maximum platform roster pages one `im_members` call reads before stopping (default 10). */
+    maxMemberPages: number
     /**
      * Session-relative directory `im_read_file` writes a downloaded file into (default
      * `.dsh/im`); the path a chat file is staged at stays inside the working directory so
@@ -458,6 +465,22 @@ export interface ImSessionFilter {
 }
 
 /**
+ * Idempotency and generation guard for {@link ImSessions.reset}.
+ */
+export interface ImResetOptions {
+  /**
+   * Caller-supplied idempotency key (for example, a command message key). Within `retentionMs`, repeating `reset` for
+   * the same `(key, operationId)` returns the originally replaced `SessionId` without advancing a newer generation.
+   */
+  operationId?: string
+  /**
+   * Generation the caller observed and intends to replace. When `key` has already advanced past `expectedGeneration`,
+   * `reset` leaves the newer generation untouched instead of resetting subsequent work.
+   */
+  expectedGeneration?: number
+}
+
+/**
  * Hosted sessions (`ctx.im.sessions`): records keyed by an owner-defined key, their live agents, bindings, durable
  * deliveries and the reset/stop lifecycle. Plugins own their keys and interpret the records they created.
  */
@@ -470,8 +493,11 @@ export interface ImSessions {
   forChat(chat: ImChatKey): ImSessionRecord[]
   /** Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. */
   deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>
-  /** Cancel + dispose the live agent, bump generation; the next ensure() creates a fresh session. */
-  reset(key: string, reason: string): Promise<void>
+  /**
+   * Cancel + dispose the live agent and bump generation so the next `ensure()` creates a fresh session. Returns the
+   * replaced `SessionId`, or `undefined` when `key` is not hosted (or already advanced past `expectedGeneration`).
+   */
+  reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>
   bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>
   /** Live agent (created/resumed with the stored composition). */
   agent(target: SessionId | string): Promise<Agent>

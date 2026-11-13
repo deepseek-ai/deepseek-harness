@@ -17,11 +17,13 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import type {
-  ImBinding, ImChatKey, ImConfig, ImDelivery, ImMessage, ImSessionFilter, ImSessionRecord, ImSessions, ImSessionSpec,
+  ImBinding, ImChatKey, ImConfig, ImDelivery, ImMessage, ImResetOptions, ImSessionFilter, ImSessionRecord, ImSessions,
+  ImSessionSpec,
 } from './api.ts'
 import { ImError } from './error.ts'
 import type { ImFormatter } from './format.ts'
 import { sessionIdOf, type ImAgentHost } from './hosting.ts'
+import { runKeyed, WriteQueue } from './serial.ts'
 import { isStoredMessage, isStoredRecord, storedChatKey, storedSessionId } from './state.ts'
 import { inputBytes } from './store.ts'
 
@@ -45,6 +47,12 @@ export interface StoredDelivery {
   delivery: ImDelivery
   createdAt: number
   admitted: boolean
+}
+
+/** One durable reset receipt, keyed `${key}|${operationId}`. */
+export interface StoredReset {
+  replaced: SessionId
+  createdAt: number
 }
 
 /** One stored binding: the chat, its write grant and the two placement flags. */
@@ -88,16 +96,21 @@ const deliverySchema = z.object({
   }),
   createdAt: z.number(), admitted: z.boolean(),
 })
+const resetSchema = z.object({
+  replaced: storedSessionId,
+  createdAt: z.number(),
+})
 
-/** The `im_sessions` storage domain: records by key, delivery intents. */
+/** The `im_sessions` storage domain: records by key, delivery intents, and idempotent reset receipts. */
 export const imSessionsDomain = defineDomain({
   name: 'im_sessions', version: 1,
   tables: {
     sessions: domainTable<string, ImSessionRecord>(sessionSchema),
     deliveries: domainTable<string, StoredDelivery>(deliverySchema),
+    resets: domainTable<string, StoredReset>(resetSchema),
   },
 })
-/** The `im_sessions` domain type: session records by key and delivery intents by `${sessionId}|${delivery.id}`. */
+/** The `im_sessions` domain type: session records, delivery intents, and reset receipts. */
 export type ImSessionsDomain = Domain<typeof imSessionsDomain>
 
 /**
@@ -126,22 +139,40 @@ export class ImSessionHost implements ImSessions {
   /** Current generation's session id → key. */
   private readonly ids = new Map<SessionId, string>()
   private readonly deliveries = new Map<string, StoredDelivery>()
+  private readonly resets = new Map<string, StoredReset>()
   /** Session ids a reset retired: nothing recorded for one of them can be admitted any more. */
   private readonly retired = new Set<SessionId>()
   private readonly triggers = new Map<SessionId, ImMessage>()
   /** Per-session admission order. */
   private readonly chains = new Map<SessionId, Promise<unknown>>()
-  private writes: Promise<unknown> = Promise.resolve()
+  private readonly writes = new WriteQueue()
   private recovering: Promise<void> | undefined
+  private held = false
 
   constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSessionHostDeps) {}
 
-  /** Open the domain, load records, start recovery of pending deliveries. */
+  /** Open the domain, load records, start recovery of pending deliveries unless held. */
   async start(): Promise<void> {
     const domain = await this.ctx.storageDomain.open(imSessionsDomain)
     this.domain = domain
     for (const [, record] of domain.table('sessions').entries()) this.index(record)
     for (const [id, stored] of domain.table('deliveries').entries()) this.deliveries.set(id, stored)
+    for (const [id, stored] of domain.table('resets').entries()) this.resets.set(id, stored)
+    this.retry()
+  }
+
+  /**
+   * Hold recovery passes until {@link release}, so persisted deliveries do not open agents before sibling plugins
+   * (`im_*` tools, prompt sections, routing listeners) have finished starting.
+   */
+  hold(): void {
+    this.held = true
+  }
+
+  /** End a {@link hold} and start recovery of pending deliveries. */
+  release(): void {
+    if (!this.held) return
+    this.held = false
     this.retry()
   }
 
@@ -150,7 +181,7 @@ export class ImSessionHost implements ImSessions {
    * pending for the next pass, and a failing retention write is reported.
    */
   retry(): void {
-    if (!this.domain || this.recovering) return
+    if (!this.domain || this.held || this.recovering) return
     const run = this.recover().catch((error: unknown) => {
       this.ctx.logger.error('IM deliveries remain pending; inspect persistence, presets and compositions: %s', error)
     }).finally(() => { this.recovering = undefined })
@@ -166,8 +197,7 @@ export class ImSessionHost implements ImSessions {
   async dispose(): Promise<void> {
     await this.recovering
     await Promise.allSettled([...this.chains.values()])
-    // `write()` stores the settled chain, so pending writes cannot reject here.
-    await this.writes
+    await this.writes.drain()
     const domain = this.domain
     this.domain = undefined
     await domain?.close()
@@ -263,21 +293,37 @@ export class ImSessionHost implements ImSessions {
     }
   }
 
-  async reset(key: string, reason: string): Promise<void> {
+  async reset(key: string, reason: string, options: ImResetOptions = {}): Promise<SessionId | undefined> {
+    this.domainOf()
+    const receiptKey = options.operationId === undefined ? undefined : `${key}|${options.operationId}`
+    if (receiptKey !== undefined) {
+      const recorded = this.resets.get(receiptKey)
+      if (recorded !== undefined) return recorded.replaced
+    }
     const known = this.records.get(key)
-    if (!known) return
+    if (!known) return undefined
     // The whole lifecycle of the generation being replaced — cancel, dispose, and the record advance that publishes
     // the next one — runs as ONE serial operation for that session id, because `admit()` queues on the same chain.
     // Releasing the chain between the dispose and the write let a queued admission read the disposed generation and
     // write its stale record back, which rolled the counter back and made the cleared session current again.
-    const { old, record } = await this.serial(known.sessionId, async () => {
-      const current = this.records.get(key) ?? known
+    const outcome = await this.serial<{
+      replaced: SessionId | undefined
+      advanced?: { old: ImSessionRecord; record: ImSessionRecord }
+    }>(known.sessionId, async () => {
+      if (receiptKey !== undefined) {
+        const recorded = this.resets.get(receiptKey)
+        if (recorded !== undefined) return { replaced: recorded.replaced }
+      }
+      const current = this.resolve(key)
+      if (options.expectedGeneration !== undefined && current.generation !== options.expectedGeneration) {
+        return { replaced: undefined }
+      }
       this.deps.agents.live(current.sessionId)?.cancel({ kind: 'user' })
       await this.deps.agents.dispose(current.sessionId)
-      const advanced = await this.write(async () => {
+      return await this.write(async () => {
         // Re-read inside the write: disposing the agent awaited, and an ensure()/bind() may have committed a newer
         // record (another chat's binding) meanwhile. Advancing the generation from the stale copy would drop it.
-        const latest = this.records.get(key) ?? current
+        const latest = this.resolve(key)
         for (const [id, stored] of this.deliveries) {
           if (stored.session !== latest.sessionId || stored.admitted) continue
           await this.domainOf().table('deliveries').delete(id)
@@ -291,13 +337,20 @@ export class ImSessionHost implements ImSessions {
         const now = Date.now()
         const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
         await this.save(next)
-        return next
+        if (receiptKey !== undefined) {
+          const receipt: StoredReset = { replaced: latest.sessionId, createdAt: now }
+          await this.domainOf().table('resets').put(receiptKey, receipt)
+          this.resets.set(receiptKey, receipt)
+        }
+        return { replaced: latest.sessionId, advanced: { old: latest, record: next } }
       })
-      return { old: current, record: advanced }
     })
     // Announced after the serial operation settled: a listener may call back into this host.
-    this.ctx.emit('im/session/reset', old, reason)
-    this.ctx.emit('im/session/created', record)
+    if (outcome.advanced !== undefined) {
+      this.ctx.emit('im/session/reset', outcome.advanced.old, reason)
+      this.ctx.emit('im/session/created', outcome.advanced.record)
+    }
+    return outcome.replaced
   }
 
   async bind(target: SessionId | string, bindings: ImBinding[]): Promise<void> {
@@ -350,6 +403,11 @@ export class ImSessionHost implements ImSessions {
         if (!stored.admitted || stored.createdAt >= cutoff) continue
         await this.domainOf().table('deliveries').delete(id)
         this.deliveries.delete(id)
+      }
+      for (const [id, stored] of this.resets) {
+        if (stored.createdAt >= cutoff) continue
+        await this.domainOf().table('resets').delete(id)
+        this.resets.delete(id)
       }
     })
   }
@@ -470,17 +528,11 @@ export class ImSessionHost implements ImSessions {
   }
 
   private write<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.writes.then(operation)
-    this.writes = result.catch(() => {})
-    return result
+    return this.writes.run(operation)
   }
 
   private serial<T>(sessionId: SessionId, operation: () => Promise<T>): Promise<T> {
-    const result = (this.chains.get(sessionId) ?? Promise.resolve()).then(operation)
-    const chain = result.then(() => {}, () => {})
-    this.chains.set(sessionId, chain)
-    void chain.then(() => { if (this.chains.get(sessionId) === chain) this.chains.delete(sessionId) })
-    return result
+    return runKeyed(this.chains, sessionId, operation)
   }
 
   private domainOf(): ImSessionsDomain {

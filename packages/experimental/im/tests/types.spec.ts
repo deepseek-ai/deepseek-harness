@@ -35,9 +35,10 @@ describe('dsh-im contracts', () => {
     })
     expect(config.send).toEqual({ maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
     expect(config.tools).toEqual({
-      readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im',
+      readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
     })
     expect(config.retentionMs).toBe(30 * 86400000)
+    expect(config.compositionWarnMs).toBe(30000)
     expect(parse({}).sources).toEqual([])
     expect(() => parse({ sources: [{ id: 'x' }] })).toThrow()
   })

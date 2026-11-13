@@ -56,7 +56,7 @@ interface Composition {
  * @returns the Loader, or undefined for a context composed by hand.
  */
 function composition(ctx: Context): Composition | undefined {
-  const loader: unknown = (ctx as unknown as { get(name: string): unknown }).get('loader')
+  const loader: unknown = ctx.get('loader')
   if (loader === null || typeof loader !== 'object') return undefined
   return typeof (loader as Partial<Composition>).await === 'function' ? loader as Composition : undefined
 }
@@ -129,6 +129,12 @@ export class ImService extends Service implements ImApi {
 
   async* [Service.init](): AsyncGenerator<() => Promise<void>, void> {
     const ctx = this.home
+    // Nothing is dispatched or recovered until the composition settles: this service finishes loading before sibling
+    // plugins (routing strategies, session commands, tools, prompt sections) finish starting, so an immediate pass
+    // would settle a pending command through the default dispatcher or admit a persisted delivery before IM tools are
+    // registered. Both holds are armed before `sessions.start()` opens the store.
+    this.intake.hold()
+    this.sessions.hold()
     try {
       await this.store.start()
       await this.sessions.start()
@@ -153,7 +159,11 @@ export class ImService extends Service implements ImApi {
       }
       throw error
     }
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined
+    let warnTimer: ReturnType<typeof setTimeout> | undefined
     yield async () => {
+      clearTimeout(releaseTimer)
+      clearTimeout(warnTimer)
       clearInterval(this.timer)
       await this.intake.dispose()
       await this.outputs.dispose()
@@ -180,21 +190,32 @@ export class ImService extends Service implements ImApi {
         })
       })
     }
-    // Nothing is dispatched until the composition is complete: this service finishes loading before the plugins that
-    // listen to `im/message` (routing strategies, session commands) start, so a pass now — for a message a previous
-    // run stored, or for a frame that arrives meanwhile — would hand a pending command to the default dispatcher as an
-    // ordinary message. Under a Loader, complete means it has no import or lifecycle task left; without one (plugins
-    // composed by hand, as tests do), the next macrotask stands in, after the plugin calls of the current one.
-    this.intake.hold()
+    // Schedule release on a macrotask once the composition settles so nested `ctx.inject` registrations (such as
+    // `im_read_file` inside `applyTools`) finish before any recovered turn or inbound dispatch runs.
+    const release = (): void => {
+      clearTimeout(warnTimer)
+      releaseTimer = setTimeout(() => {
+        this.intake.release()
+        this.sessions.release()
+      }, 0)
+    }
     const loader = composition(ctx)
     if (loader === undefined) {
-      setTimeout(() => { this.intake.release() }, 0)
+      release()
     } else {
+      warnTimer = setTimeout(() => {
+        ctx.logger.warn(
+          'IM intake and session recovery are still waiting after %dms for the composition to settle; '
+            + 'messages are stored and acknowledged until every plugin finishes starting.',
+          this.config.compositionWarnMs,
+        )
+      }, this.config.compositionWarnMs)
+      warnTimer.unref()
       void loader.await().then(
-        () => { this.intake.release() },
+        () => { release() },
         (error: unknown) => {
           ctx.logger.warn('IM dispatch starts although the composition did not settle: %s', String(error))
-          this.intake.release()
+          release()
         },
       )
     }

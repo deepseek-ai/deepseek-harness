@@ -11,12 +11,13 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import {
-  ImChatKey, ImMessageKey, ImSourceId, type ImConfig, type ImMessage, type ImSourceConfig,
+  ImChatKey, ImMessageKey, ImSourceId, type ImConfig, type ImDelivery, type ImMessage, type ImSourceConfig,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
-import { chatHeader } from '../src/dispatcher.ts'
+import { ImDispatcher } from '../src/dispatcher.ts'
 import { admit, DELIVERY_ENVELOPE_BYTES, draftOf, ImIntake, parseCommand } from '../src/intake.ts'
+import { sessionIdOf } from '../src/hosting.ts'
 import { ImStore, inputBytes } from '../src/store.ts'
 
 const contexts: Context[] = []
@@ -354,10 +355,37 @@ describe('ImIntake admission', () => {
 
   it('leaves room for the delivery of a message admitted at the very edge of maxInputBytes', async () => {
     // Real Feishu identifiers, which every key, the chat header and the delivery id repeat: the intake reserves a fixed
-    // envelope for the delivery intent, and this pins that the reserve covers the default dispatcher's intent.
+    // envelope for the delivery intent, and this pins that the reserve covers the real `ImDispatcher.handle` intent.
     const maxInputBytes = 8192
     const larkBot = 'lark:cli_a5f1e2d3c4b5a697'
-    const { bot, store, intake, dispatched } = await boot({ config: { maxInputBytes }, bot: larkBot })
+    const defaultDispatch = {
+      agentPreset: 'im', cwd: process.cwd(), provider: 'mock', model: 'mock',
+      output: 'none', delivery: 'steer' as const, prompt: { name: 'im:dispatcher', order: 81, text: '' },
+    }
+    const { ctx, bot, store, intake, dispatched } = await boot({
+      config: { maxInputBytes, defaultDispatch },
+      bot: larkBot,
+    })
+    const captured: ImDelivery[] = []
+    let hosted: ReturnType<typeof sessionIdOf> | undefined
+    const dispatcher = new ImDispatcher(intake.config.defaultDispatch!, {
+      get: () => undefined,
+      of: () => undefined,
+      ensure: async (spec) => {
+        hosted = sessionIdOf(spec.key, 0)
+        return { ...spec, sessionId: hosted, generation: 0, createdAt: 0, lastActiveAt: 0 }
+      },
+    })
+    ctx.on('im/message', event => dispatcher.handle({
+      ...event,
+      deliver: async (_target, options) => {
+        captured.push({
+          ...options,
+          id: options.id ?? event.message.key,
+          content: options.content ?? [event.message],
+        })
+      },
+    }))
     const source = intake.config.sources[0]!
     const chat = { id: `oc_${'a1b2c3d4'.repeat(4)}`, type: 'group' as const }
     const shaped = (length: number) => inbound({
@@ -375,9 +403,8 @@ describe('ImIntake admission', () => {
     const [message] = dispatched
     expect(message).toBeDefined()
     expect(store.state(message!.key)?.dispatch).toBe('done')
-    // The intent `ImDispatcher.handle` records for it, measured the way `ImSessionHost.deliver` measures it.
-    const delivery = { id: message!.key, mode: 'steer', media: true, header: chatHeader(message!.chat), content: [message] }
-    expect(inputBytes(delivery)).toBeLessThanOrEqual(maxInputBytes)
+    expect(captured).toHaveLength(1)
+    expect(inputBytes(captured[0]!)).toBeLessThanOrEqual(maxInputBytes)
   })
 
   it('acknowledges an input over maxInputBytes instead of leaving it unacknowledged', async () => {

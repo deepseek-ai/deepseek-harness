@@ -210,6 +210,73 @@ describe('/clear and /new', () => {
     await other.receive(reset)
     expect(other.base.resets).toEqual([{ record, reason: 'session-commands:/new' }])
   })
+
+  it('retries an unsettled /clear without resetting a newer generation or publishing a second reply', async () => {
+    const harness = await bootCommands()
+    const shared = await ensureShared(harness)
+
+    // The reset and reply succeed on the first attempt, then `store.settle` fails so the command stays pending.
+    const settle = harness.store.settle.bind(harness.store)
+    let failOnce = true
+    vi.spyOn(harness.store, 'settle').mockImplementation(async (key, outcome) => {
+      if (failOnce) {
+        failOnce = false
+        throw new Error('storage blip')
+      }
+      return settle(key, outcome)
+    })
+
+    const clear = inbound('/clear')
+    await harness.receive(clear)
+    expect(harness.outcome(clear.id)).toBeUndefined()
+    const gen1 = harness.base.host.get(shared.key)!
+    expect(gen1.generation).toBe(1)
+    expect(harness.replies).toHaveLength(1)
+    expect(harness.replies[0]?.options).toEqual({ operationId: `${BY}:reply:fake:bot|${clear.id}` })
+
+    // Another chat bound to the shared session starts a turn on generation 1 before the intake retries `/clear`.
+    const keep = harness.base.model.gate()
+    const gen1Agent = await running(harness, gen1)
+
+    harness.intake.pump()
+    await harness.intake.idle()
+
+    expect(harness.base.host.get(shared.key)?.generation).toBe(1)
+    expect(gen1Agent.status).toBe('running')
+    expect(harness.replies).toHaveLength(1)
+    expect(harness.outcome(clear.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+
+    keep()
+    await gen1Agent.whenIdle()
+  })
+
+  it('leaves a newly advanced generation alone when an in-flight reset finishes ahead of /clear', async () => {
+    const harness = await bootCommands()
+    const shared = await ensureShared(harness)
+    const dispose = harness.base.agents.dispose.bind(harness.base.agents)
+    let releaseDispose = (): void => {}
+    const held = new Promise<void>((resolve) => { releaseDispose = resolve })
+    const slow = vi.spyOn(harness.base.agents, 'dispose').mockImplementationOnce(async (sessionId) => {
+      await held
+      await dispose(sessionId)
+    })
+
+    // Start an earlier reset and hold it inside `dispose` so `forChat` still sees generation 0 when `/clear` arrives.
+    const earlier = harness.base.host.reset(shared.key, 'earlier')
+    await vi.waitFor(() => { expect(slow).toHaveBeenCalled() })
+
+    const clear = inbound('/clear')
+    const receiving = harness.receive(clear)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    releaseDispose()
+    await Promise.all([earlier, receiving])
+
+    expect(harness.base.host.get(shared.key)?.generation).toBe(1)
+    expect(harness.base.resets).toHaveLength(1)
+    expect(text(harness)).toBe('没有可重置的会话。')
+    expect(harness.outcome(clear.id)).toEqual({ kind: 'handled', by: BY })
+    slow.mockRestore()
+  })
 })
 
 describe('/status', () => {

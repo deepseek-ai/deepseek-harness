@@ -46,6 +46,7 @@ export const Config = z.object({
   maxInputBytes: z.natural().min(1).default(262144),
   retryIntervalMs: z.natural().min(1).default(5000),
   platformTimeoutMs: z.natural().min(1).default(30000),
+  compositionWarnMs: z.natural().min(1).default(30000),
   media: z.object({
     download: z.boolean().default(true),
     maxBytes: z.natural().min(1).default(10485760),
@@ -65,6 +66,7 @@ export const Config = z.object({
     maxReadBytes: z.natural().min(1).default(65536),
     maxHistoryItems: z.natural().min(1).max(200).default(50),
     maxMembers: z.natural().min(1).max(1000).default(200),
+    maxMemberPages: z.natural().min(1).max(100).default(10),
     fileDir: z.string().default('.dsh/im'),
   }),
   defaultDispatch: z.union([Dispatcher, z.const(undefined)]),

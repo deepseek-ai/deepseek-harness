@@ -39,6 +39,7 @@ import {
   type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
+import { runKeyed, WriteQueue } from './serial.ts'
 import { storedChatKey, storedMessageKey, storedSessionId } from './state.ts'
 import type { ImStore } from './store.ts'
 
@@ -121,7 +122,7 @@ export class ImSender {
   /** Per-operation dispatch chain (see {@link serial}). */
   private readonly chains = new Map<string, Promise<unknown>>()
   /** The receipt write chain. */
-  private writes: Promise<unknown> = Promise.resolve()
+  private readonly writes = new WriteQueue()
 
   constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps) {}
 
@@ -135,7 +136,7 @@ export class ImSender {
   /** Finish the dispatches in flight and close the domain. */
   async dispose(): Promise<void> {
     await Promise.allSettled([...this.chains.values()])
-    await this.writes
+    await this.writes.drain()
     const domain = this.domain
     this.domain = undefined
     this.receipts.clear()
@@ -496,24 +497,14 @@ export class ImSender {
   }
 
   private put(id: string, receipt: StoredReceipt): Promise<void> {
-    return this.write(async () => {
+    return this.writes.run(async () => {
       await this.domainOf().table('receipts').put(id, receipt)
       this.index(id, receipt)
     })
   }
 
-  private write<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.writes.then(operation)
-    this.writes = result.catch(() => {})
-    return result
-  }
-
   private serial<T>(id: string, operation: () => Promise<T>): Promise<T> {
-    const result = (this.chains.get(id) ?? Promise.resolve()).then(operation)
-    const chain = result.then(() => {}, () => {})
-    this.chains.set(id, chain)
-    void chain.then(() => { if (this.chains.get(id) === chain) this.chains.delete(id) })
-    return result
+    return runKeyed(this.chains, id, operation)
   }
 
   private domainOf(): ImReceiptsDomain {

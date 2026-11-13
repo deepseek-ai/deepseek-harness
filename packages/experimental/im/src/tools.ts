@@ -23,6 +23,8 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { FileSystem, FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-sandbox'
+import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import {
   ImChatKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImOutputs, type ImSendResult,
@@ -183,6 +185,12 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
   // The file read tool stages the bytes it admits in the calling session's own filesystem, so it needs that seam
   // (`ctx.inject` does not inherit the caller's injections, so `tools` is named again).
   ctx.inject(['tools', 'fs', 'workingDirectory'], (scoped) => {
+    const policyService: SandboxPolicyService | undefined = scoped.fs.sandboxMode === undefined
+      ? undefined
+      : scoped.get('sandboxPolicy')
+    if (scoped.fs.sandboxMode !== undefined && policyService === undefined) {
+      throw new Error('im_read_file: the mounted filesystem confines writes, so ctx.sandboxPolicy is required.')
+    }
     scoped.tools.register(defineTool({
       name: 'im_read_file',
       description: 'Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the '
@@ -205,7 +213,8 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         // chat of a shared session stages into the same working directory.
         const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${item.ref.seq}.${item.ref.index}-${attachment.name}`
         const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
-        await scoped.fs.writeBytes(target, data, undefined, exec.signal)
+        const policy = policyService?.resolve({ session: agent.session })
+        await scoped.fs.writeBytes(target, data, undefined, exec.signal, policy)
         return {
           id: args.id,
           chat,
@@ -361,29 +370,29 @@ function mentionSyntax(member: { id: string; name?: string }): string {
   return `<at user_id="${id}">${name}</at>`
 }
 
-/** Platform pages one `im_members` call reads at most. */
-const MAX_MEMBER_PAGES = 10
-
 /**
- * Page through one chat's members, keeping the ones `query` names, up to the configured bound.
+ * Page through one chat's members, keeping the ones `query` names, up to `config.tools.maxMembers`.
+ *
+ * Reading also stops after `config.tools.maxMemberPages` pages so an unmatched `query` cannot walk the whole roster of
+ * a large chat inside a single tool call. Each request asks for up to 100 entries per page (or the remaining budget
+ * when listing without a query) so `tools.maxMembers` up to 1,000 is reachable within the default 10-page bound.
  *
  * @param im - host slice holding the member read.
  * @param chat - chat whose members are listed.
  * @param query - case-insensitive text a member's name must carry; absent keeps every member.
- * Reading stops after {@link MAX_MEMBER_PAGES} pages as well: a `query` no member matches would otherwise read the
- * whole roster of a large chat, one platform request per page, inside one tool call.
- *
- * @param config - operator configuration (`tools.maxMembers`).
- * @returns the members, and whether the bound or the page limit left some out.
+ * @param config - operator configuration (`tools.maxMembers` and `tools.maxMemberPages`).
+ * @returns the members, and whether the member bound or the page bound left some out.
  */
 async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined, config: ImConfig) {
   const bound = config.tools.maxMembers
+  const maxPages = config.tools.maxMemberPages
   const needle = query?.trim().toLowerCase() ?? ''
   const members: MemberView[] = []
   let cursor: string | undefined
   for (let pages = 0; ; pages++) {
-    if (pages === MAX_MEMBER_PAGES) return { chat, members, total: members.length, more: true }
-    const page: MembersPage = await im.members(chat, cursor)
+    if (pages === maxPages) return { chat, members, total: members.length, more: true }
+    const pageLimit = needle ? 100 : Math.min(bound - members.length, 100)
+    const page: MembersPage = await im.members(chat, cursor, pageLimit)
     let full = false
     for (const member of page.data) {
       const name = member.name ?? ''
@@ -396,6 +405,7 @@ async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined
     }
     if (full) return { chat, members, total: members.length, more: true }
     if (page.next === undefined) return { chat, members, total: members.length, more: false }
+    if (members.length === bound) return { chat, members, total: members.length, more: true }
     cursor = page.next
   }
 }

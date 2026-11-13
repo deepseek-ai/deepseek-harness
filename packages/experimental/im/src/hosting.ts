@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { ImSessionRecord } from './api.ts'
 import { ImError } from './error.ts'
+import { runKeyed } from './serial.ts'
 
 /**
  * The session id of one generation of a hosted session: `im-${sha256(key + '#' + generation)[0..32]}`.
@@ -73,11 +74,7 @@ export class ImAgentHost {
   }
 
   private serial<T>(sessionId: SessionId, operation: () => Promise<T>): Promise<T> {
-    const result = (this.chains.get(sessionId) ?? Promise.resolve()).then(operation)
-    const chain = result.then(() => {}, () => {})
-    this.chains.set(sessionId, chain)
-    void chain.then(() => { if (this.chains.get(sessionId) === chain) this.chains.delete(sessionId) })
-    return result
+    return runKeyed(this.chains, sessionId, operation)
   }
 
   private async openNow(record: ImSessionRecord): Promise<Agent> {

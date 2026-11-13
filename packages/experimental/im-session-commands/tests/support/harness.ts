@@ -68,7 +68,10 @@ export async function bootCommands(
   const store = new ImStore(ctx, imConfig)
   await store.start()
   const replies: Reply[] = []
-  const intake = new ImIntake(ctx, imConfig, store, { event: (message, source) => event(bot, message, source, replies) })
+  const seenReplyOps = new Set<string>()
+  const intake = new ImIntake(ctx, imConfig, store, {
+    event: (message, source) => event(bot, message, source, replies, seenReplyOps),
+  })
   ctx.on('satori/receive', session => intake.receive(session))
   // The plugin only reads `ctx.im.sessions`; the send funnel has its own package tests.
   ctx.provide('im', { sessions: base.host })
@@ -92,8 +95,14 @@ function event(
   message: ImMessage,
   source: ImSourceConfig,
   replies: Reply[],
+  seenReplyOps: Set<string>,
 ): ImMessageEvent {
   const reply = (content: Fragment, options?: unknown): Promise<ImSendResult> => {
+    const operationId = (options as { operationId?: string } | undefined)?.operationId
+    if (operationId !== undefined) {
+      if (seenReplyOps.has(operationId)) return Promise.resolve({ status: 'confirmed' } as ImSendResult)
+      seenReplyOps.add(operationId)
+    }
     replies.push({ content, options })
     return Promise.resolve({ status: 'confirmed' } as ImSendResult)
   }
