@@ -46,6 +46,9 @@
       "path": "../ui-input-trigger"
     },
     {
+      "path": "../modules"
+    },
+    {
       "path": "../ui-renderer"
     },
     {

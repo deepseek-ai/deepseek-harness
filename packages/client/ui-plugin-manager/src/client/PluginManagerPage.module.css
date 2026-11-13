@@ -269,6 +269,13 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.failure ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .statusWithDot {
   display: inline-flex;
   align-items: center;

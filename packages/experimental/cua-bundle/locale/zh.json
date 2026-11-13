@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "在 macOS 和 Windows 上操作应用。通过 npm 安装 DSH 的 Windows 用户需要单独配置 helper。",
+    "description": "允许 agent 直接操作电脑上的应用程序。",
     "detail": "docs/DETAIL.zh.md"
   }
 }
