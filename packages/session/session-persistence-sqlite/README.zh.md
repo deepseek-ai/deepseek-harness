@@ -65,7 +65,7 @@ kind: "package-library"
 
 - [Session 持久化子系统](../../../docs/subsystems/persistence.zh.md)说明共享服务语义。
 - [Session 格式目录](../session-format-catalog/README.zh.md)定义支持的逻辑历史版本。
-- [SQLite 存储升级](../../../docs/upgrade-guide/v0.2.2-rc.2/session-sqlite-storage/guide.zh.md)说明备份与存储选择。
+- [SQLite 存储升级](../../../docs/upgrade-guide/v0.2.2-rc.3/session-sqlite-storage/guide.zh.md)说明备份与存储选择。
 
 -----
 

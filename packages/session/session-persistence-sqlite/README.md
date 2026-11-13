@@ -65,7 +65,7 @@ Each Session permits one writer. Public handle operations reject after closing b
 
 - [Session persistence subsystem](../../../docs/subsystems/persistence.md) explains shared service semantics.
 - [Session format catalog](../session-format-catalog/README.md) defines supported logical history versions.
-- [SQLite storage upgrade](../../../docs/upgrade-guide/v0.2.2-rc.2/session-sqlite-storage/guide.md) explains backup and storage selection.
+- [SQLite storage upgrade](../../../docs/upgrade-guide/v0.2.2-rc.3/session-sqlite-storage/guide.md) explains backup and storage selection.
 
 -----
 
