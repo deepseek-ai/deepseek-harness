@@ -10,7 +10,7 @@ import {
   fixtureUserPrompts, launchWebScaffold, seedSession, watchConsole, webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, fullscreenBox, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/details-session-lifecycle', import.meta.url))
 const HANDLES_EXPECTED = join(SNAPSHOT_DIR, 'handles.expected.md')
@@ -110,8 +110,8 @@ async function sidebarSnapshot(page: Page) {
       mode: panel.getAttribute('data-sidebar-right-panel'),
       panelContentWidth: expanded ? Math.round(Number.parseFloat(style.width)) : 0,
       panelOuterWidth: expanded ? Math.round(rect.width) : 0,
-      coversViewport: expanded && rect.x === 0 && rect.y === 0
-        && Math.round(rect.width) === window.innerWidth && Math.round(rect.height) === window.innerHeight,
+      coversViewport: expanded && rect.x === -1 && rect.y === 0
+        && Math.round(rect.width) === window.innerWidth + 1 && Math.round(rect.height) === window.innerHeight,
       resizeHandleWidth: handle === null ? 0 : Math.round(handle.getBoundingClientRect().width),
       expandedDirectories: [...panel.querySelectorAll('[data-files-entry="directory"] button[aria-expanded="true"]')]
         .map(button => button.textContent?.trim()),
@@ -195,7 +195,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
       await expect.poll(() => blankColumn.locator('[data-dockkit-host="dock"]:not([hidden])').evaluate(element => getComputedStyle(element).transform))
         .toBe('none')
       await expect.poll(() => blankColumn.locator('[data-sidebar-right-panel]').boundingBox())
-        .toEqual({ x: 0, y: 0, width: 767, height: blankViewport.height })
+        .toEqual(fullscreenBox({ width: 767, height: blankViewport.height }))
       // A preview the files page opened starts with its tree hidden; shown, the tree fills the viewport.
       const treeToggle = blankColumn.locator('[data-files-navigator-toggle]')
       await expect.poll(() => treeToggle.getAttribute('aria-expanded')).toBe('false')
@@ -360,7 +360,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await checkpoint('A normal: two panes')
 
     await column.locator('[data-sidebar-right-mode="fullscreen"]').click()
-    await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+    await expect.poll(() => panel.boundingBox()).toEqual(fullscreenBox(viewport))
     expect(await columns(page)).toEqual(normalColumns)
     expect(await sidebarSnapshot(page)).toMatchObject({ mode: 'fullscreen', resizeHandleWidth: 0, coversViewport: true })
     expect(await paneSnapshot(page)).toEqual(retainedA)
@@ -395,7 +395,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     expect(await panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
     expect(await paneSnapshot(page)).toEqual(retainedA)
     await open()
-    await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+    await expect.poll(() => panel.boundingBox()).toEqual(fullscreenBox(viewport))
     expect(await paneSnapshot(page)).toEqual(retainedA)
     await checkpoint('A restored: manual fullscreen, tabs, and panes')
     await column.locator('[data-sidebar-right-mode="push"]').click()
@@ -433,7 +433,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
       await page.locator('[data-sidebar-right-expand]').click()
       await expect.poll(() => columns(page)).toEqual([420, viewport.width - 420 - normalWidth, normalWidth])
       await page.setViewportSize({ width: 767, height: viewport.height })
-      await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, width: 767, height: viewport.height })
+      await expect.poll(() => panel.boundingBox()).toEqual(fullscreenBox({ width: 767, height: viewport.height }))
       await expect.poll(() => columns(page)).toEqual([0, 767, 0])
       expect(await sidebarSnapshot(page)).toMatchObject({ mode: 'fullscreen', resizeHandleWidth: 0, coversViewport: true })
       await checkpoint('A automatic fullscreen at 767px')

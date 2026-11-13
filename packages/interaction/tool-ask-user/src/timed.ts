@@ -3,7 +3,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import { TIMED_WAIT_PARAMETER } from '@deepseek-ai/dsh-user-questions'
 import type {
   AskUserQuestionAnswer, AskUserQuestionRequestEvent,
@@ -11,7 +11,7 @@ import type {
 
 function validateTimeout(timeout: number): number {
   if (timeout !== -1 && (!Number.isInteger(timeout) || timeout < 1 || timeout > 2_147_483)) {
-    throw new Error('timeout must be -1 or a positive integer up to 2147483 seconds')
+    throw new ToolArgsError(['timeout must be -1 or a positive integer up to 2147483 seconds'])
   }
   return timeout
 }
@@ -19,7 +19,7 @@ function validateTimeout(timeout: number): number {
 function validateQuestionIds(questions: readonly { readonly id: string }[]): void {
   const ids = new Set<string>()
   for (const question of questions) {
-    if (ids.has(question.id)) throw new Error(`question id ${JSON.stringify(question.id)} must be unique within this call`)
+    if (ids.has(question.id)) throw new ToolArgsError([`question id ${JSON.stringify(question.id)} must be unique within this call`])
     ids.add(question.id)
   }
 }
@@ -197,7 +197,7 @@ export function registerTimedAskUser(ctx: Context, timeout = 120): void {
       validateQuestionIds(args.questions)
       const request = questionRequest(args.questions, exec)
       if (timeout !== -1) {
-        if (exec.agent === undefined) throw new Error('timed questions require a live agent')
+        if (exec.agent === undefined) throw new ToolContextUnavailableError('timed questions require a live agent')
         const result = await ctx.userQuestions.askTimed({ ...request, agent: exec.agent }, exec.callId, timeout * 1000)
         return 'pending' in result ? { ...result, message: pendingNotice } : answerResult(result)
       }

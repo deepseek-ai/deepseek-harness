@@ -18,8 +18,9 @@ beforeEach(() => {
 })
 
 function share(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const sessionId = (overrides.sessionId as string | undefined) ?? 'session-1'
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionId, sessionIds: [sessionId], sessionTitle: 'Session', accessMode: 'open',
     relay: 'https://relay.example.test/liveshare', gatewayToken: 'token', allowedSubjectIds: [],
     createdAt: '2026-01-01T00:00:00Z', revision: 1, allowsFork: false, sessionMode: 'view', online: true,
     ...overrides,
@@ -92,6 +93,7 @@ function harness(options: Options = {}) {
     invalidateRelayAccess: vi.fn(),
   }
   const state = { disposed: false }
+  const turnIsViewerDriven = vi.fn(() => true)
   const access = createSourceAccess({
     ctx: base,
     ownerShares,
@@ -99,9 +101,10 @@ function harness(options: Options = {}) {
     relay,
     disposed: () => state.disposed,
     accessChanged: vi.fn(),
+    turnIsViewerDriven,
   } as never)
   return {
-    access, base, ownerShares, forks, relay, state,
+    access, base, ownerShares, forks, relay, state, turnIsViewerDriven,
     live, agents, scope, tools, fs, sandboxPolicy, registered, scoped, session, typertLookup,
   }
 }
@@ -109,11 +112,11 @@ function harness(options: Options = {}) {
 describe('source layer installation refusals', () => {
   it('refuses when the Session is not live or has no scope', async () => {
     const h = harness()
-    const missing = await h.access.apply(share({ sessionId: 'other' }) as never)
+    const missing = await h.access.apply(share({ sessionId: 'other' }) as never, 'other')
     expect(missing).toEqual({ kind: 'refused', reason: 'no-live-session' })
 
     const unscoped = harness({ noScope: true })
-    expect(await unscoped.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'no-session-scope' })
+    expect(await unscoped.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'no-session-scope' })
   })
 
   it('names each host service the layer cannot work without', async () => {
@@ -121,21 +124,21 @@ describe('source layer installation refusals', () => {
       ['fs', 'no-filesystem'], ['tools', 'no-tool-registry'], ['sandboxPolicy', 'no-sandbox-policy'],
     ] as const) {
       const h = harness({ services: ['fs', 'tools', 'sandboxPolicy'].filter(name => name !== service) as never })
-      expect(await h.access.apply(share() as never)).toEqual({ kind: 'refused', reason })
+      expect(await h.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason })
     }
   })
 
   it('refuses a Session without a granted root or working directory, or a root that will not resolve', async () => {
     const noRoot = harness({ session: { id: 'session-1', header: { cwd: ROOT } } })
     noRoot.sandboxPolicy.resolve.mockReturnValue({} as never)
-    expect(await noRoot.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'no-workspace-root' })
+    expect(await noRoot.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'no-workspace-root' })
 
     const noCwd = harness({ session: { id: 'session-1', header: {} } })
-    expect(await noCwd.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'no-session-cwd' })
+    expect(await noCwd.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'no-session-cwd' })
 
     const unresolved = harness()
     unresolved.fs.resolve.mockRejectedValueOnce(new Error('missing'))
-    expect(await unresolved.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'workspace-unresolved' })
+    expect(await unresolved.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'workspace-unresolved' })
   })
 
   it('refuses a share removed or reassigned while the workspace resolved', async () => {
@@ -144,27 +147,27 @@ describe('source layer installation refusals', () => {
       h.ownerShares.clear()
       return `${ROOT}/file`
     })
-    expect(await h.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'share-gone' })
+    expect(await h.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'share-gone' })
 
     const reassigned = harness()
     reassigned.ownerShares.set('share-1', share({ sessionId: 'other-session' }))
-    expect(await reassigned.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'share-reassigned' })
+    expect(await reassigned.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'share-reassigned' })
   })
 
   it('installs a usable layer, keeps it for the same tier, and reports its refusal codes', async () => {
     const h = harness()
     h.ownerShares.set('share-1', share())
-    const installed = await h.access.apply(share() as never)
+    const installed = await h.access.apply(share() as never, 'session-1')
     expect(installed).toMatchObject({ kind: 'installed', installation: { readConfined: true } })
-    expect(h.access.confined('share-1')).toBe(true)
-    expect(h.access.confinementRefusal('share-1')).toBeUndefined()
+    expect(h.access.confined('share-1', 'session-1')).toBe(true)
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBeUndefined()
 
-    const kept = await h.access.apply(share() as never)
+    const kept = await h.access.apply(share() as never, 'session-1')
     expect(kept).toMatchObject({ kind: 'kept' })
 
-    expect(h.access.confinementRefusal('absent')).toBe('share-unknown')
+    expect(h.access.confinementRefusal('absent', 'session-1')).toBe('share-unknown')
     h.relay.drivableModeOf.mockReturnValue(undefined)
-    expect(h.access.confinementRefusal('share-1')).toBe('share-mode-unknown')
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBe('share-mode-unknown')
   })
 
   it('reports the refusal recorded on an installation that confined no read', async () => {
@@ -172,11 +175,11 @@ describe('source layer installation refusals', () => {
     h.ownerShares.set('share-1', share())
     h.registered.clear()
     h.tools.get.mockReturnValue(undefined)
-    const outcome = await h.access.apply(share() as never)
+    const outcome = await h.access.apply(share() as never, 'session-1')
     expect(outcome).toMatchObject({ kind: 'installed', installation: { readConfined: false, refusal: 'tool-unavailable' } })
-    expect(h.access.confined('share-1')).toBe(false)
-    expect(h.access.refusalOf('share-1')).toBe('tool-unavailable')
-    expect(h.access.confinementRefusal('share-1')).toBe('layer-read-unconfined')
+    expect(h.access.confined('share-1', 'session-1')).toBe(false)
+    expect(h.access.refusalOf('share-1', 'session-1')).toBe('tool-unavailable')
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBe('layer-read-unconfined')
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('source session not confined'))
   })
 
@@ -190,14 +193,14 @@ describe('source layer installation refusals', () => {
       h.registered.set(definition.name, definition)
       return () => { h.registered.delete(definition.name) }
     })
-    const outcome = await h.access.apply(share({ sessionMode: 'write' }) as never)
+    const outcome = await h.access.apply(share({ sessionMode: 'write' }) as never, 'session-1')
     expect(outcome).toMatchObject({ kind: 'installed', installation: { readConfined: true, writeConfined: false } })
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('write not confined'))
 
     const clean = harness({ mode: 'write' })
     clean.ownerShares.set('share-1', share({ sessionMode: 'write' }))
     clean.registered.set('write', { name: 'write', description: 'write', parameters: {}, output: { schema: {}, render: () => [] } })
-    await clean.access.apply(share({ sessionMode: 'write' }) as never)
+    await clean.access.apply(share({ sessionMode: 'write' }) as never, 'session-1')
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('source access installed'))
   })
 
@@ -207,7 +210,7 @@ describe('source layer installation refusals', () => {
     h.tools.register.mockImplementation((definition: { name: string }) => {
       throw definition.name === 'read' ? 'plain read failure' : new Error('unexpected')
     })
-    const outcome = await h.access.apply(share() as never)
+    const outcome = await h.access.apply(share() as never, 'session-1')
     expect(outcome).toMatchObject({ kind: 'installed', installation: { readConfined: false, registrationFailure: { tool: 'read' } } })
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('plain read failure'))
   })
@@ -216,7 +219,7 @@ describe('source layer installation refusals', () => {
     const h = harness({ mode: 'write' })
     h.ownerShares.set('share-1', share({ sessionMode: 'write' }))
     h.registered.set('write', { name: 'write', description: 'write', parameters: {}, output: { schema: {}, render: () => [] } })
-    await h.access.apply(share({ sessionMode: 'write' }) as never)
+    await h.access.apply(share({ sessionMode: 'write' }) as never, 'session-1')
     const write = h.scoped.get('write') as { execute: (args: unknown, exec: unknown) => Promise<unknown> }
     await expect(write.execute({ file_path: 'file', content: 'text' }, {
       arguments: { file_path: 'file' }, agent: { id: 'session-1', session: h.session }, signal: undefined,
@@ -227,20 +230,20 @@ describe('source layer installation refusals', () => {
 
   it('reports the refusal code a share with no recorded layer carries', () => {
     const h = harness()
-    expect(h.access.refusalOf('absent')).toBeUndefined()
-    expect(h.access.confinementRefusal('absent')).toBe('share-unknown')
+    expect(h.access.refusalOf('absent', 'session-1')).toBeUndefined()
+    expect(h.access.confinementRefusal('absent', 'session-1')).toBe('share-unknown')
   })
 
   it('names the refused guard in debug mode', async () => {
     vi.stubEnv('LIVESHARE_VIEWER_DEBUG', '1')
     const h = harness()
-    await h.access.apply(share({ sessionId: 'other' }) as never)
+    await h.access.apply(share({ sessionId: 'other' }) as never, 'other')
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('source access not installed'))
   })
 
   it('refuses a live context without a session scope', async () => {
     const h = harness({ noScope: true })
-    expect(await h.access.apply(share() as never)).toEqual({ kind: 'refused', reason: 'no-session-scope' })
+    expect(await h.access.apply(share() as never, 'session-1')).toEqual({ kind: 'refused', reason: 'no-session-scope' })
   })
 
   it('refuses a tier that changed while the workspace resolved, and keeps a concurrent layer', async () => {
@@ -251,7 +254,7 @@ describe('source layer installation refusals', () => {
       h.ownerShares.set('share-1', share({ sessionMode: 'view' }))
       return `${ROOT}/file`
     })
-    expect(await h.access.apply(share({ sessionMode: 'write' }) as never))
+    expect(await h.access.apply(share({ sessionMode: 'write' }) as never, 'session-1'))
       .toEqual({ kind: 'refused', reason: 'share-mode-changed' })
 
     const concurrent = harness()
@@ -260,10 +263,10 @@ describe('source layer installation refusals', () => {
     concurrent.fs.resolve.mockImplementationOnce(() => new Promise((resolve) => {
       release = () => { resolve(`${ROOT}/file`) }
     }))
-    const slow = concurrent.access.apply(share() as never)
+    const slow = concurrent.access.apply(share() as never, 'session-1')
     await Promise.resolve()
     // Another attempt finishes first and records the layer.
-    await concurrent.access.apply(share() as never)
+    await concurrent.access.apply(share() as never, 'session-1')
     release?.()
     expect(await slow).toMatchObject({ kind: 'kept' })
   })
@@ -272,15 +275,15 @@ describe('source layer installation refusals', () => {
     const h = harness({ mode: 'write' })
     h.ownerShares.set('share-1', share({ sessionMode: 'write' }))
     h.registered.delete('write')
-    await h.access.apply(share({ sessionMode: 'write' }) as never)
-    expect(h.access.confinementRefusal('share-1')).toBe('layer-write-unconfined')
+    await h.access.apply(share({ sessionMode: 'write' }) as never, 'session-1')
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBe('layer-write-unconfined')
     h.registered.set('write', { name: 'write', description: 'write', parameters: {}, output: { schema: {}, render: () => [] } })
-    expect(await h.access.apply(share({ sessionMode: 'write' }) as never)).toMatchObject({ kind: 'installed' })
+    expect(await h.access.apply(share({ sessionMode: 'write' }) as never, 'session-1')).toMatchObject({ kind: 'installed' })
   })
 })
 
 describe('turn and tool helpers', () => {
-  it('stops the running turn of a share that ends, whoever started it', () => {
+  it('stops the running turn of a share that ends when the share started it', () => {
     const h = harness()
     h.access.cancelShareTurn('absent')
     h.ownerShares.set('share-1', share())
@@ -293,20 +296,29 @@ describe('turn and tool helpers', () => {
     expect(h.live.cancel).not.toHaveBeenCalled()
   })
 
+  it('leaves a turn the owner started running when a share ends its grant', () => {
+    const h = harness()
+    h.ownerShares.set('share-1', share())
+    h.turnIsViewerDriven.mockReturnValue(false)
+    h.access.cancelShareTurn('share-1')
+    expect(h.turnIsViewerDriven).toHaveBeenCalledWith('session-1')
+    expect(h.live.cancel).not.toHaveBeenCalled()
+  })
+
   it('releases the Session’s layer once none of its shares is active', async () => {
     const h = harness()
     const granted = share()
     h.ownerShares.set('share-1', granted)
-    await h.access.apply(granted as never)
-    expect(h.access.confined('share-1')).toBe(true)
+    await h.access.apply(granted as never, 'session-1')
+    expect(h.access.confined('share-1', 'session-1')).toBe(true)
 
     h.ownerShares.clear()
     h.access.reconcileSessionAccess('session-1')
-    expect(h.access.confinementRefusal('share-1')).toBe('share-unknown')
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBe('share-unknown')
     // A Session with neither shares nor a layer reconciles to nothing.
     h.access.reconcileSessionAccess('session-1')
     h.ownerShares.set('share-1', granted)
-    expect(h.access.confinementRefusal('share-1')).toBe('layer-absent')
+    expect(h.access.confinementRefusal('share-1', 'session-1')).toBe('layer-absent')
   })
 
   it('releases a layer whose only share passes its deadline', async () => {
@@ -314,7 +326,7 @@ describe('turn and tool helpers', () => {
     const expiring = share({ expiresAt: '2000-01-01T00:00:00.000Z' })
     h.ownerShares.set('share-1', expiring)
     // A record past its deadline installs nothing, so the Session keeps its own tools.
-    expect(await h.access.apply(expiring as never)).toEqual({ kind: 'refused', reason: 'share-inactive' })
+    expect(await h.access.apply(expiring as never, 'session-1')).toEqual({ kind: 'refused', reason: 'share-inactive' })
   })
 
   it('re-installs the read-only layer when the last write share narrows to view', async () => {
@@ -322,12 +334,12 @@ describe('turn and tool helpers', () => {
     const writable = share({ sessionMode: 'write' })
     h.ownerShares.set('share-1', writable)
     h.registered.set('write', { name: 'write', description: 'write', parameters: {}, output: { schema: {}, render: () => [] } })
-    expect(await h.access.apply(writable as never)).toMatchObject({ kind: 'installed', installation: { writeConfined: true } })
+    expect(await h.access.apply(writable as never, 'session-1')).toMatchObject({ kind: 'installed', installation: { writeConfined: true } })
 
     h.relay.drivableModeOf.mockReturnValue('view')
     h.ownerShares.set('share-1', share({ sessionMode: 'view' }))
     h.access.reconcileSessionAccess('session-1')
-    await vi.waitFor(() => { expect(h.access.confined('share-1')).toBe(true) })
+    await vi.waitFor(() => { expect(h.access.confined('share-1', 'session-1')).toBe(true) })
     // The write name is gone from the Session's layer, and so is the bounded write behind it.
     expect(h.scoped.has('write')).toBe(false)
     expect(h.scoped.has('read')).toBe(true)
@@ -336,7 +348,7 @@ describe('turn and tool helpers', () => {
   it('does not prepare a layer that is already usable', async () => {
     const h = harness()
     h.ownerShares.set('share-1', share())
-    await h.access.apply(share() as never)
+    await h.access.apply(share() as never, 'session-1')
     await expect(h.access.prepareSourceSession('session-1', 'prompt')).resolves.toBeUndefined()
   })
 
@@ -434,7 +446,7 @@ describe('preparation', () => {
     h.ownerShares.set('share-1', share())
     h.agents.get.mockReturnValue(h.live)
     await h.access.prepareSourceSession('session-1', 'prompt')
-    expect(h.access.confined('share-1')).toBe(true)
+    expect(h.access.confined('share-1', 'session-1')).toBe(true)
   })
 
   it('prepares from a reader request only for a share that needs it and is not already preparing', async () => {
@@ -459,6 +471,6 @@ describe('preparation', () => {
     unlive.agents.get.mockReturnValue(undefined)
     unlive.access.prepareSourceForReader('share-1')
     await vi.waitFor(() => { expect(vi.mocked(console.warn).mock.calls.length).toBeGreaterThan(0) })
-    expect(unlive.access.confined('share-1')).toBe(false)
+    expect(unlive.access.confined('share-1', 'session-1')).toBe(false)
   })
 })

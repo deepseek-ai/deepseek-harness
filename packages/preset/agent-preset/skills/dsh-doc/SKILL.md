@@ -11,7 +11,7 @@ Loading this skill does not authorize changes. Write bundle files, run mutating 
 
 ## Find facts in this order
 
-1. Runtime inspection, when `cordis_inspect_list` and `cordis_inspect_query` are among your tools: exact Service methods and Event modes, a mounted plugin's Config schema and `packageDir`, the Tools this Agent can call, and live Client Slots and theme tokens.
+1. Runtime inspection, when `cordis_inspect` is among your tools: exact Service methods and Event modes, a mounted plugin's Config schema and `packageDir`, the Tools this Agent can call, and live Client Slots and theme tokens.
 2. The installed documentation and package sources, located as `references/locate-docs.md` describes.
 3. When an answer depends on a live API that you can neither inspect nor read, state what remains unverified. Do not change a preset or the profile to gain tools.
 
@@ -24,6 +24,7 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Find the installed version's documentation and package sources | `references/locate-docs.md` |
 | Build, install, enable, or debug a plugin or bundle | `references/plugin-development.md` |
 | Bundle manifest, locale resources, detail document, icons, installation, Host exports and Config | `references/host-plugin.md` |
+| Bundle descriptions, optional single-image details, locale paths and preview verification | `references/plugin-details.md` |
 | Save plugin configuration or credentials | `references/configuration.md` |
 | Web UI: Client manifest, module loader, slot registration | `references/ui-plugin.md` |
 | Connect an MCP server through a configuration-only bundle | `references/mcp-bundle.md` |
@@ -36,5 +37,5 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Loader patch dialect | `references/composition-reference.md` |
 | Installable plugin packages, one table per package group | `references/packages.md` |
 | Write a DSH tool definition, skill, or multi-step workflow | `references/tool-design.md` |
-| UI plugin template | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale`, `templates/decoration/docs/DETAIL.md`, `templates/decoration/icon.svg` |
-| MCP bundle template | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale`, `templates/mcp/docs/DETAIL.md`, `templates/mcp/icon.svg` |
+| UI plugin template | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale`, `templates/decoration/docs/DETAIL.md`, `templates/decoration/docs/preview.svg`, `templates/decoration/icon.svg` |
+| MCP bundle template | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale`, `templates/mcp/docs/DETAIL.md`, `templates/mcp/docs/preview.svg`, `templates/mcp/icon.svg` |

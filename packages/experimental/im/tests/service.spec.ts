@@ -565,7 +565,7 @@ describe('ImService facade', () => {
 
     try {
       await ctx.plugin(ImService, Config({ sources: SOURCES }))
-    } catch {
+    } catch (_refusedLoad) {
       // A refused load is the scenario; what it leaves behind is what this test pins.
     }
     await vi.waitFor(() => { expect(released).toHaveBeenCalled() })

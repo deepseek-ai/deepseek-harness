@@ -27,20 +27,20 @@ id: 2026-10-28-im-message-source
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-10-27-retry-control-input"
-    after: "0355c575aca4270bbee7139e96b581f79bbf9d58675e80f4afa57313ccd42348"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "d6d06328af1c9b5a8a763de75c8f95b3bdf15a67f9f5ae2c18401c80572f4ddf"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-10-27-retry-control-input"
-    after: "e584c8c8287efccb70b9477e4c62b7e3c8956ae0aa6edd67264d36449013dfdb"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "ee21b73a2ccee9a6a23640ead31553551776d82ad5c47679b7f468bf9889d3f9"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-10-27-retry-control-input"
-    after: "d83988305c43ef6e9f971a1a042d52d5cb6fce07579d5571d5f6511115659faf"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "265c4bb3701a47b57cc9cede8a66e7056522b7546a5c9cb97938e44a6b1898df"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-10-27-retry-control-input"
-    after: "0afbb0496cb3532810ace398d8e50feef4317fbcb311e9335feb1f76ab34fee3"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "c68fa14948985fdc23004a95480ba96eab26cb08b82736425f9f9cd053e3ba2f"
     decision: same-version
 ```
 

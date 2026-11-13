@@ -94,16 +94,6 @@ private func node(_ role: String = "AXButton") -> AXTextNode {
     }
 }
 
-@Test func actionAliasesResolveOnlyWhenUnambiguous() throws {
-    let first = "Name:Move previous\nTarget:0x123\nSelector:(null)"
-    let other = "Name:Move previous\nTarget:0x456\nSelector:(null)"
-    #expect(try AXWorker.resolveAction("Move previous", names: [first]) == first)
-    #expect(try AXWorker.resolveAction("press", names: ["AXPress"]) == "AXPress")
-    #expect(throws: NativeFailure.self) { try AXWorker.resolveAction("Move previous", names: [first, other]) }
-    #expect(try AXWorker.resolveAction(other, names: [first, other]) == other)
-    #expect(throws: NativeFailure.self) { try AXWorker.resolveAction("missing", names: [first]) }
-}
-
 @Test func identifiesTheReachedTraversalLimit() {
     #expect(AXTextFormatter.truncation(maxElements: nil, maxDepth: 25).contains("(maxDepth=25)"))
     #expect(AXTextFormatter.truncation(maxElements: 2000, maxDepth: nil).contains("(maxElements=2000)"))

@@ -42,7 +42,8 @@ import Darwin
         self.onClose = onClose
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
-                          textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs)
+                          textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs,
+                          heldKeys: scheduler.heldKeys)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation, channel: channel)
         self.writer = writer
     }
@@ -165,7 +166,7 @@ import Darwin
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
+        let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
         if request.method == "permissionStatus" {
@@ -192,7 +193,7 @@ import Darwin
             var installed: InstalledApplication?
             if request.method == "getApp" {
                 let selector = try params.string("selector")
-                if !catalog.applications.contains(where: { $0.matches(selector) }) && Int32(selector) == nil {
+                if !catalog.selectableApplications.contains(where: { $0.matches(selector) }) && Int32(selector) == nil {
                     installed = try ApplicationDiscovery.applications(matching: selector, exact: true, limit: 1,
                                                                        cancellation: cancellation).first
                 }
@@ -211,10 +212,10 @@ import Darwin
                 let image = try await capture.capture(target, cancellation: cancellation, trace: trace)
                 result = try await worker.finishCapture(target, image: image, trace: trace)
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
-            case .hover(let route, let point):
+            case .mouseMove(let route, let point):
                 let latch = cancellation
-                try WindowPointerInput.hover(in: route, at: point, checkCancellation: { try latch.check() })
-                result = AXWorker.hoverResult(route: "system-pointer", pointerMoved: true)
+                try WindowPointerInput.mouseMove(in: route, at: point, checkCancellation: { try latch.check() })
+                result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
             case .paste(let plan):
                 try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes, readTimeout: plan.readTimeout,
                     checkCancellation: { try cancellation.check() }) { requireClipboard in
@@ -223,28 +224,25 @@ import Darwin
                 result = AXWorker.actionResult
             case .launch(let plan):
                 let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
-                result = try await worker.finishLaunch(plan, pid: pid)
+                result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
         }
         return result
     }
     private func performForeground(_ plan: ForegroundPlan, requestID: String) async throws -> JSONValue {
         let before = try await worker.foregroundObservation(plan)
-        let raiseRequested = plan.isRaise && AXWorker.shouldRaise(plan, before: before)
         var activationRequested = false
-        if !plan.isRaise || raiseRequested {
-            if before.frontPID != plan.identity.pid {
-                try cancellation.check()
-                try ApplicationCatalog.activate(plan.identity)
-                activationRequested = true
-            }
+        if before.frontPID != plan.identity.pid {
+            try cancellation.check()
+            try ApplicationCatalog.activate(plan.identity)
+            activationRequested = true
         }
-        if raiseRequested { try await worker.raise(plan) }
         let after = try await worker.foregroundObservation(plan)
-        return .object(["dispatched": .bool(true), "verified": .bool(false), "foreground": .object([
-            "requestId": .string(requestID), "operation": .string(plan.isRaise ? "AXRaise" : "activate"),
-            "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": plan.targetWindowID.map { .number(Double($0)) } ?? .null,
-            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(raiseRequested),
+        let changed = ForegroundObservation.change(beforePID: before.frontPID, beforeWindow: before.frontWindowID,
+                                                   afterPID: after.frontPID, afterWindow: after.frontWindowID)
+        return .object(["dispatched": .bool(true), "foregroundChanged": changed, "foreground": .object([
+            "requestId": .string(requestID), "targetPid": .number(Double(plan.identity.pid)),
+            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested),
         ])])
     }
     private func transportFailed(_ failure: NativeFailure) {

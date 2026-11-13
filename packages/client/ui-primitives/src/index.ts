@@ -92,7 +92,6 @@ export type {
 export { CODE_HIGHLIGHT_EXTENSIONS, languageForPath, useCodeHighlighter } from './code-highlighting.ts'
 export type { CodeHighlighter, HighlightSpan } from './code-highlighting.ts'
 export { relativeTime } from './relative-time.ts'
-export { rankByName } from './rank-by-name.ts'
 export { isDarwinDesktop } from './darwin-desktop.ts'
 export type { RelativeTime, RelativeTimeUnit } from './relative-time.ts'
 export { JsonTree } from './JsonTree.tsx'
@@ -136,7 +135,7 @@ export { ImageLightbox } from './ImageLightbox.tsx'
 export type { ImageLightboxLabels } from './ImageLightbox.tsx'
 
 export { QuotePreview } from './QuotePreview.tsx'
-export type { QuotePreviewProps, QuotePreviewRemoval } from './QuotePreview.tsx'
+export type { QuotePreviewProps, QuotePreviewRemoval, QuoteSummary } from './QuotePreview.tsx'
 export { formatQuoteText } from './markdown/quote-text.ts'
 
 export type { MarkdownMenuTarget } from './markdown/MarkdownDelegate.tsx'

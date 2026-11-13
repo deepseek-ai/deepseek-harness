@@ -8,8 +8,8 @@ name: Release publish (dsh)
 on:
   workflow_dispatch:
     inputs:
-      cua_run_id:
-        description: 'CUA helper run ID，留空复用源码逐字节一致的产物，无匹配则构建'
+      cua_macos_run_id:
+        description: 'macOS CUA helper run ID，留空复用源码逐字节一致的产物，无匹配则构建'
         type: string
         required: false
         default: ''
@@ -28,17 +28,17 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
-  cua-helper:
+  cua-helper-macos:
     if: startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check
-    uses: ./.github/workflows/cua-helper-package.yml
+    uses: ./.github/workflows/cua-helper-package-macos.yml
     with:
       reuse: true
       preset: production
-      cua_run_id: ${{ inputs.cua_run_id }}
+      cua_macos_run_id: ${{ inputs.cua_macos_run_id }}
 
   pack:
     name: Pack npm tarballs
-    needs: cua-helper
+    needs: cua-helper-macos
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -81,34 +81,34 @@ jobs:
           RELEASE_PUBLISH: 'true'
         run: pnpm run release:verify --family dsh ${{ inputs.skip-tag-check && '--skip-tag-check' || '' }}
 
-      - name: Download selected CUA helper
+      - name: Download selected macOS CUA helper
         uses: actions/download-artifact@v8.0.1
         with:
-          artifact-ids: ${{ needs.cua-helper.outputs.artifact-id }}
-          run-id: ${{ needs.cua-helper.outputs.run-id }}
+          artifact-ids: ${{ needs.cua-helper-macos.outputs.artifact-id }}
+          run-id: ${{ needs.cua-helper-macos.outputs.run-id }}
           github-token: ${{ github.token }}
           path: dist/cua-helper
 
       - name: Build
         run: pnpm run build:official --serial
 
-      - name: Stage verified native helper applications
+      - name: Stage verified macOS helper applications
         env:
-          CUA_EXPECTED_BUILD_KEY: ${{ needs.cua-helper.outputs.build-key }}
+          CUA_EXPECTED_BUILD_KEY: ${{ needs.cua-helper-macos.outputs.build-key }}
         run: |
           mkdir dist/cua-helper/extracted
           tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
           pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
 
-      - name: Record CUA source and publication retry instructions
+      - name: Record macOS CUA source and publication retry instructions
         env:
-          CUA_RUN_ID: ${{ needs.cua-helper.outputs.run-id }}
-          CUA_ARTIFACT_ID: ${{ needs.cua-helper.outputs.artifact-id }}
+          CUA_MACOS_RUN_ID: ${{ needs.cua-helper-macos.outputs.run-id }}
+          CUA_ARTIFACT_ID: ${{ needs.cua-helper-macos.outputs.artifact-id }}
         run: |
           {
-            printf '采用 CUA helper 构建 run ID `%s`，artifact ID `%s`。\n\n' "$CUA_RUN_ID" "$CUA_ARTIFACT_ID"
+            printf '采用 macOS CUA helper 构建 run ID `%s`，artifact ID `%s`。\n\n' "$CUA_MACOS_RUN_ID" "$CUA_ARTIFACT_ID"
             printf '%s\n\n' 'npm 部分发布失败时，只重跑 Publish to npm job，复用原 dsh-npm-tarballs；不要重跑全部 job。'
-            printf '需要重新打包时，可留空自动查找，或填写 `cua_run_id=%s` 指定该 helper；源码和构建配置必须匹配。\n' "$CUA_RUN_ID"
+            printf '需要重新打包时，可留空自动查找，或填写 `cua_macos_run_id=%s` 指定该 helper；源码和构建配置必须匹配。\n' "$CUA_MACOS_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pack release tarballs

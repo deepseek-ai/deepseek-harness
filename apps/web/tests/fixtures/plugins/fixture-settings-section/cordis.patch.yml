@@ -1,0 +1,4 @@
+# Web e2e fixture bundle whose browser half registers a plugin settings page.
+- insert:
+    - id: fixture-settings-section
+      name: '@fixture/settings-section'

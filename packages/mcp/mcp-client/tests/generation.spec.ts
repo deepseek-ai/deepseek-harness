@@ -117,7 +117,7 @@ it('reports confirmed transport closure when local work outlives cleanup', async
   await observedClose.promise
   await vi.advanceTimersByTimeAsync(101)
   expect(await closing).toEqual({
-    closeConfirmed: true, cleanupError: 'Error: MCP cleanup did not settle',
+    closeConfirmed: true, cleanupError: 'McpLocalError: MCP cleanup did not settle',
   })
 })
 
@@ -142,5 +142,5 @@ it.each([false, true])('distinguishes local work from unfinished negotiation (tr
   await entered.promise
   const closing = generation.close()
   await vi.advanceTimersByTimeAsync(101)
-  expect(await closing).toEqual({ closeConfirmed: !created, cleanupError: 'Error: MCP cleanup did not settle' })
+  expect(await closing).toEqual({ closeConfirmed: !created, cleanupError: 'McpLocalError: MCP cleanup did not settle' })
 })

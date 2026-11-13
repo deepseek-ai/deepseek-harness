@@ -12,8 +12,8 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { TokenSpan } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import type { PopupSearchLabels, PopupSearchMode, PopupSelectSpec, SelectOption } from './contract.ts'
-import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
+import type { PopupSearchLabels, PopupSelectSpec, SelectOption } from './contract.ts'
 import { groupOptions } from './option-groups.ts'
 
 /**
@@ -33,7 +33,7 @@ export type TokenSegment =
  * session wiring passes its session projection; the controller only carries
  * it from open() to the callbacks).
  */
-export interface PopupSpec<TCtx> extends Pick<PopupSelectSpec, 'searchLabels' | 'searchMode'> {
+export interface PopupSpec<TCtx> extends Pick<PopupSelectSpec, 'searchLabels'> {
   /** Load the option rows once per open (retry after failure reuses the same signal). */
   options(context: TCtx, signal: AbortSignal): Promise<readonly SelectOption[]>
   /** Settle the picked option against the open-time context. */
@@ -67,8 +67,6 @@ export interface PopupState {
   readonly search: string
   /** Command-owned copy for this opening; null uses generic shell labels. */
   readonly searchLabels: PopupSearchLabels | null
-  /** Search policy resolved from the command spec at opening. */
-  readonly searchMode: PopupSearchMode
   /**
    * Highlight index into the filtered row list: 0 until options land; afterwards
    * the row the loaded list marks as the current value
@@ -87,31 +85,20 @@ export interface PopupState {
 }
 
 const CLOSED: PopupState = {
-  open: false, command: null, status: 'pending', options: [], search: '', searchLabels: null, searchMode: 'substring', active: 0,
+  open: false, command: null, status: 'pending', options: [], search: '', searchLabels: null, active: 0,
   submitting: false, confirming: null, acknowledged: false, error: null,
 }
 
 /**
- * Filter rows using substring matching, or rank labels fuzzily within each group.
- * Blank search keeps every row; fuzzy matching preserves group order.
+ * Filter and rank rows within each group: labels match fuzzily, details as substrings.
+ * Blank search keeps every row; groups keep their order.
  * @param options - the loaded rows.
  * @param search - the shell's search text.
- * @param mode - the command's policy; defaults to substring over label and detail.
  * @returns the original option objects in the order shown and used for selection.
  */
-export function filterOptions(
-  options: readonly SelectOption[], search: string, mode: PopupSearchMode = 'substring',
-): readonly SelectOption[] {
-  const query = search.trim().toLowerCase()
-  const groups = groupOptions(options)
-  const ordered = groups.some(group => group.group !== undefined) ? groups.flatMap(group => group.rows) : options
-  if (query === '') return ordered
-  if (mode === 'fuzzy-label') {
-    return groups.flatMap(group => rankByName(
-      group.rows.map(option => ({ name: option.label, option })), query,
-    ).map(row => row.option))
-  }
-  return ordered.filter(o => o.label.toLowerCase().includes(query) || (o.detail?.toLowerCase().includes(query) ?? false))
+export function filterOptions(options: readonly SelectOption[], search: string): readonly SelectOption[] {
+  return groupOptions(options).flatMap(group =>
+    new TextSearchIndex(group.rows, option => ({ fuzzy: [option.label], substring: [option.detail] })).search(search))
 }
 
 /**
@@ -121,11 +108,10 @@ export function filterOptions(
  * made without looking confirms that value instead of the topmost row.
  * @param options - the loaded rows.
  * @param search - the shell's live filter text (non-empty after a retry).
- * @param mode - the command's search policy.
  * @returns index into the filtered rows.
  */
-function currentIndex(options: readonly SelectOption[], search: string, mode: PopupSearchMode): number {
-  const at = filterOptions(options, search, mode).findIndex(option => option.active === true)
+function currentIndex(options: readonly SelectOption[], search: string): number {
+  const at = filterOptions(options, search).findIndex(option => option.active === true)
   return at === -1 ? 0 : at
 }
 
@@ -173,7 +159,7 @@ export class PopupSelectController<TCtx = unknown> {
     this.binding?.abort.abort()
     const binding: OpenBinding<TCtx> = { command, spec, context, segment, abort: new AbortController() }
     this.binding = binding
-    this.state.set({ ...CLOSED, open: true, command, searchLabels, searchMode: spec.searchMode ?? 'substring' })
+    this.state.set({ ...CLOSED, open: true, command, searchLabels })
     this.load(binding)
   }
 
@@ -183,7 +169,7 @@ export class PopupSelectController<TCtx = unknown> {
       (options) => {
         if (this.binding !== binding) return
         const current = this.state.getSnapshot()
-        this.state.set({ ...current, status: 'ready', options, active: currentIndex(options, current.search, current.searchMode), error: null })
+        this.state.set({ ...current, status: 'ready', options, active: currentIndex(options, current.search), error: null })
       },
       (error: unknown) => {
         if (this.binding !== binding) return
@@ -222,7 +208,7 @@ export class PopupSelectController<TCtx = unknown> {
   move(dir: 1 | -1): void {
     const s = this.state.getSnapshot()
     if (!s.open || s.status !== 'ready' || s.submitting || s.confirming !== null) return
-    const rows = filterOptions(s.options, s.search, s.searchMode)
+    const rows = filterOptions(s.options, s.search)
     if (rows.length === 0) return
     const active = (s.active + dir + rows.length) % rows.length
     this.state.set({ ...s, active })
@@ -236,7 +222,7 @@ export class PopupSelectController<TCtx = unknown> {
   highlight(index: number): void {
     const s = this.state.getSnapshot()
     if (!s.open || s.status !== 'ready' || s.submitting || s.confirming !== null) return
-    if (index < 0 || index >= filterOptions(s.options, s.search, s.searchMode).length || index === s.active) return
+    if (index < 0 || index >= filterOptions(s.options, s.search).length || index === s.active) return
     this.state.set({ ...s, active: index })
   }
 
@@ -254,7 +240,7 @@ export class PopupSelectController<TCtx = unknown> {
     const binding = this.binding
     const s = this.state.getSnapshot()
     if (binding === null || !s.open || s.status !== 'ready' || s.submitting || s.confirming !== null) return
-    const option = filterOptions(s.options, s.search, s.searchMode)[index]
+    const option = filterOptions(s.options, s.search)[index]
     if (option === undefined) return
     if (option.confirmation !== undefined) {
       this.state.set({ ...s, confirming: option, acknowledged: false, error: null })

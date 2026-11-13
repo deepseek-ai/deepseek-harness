@@ -14,10 +14,29 @@ import Testing
     }
     for error in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
         #expect(!AXAccess.optionalAttributeUnavailable(error, attribute: "AXValue"))
-        #expect(!AXAccess.actionsUnavailable(error))
     }
-    #expect(AXAccess.actionsUnavailable(.failure))
-    #expect(AXAccess.actionsUnavailable(.actionUnsupported))
+}
+
+@Test func unavailableActionMetadataDoesNotInterruptObservation() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    #expect(try access.actionNames(nil, error: .failure, requireKnown: false).isEmpty)
+    #expect(throws: NativeFailure.self) { try access.actionNames(nil, error: .failure, requireKnown: true) }
+    for strict in [false, true] {
+        #expect(try access.actionNames(nil, error: .actionUnsupported, requireKnown: strict).isEmpty)
+        for error in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
+            #expect(throws: NativeFailure.self) { try access.actionNames(nil, error: error, requireKnown: strict) }
+        }
+    }
+}
+
+@Test func listingSkipsOnlyTheAttributeWhoseWritabilityIsUnknown() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    let writable = try AXAccess.writableAttributeNames(["AXValue", "AXFocused"]) { name in
+        try access.attributeWritability(true, error: name == "AXValue" ? .failure : .success, name: name, forDiscovery: true)
+    }
+    #expect(writable == ["AXFocused"])
+    #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .failure, name: "AXValue", forDiscovery: false) }
+    #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .apiDisabled, name: "AXValue", forDiscovery: true) }
 }
 
 private func wrappedAXError(_ code: AXError) throws -> AXValue {
@@ -55,6 +74,7 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
             Issue.record("Batch attribute accepted an accessibility failure")
         } catch let error as NativeFailure {
             #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
+            #expect(error.attribute == "AXTitle")
             #expect(error.accessibilityError == code.rawValue)
             #expect(error.message.contains("AXTitle"))
             #expect(error.message.contains(String(code.rawValue)))
@@ -62,21 +82,29 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
     }
 }
 
-@Test func invalidElementsInvalidateObservationsWithoutWeakeningInputOrOtherErrors() {
+@Test func observationFailuresPreserveNativeDetailsWithoutReclassifyingInputOrStaleSnapshots() {
     let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
-    let stale = access.failure(.invalidUIElement, "read AXRole")
-    #expect(stale.code == "NATIVE_ERROR")
-    #expect(AXWorker.observationFailure(stale).code == "STALE_SNAPSHOT")
-    for code in [AXError.apiDisabled, .cannotComplete, .failure, .illegalArgument] {
+    for (error, attribute) in [(AXError.invalidUIElement, "AXRole"), (.cannotComplete, "AXChildren")] {
+        let original = access.failure(error, "read \(attribute)", attribute: attribute)
+        #expect(original.code == "NATIVE_ERROR")
+        let observed = AXWorker.observationFailure(original)
+        #expect(observed.code == "AX_OBSERVATION_UNAVAILABLE")
+        #expect(observed.message.contains("read \(attribute) failed with error \(error.rawValue)"))
+        #expect(observed.accessibilityError == error.rawValue)
+        #expect(observed.attribute == attribute)
+    }
+    for code in [AXError.apiDisabled, .failure, .illegalArgument] {
         let original = access.failure(code, "read AXRole")
         let observed = AXWorker.observationFailure(original)
         #expect(observed.code == original.code)
         #expect(observed.message == original.message)
         #expect(observed.accessibilityError == code.rawValue)
     }
-    let other = NativeFailure(code: "NATIVE_ERROR", message: "Unrelated failure with -25202 in text")
-    #expect(AXWorker.observationFailure(other).code == other.code)
-    #expect(AXWorker.observationFailure(other).message == other.message)
+    for other in [NativeFailure(code: "NATIVE_ERROR", message: "Unrelated failure with -25202 in text"),
+                  NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot expired; read fresh getAccessibilityTree")] {
+        #expect(AXWorker.observationFailure(other).code == other.code)
+        #expect(AXWorker.observationFailure(other).message == other.message)
+    }
 }
 
 @Test func batchRejectsSuccessEncodedAsAnAttributeError() throws {
@@ -156,11 +184,56 @@ func consumedContainerMetadataPreservesStaleAndCommunicationErrors(role: String)
             } catch let error as NativeFailure {
                 #expect(error.accessibilityError == code.rawValue)
                 #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
-                if code == .invalidUIElement { #expect(AXWorker.observationFailure(error).code == "STALE_SNAPSHOT") }
+                if code == .invalidUIElement { #expect(AXWorker.observationFailure(error).code == "AX_OBSERVATION_UNAVAILABLE") }
             }
         }
     }
     #expect(throws: NativeFailure.self) {
         try access.nodeObservation(attributes: ["AXRole": "AXGroup" as CFString, "AXChildren": try wrappedAXError(.illegalArgument)]) { _ in nil }.attribute("AXChildren")
+    }
+}
+
+@Test(arguments: ["AXValue", "AXSelectedTextRange"])
+func observationRetainsUnknownWritabilityAndFollowingNodes(failedAttribute: String) throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    var lines: [String] = []
+    for title in ["Affected control", "Following control"] {
+        let writable = try AXAccess.observationWritability(role: "AXTextField") { name, discovery in
+            try access.attributeWritability(true, error: title == "Affected control" && name == failedAttribute ? .failure : .success,
+                                           name: name, forDiscovery: discovery)
+        }
+        let node = AXTextNode(index: nil, role: "AXTextField", title: title, value: "Text", description: nil,
+                              actions: [], enabled: true, valueWritable: writable.value, selectionWritable: writable.selection,
+                              selected: nil, selectedRange: nil, selectedText: nil)
+        lines.append(AXTextFormatter.line(node, level: 0))
+    }
+    let unknown = failedAttribute == "AXValue" ? "valueWritable" : "selectionWritable"
+    #expect(lines[0].contains("\(unknown)=unknown"))
+    #expect(!lines[0].contains("\(unknown)=true"))
+    #expect(lines[0].contains("Affected control"))
+    #expect(lines[1].contains("Following control"))
+    #expect(lines[1].contains("valueWritable=true selectionWritable=true"))
+    do {
+        _ = try access.attributeWritability(true, error: .failure, name: failedAttribute, forDiscovery: false)
+        Issue.record("Mutation admitted unknown writability")
+    } catch let error as NativeFailure {
+        #expect(error.accessibilityError == -25200)
+        #expect(error.code == "NATIVE_ERROR")
+    }
+}
+
+@Test(arguments: ["AXValue", "AXSelectedTextRange"])
+func observationWritabilityPreservesPermissionCommunicationAndInvalidElementErrors(attribute: String) {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    for code in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
+        do {
+            _ = try AXAccess.observationWritability(role: "AXTextField") { name, discovery in
+                try access.attributeWritability(true, error: name == attribute ? code : .success, name: name, forDiscovery: discovery)
+            }
+            Issue.record("Observation hid an actionable AX error")
+        } catch let error as NativeFailure {
+            #expect(error.accessibilityError == code.rawValue)
+            #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
+        } catch { Issue.record("Unexpected error: \(error)") }
     }
 }

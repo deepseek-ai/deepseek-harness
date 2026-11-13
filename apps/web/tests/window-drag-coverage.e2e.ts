@@ -20,7 +20,8 @@ import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { initialShortcutConfig } from '@deepseek-ai/dsh-client-shortcuts/protocol'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
   INTERACTIVE_SELECTOR, RECALL_MARK, isDraggableAt, type RegionRect,
@@ -252,7 +253,7 @@ describe('web e2e: macOS window drag coverage', () => {
     const { page, tripwire } = await desktopPage()
     try {
       const session = await connectWorkspaceSession(page, 'scrolled-drag-content')
-      const callId = ToolCallId('window-drag-scroll-command')
+      const callId = brandString<ToolCallId>('window-drag-scroll-command')
       const args = JSON.stringify({ command: 'printf drag-fixture', description: 'Inspect scroll fixture' })
       session.append('turn/start', { turn: 1 })
       session.append('user/message', createUserMessage({
@@ -333,7 +334,7 @@ describe('web e2e: macOS window drag coverage', () => {
       const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
       await panel.waitFor()
       await settled(page)
-      const body = panel.locator('[data-dockkit-pane] > [class*="_paneBody_"]').first()
+      const body = panel.locator('[data-dockkit-pane] > [data-dockkit-pane-body]').first()
       await body.waitFor()
       // The existing pane supplies the no-drag owner; plain fixture content isolates CSS inheritance from plugin behavior.
       await body.evaluate((element) => {

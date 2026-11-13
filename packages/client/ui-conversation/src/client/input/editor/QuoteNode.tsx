@@ -3,6 +3,7 @@
 import type { JSX } from 'react'
 import { QuotePreview } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   EditorConfig, LexicalEditor, LexicalNode, NodeKey, SerializedLexicalNode, Spread,
 } from 'lexical'
@@ -18,21 +19,24 @@ const EMPTY_LABELS: QuoteNodeLabels = { remove: '' }
 /** JSON form used only by Lexical's editor-state APIs, not browser persistence. */
 export type SerializedQuoteNode = Spread<{
   text: string
+  summary?: QuoteSummary
 }, SerializedLexicalNode>
 
 /** Remove one quote occurrence by its Lexical identity. */
 export const REMOVE_QUOTE_COMMAND = createCommand<NodeKey>('REMOVE_QUOTE_COMMAND')
 
 /** Pure React face of one quote node. */
-export function QuoteNodeView({ editor, nodeKey, text, labels }: {
+export function QuoteNodeView({ editor, nodeKey, text, summary, labels }: {
   readonly editor: LexicalEditor
   readonly nodeKey: NodeKey
   readonly text: string
+  readonly summary?: QuoteSummary | undefined
   readonly labels: QuoteNodeLabels
 }) {
   return (
     <QuotePreview
       text={text}
+      summary={summary}
       removal={{
         label: labels.remove,
         onRemove: () => { editor.dispatchCommand(REMOVE_QUOTE_COMMAND, nodeKey) },
@@ -44,6 +48,7 @@ export function QuoteNodeView({ editor, nodeKey, text, labels }: {
 /** One selected transcript range represented as an atomic inline decorator. */
 export class QuoteNode extends DecoratorNode<JSX.Element> {
   __text: string
+  __summary: QuoteSummary | undefined
   __labels: QuoteNodeLabels
 
   /** Lexical node registry type tag. */
@@ -56,27 +61,31 @@ export class QuoteNode extends DecoratorNode<JSX.Element> {
     return new QuoteNode(
       node.__text,
       node.__labels,
+      node.__summary,
       node.__key,
     )
   }
 
   /** @param json - serialized editor node. @returns a fresh node with default runtime labels. */
   static override importJSON(json: SerializedQuoteNode): QuoteNode {
-    return new QuoteNode(json.text)
+    return new QuoteNode(json.text, EMPTY_LABELS, json.summary)
   }
 
   /**
    * @param text - selected text.
    * @param labels - runtime-only localized labels.
+   * @param summary - readable display shown instead of the text.
    * @param key - Lexical clone-path key; absent for fresh nodes.
    */
   constructor(
     text: string,
     labels: QuoteNodeLabels = EMPTY_LABELS,
+    summary?: QuoteSummary,
     key?: NodeKey,
   ) {
     super(key)
     this.__text = text
+    this.__summary = summary
     this.__labels = labels
   }
 
@@ -87,6 +96,7 @@ export class QuoteNode extends DecoratorNode<JSX.Element> {
       type: 'quote',
       version: 1,
       text: this.__text,
+      ...(this.__summary === undefined ? {} : { summary: this.__summary }),
     }
   }
 
@@ -123,6 +133,11 @@ export class QuoteNode extends DecoratorNode<JSX.Element> {
     return this.getLatest().__text
   }
 
+  /** Readable display the inserting owner supplied, if any. */
+  getQuoteSummary(): QuoteSummary | undefined {
+    return this.getLatest().__summary
+  }
+
   /** Update the localized remove label without changing persisted quote data. */
   setLabels(labels: QuoteNodeLabels): void {
     if (this.getLatest().__labels.remove !== labels.remove) this.getWritable().__labels = labels
@@ -135,15 +150,21 @@ export class QuoteNode extends DecoratorNode<JSX.Element> {
         editor={editor}
         nodeKey={this.__key}
         text={this.__text}
+        summary={this.__summary}
         labels={this.__labels}
       />
     )
   }
 }
 
-/** @param text - selected quote text. @param labels - runtime labels. @returns a fresh node. */
-export function $createQuoteNode(text: string, labels: QuoteNodeLabels): QuoteNode {
-  return new QuoteNode(text, labels)
+/**
+ * @param text - selected quote text.
+ * @param labels - runtime labels.
+ * @param summary - readable display shown instead of the text.
+ * @returns a fresh node.
+ */
+export function $createQuoteNode(text: string, labels: QuoteNodeLabels, summary?: QuoteSummary): QuoteNode {
+  return new QuoteNode(text, labels, summary)
 }
 
 /** @param node - possible Lexical node. @returns whether it is a QuoteNode. */

@@ -14,6 +14,7 @@ import {
   createSnapshotStore, type ObservableSnapshot, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor } from 'lexical'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   CommandClaim, ConsumeTokenRequest, DraftAttachmentId, DraftInitializationOptions, DraftInitializationResult,
   InputActions, InputEffect, InputNotice, InputState, InputTriggerController, PickOutcome,
@@ -100,12 +101,17 @@ function frozen(phase: InputState['phase']): boolean {
 }
 
 /** Whether two projections differ in content (selection and caret excluded). */
+function sameSummary(left: QuoteSummary | undefined, right: QuoteSummary | undefined): boolean {
+  return left === right || (left !== undefined && right !== undefined && left.label === right.label
+    && left.title === right.title && left.detail === right.detail && left.body === right.body)
+}
+
 function projectionContentChanged(prev: EditorProjection, next: EditorProjection): boolean {
   if (prev.clipboardText !== next.clipboardText || prev.detectText !== next.detectText) return true
   if (prev.command !== next.command) return true
   if (prev.quotes.length !== next.quotes.length || prev.quotes.some((quote, i) => {
     const old = next.quotes[i]
-    return old?.text !== quote.text || old.offset !== quote.offset
+    return old?.text !== quote.text || old.offset !== quote.offset || !sameSummary(old.summary, quote.summary)
   })) return true
   if (prev.occurrences.length !== next.occurrences.length) return true
   return next.occurrences.some((occ, i) => {
@@ -140,7 +146,7 @@ export class SessionInputShell implements SessionInput {
   }
   /** The public provide-channel action face (one stable identity per session). */
   readonly actions: InputActions = {
-    insertQuote: text => this.insertQuote(text),
+    insertQuote: (text, summary) => this.insertQuote(text, summary),
     captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
     insertText: (text, span) => {
       if (frozen(this.snapshot.phase) || this.disposed) return false
@@ -230,10 +236,14 @@ export class SessionInputShell implements SessionInput {
     this.restoreCommand()
   }
 
-  /** @param text - selected transcript text. @returns whether the editable draft accepted the quote. */
-  insertQuote(text: string): boolean {
+  /**
+   * @param text - selected transcript text.
+   * @param summary - readable composer display of the quote.
+   * @returns whether the editable draft accepted the quote.
+   */
+  insertQuote(text: string, summary?: QuoteSummary): boolean {
     if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.quoteInsertionAllowed?.() === false || text.trim() === '') return false
-    const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' })
+    const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' }, summary)
     if (inserted) this.focus()
     return inserted
   }

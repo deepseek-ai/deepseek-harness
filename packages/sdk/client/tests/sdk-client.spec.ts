@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import {
   DeepSeekHarness,
   HarnessClient,
@@ -86,9 +87,13 @@ describe('DeepSeekHarness', () => {
     expect(result.notifications.some(notification => notification.method === 'session.status')).toBe(false)
   })
 
-  it('returns a restored handle that can run followups on the same identity', async () => {
+  it.each([undefined, 'danger-full-access'])('restores a handle with optional permissions: %s', async (permissionMode) => {
     const harness = harnessWith()
-    const session = await harness.resumeSession('saved-session')
+    const request = vi.spyOn(harness.client, 'request')
+    const session = await harness.resumeSession('saved-session', permissionMode === undefined ? {} : { permissionMode })
+    expect(request).toHaveBeenCalledWith('session/resume', {
+      sessionId: 'saved-session', ...permissionMode === undefined ? {} : { permissionMode },
+    })
     expect(session.id).toBe('saved-session')
     expect((await session.run([{ type: 'text', text: 'continue' }])).sessionId).toBe('saved-session')
   })
@@ -314,7 +319,7 @@ describe('DeepSeekHarness', () => {
       cwd: dir,
       provider: 'custom-provider',
       model: 'custom-model',
-      reasoningEffort: ReasoningEffortId('max'),
+      reasoningEffort: brandString<ReasoningEffortId>('max'),
       maxTokens: 4096,
       approvalRequests: true,
     })

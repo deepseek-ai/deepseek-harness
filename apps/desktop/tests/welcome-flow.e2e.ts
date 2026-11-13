@@ -9,7 +9,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesktopHostProcess } from '../src/host-process.ts'
 import { desktopClientMetadata } from '../src/client-metadata.ts'
 import { connectDesktopWelcome, type DesktopWelcomeBackend } from '../src/welcome-backend.ts'
-import { authenticateWebHost } from '../src/web-document.ts'
 import { builtHost, prepareDesktopHome } from './harness.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
@@ -83,16 +82,16 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
       const nodeBin = join(root, 'runtime/primary-runtime/dependencies/node/bin')
       mkdirSync(nodeBin, { recursive: true })
       cpSync(process.execPath, join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'))
-      writeFileSync(join(paths.profile, 'cordis.patch.yml'), `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n- id: deepseek-account\n  config:\n${process.platform === 'linux' ? '    desktopPlatform: darwin\n' : ''}    platformOrigin: ${platform.origin}\n    allowLoopbackHttp: true\n    requestHeaders:\n      Cookie: test_gate=synthetic\n`)
+      writeFileSync(join(paths.profile, 'cordis.patch.yml'), `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n- id: deepseek-account\n  config:\n${process.platform === 'linux' ? '    desktopPlatform: darwin\n' : ''}    platformOrigin: ${platform.origin}\n    harnessOrigin: ${platform.origin}\n    allowLoopbackHttp: true\n    requestHeaders:\n      Cookie: test_gate=synthetic\n`)
       let backend: DesktopWelcomeBackend
       let hostOrigin = ''
       const restart = async (): Promise<void> => {
         await host?.stop()
         host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
           process.env, undefined, join(root, 'runtime', 'primary-runtime'))
-        const { url } = await host.start()
+        const { url, authenticationCookie } = await host.start()
         hostOrigin = new URL(url).origin
-        backend = connectDesktopWelcome(url, await authenticateWebHost(url))
+        backend = connectDesktopWelcome(url, authenticationCookie)
       }
       const status = async () => backend.read()
       const fingerprint = (): string => createHash('sha256')

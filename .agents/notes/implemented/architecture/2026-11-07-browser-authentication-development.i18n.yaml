@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-11-07-browser-authentication-development.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-07-browser-authentication-development.md
+/agent-note-authentication-provider-integration:
+  en: 1a29efbb24021a72
+  zh: be3ad79af7975a72
+/agent-note-authentication-provider-integration/problem:
+  en: 670cfd5061a9aa5a
+  zh: 98598c1e45236ed2
+/agent-note-authentication-provider-integration/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-authentication-provider-integration/decision/register-a-provider-and-own-its-peer:
+  en: 7305dc1791116cf6
+  zh: f23cd0b8161522ee
+/agent-note-authentication-provider-integration/decision/declare-route-admission-and-consume-the-selected-peer:
+  en: e2b17a8dff46e81c
+  zh: 2391ed8fdf502a30
+/agent-note-authentication-provider-integration/decision/use-scoped-webserver-events:
+  en: 3f191940167f3f9e
+  zh: 6e4f20d1f66f5454
+/agent-note-authentication-provider-integration/decision/keep-socket-policy-with-the-issuing-product:
+  en: 59235b955e65e342
+  zh: 76d9314d0a738438
+/agent-note-authentication-provider-integration/decision/let-webapp-publish-complete-entry-urls:
+  en: 0676f301d5aec364
+  zh: 0ef43eba7bfe2f01
+/agent-note-authentication-provider-integration/testing:
+  en: c783cb006f9962a4
+  zh: 79bf36b25665e49c
+/agent-note-authentication-provider-integration/alternatives-considered:
+  en: 868953274abd81e8
+  zh: 1b2890de876a6db6
+/agent-note-authentication-provider-integration/consequences:
+  en: cf654878d39ce4bc
+  zh: 435687a8da20f294

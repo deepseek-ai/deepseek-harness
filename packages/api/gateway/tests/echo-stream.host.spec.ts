@@ -47,7 +47,7 @@ describe('the echo stream on each carrier', () => {
   it('echoes uplink frames through the WebSocket carrier', async () => {
     const ctx = await setup(true)
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: unknown[] = []

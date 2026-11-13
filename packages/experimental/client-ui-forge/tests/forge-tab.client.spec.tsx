@@ -11,7 +11,7 @@ import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from 
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { IconBranchOutlineRegular, IconFolderCloseRegular, IconWarningTriangleOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { changesAddress } from '../src/client/changes-address.ts'
 import { ForgeTab, type ForgeTabProps } from '../src/client/ForgeTab.tsx'
 import { en } from '../src/client/locales.ts'
@@ -19,11 +19,12 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ForgeTab.module.css'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 const unused = (): never => { throw new Error('the forge tab does not call this tab action') }
 
 /** Tab information of a forge tab whose visibility the test sets. */
@@ -55,6 +56,10 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
   const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
   const readChecks = vi.fn<ForgeTabProps['readChecks']>(async () => snapshot(1))
+  const rerunChecks = vi.fn<ForgeTabProps['rerunChecks']>(async () => {})
+  const requestReviews = vi.fn<ForgeTabProps['requestReviews']>(async () => {})
+  const reviewerCandidates = vi.fn<ForgeTabProps['reviewerCandidates']>(async () => [])
+  const updateBranch = vi.fn<ForgeTabProps['updateBranch']>(async () => {})
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
@@ -62,14 +67,16 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const reportVisible = vi.fn<(visible: boolean) => void>()
   const createChangeRequest = vi.fn<() => void>()
   const openResource = vi.fn<SidebarRightTabActions['openResource']>()
+  // Draws nothing for the card's plugin slot.
+  const renderSlot = (() => null) as ForgeTabProps['renderSlot']
   const props: ForgeTabProps = {
     useTabInfo: () => tabInfo(useVisibility(current => current), openResource),
     sessionId: SESSION,
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
-    reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
-    t,
+    reconnect, refresh, remove, markReady, merge, readChecks, rerunChecks, requestReviews, reviewerCandidates, updateBranch, restore,
+    openLink, copyText, copyPath, reportVisible, createChangeRequest, renderSlot, t,
   }
   const view = render(<ForgeTab {...props} />)
   return {
@@ -293,8 +300,8 @@ describe('ForgeTab local changes', () => {
 })
 
 describe('ForgeTab sign-in banner', () => {
-  it('offers the GitHub CLI sign-in command for an unauthenticated GitHub host', () => {
-    const b = tab(ready({ readiness: { state: 'unauthenticated', message: 'not logged in' } }))
+  it('offers the sign-in command the provider names for an unauthenticated host', () => {
+    const b = tab(ready({ readiness: { state: 'unauthenticated', message: 'not logged in', signIn: { command: 'gh auth login --hostname github.com' } } }))
     const banner = b.view.getByRole('status')
     expect(within(banner).getByText('Sign in to github.com to show change request status')).toBeTruthy()
     expect(within(banner).getByText('gh auth login --hostname github.com').tagName).toBe('CODE')
@@ -306,10 +313,10 @@ describe('ForgeTab sign-in banner', () => {
   it.each([
     ['with its message', 'token expired', ['Sign in to gitlab.example.test to show change request status', 'token expired']],
     ['without a message', null, ['Sign in to gitlab.example.test to show change request status']],
-  ])('asks to sign in to another code host %s', (_label, message, texts) => {
+  ])('asks to sign in %s when the provider names no sign-in command', (_label, message, texts) => {
     const b = tab(ready({
       repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
-      readiness: { state: 'unauthenticated', message },
+      readiness: { state: 'unauthenticated', message, signIn: null },
     }))
     const banner = b.view.getByRole('status')
     expect([...banner.children].map(child => child.textContent)).toEqual(texts)
@@ -320,14 +327,14 @@ describe('ForgeTab sign-in banner', () => {
     ['with its message', 'spawn gh ENOENT', 'Change requests on github.com could not be read: spawn gh ENOENT'],
     ['without a message', null, 'Change requests on github.com could not be read: '],
   ])('explains an unreachable host %s', (_label, message, text) => {
-    const b = tab(ready({ readiness: { state: 'unavailable', message } }))
+    const b = tab(ready({ readiness: { state: 'unavailable', message, signIn: null } }))
     expect(b.view.getByRole('status').textContent).toBe(text)
   })
 
   it.each([
     ['sign-in is unknown', ready({ readiness: null })],
     ['the host is signed in', ready()],
-    ['no provider serves the repository', ready({ repository: null, readiness: { state: 'unauthenticated', message: 'not logged in' } })],
+    ['no provider serves the repository', ready({ repository: null, readiness: { state: 'unauthenticated', message: 'not logged in', signIn: null } })],
   ])('shows no banner while %s', (_label, state) => {
     const b = tab(state)
     expect(b.view.queryByRole('status')).toBeNull()

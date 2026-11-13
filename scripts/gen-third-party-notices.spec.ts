@@ -13,6 +13,7 @@ import {
   isPermissive,
   type Manifest,
   manifestPatterns,
+  parseLocalVendorRows,
   parsePyprojectRequirements,
   parseVendoredRows,
   render,
@@ -268,8 +269,17 @@ describe('parseVendoredRows', () => {
     expect(parseVendoredRows('| `cordis/` | `@deepseek-ai/cordis` | cordis | 4.0.0 | https://example.com | `abc123` |\n')).toEqual([])
   })
 
+  it('yields nothing when a local-vendor row drops its explicit none: origin, so the generator fails loud', () => {
+    expect(parseLocalVendorRows('| `plugin-im-markdown/` | `@deepseek-ai/cordis-plugin-im-markdown` | — | 4.0.0-alpha.0 | written locally | — |\n')).toEqual([])
+    expect(parseLocalVendorRows('| `plugin-im-markdown/` | @deepseek-ai/cordis-plugin-im-markdown | — | 4.0.0-alpha.0 | none: written locally | — |\n')).toEqual([])
+  })
+
   it('covers every vendored directory, so no package can drop out of the notices', () => {
-    const parsed = new Set(parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8')).map(row => row.npmName))
+    const readme = readFileSync(resolve(root, 'vendor/README.md'), 'utf8')
+    const vendored = parseVendoredRows(readme).map(row => row.npmName)
+    const local = parseLocalVendorRows(readme)
+    expect(local).toEqual(['@deepseek-ai/cordis-plugin-im-markdown'])
+    const parsed = new Set([...vendored, ...local])
     const onDisk = readdirSync(resolve(root, 'vendor'), { withFileTypes: true })
       .filter(entry => entry.isDirectory())
       .map(entry => (JSON.parse(readFileSync(resolve(root, 'vendor', entry.name, 'package.json'), 'utf8')) as Manifest).name)

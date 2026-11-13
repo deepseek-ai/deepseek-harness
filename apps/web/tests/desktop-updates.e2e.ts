@@ -74,11 +74,10 @@ describe('web e2e: Desktop update workspace chrome', () => {
           await publish(progress)
           const downloading = page.getByRole('button', { name: '58%', exact: true })
           await downloading.waitFor()
-          expect(await downloading.getAttribute('aria-disabled')).toBe('true')
+          expect(await downloading.getAttribute('aria-disabled')).toBe('false')
           expect(await downloading.locator('svg').count()).toBe(1)
-          // Force dispatch past Playwright's aria-disabled guard to verify the product's click guard.
-          await downloading.click({ force: true })
-          expect(await opens()).toBe(1)
+          await downloading.click()
+          await expect.poll(opens).toBe(2)
           await page.screenshot({ path: join(evidence, 'downloading.png') })
 
           const collapse = locale === 'zh-CN' ? '收起侧边栏' : 'Collapse sidebar'
@@ -118,21 +117,21 @@ describe('web e2e: Desktop update workspace chrome', () => {
           await expect.poll(() => tooltip.evaluateAll(elements => elements.map(element => getComputedStyle(element).opacity))).toEqual(['1'])
           await page.screenshot({ path: join(evidence, 'retry.png') })
           await retry.click()
-          await expect.poll(opens).toBe(2)
+          await expect.poll(opens).toBe(3)
 
           await publish(presentDesktopUpdate({ phase: 'ready', version }))
           const ready = page.getByRole('button', { name: readyLabel, exact: true })
           await ready.waitFor()
           expect(await ready.getAttribute('aria-disabled')).toBe('false')
-          expect(await opens()).toBe(2)
+          expect(await opens()).toBe(3)
           await page.screenshot({ path: join(evidence, 'ready.png') })
           await ready.click()
-          await expect.poll(opens).toBe(3)
+          await expect.poll(opens).toBe(4)
           expect(tripwire.pageErrors).toEqual([])
           expect(tripwire.warnings).toEqual([])
           expect(await page.evaluate(() => (window as FixtureWindow).updateFixture.listeners.size)).toBe(1)
           await writeFile(join(evidence, 'result.json'), JSON.stringify({ locale, geometry, updateBackground, failedBackground,
-            passed: true, explicitActions: 3, carrier: 'substituted', host: 'real Web composition',
+            passed: true, explicitActions: 4, carrier: 'substituted', host: 'real Web composition',
             electron: false, installerExecuted: false }, null, 2) + '\n')
           console.log(`Desktop workspace chrome evidence: ${evidence}`)
         } catch (error) {

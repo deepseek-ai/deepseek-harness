@@ -13,7 +13,8 @@ import * as PtcPlugin from '@deepseek-ai/dsh-tool-executor-ptc'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import type { Context } from '@deepseek-ai/cordis'
 import { expect, it, onTestFinished } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { defineTool, type ToolExecutor } from '@deepseek-ai/dsh-tools'
 import { agentOn, declare, harness } from './harness.ts'
 
@@ -53,7 +54,7 @@ it('loads scoped executor objects and retains them with the preset revision', as
   expect((await ctx.systemPrompt.assemble({ scope: first })).sections)
     .toContainEqual(expect.objectContaining({ name: 'tools:transport', text: 'executor-1' }))
   const result = await executeModelToolFixture(ctx, {
-    agent: first, callId: ToolCallId('loader-executor'), name: 'echo', arguments: {}, signal: new AbortController().signal,
+    agent: first, callId: brandString<ToolCallId>('loader-executor'), name: 'echo', arguments: {}, signal: new AbortController().signal,
   })
   expect(result).toMatchObject({ value: 'shared', isError: false })
   await firstRow.dispose()
@@ -67,7 +68,7 @@ it('loads scoped executor objects and retains them with the preset revision', as
     .toContainEqual(expect.objectContaining({ text: 'executor-2' }))
   for (const agent of [first, sameRevision, plain, newer]) {
     const batch = await ctx.tools.execute({
-      agent, calls: [{ type: 'tool-call', id: ToolCallId('revision'), name: 'echo', arguments: '{}' }],
+      agent, calls: [{ type: 'tool-call', id: brandString<ToolCallId>('revision'), name: 'echo', arguments: '{}' }],
       signal: new AbortController().signal,
     })
     expect(batch.results[0]?.result).toMatchObject({ value: 'shared', isError: false })
@@ -85,9 +86,10 @@ class ProgramFixture extends PtcRuntime {
   }
 
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
-    expect(request.program).toBe('return await tools.echo({ value: "ptc" })')
+    expect(request.program).toBe('inspect(await tools.echo({ value: "ptc" }))')
     const value = await request.bindings[0]!.functions.echo!({ value: 'ptc' })
-    return { logs: [], value }
+    if (typeof value !== 'string') throw new Error('expected a string echo result')
+    return { output: [{ type: 'text', text: value }] }
   }
 }
 
@@ -136,11 +138,11 @@ it.each([true, false])('loads cordis.yml executor presets with runtime availabil
   expect((await ctx.systemPrompt.assemble({ scope: ptc })).tools.map(tool => tool.name)).toEqual(['run_code'])
   const signal = new AbortController().signal
   expect(await executeModelToolFixture(ctx, {
-    agent: native, name: 'echo', arguments: { value: 'native' }, callId: ToolCallId('native'), signal,
+    agent: native, name: 'echo', arguments: { value: 'native' }, callId: brandString<ToolCallId>('native'), signal,
   })).toMatchObject({ isError: false, value: 'echo:native' })
   expect(await executeModelToolFixture(ctx, {
-    agent: ptc, name: 'run_code', callId: ToolCallId('program'), signal,
-    arguments: { code: 'return await tools.echo({ value: "ptc" })', description: 'Echo through the program' },
+    agent: ptc, name: 'run_code', callId: brandString<ToolCallId>('program'), signal,
+    arguments: { code: 'inspect(await tools.echo({ value: "ptc" }))', description: 'Echo through the program' },
   })).toMatchObject({ isError: false, content: [{ type: 'text', text: 'echo:ptc' }] })
   expect(ptc.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')).toMatchObject({
     data: { name: 'echo', isError: false, content: [{ type: 'text', text: 'echo:ptc' }] },

@@ -1,1 +1,1 @@
-![An instruction to add meeting notes, with the notes entered in the macOS Notes app](preview.svg)
+![A request to add meeting notes and the resulting text in Notes](preview.svg)

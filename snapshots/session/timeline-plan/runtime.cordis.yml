@@ -1,0 +1,7 @@
+- insert:
+    - id: timeline-experimental
+      name: '@deepseek-ai/dsh-timeline'
+      config:
+        reportsEnabled: false
+        reminderIterations: 2
+        language: en

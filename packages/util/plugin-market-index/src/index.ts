@@ -229,6 +229,7 @@ function icon(value: unknown, path: string, indexUrl: URL): string {
     if (bytes > MAX_INLINE_ICON_BYTES) fail(path, `must not exceed ${String(MAX_INLINE_ICON_BYTES / 1024)} KiB of decoded bytes`)
     return text
   }
+  if (indexUrl.protocol.startsWith('git+') && !URL.canParse(text)) fail(path, 'Git indexes require an absolute HTTPS or inline icon URL')
   let resolved: URL
   try {
     resolved = new URL(text, indexUrl)

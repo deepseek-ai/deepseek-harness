@@ -284,8 +284,12 @@ export class Http extends Service<Http.Intercept> {
     })
   }
 
+  [Service.mergeIntercept](...values: Http.Intercept[]): Http.Intercept {
+    return values.reduce<Http.Intercept>((acc, value) => Http.mergeConfig(acc, value), {})
+  }
+
   resolveConfig(init?: Http.RequestConfig): Http.RequestConfig {
-    return this[Service.resolveConfig](this.config, init)
+    return Http.mergeConfig(Http.mergeConfig(this.config, this[Service.resolveIntercept]()), init)
   }
 
   resolveURL(url: string | URL, config: Http.RequestConfig, isWebSocket = false) {

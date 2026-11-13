@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Converter, RenderImagesRequest, RenderImagesResult, RenderedImage } from '@deepseek-ai/libreoffice-kit'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
-import OfficeKit, { Config, OfficeSourceKey, type OfficeKitSource, type OfficeImagesRequest } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import OfficeKit, { Config, type OfficeSourceKey, type OfficeKitSource, type OfficeImagesRequest } from '../src/index.ts'
 
 const kit = vi.hoisted(() => ({ create: vi.fn<() => Promise<Converter>>() }))
 vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
@@ -29,7 +30,7 @@ const PDF = Buffer.from('%PDF-1.7\nconverted\n%%EOF\n')
 const XLSX = Buffer.from([80, 75, 3, 4, 9])
 
 function source(key = 'source', bytes = new Uint8Array([80, 75, 3, 4])): OfficeKitSource {
-  return { key: OfficeSourceKey(key), version: 'v1', bytes: bytes.length, read: async () => ({ bytes, version: 'v1' }) }
+  return { key: brandString<OfficeSourceKey>(key), version: 'v1', bytes: bytes.length, read: async () => ({ bytes, version: 'v1' }) }
 }
 
 const limits = { maxImages: 4, maxPixels: 1_000_000, maxDimension: 4096, maxBytes: 1024 } as const

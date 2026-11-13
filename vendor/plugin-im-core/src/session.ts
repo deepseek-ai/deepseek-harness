@@ -7,7 +7,7 @@
 import type {
   ButtonCallback, ButtonEvent, CheckCallback, CheckEvent, SelectCallback, SelectEvent,
 } from '@deepseek-ai/satori-element'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { defineProperty, Time } from '@deepseek-ai/cosmokit'
 import type { Bot } from './bot.ts'
 import type { InboundMessage, Login, MessageRef, UserRef } from './protocol.ts'
@@ -58,7 +58,7 @@ export class Session {
     // defined here so callers still reach the context.
     defineProperty(this, 'bot', bot)
     defineProperty(this, 'ctx', bot.ctx)
-    defineProperty(this, 'app', bot.ctx.root)
+    defineProperty(this, 'app', bot.ctx[Context.root])
   }
 
   get type() {

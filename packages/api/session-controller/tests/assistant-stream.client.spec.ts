@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { LlmAttemptId, createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type LlmAttemptId, createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {
   SessionAssistantStreamBaseline,
@@ -8,7 +9,7 @@ import type {
 import { ClientAssistantStream } from '../src/client/sessions/assistant-stream.ts'
 import type { SessionLiveEventEntry } from '../src/client/contract/events.ts'
 
-const ATTEMPT = LlmAttemptId('session:1')
+const ATTEMPT = brandString<LlmAttemptId>('session:1')
 
 function entry(event: SessionEvent): SessionLiveEventEntry {
   return { type: 'event', event }
@@ -151,7 +152,7 @@ describe('ClientAssistantStream', () => {
     const closed = entry({ type: 'step/end', seq: SessionSeq(4), time: 4, data: { turn: 1, step: 1 } })
     expect(stream.acceptDurable(closed)).toEqual({ type: 'publish', entry: closed, retireAttemptId: ATTEMPT })
     expect(stream.acceptDurable(ordinary(5))).toEqual({ type: 'publish', entry: ordinary(5) })
-    expect(stream.acceptFrame(start(LlmAttemptId('session:2'), 4))).toBeUndefined()
+    expect(stream.acceptFrame(start(brandString<LlmAttemptId>('session:2'), 4))).toBeUndefined()
   })
 
   it('clears retained chunks on replacement and refuses a new attempt before Step completion', () => {
@@ -159,11 +160,11 @@ describe('ClientAssistantStream', () => {
     const durable = messageEvent(2)
     stream.acceptDurable(durable)
     stream.acceptFrame(end(0, { kind: 'committed', eventType: 'assistant/message', seq: 2 }))
-    expect(stream.acceptFrame(start(LlmAttemptId('session:2')))).toEqual({ type: 'rebaseline' })
+    expect(stream.acceptFrame(start(brandString<LlmAttemptId>('session:2')))).toEqual({ type: 'rebaseline' })
     expect(stream.replace([durable])).toEqual([durable])
     const closed = entry({ type: 'step/end', seq: SessionSeq(3), time: 3, data: { turn: 1, step: 1 } })
     expect(stream.acceptDurable(closed)).toEqual({ type: 'publish', entry: closed })
-    expect(stream.acceptFrame(start(LlmAttemptId('session:2'), 3))).toBeUndefined()
+    expect(stream.acceptFrame(start(brandString<LlmAttemptId>('session:2'), 3))).toBeUndefined()
   })
 
   it('retires failed attempts and interrupted messages at stream end', () => {
@@ -176,7 +177,7 @@ describe('ClientAssistantStream', () => {
       expect(stream.acceptFrame(end(0, {
         kind: 'committed', eventType: durable.event.type as 'assistant/message' | 'assistant/attempt', seq: 2,
       }))).toEqual({ type: 'settlement', attemptId: ATTEMPT, entry: durable })
-      expect(stream.acceptFrame(start(LlmAttemptId('session:2'), 2))).toBeUndefined()
+      expect(stream.acceptFrame(start(brandString<LlmAttemptId>('session:2'), 2))).toBeUndefined()
     }
   })
 
@@ -185,7 +186,7 @@ describe('ClientAssistantStream', () => {
     const durable = attemptEvent(2)
     expect(duplicate.acceptDurable(durable)).toBeUndefined()
     expect(duplicate.acceptDurable(durable)).toEqual({ type: 'rebaseline' })
-    expect(duplicate.acceptFrame(start(LlmAttemptId('session:2')))).toEqual({ type: 'rebaseline' })
+    expect(duplicate.acceptFrame(start(brandString<LlmAttemptId>('session:2')))).toEqual({ type: 'rebaseline' })
 
     const clean = new ClientAssistantStream()
     expect(clean.acceptFrame(start())).toBeUndefined()
@@ -193,7 +194,7 @@ describe('ClientAssistantStream', () => {
 
   it('falls back to durable settlement for frames from an unknown attempt', () => {
     const stream = new ClientAssistantStream()
-    const unknown = LlmAttemptId('session:unknown')
+    const unknown = brandString<LlmAttemptId>('session:unknown')
     expect(stream.acceptFrame(chunkFrame(0, unknown))).toBeUndefined()
     expect(stream.acceptFrame(end(0, { kind: 'abandoned' }, unknown))).toBeUndefined()
     const durable = attemptEvent(2)

@@ -25,6 +25,8 @@ Host 把组合后的 `WebBootGraph` 写入 `window.__DSH_BOOT__`，并在 parser
 
 Web boot kernel 创建模块系统、预取 `immediately` entry、挂载 vendored Cordis Loader，再创建图中的每个 entry。Cordis service injection 决定激活顺序；module graph 顺序只决定同步 import 能否被 materialize。完整 roster 到达 settled 状态且启动审计通过后（浏览器必需名单中的 entry 未激活会拒绝启动；其他未激活 entry 输出一条控制台警告），`ui-renderer` hydrate 不依赖框架的 boot DOM，并调用唯一一次 context 级 `renderSlot('root')`。[Client Modules](client-modules.zh.md)负责 graph、bundle route、cache revision 与 loader 细节。
 
+模块构造时将启动载体原有的脚本加载器绑定为自身 Main 环境；可选 Realm 提供方不会增加启动阶段。Modules 保存可选的元信息生产函数并发布模块记录变化；[UI Renderer](../../packages/client/ui-renderer/README.zh.md) 求值样式描述并持有其主文档安装。资源生命周期是模块级，而不是 Slot 或组件挂载协议。
+
 ## Remote 通信
 
 Host 业务 service 使用 Typert Remote decorator 标记可调用 method。Host generation 产出严格 descriptor、runtime codec、declaration merge 与 source map。Client 侧 `api-remotes` assembly 选择这些生成贡献，并把具体 method 挂到 `ctx.remote.<namespace>` 与 Session scope 的 `agentCtx.remote.<namespace>`。功能包依赖生成的 service face，而不依赖 Gateway 实现或 Host 包的运行时 entry。
@@ -57,7 +59,7 @@ Connection 拥有请求 URL 解析、request correlation、`/api` carrier、trus
 
 Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settings/README.zh.md#use-this-package)。它控制诊断 View、[可用的预设选项](../../packages/client/ui-agent-preset/README.zh.md)、改动文件卡片和内置 HTML 预览策略，不改变 Session 记录。
 
-`ui-session` 安装 Session scope adapter，并在 [remote-access](../../packages/api/remote-access/README.zh.md) Client 服务之上提供 `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess`、`useSession`、`sessionId`、`useProjection` 和会话作用域的 `useAccess`。`SessionProvider` 可以继承外围 binding，也可以绑定显式 `SessionReference`，因此并存子树可以指向不同 Session。领域 adapter 可以继续添加标准 source，但不会把 React hook 放进 model object。
+`ui-session` 安装 Session scope adapter，并在 [remote-access](../../packages/api/remote-access/README.zh.md) Client 服务之上提供 `useSessions`、`useSessionRetainInfo`、`useSessionAccess`、`useSession`、`sessionId`、`useProjection` 和会话作用域的 `useAccess`。`SessionProvider` 可以继承外围 binding，也可以绑定显式 `SessionReference`，因此并存子树可以指向不同 Session。[`ui-session-status`](../../packages/client/ui-session-status/README.zh.md) 从 `ctx.uiSession.sessionStatus` 状态表提供 `useSessionStatus`，该表汇总运行状态、生效的待交互请求，以及其宿主面为同一宿主各前端保存的阅读提醒。领域 adapter 可以继续添加标准 source，但不会把 React hook 放进 model object。
 
 `ui-conversation` 对每个 `SessionBinding.eventSource` 只绑定一次。它的 event registry 把持久 Session event 与 Client-only `assistant/live-chunk` update 关联成稳定的业务 Context，view registry 则 materialize target snapshot。Chat Assistant、Trajectory Assistant 与 Turn Tail 同时解释 live chunk 和持久 settlement 中嵌入的紧凑 stream，因此重连与分页历史无需持久 token 行即可复现相同 Assistant 状态。`ui-chat` 与 `ui-trajectory` 分别注册自己的 Definition 和 builder：它们可以解释同一 event family，但不会导入或共享彼此的最终 display model。Shell 选择一个已注册 view，再通过标准 hook 与 Slot 交付其 snapshot。[Conversation](conversation.zh.md)定义 Context identity、replay、Location data、target builder 与 keyed renderer。
 
@@ -86,11 +88,29 @@ Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settin
 
 架构中没有统一的 Client `Runtime`、`HostFrame`、`events.mux`、`events.host` 或通用 `resync()` API。Connection 公开 generation state，Gateway 管理 logical stream，Client model 则按自身数据定义 replacement 或 resume 语义。
 
+## 阅读提醒
+
+[会话状态](../../packages/client/ui-session-status/README.zh.md)在宿主内存中保存使用者的阅读确认和手动未读标记。其宿主 Remote 服务发送重连快照和已保存的更新；其前端插件把这些记录汇入 `ctx.uiSession.sessionStatus` 状态表，并在可见且聚焦的主视图中确认已加载的完成内容。阅读状态不改变模型历史。
+
+### SessionReadState
+
+完整阅读记录包含 `sessionId`、最近结束的 `completedTurn`、该轮是否以本宿主观察到的执行错误结束的 `failed`、已确认的 `readTurn` 和 `manualUnread` 标记。设置了手动标记，或最近结束的轮次大于已确认轮次时，会话为未读。
+
+`mark(sessionId, action)` 按宿主处理顺序更新会话。前端只通过有序订阅流更新记录。该服务自己记录 `turn/end` 事件，包括该轮是否失败。
+
+### SessionReadAction
+
+`unread` 操作设置手动标记。`read` 操作清除标记，并将阅读位置推进至它的 `throughTurn`；`acknowledge` 操作只推进位置，不改变标记。位置不会回退，也不越过宿主最近完成的轮次。修改回复仅表示成功或失败，不回传记录。
+
+### SessionReadFrame
+
+每次同步先发送 `type: 'baseline'`，在 `items` 中包含所有可访问的记录。后续每个 `type: 'changed'` 都携带一条已保存的完整 `state`。重连会替换上一代同步流的记录。
+
 ## 包边界
 
 功能插件包可以通过 `import type` 共享声明；不得运行时导入或转发另一个功能插件的值。跨包行为使用注入的 Cordis service，跨包 UI 使用 Slots。特定 target 的 Conversation Definition、projection helper 与最终 view data 留在所属 target 包中，即使 Chat 和 Trajectory 有意实现平行逻辑。
 
-共享运行时值需要一个职责收窄、没有功能生命周期的静态 owner，例如 `client/store`、`ui-primitives` 或浏览器安全的 util 包。Transport 与生成 API assembly 可以导入运行时 contribution，因为组装同一个 protocol 正是它们的显式职责。功能包不能只为绕过此规则而添加 `dsh.client.external`。
+共享运行时值需要一个职责收窄、没有功能生命周期的静态 owner，例如 `client/store`、`ui-primitives` 或浏览器安全的 util 包。Transport 与生成 API assembly 可以导入运行时 contribution，因为组装同一个 protocol 正是它们的显式职责。功能包可以通过 `dsh.client.external` 请求 `packages/api/` 下某一行的运行时值，但不能请求另一个功能插件的行。
 
 根据所添加的扩展查阅四篇详细参考：
 
@@ -98,3 +118,40 @@ Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settin
 - [API Gateway](../api-gateway.zh.md)：Host method、生成的 Remote contribution、stream 与 forwarded event。
 - [Web Client Slots](slots.zh.md)：component、hook、store、injection 与 placement。
 - [Conversation](conversation.zh.md)：持久 event correlation、target snapshot，以及 Chat 或 Trajectory view contribution。
+
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxsessionstatus--sessionstatusservice"></a>
+
+### `ctx.sessionStatus` — `SessionStatusService`
+
+Shared owner reading records; no reading operation changes model history.
+
+```ts cordis-catalog
+/**
+ * Update one Session; read positions advance only through Client-observed completions.
+ * @param sessionId - Session identity.
+ * @param action - Explicit reminder change or automatic read-position acknowledgement.
+ * @throws RemoteError when closing, the Session is missing, or its metadata cannot be read.
+ */
+@Remote async mark(sessionId: SessionId, action: SessionReadAction): Promise<void>
+
+/**
+ * Follow accessible reading records; every connection starts with a complete baseline.
+ * @param signal - generation cancellation.
+ * @returns the baseline and whole-record changes, filtered by Session access.
+ * @throws RemoteError when the service is closing.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<SessionReadFrame>
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/client/ui-session-status/src/index.ts`](../../packages/client/ui-session-status/src/index.ts)
+<!-- END GENERATED cordis-surface -->

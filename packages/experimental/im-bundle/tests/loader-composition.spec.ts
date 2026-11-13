@@ -13,11 +13,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import * as yaml from 'js-yaml'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
-import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import Include, { parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { Satori, h } from '@deepseek-ai/cordis-plugin-im-core'
 import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
@@ -83,7 +82,7 @@ interface PatchList {
 
 /** Every patch of the bundle file, with the `!!js` scalars as expression nodes. */
 function patches(): PatchOptions[] {
-  return yaml.load(readFileSync(PATCH, 'utf8'), { schema: entryListSchema }) as PatchOptions[]
+  return parseEntryYaml(readFileSync(PATCH, 'utf8')) as PatchOptions[]
 }
 
 /** The rows the patch inserts, in declaration order. */

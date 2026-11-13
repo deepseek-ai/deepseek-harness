@@ -15,7 +15,7 @@ description: "Python PTC 组合需要沙箱服务，且直接 Python 文件操�
 
 ## 迁移
 
-1. 在选择 Python 运行时的 `cordis.yml` 或 profile patch 中，保留已有共享沙箱服务。若尚未提供，挂载 `@deepseek-ai/dsh-sandbox-local` 和 `@deepseek-ai/dsh-sandbox-policy`，以及后者所需的 `@deepseek-ai/dsh-session-projection` 服务。参见 [Python 运行时要求](../../../../packages/experimental/ptc-runtime-python/README.zh.md#use-this-package)。
+1. 在选择 Python 运行时的 `cordis.yml` 或 profile patch 中，保留已有共享沙箱服务。若尚未提供，挂载 `@deepseek-ai/dsh-sandbox-local` 和 `@deepseek-ai/dsh-sandbox-policy`，以及后者所需的 `@deepseek-ai/dsh-session-projection` 服务。参见 Python 运行时要求（[English](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.1-alpha.2/packages/experimental/ptc-runtime-python/README.md#use-this-package), [中文](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.1-alpha.2/packages/experimental/ptc-runtime-python/README.zh.md#use-this-package)）。
 2. 为无 Agent 调用设置共享 `sandbox-policy` 行的 `mode` 和 `workspaceRoot`。默认模式是 `read-only`；`workspace-write` 允许工作区写入。PTC 工具调用使用 Session 的已解析策略和目录。不要新增 Python 专用沙箱设置。
 3. 直接服务调用方使用 `runtime.run(runtime.resolve(request))`；仅在需要显式覆盖时传入可信 `sandboxPolicy`。面向模型的 `run_code` 通过现有审批流程为一次调用扩大权限，不改变嵌套工具的权限，也不自动重放程序。
 4. 验证程序在 `workspace-write` 下可以写入预期工作区、写入工作区外时失败，并返回 `result.sandbox.mode` 和 `result.sandbox.enforcement`。在 `read-only` 下，直接文件写入失败。将 `sandbox-unavailable` 与文件操作被拒绝区分处理，修复本地沙箱安装后再重试。

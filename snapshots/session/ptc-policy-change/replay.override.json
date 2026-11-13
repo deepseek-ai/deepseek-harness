@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_check",
         "name": "run_code",
-        "argumentsDelta": "{\"description\":\"Verify the new file policy denies writes\",\"code\":\"const fileSystem = await import(\\\"node:fs/promises\\\"); let denied = false; try { await fileSystem.writeFile(\\\"denied.txt\\\", \\\"unexpected\\\") } catch (error) { denied = [\\\"EPERM\\\", \\\"EACCES\\\", \\\"EROFS\\\"].includes(error.code) }; console.log(JSON.stringify({ denied }));\"}"
+        "argumentsDelta": "{\"description\":\"Verify the new file policy denies writes\",\"code\":\"const fileSystem = await import(\\\"node:fs/promises\\\"); let denied = false; try { await fileSystem.writeFile(\\\"denied.txt\\\", \\\"unexpected\\\") } catch (error) { denied = [\\\"EPERM\\\", \\\"EACCES\\\", \\\"EROFS\\\"].includes(error.code) }; inspect(JSON.stringify({ denied }));\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_check",
           "name": "run_code",
-          "arguments": "{\"description\":\"Verify the new file policy denies writes\",\"code\":\"const fileSystem = await import(\\\"node:fs/promises\\\"); let denied = false; try { await fileSystem.writeFile(\\\"denied.txt\\\", \\\"unexpected\\\") } catch (error) { denied = [\\\"EPERM\\\", \\\"EACCES\\\", \\\"EROFS\\\"].includes(error.code) }; console.log(JSON.stringify({ denied }));\"}"
+          "arguments": "{\"description\":\"Verify the new file policy denies writes\",\"code\":\"const fileSystem = await import(\\\"node:fs/promises\\\"); let denied = false; try { await fileSystem.writeFile(\\\"denied.txt\\\", \\\"unexpected\\\") } catch (error) { denied = [\\\"EPERM\\\", \\\"EACCES\\\", \\\"EROFS\\\"].includes(error.code) }; inspect(JSON.stringify({ denied }));\"}"
         }
       },
       {

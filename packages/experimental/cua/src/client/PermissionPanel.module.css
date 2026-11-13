@@ -1,5 +1,6 @@
 .panels { display: grid; gap: 32px; margin: 0; font-size: 13px; }
 .panel { display: grid; gap: 12px; min-width: 0; }
+.guidance { display: grid; gap: 8px; overflow-wrap: anywhere; }
 .card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
 .card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
@@ -33,16 +34,23 @@
 }
 .applicationBadge img { flex-shrink: 0; object-fit: contain; }
 .applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
+.skeletonCopy strong, .skeletonCopy .applicationBadge {
+  color: transparent;
+  background: var(--dsw-alias-bg-skeleton);
+  border-radius: var(--dsw-radius-xs);
+}
+.skeletonCopy p { color: transparent; }
+.appPlaceholder { width: 160px; height: 1.6em; }
+.pendingHint { visibility: hidden; }
 .permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
 .permissionAction[data-configured]:disabled { opacity: 1; color: var(--dsw-alias-label-primary); cursor: default; }
-.buttonPlaceholder, .appPlaceholder, .appsPlaceholder {
+.buttonPlaceholder, .appsPlaceholder {
   display: inline-block;
   max-width: 100%;
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-skeleton);
 }
 .buttonPlaceholder { height: 28px; }
-.appPlaceholder { width: 160px; height: 1.6em; }
 .appsPlaceholder { display: block; color: transparent; }
 
 .iconPlaceholder { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }

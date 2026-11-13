@@ -27,7 +27,7 @@ Render Office documents as PDFs or PNG images, convert them between formats, and
 
 The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bundle/sdk-app/README.md) mount this provider as `office-kit`; the [Office tools](../tool-office/README.md) are its model-facing consumers. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
 
-Callers submit authorized source identity, version, optional byte size, a deferred bounded read, and input extension; PDF conversions also name a scheduling priority, and image rendering, format conversion, and recalculation run at foreground priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`. Every result carries the missing fonts; PDF results also carry the conversion generation, which changes on configuration replacement.
+Callers submit authorized source identity, version, optional byte size, a deferred bounded read, and input extension; PDF conversions also name a scheduling priority, and image rendering, format conversion, and recalculation run at foreground priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`, whose lowercase `code` is also the `document-render/failed` reason; [`dsh-tool-office`](../tool-office/README.md#use-this-package) maps it to `OfficeToolError` codes for tool results. Every result carries the missing fonts; PDF results also carry the conversion generation, which changes on configuration replacement.
 
 | Method | Operation | Result |
 |---|---|---|

@@ -3,7 +3,7 @@
   - navigation:
     - button "通用设置"
     - button "模型"
-    - button "内置插件"
+    - button "插件管理"
     - button "Agent 预设"
   - button "打开配置文件"
   - button "关闭"
@@ -36,6 +36,7 @@
           - option "OpenAI Chat Completions" [selected]
           - option "OpenAI Responses"
           - option "Anthropic Messages"
+          - option "Gemini API"
         - group "重试策略":
           - text: 重试策略
           - combobox "重试策略":

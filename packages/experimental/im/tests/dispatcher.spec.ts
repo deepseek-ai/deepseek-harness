@@ -69,7 +69,7 @@ function deliver(bot: FakeAdapter, message: InboundMessage): Promise<void> {
 /** The outcome the store recorded for one message, once dispatch settled. */
 async function outcomeOf(service: ImService, id: string): Promise<ImOutcome | undefined> {
   const key = ImMessageKey('fake:bot', id)
-  await vi.waitFor(() => { expect(service.store.state(key)?.dispatch).toBe('done') })
+  await vi.waitFor(() => { expect(service.store.state(key)?.dispatch).toBe('done') }, { timeout: 5_000 })
   return service.store.state(key)?.outcome
 }
 

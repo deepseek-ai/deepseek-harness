@@ -17,7 +17,8 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/viewer-access-policy
  */
 
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   RemoteAccessAction,
   RemoteAccessBinding,
@@ -65,11 +66,12 @@ export interface ViewerAccessFacts {
    */
   readonly viewerAdmitted: (shareId: string, actor: ShareRpcActor) => boolean
   /**
-   * Whether the share's source Session carries a usable confined access layer.
+   * Whether one source Session of the share carries a usable confined access layer.
    * @param shareId - Share whose source Session is asked about.
+   * @param sessionId - Source Session asked about.
    * @returns True only while the layer is installed and confined.
    */
-  readonly sourceConfined: (shareId: string) => boolean
+  readonly sourceConfined: (shareId: string, sessionId: string) => boolean
   /** Forks this host created, and the per-child prompt decision. */
   readonly forks: Pick<ForkRegistry, 'find' | 'listForShare' | 'allowsPrompt'>
   /**
@@ -405,8 +407,8 @@ export function readerWriteRefusal(
   const serving = servingShare(facts, viewer.shareId, viewer.actor)
   if ('refusal' in serving) return serving.refusal
   const mode = drivableMode(serving.share)
-  if (sessionId === serving.share.sessionId) {
-    return sourceWriteRefusal(mode, facts.sourceConfined(viewer.shareId))
+  if (serving.share.sessionIds.includes(sessionId)) {
+    return sourceWriteRefusal(mode, facts.sourceConfined(viewer.shareId, sessionId))
   }
   const child = ownFork(facts, viewer, sessionId)
   if (child === undefined) return foreignWriteRefusal(facts, viewer, sessionId)
@@ -428,7 +430,7 @@ function explainReaderRefusal(facts: ViewerAccessFacts, request: RemoteAccessReq
   const serving = servingShare(facts, viewer.shareId, viewer.actor)
   if ('refusal' in serving) return serving.refusal
   for (const resource of request.resources) {
-    if (resource.kind !== 'session' || resource.id === serving.share.sessionId) continue
+    if (resource.kind !== 'session' || serving.share.sessionIds.includes(resource.id)) continue
     if (request.action === 'session/fork') return 'source-session-mismatch'
     if (request.action === 'session/prompt' || request.action === 'session/cancel') {
       return foreignWriteRefusal(facts, viewer, resource.id)
@@ -449,29 +451,33 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
       if ('refusal' in serving) return []
       const { share } = serving
       const mode = drivableMode(share)
-      const source = SessionId(share.sessionId)
+      const sources = share.sessionIds.map(id => brandString<SessionId>(id))
       // Revoked forks stay bound for reading, so the reader's snapshot states them as read-only.
       const children = facts.forks.listForShare(viewer.shareId)
         .filter(child => identityKeyOf(child.creator) === identityKeyOf(viewer.actor))
-      const visible = new Set<string>([share.sessionId, ...children.map(child => child.childSessionId)])
+      const visible = new Set<string>([...share.sessionIds, ...children.map(child => child.childSessionId)])
       /** Workspaces holding a Session the reader can see; only those may carry a declaration. */
       const memberWorkspaces: Workspace['id'][] = []
       const bindings: RemoteAccessBinding[] = [
         { role: VIEWER_GLOBAL_ROLE, resource: { kind: 'global' } },
-        { role: VIEWER_SESSION_READ_ROLE, resource: { kind: 'session', id: source } },
-        {
-          role: VIEWER_FORK_ROLE,
-          resource: { kind: 'session', id: source },
-          condition: () => answer(share.allowsFork ? undefined : 'fork-not-permitted'),
-        },
-        {
-          role: VIEWER_SOURCE_WRITE_ROLE,
-          resource: { kind: 'session', id: source },
-          condition: () => answer(sourceWriteRefusal(mode, facts.sourceConfined(viewer.shareId))),
-        },
       ]
+      for (const source of sources) {
+        bindings.push(
+          { role: VIEWER_SESSION_READ_ROLE, resource: { kind: 'session', id: source } },
+          {
+            role: VIEWER_FORK_ROLE,
+            resource: { kind: 'session', id: source },
+            condition: () => answer(share.allowsFork ? undefined : 'fork-not-permitted'),
+          },
+          {
+            role: VIEWER_SOURCE_WRITE_ROLE,
+            resource: { kind: 'session', id: source },
+            condition: () => answer(sourceWriteRefusal(mode, facts.sourceConfined(viewer.shareId, source))),
+          },
+        )
+      }
       for (const child of children) {
-        const id = SessionId(child.childSessionId)
+        const id = brandString<SessionId>(child.childSessionId)
         bindings.push(
           { role: VIEWER_SESSION_READ_ROLE, resource: { kind: 'session', id } },
           {
@@ -512,7 +518,7 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
         bindings.push(
           { role: declarationRole('liveshare:viewer-method-global', 'global', exposed), resource: { kind: 'global' } },
         )
-        for (const id of [source, ...children.map(child => SessionId(child.childSessionId))]) {
+        for (const id of [...sources, ...children.map(child => brandString<SessionId>(child.childSessionId))]) {
           bindings.push({ role: declarationRole('liveshare:viewer-method-session', 'session', exposed),
             resource: { kind: 'session', id } })
         }
