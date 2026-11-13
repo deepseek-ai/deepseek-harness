@@ -479,7 +479,7 @@ async function boot(): Promise<Host> {
 }
 
 async function exchange(host: Host, mode: 'html' | 'none' | 'answer'): Promise<string> {
-  const auth = await BrowserAuth.create(host.ctx.root, host.ctx.credentials, 30)
+  const auth = await BrowserAuth.create(host.ctx[Context.root], host.ctx.credentials, 30)
   const target = new URL(auth.authenticatedUrl(`${host.origin}${mode === 'html' ? '/' : '/connect'}`))
   if (mode !== 'html') target.searchParams.set('interactions', mode)
   const response = await fetch(target, { redirect: 'manual', headers: { accept: mode === 'html' ? 'text/html' : 'application/json' } })
