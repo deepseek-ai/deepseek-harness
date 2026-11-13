@@ -33,8 +33,19 @@
     "INSTALLER_EXTRACT_SAVED": "El informe completo se guardó en %s.",
     "INSTALLER_EXTRACT_UNSAVED": "No se pudo guardar el informe completo. Utilice Copiar detalles del error para conservarlo.",
     "INSTALLER_EXTRACT_COPIED": "Los detalles del error se copiaron al portapapeles.",
-    "INSTALLER_UNINSTALL_OWNER": "Este desinstalador pertenece a otra instalación. Use Aplicaciones instaladas para desinstalar la instalación actual.",
-    "INSTALLER_UNINSTALL_REGISTRATION": "No se pudo eliminar el registro de comandos o enlaces de Windows. Se conservaron los archivos de la aplicación. Cierre los otros instaladores e inténtelo de nuevo."
+    "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness está instalado en varias ubicaciones",
+    "INSTALLER_UNINSTALL_REGISTRATION": "No se pudieron limpiar algunos elementos. Guarda el informe para ver los detalles.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Ubicación de instalación registrada:",
+    "INSTALLER_UNINSTALL_DIRECTORY": "Ubicación del desinstalador:",
+    "INSTALLER_UNINSTALL_SCOPE": "Al continuar, solo se limpiará",
+    "INSTALLER_UNINSTALL_CONTINUE": "Continuar limpiando el directorio de desinstalación",
+    "INSTALLER_UNINSTALL_SAVE": "Guardar informe de limpieza…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "No se pudo guardar el informe. Elige otra ubicación.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "La desinstalación no se completó",
+    "INSTALLER_UNINSTALL_UNSAFE": "No se pudo verificar el alcance de la eliminación. No se inició la eliminación.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "Una operación de limpieza no devolvió un resultado completo. Se detuvo la limpieza posterior.",
+    "INSTALLER_UNINSTALL_BLOCKED": "No se pudo eliminar este archivo. Cierra los programas que puedan estar usándolo, comprueba los permisos y vuelve a intentarlo.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Desinstalación completada"
   },
   "uninstaller": {
     "welcome": "Bienvenido",

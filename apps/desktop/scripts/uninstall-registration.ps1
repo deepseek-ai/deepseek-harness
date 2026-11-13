@@ -1,18 +1,30 @@
-<# Remove only this installation's user registrations. Fail before payload deletion on an unknown outcome. #>
+﻿<# Remove only owned registrations; independently failed operations leave a diagnostic report. #>
 param([Parameter(Mandatory)][string]$Directory,
     [string]$ExecutableName = 'DeepSeek Harness.exe',
     [string]$EnvironmentKey = 'Environment',
     [string]$OwnerKey = 'Software\DeepSeekHarness\Command',
-    [string]$ProtocolKey = 'Software\Classes\dsh')
+    [string]$ProtocolKey = 'Software\Classes\dsh',
+    [Parameter(Mandatory)][string]$ReportPath,
+    [string]$MutexName)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'command-path.ps1')
+$failures = [Collections.Generic.List[string]]::new()
 try {
-    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $options = @{ EnvironmentKey=$EnvironmentKey; OwnerKey=$OwnerKey; MachinePath=''; MutexName=('Global\DeepSeekHarness.Command.' + $sid) }
+    if (-not $MutexName -or $MutexName -eq 'default') {
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $MutexName = 'Global\DeepSeekHarness.Command.' + $sid
+    }
+    $options = @{ EnvironmentKey=$EnvironmentKey; OwnerKey=$OwnerKey; MachinePath=''; MutexName=$MutexName }
     $command = Join-Path $Directory 'resources\runtime\cli\bin'
     $state = Invoke-DshCommandPath -Request @{operation='inspect'; directory=$command} @options
-    [void](Invoke-DshCommandPath -Request @{operation='remove'; directory=$command; expected=$state.fingerprint} @options)
-    Send-DshCommandEnvironmentChange
+    if ($state.managed) {
+        [void](Invoke-DshCommandPath -Request @{operation='remove'; directory=$command; expected=$state.fingerprint} @options)
+        Send-DshCommandEnvironmentChange
+    }
+} catch {
+    $failures.Add("[unverified] Remove owned command registration`r`nHKCU\$EnvironmentKey [Path]`r`nHKCU\$OwnerKey`r`nCode: $($_.Exception.HResult)`r`nReason: $($_.Exception.Message)")
+}
+try {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($ProtocolKey + '\shell\open\command')
     try { $registered = if ($key) { $key.GetValue('') } else { $null } }
     finally { if ($key) { $key.Dispose() } }
@@ -21,6 +33,9 @@ try {
         [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($ProtocolKey, $false)
     }
 } catch {
-    [Console]::Error.WriteLine($_.Exception.Message)
+    $failures.Add("[unverified] Remove protocol registration`r`nHKCU\$ProtocolKey`r`nCode: $($_.Exception.HResult)`r`nReason: $($_.Exception.Message)")
+}
+if ($failures.Count) {
+    [IO.File]::WriteAllText($ReportPath, ($failures -join "`r`n`r`n"), [Text.UTF8Encoding]::new($true))
     exit 1
 }

@@ -5,6 +5,12 @@
 #include <vector>
 
 namespace uninstall_data {
+struct Failure { std::wstring path; DWORD error; };
+using Failures = std::vector<Failure>;
+inline DWORD Record(Failures* failures, const std::wstring& path, DWORD error) {
+    if (error && failures) failures->push_back({path, error});
+    return error;
+}
 struct Handles {
     std::vector<HANDLE> values;
     Handles() = default;
@@ -61,42 +67,42 @@ inline DWORD Unlink(const std::wstring& extended, DWORD attributes) {
 }
 
 // Every sibling is attempted; the first error is returned after the whole tree has been visited.
-inline DWORD RemoveTree(const std::wstring& path) {
+inline DWORD RemoveTree(const std::wstring& path, Failures* failures = nullptr) {
     const std::wstring extended = L"\\\\?\\" + path;
     DWORD attributes = GetFileAttributesW(extended.c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES) {
         DWORD error = GetLastError();
-        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? ERROR_SUCCESS : error;
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? ERROR_SUCCESS : Record(failures, path, error);
     }
     DWORD first = ERROR_SUCCESS;
     if ((attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
         Handles pinned;
         DWORD error = Pin(path, pinned);
-        if (error) return error;
+        if (error) return Record(failures, path, error);
         WIN32_FIND_DATAW entry{};
         HANDLE search = FindFirstFileW((extended + L"\\*").c_str(), &entry);
         if (search == INVALID_HANDLE_VALUE) {
             error = GetLastError();
-            if (error != ERROR_FILE_NOT_FOUND) return error;
+            if (error != ERROR_FILE_NOT_FOUND) return Record(failures, path, error);
         } else {
             do {
                 if (wcscmp(entry.cFileName, L".") == 0 || wcscmp(entry.cFileName, L"..") == 0) continue;
-                error = RemoveTree(path + L"\\" + entry.cFileName);
+                error = RemoveTree(path + L"\\" + entry.cFileName, failures);
                 if (error && !first) first = error;
             } while (FindNextFileW(search, &entry));
             error = GetLastError();
             FindClose(search);
-            if (error != ERROR_NO_MORE_FILES && !first) first = error;
+            if (error != ERROR_NO_MORE_FILES && !first) first = Record(failures, path, error);
         }
     }
-    DWORD error = Unlink(extended, attributes);
+    DWORD error = Record(failures, path, Unlink(extended, attributes));
     return first ? first : error;
 }
 
 // Never select a shell folder, its ancestor, Windows/Program Files descendants,
 // a path overlapping the installation, or a path overlapping the protected root
 // (the configured Harness home). Linked descendants are unlinked only.
-inline DWORD Remove(LPCWSTR input, LPCWSTR installation, LPCWSTR protectedRoot) {
+inline DWORD Remove(LPCWSTR input, LPCWSTR installation, LPCWSTR protectedRoot, Failures* failures = nullptr) {
     std::wstring path, install;
     if (!Normalize(input, path) || !Normalize(installation, install)) return ERROR_INVALID_NAME;
     if (Contains(path, install) || Contains(install, path)) return ERROR_ACCESS_DENIED;
@@ -146,7 +152,7 @@ inline DWORD Remove(LPCWSTR input, LPCWSTR installation, LPCWSTR protectedRoot) 
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return ERROR_SUCCESS;
         if (error) return error;
     }
-    return RemoveTree(path);
+    return RemoveTree(path, failures);
 }
 
 // Remove the ordinary, empty directories between a removed path and its stop ancestor.

@@ -6,6 +6,11 @@
 #include <cassert>
 #include "../installer/uninstall-data.h"
 
+extern "C" __declspec(dllimport) void* __cdecl UninstallBegin(LPCWSTR);
+extern "C" __declspec(dllimport) DWORD __cdecl UninstallPrepare(void*, LPCWSTR, LPCWSTR);
+extern "C" __declspec(dllimport) DWORD __cdecl UninstallPayload(void*, LPCWSTR, LPCWSTR, LPCWSTR);
+extern "C" __declspec(dllimport) int __cdecl UninstallFinish(void*, LPCWSTR, LPCWSTR);
+
 static void File(const std::wstring& path, DWORD attributes = FILE_ATTRIBUTE_NORMAL) {
     HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, attributes, nullptr);
     assert(file != INVALID_HANDLE_VALUE);
@@ -86,6 +91,38 @@ int wmain(int argc, wchar_t** argv) {
     // A protected root elsewhere does not block removal.
     assert(uninstall_data::Remove(data.c_str(), installation.c_str(), (root + L"\\elsewhere").c_str()) == ERROR_SUCCESS);
     assert(!Exists(data));
+    // Exercise the shipped helper: a busy executable keeps the retry entry; auxiliary residue is reportable.
+    const std::wstring report = root + L"\\report.txt";
+    void* session = UninstallBegin(report.c_str());
+    assert(session);
+    assert(UninstallPrepare(session, installation.c_str(), nullptr) == ERROR_SUCCESS);
+    File(installation + L"\\app.exe");
+    File(installation + L"\\uninstall.exe");
+    File(installation + L"\\aux.log");
+    HANDLE mainFile = CreateFileW((installation + L"\\app.exe").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(mainFile != INVALID_HANDLE_VALUE);
+    assert(UninstallPayload(session, installation.c_str(), L"app.exe", L"uninstall.exe") == 1);
+    assert(Exists(installation + L"\\uninstall.exe"));
+    assert(Exists(installation + L"\\aux.log"));
+    CloseHandle(mainFile);
+    HANDLE auxiliary = CreateFileW((installation + L"\\aux.log").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(auxiliary != INVALID_HANDLE_VALUE);
+    assert(UninstallPayload(session, installation.c_str(), L"app.exe", L"uninstall.exe") == 0);
+    assert(!Exists(installation + L"\\app.exe"));
+    assert(UninstallFinish(session, installation.c_str(), L"uninstall.exe") == 1);
+    assert(!Exists(installation + L"\\uninstall.exe"));
+    assert(Exists(installation + L"\\aux.log"));
+    HANDLE reportFile = CreateFileW(report.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(reportFile != INVALID_HANDLE_VALUE);
+    char contents[16384]{};
+    DWORD length;
+    assert(ReadFile(reportFile, contents, sizeof(contents) - 1, &length, nullptr));
+    CloseHandle(reportFile);
+    assert(strstr(contents, "aux.log"));
+    assert(strstr(contents, "32"));
+    CloseHandle(auxiliary);
+    assert(DeleteFileW((installation + L"\\aux.log").c_str()));
+    assert(DeleteFileW(report.c_str()));
     assert(RemoveDirectoryW(installation.c_str()));
     assert(RemoveDirectoryW(root.c_str()));
 }

@@ -1,4 +1,4 @@
-param([string]$Worker, [string]$Root)
+﻿param([string]$Worker, [string]$Root)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 . $Worker
@@ -103,7 +103,7 @@ try {
     $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
     try { $key.SetValue('', $foreignCommand) } finally { $key.Dispose() }
     $helper = Join-Path (Split-Path $Worker) 'uninstall-registration.ps1'
-    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath (Join-Path $Root 'uninstall-report.txt') -MutexName $options.MutexName
     Require ($LASTEXITCODE -eq 0) 'foreign integration cleanup failed'
     Require ((State $other).managed) 'uninstall removed foreign command ownership'
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command')
@@ -111,7 +111,7 @@ try {
     [void](Apply 'install' $bin)
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command', $true)
     try { $key.SetValue('', '"' + (Join-Path $app 'DeepSeek Harness.exe') + '" "%1"') } finally { $key.Dispose() }
-    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath (Join-Path $Root 'uninstall-report.txt') -MutexName $options.MutexName
     Require ($LASTEXITCODE -eq 0) 'owned integration cleanup failed'
     Require (-not (State $bin).managed) 'uninstall retained command ownership'
     Require (-not (Test-Path -LiteralPath ('HKCU:\' + $protocolKey))) 'uninstall retained protocol'

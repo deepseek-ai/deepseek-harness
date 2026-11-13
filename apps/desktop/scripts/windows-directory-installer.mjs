@@ -85,7 +85,7 @@ export function installWindowsDirectoryInstaller() {
 }
 
 /**
- * Retain the original uninstall directory, reject another installation owner, and use native data cleanup.
+ * Retain the original uninstall directory and bypass shared cleanup for directory-only removal.
  * @param {string} source - Pinned upstream uninstaller source.
  * @returns {string} Uninstaller with long-path application removal and no upstream RMDir data removal.
  */
@@ -94,18 +94,29 @@ export function directoryUninstaller(source) {
   normalized = replaceOnce(normalized, 'Function un.onInit\n', 'Var dshUninstallDirectory\nFunction un.onInit\n  StrCpy $dshUninstallDirectory $INSTDIR\n')
   normalized = replaceOnce(normalized, '  !insertmacro initMultiUser', `  !insertmacro initMultiUser
   StrCpy $INSTDIR $dshUninstallDirectory
-  ReadRegStr $R0 SHELL_CONTEXT "\${INSTALL_REGISTRY_KEY}" InstallLocation
-  \${If} $R0 != ""
+  \${If} \${isUpdated}
+    ReadRegStr $R0 SHELL_CONTEXT "\${INSTALL_REGISTRY_KEY}" InstallLocation
     GetFullPathName $R0 "$R0\\."
     GetFullPathName $R1 "$INSTDIR\\."
     \${If} $R0 != $R1
-      MessageBox MB_OK|MB_ICONSTOP "$(INSTALLER_UNINSTALL_OWNER)" /SD IDOK
       SetErrorLevel 2
       Quit
     \${EndIf}
   \${EndIf}`)
+  const payloadStart = normalized.indexOf('  # delete the installed files\n')
+  const payloadEnd = normalized.indexOf('  ${ifNot} ${isKeepShortcuts}', payloadStart)
+  if (payloadStart < 0 || payloadEnd < 0) throw new Error('NSIS uninstaller payload template changed')
+  normalized = normalized.slice(0, payloadStart) + '  ${If} ${isUpdated}\n'
+    + normalized.slice(payloadStart, payloadEnd) + '  ${EndIf}\n'
+    + '  ${If} $UnDirectoryOnly == 1\n    Goto dshUninstallFinished\n  ${EndIf}\n'
+    + normalized.slice(payloadEnd)
+  normalized = replaceOnce(normalized, '  !ifdef ONE_CLICK\n    !insertmacro quitSuccess',
+    'dshUninstallFinished:\n  Call un.FinishCleanup\n  !ifdef ONE_CLICK\n    !insertmacro quitSuccess')
   const start = normalized.indexOf('  Var /GLOBAL isDeleteAppData\n')
   const end = normalized.indexOf('  DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"', start)
   if (start < 0 || end < 0) throw new Error('NSIS uninstaller data removal template changed')
-  return replaceOnce(normalized.slice(0, start) + normalized.slice(end), 'RMDir /r $INSTDIR', 'RMDir /r "\\\\?\\$INSTDIR"')
+  normalized = normalized.slice(0, start) + normalized.slice(end)
+  normalized = normalized.replaceAll(/^(\s*)(DeleteRegKey SHELL_CONTEXT "[^"]+"|Delete "\$old(?:Desktop|StartMenu)Link")$/gm, (_, indent, operation) =>
+    `${indent}ClearErrors\n${indent}${operation}\n${indent}\${If} \${Errors}\n${indent}  \${IfNot} \${isUpdated}\n${indent}    System::Call '$PLUGINSDIR\\window-frame.dll::UninstallNote(p $UnSession, w "[unverified] ${operation.replaceAll('"', '')}") ?c'\n${indent}  \${EndIf}\n${indent}\${EndIf}`)
+  return replaceOnce(normalized, 'RMDir /r $INSTDIR', 'RMDir /r "\\\\?\\$INSTDIR"')
 }

@@ -6,6 +6,10 @@
     "replaced",
     "home-inside",
     "registration-error",
-    "self-copy"
+    "main-locked",
+    "self-copy",
+    "auxiliary-locked",
+    "unsafe-root",
+    "save-report"
   ]
 }

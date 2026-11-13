@@ -131,7 +131,7 @@ SectionEnd
     const strings = join(languageOutput, 'strings.nsh')
     await writeFile(strings, renderInstallerStrings([locale]), 'utf8')
     const include = join(languageOutput, 'include.nsh')
-    await writeFile(include, `!define DSH_COMMAND_ENVIRONMENT_KEY "Software\\DSHUninstallTests\\${guid}\\CommandEnvironment"\n!define DSH_COMMAND_OWNER_KEY "Software\\DSHUninstallTests\\${guid}\\CommandOwner"\n!define DSH_PROTOCOL_KEY "Software\\Classes\\dsh-test-${guid}"\n!define INSTALLER_BUILD_DIR "${join(output, 'ui')}"\n!define INSTALLER_STRINGS_FILE "${strings}"\n!include "${join(appRoot, 'scripts', 'installer.nsh')}"\n`)
+    await writeFile(include, `!define DSH_COMMAND_MUTEX "Local\\DSHUninstallTests-${guid}"\n!define DSH_COMMAND_ENVIRONMENT_KEY "Software\\DSHUninstallTests\\${guid}\\CommandEnvironment"\n!define DSH_COMMAND_OWNER_KEY "Software\\DSHUninstallTests\\${guid}\\CommandOwner"\n!define DSH_PROTOCOL_KEY "Software\\Classes\\dsh-test-${guid}"\n!define INSTALLER_BUILD_DIR "${join(output, 'ui')}"\n!define INSTALLER_STRINGS_FILE "${strings}"\n!include "${join(appRoot, 'scripts', 'installer.nsh')}"\n`)
     await build({ projectDir: appRoot, prepackaged: payload, targets: Platform.WINDOWS.createTarget(['nsis'], Arch.x64), publish: 'never',
       config: { ...config, productName, extraMetadata: { ...config.extraMetadata, name: packageName },
         artifactName: 'installer-test.exe', directories: { output: languageOutput },

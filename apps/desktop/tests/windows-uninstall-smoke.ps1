@@ -1,4 +1,4 @@
-<# Production uninstaller checks with isolated application identity and seeded data. #>
+﻿<# Production uninstaller checks with isolated application identity and seeded data. #>
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$Installer, [Parameter(Mandatory)][string]$ProductName,
     [Parameter(Mandatory)][string]$RegistryKey, [Parameter(Mandatory)][string]$OutputDirectory,
@@ -24,6 +24,8 @@ $environmentKey = "Software\DSHUninstallTests\$RegistryKey\CommandEnvironment"
 $ownerKey = "Software\DSHUninstallTests\$RegistryKey\CommandOwner"
 $protocolKey = "Software\Classes\dsh-test-$RegistryKey"
 $process = $null
+$held = $null
+$strings = (Get-Content (Join-Path $PSScriptRoot "../installer/locales/$Language.json") -Encoding UTF8 -Raw | ConvertFrom-Json).strings
 function Wait-Text([string]$Text) {
     $timer = [Diagnostics.Stopwatch]::StartNew()
     do {
@@ -74,7 +76,7 @@ try {
         try { $key.SetValue('', '"' + (Join-Path $installPath ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
         $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'home-inside', 'registration-error')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
         if ($mode -eq 'upgrade') {
             Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')
@@ -85,28 +87,93 @@ try {
             $arguments = '/S /KEEP_APP_DATA'
         }
         if ($mode -eq 'home-inside') { $env:DSH_HOME = Join-Path $userDataPath 'home' } else { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue }
-        if ($mode -eq 'registration-error') {
+        if ($mode -in @('registration-error', 'save-report')) {
             $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
             try { $key.SetValue('Path', 42, [Microsoft.Win32.RegistryValueKind]::DWord) } finally { $key.Dispose() }
         }
-        $process = Start-Process -FilePath $launchUninstaller -ArgumentList $arguments -PassThru -WindowStyle ($(if ($mode -eq 'interactive') { 'Normal' } else { 'Hidden' }))
-        if ($mode -eq 'interactive') {
+        if ($mode -eq 'auxiliary-locked') {
+            $residual = Join-Path $installPath 'held-log.txt'
+            [IO.File]::WriteAllText($residual, 'held auxiliary data')
+            $held = [IO.File]::Open($residual, 'Open', 'Read', 'Read')
+        }
+        if ($mode -eq 'unsafe-root') {
+            $linked = Join-Path $OutputDirectory 'Linked Install'
+            New-Item -ItemType Junction -Path $linked -Target $externalPath | Out-Null
+            $process = Start-Process -FilePath $launchUninstaller -ArgumentList ('/S _?=' + $linked) -PassThru -WindowStyle Hidden
+            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Linked root was not rejected' }
+            if (-not (Test-Path -LiteralPath (Join-Path $externalPath 'keep.txt'))) { throw 'Unsafe root deleted external files' }
+            $report = Get-Content (Join-Path $env:TEMP ('DeepSeek-Harness-uninstall-' + $process.Id + '.txt')) -Raw
+            if (-not $report.Contains('no deletion started')) { throw 'Unsafe scope missing from report' }
+            $process.Dispose(); $process = $null
+            [IO.Directory]::Delete($linked)
+        }
+        if ($mode -eq 'main-locked') {
+            $held = [IO.File]::Open((Join-Path $installPath ($ProductName + '.exe')), 'Open', 'Read', 'Read')
+        }
+        $process = Start-Process -FilePath $launchUninstaller -ArgumentList $arguments -PassThru -WindowStyle ($(if ($mode -in @('interactive','save-report')) { 'Normal' } else { 'Hidden' }))
+        if ($mode -in @('interactive','save-report')) {
             $welcomeText = $copy.welcome
             $welcome = Wait-Text $welcomeText
             $window = [InstallerCapture]::TopLevel($welcome)
             [void][InstallerCapture]::SaveNative($window, (Join-Path $OutputDirectory 'uninstall-welcome.png'), $false)
             [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
+            if ($mode -eq 'save-report') {
+                $save = Wait-Text $strings.INSTALLER_UNINSTALL_SAVE
+                $dialog = [InstallerCapture]::TopLevel($save)
+                [void][InstallerCapture]::SaveNative($dialog, (Join-Path $OutputDirectory 'uninstall-residual.png'), $false)
+                [InstallerCapture]::Click($save)
+                $timer = [Diagnostics.Stopwatch]::StartNew()
+                do {
+                    $picker = [InstallerCapture]::FindWindowTitle($process.Id, $strings.INSTALLER_UNINSTALL_SAVE)
+                    if ($timer.Elapsed.TotalSeconds -gt 20) { throw 'Save file picker did not appear' }
+                    Start-Sleep -Milliseconds 25
+                } while ($picker -eq [IntPtr]::Zero)
+                $filename = [InstallerCapture]::FindClass($picker, 'Edit')
+                if ($filename -eq [IntPtr]::Zero) { throw 'Save filename control missing' }
+                $savedReport = Join-Path $OutputDirectory ('saved-report-' + [Guid]::NewGuid().ToString('N') + '.txt')
+                while ([InstallerCapture]::ControlText($filename) -ne 'DeepSeek-Harness-uninstall-report.txt') {
+                    if ($timer.Elapsed.TotalSeconds -gt 20) { throw 'Save filename initialization did not finish' }
+                    Start-Sleep -Milliseconds 25
+                }
+                [void][InstallerCapture]::SendMessage($filename, 0xC, [IntPtr]::Zero, $savedReport)
+                if ([InstallerCapture]::ControlText($filename) -ne $savedReport) { throw 'Save filename was not set' }
+                [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($picker, 1))
+                $timer = [Diagnostics.Stopwatch]::StartNew()
+                while (-not (Test-Path -LiteralPath $savedReport)) {
+                    if ($timer.Elapsed.TotalSeconds -gt 20) { throw "Save report did not create file: $([InstallerCapture]::VisibleText($process.Id))" }
+                    Start-Sleep -Milliseconds 50
+                }
+                if (-not ([IO.File]::ReadAllText($savedReport).Contains($environmentKey))) { throw 'Saved report omitted registry key' }
+                $save = Wait-Text $strings.INSTALLER_UNINSTALL_SAVE
+                [void][InstallerCapture]::PostMessage([InstallerCapture]::TopLevel($save), 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+            }
             $finishedText = $copy.finished
             [void](Wait-Text $finishedText)
             [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
         }
-        if ($mode -eq 'registration-error') {
-            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Registration failure did not stop uninstall' }
+        if ($mode -eq 'main-locked') {
+            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Locked main executable did not stop uninstall' }
+            $report = Get-Content (Join-Path $env:TEMP ("DeepSeek-Harness-uninstall-" + $process.Id + '.txt')) -Raw
+            if (-not $report.Contains($ProductName + '.exe') -or -not $report.Contains('32')) { throw 'Locked executable missing from report' }
+            if (-not (Test-Path -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')))) { throw 'Retry uninstaller was removed' }
+            if (-not (Test-Path -LiteralPath ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey))) { throw 'Retry uninstall entry was removed' }
+            $held.Dispose(); $held = $null
             $process.Dispose(); $process = $null
-            if (-not (Test-Path -LiteralPath (Join-Path $installPath ($ProductName + '.exe')))) { throw 'Failed registration cleanup deleted application' }
-            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
-            try { $key.SetValue('Path', $commandDirectory + ';C:\Windows', [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
             $process = Start-Process -FilePath $launchUninstaller -ArgumentList $arguments -PassThru -WindowStyle Hidden
+        }
+        if ($mode -eq 'registration-error') {
+            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 0) { throw 'Registration failure blocked uninstall' }
+            $report = Get-Content (Join-Path $env:TEMP ("DeepSeek-Harness-uninstall-" + $process.Id + '.txt')) -Raw
+            if (-not $report.Contains($environmentKey) -or -not $report.Contains('[Path]')) { throw 'Registry residual missing from report' }
+        }
+        if ($mode -eq 'auxiliary-locked') {
+            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 0) { throw 'Auxiliary failure blocked uninstall' }
+            if (Test-Path -LiteralPath (Join-Path $installPath ($ProductName + '.exe'))) { throw 'Auxiliary failure retained main executable' }
+            $report = Get-Content (Join-Path $env:TEMP ('DeepSeek-Harness-uninstall-' + $process.Id + '.txt')) -Raw
+            if (-not $report.Contains('held-log.txt')) { throw 'Auxiliary file missing from report' }
+            $held.Dispose(); $held = $null
+            Remove-Item -LiteralPath $residual
+            [IO.Directory]::Delete($installPath)
         }
         Wait-Exit
         $retained = $mode -in @('upgrade', 'replaced', 'self-copy')
@@ -118,12 +185,12 @@ try {
         if ((Test-Path (Join-Path $userDataPath 'Local State')) -ne $userDataRetained) { throw "Electron user data retention failed: $mode" }
         if ((Test-Path -LiteralPath $scopePath) -ne $userDataRetained) { throw "Package scope directory retention failed: $mode" }
         if ((Test-Path (Join-Path $cachePath 'download.txt')) -ne $retained) { throw "Update cache retention failed: $mode" }
-        $integrationsRetained = $mode -eq 'upgrade'
+        $integrationsRetained = $mode -in @('upgrade', 'registration-error', 'save-report')
         $owner = Get-ItemProperty -LiteralPath ('HKCU:\' + $ownerKey)
         if ([bool]$owner.Directory -ne $integrationsRetained) { throw "Command ownership cleanup failed: $mode" }
         $path = (Get-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey)).Path
-        if ($path.Contains($commandDirectory) -ne $integrationsRetained -or -not $path.Contains('C:\Windows')) { throw "PATH cleanup failed: $mode" }
-        if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne $integrationsRetained) { throw "Protocol cleanup failed: $mode" }
+        if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $integrationsRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
+        if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
         Write-Output "passed: $mode"
     }
     # Real replacement publishes B after the old A uninstaller has been retained.
@@ -150,12 +217,29 @@ try {
     if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -ne $newCommand) { throw 'Stale uninstaller changed B command owner' }
     if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Stale uninstaller changed B PATH' }
     if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Stale uninstaller changed B protocol' }
+    Copy-Item -LiteralPath $newPath -Destination $installPath -Recurse
+    $process = Start-Process $uninstaller -ArgumentList ('/currentuser _?=' + $installPath) -PassThru
+    $welcome = Wait-Text $copy.welcome
+    $window = [InstallerCapture]::TopLevel($welcome)
+    [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
+    $continue = Wait-Text $strings.INSTALLER_UNINSTALL_CONTINUE
+    [void][InstallerCapture]::SaveNative([InstallerCapture]::TopLevel($continue), (Join-Path $OutputDirectory 'uninstall-directory-only.png'), $false)
+    [InstallerCapture]::Click($continue)
+    [void](Wait-Text $copy.finished)
+    [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
+    Wait-Exit
+    if (-not (Test-Path -LiteralPath (Join-Path $newPath ($ProductName + '.exe')))) { throw 'Directory-only removal deleted B' }
+    $entry = Get-ItemProperty ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey)
+    if ($entry.InstallLocation.TrimEnd('\') -ne $newPath) { throw 'Directory-only removal deleted B registration' }
+    if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Directory-only removal changed B PATH' }
+    if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Directory-only removal changed B protocol' }
     $installPath = $newPath
     Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
     $process = Start-Process $uninstaller -ArgumentList ('/S _?=' + $installPath) -PassThru -WindowStyle Hidden
     Wait-Exit
     Write-Output 'passed: installation takeover'
 } finally {
+    if ($held) { $held.Dispose() }
     foreach ($key in @("Software\DSHUninstallTests\$RegistryKey", $protocolKey)) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($key, $false) }
     Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue
     if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
