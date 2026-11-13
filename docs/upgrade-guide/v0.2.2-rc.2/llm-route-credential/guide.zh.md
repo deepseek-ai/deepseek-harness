@@ -9,7 +9,7 @@ description: "DeepSeek 模型路由通过 ctx.llm.routeCredential() 发布自己
 
 ## 变更
 
-`LlmAdapter.routeCredential(provider)` 与 `LlmRuntime.routeCredential(provider)` 把路由当前的凭据发布为 `RouteCredential`：种类、解析后的基础地址、可选引用、`configured(endpoint)` 存在性检查，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`，授权包含协议请求头、裸值、可选的 `reject()`，以及可选的 `revoked` 收回信号。
+`LlmAdapter.routeCredential(provider)` 与 `LlmRuntime.routeCredential(provider)` 把路由当前的凭据发布为 `RouteCredential`：种类、解析后的基础地址、可选引用、`configured(endpoint)` 存在性检查，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`，授权包含协议请求头、裸值、可选的 `reject()`，以及可选的 `revoked` 撤回信号。
 
 `@deepseek-ai/dsh-llm-deepseek` 不再导出 `resolveDeepSeekApiKey`、`deepSeekApiKeyConfigured`、`resolveDeepSeekAccountToken` 和 `rejectDeepSeekAccountToken`。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回 `DeepSeekRequestAuth | undefined`，且 `DeepSeekRequestAuth` 在 `headers` 之外要求 `value`；新增的 `missingCredential` 与 `credential` 选项分别命名凭据缺失的失败和发布的凭据。`createModelListingCache` 的 `credential(url)` 返回请求头，其 `load` 变为可选。
 
