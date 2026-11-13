@@ -105,7 +105,7 @@ This section explains how the service is built and where the observable behavior
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
 | [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, runtime ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, human-message attribution, return guidance, and settlement notices |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, return guidance, and settlement notices |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
@@ -170,27 +170,19 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-### Direct user messages
+### Message authorship
 
 #### What the model sees
 
-Local subagents receive the following user-role notice immediately before each browser-authored Queue or Steer message, including after cold resume. The notice and original message are recorded separately in the Session; queued edits retain attribution and the user's text and images remain unchanged. Initial delegated tasks and agent-to-agent messages receive no human attribution. Root agents receive no additional notice.
-
-##### Human-message attribution
-
-```markdown
-<system-reminder>
-The following message was sent directly by the human user.
-</system-reminder>
-```
+Local continuable agents receive initial delegated tasks and later agent-to-agent messages with the `agent-message` source and the actual sender's Session id. Both start with `Agent <sender name> sent a message: ` followed by the supplied content blocks. Direct human messages retain their `user` source and original content in root and child sessions, including after cold resume. Retained history is not rewritten.
 
 #### Token effect
 
-One fixed notice per consumed human message. Pending or removed inputs add no notice.
+One short author prefix per initial delegated task or agent-to-agent message. Human input adds no attribution tokens.
 
 #### KV Cache effect
 
-The notice appends with the newly consumed message; retained history is unchanged.
+The initial task follows any inherited history; later messages append without changing retained history.
 
 ### Settlement notice
 

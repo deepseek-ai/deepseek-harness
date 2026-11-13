@@ -19,13 +19,6 @@ export interface AgentMessageSource {
   readonly senderSessionId: SessionId
 }
 
-/** Identifies the human-authored message immediately following this notice. */
-export interface SubagentUserMessageSource {
-  readonly kind: 'subagent-user-message'
-  readonly form: 'notice'
-  readonly summary: string
-}
-
 /**
  * Durable attribution for the runtime's own account of a continuable child
  * settling. Deliberately a different kind from
@@ -48,26 +41,8 @@ export interface SubagentSettledMessageSource {
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'agent-message': AgentMessageSource
-    /** Human attribution; readers preserve the notice without this producer.
-     * @persistenceAttribution
-     */
-    'subagent-user-message': SubagentUserMessageSource
     'subagent-settled': SubagentSettledMessageSource
   }
-}
-
-/**
- * Identify a direct human message without changing its editable content.
- * @returns a durable notice placed immediately before the human message.
- */
-export function createSubagentUserMessageNotice(): ReturnType<typeof createUserMessage> {
-  return createUserMessage({
-    content: [{
-      type: 'text',
-      text: '<system-reminder>\nThe following message was sent directly by the human user.\n</system-reminder>',
-    }],
-    source: { kind: 'subagent-user-message', form: 'notice', summary: 'Direct user message' },
-  })
 }
 
 /** Build durable attribution for one Agent message. */

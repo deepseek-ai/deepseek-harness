@@ -213,7 +213,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       await page.getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
       const input = page.locator('[data-composer-input]').first()
       await input.waitFor({ timeout: 15_000 })
-      await page.getByText(/^Explain event sourcing in one sentence\./)
+      await page.getByRole('button', { name: /^Task message received/ })
         .waitFor({ timeout: 15_000 })
       expect(await input.isDisabled()).toBe(false)
       const stop = page.getByRole('button', { name: 'Stop generating' })
@@ -365,9 +365,14 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       && event.data.source.kind === 'user'
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
-    expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
-    expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
+    expect(userTexts).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
+    const delegatedTask = events.find(event => event.type === 'user/message'
+      && event.data.source.kind === 'agent-message')
+    expect(delegatedTask?.type === 'user/message' && delegatedTask.data.content).toEqual([
+      { type: 'text', text: 'Agent lead sent a message: ' },
+      { type: 'text', text: INITIAL },
+      { type: 'text', text: expect.stringMatching(/^Your final answer is delivered automatically if your parent is still online\./) },
+    ])
     const imageMessage = events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'image'))
     expect(imageMessage?.type === 'user/message' && imageMessage.data.content.map(block => block.type)).toEqual(['image'])

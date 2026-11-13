@@ -25,7 +25,7 @@ import {
 } from './child-agent.ts'
 import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
 import {
-  createAgentMessage, createSettlementMessage, createSubagentUserMessageNotice, withResultDeliveryGuidance,
+  createAgentMessage, createSettlementMessage, withResultDeliveryGuidance,
 } from './continuation-messages.ts'
 import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
@@ -403,12 +403,13 @@ export class SubagentManager {
         established = activation
         const child = requireLocalActivation(activation).handle.agent
         const childHeader = child.session.header
+        const task = createAgentMessage(parent, agentAddress(this.pathOf(parent, ancestry.root), parent.id), spec.prompt)
         return await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller'
-            ? withResultDeliveryGuidance(spec.prompt)
-            : spec.prompt,
-          { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
+            ? withResultDeliveryGuidance([...task.content])
+            : [...task.content],
+          { source: task.source, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,
           () => {
             this.assertAdmitting(parent)
@@ -842,16 +843,6 @@ export class SubagentManager {
           await workingDirectory.set(child, create.cwd, inputs.signal)
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
-        childCtx.on('agent/pre-step', async ({ agent }, next) => {
-          const decision = await next()
-          if (agent !== child || decision.kind === 'reject') return decision
-          return {
-            ...decision,
-            messages: decision.messages.flatMap(message => message.source.kind === 'user' && 'rpcId' in message.source
-              ? [createSubagentUserMessageNotice(), message]
-              : [message]),
-          }
-        })
         if (inputs.outputSchema !== undefined) {
           structured = attachStructuredRuntime(childCtx, inputs.outputSchema, () =>
             child.inbox.nextStep.length === 0

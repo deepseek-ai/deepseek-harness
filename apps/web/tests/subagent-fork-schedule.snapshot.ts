@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SubagentPromptRequestId } from '@deepseek-ai/dsh-subagent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { parseSessionLog, prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
@@ -44,13 +44,12 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     parent.followup(createUserMessage({ content: [{ type: 'text', text: prompt }], source: { kind: 'user' } }))
     await parent.whenIdle()
 
-    const childPrompt = parseSessionLog(expected[1]!).findLast(event => event.type === 'user/message'
-      && event.data.source.kind === 'user')
-    if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no user prompt')
+    const childPrompt = fixtureChildInputs(expected[1]!)[0]
+    if (childPrompt === undefined) throw new Error('child fixture has no delegated task')
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: 'Check child reminder refusal', delivery: 'caller',
       signal: new AbortController().signal,
-      parent, prompt: [...childPrompt.data.content],
+      parent, prompt: childPrompt,
     })
     try {
       await activation.result
@@ -79,7 +78,7 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
 
 const HUMAN_DIR = fileURLToPath(new URL('../../../snapshots/web/subagent-human-message', import.meta.url))
 
-it.skipIf(MODE === 'record')('attributes a direct human message after a Web subagent cold resume', async () => {
+it.skipIf(MODE === 'record')('distinguishes the delegated task from a direct human message after a Web subagent cold resume', async () => {
   const paths = await Promise.all(['session.v4.jsonl', 'session.1.v4.jsonl']
     .map(file => selectedSessionFixture(join(HUMAN_DIR, file))))
   const expected = await Promise.all(paths.map(path => readFile(path, 'utf8')))
@@ -96,10 +95,10 @@ it.skipIf(MODE === 'record')('attributes a direct human message after a Web suba
     await parent.whenIdle()
     let child: Session | undefined
     scaffold.ctx.on('subagent/start', (info) => { child = scaffold.ctx.agents.get(info.id)!.session })
-    const prompts = fixtureUserPrompts(expected[1]!)
+    const inputs = fixtureChildInputs(expected[1]!)
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: 'Identify direct human messages', delivery: 'caller',
-      parent, prompt: [{ type: 'text', text: prompts.at(-2)! }], signal: new AbortController().signal,
+      parent, prompt: inputs[0]!, signal: new AbortController().signal,
     })
     try {
       await activation.result
@@ -111,7 +110,10 @@ it.skipIf(MODE === 'record')('attributes a direct human message after a Web suba
     scaffold.ctx.on('subagent/end', (info) => {
       if (info.id === activation.childId) settled.resolve(undefined)
     })
-    const content = [{ type: 'text' as const, text: prompts.at(-1)! }]
+    const content = inputs[1]!.map((block) => {
+      if (block.type !== 'text') throw new Error('human fixture input must be text')
+      return block
+    })
     const receipt = await scaffold.ctx.subagents.prompt({
       childSessionId: activation.childId,
       requestId: brandString<SubagentPromptRequestId>('human-question'), delivery: 'steer', content,
@@ -120,13 +122,11 @@ it.skipIf(MODE === 'record')('attributes a direct human message after a Web suba
     await parent.whenIdle()
     await scaffold.ctx.sessions.flush(parent.session)
     if (child === undefined) throw new Error('subagent start did not expose its Session')
-    const messages = child.deriveMessages()
-    const index = messages.findIndex(message => message.id === receipt.messageId)
-    expect(index).toBeGreaterThan(0)
-    expect(messages[index - 1]?.source.kind).toBe('subagent-user-message')
-    expect(messages[index]?.content).toEqual(content)
-    expect(messages.filter(message => message.source.kind === 'subagent-user-message')).toHaveLength(1)
-    expect(parent.session.deriveMessages().some(message => message.source.kind === 'subagent-user-message')).toBe(false)
+    const received = child.deriveMessages().find(message => message.id === receipt.messageId)
+    expect(received).toMatchObject({
+      source: { kind: 'user', rpcId: 'human-question' },
+      content,
+    })
     await assertSubagentSessions(scaffold, [parent.session, child], paths, expected)
   } finally {
     await scaffold.close()
@@ -170,4 +170,15 @@ async function assertSubagentSessions(
   }
   expect(normalizeSessionSnapshots(raw, context))
     .toEqual(normalizeSessionSnapshots(expected, fixtureContext(expected[0]!)))
+}
+
+/** Read the child's admitted inputs, removing the parent prefix when recreating its initial task. */
+function fixtureChildInputs(log: string): ContentBlock[][] {
+  const events = parseSessionLog(log)
+  const start = events.findLastIndex(event => event.type === 'subagent/descriptor')
+  return events.slice(start + 1).flatMap(event => event.type === 'agent/inbox/spliced'
+    ? event.data.inserted.map(message => message.source.kind === 'agent-message'
+      ? message.content.slice(1)
+      : [...message.content])
+    : [])
 }

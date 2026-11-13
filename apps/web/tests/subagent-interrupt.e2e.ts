@@ -183,9 +183,14 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the 
       && event.data.source.kind === 'user'
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
-    expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
-    expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
+    expect(userTexts).toEqual([FOLLOWUP, WAKING])
+    const delegatedTask = events.find(event => event.type === 'user/message'
+      && event.data.source.kind === 'agent-message')
+    expect(delegatedTask?.type === 'user/message' && delegatedTask.data.content).toEqual([
+      { type: 'text', text: 'Agent lead sent a message: ' },
+      { type: 'text', text: INITIAL },
+      { type: 'text', text: expect.stringMatching(/^Your final answer is delivered automatically if your parent is still online\./) },
+    ])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')
       .map(event => (event).data.reason.kind)
