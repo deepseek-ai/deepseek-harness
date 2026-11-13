@@ -14,7 +14,73 @@
           "type": "tool-call",
           "id": "cua-ptc-native-result",
           "name": "run_code",
-          "arguments": "{\"code\":\"const { Buffer } = await import('node:buffer');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst bytes = Buffer.from(shot.data, 'base64');\\nreturn { appHandle: app.appHandle, hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.attachment.width, imageHeight: shot.attachment.height };\",\"description\":\"Read native CUA values and receive one screenshot\"}"
+          "arguments": "{\"code\":\"const { readFile } = await import('node:fs/promises');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst target = { appHandle: app.appHandle, windowId: '7' };\\nconst first = await tools.cua({ method: 'getState', params: { ...target, maxElements: 1 } });\\nconst state = first.truncated ? await tools.cua({ method: 'getState', params: { ...target, maxElements: 16 } }) : first;\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: '7' } });\\nconst bytes = await readFile(shot.path);\\ninspect({ appHandle: app.appHandle, initiallyTruncated: first.truncated, recoveredTextField: !first.tree.includes('AXTextField') && state.tree.includes('AXTextField'), hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.width, imageHeight: shot.height }, shot); return;\",\"description\":\"Read native CUA values and receive one screenshot\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-ax-failure",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { readFile, writeFile, unlink } = await import('node:fs/promises');\\nconst { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nawait writeFile('fixture-ax-failure', '');\\ntry {\\n  const cua = connectCua(() => tools.cua);\\n  const app = await cua.getApp('test.fixture');\\n  const windows = await app.getWindows();\\n  const window = await app.getWindow(windows[0].windowId);\\n  const failures = [];\\n  for (const surface of [app, window]) {\\n    try { await surface.getAccessibilityTree(); throw new Error('Expected AX failure'); }\\n    catch (error) { if (!error.message.includes('Fixture accessibility read failed')) throw error; failures.push(error.message); }\\n  }\\n  let coordinateRefused = false;\\n  try { await window.click([100, 100], { relative: true }); }\\n  catch (error) { if (!error.message.includes('Window has no observation')) throw error; coordinateRefused = true; }\\n  if (!coordinateRefused) throw new Error('Coordinate input accepted without observation');\\n  const shot = await window.getScreenshot();\\n  const coordinateDispatched = (await window.click([100, 100], { relative: true })).dispatched;\\n  let elementRefused = false;\\n  try { await window.invoke('0'); }\\n  catch (error) { if (!error.message.includes('Read getAccessibilityTree')) throw error; elementRefused = true; }\\n  if (!elementRefused) throw new Error('Element input accepted without an AX snapshot');\\n  inspect({ axFailures: failures.length, screenshotWindow: window.windowId, pngBytes: (await readFile(shot.path)).byteLength, elementRefused, coordinateRefused, coordinateDispatched }, shot);\\n} finally { await unlink('fixture-ax-failure'); }\",\"description\":\"Capture through the object API despite application and window AX failures\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-writability",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { writeFile, unlink } = await import('node:fs/promises');\\nconst { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst results = [];\\nfor (const attribute of ['AXValue', 'AXSelectedTextRange']) {\\n  await writeFile('fixture-ax-writability-failure', attribute);\\n  try {\\n    const tree = await app.getAccessibilityTree();\\n    const field = attribute === 'AXValue' ? 'valueWritable' : 'selectionWritable';\\n    if (!tree.includes(field + '=unknown') || tree.includes(field + '=true')) throw new Error('Unknown writability was lost');\\n    if (!tree.includes('Increment') || !tree.includes('Count:')) throw new Error('Other nodes were lost');\\n    let writeRefused = false;\\n    try {\\n      if (attribute === 'AXValue') await app.setValue('1', 'must not be written');\\n      else await app.selectText('1', 'Fixture');\\n    } catch (error) {\\n      if (!error.message.includes('writability of ' + attribute + ' failed with error -25200')) throw error;\\n      writeRefused = true;\\n    }\\n    if (!writeRefused) throw new Error('Write accepted with unknown writability');\\n    results.push({ attribute, unknown: true, otherNodesRetained: true, writeRefused });\\n  } finally { await unlink('fixture-ax-writability-failure'); }\\n}\\ninspect(results);\",\"description\":\"Retain AX trees with unknown writability and reject writes\"}"
         }
       },
       {
@@ -45,7 +111,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Received native CUA values and one PNG screenshot through PTC. The PNG is 90 bytes with signature 89504e470d0a1a0a."
+          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot. Both writability probe failures left the tree readable with unknown fields and kept writes strict."
         }
       },
       {

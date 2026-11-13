@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SurfaceIntent } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HistoryController } from '../src/history/controller.ts'
 import { WebController } from '../src/web/controller.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const signal = (): AbortSignal => new AbortController().signal
 
@@ -85,7 +86,7 @@ function controllers(
   history: HistoryController
   web: WebController
 } {
-  roots.add(ctx.root)
+  roots.add(ctx[Context.root])
   installSessionReadTestServices(ctx)
   const history = new HistoryController(ctx)
   return { history, web: new WebController(ctx, history, promote) }
@@ -102,7 +103,7 @@ async function setup(): Promise<{ ctx: Context; history: HistoryController; web:
 describe('Session history and Web follow', () => {
   it('opens at the current cursor and follows later events from an ordinary Session', async () => {
     const { ctx, history, web } = await setup()
-    const session = ctx.sessions.create(SessionId('ordinary'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('ordinary'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     const abort = new AbortController()
     const iterator = web.follow(
@@ -139,7 +140,7 @@ describe('Session history and Web follow', () => {
       { inject: ['sessions', 'sessionQuery'] },
     ))
     await owner.await()
-    const session = ctx.sessions.create(SessionId('controller-unload'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('controller-unload'), { meta: { cwd: '/workspace' } })
     const iterator = web.follow(
       { address: { kind: 'session', sessionId: session.id } },
       new AbortController().signal,
@@ -157,7 +158,7 @@ describe('Session history and Web follow', () => {
 
   it('reconnects with a complete replacement snapshot before later live events', async () => {
     const { ctx, web } = await setup()
-    const session = ctx.sessions.create(SessionId('resume'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('resume'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     session.append('turn/start', { turn: 2 })
@@ -187,7 +188,7 @@ describe('Session history and Web follow', () => {
 
   it('subscribes before a cold read and ignores unrelated and replayed buffered events', async () => {
     const { ctx, web } = await setup()
-    const sessionId = SessionId('cold-race')
+    const sessionId = brandString<SessionId>('cold-race')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
@@ -211,7 +212,7 @@ describe('Session history and Web follow', () => {
 
     const unrelated = event('fixture/other', SessionSeq(0))
     const start = event('fixture/start', SessionSeq(0))
-    ctx.emit('session/event', eventSession({ ...header, id: SessionId('unrelated') }, [unrelated]), unrelated)
+    ctx.emit('session/event', eventSession({ ...header, id: brandString<SessionId>('unrelated') }, [unrelated]), unrelated)
     ctx.emit('session/event', eventSession(header, [start]), start)
     inspected.resolve({
       meta: header,
@@ -228,7 +229,7 @@ describe('Session history and Web follow', () => {
   it('buffers creation while the opening observation is unresolved', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const sessionId = SessionId('created-during-observation')
+    const sessionId = brandString<SessionId>('created-during-observation')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
@@ -286,7 +287,7 @@ describe('Session history and Web follow', () => {
       (inner: Context) => { agentCtx = createScope(inner, { name: 'agent' }).ctx },
       { inject: ['sessions'] },
     ))
-    const sessionId = SessionId('cold-attach')
+    const sessionId = brandString<SessionId>('cold-attach')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
@@ -301,7 +302,7 @@ describe('Session history and Web follow', () => {
       [Symbol.asyncIterator]()
 
     await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot', cursor: 0 } })
-    agentCtx.sessions.create(SessionId('unrelated-created'), { meta: { cwd: '/workspace' } })
+    agentCtx.sessions.create(brandString<SessionId>('unrelated-created'), { meta: { cwd: '/workspace' } })
     const attached = agentCtx.sessions.prepare(sessionId, { meta: header, seed })
     agentCtx.sessions.enter(attached)
     agentCtx.sessions.announce(attached)
@@ -331,7 +332,7 @@ describe('Session history and Web follow', () => {
 
   it('rejects gaps in replayed and live event sequences', async () => {
     const replay = await setup()
-    const replayId = SessionId('replay-gap')
+    const replayId = brandString<SessionId>('replay-gap')
     const replayHeader: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: replayId,
@@ -346,7 +347,7 @@ describe('Session history and Web follow', () => {
     await expect(replayed.next()).rejects.toMatchObject({ code: 'SESSION_QUERY_CORRUPT_SESSION' })
 
     const live = await setup()
-    const session = live.ctx.sessions.create(SessionId('live-gap'), { meta: { cwd: '/workspace' } })
+    const session = live.ctx.sessions.create(brandString<SessionId>('live-gap'), { meta: { cwd: '/workspace' } })
     append(session, 'fixture/start', {})
     live.ctx.provide('agents', { get: () => ({ id: session.id }) } as never)
     const followed = live.web.follow({
@@ -364,7 +365,7 @@ describe('Session history and Web follow', () => {
 
   it('opens an empty source at cursor -1', async () => {
     const { ctx, history, web } = await setup()
-    const session = ctx.sessions.create(SessionId('empty-follow'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('empty-follow'), { meta: { cwd: '/workspace' } })
     const abort = new AbortController()
     const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
@@ -380,7 +381,7 @@ describe('Session history and Web follow', () => {
   it('fails explicitly when a projected observation omits its baseline', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const sessionId = SessionId('projectionless-follow')
+    const sessionId = brandString<SessionId>('projectionless-follow')
     const meta: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
@@ -412,7 +413,7 @@ describe('Session history and Web follow', () => {
   it('does not activate a prepared Session when the request omits activate', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const sessionId = SessionId('passive-activation-default')
+    const sessionId = brandString<SessionId>('passive-activation-default')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
     }
@@ -443,7 +444,7 @@ describe('Session history and Web follow', () => {
   it('starts activation for a consumer that stops after the opening snapshot', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const sessionId = SessionId('activation-after-opening')
+    const sessionId = brandString<SessionId>('activation-after-opening')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
     }
@@ -478,7 +479,7 @@ describe('Session history and Web follow', () => {
   it('disposes a retained promotion when background activation rejects synchronously', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const sessionId = SessionId('promotion-failure')
+    const sessionId = brandString<SessionId>('promotion-failure')
     const meta = { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace' }
     const disposePromotion = vi.fn()
     const promotion = {
@@ -505,8 +506,8 @@ describe('Session history and Web follow', () => {
 
   it('requires the durable parent and mode for a direct subagent address', async () => {
     const { ctx, history } = await setup()
-    const parentSessionId = SessionId('parent')
-    const childSessionId = SessionId('child')
+    const parentSessionId = brandString<SessionId>('parent')
+    const childSessionId = brandString<SessionId>('child')
     ctx.sessions.create(parentSessionId, { meta: { cwd: '/workspace' } })
     const child = ctx.sessions.create(childSessionId, {
       meta: { cwd: '/workspace', origin: 'subagent', parentSession: parentSessionId },
@@ -536,13 +537,13 @@ describe('Session history and Web follow', () => {
       records: [{ type: 'event', event: { type: 'subagent/descriptor' } }],
     })
     await expect(history.events({
-      address: { kind: 'subagent', parentSessionId: SessionId('other-parent'), childSessionId, mode: 'unknown' },
+      address: { kind: 'subagent', parentSessionId: brandString<SessionId>('other-parent'), childSessionId, mode: 'unknown' },
       throughSeq: 0,
     }, signal)).rejects.toMatchObject({ code: 'subagent/unauthorized' })
     await expect(history.events({
       address: {
         kind: 'subagent',
-        parentSessionId: SessionId('other-parent'),
+        parentSessionId: brandString<SessionId>('other-parent'),
         childSessionId,
         mode: 'continuable',
       },
@@ -565,7 +566,7 @@ describe('Session history and Web follow', () => {
 
   it('preserves a cold inspection failure for the Gateway error branch', async () => {
     const { ctx, history } = await setup()
-    const sessionId = SessionId('corrupt-cold')
+    const sessionId = brandString<SessionId>('corrupt-cold')
     const failure = new Error('cold log is corrupt')
     const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, isSeeded: false, cwd: '/workspace' }
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
@@ -584,7 +585,7 @@ describe('Session history and Web follow', () => {
 
   it('rejects malformed page and follow cursors at the service boundary', async () => {
     const { ctx, history, web } = await setup()
-    const session = ctx.sessions.create(SessionId('validation'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('validation'), { meta: { cwd: '/workspace' } })
     const address = { kind: 'session' as const, sessionId: session.id }
     for (const request of [
       { address, throughSeq: -2 },
@@ -608,7 +609,7 @@ describe('Session history and Web follow', () => {
       .rejects.toMatchObject({ code: 'gateway/bad-request' })
 
     const corrupt = await setup()
-    const corruptId = SessionId('missing-through-seq')
+    const corruptId = brandString<SessionId>('missing-through-seq')
     cold(
       corrupt.ctx,
       { version: SESSION_FORMAT_VERSION, id: corruptId, createdAt: 1, cwd: '/workspace', isSeeded: false },
@@ -635,7 +636,7 @@ describe('Session history and Web follow', () => {
 
   it('reports missing ordinary and subagent sources without fabricating inspection failures', async () => {
     const { ctx, history } = await setup()
-    const ordinary = { kind: 'session' as const, sessionId: SessionId('missing') }
+    const ordinary = { kind: 'session' as const, sessionId: brandString<SessionId>('missing') }
     await expect(history.events({ address: ordinary, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'session/not-found' })
 
@@ -651,8 +652,8 @@ describe('Session history and Web follow', () => {
     await expect(history.events({
       address: {
         kind: 'subagent',
-        parentSessionId: SessionId('parent'),
-        childSessionId: SessionId('missing-child'),
+        parentSessionId: brandString<SessionId>('parent'),
+        childSessionId: brandString<SessionId>('missing-child'),
         mode: 'continuable',
       },
       throughSeq: -1,
@@ -664,7 +665,7 @@ describe('Session history and Web follow', () => {
 
   it('rejects incomplete cold metadata before serving a source', async () => {
     const first = await setup()
-    const sessionId = SessionId('incomplete')
+    const sessionId = brandString<SessionId>('incomplete')
     const address = { kind: 'session' as const, sessionId }
     const firstHeader: SessionHeader = { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, isSeeded: false }
     first.ctx.provide('sessionPersistence', testSessionPersistence(first.ctx, {
@@ -695,7 +696,7 @@ describe('Session history and Web follow', () => {
 
   it('serves cold ordinary history and validates every durable subagent descriptor state', async () => {
     const ordinaryBench = await setup()
-    const ordinaryId = SessionId('cold-ordinary')
+    const ordinaryId = brandString<SessionId>('cold-ordinary')
     const ordinaryHeader: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: ordinaryId,
@@ -711,8 +712,8 @@ describe('Session history and Web follow', () => {
       records: [{ type: 'event', event: { seq: 0 } }],
     })
 
-    const parentSessionId = SessionId('cold-parent')
-    const childSessionId = SessionId('cold-child')
+    const parentSessionId = brandString<SessionId>('cold-parent')
+    const childSessionId = brandString<SessionId>('cold-child')
     const childHeader: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: childSessionId,
@@ -748,8 +749,8 @@ describe('Session history and Web follow', () => {
   it('reports an unavailable descriptor when an observed child has no projection value', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    const parentSessionId = SessionId('missing-projection-parent')
-    const childSessionId = SessionId('missing-projection-child')
+    const parentSessionId = brandString<SessionId>('missing-projection-parent')
+    const childSessionId = brandString<SessionId>('missing-projection-child')
     const meta: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: childSessionId,
@@ -788,7 +789,7 @@ describe('Session history and Web follow', () => {
 
   it('keeps pages projection-free and computes projections only for child authorization', async () => {
     const ordinary = await setup()
-    const session = ordinary.ctx.sessions.create(SessionId('projected'), { meta: { cwd: '/workspace' } })
+    const session = ordinary.ctx.sessions.create(brandString<SessionId>('projected'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     const ordinarySnapshot = vi.spyOn(ordinary.ctx.sessionProjections, 'snapshot')
     const ordinaryPage = await ordinary.history.events({
@@ -799,8 +800,8 @@ describe('Session history and Web follow', () => {
     expect(ordinarySnapshot).not.toHaveBeenCalled()
 
     const child = await setup()
-    const parentSessionId = SessionId('projection-parent')
-    const childSessionId = SessionId('projection-child')
+    const parentSessionId = brandString<SessionId>('projection-parent')
+    const childSessionId = brandString<SessionId>('projection-child')
     const childSession = child.ctx.sessions.create(childSessionId, {
       meta: { cwd: '/workspace', origin: 'subagent', parentSession: parentSessionId },
     })
@@ -823,7 +824,7 @@ describe('Session history and Web follow', () => {
 
   it('keeps message-aligned pagination contiguous across replacement source-event references', async () => {
     const { ctx, history } = await setup()
-    const session = ctx.sessions.create(SessionId('pagination'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('pagination'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     append(session, 'user/message', { content: [], source: { kind: 'user' } }, { surfaceOp: 'append' })
     const firstReply = append(session, 'assistant/message', { turn: 1, step: 1, message: {} }, { surfaceOp: 'append' })
@@ -849,7 +850,7 @@ describe('Session history and Web follow', () => {
 
   it('keeps cited source events in the page that owns their appended message', async () => {
     const { ctx, history } = await setup()
-    const session = ctx.sessions.create(SessionId('pagination-sources'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('pagination-sources'), { meta: { cwd: '/workspace' } })
     const source = append(session, 'fixture/source', {})
     append(session, 'user/message', { content: [], source: { kind: 'plugin' } }, {
       surfaceOp: 'append', sourceEventSeqs: [source.seq],

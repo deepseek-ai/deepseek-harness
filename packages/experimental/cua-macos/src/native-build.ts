@@ -1,9 +1,9 @@
 /** Source-checkout preparation and installed macOS application resolution. */
 import { constants } from 'node:fs'
-import { access, mkdir, readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
-import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
-import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { access, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { buildNativeExecutable as compileExecutable, sourceNativePackage } from '@deepseek-ai/dsh-cua/native-build'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { z } from 'zod'
 
 const NativeApplication = z.object({ bundle: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
@@ -27,7 +27,7 @@ export type SourceSigning = 'ad-hoc' | {
  * @throws When the current host has no native implementation.
  */
 export function nativeHostArchitecture(platform: string, architecture: string): NativeArchitecture {
-  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('Computer use currently requires macOS on Apple silicon or Intel. Windows support is in development')
+  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('The macOS Computer Use provider requires macOS on Apple silicon or Intel')
   return architecture
 }
 
@@ -64,15 +64,7 @@ export async function nativeExecutablePath(directory: string, variant: 'release'
  * @returns True only for a CUA package in a DSH source checkout.
  */
 export async function isSourcePackage(packageRoot: string): Promise<boolean> {
-  const root = resolve(packageRoot, '../../..')
-  if (join(root, 'packages/experimental/cua-macos') !== packageRoot) return false
-  try {
-    const manifest: unknown = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-    return typeof manifest === 'object' && manifest !== null && 'name' in manifest && manifest.name === '@deepseek-ai/dsh-root'
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw error
-  }
+  return sourceNativePackage(packageRoot, 'packages/experimental/cua-macos')
 }
 
 /**
@@ -83,36 +75,20 @@ export async function isSourcePackage(packageRoot: string): Promise<boolean> {
  * @throws When preparation, cancellation, resource cleanup or receipt validation fails.
  */
 export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<string> {
-  spec.signal.throwIfAborted()
   const nativeRoot = join(spec.packageRoot, 'native')
   const directory = join(nativeRoot, '.build', 'prepared', spec.architecture)
-  const signal = AbortSignal.any([spec.signal, AbortSignal.timeout(spec.timeoutMs)])
-  await mkdir(join(nativeRoot, '.build'), { recursive: true })
-  return withFileLock(join(nativeRoot, '.build', 'application-build'), async () => {
-    const signing = spec.sourceSigning
-    const signingArgs = typeof signing === 'string'
-      ? ['--identity', '-']
-      : ['--identity', signing.identity, '--keychain', signing.keychain]
-    const handle = spec.subprocess.spawn({
-      argv: ['/usr/bin/xcrun', 'python3', join(nativeRoot, 'build_app.py'),
-        '--scratch-path', join(nativeRoot, '.build', `runtime-${spec.architecture}`),
-        '--output-directory', directory, '--arch', spec.architecture === 'x64' ? 'x86_64' : 'arm64', '--variant', 'dev', ...signingArgs],
-      cwd: spec.packageRoot, signal, graceMs: spec.graceMs,
-      stdio: { stdin: 'ignore', stdout: { maxBytes: 65_536 }, stderr: { maxBytes: 65_536 } },
-    })
-    let outcome: SubprocessOutcome
-    try { outcome = await handle.done } finally {
-      try { handle.terminate() } finally {
-        if (!await handle.waitForExit()) throw new Error('Computer use preparation did not release its managed process range')
-      }
-    }
-    signal.throwIfAborted()
-    if (outcome.exitCode !== 0 || outcome.signal !== null) {
-      const diagnostics = `${handle.collected.stdout?.readFrom(0).text ?? ''}${handle.collected.stderr?.readFrom(0).text ?? ''}`
-      throw new Error(`Computer use native preparation failed (${String(outcome.exitCode)}, ${String(outcome.signal)}): ${diagnostics}`)
-    }
-    return nativeExecutablePath(directory, 'dev')
-  }, { waitMs: spec.timeoutMs, signal })
+  const signing = spec.sourceSigning
+  const signingArgs = typeof signing === 'string'
+    ? ['--identity', '-']
+    : ['--identity', signing.identity, '--keychain', signing.keychain]
+  return compileExecutable({
+    ...spec,
+    lockPath: join(nativeRoot, '.build', 'application-build'),
+    argv: ['/usr/bin/xcrun', 'python3', join(nativeRoot, 'build_app.py'),
+      '--scratch-path', join(nativeRoot, '.build', `runtime-${spec.architecture}`),
+      '--output-directory', directory, '--arch', spec.architecture === 'x64' ? 'x86_64' : 'arm64', '--variant', 'dev', ...signingArgs],
+    resolveExecutable: () => nativeExecutablePath(directory, 'dev'),
+  })
 }
 
 /**

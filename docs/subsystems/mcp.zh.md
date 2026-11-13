@@ -55,7 +55,7 @@ Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../pac
 
 stdio 和 Streamable HTTP 都使用官方 SDK 的协商、发现、协议校验和取消机制。工具列表变化通过旧版通知或现代订阅触发发现。刷新失败时保留上一代工具；连接恢复遵循[客户端生命周期](../../packages/mcp/mcp-client/README.zh.md#use-this-package)。
 
-结果适配器为程序化调用方保留规范 MCP JSON，并准备普通工具内容。受支持的图像使用附件系统；不受支持的富内容产生明确的文本诊断。工具注册表仍决定策略失败和结果替换。[工具契约](tools.zh.md) 维护记录和最终呈现规则；[客户端结果参考](../../packages/mcp/mcp-client/README.zh.md#use-this-package) 维护 MCP 特有的投影细节。
+结果适配器为程序化调用方保留规范 MCP JSON，并准备普通工具内容。受支持的图像使用附件系统；不受支持的富内容产生明确的文本诊断。服务器 `isError` 结果与请求失败抛出 `McpToolError`，其 code 告诉调用方请求结果是否已知，例如 `MCP_TOOL_ERROR`、`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT`；客户端 README 列出全部 code。工具注册表仍决定策略失败和结果替换。[工具契约](tools.zh.md) 维护记录和最终呈现规则；[客户端结果参考](../../packages/mcp/mcp-client/README.zh.md#use-this-package) 维护 MCP 特有的投影细节。
 
 -----
 
@@ -86,7 +86,9 @@ type McpResourceRequest =
 /** One configured server's resource access, owned by its MCP connection plugin. */
 interface McpResourceProvider {
   /**
-   * Run an operation against one live connection generation.
+   * Run an operation against one live connection generation. The resource tools
+   * dispatch in parallel, so one provider may receive several concurrent requests;
+   * each must settle independently.
    * @param request - MCP resource method and parameters.
    * @param exec - caller identity and cancellation for this invocation.
    * @returns the protocol result as lossless JSON.
@@ -113,6 +115,7 @@ interface McpResourceProvider {
 - [资源可见性参考](../../packages/mcp/mcp-resources/README.zh.md) — profile 统一挂载及由已配置服务器决定的可见性。
 - [第三方记忆服务器](../user/guide/mcp-memory.zh.md) — 产品配置指南。
 - [协议协商参考](../../packages/mcp/mcp-client/README.zh.md) — SDK 职责与兼容性决策。
+- [Computer Use MCP 服务器](../../packages/experimental/cua-mcp/README.zh.md) — DSH 作为 MCP stdio 服务器向其他 harness 提供 Computer Use 程序。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

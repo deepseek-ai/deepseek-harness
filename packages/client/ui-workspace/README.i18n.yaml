@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-workspace/use-this-package:
-  en: 9226c42c2559fbf0
-  zh: 5527f59aa379c9fd
+  en: c24ee36a92dcb08e
+  zh: 1383bbf4d2579e97
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/reordering-and-view-options:
   en: 55054408b8593c70
   zh: 9fdf9861a48abba3
@@ -24,26 +24,29 @@
   en: cd8635fa6516441d
   zh: c06e251fe3dd895b
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/search:
-  en: 148f2ab562fecc09
-  zh: 9ba7c07999705b31
+  en: 1a1e90c2ed1fd3c1
+  zh: b57fedcec1f00367
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/managing-sessions:
-  en: 29b6b357fc6be99a
-  zh: 182996efed35029c
+  en: 0515aae59aa89cce
+  zh: 83b150ab0e233d8a
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/pending-interactions:
-  en: 9fb88260380bf093
-  zh: 3bace2b96ecd4a82
+  en: 27089341ac2cbcc4
+  zh: 63d818a53a7c20e9
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/active-schedule-markers:
-  en: 668ee06286b227b6
-  zh: aafdb03cde1b93c9
+  en: 249d9552d8bef805
+  zh: 405b1c636cba8e0b
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation:
   en: 8f170900a4096408
   zh: 85332e80adf39403
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/the-directory-flow-hole:
-  en: 868904dbfb5713f8
-  zh: 35d3c285ed770885
+  en: b4c44f1b6d96966d
+  zh: 96e9c8c003e2341a
+/deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/the-reusable-workspace-picker:
+  en: 029ec1761656801e
+  zh: 524dfd341be0e62e
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/session-row-actions:
-  en: 511408e373ff8c70
-  zh: 7ae3b396171821a4
+  en: d309a8bc5085616b
+  zh: 66152a89d58cb7cb
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/session-row-actions/packaged-client-plugin:
   en: 36934671b80b11ae
   zh: 8e0aea6162e35e77
@@ -57,8 +60,8 @@
   en: 8bcb7bd90d7c5773
   zh: 17663be926a099d2
 /deepseek-ai-dsh-client-ui-workspace/further-exploration:
-  en: 2abbf27abbd71ba4
-  zh: ace33fa2ea042357
+  en: cb0b5c3c3caa27f5
+  zh: e854ce9c897d1b64
 /deepseek-ai-dsh-client-ui-workspace/model-experience:
   en: 3120df665299c634
   zh: 1d9f365d091d0d2a

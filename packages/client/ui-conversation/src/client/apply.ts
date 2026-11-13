@@ -12,6 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { UiConversation } from './conversation/assembly.ts'
@@ -33,6 +34,7 @@ import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
 import { InputHub } from './input/hub.ts'
+import { createComposerFileIntake } from './input/file-intake.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
@@ -57,9 +59,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Services required by the Conversation plugin. */
+/**
+ * Services required by the Conversation plugin. `uiSession.sessionStatus` provides the `useSessionStatus` hook the
+ * Conversation shell renders with, so the plugin unloads and reloads with it.
+ */
 export const inject = [
-  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms',
+  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiSession.sessionStatus', 'uiWorkspace', 'locale', 'configForms',
 ]
 
 /** Conversation runtime configuration. */
@@ -460,6 +465,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     }),
   }, ConversationSessionHeader)
 
+  const fileIntake = createComposerFileIntake()
   const registerComposerBar = () => slots.register({
     name: 'conversation.composer.bar',
     locale: NS,
@@ -477,6 +483,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
       if (sessionId === undefined) {
         return {
+          registerFileIntake: fileIntake,
           keyboard: undefined,
           addFiles: undefined,
           removeAttachment: undefined,
@@ -500,6 +507,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       const inputTriggers = inputHub.inputTriggers(sessionId)
       const bridge = hostPathBridge()
       return {
+        registerFileIntake: fileIntake,
         keyboard: shell,
         addFiles: (files, directories = new Set()) => {
           if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')

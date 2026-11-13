@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { resolveAdapterOptions } from '../../src/config.ts'
 import { serialize } from '../../src/serialize.ts'
 
@@ -26,7 +27,7 @@ export function apply(ctx: Context): void {
       createUserMessage({ source, content: [
         { type: 'text', text: 'Background subagent finished. Its closing message: Saved child answer.' },
         { type: 'reasoning', text: 'unforwarded-child-thought' },
-        { type: 'tool-call', id: ToolCallId('unforwarded-child-call'), name: 'bash', arguments: '{}' },
+        { type: 'tool-call', id: brandString<ToolCallId>('unforwarded-child-call'), name: 'bash', arguments: '{}' },
       ] }),
       createUserMessage({ source, content: [{ type: 'reasoning', text: 'unforwarded-empty-notice' }] }),
     ] }

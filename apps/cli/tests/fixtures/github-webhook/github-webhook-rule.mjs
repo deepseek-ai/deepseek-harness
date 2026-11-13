@@ -1,5 +1,5 @@
 import z from '@deepseek-ai/schemastery'
-import { WebhookRuleId } from '@deepseek-ai/dsh-webhook'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 export const name = 'github-webhook-real-e2e-rule'
 export const inject = ['webhookRuntime']
@@ -14,8 +14,10 @@ export const Config = z.object({
 })
 
 export function apply(ctx, config) {
+  /** @type {import('@deepseek-ai/dsh-webhook/types').WebhookRuleId} */
+  const id = brandString('github-real-e2e')
   ctx.effect(() => ctx.webhookRuntime.register({
-    id: WebhookRuleId('github-real-e2e'),
+    id,
     kind: 'github',
 
     run(delivery, signal) {

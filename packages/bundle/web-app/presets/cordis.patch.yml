@@ -8,13 +8,13 @@
         id: cordis
         order: 4
         plugins:
-          # Same persona as `standard`: tool descriptions and the skill catalog carry
-          # the operating detail, and the skills own the preset-authoring rules.
+          # The dsh-doc skill owns plugin implementation and authorization guidance.
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
               prefix: >-
                 You are a coding agent powered by the {{model}} model.
+                You help the user customize DeepSeek Harness itself.
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
@@ -90,6 +90,8 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
+                config:
+                  interrupt: false
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:

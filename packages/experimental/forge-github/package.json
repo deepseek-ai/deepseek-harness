@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-forge-github",
   "description": "GitHub provider for the experimental forge registry, read through the GitHub CLI on the host",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -34,18 +34,26 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
     "@deepseek-ai/dsh-timeout": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "execa": "^10.0.1",
     "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-experimental-forge-session": {
+      "optional": true
+    }
   }
 }

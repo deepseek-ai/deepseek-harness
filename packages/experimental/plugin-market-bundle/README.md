@@ -24,7 +24,7 @@ This optional bundle mounts custom plugin indexes: the Host [`pluginMarket`](../
 <a id="use-this-package"></a>
 ## Use this package
 
-Open **Plugins** in the Web sidebar and switch on **Custom plugin indexes** under **Experimental plugins**. The page then shows the **Installed** and **Discover** tabs; **Discover** adds index sources and installs their bundles. Switching the bundle off removes the Discover tab and the `plugin_market` tool; the saved index sources stay in the profile.
+Open **Plugins** in the Web sidebar and switch on **Custom plugin indexes** under **Experimental plugins**. The page then shows the **Installed** and **Discover** tabs. Use [Discover](../../client/ui-plugin-market/README.md#use-this-package) to add direct JSON addresses or Git repositories, including private repositories the Host can access, and install their bundles. Switching the bundle off removes the Discover tab and the `plugin_market` tool. The saved index sources stay in the profile.
 
 -----
 

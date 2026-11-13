@@ -9,7 +9,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: the Workspace registry's archive-admission family map this seam merges `job` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
-import type { JobId } from './brand.ts'
+import type { JobId } from './types.ts'
 
 /**
  * Job lifecycle: `running`, optionally `stopping`, then exactly one terminal

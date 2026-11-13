@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { appendHookInvoked, appendHookResult, summarizeStderr, type HookOutput } from '@deepseek-ai/dsh-hook-protocol'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A {@link HookOutput} with the required stream fields defaulted. */
 function output(over: Partial<HookOutput> = {}): HookOutput {
@@ -9,7 +10,7 @@ function output(over: Partial<HookOutput> = {}): HookOutput {
 
 describe('hook/* session events', () => {
   it('appendHookInvoked records a log-only hook/invoked (with matcher when present)', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookInvoked(session, { turn: 1, point: 'PreToolUse', dialect: 'claude-code', handlerId: 'h1', matcher: 'Bash' })
 
     const ev = session.snapshotEvents().find(e => e.type === 'hook/invoked')
@@ -22,7 +23,7 @@ describe('hook/* session events', () => {
   })
 
   it.each([{}, { matcher: undefined }])('omits an absent or undefined matcher from the event (%j)', (matcher) => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookInvoked(session, { turn: 2, point: 'Stop', dialect: 'codex', handlerId: 'h2', ...matcher })
 
     const ev = session.snapshotEvents().find(e => e.type === 'hook/invoked')
@@ -30,7 +31,7 @@ describe('hook/* session events', () => {
   })
 
   it('appendHookResult derives decision/exitCode/stderrSummary from the output', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookResult(session, {
       turn: 1, point: 'PreToolUse', handlerId: 'h1',
       stderrSummaryMaxChars: 500, durationMs: 5, output: output({ exitCode: 2, stderr: 'blocked', decision: 'deny' }),
@@ -41,7 +42,7 @@ describe('hook/* session events', () => {
     }
 
     // A result with no exit code / no stderr (e.g. a hook that could not run) omits both keys.
-    const session2 = Session.create(SessionId('s2'))
+    const session2 = Session.create(brandString<SessionId>('s2'))
     appendHookResult(session2, {
       turn: 1, point: 'Stop', handlerId: 'h3',
       stderrSummaryMaxChars: 500, durationMs: 5, output: output({ exitCode: undefined, decision: 'allow' }),
@@ -55,7 +56,7 @@ describe('hook/* session events', () => {
   })
 
   it('the decision falls back to stop on continue:false, else pass', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookResult(session, { turn: 1, point: 'Stop', handlerId: 'halt', stderrSummaryMaxChars: 500, durationMs: 5, output: output({ continue: false }) })
     appendHookResult(session, { turn: 1, point: 'Stop', handlerId: 'noop', stderrSummaryMaxChars: 500, durationMs: 5, output: output() })
     // An explicit decision wins over the continue:false fallback.
@@ -68,7 +69,7 @@ describe('hook/* session events', () => {
   })
 
   it('stderrSummary is trimmed and truncated to 500 characters with an ellipsis', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookResult(session, {
       turn: 1, point: 'PreToolUse', handlerId: 'long',
       stderrSummaryMaxChars: 500, durationMs: 5, output: output({ exitCode: 2, stderr: `  ${'x'.repeat(600)}  ` }),
@@ -80,7 +81,7 @@ describe('hook/* session events', () => {
   })
 
   it('a 500-character stderr is kept verbatim (the cap is exclusive)', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookResult(session, {
       turn: 1, point: 'PreToolUse', handlerId: 'edge',
       stderrSummaryMaxChars: 500, durationMs: 5, output: output({ exitCode: 2, stderr: 'y'.repeat(500) }),
@@ -92,7 +93,7 @@ describe('hook/* session events', () => {
   })
 
   it('an invoked/result pair correlates by handlerId', () => {
-    const session = Session.create(SessionId('s'))
+    const session = Session.create(brandString<SessionId>('s'))
     appendHookInvoked(session, { turn: 1, point: 'PreToolUse', dialect: 'claude-code', handlerId: 'pair-1' })
     appendHookResult(session, { turn: 1, point: 'PreToolUse', handlerId: 'pair-1', stderrSummaryMaxChars: 500, durationMs: 5, output: output({ decision: 'allow' }) })
 

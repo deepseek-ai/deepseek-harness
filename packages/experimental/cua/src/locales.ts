@@ -80,3 +80,26 @@ export const applicationAccessDisplay = {
     pt: pt.approve,
   },
 }
+
+/** Window consent never grants access to sibling windows or application launch. */
+export const windowAccessQuestion = {
+  en: 'Allow computer use to read, capture and control this window?',
+  zh: '允许电脑操作读取、截图并控制这个窗口吗？',
+  ja: 'このウィンドウの読み取り、撮影、操作を許可しますか？',
+  es: '¿Permitir leer, capturar y controlar esta ventana?',
+  fr: 'Autoriser la lecture, la capture et le contrôle de cette fenêtre ?',
+  de: 'Lesen, Aufnehmen und Steuern dieses Fensters erlauben?',
+  ru: 'Разрешить чтение, снимки и управление этим окном?',
+  pt: 'Permitir ler, capturar e controlar esta janela?',
+}
+/** Launch consent does not grant access to resulting windows. */
+export const launchAccessQuestion = {
+  en: 'Allow computer use to launch this entry? Window access is requested separately.',
+  zh: '允许电脑操作启动这个入口吗？窗口访问将单独请求授权。',
+  ja: 'この項目の起動を許可しますか？ウィンドウへのアクセスは別途確認します。',
+  es: '¿Permitir iniciar esta entrada? El acceso a ventanas se solicita por separado.',
+  fr: 'Autoriser le lancement de cette entrée ? L’accès aux fenêtres sera demandé séparément.',
+  de: 'Diesen Eintrag starten? Fensterzugriff wird separat angefragt.',
+  ru: 'Разрешить запуск? Доступ к окнам запрашивается отдельно.',
+  pt: 'Permitir iniciar esta entrada? O acesso às janelas é solicitado separadamente.',
+}

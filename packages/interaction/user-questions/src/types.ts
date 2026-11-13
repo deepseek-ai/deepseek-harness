@@ -2,7 +2,7 @@
 
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent/types'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-session-projection/types'
 

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-reject-silent-empty-catch.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-21-reject-silent-empty-catch.md
+/agent-note-reject-silent-empty-catch-clauses:
+  en: b058c52537202c50
+  zh: f48d8847967a31a8
+/agent-note-reject-silent-empty-catch-clauses/problem:
+  en: a89b84c7052329b4
+  zh: 9c511a0b4ee3f1ef
+/agent-note-reject-silent-empty-catch-clauses/decision:
+  en: 0392fb5d5cc3b387
+  zh: c4219e43bded8ce6
+/agent-note-reject-silent-empty-catch-clauses/alternatives-considered:
+  en: 65d05680072f8797
+  zh: e160d37d8ece30ad
+/agent-note-reject-silent-empty-catch-clauses/consequences:
+  en: 88a4796188c31922
+  zh: bfa8efc7944ea12a

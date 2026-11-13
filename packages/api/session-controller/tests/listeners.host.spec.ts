@@ -1,7 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm'
+import SessionStore, { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventListener, ListenerBuffer, ProjectionListener, eventItem } from '../src/history/listener.ts'
 import { SessionAssistantStreamsListener } from '../src/history/assistant-stream.ts'
@@ -25,14 +26,14 @@ async function fixture() {
   roots.push(ctx)
   await ctx.plugin(SessionStore)
   installSessionReadTestServices(ctx)
-  const session = ctx.sessions.create(SessionId('listener-target'), { meta: { cwd: '/listeners' } })
+  const session = ctx.sessions.create(brandString<SessionId>('listener-target'), { meta: { cwd: '/listeners' } })
   const abort = cancellation()
   const partial: Partial<Agent> = { id: session.id, session }
   const agent = partial as Agent
   const emit = (frame: AssistantStreamFrame) => { ctx.emit('agent/assistant-stream', { agent, frame }) }
   return { ctx, session, abort, emit, agent }
 }
-const start = (revision = 1): AssistantStreamFrame => ({ type: 'start', attemptId: LlmAttemptId('attempt'), revision, turn: 1, step: 1 })
+const start = (revision = 1): AssistantStreamFrame => ({ type: 'start', attemptId: brandString<LlmAttemptId>('attempt'), revision, turn: 1, step: 1 })
 
 describe('ListenerBuffer', () => {
   it('orders heterogeneous inputs lazily, supports prepend, and admits only one consumer', async () => {
@@ -105,7 +106,7 @@ describe('EventListener', () => {
 
   it('subscribes before an empty Session is created and follows its first later event', async () => {
     const { ctx, abort } = await fixture()
-    const id = SessionId('created-after-bind')
+    const id = brandString<SessionId>('created-after-bind')
     using listener = new EventListener(ctx, id, abort.signal)
     const session = ctx.sessions.create(id)
     const values = listener.events()[Symbol.asyncIterator]()
@@ -184,7 +185,7 @@ describe('ProjectionListener', () => {
     const dispose = vi.fn()
     vi.spyOn(ctx.sessionProjections, 'onEventChanged').mockImplementation((listener) => { receive = listener; return dispose })
     using listener = new ProjectionListener(ctx, session.id, abort.signal)
-    const other = ctx.sessions.create(SessionId('other'))
+    const other = ctx.sessions.create(brandString<SessionId>('other'))
     receive(other, [{ key: 'subagent', val: null }], SessionSeq(0))
     receive(session, [{ key: 'subagent', val: null }, { key: 'title', val: 'renamed' }], SessionSeq(1))
     const changes = listener.changes()[Symbol.asyncIterator]()
@@ -217,7 +218,7 @@ describe('AssistantStreamListener', () => {
     expect(listener.snapshot()).toMatchObject({ baseline: { revision: 1 }, ordinal: 1 })
     listener.setOrdinalCut(1)
     const frames = queue.items()[Symbol.asyncIterator]()
-    const end: AssistantStreamFrame = { type: 'end', attemptId: LlmAttemptId('attempt'), revision: 2, index: 0, outcome: { kind: 'abandoned' } }
+    const end: AssistantStreamFrame = { type: 'end', attemptId: brandString<LlmAttemptId>('attempt'), revision: 2, index: 0, outcome: { kind: 'abandoned' } }
     emit(end)
     expect(await frames.next()).toMatchObject({ value: { type: 'assistant-stream', frame: end } })
     ctx.emit('agent/disposed', { agent })

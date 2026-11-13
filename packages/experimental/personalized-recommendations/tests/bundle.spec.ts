@@ -4,9 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
-import * as yaml from 'js-yaml'
 import type { Context } from '@deepseek-ai/cordis'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { boot, initProfile, loadProfileDirectory, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import Hmr from '@deepseek-ai/dsh-hmr'
@@ -32,9 +31,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
   dependencies: Record<string, string>
   dsh: { bundle: { patch: string } }
 }
-const patch = yaml.load(readFileSync(new URL(`../${manifest.dsh.bundle.patch}`, import.meta.url), 'utf8'), {
-  schema: entryListSchema,
-}) as { insert: Row[] }[]
+const patch = parseEntryYaml(readFileSync(new URL(`../${manifest.dsh.bundle.patch}`, import.meta.url), 'utf8')) as { insert: Row[] }[]
 const rows = patch[0]?.insert ?? []
 
 /** A browser row's Host entry is an empty `apply`; its contribution loads in the Client. */
@@ -133,7 +130,7 @@ it('addresses every row through its own id and switches the shared card service 
   await toggle('action-cards', false)
   expect(ctx.get('actionCards')).toBeUndefined()
   expect(await skills()).toEqual([])
-  expect(yaml.load(await readFile(profile.patchPath, 'utf8'))).toEqual([
+  expect(parseEntryYaml(await readFile(profile.patchPath, 'utf8'))).toEqual([
     { id: 'creation-recommendations', disabled: true }, { id: 'action-cards', disabled: true },
   ])
   await toggle('action-cards', true)
@@ -144,5 +141,5 @@ it('addresses every row through its own id and switches the shared card service 
   expect(await skills()).toEqual(['personalized-pages'])
   await toggle('plugin-recommendations', true)
   expect(await skills()).toEqual(['official-plugins', 'personalized-pages'])
-  expect(yaml.load(await readFile(profile.patchPath, 'utf8'))).toEqual([])
+  expect(parseEntryYaml(await readFile(profile.patchPath, 'utf8'))).toEqual([])
 }, 30_000)

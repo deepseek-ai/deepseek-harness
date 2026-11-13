@@ -6,6 +6,7 @@ import z from '@deepseek-ai/schemastery'
 import semver from 'semver'
 import { evaluatePluginCompatibility, getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import { marketInstallTarget, type MarketIndex, type MarketPlugin, type MarketVersion } from '@deepseek-ai/dsh-plugin-market-index'
+import { parseGitMarketIndexSource } from '@deepseek-ai/dsh-plugin-market-index/source'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
 // Also declares the `pluginManager` service this one reads bundles from.
 import { pinnedGitOrigin } from '@deepseek-ai/dsh-plugin-manager'
@@ -31,6 +32,7 @@ import type {
 } from './types.ts'
 
 export type * from './types.ts'
+export { PluginMarketError, type PluginMarketErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -43,7 +45,7 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Index URLs in display order; Settings and `setIndexes` write this field without remounting the service. */
   indexes: Volatile<string[]>
-  /** Deadline for one index fetch, including the body. */
+  /** Deadline for an HTTP index or detail file request, including its body. */
   fetchTimeoutMs: number
   /** Largest accepted index body in bytes. */
   maxBytes: number
@@ -59,7 +61,7 @@ export interface Config {
   detailCacheMaxBytes: number
   /** Directory of the partial clones, relative to the profile directory; absent means `.plugin-market/repositories`. */
   detailCacheDir?: string
-  /** Deadline of one Git command of the clone fallback. */
+  /** Deadline for a Git index read and for each Git command used to read an index or plugin details. */
   detailGitTimeoutMs: number
   /** npm file CDNs read in order; a read's `npmFileSources` moves the CDNs it names first. */
   detailNpmFileSources: NpmFileSource[]
@@ -109,7 +111,7 @@ export default class PluginMarket extends TypertRemoteService {
   static inject = ['pluginManager']
 
   static Config = z.object({
-    indexes: z.array(z.string().pattern(/^https?:\/\/\S+$/u)).default([]).volatile(),
+    indexes: z.array(z.string().pattern(/^(?:https?|git\+(?:https|ssh)):\/\/\S+$/u)).default([]).volatile(),
     fetchTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(15000),
     maxBytes: z.natural().min(1).default(128 * 1024 * 1024),
     cacheTtlMs: z.natural().default(600000),
@@ -380,7 +382,7 @@ export default class PluginMarket extends TypertRemoteService {
 
   /**
    * The configured sources as written, each with the refusal that makes it unusable. Settings and profile files can
-   * write any http(s) string, so every use validates instead of the schema; an unusable source is listed with its error
+   * write a noncanonical address, so every use validates it. An unusable source is listed with its error
    * and never fetched, and a repeated URL counts once.
    */
   private sources(): { readonly url: string; readonly error?: string }[] {
@@ -422,9 +424,44 @@ export default class PluginMarket extends TypertRemoteService {
   }
 
   private async fetchIndex(url: string): Promise<MarketIndex> {
-    const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(this.config.fetchTimeoutMs)])
+    const git = url.startsWith('git+')
+    const timeoutMs = git ? this.config.detailGitTimeoutMs : this.config.fetchTimeoutMs
+    const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(timeoutMs)])
     const failed = (reason: string, cause?: unknown): RemoteError =>
       new RemoteError('plugin-market/fetch-failed', `Could not fetch ${url}: ${reason}`, { url, reason }, { cause })
+    const bytes = git ? await this.readGitIndex(url, signal, failed) : await this.fetchIndexBody(url, signal, failed)
+    const result = await parseIndexInWorker(bytes, url, this.lifetime.signal).catch((error: unknown) => {
+      throw failed(messageOf(error), error)
+    })
+    if (result.ok) return result.index
+    throw new RemoteError('plugin-market/invalid-index', `${url}: ${result.message}`, { url, path: result.path, reason: result.reason })
+  }
+
+  private async readGitIndex(url: string, signal: AbortSignal, failed: (reason: string) => RemoteError): Promise<Uint8Array> {
+    const { repository, ref, path } = parseGitMarketIndexSource(url)
+    let bytes: Uint8Array | undefined
+    try {
+      bytes = await this.repositories.readIndex(repository, ref, path, this.config.maxBytes, signal)
+    } catch (error) {
+      if (signal.aborted) throw failed(messageOf(signal.reason))
+      if (error instanceof DetailFailure) {
+        switch (error.reason) {
+          case 'denied': throw failed('Git could not read the repository. Check Host Git authentication, repository permissions, and the branch or commit')
+          case 'git-unavailable': throw failed('Git is unavailable on the Host')
+          case 'network': throw failed('Git could not connect to the repository')
+          case 'too-large': throw failed('The Git index file or repository exceeds its size limit')
+          default: break
+        }
+      }
+      throw failed('Git could not read the index file on the Host')
+    }
+    if (bytes === undefined) throw failed(`No regular index file at ${path}`)
+    return Uint8Array.from(bytes)
+  }
+
+  private async fetchIndexBody(
+    url: string, signal: AbortSignal, failed: (reason: string, cause?: unknown) => RemoteError,
+  ): Promise<Uint8Array> {
     let response: Response
     try {
       response = await fetch(url, { signal, redirect: 'error', headers: { accept: 'application/json' } })
@@ -435,12 +472,7 @@ export default class PluginMarket extends TypertRemoteService {
       await response.body?.cancel()
       throw failed(`HTTP ${String(response.status)}`)
     }
-    const bytes = await this.readBody(response, failed)
-    const result = await parseIndexInWorker(bytes, url, this.lifetime.signal).catch((error: unknown) => {
-      throw failed(messageOf(error), error)
-    })
-    if (result.ok) return result.index
-    throw new RemoteError('plugin-market/invalid-index', `${url}: ${result.message}`, { url, path: result.path, reason: result.reason })
+    return await this.readBody(response, failed)
   }
 
   /** Read the whole body, refusing it as soon as it exceeds `maxBytes`. */

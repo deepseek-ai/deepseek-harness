@@ -16,7 +16,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   allowAllAccess, bindSnapshotSelector, conversationSnapshot, sessionSnapshot,
 } from '@deepseek-ai/dsh-client-test-runtime'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubmitAttachment, SubmitOutcome } from '../src/client/contract/input.ts'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -26,6 +26,7 @@ import { SessionInputShell } from '../src/client/input/facade.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -77,6 +78,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     addFiles: () => null,
     useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
     retryFileUpload: undefined,
+    registerFileIntake: createComposerFileIntake(),
     removeAttachment: () => {},
     // Every id resolves so the bar's registry prune never drops a test image.
     resolveDraftAttachments: ids => ids.map(id => ({
@@ -95,6 +97,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     stop: vi.fn(),
     t: makeTranslate(zh, commonZh),
     variant: 'composer',
+    occurrence: 'main',
   }
   return render(<InputBar {...props} />)
 }

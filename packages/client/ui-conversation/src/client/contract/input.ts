@@ -11,6 +11,7 @@ import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/cli
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ArbitrateKey, ArbitrateOutcome, DraftQuote, Occurrence, ReferenceInsert, TokenSpan } from './draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission } from './composer-submission.ts'
 
@@ -182,8 +183,13 @@ export interface InputTarget {
 
 /** Per-session input facade owned by the conversation wiring layer. */
 export interface SessionInput extends InputTarget {
-  /** Insert selected transcript text as an atomic quote. @param text - nonblank selection. @returns whether editing accepted it. */
-  insertQuote(text: string): boolean
+  /**
+   * Insert text as an atomic quote.
+   * @param text - nonblank selection; the sent message carries it as a Markdown blockquote.
+   * @param summary - readable display shown in the composer instead of `text`.
+   * @returns whether editing accepted it.
+   */
+  insertQuote(text: string, summary?: QuoteSummary): boolean
 
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
@@ -256,8 +262,13 @@ export type DraftInitializationResult = 'applied' | 'preserved' | 'blocked'
  * paste/…) stay InputBar-private and never ride this face.
  */
 export interface InputActions {
-  /** Insert one nonblank transcript quote. @param text - selected text. @returns whether editing accepted it. */
-  insertQuote(text: string): boolean
+  /**
+   * Insert one nonblank quote.
+   * @param text - selected text; the sent message carries it as a Markdown blockquote.
+   * @param summary - readable display shown in the composer instead of `text`.
+   * @returns whether editing accepted it.
+   */
+  insertQuote(text: string, summary?: QuoteSummary): boolean
   /** @returns a revision-guarded copy of the current editor selection. */
   captureInsertion(): TokenSpan
   /**

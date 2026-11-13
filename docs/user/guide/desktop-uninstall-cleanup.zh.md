@@ -19,21 +19,25 @@
 
 脚本会永久删除当前用户默认的 Harness 主目录及下方列出的 Desktop 数据路径，包括会话、凭据、设置、插件、缓存和与 CLI 共用的状态。如果配置了 `DSH_HOME`，删除前请单独检查该目录；脚本仍会删除默认的 `~/.dsh`。隔离的开发和测试数据目录不在此清理范围内。
 
-Windows 卸载程序通常会删除脚本中列出的三个应用数据目录，但保留 Harness 主目录。若卸载时有文件残留或保留了应用数据，脚本也会清理这些目录。
+Windows 卸载程序通常会删除脚本中列出的两个应用数据目录，但保留 Harness 主目录。若卸载时有文件残留或保留了应用数据，脚本也会清理这些目录。
 
 ::: code-group
 
-```bash [macOS]
+```sh [macOS]
+sh -c '
 rm -rf -- \
   "$HOME/.dsh" \
   "$HOME/Library/Application Support/@deepseek-ai/dsh-desktop" \
-  "$HOME/Library/Application Support/DeepSeek Harness" \
   "$HOME/Library/Logs/DeepSeek Harness" \
   "$HOME/Library/Preferences/com.deepseek.dsh.plist" \
+  "$HOME/Library/Preferences/ByHost"/com.deepseek.dsh.ShipIt.*.plist \
   "$HOME/Library/Caches/com.deepseek.dsh" \
   "$HOME/Library/Caches/com.deepseek.dsh.ShipIt" \
   "$HOME/Library/HTTPStorages/com.deepseek.dsh" \
-  "$HOME/Library/Caches/@deepseek-aidsh-desktop-updater"
+  "$HOME/Library/Caches/@deepseek-aidsh-desktop-updater" \
+  "$(getconf DARWIN_USER_CACHE_DIR)/com.deepseek.dsh" \
+  "$(getconf DARWIN_USER_CACHE_DIR)/com.deepseek.dsh.helper"
+'
 ```
 
 ```powershell [Windows]
@@ -41,7 +45,6 @@ $ErrorActionPreference = 'Stop'
 @(
     (Join-Path $env:USERPROFILE '.dsh'),
     (Join-Path $env:APPDATA '@deepseek-ai\dsh-desktop'),
-    (Join-Path $env:APPDATA 'DeepSeek Harness'),
     (Join-Path $env:LOCALAPPDATA '@deepseek-aidsh-desktop-updater')
 ) | ForEach-Object {
     if (Test-Path -LiteralPath $_) {

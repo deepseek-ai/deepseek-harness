@@ -6,4 +6,6 @@ recording: authored
 header:
   class: ptc-timeout
   pin: true
+  systemPromptSource: ptc-persistent
+  toolSchemasSource: ptc-timeout-fallback
 permission: workspace-write

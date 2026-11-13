@@ -3,15 +3,16 @@ import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ToolCallId, HarnessError, type ContentBlock  } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, type ToolCallId, HarnessError, type ContentBlock  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
-import ToolRuntime, { defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { ToolContextUnavailableError, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
@@ -75,7 +76,7 @@ describe('ToolRuntime', () => {
       return next()
     })
     const input = {
-      calls: ['first', 'second'].map(id => ({ type: 'tool-call' as const, id: ToolCallId(id), name: 'echo', arguments: JSON.stringify({ text: id }) })),
+      calls: ['first', 'second'].map(id => ({ type: 'tool-call' as const, id: brandString<ToolCallId>(id), name: 'echo', arguments: JSON.stringify({ text: id }) })),
       signal: new AbortController().signal,
     }
     const pending = ctx.tools.execute(input)
@@ -163,7 +164,7 @@ describe('ToolRuntime', () => {
     })
     try {
       expect(Object.keys(ctx.tools.schemas()[0]!)).not.toContain('projectContent')
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('projection'), name: 'projected', arguments: {} })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('projection'), name: 'projected', arguments: {} })
       expect(result.content).toEqual([{ type: 'text', text: 'policy result' }])
       if (result.isError) throw new Error('expected successful projection')
       expect(result.value).toBe('canonical')
@@ -176,7 +177,7 @@ describe('ToolRuntime', () => {
     ctx.tools.register({ ...echoTool, projectContent() { throw new Error('projection failed') } })
     ctx.on('tools/post-execute', async (_exec, _result, next) => { postCalls++; return next() })
     try {
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('projection-error'), name: 'echo', arguments: {} })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('projection-error'), name: 'echo', arguments: {} })
       expect(result.isError).toBe(true)
       expect(JSON.stringify(result.content)).toContain('projection failed')
       expect(postCalls).toBe(0)
@@ -199,7 +200,7 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
     let observed: ToolExecutionResult | undefined
     ctx.on('tools/result', (_exec, result) => { observed = result })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result).toEqual({ content: [{ type: 'text', text: 'hi' }], isError: false, value: 'hi' })
     expect(observed).toEqual(result)
   })
@@ -217,7 +218,7 @@ describe('ToolRuntime', () => {
         return 'ok'
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'meta-tool', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'meta-tool', arguments: {} })
     expect(result).toEqual({
       content: [{ type: 'text', text: 'ok' }],
       isError: false,
@@ -235,7 +236,7 @@ describe('ToolRuntime', () => {
         return 'ok'
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'no-meta-tool', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'no-meta-tool', arguments: {} })
     expect(result).toEqual({ content: [{ type: 'text', text: 'ok' }], isError: false, value: 'ok' })
     expect('meta' in result).toBe(false)
   })
@@ -258,7 +259,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('bad-meta'), name: 'bad-meta', arguments: {},
+      callId: brandString<ToolCallId>('bad-meta'), name: 'bad-meta', arguments: {},
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.type === 'text' && result.content[0].text).toContain('Error:')
@@ -296,7 +297,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('throwing-meta'), name: 'throwing-meta', arguments: {},
+      callId: brandString<ToolCallId>('throwing-meta'), name: 'throwing-meta', arguments: {},
     })
 
     expect(result.isError).toBe(true)
@@ -321,7 +322,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('throwing-finalizer'), name: 'throwing-finalizer', arguments: {},
+      callId: brandString<ToolCallId>('throwing-finalizer'), name: 'throwing-finalizer', arguments: {},
     })
 
     expect(result).toEqual({
@@ -362,8 +363,8 @@ describe('ToolRuntime', () => {
       execute: async () => 42 as unknown as string,
     }))
 
-    const lossy = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('lossy'), name: 'lossy-output', arguments: {} })
-    const mismatch = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('mismatch'), name: 'wrong-output', arguments: {} })
+    const lossy = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('lossy'), name: 'lossy-output', arguments: {} })
+    const mismatch = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('mismatch'), name: 'wrong-output', arguments: {} })
     expect(lossy.error).toMatchObject({ info: { name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' } })
     expect(lossy.content[0]?.type === 'text' ? lossy.content[0].text : '').toContain('not lossless JSON')
     expect(mismatch.error).toMatchObject({ info: { name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' } })
@@ -386,7 +387,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('hostile-body'), name: 'hostile-body', arguments: {},
+      callId: brandString<ToolCallId>('hostile-body'), name: 'hostile-body', arguments: {},
     })
     expect(result.error?.message).toContain('value snapshot failed: body snapshot getter exploded')
     expect(result.error?.info).toEqual({ name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' })
@@ -412,7 +413,7 @@ describe('ToolRuntime', () => {
       execute: async () => 'ok',
     }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(projector), name: `throwing-${projector}`, arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(projector), name: `throwing-${projector}`, arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.error?.message)
       .toContain(projector === 'render' ? 'renderer exploded' : 'metadata exploded')
@@ -444,7 +445,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId(`hostile-${projector}`), name: `hostile-${projector}`, arguments: {},
+      callId: brandString<ToolCallId>(`hostile-${projector}`), name: `hostile-${projector}`, arguments: {},
     })
     expect(result.error?.message).toContain('snapshot getter exploded')
     expect(result.error?.info).toEqual({ name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' })
@@ -481,9 +482,9 @@ describe('ToolRuntime', () => {
       }
     })
 
-    const content = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('content'), name: 'projected', arguments: {} })
+    const content = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('content'), name: 'projected', arguments: {} })
     replacement = 'value'
-    const value = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('value'), name: 'projected', arguments: {} })
+    const value = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('value'), name: 'projected', arguments: {} })
 
     expect(content).toEqual({
       isError: false,
@@ -513,7 +514,7 @@ describe('ToolRuntime', () => {
       value: 'replacement',
       content: [{ type: 'text', text: 'also replacement' }],
     } as unknown as PostToolDecision))
-    const bothResult = await executeToolFixture(both, { signal: testToolSignal, callId: ToolCallId('both'), name: 'echo', arguments: {} })
+    const bothResult = await executeToolFixture(both, { signal: testToolSignal, callId: brandString<ToolCallId>('both'), name: 'echo', arguments: {} })
     expect(bothResult).toMatchObject({
       isError: true,
       error: { message: 'tools/post-execute accept decision cannot replace both value and content' },
@@ -522,7 +523,7 @@ describe('ToolRuntime', () => {
     const invalid = await setup()
     invalid.tools.register(echoTool)
     invalid.on('tools/post-execute', async () => ({ kind: 'accept', value: 1 }))
-    const invalidResult = await executeToolFixture(invalid, { signal: testToolSignal, callId: ToolCallId('invalid'), name: 'echo', arguments: {} })
+    const invalidResult = await executeToolFixture(invalid, { signal: testToolSignal, callId: brandString<ToolCallId>('invalid'), name: 'echo', arguments: {} })
     expect(invalidResult.error).toMatchObject({ info: { code: 'INVALID_TOOL_OUTPUT' } })
     expect('value' in invalidResult).toBe(false)
   })
@@ -535,7 +536,7 @@ describe('ToolRuntime', () => {
       feedback: [{ type: 'text', text: 'blocked by policy' }],
     }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('block'), name: 'echo', arguments: { text: 'secret' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('block'), name: 'echo', arguments: { text: 'secret' } })
     expect(result).toEqual({
       isError: true,
       error: { message: 'blocked by policy' },
@@ -549,7 +550,7 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
     ctx.on('tools/post-execute', async () => ({ kind: 'accept', value: 'replacement' }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('replace-value'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('replace-value'), name: 'echo', arguments: {} })
     expect(result).toEqual({
       isError: false,
       value: 'replacement',
@@ -565,8 +566,25 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
     ctx.on('tools/post-execute', async () => ({ kind: 'block', feedback: [...feedback] }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('block-message'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('block-message'), name: 'echo', arguments: {} })
     expect(result.error?.message).toBe(message)
+  })
+
+  it('records the structured identity of a post-execute block', async () => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    ctx.on('tools/post-execute', async (): Promise<PostToolDecision> => ({
+      kind: 'block',
+      feedback: [{ type: 'text', text: 'blocked by hook' }],
+      info: { name: 'HookBlockedError', code: 'HOOK_BLOCKED' },
+    }))
+
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('block-info'), name: 'echo', arguments: {} })
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: 'blocked by hook' }],
+      isError: true,
+      error: { message: 'blocked by hook', info: { name: 'HookBlockedError', code: 'HOOK_BLOCKED' } },
+    })
   })
 
   it('contains a non-JSON post-execute failure projection as a safe final error', async () => {
@@ -577,7 +595,7 @@ describe('ToolRuntime', () => {
       feedback: [{ type: 'text', text: 'blocked', invalid: () => undefined } as never],
     }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('invalid-block'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('invalid-block'), name: 'echo', arguments: {} })
     expect(result).toMatchObject({
       isError: true,
       error: { message: 'tool result must be losslessly JSON-serializable' },
@@ -595,7 +613,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('failed-replace'), name: 'throw-before-replace', arguments: {},
+      callId: brandString<ToolCallId>('failed-replace'), name: 'throw-before-replace', arguments: {},
     })
     expect(result.error?.message).toBe('tools/post-execute cannot replace the value of a failed result')
   })
@@ -608,7 +626,7 @@ describe('ToolRuntime', () => {
       return { kind: 'accept', value: 'replacement' }
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('post-disposed'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('post-disposed'), name: 'echo', arguments: {} })
     expect(result.error).toEqual({
       message: 'unknown tool "echo"',
       info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
@@ -628,7 +646,7 @@ describe('ToolRuntime', () => {
       })],
     }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('wrapper-failure'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('wrapper-failure'), name: 'echo', arguments: {} })
     expect(result).toEqual({
       isError: true,
       error: { message: 'wrapped failure' },
@@ -651,7 +669,7 @@ describe('ToolRuntime', () => {
       return { isError: false, value: 'replacement', content: [] }
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('wrapper-disposed'), name: 'echo', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('wrapper-disposed'), name: 'echo', arguments: {} })
     expect(result.error).toEqual({
       message: 'unknown tool "echo"',
       info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
@@ -665,10 +683,10 @@ describe('ToolRuntime', () => {
       name: 'meta-suppression',
       output: { ...echoTool.output, presentationMeta: () => ({ card: true }) },
     })
-    const direct = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('direct'), name: 'meta-suppression', arguments: {} })
+    const direct = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('direct'), name: 'meta-suppression', arguments: {} })
     const nested = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('nested'),
+      callId: brandString<ToolCallId>('nested'),
       name: 'meta-suppression',
       arguments: {},
       parent: Symbol('outer') as ToolExecutionToken,
@@ -700,7 +718,7 @@ describe('ToolRuntime', () => {
       async execute(_args, exec) {
         call += 1
         const nested = await executeToolFixture(ctx, {
-          signal: exec.signal, callId: ToolCallId(`nested-${call}`), name: 'terminal-nested', arguments: {}, parent: exec.token,
+          signal: exec.signal, callId: brandString<ToolCallId>(`nested-${call}`), name: 'terminal-nested', arguments: {}, parent: exec.token,
         })
         if (nested.concludesTurn) exec.concludeTurn()
         return nested.isError ? 'nested failed, composite recovered' : 'nested succeeded'
@@ -714,7 +732,7 @@ describe('ToolRuntime', () => {
       return { kind: 'block', feedback: [{ type: 'text', text: 'nested success rejected' }] }
     })
     const recovered = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('composite-vetoed'), name: 'composite', arguments: {},
+      signal: testToolSignal, callId: brandString<ToolCallId>('composite-vetoed'), name: 'composite', arguments: {},
     })
     expect(recovered.isError).toBe(false)
     expect(recovered.concludesTurn).toBeUndefined()
@@ -723,7 +741,7 @@ describe('ToolRuntime', () => {
     // The same nested call succeeding carries the marker; the composite
     // forwards it onto its own successful result.
     const concluded = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('composite-ok'), name: 'composite', arguments: {},
+      signal: testToolSignal, callId: brandString<ToolCallId>('composite-ok'), name: 'composite', arguments: {},
     })
     expect(concluded.isError).toBe(false)
     expect(concluded.concludesTurn).toBe(true)
@@ -739,7 +757,7 @@ describe('ToolRuntime', () => {
       },
     })
 
-    const unknown = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'nope', arguments: {} })
+    const unknown = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'nope', arguments: {} })
     expect(unknown.isError).toBe(true)
     expect(unknown.content[0]).toMatchObject({ text: 'Error: unknown tool "nope"' })
     // An unknown tool is a routable failure class, same as a tool-thrown one.
@@ -748,7 +766,7 @@ describe('ToolRuntime', () => {
       info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
     })
 
-    const thrown = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c2'), name: 'boom', arguments: {} })
+    const thrown = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c2'), name: 'boom', arguments: {} })
     expect(thrown.isError).toBe(true)
     expect(thrown.content[0]).toMatchObject({ text: 'Error: exploded' })
   })
@@ -769,10 +787,29 @@ describe('ToolRuntime', () => {
 
     await expect(executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('hostile'), name: 'hostile-throw', arguments: {},
+      callId: brandString<ToolCallId>('hostile'), name: 'hostile-throw', arguments: {},
     })).resolves.toMatchObject({
       isError: true,
       content: [{ type: 'text', text: 'Error: <unprintable thrown value>' }],
+    })
+  })
+
+  it('records ToolContextUnavailableError thrown by a tool body', async () => {
+    const ctx = await setup()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'needs-agent',
+      execute() { return Promise.reject(new ToolContextUnavailableError('needs-agent requires a calling agent')) },
+    })
+
+    const result = await executeToolFixture(ctx, {
+      signal: testToolSignal, callId: brandString<ToolCallId>('needs-agent'), name: 'needs-agent', arguments: {},
+    })
+
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: 'Error: needs-agent requires a calling agent' }],
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
     })
   })
 
@@ -806,7 +843,7 @@ describe('ToolRuntime', () => {
       return next()
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: denied by policy' })
     expect(result.error).toEqual({
@@ -823,7 +860,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> =>
       ({ kind: 'ask', reason: 'needs approval' }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: needs approval' })
   })
@@ -834,14 +871,15 @@ describe('ToolRuntime', () => {
 
     ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval (not yet supported)' })
+    expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
   })
 
   describe('ask routing through ctx.approval', () => {
     function fakeAgent(): Agent {
-      const session = Session.create(SessionId('approval-fake-agent'))
+      const session = Session.create(brandString<SessionId>('approval-fake-agent'))
       session.append('turn/start', { turn: 1 })
       return { session } as unknown as Agent
     }
@@ -874,7 +912,7 @@ describe('ToolRuntime', () => {
         ({ kind: 'ask', reason: 'hook wants a human', displayReason: { en: 'Allow it?', zh: '允许吗？' } }))
 
       const result = await executeToolFixture(ctx, {
-        callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' }, agent, signal: controller.signal,
+        callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' }, agent, signal: controller.signal,
       })
 
       expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'hi' }] })
@@ -890,9 +928,10 @@ describe('ToolRuntime', () => {
       ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('rejected'))
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: the user rejected tool "echo"' })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
     })
 
     it('denies with the cancellation reason on cancelled', async () => {
@@ -900,9 +939,10 @@ describe('ToolRuntime', () => {
       ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('cancelled'))
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: approval for tool "echo" was cancelled' })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_CANCELLED' })
     })
 
     it('returns ABORTED_BEFORE_DISPATCH when caller cancellation overtakes approval', async () => {
@@ -922,7 +962,7 @@ describe('ToolRuntime', () => {
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
       const controller = new AbortController()
       const pending = executeToolFixture(ctx, {
-        callId: ToolCallId('approval-cancelled'),
+        callId: brandString<ToolCallId>('approval-cancelled'),
         name: 'approval-probe',
         arguments: {},
         agent: fakeAgent(),
@@ -944,9 +984,10 @@ describe('ToolRuntime', () => {
       const ctx = await approvalSetup()
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval, but no approval channel is available' })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
     })
 
     it('denies an agent-less execution without asking — nothing to route or audit through', async () => {
@@ -958,10 +999,11 @@ describe('ToolRuntime', () => {
       })
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {} })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: {} })
       expect(asked).toBe(false)
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval, but the call has no agent to route it through' })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
     })
 
     it('turns a rogue outcome from a NON-conforming approval stand-in into an isError result', async () => {
@@ -973,7 +1015,7 @@ describe('ToolRuntime', () => {
       ctx.provide('approval', { request: () => Promise.resolve('yolo') } as unknown as ApprovalService)
       ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
 
-      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       const text = result.content[0]?.type === 'text' ? result.content[0].text : ''
       expect(text).toContain('unreachable')
@@ -987,7 +1029,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/post-execute', async (_exec, _result, _next): Promise<PostToolDecision> =>
       ({ kind: 'accept', content: [{ type: 'text', text: 'rewritten' }] }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(false)
     expect(result.content[0]).toMatchObject({ text: 'rewritten' })
   })
@@ -999,7 +1041,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/post-execute', async (_exec, _result, _next): Promise<PostToolDecision> =>
       ({ kind: 'block', feedback: [{ type: 'text', text: 'output rejected: try again' }] }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'output rejected: try again' })
   })
@@ -1022,7 +1064,7 @@ describe('ToolRuntime', () => {
       throw new HarnessError('policy failed', 'POLICY_FAILED')
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('bounded'), name: 'bounded', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('bounded'), name: 'bounded', arguments: {} })
 
     expect(result).toEqual({
       content: [{ type: 'text', text: 'bounded failure' }],
@@ -1046,7 +1088,7 @@ describe('ToolRuntime', () => {
       },
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('identity-finalizer'), name: 'identity-finalizer', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('identity-finalizer'), name: 'identity-finalizer', arguments: {} })
 
     expect(result.isError).toBe(false)
     expect(result.content).toEqual([{ type: 'text', text: '' }])
@@ -1066,7 +1108,7 @@ describe('ToolRuntime', () => {
         })],
       }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'rejected' })
     expect(result.additionalContexts).toMatchObject([{ content: [{ text: 'why it was rejected' }], source: { kind: 'test' } }])
@@ -1081,7 +1123,7 @@ describe('ToolRuntime', () => {
         content: [{ type: 'text', text: 'fyi' }], source: { kind: 'test' },
       })] }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.additionalContexts).toMatchObject([{ content: [{ text: 'fyi' }], source: { kind: 'test' } }])
   })
 
@@ -1126,7 +1168,7 @@ describe('ToolRuntime', () => {
       }
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('composite'), name: 'composite', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('composite'), name: 'composite', arguments: {} })
 
     expect(result.additionalContexts?.map(context => context.source)).toEqual([
       { kind: 'nested-1' },
@@ -1150,7 +1192,7 @@ describe('ToolRuntime', () => {
       },
     }))
 
-    const failed = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('failed'), name: 'failing-composite', arguments: {} })
+    const failed = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('failed'), name: 'failing-composite', arguments: {} })
     expect(failed.isError).toBe(true)
     expect(failed.additionalContexts?.map(context => context.source)).toEqual([{ kind: 'nested' }])
 
@@ -1161,7 +1203,7 @@ describe('ToolRuntime', () => {
         content: [{ type: 'text', text: 'block-only' }], source: { kind: 'blocker' },
       })],
     }))
-    const blocked = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('blocked'), name: 'failing-composite', arguments: {} })
+    const blocked = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('blocked'), name: 'failing-composite', arguments: {} })
     expect(blocked.isError).toBe(true)
     expect(blocked.additionalContexts?.map(context => context.source)).toEqual([{ kind: 'blocker' }])
   })
@@ -1184,7 +1226,7 @@ describe('ToolRuntime', () => {
       return decision
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'x' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'x' } })
     expect(result.isError).toBe(false)
     // pre runs fully (gate) before dispatch, then post runs over the result.
     expect(order).toEqual(['pre:before', 'pre:after', 'post:before', 'post:after'])
@@ -1212,7 +1254,7 @@ describe('ToolRuntime', () => {
     })
     ctx.on('tools/post-execute', async (_exec, _result, next) => { order.push('post'); return next() })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'traced', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'traced', arguments: { text: 'hi' } })
     expect(result).toEqual({ content: [{ type: 'text', text: 'hi' }], isError: false, value: [{ type: 'text', text: 'hi' }] })
     // The around-dispatch extension point wraps dispatch; pre gates before it, post runs over its result.
     expect(order).toEqual(['pre', 'execute:before', 'dispatch', 'execute:after', 'post'])
@@ -1236,7 +1278,7 @@ describe('ToolRuntime', () => {
 
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-in-pre'), name: 'must-not-run', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-in-pre'), name: 'must-not-run', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('cancelled in policy')
@@ -1261,7 +1303,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/pre-execute', async () => ({ kind: 'cancel' }))
 
     await expect(executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-by-policy'),
+      callId: brandString<ToolCallId>('cancelled-by-policy'),
       name: 'cancelled-by-policy',
       arguments: {},
       signal: new AbortController().signal,
@@ -1293,7 +1335,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('denied-after-cancel'), name: 'denied-after-cancel', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('denied-after-cancel'), name: 'denied-after-cancel', arguments: {}, signal: controller.signal,
     })
 
     await entered.promise
@@ -1326,7 +1368,7 @@ describe('ToolRuntime', () => {
 
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-pre-error'), name: 'must-not-run', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-pre-error'), name: 'must-not-run', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('cancelled in policy')
@@ -1365,7 +1407,7 @@ describe('ToolRuntime', () => {
 
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-in-around'), name: 'must-not-run', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-in-around'), name: 'must-not-run', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('cancelled in wrapper')
@@ -1399,7 +1441,7 @@ describe('ToolRuntime', () => {
 
     const controller = new AbortController()
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-wrapper'), name: 'must-not-run', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-wrapper'), name: 'must-not-run', arguments: {}, signal: controller.signal,
     })
 
     expect(result.error).toEqual({
@@ -1434,7 +1476,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-short-circuit'),
+      callId: brandString<ToolCallId>('cancelled-short-circuit'),
       name: 'short-circuited',
       arguments: {},
       signal: controller.signal,
@@ -1476,7 +1518,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-after-body'), name: 'completed-before-wrapper', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-after-body'), name: 'completed-before-wrapper', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('cancelled while wrapper settled')
@@ -1519,7 +1561,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-in-post'), name: 'completed-before-post', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-in-post'), name: 'completed-before-post', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('cancelled while post policy waits')
@@ -1553,7 +1595,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('wrapper-failure'), name: 'wrapper-failure', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('wrapper-failure'), name: 'wrapper-failure', arguments: {}, signal: controller.signal,
     })
 
     await entered.promise
@@ -1585,7 +1627,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('tool-failure'), name: 'tool-failure', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('tool-failure'), name: 'tool-failure', arguments: {}, signal: controller.signal,
     })
 
     await entered.promise
@@ -1610,7 +1652,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('post-failure'), name: 'echo', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('post-failure'), name: 'echo', arguments: {}, signal: controller.signal,
     })
 
     await entered.promise
@@ -1653,7 +1695,7 @@ describe('ToolRuntime', () => {
 
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-body'), name: 'cooperative', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancelled-body'), name: 'cooperative', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     expect(bodySignal).not.toBe(controller.signal)
@@ -1687,7 +1729,7 @@ describe('ToolRuntime', () => {
     const controller = new AbortController()
 
     await executeToolFixture(ctx, {
-      callId: ToolCallId('restored-signal'), name: 'echo', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('restored-signal'), name: 'echo', arguments: {}, signal: controller.signal,
     })
 
     expect(postSignal).toBe(controller.signal)
@@ -1711,7 +1753,7 @@ describe('ToolRuntime', () => {
     })
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('drain-body'), name: 'uncooperative', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('drain-body'), name: 'uncooperative', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort('must still drain')
@@ -1727,6 +1769,119 @@ describe('ToolRuntime', () => {
       error: { info: { name: 'AbortError', code: TOOL_ABORTED } },
       additionalContexts: [{ source: { kind: 'nested' } }],
     })
+  })
+
+  it.each([
+    ['the signal reason', (signal: AbortSignal): void => { signal.throwIfAborted() }, 'caller stopped'],
+    ['a dependency AbortError', (): void => { throw new DOMException('This operation was aborted', 'AbortError') }, 'This operation was aborted'],
+  ])('classifies %s thrown after cancellation as ABORTED', async (_label, fail, message) => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'throws-on-abort',
+      async execute(_args, exec) {
+        entered.resolve(undefined)
+        await new Promise<void>((resolve) => {
+          exec.signal.addEventListener('abort', () => { resolve() }, { once: true })
+        })
+        fail(exec.signal)
+        return 'not reached'
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('throws-on-abort'), name: 'throws-on-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    await expect(pending).resolves.toMatchObject({
+      content: [{ type: 'text', text: `Error: ${message}` }],
+      isError: true,
+      error: { message, info: { name: 'AbortError', code: TOOL_ABORTED } },
+    })
+  })
+
+  it('keeps a HarnessError thrown after cancellation', async () => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'domain-abort',
+      execute(_args, exec) {
+        entered.resolve(undefined)
+        return new Promise<string>((_resolve, reject) => {
+          exec.signal.addEventListener('abort', () => {
+            reject(new HarnessError('search cancelled', 'SEARCH_ABORTED'))
+          }, { once: true })
+        })
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('domain-abort'), name: 'domain-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    await expect(pending).resolves.toMatchObject({
+      content: [{ type: 'text', text: 'Error: search cancelled' }],
+      isError: true,
+      error: { info: { name: 'HarnessError', code: 'SEARCH_ABORTED' } },
+    })
+  })
+
+  it.each([
+    ['a distinct failure', (): void => { throw new Error('cleanup failed') }, 'Error: cleanup failed'],
+    ['an uninspectable value', (): void => {
+      throw new Proxy({}, {
+        getPrototypeOf: () => { throw new Error('prototype trap') },
+        has: () => { throw new Error('has trap') },
+        get: () => { throw new Error('get trap') },
+      })
+    }, 'Error: <unprintable thrown value>'],
+  ])('keeps %s thrown during cancellation without info', async (_label, fail, text) => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'fails-during-abort',
+      async execute(_args, exec) {
+        entered.resolve(undefined)
+        await new Promise<void>((resolve) => {
+          exec.signal.addEventListener('abort', () => { resolve() }, { once: true })
+        })
+        fail()
+        return 'not reached'
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('fails-during-abort'), name: 'fails-during-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    const result = await pending
+    expect(result).toMatchObject({ content: [{ type: 'text', text }], isError: true })
+    expect(result.error?.info).toBeUndefined()
+  })
+
+  it('keeps a plain failure without info when the call was not cancelled', async () => {
+    const ctx = await setup()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'plain-failure',
+      execute() { return Promise.reject(new Error('disk full')) },
+    })
+
+    const result = await executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('plain-failure'), name: 'plain-failure', arguments: {}, signal: new AbortController().signal,
+    })
+
+    expect(result).toMatchObject({ isError: true, error: { message: 'disk full' } })
+    expect(result.error?.info).toBeUndefined()
   })
 
   it('materializes a pre-aborted call and publishes one result without entering pipeline phases', async () => {
@@ -1758,7 +1913,7 @@ describe('ToolRuntime', () => {
     })
 
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('pre-aborted'),
+      callId: brandString<ToolCallId>('pre-aborted'),
       name: 'domain-abort',
       get arguments() { argumentReads += 1; return callerArguments },
       signal: callerSignal,
@@ -1790,7 +1945,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/result', () => { observed += 1 })
 
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('invalid-pre-aborted'),
+      callId: brandString<ToolCallId>('invalid-pre-aborted'),
       name: 'missing',
       arguments: { invalid: () => undefined },
       signal: AbortSignal.abort('already cancelled'),
@@ -1814,7 +1969,7 @@ describe('ToolRuntime', () => {
       reject: () => new Error('executor refuses direct calls'),
     })
     const prepared = await pipeline.prepare({
-      callId: ToolCallId('cancelled-refusal'), name: 'echo', arguments: {}, signal: AbortSignal.abort(),
+      callId: brandString<ToolCallId>('cancelled-refusal'), name: 'echo', arguments: {}, signal: AbortSignal.abort(),
     })
     expect(prepared.kind).toBe('final-result')
     if (prepared.kind === 'dispatch') throw new Error('cancelled call was dispatched')
@@ -1834,7 +1989,7 @@ describe('ToolRuntime', () => {
       return next()
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: nope' })
     expect(entered).toBe(false) // A denied call never enters the around-dispatch extension point.
@@ -1857,7 +2012,7 @@ describe('ToolRuntime', () => {
       return result
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'boom', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'boom', arguments: {} })
     expect(seen).toEqual({
       isError: true,
       error: { message: 'kaboom', info: { name: 'HarnessError', code: 'BOOM' } },
@@ -1882,7 +2037,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('frozen-canonical'), name: 'echo', arguments: { text: 'original' },
+      callId: brandString<ToolCallId>('frozen-canonical'), name: 'echo', arguments: { text: 'original' },
     })
     expect(mutationAttempts).toEqual([false, false])
     expect(result.isError ? undefined : result.value).toBe('original')
@@ -1903,7 +2058,7 @@ describe('ToolRuntime', () => {
       return next()
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'boom', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'boom', arguments: {} })
     expect(postSaw).toBe(true) // the normalized isError still flows through post-execute
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: exploded' })
@@ -1931,7 +2086,7 @@ describe('ToolRuntime', () => {
       return next()
     })
 
-    await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'signal-probe', arguments: {}, signal: upstream })
+    await executeToolFixture(ctx, { callId: brandString<ToolCallId>('c1'), name: 'signal-probe', arguments: {}, signal: upstream })
     expect(seenSignal).toBeDefined()
     expect(seenSignal).not.toBe(upstream)
     expect(seenSignal).not.toBe(replacement)
@@ -1949,7 +2104,7 @@ describe('ToolRuntime', () => {
     ctx.on('tools/execute', async (_exec: ToolDispatchExecution, _next: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult> =>
       ({ content: [{ type: 'text', text: 'ignored authored content' }], isError: false, value: 'short-circuited' }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'never-runs', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'never-runs', arguments: {} })
     expect(dispatched).toBe(false) // returning without next() skips core dispatch
     expect(result.content[0]).toMatchObject({ text: 'short-circuited' })
   })
@@ -1989,10 +2144,10 @@ describe('ToolRuntime', () => {
     })
 
     const first = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('cached-first'), name: 'string-output', arguments: {},
+      signal: testToolSignal, callId: brandString<ToolCallId>('cached-first'), name: 'string-output', arguments: {},
     })
     const second = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('cached-second'), name: 'object-output', arguments: {},
+      signal: testToolSignal, callId: brandString<ToolCallId>('cached-second'), name: 'object-output', arguments: {},
     })
 
     expect(first.isError ? undefined : first.value).toBe('cached')
@@ -2018,7 +2173,7 @@ describe('ToolRuntime', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('around-context'), name: 'echo', arguments: {},
+      callId: brandString<ToolCallId>('around-context'), name: 'echo', arguments: {},
     })
     expect(result.additionalContexts).toEqual([{
       id: expect.any(String) as unknown,
@@ -2033,12 +2188,42 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
     ctx.on('tools/execute', async () => { throw new Error('wrapper broke') })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result).toEqual({
       content: [{ type: 'text', text: 'Error: wrapper broke' }],
       error: { message: 'wrapper broke' },
       isError: true,
     })
+  })
+
+  it.each([
+    ['the caller reason after the body ran', true, (signal: AbortSignal): never => { throw signal.reason as Error }, { name: 'AbortError', code: TOOL_ABORTED }],
+    ['the caller reason before the body ran', false, (signal: AbortSignal): never => { throw signal.reason as Error }, { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH }],
+    ['an AbortError after the body ran', true, (): never => { throw new DOMException('wrapper stopped', 'AbortError') }, { name: 'AbortError', code: TOOL_ABORTED }],
+    ['a HarnessError after the body ran', true, (): never => { throw new HarnessError('wrapper failed', 'WRAPPER_FAILED') }, { name: 'HarnessError', code: 'WRAPPER_FAILED' }],
+    ['a plain failure after the body ran', true, (): never => { throw new Error('wrapper broke') }, undefined],
+  ])('classifies %s thrown by a tools/execute listener after cancellation', async (_label, delegate, fail, info) => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    const controller = new AbortController()
+    ctx.on('tools/execute', async (exec, next) => {
+      if (delegate) await next()
+      controller.abort(new Error('caller stopped'))
+      return fail(exec.signal)
+    })
+
+    const result = await executeToolFixture(ctx, { signal: controller.signal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual(info)
+  })
+
+  it('keeps a plain tools/execute listener failure without info when the caller did not cancel', async () => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    ctx.on('tools/execute', async () => { throw new DOMException('wrapper stopped', 'AbortError') })
+
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
+    expect(result.error).toEqual({ message: 'wrapper stopped' })
   })
 
   it('returns an isError result when a tools/pre-execute listener throws', async () => {
@@ -2048,7 +2233,7 @@ describe('ToolRuntime', () => {
       throw new Error('permission hook broke')
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
 
     expect(result).toEqual({
       content: [{ type: 'text', text: 'Error: permission hook broke' }],
@@ -2064,7 +2249,7 @@ describe('ToolRuntime', () => {
       throw new Error('post hook broke')
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
 
     expect(result).toEqual({
       content: [{ type: 'text', text: 'Error: post hook broke' }],
@@ -2080,7 +2265,7 @@ describe('ToolRuntime', () => {
       throw new HarnessError('denied', 'DENIED')
     })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
 
     expect(result).toMatchObject({
       isError: true,
@@ -2308,7 +2493,7 @@ describe('defineTool / schema DSL', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('c1'),
+      callId: brandString<ToolCallId>('c1'),
       name: 'typed-echo',
       arguments: { text: 'hello', uppercase: true },
     })
@@ -2367,7 +2552,7 @@ describe('defineTool / schema DSL', () => {
     // Execution round-trip
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('c1'),
+      callId: brandString<ToolCallId>('c1'),
       name: 'roundtrip',
       arguments: { req: 'hello' },
     })
@@ -2404,7 +2589,7 @@ describe('defineTool / schema DSL', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('c1'),
+      callId: brandString<ToolCallId>('c1'),
       name: 'raw-tool',
       arguments: { path: '/tmp' },
     })
@@ -2581,7 +2766,7 @@ describe('schema DSL optional and nested contracts', () => {
         throw { message: 'denied by object' }
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'object-thrower', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'object-thrower', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: denied by object' })
   })
@@ -2596,7 +2781,7 @@ describe('schema DSL optional and nested contracts', () => {
         throw 'kaboom'
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'string-thrower', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'string-thrower', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: kaboom' })
   })
@@ -2611,7 +2796,7 @@ describe('schema DSL optional and nested contracts', () => {
         throw { code: 500 }
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'object-no-message', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'object-no-message', arguments: {} })
     expect(result.isError).toBe(true)
     const firstContent = result.content[0]!
     expect(firstContent.type).toBe('text')
@@ -2750,7 +2935,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
       },
     }))
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'reader', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'reader', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({
       text: 'Error: invalid arguments: missing required property "path"',
@@ -2767,7 +2952,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
         return [{ type: 'text', text: `read ${args.path}` }]
       },
     }))
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'reader', arguments: { path: '/x' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'reader', arguments: { path: '/x' } })
     expect(result).toEqual({
       content: [{ type: 'text', text: 'read /x' }],
       isError: false,
@@ -2794,7 +2979,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
         return [{ type: 'text', text: args.path }]
       },
     }))
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'reader', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'reader', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.error).toEqual({
       message: 'invalid arguments: missing required property "path"',
@@ -2812,7 +2997,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
         throw new HarnessError('disk full', 'ENOSPC')
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'coded', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'coded', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.error).toEqual({ message: 'disk full', info: { name: 'HarnessError', code: 'ENOSPC' } })
     expect(result.content[0]).toMatchObject({ text: 'Error: disk full' })
@@ -2827,7 +3012,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
         throw new Error('just a message')
       },
     })
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'plain', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'plain', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.error).toEqual({ message: 'just a message' })
     expect(result.content[0]).toMatchObject({ text: 'Error: just a message' })
@@ -2850,7 +3035,7 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
     })
     // Missing the "required" path — but raw tools validate their own input, so
     // this reaches execute rather than being rejected by the harness.
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'raw', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'raw', arguments: {} })
     expect(result.isError).toBe(false)
   })
 
@@ -2963,9 +3148,9 @@ it('executes raw native calls without an Agent or Session and keeps input order'
     const batch = await ctx.tools.execute({
       signal: testToolSignal,
       calls: [
-        { type: 'tool-call', id: ToolCallId('raw'), name: 'echo', arguments: '{ "text": "raw value" }' },
-        { type: 'tool-call', id: ToolCallId('malformed'), name: 'echo', arguments: '{invalid' },
-        { type: 'tool-call', id: ToolCallId('empty'), name: 'echo', arguments: '' },
+        { type: 'tool-call', id: brandString<ToolCallId>('raw'), name: 'echo', arguments: '{ "text": "raw value" }' },
+        { type: 'tool-call', id: brandString<ToolCallId>('malformed'), name: 'echo', arguments: '{invalid' },
+        { type: 'tool-call', id: brandString<ToolCallId>('empty'), name: 'echo', arguments: '' },
       ],
     })
     expect(batch.results.map(outcome => outcome.callId)).toEqual(['raw', 'malformed', 'empty'])
@@ -2994,7 +3179,7 @@ it('settles every unowned call when cancellation precedes the batch', async () =
     abort.abort()
     const batch = await ctx.tools.execute({
       signal: abort.signal,
-      calls: ['first', 'second'].map(id => ({ type: 'tool-call', id: ToolCallId(id), name: 'echo', arguments: '{}' })),
+      calls: ['first', 'second'].map(id => ({ type: 'tool-call', id: brandString<ToolCallId>(id), name: 'echo', arguments: '{}' })),
     })
     expect(invoked).toBe(false)
     expect(batch.results.map(({ result }) => result.error?.info?.code)).toEqual([

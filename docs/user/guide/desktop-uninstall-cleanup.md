@@ -19,21 +19,25 @@ This step is optional. If you want to clean up local data, select the script for
 
 The scripts permanently delete the current user's default Harness home and the Desktop data paths listed below, including sessions, credentials, settings, plugins, caches, and shared CLI state. If you configured `DSH_HOME`, inspect that directory separately before deleting it; the scripts still delete the default `~/.dsh`. Isolated development and test data directories are outside this cleanup scope.
 
-On Windows, the uninstaller normally removes the three application-data directories listed in the script but retains the Harness home. The script also handles those directories if uninstallation left files behind or retained app data.
+On Windows, the uninstaller normally removes the two application-data directories listed in the script but retains the Harness home. The script also handles those directories if uninstallation left files behind or retained app data.
 
 ::: code-group
 
-```bash [macOS]
+```sh [macOS]
+sh -c '
 rm -rf -- \
   "$HOME/.dsh" \
   "$HOME/Library/Application Support/@deepseek-ai/dsh-desktop" \
-  "$HOME/Library/Application Support/DeepSeek Harness" \
   "$HOME/Library/Logs/DeepSeek Harness" \
   "$HOME/Library/Preferences/com.deepseek.dsh.plist" \
+  "$HOME/Library/Preferences/ByHost"/com.deepseek.dsh.ShipIt.*.plist \
   "$HOME/Library/Caches/com.deepseek.dsh" \
   "$HOME/Library/Caches/com.deepseek.dsh.ShipIt" \
   "$HOME/Library/HTTPStorages/com.deepseek.dsh" \
-  "$HOME/Library/Caches/@deepseek-aidsh-desktop-updater"
+  "$HOME/Library/Caches/@deepseek-aidsh-desktop-updater" \
+  "$(getconf DARWIN_USER_CACHE_DIR)/com.deepseek.dsh" \
+  "$(getconf DARWIN_USER_CACHE_DIR)/com.deepseek.dsh.helper"
+'
 ```
 
 ```powershell [Windows]
@@ -41,7 +45,6 @@ $ErrorActionPreference = 'Stop'
 @(
     (Join-Path $env:USERPROFILE '.dsh'),
     (Join-Path $env:APPDATA '@deepseek-ai\dsh-desktop'),
-    (Join-Path $env:APPDATA 'DeepSeek Harness'),
     (Join-Path $env:LOCALAPPDATA '@deepseek-aidsh-desktop-updater')
 ) | ForEach-Object {
     if (Test-Path -LiteralPath $_) {

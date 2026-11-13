@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -536,6 +536,12 @@ describe('RowActionToast', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it.each([t, tEn])('reports an unknown reading write outcome', async (translate) => {
+    const { notify } = await toastSurface(undefined, translate)
+    notify({ kind: 'readingFailed' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.readingFailed'))
+  })
+
   it.each([t, tEn])('reports clipboard success and failure through the global toast', async (translate) => {
     const { notify } = await toastSurface(undefined, translate)
     notify({ kind: 'sessionIdCopied' })
@@ -599,6 +605,18 @@ describe('RowActionToast', () => {
     expect(callOrder(dismissToast, 1)).toBeLessThan(callOrder(showArchived))
     expect(undoArchive).toHaveBeenCalledOnce()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+
+  it.each(['archived', 'stoppedAndArchived'] as const)('renders a %s follow-up in the same toast with undo', async (kind) => {
+    const { notify, undoArchive } = await toastSurface()
+    notify({ kind, sessionId: sid('one'), message: '已归档，工作树将被清理', tone: 'success' })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toContain('已归档，工作树将被清理')
+    notify({ kind, sessionId: sid('one'), message: '已归档，工作树清理失败', tone: 'warning' })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(undoArchive).toHaveBeenCalledWith(sid('one'))
   })
 
   it('the archived notice takes itself down, then undoes the archive or shows the archived rows', async () => {

@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { codingHarness, finalText, SYSTEM_PROMPT, waitForIdle } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * Proves durable conversation continuity end-to-end: run 1 tells the REAL model
@@ -16,7 +17,7 @@ import { codingHarness, finalText, SYSTEM_PROMPT, waitForIdle } from './harness.
  */
 
 const SECRET = 'plum-galaxy-1791'
-const SESSION_ID = SessionId('resume-e2e-session')
+const SESSION_ID = brandString<SessionId>('resume-e2e-session')
 
 let ctx: Context | undefined
 let root: string | undefined

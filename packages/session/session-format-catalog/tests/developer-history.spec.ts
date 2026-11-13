@@ -2,7 +2,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { createDeveloperMessage } from '@deepseek-ai/dsh-llm'
 import type { ToolAdditionBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import { createSessionFormatCatalog } from '@deepseek-ai/dsh-session-format'
@@ -10,6 +10,7 @@ import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to
 import { sessionFormatCatalogOptions } from '../src/generated.ts'
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function restore(session: Session): Session {
   const header = { ...session.header, delegationDepth: 0 }
@@ -21,7 +22,7 @@ function restore(session: Session): Session {
     reader.decodeRow(sessionFormatCatalog.encodeCurrentEvent(event as unknown as SessionFormatEvent))
   }
   const artifact = reader.finish()
-  return Session.fromRestore(SessionId(artifact.header.id), artifact.events as SessionEvent[],
+  return Session.fromRestore(brandString<SessionId>(artifact.header.id), artifact.events as SessionEvent[],
     artifact.header as unknown as SessionHeader, SessionLogOffset(artifact.inheritedEventCount), 'detached')
 }
 
@@ -78,7 +79,7 @@ describe('developer tool history', () => {
   })
 
   it('reconstructs remove/re-add and replacement from historical headers after restart and fork', () => {
-    const parent = Session.create(SessionId('tool-history'))
+    const parent = Session.create(brandString<SessionId>('tool-history'))
     const initial: ToolSchema = { name: 'search', description: 'Initial', parameters: {} }
     const first: ToolSchema = { name: 'search', description: 'First', parameters: { properties: { query: { type: 'string' } } }, deferLoading: true }
     const second: ToolSchema = { name: 'search', description: 'Second', parameters: { properties: { limit: { type: 'number' } } } }
@@ -113,7 +114,7 @@ describe('developer tool history', () => {
     expect(toolStates(parent)).toEqual(expected)
     expect(toolStates(restore(parent))).toEqual(expected)
 
-    const childId = SessionId('tool-history-fork')
+    const childId = brandString<SessionId>('tool-history-fork')
     const child = Session.create(childId, buildForkSeed(parent.snapshotEvents(), boundary),
       { ...parent.header, id: childId, parentSession: parent.id, isSeeded: true }, SessionLogOffset(boundary + 1))
     expect(toolStates(restore(child))).toEqual(expected.slice(0, 4))

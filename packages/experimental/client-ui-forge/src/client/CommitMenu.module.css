@@ -1,0 +1,139 @@
+/* Commit picker trigger in the changes header and its menu of commits, oldest first. */
+.anchor {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.trigger {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chosen .triggerName {
+  font-family: var(--ds-font-family-code);
+}
+
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.trigger:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.trigger svg {
+  flex: none;
+}
+
+.triggerName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu {
+  width: min(400px, calc(100vw - 24px));
+}
+
+.rows {
+  max-height: 360px;
+  overflow: auto;
+  padding: 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.allTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.sha {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.check {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.unchecked {
+  visibility: hidden;
+}
+
+.label {
+  padding: 6px 8px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.note {
+  padding: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* Why a Shift click left the shown commits unchanged; outside the scrolled rows so it stays in view. */
+.rejected {
+  padding: 8px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}

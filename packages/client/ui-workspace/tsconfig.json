@@ -9,7 +9,13 @@
   ],
   "references": [
     {
+      "path": "../../util/text-search"
+    },
+    {
       "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-session-status/tsconfig.client.json"
     },
     {
       "path": "../../preset/agent-preset-registry"

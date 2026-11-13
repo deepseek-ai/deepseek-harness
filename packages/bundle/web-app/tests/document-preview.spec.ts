@@ -11,7 +11,7 @@ import WorkspaceFiles, { type WorkspaceFileScope } from '@deepseek-ai/dsh-api-wo
 import OfficeKit from '@deepseek-ai/dsh-office-kit'
 import * as DocumentPreview from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
 import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -19,6 +19,7 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { expect, it, onTestFinished, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** The Peer an index render speaks for; this listener reads no field of it. */
 const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
@@ -106,12 +107,12 @@ it('loads the shipped Office rows with separately patched settings and authorize
     { kind: 'global', name: '__DSH_DOCUMENT_PREVIEW_CONFIG__', value: clientConfig },
   ])
 
-  const id = SessionId('office-loader')
+  const id = brandString<SessionId>('office-loader')
   const session = ctx.sessions.create(id, { meta: { cwd: directory } })
   const lookup = ctx.typert.lookups.get('workspaceFileScope')!
   const scope = await lookup.resolve(id) as WorkspaceFileScope | undefined
   if (scope === undefined) throw new Error('Expected the Session workspace scope')
-  expect(await lookup.resolve(SessionId('missing'))).toBeUndefined()
+  expect(await lookup.resolve(brandString<SessionId>('missing'))).toBeUndefined()
   const sourcePath = join(directory, 'report.docx')
   await writeFile(sourcePath, 'authorized OOXML')
   const signal = new AbortController().signal

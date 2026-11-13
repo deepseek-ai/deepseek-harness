@@ -43,14 +43,15 @@ it('saves index sources without remounting, announces them, and restores them at
     const fiber = entry.fiber
     let changes = 0
     ctx.on('plugin-market/changed', () => { changes++ })
-    await market.setIndexes(['https://second.example/index.json ', 'http://127.0.0.1:8080/index.json'])
-    expect(market.listIndexes().map(index => index.url)).toEqual(['https://second.example/index.json', 'http://127.0.0.1:8080/index.json'])
+    const sources = ['https://second.example/index.json', 'http://127.0.0.1:8080/index.json', 'git+ssh://git@git.example/plugins/market.git']
+    await market.setIndexes(['https://second.example/index.json ', ...sources.slice(1)])
+    expect(market.listIndexes().map(index => index.url)).toEqual(sources)
     expect(entry.fiber === fiber).toBe(true)
     expect(changes).toBe(1)
     expect(readFileSync(profile.patchPath, 'utf8')).toContain('https://second.example/index.json')
     await ctx.fiber.dispose()
     ctx = await start()
-    expect(ctx.get('pluginMarket')!.listIndexes().map(index => index.url)).toEqual(['https://second.example/index.json', 'http://127.0.0.1:8080/index.json'])
+    expect(ctx.get('pluginMarket')!.listIndexes().map(index => index.url)).toEqual(sources)
   } finally {
     try { await ctx?.fiber.dispose() } finally { rmSync(home, { recursive: true, force: true }) }
   }

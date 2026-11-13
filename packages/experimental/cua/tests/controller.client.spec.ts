@@ -7,8 +7,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = {
-  accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
+const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']
@@ -25,10 +24,43 @@ function fixture() {
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
   let locale = 'zh'
-  const controller = new PermissionController(actions, () => locale)
+  const windowsProvider = vi.fn(async () => ({ ok: true as const, value: true }))
+  const controller = new PermissionController(actions, () => locale, windowsProvider)
   onTestFinished(() => controller.dispose())
-  return { actions, controller, face: controller.face(), setLocale: (value: string) => { locale = value } }
+  return { actions, controller, windowsProvider, face: controller.face(), setLocale: (value: string) => { locale = value } }
 }
+
+it('identifies the enabled provider if the native helper cannot report its platform', async () => {
+  const f = fixture()
+  const statuses: boolean[] = []
+  onTestFinished(f.controller.state.subscribe(() => { statuses.push(f.controller.state.getSnapshot().windowsProvider.busy) }))
+  f.actions.systemStatus.mockRejectedValueOnce(new Error('helper missing'))
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().windowsProvider.value).toBe(true) })
+  expect(f.controller.state.getSnapshot().system.error).toBe('helper missing')
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.value).toEqual(value) })
+  expect(f.windowsProvider).toHaveBeenCalledOnce()
+  expect(statuses).toContain(true)
+  expect(statuses.at(-1)).toBe(false)
+})
+
+it('clears a superseded inventory read when native permissions become available', async () => {
+  const f = fixture()
+  const inventory = Promise.withResolvers<{ ok: true; value: boolean }>()
+  onTestFinished(() => { inventory.resolve({ ok: true, value: true }) })
+  f.windowsProvider.mockImplementationOnce(() => inventory.promise)
+  f.actions.systemStatus.mockRejectedValueOnce(new Error('helper missing'))
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().windowsProvider.busy).toBe(true) })
+  f.controller.setChanging(true)
+  expect(f.controller.state.getSnapshot().windowsProvider.busy).toBe(false)
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.value).toEqual(value) })
+  inventory.resolve({ ok: true, value: true })
+  await setImmediate()
+  expect(f.controller.state.getSnapshot().windowsProvider).toEqual({ value: null, busy: false, error: null })
+})
 
 it('refreshes after a request and then waits for an explicit refresh', async () => {
   vi.useFakeTimers()
@@ -40,11 +72,11 @@ it('refreshes after a request and then waits for an explicit refresh', async () 
     f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, screenRecording: true } })
     await vi.advanceTimersByTimeAsync(120000)
     expect(f.actions.systemStatus).toHaveBeenCalledOnce()
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: false })
     f.face.refresh()
     await vi.advanceTimersByTimeAsync(0)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: true })
   } finally { await f.controller.dispose(); vi.useRealTimers() }
 })
 
@@ -53,7 +85,7 @@ it('refreshes after a user request without treating the request itself as a gran
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
   expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', 'zh')
-  expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+  expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: false })
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()
   expect(f.controller.state.getSnapshot().toast).toBeNull()

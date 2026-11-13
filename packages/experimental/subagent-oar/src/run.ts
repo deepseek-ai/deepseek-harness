@@ -16,6 +16,7 @@ import type {
 } from '@botiverse/oar'
 import { awaitTurnEnd } from '@botiverse/oar/observe'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -49,7 +50,7 @@ export interface OarRunSpec {
 }
 
 type FailureStage = 'installation' | 'startup' | 'turn' | 'abort' | 'dispose'
-type FailureCategory = FailureClass | RejectionCode | 'not-found' | 'unsupported' | 'cancelled' | 'timeout'
+type FailureCategory = FailureClass | RejectionCode | 'not-found' | 'unsupported' | 'timeout'
 
 const failureAdvice: Readonly<Record<FailureStage, string>> = {
   installation: 'Install and authenticate the selected runtime before retrying.',
@@ -59,11 +60,56 @@ const failureAdvice: Readonly<Record<FailureStage, string>> = {
   dispose: 'The runtime may still be active; check it before starting another task.',
 }
 
-class OarFailure extends Error {
-  constructor(readonly stage: FailureStage, readonly category: FailureCategory, options?: ErrorOptions) {
-    super(`OAR subagent failure (stage: ${stage}; category: ${category}). ${failureAdvice[stage]}`, options)
+/**
+ * Every {@link OarFailure} code:
+ * - `OAR_INVALID_TASK` — the task is empty or contains a non-text block; send one non-empty text task.
+ * - `OAR_RUNTIME_UNAVAILABLE` — the selected runtime is unsupported, not installed, or its installation probe failed;
+ *   install and authenticate it before retrying.
+ * - `OAR_START_FAILED` — the runtime could not open or publish a session; check its installation, authentication, and launch settings.
+ * - `OAR_TURN_FAILED` — the native turn failed or was rejected; check the runtime and its account before retrying.
+ * - `OAR_ABORT_FAILED` — the runtime did not accept interruption; session disposal was requested.
+ * - `OAR_DISPOSE_FAILED` — session disposal failed and the runtime may still be active; check it before starting another task.
+ */
+export const OAR_FAILURE_CODES = [
+  'OAR_INVALID_TASK',
+  'OAR_RUNTIME_UNAVAILABLE',
+  'OAR_START_FAILED',
+  'OAR_TURN_FAILED',
+  'OAR_ABORT_FAILED',
+  'OAR_DISPOSE_FAILED',
+] as const
+
+/** One code from {@link OAR_FAILURE_CODES}. */
+export type OarFailureCode = typeof OAR_FAILURE_CODES[number]
+
+const stageCodes: Readonly<Record<FailureStage, OarFailureCode>> = {
+  installation: 'OAR_RUNTIME_UNAVAILABLE',
+  startup: 'OAR_START_FAILED',
+  turn: 'OAR_TURN_FAILED',
+  abort: 'OAR_ABORT_FAILED',
+  dispose: 'OAR_DISPOSE_FAILED',
+}
+
+/** OAR delegation failure carrying a stable {@link OarFailureCode}; native causes stay in `cause` and can contain secrets. */
+export class OarFailure extends HarnessError {
+  override readonly code: OarFailureCode
+
+  /**
+   * @param message - safe summary without native detail.
+   * @param code - failure class.
+   * @param options - native cause, retained for local debugging.
+   */
+  constructor(message: string, code: OarFailureCode, options?: ErrorOptions) {
+    super(message, code, options)
     this.name = 'OarFailure'
+    this.code = code
   }
+}
+
+/** Build the safe stage and category summary for one native failure. */
+function stageFailure(stage: FailureStage, category: FailureCategory, options?: ErrorOptions): OarFailure {
+  const message = `OAR subagent failure (stage: ${stage}; category: ${category}). ${failureAdvice[stage]}`
+  return new OarFailure(message, stageCodes[stage], options)
 }
 
 function reportFailure(spec: OarRunSpec, error: OarFailure): void {
@@ -78,20 +124,21 @@ function reportFailure(spec: OarRunSpec, error: OarFailure): void {
  * Validate one text task before opening a native session.
  * @param prompt - content supplied by the shared subagent service.
  * @returns the text blocks in their original order, without inserted separators.
+ * @throws {OarFailure} `OAR_INVALID_TASK` when the task is empty or contains a non-text block.
  */
 export function textTask(prompt: readonly ContentBlock[]): string {
   if (prompt.length === 0) {
-    throw new Error('subagent-oar: the one-shot task must contain only text blocks')
+    throw new OarFailure('subagent-oar: the one-shot task must contain only text blocks', 'OAR_INVALID_TASK')
   }
   const texts: string[] = []
   for (const block of prompt) {
     if (block.type !== 'text') {
-      throw new Error('subagent-oar: the one-shot task must contain only text blocks')
+      throw new OarFailure('subagent-oar: the one-shot task must contain only text blocks', 'OAR_INVALID_TASK')
     }
     texts.push(block.text)
   }
   if (texts.every(text => text.trim().length === 0)) {
-    throw new Error('subagent-oar: the one-shot task must not be empty')
+    throw new OarFailure('subagent-oar: the one-shot task must not be empty', 'OAR_INVALID_TASK')
   }
   return texts.join('')
 }
@@ -101,15 +148,16 @@ function isAborted(signal: AbortSignal): boolean {
   return signal.aborted
 }
 
-function cancellationFailure(): OarFailure {
-  return new OarFailure('startup', 'cancelled')
+/** The caller cancelled delegation before the run was published. */
+function cancellationFailure(): DOMException {
+  return new DOMException('OAR subagent startup was cancelled', 'AbortError')
 }
 
 async function disposeSession(session: Session, spec: OarRunSpec): Promise<void> {
   try {
     await session.dispose()
   } catch (error: unknown) {
-    const failure = new OarFailure('dispose', 'unknown', { cause: error })
+    const failure = stageFailure('dispose', 'unknown', { cause: error })
     reportFailure(spec, failure)
     throw failure
   }
@@ -125,7 +173,7 @@ function completedTurn(outcome: TurnOutcome, output: readonly ContentBlock[]): S
       return {
         output,
         stopReason: 'error',
-        diagnostic: new OarFailure('turn', outcome.failure).message,
+        diagnostic: stageFailure('turn', outcome.failure).message,
       }
     /* v8 ignore next -- OAR supplies the closed TurnOutcome union; native parsing belongs to its adapters. */
     default: return assertNever(outcome)
@@ -156,7 +204,7 @@ function publishRun(
     try {
       await session.abort()
     } catch (error: unknown) {
-      reportFailure(spec, new OarFailure('abort', 'unknown', { cause: error }))
+      reportFailure(spec, stageFailure('abort', 'unknown', { cause: error }))
     }
   }
   const interrupt = (reason: 'cancelled' | 'timeout'): void => {
@@ -191,7 +239,7 @@ function publishRun(
       return {
         output: collectOutput(),
         stopReason: 'error',
-        diagnostic: new OarFailure('turn', admitted.code).message,
+        diagnostic: stageFailure('turn', admitted.code).message,
       }
     }
     const outcome = await awaitTurnEnd(session, admitted.seq, inputId)
@@ -206,11 +254,11 @@ function publishRun(
           stopped.promise,
         ])
       } catch (error: unknown) {
-        throw new OarFailure('turn', 'unknown', { cause: error })
+        throw stageFailure('turn', 'unknown', { cause: error })
       }
     },
     collectOutput,
-    collectDiagnostic: () => new OarFailure('turn', 'unknown').message,
+    collectDiagnostic: () => stageFailure('turn', 'unknown').message,
     cancelled: () => phase === 'cancelled',
     onError: spec.onError,
     signal: request.signal,
@@ -252,16 +300,16 @@ export async function startOarRun(
   try {
     installation = await spec.runtime.installation?.({ env: oarEnvironment(spec.env) })
   } catch (error: unknown) {
-    const failure = new OarFailure('installation', 'unknown', { cause: error })
+    const failure = stageFailure('installation', 'unknown', { cause: error })
     reportFailure(spec, failure)
     throw failure
   }
   if (isAborted(request.signal)) throw cancellationFailure()
   if (installation === undefined || installation.kind === 'unsupported') {
-    throw new OarFailure('installation', 'unsupported')
+    throw stageFailure('installation', 'unsupported')
   }
   if (installation.kind === 'not_found') {
-    throw new OarFailure('installation', 'not-found')
+    throw stageFailure('installation', 'not-found')
   }
 
   let session: Session
@@ -275,7 +323,7 @@ export async function startOarRun(
     })
   } catch (error: unknown) {
     if (isAborted(request.signal)) throw cancellationFailure()
-    const failure = new OarFailure('startup', 'unknown', { cause: error })
+    const failure = stageFailure('startup', 'unknown', { cause: error })
     reportFailure(spec, failure)
     throw failure
   }
@@ -288,7 +336,7 @@ export async function startOarRun(
   try {
     run = publishRun(session, prompt, request, spec)
   } catch (error: unknown) {
-    const failure = new OarFailure('startup', 'unknown', { cause: error })
+    const failure = stageFailure('startup', 'unknown', { cause: error })
     reportFailure(spec, failure)
     await disposeSession(session, spec)
     throw failure

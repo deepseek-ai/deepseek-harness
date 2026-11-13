@@ -8,7 +8,10 @@ import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { inspectCheckout } from '../src/git.ts'
 import { FilterConfigError, localChanges, localDiff } from '../src/local-diff.ts'
 import type { DiffConfig } from '../src/local-diff.ts'
+import { FileLayers } from '../src/layers.ts'
 import { git, gitContext, plainSession, repository, sandboxRecord, scratch } from './harness.ts'
+
+const LAYERS = new FileLayers([], [])
 
 const CONFIG: DiffConfig = {
   gitCommand: 'git', gitTimeoutMs: 10_000, graceMs: 500, maxOutputBytes: 1_048_576, maxDiffBytes: 1_048_576, maxUntrackedFiles: 100,
@@ -54,7 +57,7 @@ describe('diff helper restrictions', () => {
     const spawn = vi.spyOn(b.ctx.subprocess, 'spawn')
 
     try {
-      await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+      await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
       await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
       const diffs = spawn.mock.calls.map(([spec]) => spec).filter(spec => spec.argv.includes('diff'))
       expect(diffs).toHaveLength(2)
@@ -90,7 +93,7 @@ describe('diff helper restrictions', () => {
     expect(await readFile(marker, 'utf8')).toBe('ran')
     await rm(marker)
 
-    await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
     await expect(access(marker)).rejects.toThrow()
   })
@@ -103,7 +106,7 @@ describe('diff helper restrictions', () => {
     await git(b.repo, 'config', 'filter.demo.clean', `${b.command} clean`)
     await writeFile(join(b.repo, 'tracked.txt'), 'initial\r\n')
 
-    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     const changes = await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
     expect(diff.files).toEqual([])
     expect(changes?.files.some(file => file.path === 'tracked.txt')).toBe(false)
@@ -124,7 +127,7 @@ describe('diff helper restrictions', () => {
     const index = await readFile(join(b.repo, '.git', 'index'))
     const indexStat = await stat(join(b.repo, '.git', 'index'))
 
-    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, b.signal)
+    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, LAYERS, b.signal)
     const changes = await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
 
     expect(diff.files.find(file => file.path === 'tracked.txt')?.hunks.flatMap(hunk => hunk.lines)).toEqual(['-initial', '+changed'])
@@ -145,7 +148,7 @@ describe('diff helper restrictions', () => {
     expect(await readFile(b.marker, 'utf8')).toBe('ran')
     await rm(b.marker)
 
-    await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, b.signal)
+    await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, LAYERS, b.signal)
     await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
     await expect(access(b.marker)).rejects.toThrow()
   })
@@ -156,7 +159,7 @@ describe('diff helper restrictions', () => {
     await git(b.repo, 'config', key, b.command)
     await writeFile(join(b.repo, 'tracked.txt'), 'changed\n')
 
-    await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, b.signal)
+    await localDiff(b.ctx, CONFIG, b.session, b.repo, b.fork, { kind: 'unstaged' }, LAYERS, b.signal)
     await localChanges(b.ctx, CONFIG, b.session, b.inspection, null, b.signal)
     await expect(access(b.marker)).rejects.toThrow()
   })
@@ -170,7 +173,7 @@ describe('diff helper restrictions', () => {
     await writeFile(join(nested, 'tracked.txt'), 'dirty\n')
     await git(nested, 'config', 'core.fsmonitor', b.command)
     await git(b.repo, 'config', 'diff.submodule', 'diff')
-    const clean = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    const clean = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     expect(clean.files).toEqual([])
     await expect(access(b.marker)).rejects.toThrow()
 
@@ -179,7 +182,7 @@ describe('diff helper restrictions', () => {
     await git(nested, 'config', 'user.email', 'forge@example.invalid')
     await git(nested, '-c', 'commit.gpgSign=false', 'commit', '-am', 'nested change')
     await git(nested, 'config', 'core.fsmonitor', b.command)
-    const changed = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    const changed = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     expect(changed.files.map(file => file.path)).toEqual(['nested'])
     expect(changed.files[0]?.hunks.flatMap(hunk => hunk.lines).join('\n')).toContain('Subproject commit')
     await expect(access(b.marker)).rejects.toThrow()
@@ -190,7 +193,7 @@ describe('diff helper restrictions', () => {
     await git(b.repo, 'config', `filter.${'long'.repeat(200)}.clean`, b.command)
     await writeFile(join(b.repo, '.gitattributes'), `tracked.txt filter=${'long'.repeat(200)}\n`)
     await writeFile(join(b.repo, 'tracked.txt'), 'changed\n')
-    await expect(localDiff(b.ctx, { ...CONFIG, maxDiffBytes: 128 }, b.session, b.repo, null, { kind: 'unstaged' }, b.signal))
+    await expect(localDiff(b.ctx, { ...CONFIG, maxDiffBytes: 128 }, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal))
       .rejects.toBeInstanceOf(FilterConfigError)
     await expect(localChanges(b.ctx, { ...CONFIG, maxOutputBytes: 128 }, b.session, b.inspection, null, b.signal))
       .rejects.toBeInstanceOf(FilterConfigError)
@@ -203,7 +206,7 @@ describe('diff helper restrictions', () => {
     const resolve = vi.spyOn(b.ctx.subprocess, 'resolveExecutable').mockRejectedValue(failure)
     const spawn = vi.spyOn(b.ctx.subprocess, 'spawn')
     try {
-      await expect(localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal))
+      await expect(localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal))
         .rejects.toMatchObject({ name: 'FilterConfigError', cause: failure })
       expect(spawn).not.toHaveBeenCalled()
     } finally { resolve.mockRestore(); spawn.mockRestore() }
@@ -218,9 +221,9 @@ describe('diff helper restrictions', () => {
     await git(b.repo, 'commit', '-m', 'pointer')
     await git(b.repo, 'config', 'filter.lfs.process', b.command)
     await git(b.repo, 'config', 'filter.lfs.required', 'true')
-    await expect(localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)).resolves.toMatchObject({ files: [] })
+    await expect(localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)).resolves.toMatchObject({ files: [] })
     await writeFile(join(b.repo, 'asset.bin'), Uint8Array.from([0, 1, 2, 3]))
-    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     expect(diff.files).toMatchObject([{ path: 'asset.bin', binary: true, hunks: [] }])
     await expect(access(b.marker)).rejects.toThrow()
   })
@@ -241,7 +244,7 @@ describe('diff helper restrictions', () => {
     expect(await readFile(b.marker, 'utf8')).toBe('ran')
     await rm(b.marker)
 
-    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, b.signal)
+    const diff = await localDiff(b.ctx, CONFIG, b.session, b.repo, null, { kind: 'unstaged' }, LAYERS, b.signal)
     expect(diff.files).toMatchObject([{ path: 'asset.txt', additions: 1, deletions: 3 }])
     await expect(access(b.marker)).rejects.toThrow()
   })

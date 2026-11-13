@@ -1,7 +1,8 @@
 /** Capability-driven transcript updates through the real pi-ai serializers and shared runtime. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createAssistantMessage, createDeveloperMessage, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createAssistantMessage, createDeveloperMessage, createMessage, createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ToolSchema, ToolUpdate } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { Api, Model } from '@earendil-works/pi-ai'
@@ -100,12 +101,12 @@ describe('serialized conversation updates', () => {
       })
       ctx.effect(() => ctx.llm.registerAdapter(['openai'], adapter))
       const first = await assemble(ctx, {
-        provider: 'openai', model: 'gpt-6-sol', reasoningEffort: ReasoningEffortId('low'), messages: [user('first')],
+        provider: 'openai', model: 'gpt-6-sol', reasoningEffort: brandString<ReasoningEffortId>('low'), messages: [user('first')],
       })
       expect(first.finish).toEqual({ kind: 'stop' })
       expect(first.message.source).toMatchObject({ replayState: { response: { providerThinkingLevel: 'low' } } })
       const second = await assemble(ctx, {
-        provider: 'openai', model: 'gpt-6-sol', reasoningEffort: ReasoningEffortId('high'),
+        provider: 'openai', model: 'gpt-6-sol', reasoningEffort: brandString<ReasoningEffortId>('high'),
         messages: [user('first'), first.message, user('next')],
       })
       expect(second.finish).toEqual({ kind: 'stop' })

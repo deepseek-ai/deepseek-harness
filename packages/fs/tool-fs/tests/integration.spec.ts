@@ -10,21 +10,22 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mountAgentLoopTestDependencies, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { FsVersion } from '@deepseek-ai/dsh-fs'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const testToolSignal = new AbortController().signal
 
@@ -38,7 +39,7 @@ let callCounter = 0
 function call(name: string, args: unknown) {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: args,
     agent: { session } as never,
@@ -355,6 +356,27 @@ describe('bare provider (no dsh-fs-observation-policy)', () => {
     expect(text(result)).toContain('1: alpha')
   })
 
+  it('reports a host metadata fault as a typed filesystem failure', async () => {
+    await symlink(join(dir, 'loop'), join(dir, 'loop'))
+    const result = await call('read', { file_path: 'loop' })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_IO_ERROR' })
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('reports unreadable content as FS_PERMISSION_DENIED', async () => {
+    const file = join(dir, 'locked.txt')
+    await writeFile(file, 'secret')
+    await chmod(file, 0o000)
+    try {
+      const result = await call('read', { file_path: 'locked.txt' })
+      expect(result.isError).toBe(true)
+      expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_PERMISSION_DENIED' })
+      expect(text(result)).toContain('permission denied')
+    } finally {
+      await chmod(file, 0o600)
+    }
+  })
+
   it('write unconditionally creates a new file', async () => {
     const result = await call('write', { file_path: 'new.txt', content: 'fresh' })
     expect(result.isError).toBe(false)
@@ -423,7 +445,7 @@ describe('per-session cwd', () => {
   const callIn = (sessionObj: object, name: string, args: unknown) =>
     executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId(`call-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-${++callCounter}`),
       name,
       arguments: args,
       agent: { session: sessionObj } as never,
@@ -468,9 +490,9 @@ describe('signal, concurrency, and the fs/observed contract', () => {
 
   const session = { header: { get cwd() { return dir } } }
   const callSig = (signal: AbortSignal, name: string, args: unknown) =>
-    executeToolFixture(ctx, { callId: ToolCallId(`c-${++callCounter}`), name, arguments: args, agent: { session } as never, signal })
+    executeToolFixture(ctx, { callId: brandString<ToolCallId>(`c-${++callCounter}`), name, arguments: args, agent: { session } as never, signal })
   const callOwned = (name: string, args: unknown) =>
-    executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`c-${++callCounter}`), name, arguments: args, agent: { session } as never })
+    executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(`c-${++callCounter}`), name, arguments: args, agent: { session } as never })
 
   it('a pre-aborted registry call skips read/write/edit with ABORTED_BEFORE_DISPATCH', async () => {
     await writeFile(join(dir, 'a.txt'), 'hello')
@@ -581,7 +603,7 @@ describe('current working directory', () => {
       await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: dir })
       fiber = await ctx.plugin(ToolFs)
       const handle = await ctx.agents.create({
-        sessionId: SessionId('current-directory-files'), meta: { cwd: dir },
+        sessionId: brandString<SessionId>('current-directory-files'), meta: { cwd: dir },
         agentOptions: { provider: 'mock', model: 'mock' },
       })
       const agent = handle.agent
@@ -590,20 +612,20 @@ describe('current working directory', () => {
       await ctx.workingDirectory.set(agent, next)
       const current = ctx.workingDirectory.get(session)
       const read = await executeToolFixture(ctx, {
-        signal: testToolSignal, callId: ToolCallId('read-current'), name: 'read',
+        signal: testToolSignal, callId: brandString<ToolCallId>('read-current'), name: 'read',
         arguments: { file_path: 'note.txt' }, agent,
       })
       expect(read.isError).toBe(false)
       expect(text(read)).toContain('current')
       expect(read.meta).toMatchObject({ path: join(current, 'note.txt') })
       const write = await executeToolFixture(ctx, {
-        signal: testToolSignal, callId: ToolCallId('write-current'), name: 'write',
+        signal: testToolSignal, callId: brandString<ToolCallId>('write-current'), name: 'write',
         arguments: { file_path: 'created.txt', content: 'new' }, agent,
       })
       expect(write.isError).toBe(false)
       expect(write.meta).toEqual({ operation: 'create', path: join(current, 'created.txt'), diffs: [] })
       const edit = await executeToolFixture(ctx, {
-        signal: testToolSignal, callId: ToolCallId('edit-current'), name: 'edit',
+        signal: testToolSignal, callId: brandString<ToolCallId>('edit-current'), name: 'edit',
         arguments: { file_path: 'created.txt', old_string: 'new', new_string: 'edited' }, agent,
       })
       expect(edit.isError).toBe(false)
@@ -619,13 +641,13 @@ describe('current working directory', () => {
           if (read === undefined) throw new Error('missing read binding')
           const value = await read({ file_path: 'note.txt' })
           expect(JSON.stringify(value)).toContain('current')
-          return { logs: [], value }
+          return { output: [], value }
         }
       }
       await ctx.plugin(ReadBindingRuntime)
       await agent.ctx.plugin(PtcToolExecutor)
       const nested = await executeModelToolFixture(ctx, {
-        signal: testToolSignal, callId: ToolCallId('ptc-read-current'), name: 'run_code',
+        signal: testToolSignal, callId: brandString<ToolCallId>('ptc-read-current'), name: 'run_code',
         arguments: { code: 'return await tools.read({file_path: "note.txt"})', description: 'Read the current note' }, agent,
       })
       expect(nested.isError).toBe(false)

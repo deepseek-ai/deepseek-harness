@@ -3,8 +3,9 @@ import { LocalSpillStore } from '@deepseek-ai/dsh-spill-local'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -31,8 +32,8 @@ it.skipIf(process.platform === 'win32')('resolves the exact spill verifier, reta
     disposers.push(() => mapping.dispose())
     await mapping
     const saved = await ctx.spillStore.saveText({
-      owner: { sessionId: SessionId('query-verifier') },
-      source: { kind: 'tool', toolName: 'session_event_read', callId: ToolCallId('query'), label: 'result' },
+      owner: { sessionId: brandString<SessionId>('query-verifier') },
+      source: { kind: 'tool', toolName: 'session_event_read', callId: brandString<ToolCallId>('query'), label: 'result' },
       suggestedName: 'session_event_read.txt', content: 'request/header session_event_search',
     })
     const adapter = ctx.plugin(commands)

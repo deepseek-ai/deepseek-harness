@@ -45,7 +45,12 @@ it('does not replay an expiry reason from an account snapshot', () => {
   expect(accountView({ ...state, signOutReason: 'expired' })).toEqual(state)
 })
 
-it('receives live expiry separately from account snapshots', async () => {
+it.each([
+  ['snapshot', 'invalid'],
+  ['credentials-changed', 'invalid'],
+  ['snapshot', ['snapshot']],
+  ['credentials-changed', ['credentials-changed']],
+] as const)('receives %s state updates separately from live expiry and rejects type %j', async (type, invalidType) => {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   await once(server, 'listening')
   onTestFinished(async () => {
@@ -61,8 +66,9 @@ it('receives live expiry separately from account snapshots', async () => {
     links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }
   const received = Promise.withResolvers<undefined>()
   const backend = desktopAccountBackend(`http://127.0.0.1:${address.port}`, () => Promise.resolve(snapshot), 'dsh-auth-fixture=signed')
+  const failed = vi.fn()
   const stop = backend.watch(
-    (value) => { expect(value).toEqual(snapshot); received.resolve(undefined) }, vi.fn(), expired, onAnalyticsEnabledChanged,
+    (value) => { expect(value).toEqual(snapshot); received.resolve(undefined) }, failed, expired, onAnalyticsEnabledChanged,
   )
   onTestFinished(stop)
   const [, upgrade] = await connected as [unknown, IncomingMessage]
@@ -78,7 +84,7 @@ it('receives live expiry separately from account snapshots', async () => {
     if (streams.size === 3) opened.resolve(undefined)
   })
   await opened.promise
-  socket.send(JSON.stringify({ type: 'item', streamId: streams.get('account/watch'), value: snapshot }))
+  socket.send(JSON.stringify({ type: 'item', streamId: streams.get('account/watch'), value: { type, state: snapshot } }))
   await received.promise
   socket.send(JSON.stringify({ type: 'item', streamId: streams.get('productAnalytics/watchPolicy'), value: true }))
   await vi.waitFor(() => { expect(onAnalyticsEnabledChanged).toHaveBeenLastCalledWith(true) })
@@ -91,5 +97,7 @@ it('receives live expiry separately from account snapshots', async () => {
   expect(expired).not.toHaveBeenCalled()
   socket.send(JSON.stringify({ type: 'item', streamId: streams.get('account/watchExpiry'), value: 'session-expired' }))
   await vi.waitFor(() => { expect(expired).toHaveBeenCalledOnce() })
+  socket.send(JSON.stringify({ type: 'item', streamId: streams.get('account/watch'), value: { type: invalidType, state: snapshot } }))
+  await vi.waitFor(() => { expect(failed).toHaveBeenCalledOnce() })
   stop()
 })

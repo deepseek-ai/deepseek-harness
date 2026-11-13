@@ -1,5 +1,6 @@
 /**
- * ui-workspace contracts. Two registrations share this package:
+ * ui-workspace contracts. Two registrations and one Component Factory share
+ * this package:
  *
  * - WorkspaceBrowser fills the sidebar shell's `sidebar.workspaces` hole —
  *   the whole browsing region (section header, search, grouped/flat session
@@ -7,8 +8,10 @@
  *   consumes the shell's two-fact owner share (wide / expandSidebar).
  * - WorkspacePicker fills the conversation empty-state hole (menu + error
  *   dialog shared with the browser).
+ * - The `workspace.picker` Factory renders the same picker for other
+ *   plugins' surfaces (see `SlotFactoryMap` below).
  *
- * Both registrations declare a **directory-flow hole** (`single` kind): the
+ * Each of the three declares a **directory-flow hole** (`single` kind): the
  * slot a composed picker package's client half fills with its
  * picking interaction — a renderless native-chooser driver or an in-app
  * browsing dialog. ui-workspace owns the trigger (the "Add workspace…"
@@ -18,9 +21,9 @@
  * including creating a new directory to hand back. That occupant-owned
  * creation is why adding a workspace has a single route: an unoccupied hole
  * leaves the surface with no add affordance at all.
- * Two holes exist because the two menu surfaces are independent slot entries
- * and a hole has exactly one declaring entry — they carry the same owner
- * contract and the same occupant.
+ * Three holes exist because the menu surfaces are independent declarations
+ * and a hole has exactly one declaring entry or Factory — they carry the
+ * same owner contract and the same occupant.
  *
  * WorkspaceBrowser declares the Session hover-button list. Its built-in
  * pin and archive entries share callbacks with the structured ctx.contextMenus
@@ -36,12 +39,13 @@
  */
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {
-  HostObservable, InjectFace, PropsHooks, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore, SlotHookFactory,
+  FactoryComponentPropsOf, HostObservable, InjectFace, PropsHooks, PropsLocale, PropsRenderFactories, PropsRenderSlots,
+  PropsRuntime, PropsStore, SlotHookFactory,
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pull the owner SlotMap merges into programs that resolve the
 // runtime shares below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { EmptyWorkspaceOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
@@ -138,6 +142,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /**
+     * Directory-flow hole under every `workspace.picker` Factory occurrence
+     * (declared by the Factory definition). A directory-picker package
+     * registers the same occupant here as in the other two directory-flow
+     * holes; while this hole is empty, Factory occurrences offer no
+     * "Add workspace…" entry.
+     */
+    'workspace.picker.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /**
      * Leading decoration of one Session row, in the 16px cell before the title
      * that the row's own state dot otherwise occupies. A higher-priority state
      * (a pending interaction, a new message, live activity) replaces the seat
@@ -211,15 +223,33 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.workspaces.session.row.action': { kind: 'list'; scope: 'root'; owner: SessionRowOwnerProps }
   }
+
+  interface SlotFactoryMap {
+    /**
+     * The blank-session hero's Workspace picker for another plugin's surface:
+     * a menu of the existing Workspaces plus "Add workspace…", which runs the
+     * `workspace.picker.directoryFlow` occupant, creates a Workspace from the
+     * picked path, and reports it through `onPick`. The caller owns the anchor
+     * control, its open state, and what a pick means.
+     */
+    'workspace.picker': {
+      scope: 'root'
+      props: WorkspacePickerInput
+      inject: WorkspacePickerInjected
+      locale: 'workspace'
+      children: { 'workspace.picker.directoryFlow': { kind: 'single'; scope: 'root' } }
+    }
+  }
 }
 
-/** The two directory-flow holes; a flow package's client half registers its one component into both. */
+/** The three directory-flow holes; a flow package's client half registers its one component into each. */
 export type DirectoryFlowSlotName =
   | 'conversation.hero.workspace.directoryFlow'
   | 'sidebar.workspaces.directoryFlow'
+  | 'workspace.picker.directoryFlow'
 
 /**
- * Directory-picking share both trigger surfaces consume. Occupancy rides the
+ * Directory-picking share every trigger surface consumes. Occupancy rides the
  * inject face's reserved `hooks` compartment: the renderer binds the source
  * into the `useDirectoryFlow` selector hook, so an empty hole hides the
  * "Add workspace…" entry reactively and the surface withdraws an open
@@ -318,8 +348,9 @@ export type SessionRowActionProps<Injected extends object = object> =
 
 /** One transient Workspace notice rendered by the overlay toast entry. */
 export type RowToast =
-  | { kind: 'archived'; sessionId: SessionId }
-  | { kind: 'stoppedAndArchived'; sessionId: SessionId }
+  | { kind: 'archived'; sessionId: SessionId; message?: string; tone?: 'success' | 'warning' }
+  | { kind: 'stoppedAndArchived'; sessionId: SessionId; message?: string; tone?: 'success' | 'warning' }
+  | { kind: 'readingFailed' }
   | { kind: 'sessionIdCopied' }
   | { kind: 'sessionIdCopyFailed' }
   | { kind: 'pinFailed' }
@@ -528,3 +559,19 @@ export type WorkspacePickerProps =
   & Omit<WorkspacePickerInjected, 'hooks'>
   & PropsHooks<WorkspacePickerInjected['hooks']>
   & PropsLocale<'workspace'>
+
+/**
+ * Caller input of one `workspace.picker` occurrence: the hero picker's owner
+ * props, so both surfaces take the same values. `open` is caller-held menu
+ * visibility; the menu portals to the document body and positions against
+ * `anchorRef`, and stays hidden without an anchor element. `selectedId`
+ * marks one row. `onPick` receives an existing Workspace the user chose or
+ * the Workspace created from a picked directory; the caller closes the menu
+ * there. `onClose` fires on outside press, Escape, and before the directory
+ * flow opens. Once the list is ready with no Workspaces, an open request
+ * raises the directory flow directly and calls `onClose`.
+ */
+export type WorkspacePickerInput = EmptyWorkspaceOwnerProps
+
+/** Complete props of the `workspace.picker` Factory definition. */
+export type WorkspacePickerFactoryProps = FactoryComponentPropsOf<'workspace.picker'>

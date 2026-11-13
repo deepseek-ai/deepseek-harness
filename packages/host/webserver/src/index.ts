@@ -7,6 +7,8 @@
  * Route handlers retain direct response ownership; a route or the fallback may
  * instead give a resource, which maps a Fetch `Request` to a `Response` and
  * also answers in-process reads.
+ * WebServer events use the instance as their subject: ordinary listeners follow
+ * its webServer isolation, while explicitly global listeners receive every instance.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -27,11 +29,55 @@ import { renderIndexInjections, type IndexInjection } from './injections.ts'
 export { renderIndexInjections } from './injections.ts'
 export type { IndexInjection, IndexInjectionPlacement } from './injections.ts'
 
+/** One application entry URL contributed for startup printing or browser handoff. */
+export interface WebEntryUrl {
+  /** Output prefix, such as `dsh web`. */
+  readonly label: string
+  /** Complete entry URL, including any credentials required by its provider. */
+  readonly url: string
+  /** Whether this entry is eligible for the application's automatic browser handoff. */
+  readonly open: boolean
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     webServer: WebServer
   }
   interface Events {
+    /**
+     * Collect complete entry URLs for an advertised server address.
+     * @param baseUrl - advertised server base URL without provider credentials.
+     * @param entries - entries appended synchronously in listener order.
+     * @mode emit
+     */
+    'webserver/entry-url'(baseUrl: string, entries: WebEntryUrl[]): void
+    /**
+     * Admit a matched request synchronously; the first decision wins.
+     * @param request - headers, target, transport, and available cancellation state.
+     * @param policy - resolved route policy; deny never emits this event.
+     * @mode bail
+     */
+    'webserver/authorize'(request: WebAuthRequest, policy: WebAuthPolicy): WebAdmission | undefined
+    /**
+     * Handle an HTTP request before named-route and fallback dispatch.
+     * @param request - original incoming HTTP request.
+     * @param response - response owned by the listener or its delegated handler.
+     * @param next - dispatch to the next listener or the matching route.
+     * @mode waterfall
+     */
+    'webserver/request'(request: IncomingMessage, response: ServerResponse, next: () => Promise<void>): Promise<void>
+    /**
+     * Handle an admitted upgrade before its registered protocol handler.
+     * @param request - original upgrade request.
+     * @param socket - transport owned by the upgrade.
+     * @param head - bytes received after the HTTP headers.
+     * @param peer - authenticated identity, absent for anonymous admission.
+     * @param next - delegate to the next listener or protocol handler.
+     * @mode waterfall
+     */
+    'webserver/upgrade'(
+      request: IncomingMessage, socket: Duplex, head: Buffer, peer: PeerScope | undefined, next: () => Promise<void>,
+    ): Promise<void>
     /**
      * Collect the structured index injection table for the page `peer` speaks
      * for. Emitted on every index render and every worker boot-payload
@@ -45,6 +91,25 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** A route permits anonymous access, requires a live Peer, or refuses all access. */
+export type WebAuthPolicy = 'anonymous' | 'required' | 'deny'
+
+/** Authentication inputs shared by socket-backed and synthetic requests. */
+export interface WebAuthRequest {
+  headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>
+  method?: string | undefined
+  url: URL
+  transport: 'http' | 'upgrade'
+  signal?: AbortSignal | undefined
+  socket?: { readonly destroyed: boolean } | undefined
+}
+
+/** Fixed route policy or a synchronous policy selector. */
+export type WebAuthenticationRule = WebAuthPolicy | ((request: WebAuthRequest) => WebAuthPolicy)
+
+/** First authorization decision; authenticated access requires a live Peer. */
+export type WebAdmission = { kind: 'allow'; peer?: PeerScope } | { kind: 'deny'; status: 401 | 403 | 503 }
+
 /** Route match kind: 'exact' matches the pathname verbatim; 'prefix' p matches p and p/<anything>. */
 export type WebRouteKind = 'exact' | 'prefix'
 
@@ -54,12 +119,14 @@ export interface WebRoute {
   /** Absolute pathname, no trailing slash. */
   path: string
   /** Owns the full response lifecycle (may hold the response open, e.g. SSE). */
-  handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+  handler: (req: IncomingMessage, res: ServerResponse, peer?: PeerScope) => void | Promise<void>
+  /** Defaults to required. Anonymous handlers may receive no Peer. */
+  auth?: WebAuthenticationRule
 }
 
 /**
- * Answers one GET or HEAD request with a Fetch response. An HTTP request
- * arrives without a Peer and carries the client's headers; an in-process
+ * Answers one GET or HEAD request with a Fetch response and its admitted Peer.
+ * Anonymous HTTP admission may omit the Peer; an in-process
  * {@link WebServer.readResource} read passes the Peer its caller admitted.
  */
 export type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>
@@ -71,14 +138,21 @@ export interface WebResourceRoute {
   path: string
   /** Answers HTTP GET and HEAD requests and in-process reads. */
   resource: WebResource
+  /** Defaults to required; in-process reads still enforce deny. */
+  auth?: WebAuthenticationRule
 }
+
+/** The unmatched-request responder; omitted auth requires authentication. */
+export type WebFallback = Pick<WebRoute, 'handler' | 'auth'> | Pick<WebResourceRoute, 'resource' | 'auth'>
 
 /** One exact-path HTTP upgrade registration. */
 export interface WebUpgradeRoute {
   /** Absolute pathname, no trailing slash. */
   path: string
   /** Owns protocol negotiation and the upgraded socket after dispatch. */
-  handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>
+  handler: (req: IncomingMessage, socket: Duplex, head: Buffer, peer?: PeerScope) => void | Promise<void>
+  /** Defaults to required. Anonymous handlers may receive no Peer. */
+  auth?: WebAuthenticationRule
 }
 
 /**
@@ -352,7 +426,8 @@ async function writeResponse(res: ServerResponse, response: Response, head: bool
  * initialization, and the boot process reports the failed fiber. Route
  * registration order does not affect requests because configured named routes
  * must be distinct, and a request no named route matches is answered 404
- * until the fallback owner registers.
+ * until the fallback owner registers. HTTP and upgrade admission refusals
+ * carry `Cache-Control: no-store`.
  */
 export class WebServer extends Service {
   static Config: z<Config> = z.object({
@@ -388,7 +463,7 @@ export class WebServer extends Service {
    */
   private readonly tlsConnections = new Set<Duplex>()
   private readonly indexTaps: ((html: string) => string)[] = []
-  private fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'> | undefined
+  private fallback: WebFallback | undefined
   private server!: Server
   private listenedPort: number | undefined
   private readonly gzip: NodeMiddleware | undefined
@@ -471,14 +546,14 @@ export class WebServer extends Service {
    * composition). One owner only — a second registration throws, because two
    * fallbacks cannot compose.
    * @param fallback - a handler owning the full response lifecycle of
-   * unmatched requests, or `{ resource }` answering them.
+   * unmatched requests, or an object declaring `handler` or `resource` and auth.
    * @returns the disposer releasing the seat.
    */
-  registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void {
+  registerFallback(fallback: WebRoute['handler'] | WebFallback): () => void {
     if (this.fallback !== undefined) {
       throw new Error('webserver: fallback already registered')
     }
-    this.fallback = fallback
+    this.fallback = typeof fallback === 'function' ? { handler: fallback } : fallback
     return () => { this.fallback = undefined }
   }
 
@@ -488,6 +563,7 @@ export class WebServer extends Service {
    * path picks the responder by the HTTP match order — exact, longest prefix,
    * then the fallback — and only a resource answers. This method checks no
    * cookie, Host, or Origin: the caller admits the reader before reading.
+   * A resolved deny policy returns 403 even for an explicitly admitted Peer.
    * @param request - the read; its URL path selects the responder.
    * @param peer - the Peer the read speaks for, passed to the resource.
    * @returns the resource's response, without a body for HEAD as over HTTP;
@@ -501,8 +577,12 @@ export class WebServer extends Service {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response(null, { status: 405, headers: { allow: RESOURCE_METHODS } })
     }
-    const responder = this.responderFor(new URL(request.url).pathname)
-    if (typeof responder !== 'object' || !('resource' in responder)) return new Response(null, { status: 404 })
+    const url = new URL(request.url)
+    const responder = this.responderFor(url.pathname)
+    if (responder === undefined || !('resource' in responder)) return new Response(null, { status: 404 })
+    if (this.authPolicy(responder.auth, { headers: request.headers, method: request.method, url, transport: 'http', signal: request.signal }) === 'deny') {
+      return new Response(null, { status: 403 })
+    }
     const response = await responder.resource(request, peer)
     if (request.method === 'GET') return response
     await response.body?.cancel()
@@ -536,9 +616,34 @@ export class WebServer extends Service {
         res.end()
         return
       }
-      if (typeof responder === 'function') await responder(req, res)
-      else if ('resource' in responder) await this.serveResource(req, res, target, responder.resource)
-      else await responder.handler(req, res)
+      const abort = new AbortController()
+      const cleanup = (): void => {
+        res.off('close', onClose)
+        res.off('finish', cleanup)
+      }
+      const onClose = (): void => {
+        abort.abort()
+        cleanup()
+      }
+      res.once('close', onClose)
+      res.once('finish', cleanup)
+      try {
+        const request: WebAuthRequest = {
+          headers: req.headers, method: req.method, url: target, transport: 'http',
+          signal: abort.signal, socket: req.socket,
+        }
+        const admission = this.authorize(request, responder.auth)
+        if (abort.signal.aborted || request.socket?.destroyed) return
+        if (admission.kind === 'deny') {
+          res.writeHead(admission.status, { 'Cache-Control': 'no-store' })
+          res.end(admission.status === 401 ? 'unauthorized' : admission.status === 503 ? 'authentication unavailable' : 'forbidden')
+          return
+        }
+        if ('resource' in responder) await this.serveResource(req, res, target, responder.resource, abort.signal, admission.peer)
+        else await responder.handler(req, res, admission.peer)
+      } finally {
+        if (res.writableEnded || abort.signal.aborted) cleanup()
+      }
     }
     // Last-resort guard: handle() rejecting would otherwise be an unhandled
     // rejection killing the process on one malformed request (bad %-escape,
@@ -546,7 +651,8 @@ export class WebServer extends Service {
     // never a process exit.
     const listener = (req: IncomingMessage, res: ServerResponse): void => {
       const next = (): void => {
-        void handle(req, res).catch((err: unknown) => {
+        const dispatch = async (): Promise<void> => { await this.ctx.waterfall(this, 'webserver/request', req, res, () => handle(req, res)) }
+        void dispatch().catch((err: unknown) => {
           this.ctx.logger.warn(err instanceof Error ? err : new Error(String(err)))
           if (res.headersSent) {
             res.destroy()
@@ -592,9 +698,11 @@ export class WebServer extends Service {
           this.upgradedSockets.delete(socket)
         })
         let route: WebUpgradeRoute | undefined
+        let target: URL
         try {
           /* v8 ignore next -- node:http always sets url on server requests. */
-          route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
+          target = new URL(req.url ?? '/', 'http://x')
+          route = this.upgrades.get(target.pathname)
         } catch (error) {
           this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
           socket.destroy()
@@ -605,8 +713,26 @@ export class WebServer extends Service {
           return
         }
         this.upgradedSockets.add(socket)
+        const abort = new AbortController()
+        socket.once('close', () => { abort.abort() })
         try {
-          Promise.resolve(route.handler(req, socket, head)).catch((error: unknown) => {
+          const admission = this.authorize({
+            headers: req.headers, method: req.method, url: target, transport: 'upgrade',
+            signal: abort.signal, socket,
+          }, route.auth)
+          if (abort.signal.aborted || socket.destroyed) return
+          if (admission.kind === 'deny') {
+            const reason = { 401: 'Unauthorized', 403: 'Forbidden', 503: 'Service Unavailable' }[admission.status]
+            const body = reason.toLowerCase()
+            socket.end(`HTTP/1.1 ${String(admission.status)} ${reason}\r\nConnection: close\r\nCache-Control: no-store\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${String(Buffer.byteLength(body))}\r\n\r\n${body}`)
+            return
+          }
+          const dispatch = async (): Promise<void> => {
+            await this.ctx.waterfall(this, 'webserver/upgrade', req, socket, head, admission.peer, async () => {
+              if (!socket.destroyed) await route.handler(req, socket, head, admission.peer)
+            })
+          }
+          void dispatch().catch((error: unknown) => {
             this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
             socket.destroy()
           })
@@ -647,8 +773,24 @@ export class WebServer extends Service {
    * The responder for one request path, shared by HTTP requests and
    * {@link readResource}: the matched named route, otherwise the fallback.
    */
-  private responderFor(pathname: string): WebRoute | WebResourceRoute | WebRoute['handler'] | Pick<WebResourceRoute, 'resource'> | undefined {
+  private responderFor(pathname: string): WebFallback | undefined {
     return this.match(pathname) ?? this.fallback
+  }
+
+  private authPolicy(auth: WebAuthenticationRule | undefined, request: WebAuthRequest): WebAuthPolicy {
+    return typeof auth === 'function' ? auth(request) : auth ?? 'required'
+  }
+
+  private authorize(request: WebAuthRequest, auth: WebAuthenticationRule | undefined): WebAdmission {
+    const policy = this.authPolicy(auth, request)
+    if (policy === 'deny') return { kind: 'deny', status: 403 }
+    const admission: WebAdmission = this.ctx.bail(this, 'webserver/authorize', request, policy)
+      ?? (policy === 'anonymous' ? { kind: 'allow' } : { kind: 'deny', status: 503 })
+    if (admission.kind === 'allow') {
+      if (policy === 'required' && admission.peer === undefined) return { kind: 'deny', status: 503 }
+      if (admission.peer?.signal.aborted) return { kind: 'deny', status: 401 }
+    }
+    return admission
   }
 
   /** Longest-prefix-wins over the prefix table after an exact-table miss. */
@@ -666,13 +808,15 @@ export class WebServer extends Service {
   /**
    * Answer one HTTP exchange from a resource. Only GET and HEAD reach it;
    * any other method receives 405 and its request body is never read. The
-   * request becomes a Fetch `Request` without a Peer whose URL is the request
+   * request becomes a Fetch `Request` whose URL is the request
    * target resolved against a placeholder origin, as the match reads it; the
    * client's authority stays only in the `host` header. The connection
    * closing before this method ends the response aborts the request signal
    * and cancels the response body.
    */
-  private async serveResource(req: IncomingMessage, res: ServerResponse, target: URL, resource: WebResource): Promise<void> {
+  private async serveResource(
+    req: IncomingMessage, res: ServerResponse, target: URL, resource: WebResource, signal: AbortSignal, peer?: PeerScope,
+  ): Promise<void> {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { allow: RESOURCE_METHODS })
       res.end()
@@ -682,24 +826,9 @@ export class WebServer extends Service {
     for (const [name, value] of Object.entries(req.headers)) {
       for (const item of typeof value === 'string' ? [value] : value ?? []) headers.append(name, item)
     }
-    const abort = new AbortController()
-    // An own flag, not `writableEnded`: the Web Worker tunnel marks an aborted
-    // response ended before it emits `close`.
-    let ended = false
-    const onClose = (): void => {
-      if (!ended) abort.abort()
-    }
-    res.on('close', onClose)
-    try {
-      const response = await resource(new Request(target, { method: req.method, headers, signal: abort.signal }))
-      await writeResponse(res, response, req.method === 'HEAD', abort.signal)
-      if (!abort.signal.aborted) {
-        ended = true
-        res.end()
-      }
-    } finally {
-      res.off('close', onClose)
-    }
+    const response = await resource(new Request(target, { method: req.method, headers, signal }), peer)
+    await writeResponse(res, response, req.method === 'HEAD', signal)
+    if (!signal.aborted) res.end()
   }
 
   /**
@@ -724,7 +853,7 @@ export class WebServer extends Service {
    */
   collectIndexInjections(peer: PeerScope): IndexInjection[] {
     const table: IndexInjection[] = []
-    this.ctx.emit('webserver/index-inject', table, peer)
+    this.ctx.emit(this, 'webserver/index-inject', table, peer)
     return table
   }
 

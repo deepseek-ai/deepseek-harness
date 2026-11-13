@@ -11,7 +11,7 @@ import { StopSequence } from './stop-sequence.ts'
  * @param shortcuts - window keyboard arbitration and validated sequence interval.
  * @param sessions - live Session identities and lifecycle sources.
  * @param openTurn - stable current-turn source for a live Session binding.
- * @param uiSession - current pending-interaction status.
+ * @param uiSession - effective pending interaction of each Session.
  * @param cancel - scoped stop operation that preserves Queue and reports failures.
  * @returns disposer releasing the input subscription, pending watches and expiry timer.
  */
@@ -47,7 +47,7 @@ export function installStopShortcut(
       const session = binding.session.getSnapshot()
       if (!session.running || session.removed
         || (session.subagent !== null && session.subagent.address.mode !== 'continuable')
-        || uiSession.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction !== undefined) return undefined
+        || uiSession.pendingInteractions.getSnapshot().get(sessionId) !== undefined) return undefined
       return turnSource.getSnapshot()
     }
     const turn = currentTurn()
@@ -58,7 +58,7 @@ export function installStopShortcut(
     const changed = (): void => {
       if (sessions.binding(sessionId) !== binding || currentTurn() !== turn) reset()
     }
-    const disposers = [turnSource.subscribe(changed), binding.session.subscribe(changed), uiSession.sessionStatus.subscribe(changed)]
+    const disposers = [turnSource.subscribe(changed), binding.session.subscribe(changed), uiSession.pendingInteractions.subscribe(changed)]
     unwatch = () => { for (const dispose of disposers) dispose() }
   })
   return () => { off(); reset() }

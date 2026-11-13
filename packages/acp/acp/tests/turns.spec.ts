@@ -4,7 +4,7 @@ import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { setImmediate } from 'node:timers/promises'
 import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -16,6 +16,7 @@ import {
   textResponse,
   type BridgeHarness,
 } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -195,7 +196,7 @@ describe('ACP prompt lifecycle', () => {
   it('rejects a turn-start failure before the prompt is claimed', async () => {
     harness = await makeBridgeHarness({ script: [textResponse('must not run')] })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const append = agent.session.append.bind(agent.session)
     vi.spyOn(agent.session, 'append').mockImplementation(((type: string, ...rest: never[]) => {
       if (type === 'turn/start') throw new Error('turn start unavailable')
@@ -210,7 +211,7 @@ describe('ACP prompt lifecycle', () => {
   it.each(['turn/start', 'turn/end'] as const)('rejects a later %s append failure after an earlier completed turn', async (failedEvent) => {
     harness = await makeBridgeHarness({ script: [textResponse('waiting'), textResponse('summary')] })
     const sessionId = await newSession(harness)
-    const parent = harness.ctx.agents.get(SessionId(sessionId))!
+    const parent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const append = parent.session.append.bind(parent.session)
     const appendSpy = vi.spyOn(parent.session, 'append')
     const failures: number[] = []
@@ -247,7 +248,7 @@ describe('ACP prompt lifecycle', () => {
   it('correlates the owning prompt when a synchronous injection joins its first step', async () => {
     harness = await makeBridgeHarness({ script: [textResponse('real answer')] })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     let injected = false
     harness.ctx.on('agent/inbox/inserted', ({ agent: subject, message }) => {
       if (subject === agent && message.source.kind === 'user' && !injected) {
@@ -264,7 +265,7 @@ describe('ACP prompt lifecycle', () => {
   it('ignores an autonomous message turn while correlating the client turn', async () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     let autonomousStarted!: () => void
     const started = new Promise<void>((resolve) => { autonomousStarted = resolve })
     harness.ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
@@ -320,7 +321,7 @@ describe('ACP prompt lifecycle', () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
-    await vi.waitFor(() => { expect(harness!.ctx.agents.get(SessionId(sessionId))?.status).toBe('running') })
+    await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(sessionId))?.status).toBe('running') })
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] }))
       .rejects.toThrow(/already in flight/)
     await harness.client.cancel({ sessionId })
@@ -335,7 +336,7 @@ describe('ACP prompt lifecycle', () => {
       { sessionId, prompt: [{ type: 'text', text: 'one' }] },
       { cancellationSignal: controller.signal },
     )
-    await vi.waitFor(() => { expect(harness!.ctx.agents.get(SessionId(sessionId))?.status).toBe('running') })
+    await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(sessionId))?.status).toBe('running') })
 
     controller.abort()
 
@@ -380,7 +381,7 @@ describe('ACP prompt lifecycle', () => {
 
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
     expect(harness.adapter.requests).toEqual([])
-    const events = harness.ctx.agents.get(SessionId(sessionId))?.session.snapshotEvents() ?? []
+    const events = harness.ctx.agents.get(brandString<SessionId>(sessionId))?.session.snapshotEvents() ?? []
     expect(events.some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
   })
 
@@ -393,7 +394,7 @@ describe('ACP prompt lifecycle', () => {
       return releaseValidation.promise
     }
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'unrelated work' }],
       source: { kind: 'test' },
@@ -430,7 +431,7 @@ describe('ACP prompt lifecycle', () => {
       throw new Error('unrelated pre-step failure')
     })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const prompt = harness.client.prompt({
       sessionId,
       prompt: [{ type: 'image', data: 'AQ==', mimeType: 'image/png' }],
@@ -494,7 +495,7 @@ describe('ACP prompt lifecycle', () => {
   it('wraps an unexpected same-process followup failure and frees the prompt slot', async () => {
     harness = await makeBridgeHarness({ script: [] })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     vi.spyOn(agent, 'followup').mockImplementationOnce(() => { throw new Error('synthetic followup failure') })
 
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
@@ -505,7 +506,7 @@ describe('ACP prompt lifecycle', () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     await vi.waitFor(() => { expect(agent.status).toBe('running') })
     await harness.client.cancel({ sessionId })
     await expect(prompt).resolves.toEqual({ stopReason: 'cancelled' })
@@ -518,7 +519,7 @@ describe('ACP prompt lifecycle', () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     await vi.waitFor(() => { expect(agent.status).toBe('running') })
     // A hook or another owner cancels the agent: the ACP client never called
     // session/cancel, so this is ordinary quiescence and reports end_turn.
@@ -529,7 +530,7 @@ describe('ACP prompt lifecycle', () => {
   it('cancels autonomous running work without an in-flight prompt', async () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'autonomous work' }],
       source: { kind: 'test' },
@@ -558,7 +559,7 @@ describe('ACP prompt lifecycle', () => {
     harness = await makeBridgeHarness({ script: ['hang', textResponse('next')] })
     const sessionId = await newSession(harness)
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
-    await vi.waitFor(() => { expect(harness!.ctx.agents.get(SessionId(sessionId))?.status).toBe('running') })
+    await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(sessionId))?.status).toBe('running') })
     await harness.client.cancel({ sessionId })
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
 
@@ -591,7 +592,7 @@ describe('ACP prompt lifecycle', () => {
       outcome === 'completed' ? textResponse('summary') : errorResponse('summary failed'),
     ] })
     const sessionId = await newSession(harness)
-    const parent = harness.ctx.agents.get(SessionId(sessionId))!
+    const parent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
     const waitForTreeWork = vi.fn()
@@ -644,7 +645,7 @@ describe('ACP prompt lifecycle', () => {
     const ctx = harness.ctx
     const delegated = await installDelegationTool(ctx)
     const sessionId = await newSession(harness)
-    const parent = ctx.agents.get(SessionId(sessionId))!
+    const parent = ctx.agents.get(brandString<SessionId>(sessionId))!
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
     vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
@@ -752,7 +753,7 @@ describe('ACP prompt lifecycle', () => {
       yield* stream(options)
     })
     const sessionId = await newSession(harness)
-    const parent = ctx.agents.get(SessionId(sessionId))!
+    const parent = ctx.agents.get(brandString<SessionId>(sessionId))!
     let result: { stopReason: string } | undefined
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'interrupted image' }] })
       .then((value) => { result = value; return value })
@@ -798,7 +799,7 @@ describe('ACP prompt lifecycle', () => {
     const ctx = harness.ctx
     const delegated = await installDelegationTool(ctx)
     const sessionId = await newSession(harness)
-    const parent = ctx.agents.get(SessionId(sessionId))!
+    const parent = ctx.agents.get(brandString<SessionId>(sessionId))!
     const queued = Promise.withResolvers<undefined>()
     ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       if (agent === parent && message.content.some(block => block.type === 'text' && block.text === 'queued prompt')) {
@@ -865,7 +866,7 @@ describe('ACP prompt lifecycle', () => {
       { type: 'finish', reason: { kind: 'stop' } },
     ])
     const sessionId = await newSession(harness)
-    const parent = harness.ctx.agents.get(SessionId(sessionId))!
+    const parent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const reading = Promise.withResolvers<undefined>()
     const delivery = Promise.withResolvers<undefined>()
     harness.attachments!.beforeRead = async () => {
@@ -908,7 +909,7 @@ describe('ACP prompt lifecycle', () => {
       return releaseImage.promise
     }
     const sessionId = await newSession(harness)
-    const parent = ctx.agents.get(SessionId(sessionId))!
+    const parent = ctx.agents.get(brandString<SessionId>(sessionId))!
     const noChildren = Promise.withResolvers<undefined>()
     vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
       noChildren.resolve(undefined)

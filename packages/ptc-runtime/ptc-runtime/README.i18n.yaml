@@ -18,17 +18,17 @@
   en: 346f62bbfd0e6d9d
   zh: bf86b2d7a26e8193
 /deepseek-ai-dsh-ptc-runtime/use-this-package/run-a-program:
-  en: aa58e5977dc6c33b
-  zh: cfa416436582b1cc
+  en: cc02624f3e84fba5
+  zh: 0294523cc7ebbbd9
 /deepseek-ai-dsh-ptc-runtime/use-this-package/choose-a-backend:
-  en: fc0d515f0c3664f3
-  zh: 0a1b646b5cf92232
-/deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings-portably:
-  en: 4e46c1672701b8df
-  zh: 0353c5855c9ff6be
+  en: a7ffbb6dfe129164
+  zh: 110a800394ef7d26
+/deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings:
+  en: b770e26d4e3906d3
+  zh: 97e6a4ecb7dc15f2
 /deepseek-ai-dsh-ptc-runtime/use-this-package/what-can-go-wrong:
-  en: 44f9fdf2c8e2cacc
-  zh: 99dd555a49075f88
+  en: 35129568fa436d64
+  zh: 0f4138ad427ef486
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation:
   en: 686d570f5e669fa4
   zh: 2075cf27c30f251a
@@ -39,17 +39,17 @@
   en: 1d7a792c9a78a517
   zh: b49bddf18c259edc
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/vocabulary:
-  en: 855cb8366e3bd293
-  zh: da6d7a0ce51f97fc
-/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/portable-identifiers:
-  en: 01c82c6e73180979
-  zh: e29b066f9f82c8b4
+  en: a499ed426b20e296
+  zh: 53a2bdb062cf85ba
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/binding-exclusions:
+  en: d789477b517ac7a2
+  zh: abd7b26775494056
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/source-map:
-  en: 85b65ceb9be0c49f
-  zh: 52df7f06d4e49d6e
+  en: 9aac7516a53e3b41
+  zh: 56373e751fd97c37
 /deepseek-ai-dsh-ptc-runtime/further-exploration:
-  en: a77e68bc4f5e66d9
-  zh: 101a57bcad581668
+  en: 552a3fb04184d5f5
+  zh: 440a9a7c61d20f76
 /deepseek-ai-dsh-ptc-runtime/model-experience:
   en: 711163291bdd8157
   zh: 4e05f1e7c60058a0
@@ -57,8 +57,8 @@
   en: 40294c1c31b74824
   zh: 081cebc2e2650f03
 /deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work:
-  en: e20364d073f78c60
-  zh: 6cac5c46ff91b3ca
+  en: 11bf73cc8d315c8b
+  zh: cf31f6b353584241
 /deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note:
   en: d56846da29ad869c
   zh: 0397151a7e29b8ba

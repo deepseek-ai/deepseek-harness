@@ -12,13 +12,14 @@ import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxMode, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import WorktreeService from '../src/index.ts'
 import type { Config } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const execute = promisify(execFile)
 
@@ -39,7 +40,7 @@ export class UnusedSandbox extends SandboxProvider {
 
 export function testAgent(ctx: Context, cwd: string, name = 'worktree-test'): Agent {
   const scope = ctx.plugin(() => {})
-  const id = SessionId(name)
+  const id = brandString<SessionId>(name)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
   const agent: Agent = {
     id, session, options: {}, status: 'idle', ctx: scope.ctx, model: unsupportedModel(),
@@ -69,7 +70,10 @@ export async function repository(parent = tmpdir()): Promise<string> {
   }
 }
 
-export async function harness(root: string, config: Config = {}, mode: SandboxMode = 'danger-full-access'): Promise<Context> {
+/** Plugin config as the schema accepts it: the volatile `retainOnArchive` is given as its plain value. */
+export type HarnessConfig = Omit<Config, 'retainOnArchive'> & { retainOnArchive?: boolean }
+
+export async function harness(root: string, config: HarnessConfig = {}, mode: SandboxMode = 'danger-full-access'): Promise<Context> {
   const ctx = new Context()
   try {
     await ctx.plugin(SessionProjectionRegistry)

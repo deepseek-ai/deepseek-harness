@@ -5,7 +5,7 @@ final class AXHover {
     private var revealed: (element: AXUIElement, windowID: UInt32)?
 
     /// Entering revealed descendants preserves their parent UI; leaving restores it once.
-    func move(to target: AXUIElement?, in route: WindowRoute, access: AXAccess) throws -> Bool {
+    func move(to target: AXUIElement?, in windowID: UInt32, access: AXAccess) throws -> Bool {
         var current = target
         var visited: [AXUIElement] = []
         var alternate: AXUIElement?
@@ -14,7 +14,7 @@ final class AXHover {
                 throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility hover ancestry contains a cycle; read fresh state")
             }
             visited.append(node)
-            if let revealed, revealed.windowID == route.windowID, CFEqual(revealed.element, node) { return true }
+            if let revealed, revealed.windowID == windowID, CFEqual(revealed.element, node) { return true }
             let actions = try access.actions(node)
             if alternate == nil, actions.contains("AXShowAlternateUI"), actions.contains("AXShowDefaultUI"),
                try access.boolean(node, "AXEnabled") != false { alternate = node }
@@ -29,7 +29,7 @@ final class AXHover {
         }
         if let alternate {
             try access.perform(alternate, "AXShowAlternateUI")
-            revealed = (alternate, route.windowID)
+            revealed = (alternate, windowID)
             return true
         }
         return leaving

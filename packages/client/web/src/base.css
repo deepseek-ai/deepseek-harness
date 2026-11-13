@@ -8,6 +8,12 @@ body,
   margin: 0;
 }
 
+/* Preserve authored text sizes when mobile browsers rotate or unfold. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(
     --dsw-font-family,
