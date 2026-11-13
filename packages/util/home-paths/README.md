@@ -1,5 +1,5 @@
 ---
-description: "Shared resolution of the DeepSeek Harness home and the shared agent configuration root, plus user-data paths, tilde expansion, and stable watch paths."
+description: "Shared resolution of the DeepSeek Harness home, its config, data, state, cache, and backup category paths, and the shared agent configuration root, plus tilde expansion and stable watch paths."
 kind: "package-library"
 ---
 
@@ -39,6 +39,20 @@ const cache = dshCachePath('models')         // $DSH_HOME/cache/models, default 
 An explicit configured path has the highest precedence, then `$DSH_HOME`, then the default `~/.dsh`. An empty or whitespace-only `$DSH_HOME` is treated as unset, so a blank override never resolves the home to the current working directory.
 
 `dshCachePath(...segments)` derives paths from the resolved home's `cache` directory. With no segments it returns the cache directory itself. Pass an initial options object, `dshCachePath({ dshHome: home }, ...segments)`, to use an explicit configured home with the same precedence and tilde expansion. It returns an absolute path without creating directories.
+
+<a id="choosing-a-category"></a>
+### Choosing a category for a new path
+
+```ts
+import { dshPath } from '@deepseek-ai/dsh-home-paths'
+
+const index = dshPath('state', 'my-plugin', 'index.json')             // $DSH_HOME/state/my-plugin/index.json
+const models = dshPath({ category: 'cache', dshHome: '~/other-dsh' }, 'my-plugin') // ~/other-dsh/cache/my-plugin
+```
+
+A new file under the home uses `dshPath(category, ...segments)` and passes its owner's directory name, normally the package name without the `@deepseek-ai/dsh-` prefix, as the first segment. Use `config` for files a person writes to configure the harness, `data` for records whose loss loses user work, sign-ins, or installed software, `state` for logs, indexes, ids, and other records the harness can lose without losing user work, `cache` for content it can rebuild or download again, and `backup` for backup archives, which users can delete at any time without affecting the harness. Loader `!!js` config expressions receive the same function, for example `root: !!js dshPath('data', 'my-plugin')`. `dshPath` returns an absolute path without creating directories.
+
+Existing entries keep their current locations: conventional top-level entries such as `sessions/`, `profiles/`, `skills/`, `AGENTS.md`, `.env`, and `.credentials.yaml` stay at the top level, and the [home path categories proposal](../../../.agents/notes/proposed/architecture/2026-11-04-dsh-home-path-categories.md) lists the category of every other existing path.
 
 ### Resolving the shared agents root
 
@@ -81,7 +95,7 @@ The package is built on one principle: harness user data lives under one root, a
 
 ### Resolution rules
 
-`resolveDshHome` reads the explicit override, then `$DSH_HOME`, then falls back to the operating-system home joined with `.dsh`. `resolveAgentsHome` reads the same three levels for `$DSH_AGENTS_HOME` and `~/.agents`. The chosen value is tilde-expanded and normalized to an absolute path; `dshHomePath` joins child segments with Node's platform path rules. `dshHomeDisplay` and `agentsHomeDisplay` compare the resolved path against the default root and return the symbolic label, so a configured root never leaks its absolute path.
+`resolveDshHome` reads the explicit override, then `$DSH_HOME`, then falls back to the operating-system home joined with `.dsh`. `resolveAgentsHome` reads the same three levels for `$DSH_AGENTS_HOME` and `~/.agents`. The chosen value is tilde-expanded and normalized to an absolute path; `dshHomePath` and `dshPath` join child segments with Node's platform path rules. `dshHomeDisplay` and `agentsHomeDisplay` compare the resolved path against the default root and return the symbolic label, so a configured root never leaks its absolute path.
 
 ### Canonicalization mechanics
 
