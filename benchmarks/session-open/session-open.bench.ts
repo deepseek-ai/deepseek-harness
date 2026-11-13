@@ -356,7 +356,7 @@ describe('Session opening benchmark prerequisites', () => {
     const mount = async () => {
       const ctx = new Context()
       contexts.push(ctx)
-      await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
+      await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd', storage: 'jsonl' })
       return ctx.sessionPersistence
     }
     try {

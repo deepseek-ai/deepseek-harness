@@ -15,6 +15,7 @@ import runpy
 import secrets
 import shutil
 import subprocess
+import sqlite3
 import sys
 import sysconfig
 import tempfile
@@ -163,6 +164,7 @@ RECOVERY_SNAPSHOT_FILENAMES = ("result.json", "requests.json", "session.v4.jsonl
 MCP_SERVER_SCRIPT = """\
 import json
 import os
+import sqlite3
 import sys
 import time
 
@@ -1327,7 +1329,7 @@ def smoke_sdk_live() -> None:
                     raise AssertionError(f"verify turn wrote unexpected bytes to receipt {receipt}")
                 if not marker.is_file() or marker.read_bytes() != challenge:
                     raise AssertionError(f"verify turn changed source file {marker}")
-        assert_zstd_session_log(sessions)
+        assert_sqlite_session_log(sessions)
 
 
 def assert_live_turn(label: str, result: RunResult) -> None:
@@ -1401,7 +1403,7 @@ def smoke_sdk_default(base_url: str) -> None:
             f"events={[event.get('type') for event in result.events]!r} "
             f"turn_end={safe_turn_end(next((event.get('data', event) for event in reversed(result.events) if event.get('type') == 'turn/end'), {}))!r}"
         )
-        assert_zstd_session_log(sessions)
+        assert_sqlite_session_log(sessions)
         # The installed runtime starts with an empty PATH; no checkout or global pnpm can satisfy the tool.
         before = (dsh_home / "profiles/sdk/package.json").read_bytes()
         with DeepSeekHarness(
@@ -1745,7 +1747,7 @@ def smoke_sdk_profile_plugin(base_url: str) -> None:
             ) from error
 
         assert result.final_response == PROFILE_PLUGIN_TEXT, result.final_response
-        assert_zstd_session_log(dsh_home / "sessions")
+        assert_sqlite_session_log(dsh_home / "sessions")
 
 
 def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
@@ -2517,12 +2519,20 @@ def assert_session_log(sessions: Path, cwd: Path, *expected_texts: str) -> None:
             raise AssertionError(f"session log has no {expected!r} response: {logs[0]}")
 
 
-def assert_zstd_session_log(sessions: Path) -> None:
-    logs = latest_persisted_session_paths(sessions, compressed=True)
-    if len(logs) != 1:
-        raise AssertionError(f"expected one Zstandard JSONL session log under {sessions}, found {logs}")
-    if not logs[0].read_bytes().startswith(bytes.fromhex("28b52ffd")):
-        raise AssertionError(f"session log has no Zstandard magic: {logs[0]}")
+def assert_sqlite_session_log(sessions: Path) -> None:
+    """Verify the default profile persisted one complete turn in SQLite."""
+    database = sessions / ".segments" / "sessions.sqlite"
+    if not database.is_file():
+        raise AssertionError(f"expected SQLite session database: {database}")
+    with sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True) as connection:
+        if connection.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+            raise AssertionError(f"session database failed integrity check: {database}")
+        headers = connection.execute("SELECT header FROM traces").fetchall()
+        if len(headers) != 1:
+            raise AssertionError(f"expected one persisted Session, found {len(headers)}")
+        events = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM events ORDER BY seq")]
+        if not any(event.get("type") == "turn/end" for event in events):
+            raise AssertionError(f"session database has no completed turn: {database}")
 
 
 def read_session_logs(sessions: Path) -> dict[str, list[dict[str, object]]]:

@@ -9,8 +9,8 @@ import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import type { SqliteLogsOptions } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
-import { SessionWriteLease } from '../../src/lease.ts'
-import { sessionDir } from '../../src/format.ts'
+import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
+import { sessionDir } from '@deepseek-ai/dsh-session-persistence-sqlite/src/paths.ts'
 
 /**
  * Construct a store with the plugin defaults and no-op provider callbacks.

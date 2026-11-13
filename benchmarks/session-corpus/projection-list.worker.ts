@@ -192,7 +192,7 @@ async function mountHost(ctx: Context, root: string, workload: typeof WORKLOADS[
       ctx.sessions.create(header.id, { meta: header })
     }
   }
-  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'zstd' })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'zstd', storage: 'jsonl' })
   await mountStorage(ctx, root)
   await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 200, writeIntervalMs: 5_000 })
   await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:', openAt: 'never' })

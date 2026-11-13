@@ -166,3 +166,66 @@ it.each(['open', 'stat', 'readdir', 'exists'] as const)('refuses database initia
     await expect(logs.close()).resolves.toBeUndefined()
   }
 })
+
+it('refuses orphan routing records before admitting new Sessions', async () => {
+  const { storage, root } = await fixture()
+  await storage.publishRoute(header.id)
+  const { SqliteLogs } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts')
+  const database = vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockResolvedValue(false)
+  await expect(storage.stat(header.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
+  await rm(join(root, '.segments'), { recursive: true })
+  expect(await storage.stat(header.id)).toBeUndefined()
+  faults.op = 'readdir'; faults.error = new Error('routing scan denied')
+  await expect(storage.stat(header.id)).rejects.toThrow('routing scan denied')
+  database.mockRestore()
+})
+
+it('reports a database removed between routing validation and row inspection', async () => {
+  const { storage } = await fixture()
+  const writer = await storage.create(header); await writer.flush(); await writer.close()
+  const { SqliteLogs } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts')
+  vi.spyOn(SqliteLogs.prototype, 'stat').mockResolvedValue(undefined)
+  vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockResolvedValueOnce(true).mockResolvedValue(false)
+  await expect(storage.stat(header.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
+})
+
+it('refuses a competing publication with a different identity', async () => {
+  const { storage } = await fixture()
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const link = vi.spyOn(await import('node:fs/promises'), 'link').mockImplementation(async (_source, target) => {
+    await actual.writeFile(target, JSON.stringify({ id: 'wrong', database: '/wrong' }))
+    throw Object.assign(new Error('race'), { code: 'EEXIST' })
+  })
+  await expect(storage.publishRoute(header.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_IDENTITY' })
+  link.mockRestore()
+})
+
+it('honors cancellation while entering the bounded routing scan', async () => {
+  const { storage } = await fixture()
+  const { SqliteLogs } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts')
+  const aborted = new AbortController()
+  vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockImplementation(async () => { aborted.abort(); return true })
+  await expect(storage.list({ signal: aborted.signal })).rejects.toThrow()
+})
+
+it('preserves filesystem failures while checking a database recreated during initialization', async () => {
+  const { root } = await fixture()
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  await actual.mkdir(join(root, '.segments'), { recursive: true })
+  await actual.writeFile(join(root, '.segments', 'orphan.json'), '{}')
+  const { sqliteLogs } = await import('./fixtures/segments.ts')
+  const logs = sqliteLogs(join(root, 'missing.sqlite'), root)
+  const stat = vi.spyOn(await import('node:fs/promises'), 'stat')
+    .mockRejectedValueOnce(Object.assign(new Error('absent'), { code: 'ENOENT' }))
+    .mockRejectedValueOnce(new Error('stat denied'))
+  await expect(logs.start()).rejects.toThrow('stat denied')
+  stat.mockRestore()
+  await logs.close()
+})
+
+it('allows an empty routing directory without a database', async () => {
+  const { storage, root } = await fixture()
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  await actual.mkdir(join(root, '.segments'), { recursive: true })
+  expect(await storage.stat(header.id)).toBeUndefined()
+})

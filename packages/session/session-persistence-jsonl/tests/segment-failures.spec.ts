@@ -909,3 +909,82 @@ it('rejects already-cancelled create, open, stat and list on SQLite-backed stora
   expect(await storage.stat(header('cancelled').id)).toBeUndefined()
   expect((await storage.list()).map(entry => entry.header.id)).toEqual([header().id])
 })
+
+it('refuses importing a legacy identity already committed in SQLite', async () => {
+  const { logs } = await raw()
+  await logs.importLegacy(header(), SessionLogOffset(0), [])
+  await expect(logs.importLegacy(header(), SessionLogOffset(0), [])).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+})
+
+it('keeps an absent materialization a no-op', async () => {
+  const { logs } = await raw()
+  await logs.materialize(header())
+})
+
+it('refuses a fork constructor seed with an invalid marker', async () => {
+  const { logs } = await raw()
+  const parent = await logs.create(header()); await parent.flush()
+  const child = await logs.create({ ...header('bad-child'), isSeeded: true },
+    { inheritedEventCount: SessionLogOffset(0) }, { sourceId: parent.id, endSeq: 0 })
+  await expect(child.append([event(0)])).rejects.toMatchObject({ code: 'SESSION_FORK_SEED_REQUIRED' })
+  await child.close(); await parent.close()
+})
+
+it('aggregates write-open validation and ownership cleanup failures', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header()); await writer.flush(); await writer.close()
+  const { SessionWriteLease } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts')
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the lease receiver below.
+  const release = SessionWriteLease.prototype.release
+  const fault = vi.spyOn(SessionWriteLease.prototype, 'release').mockImplementation(async function (this: SessionWriteLease) {
+    await release.call(this)
+    throw new Error('release failed')
+  })
+  const read = vi.spyOn(logs, 'read').mockRejectedValue(new Error('history failed'))
+  try { await expect(logs.open(header().id, 'write')).rejects.toMatchObject({ errors: [expect.any(Error), expect.any(Error)] }) }
+  finally { fault.mockRestore(); read.mockRestore() }
+})
+
+it('aggregates creation refusal and shared ownership rollback failure', async () => {
+  const { logs } = await raw()
+  const { SessionWriteLease } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts')
+  const acquire = SessionWriteLease.acquire.bind(SessionWriteLease)
+  let calls = 0
+  const fault = vi.spyOn(SessionWriteLease, 'acquire').mockImplementation(async (dir, id) => {
+    if (++calls === 2) throw new Error('artifact refused')
+    const lease = await acquire(dir, id)
+    const release = lease.release.bind(lease)
+    lease.release = async () => { await release(); throw new Error('rollback failed') }
+    return lease
+  })
+  const writer = await logs.create(header())
+  try { await expect(writer.flush()).rejects.toMatchObject({ errors: [expect.any(Error), expect.any(Error)] }) }
+  finally { fault.mockRestore(); await writer.close() }
+})
+
+it.each([1, 2])('reports %i owned lease release failures', async (failures) => {
+  const { logs } = await raw()
+  const { SessionWriteLease } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts')
+  const acquire = SessionWriteLease.acquire.bind(SessionWriteLease)
+  let acquired = 0
+  const fault = vi.spyOn(SessionWriteLease, 'acquire').mockImplementation(async (dir, id) => {
+    const lease = await acquire(dir, id)
+    const release = lease.release.bind(lease)
+    if (++acquired <= failures) lease.release = async () => { await release(); throw new Error('release failed') }
+    return lease
+  })
+  const writer = await logs.create(header())
+  try {
+    await writer.flush()
+    await expect(writer.close()).rejects.toThrow(failures === 1 ? 'release failed' : 'SQLite write ownership release failed')
+  } finally { fault.mockRestore() }
+})
+
+it('refuses materializing a pending fork before its constructor seed', async () => {
+  const { logs } = await raw()
+  const parent = await logs.create(header()); await parent.flush()
+  const child = await logs.create({ ...header('pending-fork'), isSeeded: true },
+    { inheritedEventCount: SessionLogOffset(0) }, { sourceId: parent.id, endSeq: 0 })
+  await expect(logs.materialize(child.header)).rejects.toMatchObject({ code: 'SESSION_FORK_SEED_REQUIRED' })
+  await child.close(); await parent.close()
+})

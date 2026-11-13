@@ -793,7 +793,7 @@ async function harvestSessionLogs(root: string): Promise<HarvestedLog[]> {
       try {
         const { events } = await handle.read()
         const header = sessionFormatCatalog.encodeCurrentHeader(
-          { ...handle.header, delegationDepth: handle.header.delegationDepth ?? 0 }, handle.inheritedEventCount,
+          { delegationDepth: 0, ...handle.header }, handle.inheritedEventCount,
         )
         const content = [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent({
           ...event, data: snapshotSessionFormatJson(event.data),

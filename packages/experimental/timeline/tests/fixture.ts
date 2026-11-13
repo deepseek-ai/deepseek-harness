@@ -129,7 +129,7 @@ export async function setup(
   const root = restore?.root ?? (await mkdtemp(join(tmpdir(), 'dsh-timeline-test-')))
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(Jsonl, { root, compression: 'none' })
+  await ctx.plugin(Jsonl, { root, compression: 'none', storage: 'jsonl' })
   ctx.llm.registerAdapter(['fixture'], adapter)
   ctx.tools.register(
     defineTool({

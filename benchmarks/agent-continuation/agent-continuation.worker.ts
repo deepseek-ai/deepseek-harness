@@ -56,7 +56,7 @@ async function seed(root: string): Promise<void> {
   const ctx = new Context()
   try {
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd', storage: 'jsonl' })
     const handle = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION, id: PARENT_ID, createdAt: TIME_ZERO, cwd: '/bench', isSeeded: false,
     }, {})
@@ -82,7 +82,7 @@ async function measure(root: string, scenario: string): Promise<ContinuationRepo
   let toolCalls = 0
   try {
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd', storage: 'jsonl' })
     await ctx.plugin(AgentLoop, { agents: [] })
     ctx.effect(() => ctx.llm.registerAdapter(['bench'], adapter))
     ctx.effect(() => ctx.tools.register(defineContentToolFixture({

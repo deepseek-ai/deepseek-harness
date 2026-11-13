@@ -74,7 +74,7 @@ async function run(root: string, mode: string): Promise<CatalogReport | { seeded
   try {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd', storage: 'jsonl' })
     await ctx.plugin(CatalogQuery)
     provideWorkingDirectoryFixture(ctx, '/bench')
     await ctx.plugin(SubagentRuntime)

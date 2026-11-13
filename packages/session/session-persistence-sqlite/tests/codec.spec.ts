@@ -1,9 +1,10 @@
 /** SQLite JSON decoding preserves logical Session records. @module */
+import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
-import { decodeHeader, decodeEvent } from '../src/codec.ts'
+import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { decodeHeader, decodeEvent, materializeHeader } from '../src/codec.ts'
 
-const header = { version: SESSION_FORMAT_VERSION, id: SessionId('codec'), createdAt: 0, isSeeded: false }
+const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: SessionId('codec'), createdAt: 0, isSeeded: false }
 
 describe('SQLite header decoding', () => {
   it('reads logical metadata and preserves optional parent metadata', () => {
@@ -46,4 +47,11 @@ describe('SQLite event decoding', () => {
   ])('refuses malformed envelope fields %j', (fields) => {
     expect(() => decodeEvent({ ...event, ...fields })).toThrow()
   })
+})
+
+it('requires the inherited count to agree with seeded metadata', () => {
+  expect(() => materializeHeader({ ...header, isSeeded: true })).toThrow('seeded session header requires')
+  expect(() => materializeHeader(header, SessionLogOffset(1))).toThrow('unseeded session header inherited')
+  expect(materializeHeader(header)).toEqual({ ...header, delegationDepth: 0 })
+  expect(materializeHeader({ ...header, isSeeded: true }, SessionLogOffset(0))).toMatchObject({ isSeeded: true })
 })

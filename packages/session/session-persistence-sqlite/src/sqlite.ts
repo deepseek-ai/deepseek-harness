@@ -856,6 +856,7 @@ export class SqliteLogs {
 
 /** One SessionHandle over a logical SQLite event stream. */
 export class SqliteTrace implements SessionHandle {
+  private closed = false
   private pending: Promise<void> = Promise.resolve()
   private closing: Promise<void> | undefined
   private failure: Error | undefined
@@ -913,12 +914,13 @@ export class SqliteTrace implements SessionHandle {
   /**
    * Admit one live event into the bounded batching window, including while close drains the routed producer.
    * @param event - newly emitted event, copied before asynchronous persistence.
-   * @returns admission completion; durability requires flush.
+   * @returns admission completion; durability requires flush. Rejects once the close drain has finished.
    */
   receive(event: SessionEvent): Promise<void> {
     // Provider failures retain their identity across Session event admission.
     try { this.checkStorage() } catch (error: unknown) { return Promise.reject(asError(error)) }
     try {
+      if (this.closed) throw new SessionHandleClosedError(this.id, 'receive')
       this.primed = undefined
       const batch = materializeAppendBatch([event])
       this.buffer.append(batch, (error) => { this.logs.reportFailure(this.id, error) })
@@ -1021,6 +1023,7 @@ export class SqliteTrace implements SessionHandle {
         failures.push(asError(error))
       }
       await this.pending
+      this.closed = true
       try { await this.release() }
       catch (error: unknown) { failures.push(asError(error)) }
       if (failures.length > 1) throw new AggregateError(failures, `session "${this.id}": close failed to drain and release`)

@@ -61,3 +61,23 @@ it('serves a committed Session without its routing record to a fresh provider', 
   expect((await fresh.sessionPersistence.stat(header.id))?.eventCount).toBe(2)
   expect((await readdir(root, { recursive: true })).some(name => name.endsWith('.jsonl'))).toBe(false)
 })
+
+it('reports a live routing failure and retains its rejected durability checkpoint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-segment-live-publication-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  onTestFinished(() => { faults.routes = false })
+  const ctx = await mount(root)
+  const { SqliteLogs } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts')
+  const report = vi.spyOn(SqliteLogs.prototype, 'reportFailure')
+  const writer = await ctx.sessionPersistence.create(header)
+  const { SqliteTrace } = await import('@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts')
+  if (!(writer instanceof SqliteTrace)) throw new Error('Expected SQLite writer')
+  faults.routes = true
+  await writer.receive(event(0))
+  await vi.waitFor(() => { expect(report).toHaveBeenCalled() })
+  await expect(writer.flush()).rejects.toMatchObject({ code: 'SESSION_STORAGE_PUBLICATION' })
+  await expect(writer.close()).rejects.toMatchObject({ code: 'SESSION_STORAGE_PUBLICATION' })
+  expect(report).toHaveBeenCalled()
+  faults.routes = false
+  report.mockRestore()
+})
