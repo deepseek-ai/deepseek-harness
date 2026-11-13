@@ -797,6 +797,9 @@ export function ChangesTab({
     else report('viewed.syncFailed', { ...hostCopy, message: failure.message })
   })
   const marks = host?.marks ?? localMarks
+  // Files marked viewed at their current change, which the file tree draws subdued.
+  const viewedPaths = useMemo(() => new Set(files.filter(file => viewedStateOf(marks, file.path, file.digest) === 'viewed').map(file => file.path)),
+    [files, marks])
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
@@ -1276,7 +1279,7 @@ export function ChangesTab({
     )
   }
   const navigator: ChangedFilesProps = {
-    files, state: treeState, t,
+    files, state: treeState, t, viewed: viewedPaths,
     filter: (query) => { setTreeState(value => ({ ...value, query })) },
     toggle: (path) => { setTreeState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: value.collapsed[path] !== true } })) },
     jump,

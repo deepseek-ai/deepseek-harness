@@ -2185,12 +2185,18 @@ describe('ChangesTab viewed files', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     const progress = (): string | null => m.view.getByRole('progressbar').getAttribute('aria-valuetext')
+    // The file tree draws a viewed file subdued.
+    const subdued = (view: ReturnType<typeof mount>): boolean | undefined =>
+      view.view.container.querySelector('nav button[aria-label="src/app.ts"]')?.hasAttribute('data-viewed')
     expect(progress()).toBe('0 / 3 viewed')
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
     expect(progress()).toBe('1 / 3 viewed')
+    expect(subdued(m)).toBe(true)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'unviewed', 'open'])
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
 
     // A later mount reads the marks; a file whose change moved shows the change and expands again.
@@ -2202,6 +2208,8 @@ describe('ChangesTab viewed files', () => {
     await settle()
     expect(marks(again)[2]).toEqual(['src/app.ts', 'changed', 'open'])
     expect(within(again.section('src/app.ts')).getByText(en['viewed.changed'])).toBeDefined()
+    // A file changed since it was viewed needs reading again, so the tree draws it as unviewed.
+    expect(subdued(again)).toBe(false)
     cleanup()
     const same = mount({ source: { kind: 'change', url: URL7 }, viewedFiles: m.viewedFiles })
     await settle()
