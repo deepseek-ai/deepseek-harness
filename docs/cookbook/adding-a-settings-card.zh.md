@@ -39,7 +39,7 @@ export function apply(ctx: Context, config: Config): void {
 
 在插件页面修改字段并保存。验证 profile patch、消费者下一次操作、插件实例标识不变，以及重启后的恢复。提交无效值，并确认文件和即时值均未改变。
 
-自定义插件页面从 Plugins 页面所有者接收 `form.state` 和 `form.mutate(operations, expectedRevision)`。Host 校验完整 Config，并通过 ConfigEditor 和 volatile HMR 应用修改。[插件设置包](../../packages/client/ui-settings-plugins/README.zh.md) 提供现有卡片示例。
+自定义插件页面从 Plugins 页面所有者接收 `form.state` 和 `form.mutate(operations, expectedRevision)`。Host 校验完整 Config，并通过 ConfigEditor 和 volatile HMR 应用修改。[插件页面 README](../../packages/client/ui-plugin-manager/README.zh.md#configuration-pages) 列出此类页面可注册的 slot，以及 `settings.section` 条目如何同时出现在那里；[ui-settings-shell](../../packages/client/ui-settings-shell/README.zh.md) 是一个现有页面。
 
 ## 4. 向其他插件的页面贡献内容
 

@@ -40,6 +40,7 @@ import { DesktopChannelRow, DesktopChannelToast } from './DesktopChannelRow.tsx'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
+import { SettingsSectionView } from './SettingsSectionView.tsx'
 import { CurrentVersionRow } from './CurrentVersionRow.tsx'
 import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
@@ -239,7 +240,6 @@ export function apply(ctx: ClientContext): void {
           'settings.header': { kind: 'single', scope: 'root' },
           'settings.action': { kind: 'list', scope: 'root' },
           'settings.close': { kind: 'single', scope: 'root' },
-          'settings.section': { kind: 'list', scope: 'root' },
           'settings.section.icon': { kind: 'list', scope: 'root', inline: true },
           'settings.onboarding': { kind: 'list', scope: 'root' },
         },
@@ -263,6 +263,11 @@ export function apply(ctx: ClientContext): void {
   }
   ctx.slots.inject('settings.close', () =>
     ctx.slots.register({ name: 'settings.close', locale: NS }, CloseLabel))
+  // Every surface that shows a settings page renders it through this Factory, which declares `settings.section`.
+  ctx.slots.registerFactory({
+    name: 'settings.section.view', scope: 'root',
+    children: { 'settings.section': { kind: 'list', scope: 'root' } },
+  }, SettingsSectionView)
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'general',

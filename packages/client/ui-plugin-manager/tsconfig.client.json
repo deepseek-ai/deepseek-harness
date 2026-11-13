@@ -40,6 +40,9 @@
       "path": "../ui-primitives"
     },
     {
+      "path": "../modules"
+    },
+    {
       "path": "../ui-renderer"
     },
     {
