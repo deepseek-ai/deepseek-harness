@@ -133,7 +133,7 @@ User search queries over a list follow one rule, so a query finds the same item 
 - Results rank name prefix, then name substring, then fuzzy name, then text substring; equal matches keep the list's own order.
 - Facet selections, such as status, category, or label filters, stay exact.
 
-The rule covers lists filtered in memory, including a Host search that supplies a Client list, such as `@` Session candidates. Searches backed by their own index keep their matcher: Session content search runs literal SQLite full-text terms over Session text, and the plugin market ranks its paged index on the Host. The sidebar's title, Workspace, and id matching follows this rule; only its content results use the full-text matcher.
+The rule covers lists filtered in memory, including a Host search that supplies a Client list, such as `@` Session candidates; [`TextSearchIndex`](../util/text-search/README.md) implements it for both. Searches backed by their own index keep their matcher: Session content search runs literal SQLite full-text terms over Session text, and the plugin market ranks its paged index on the Host. The sidebar's title, Workspace, and id matching follows this rule; only its content results use the full-text matcher.
 
 ## Testing and coverage
 
