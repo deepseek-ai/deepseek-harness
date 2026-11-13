@@ -1,0 +1,83 @@
+{
+  "apps/cli/tests/profiles/headless/tests/fixtures/subagent-settlement-fence.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 2
+  },
+  "apps/web/tests/default-product-isolation.e2e.ts": {
+    "d0b9e422bcad4455b7450e6bef2d6fa774afc3f44cdc75bc1d480c11b9fd0214": 1
+  },
+  "packages/api/gateway/tests/browser-credentials.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/api/gateway/tests/gateway.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/api/gateway/tests/operator-connect.host.spec.ts": {
+    "a024beae6117bcaeaded2d59d0be04db10eae40e0d4b8ade0eb88fee7dfb9973": 1
+  },
+  "packages/api/gateway/tests/peer.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 4
+  },
+  "packages/api/session-controller/tests/transport.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/boot/app-boot/tests/config-reload.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/boot/config-editor/src/index.ts": {
+    "2ef15140c5ddf0d1c87a5c80055760aaae1fd5ed86c986c69115c27cfa13ee51": 3
+  },
+  "packages/boot/hmr/src/index.ts": {
+    "2ef15140c5ddf0d1c87a5c80055760aaae1fd5ed86c986c69115c27cfa13ee51": 1
+  },
+  "packages/boot/hmr/tests/package-reload.spec.ts": {
+    "08185f8ef80468685cfa5affb086454f655c61ab83ecb9f8cde15c9a573bd1be": 1
+  },
+  "packages/bundle/web-app/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 3
+  },
+  "packages/bundle/web-app/tests/browser-open.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/client/connection/tests/node-half.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 2
+  },
+  "packages/experimental/auto-review/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/experimental/auto-review/tests/auto-review.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 2
+  },
+  "packages/experimental/inspector/src/shared/cordis/observer.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/host/authentication-token/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/host/authentication-token/tests/loader.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 2
+  },
+  "packages/host/authentication-token/tests/plugin.host.spec.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/host/frontend-static/tests/frontend-static.spec.ts": {
+    "e9ced37d23b7f2f7af77caaa3c4ace319974f275186f14c1d32093f0658f73af": 1
+  },
+  "packages/mcp/mcp-client/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/preset/agent-preset-registry/src/mount.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/sdk/server/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/settings/settings/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 1
+  },
+  "packages/test-support/session-snapshot/tests/fixtures/subagent-send-message-fence.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 4
+  },
+  "packages/typert/protocol/src/index.ts": {
+    "3755d2978651498c26c74bf7d3552cae5dd33d7f28e3c405cd282098e40a7c58": 2
+  }
+}

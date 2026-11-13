@@ -18,11 +18,11 @@ function dateText(value: string | number, locale: string): string {
 
 function cordisDetails(name: string, args: Record<string, unknown>, value: unknown, t: DetailTranslate): ToolDetailsModel | null {
   if (!detailRecord(value)) return null
-  if (name === 'cordis_inspect_list') {
+  if (name === 'cordis_inspect_list' || (name === 'cordis_inspect' && Array.isArray(value.providers))) {
     if (!Array.isArray(value.providers)) return null
     return detailList(inspectionItems(value.providers, t), t('detail.providers.count', { count: value.providers.length }), t)
   }
-  if (name === 'cordis_inspect_query') {
+  if (name === 'cordis_inspect_query' || name === 'cordis_inspect') {
     if (!('data' in value) || typeof value.provider !== 'string' || typeof value.method !== 'string') return null
     return detailList(inspectionItems(value.data, t), `${value.provider}.${value.method}`, t)
   }
@@ -164,6 +164,7 @@ export function inspectionDetails(
 ): ToolDetailsModel | null {
   if (hasSpillNotice(text)) return null
   switch (name) {
+    case 'cordis_inspect':
     case 'cordis_inspect_list':
     case 'cordis_inspect_query':
     case 'cordis_inspect_self': return cordisDetails(name, args, json, t)

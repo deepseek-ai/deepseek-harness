@@ -28,7 +28,10 @@
   zh: bb6db31a63bcf383
 /defensive-patterns/shared-state-has-one-owner:
   en: 053e2c485eec2613
-  zh: 2817da00572c789f
+  zh: 637cb8ed0e6bf664
+/defensive-patterns/plugins-do-not-read-the-cordis-root-context:
+  en: 88f70e265c218094
+  zh: 975eebb43cbdf4f1
 /defensive-patterns/a-business-capability-owns-itself:
   en: f74f2467e507455f
   zh: fe1bae04be5ad63a

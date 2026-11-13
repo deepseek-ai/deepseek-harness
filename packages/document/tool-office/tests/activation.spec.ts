@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, LlmAdapter, type ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
@@ -56,7 +56,8 @@ class SkillRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
-    return { output: [], value: await request.bindings[0]!.functions.skill!({ name: this.skill }) }
+    const resolved = await request.bindings[0]!.functions.skill!({ name: this.skill })
+    return { output: [], value: resolved instanceof PtcInspectableValue ? resolved.value : resolved }
   }
 }
 

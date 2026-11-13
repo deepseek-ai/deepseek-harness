@@ -14,7 +14,7 @@ import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import { PtcRuntime, PtcRuntimeError } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntime, PtcRuntimeError, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunFailure, PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -174,6 +174,66 @@ async function runCode(
     ...extras.signal ? { signal: extras.signal } : {},
   })
 }
+
+it('carries final tool rendering with structured binding values independently of the durable log copy', async () => {
+  const { ctx, runtime } = await setup({ mode: 'ptc' })
+  try {
+    const render = vi.fn((_args: unknown, value: { count: number }) => [{ type: 'text' as const, text: `Count: ${value.count}` }])
+    ctx.tools.register(defineTool({
+      name: 'count', description: 'Count a fixture.', parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { count: { type: 'number', required: true } } },
+        render,
+      },
+      execute: async () => ({ count: 2 }),
+      finalizeContent: () => [{ type: 'text', text: 'Final count: 2' }],
+    }))
+    ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'Durable preview' }])
+    const session = Session.create(brandString<SessionId>('ptc-inspection'))
+    const agent = { ctx, session } as Agent
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.count!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.value).toEqual({ count: 2 })
+      expect(result.text).toBe('Final count: 2')
+      return printed(result.text)
+    }
+    const result = await runCode(ctx, 'inspect(await tools.count({}))', { agent })
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: 'Final count: 2' }])
+    expect(render).toHaveBeenCalledOnce()
+    expect(session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')?.data.content)
+      .toEqual([{ type: 'text', text: 'Durable preview' }])
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
+
+it.each([{ value: [] }, { value: [1, 2] }])('carries rendered text for array binding value $value', async ({ value }) => {
+  const { ctx, runtime } = await setup({ mode: 'ptc' })
+  try {
+    ctx.tools.register(defineTool({
+      name: 'list', description: 'List a fixture.', parameters: {},
+      output: {
+        schema: { type: 'array', items: { type: 'number' } },
+        render: () => [{ type: 'text', text: 'List:' }, { type: 'text', text: `${value.length} items` }],
+      },
+      execute: async () => value,
+    }))
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.list!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.value).toEqual(value)
+      expect(result.text).toBe(`List:\n${value.length} items`)
+      return printed(result.text)
+    }
+    expect((await runCode(ctx, 'inspect(await tools.list({}))')).isError).toBe(false)
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
 
 it('logs detached frozen nested metadata without changing the binding value or log-content policy', async () => {
   const { ctx, runtime } = await setup({ mode: 'ptc' })
@@ -1715,7 +1775,13 @@ describe('the run_code dispatch bridge', () => {
       name: 'cua', description: 'Return a text observation.', parameters: {},
       execute: () => Promise.resolve([{ type: 'text', text: 'Window selected' }]),
     }))
-    runtime.behavior = async request => printed(await request.bindings[0]!.functions.cua!({}))
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.cua!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.text).toBe('Window selected')
+      return printed(result.value)
+    }
 
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(false)

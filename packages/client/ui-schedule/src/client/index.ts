@@ -215,6 +215,11 @@ export function apply(ctx: ClientContext): void {
       locale: MANAGER_NS,
       inject: (): ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected => ({ hooks: detail.hooks, taskBindings }),
     }, ScheduleTaskTabTitle))
+    // New and every recommendation open a new conversation with a request in its
+    // composer, appended to the draft of a reused blank conversation.
+    const startWithPrompt = (prompt: string): void => {
+      ctx.uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })
+    }
     yield ctx.slots.inject('main', () => ctx.slots.register({
       name: 'main',
       key: PANEL_ID,
@@ -222,7 +227,8 @@ export function apply(ctx: ClientContext): void {
       store: createEditorStore(),
       inject: (): TaskManagerInjected => ({
         ...detail,
-        onNewTask: () => { ctx.uiWorkspace.startSession(undefined, { prompt: t('host.createPrompt'), whenDraftExists: 'append' }) },
+        onNewTask: () => { startWithPrompt(t('host.createPrompt')) },
+        onUseRecommendation: startWithPrompt,
         onClearEnded: async () => {
           const outcome = await clearEnded()
           deleteToast.reportClear(outcome)
