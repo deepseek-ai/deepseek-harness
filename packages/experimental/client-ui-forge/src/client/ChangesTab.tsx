@@ -56,6 +56,7 @@ import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from
 import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
+import { useForgeCopy } from './forge-copy.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
 import type { ForgeLensDescription } from './changes-service.ts'
@@ -518,14 +519,18 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
   changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles, changeRequestViewed, setFileViewed,
-  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses, useExtensions,
-  useAnnotations, changesLens, renderSlot, t,
+  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses,
+  useExtensions, useAnnotations, changesLens, renderSlot, t: translate,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
   const target = useMemo(() => parseChangesAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`forge-panel: not a changes address "${tab.contentId}"`)
   const source = target.source
+  const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
+  const state = snapshot?.state ?? null
+  const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
+  const { t, host: hostCopy } = useForgeCopy(translate, source.kind === 'change' ? source.url : null, entry?.forge ?? null)
   const queue = reviewQueue(tab)
   useSyncExternalStore(queue.subscribe, queue.getStatus)
   const reviewState = queue.getSnapshot()
@@ -556,7 +561,8 @@ export function ChangesTab({
         return message
       }
       if (!complete(result.url)) return t('review.unknown')
-      report(request.kind === 'review' ? 'review.submitted' : 'review.published')
+      if (request.kind === 'review') report('review.submitted')
+      else report('review.published', hostCopy)
       if (request.kind === 'review') setReviewOpen(false)
       return undefined
     } catch (_error) {
@@ -635,8 +641,6 @@ export function ChangesTab({
   }, [signal, actions, tab.id])
   const [attempt, setAttempt] = useState(0)
   useEffect(() => tab.actions.bindCommands({ refresh: () => { setAttempt(value => value + 1) } }), [tab.actions])
-  const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
-  const state = snapshot?.state ?? null
   const scope = choices?.scope ?? 'branch'
   const base = choices?.base ?? null
   const chosenCommits = choices?.commits ?? null
@@ -653,7 +657,6 @@ export function ChangesTab({
   const listLocalCommits = useCallback((signal: AbortSignal) => localCommits(baseRef, signal), [localCommits, baseRef])
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
-  const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
   // A read starts once the panel state arrives and again when what it describes moves. A change request's read
   // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
@@ -787,9 +790,9 @@ export function ChangesTab({
   const hostOwner = useMemo(() => data?.kind === 'change' && data.viewed !== null
     ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
   const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
-    if (failure.kind === 'stale') report('viewed.syncStale')
+    if (failure.kind === 'stale') report('viewed.syncStale', hostCopy)
     else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
-    else report('viewed.syncFailed', { message: failure.message })
+    else report('viewed.syncFailed', { ...hostCopy, message: failure.message })
   })
   const marks = host?.marks ?? localMarks
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
@@ -912,8 +915,6 @@ export function ChangesTab({
   // the code host is submitted or discarded there; without one, the summary and any comment drafts kept in the browser
   // are published as one review.
   const pendingReview = review?.pendingReview ?? null
-  // Logins compare without case, as GitHub's do.
-  const ownChangeRequest = review?.viewer != null && prAuthor !== null && review.viewer.toLowerCase() === prAuthor.toLowerCase()
   const finishWrite = async (send: () => Promise<string | undefined>, done: ForgePanelKey): Promise<void> => {
     if (reviewRunning.current) return
     reviewRunning.current = true
@@ -933,7 +934,8 @@ export function ChangesTab({
     }
   }
   const reviewForm = tab.visible && data !== null && reviewOpen && data.kind === 'change' && data.commits === null && <SubmitReview queue={queue}
-    url={data.url} headSha={data.headSha} pending={pendingReview} own={ownChangeRequest} busy={reviewBusy} error={reviewError}
+    url={data.url} headSha={data.headSha} pending={pendingReview} events={review?.reviewEvents ?? null} busy={reviewBusy}
+    error={reviewError}
     close={() => { setReviewOpen(false) }}
     check={() => { openLink(data.url) }} reconcile={() => { queue.finish(false); setReviewError(null) }}
     submit={() => {
@@ -1152,9 +1154,9 @@ export function ChangesTab({
   }), [reach, target])
   const reviewStarted = pendingReview !== null
   const publishingBlocked = reviewState.uncertain !== null
-  // Comments on a commit range or on local changes go to the input only; a whole change request also takes GitHub comments:
-  // into its pending review once the threads say the user may review, and on their own while the user has no pending
-  // review, since GitHub refuses a single comment beside one.
+  // Comments on a commit range or on local changes go to the input only; a whole change request also takes comments on the
+  // code host: into its pending review once the threads say the user may review, and on their own while the user has no
+  // pending review, since GitHub refuses a single comment beside one and the view keeps one rule for every host.
   const whole = data?.kind === 'change' && data.commits === null
   const queueable = whole && review?.viewerCanReview === true
   const single = whole && pendingReview === null

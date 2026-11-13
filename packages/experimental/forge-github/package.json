@@ -41,12 +41,19 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-experimental-forge-session": {
+      "optional": true
+    }
   }
 }

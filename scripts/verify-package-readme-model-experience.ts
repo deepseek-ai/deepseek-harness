@@ -78,6 +78,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/ssh/ssh-helper-runtime': { kind: 'none', reason: 'The private executable carrier registers no model-facing content; its providers and consumers own operation results.' },
   'packages/experimental/forge': { kind: 'none', reason: 'Providers and watchers exchange code host status without contributing model context.' },
   'packages/experimental/forge-github': { kind: 'none', reason: 'The provider reads pull request status for host-side watchers without contributing model context.' },
+  'packages/experimental/forge-gitlab': { kind: 'none', reason: 'The provider reads merge request status for host-side watchers without contributing model context.' },
   'packages/experimental/client-ui-forge': { kind: 'indirect', reason: 'Switching a Session directory from the panel reaches the model through the working-directory notice; inspection and status stay on the host.' },
   'packages/experimental/forge-bundle': { kind: 'indirect', reason: 'The worktree tool and panel own the model-visible schemas, results, and directory notices selected by the bundle.' },
   'packages/experimental/forge-session': { kind: 'none', reason: 'Bindings, discovery records, and polled status stay on the host; binding records never enter model requests.' },

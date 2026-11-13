@@ -1184,7 +1184,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:483`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:485`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1272,7 +1272,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:603`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:638`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1295,7 +1295,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-github`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-github/src/index.ts:14`](../packages/experimental/forge-github/src/index.ts)
+- `source`: [`packages/experimental/forge-github/src/index.ts:19`](../packages/experimental/forge-github/src/index.ts)
 
 ```ts config-catalog
 /** GitHub CLI executable, served hosts, and invocation limits. */
@@ -1327,7 +1327,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-session`
 
 - `inject`: `forge` · `sessions` · `sessionProjections`
-- `source`: [`packages/experimental/forge-session/src/types.ts:91`](../packages/experimental/forge-session/src/types.ts)
+- `source`: [`packages/experimental/forge-session/src/types.ts:160`](../packages/experimental/forge-session/src/types.ts)
 
 ```ts config-catalog
 /** Deployment settings of `forgeSession`. */
@@ -1630,6 +1630,39 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-file-reference-local -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-forge-gitlab -->
+<a id="deepseek-aidsh-forge-gitlab"></a>
+
+## `@deepseek-ai/dsh-forge-gitlab`
+
+- `inject`: `forge`
+- `source`: [`packages/experimental/forge-gitlab/src/index.ts:19`](../packages/experimental/forge-gitlab/src/index.ts)
+
+```ts config-catalog
+/** GitLab CLI executable, served hosts, and read limits. */
+export interface Config {
+  /** GitLab CLI executable name or absolute host path. */
+  glabCommand?: string
+  /** Host names this provider serves; list self-managed GitLab hosts explicitly. */
+  hosts?: string[]
+  /** Deadline in milliseconds for one `glab` invocation. */
+  timeoutMs?: number
+  /** Maximum captured bytes per `glab` output stream and combined JSON bytes of one complete check read or review read. */
+  maxOutputBytes?: number
+  /** Most review threads one review read returns, which reports itself truncated past it. */
+  maxReviewThreads?: number
+  /** Most commits one merge request commit listing returns, the oldest ones when there are more. */
+  maxCommits?: number
+  /** Most merge requests one status query reads; GitLab refuses a query over its complexity limit, which halves the batch. */
+  statusBatchSize?: number
+  /** Most `glab` processes one status fetch runs at once. */
+  maxConcurrentRequests?: number
+  /** Most bytes of diff version patches kept in memory for the hunks of outdated review threads. */
+  maxCachedVersionBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-forge-gitlab -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-fs-local -->
 <a id="deepseek-aidsh-fs-local"></a>

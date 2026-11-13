@@ -42,7 +42,8 @@
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-worktree": "workspace:*"
+    "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
+    "@deepseek-ai/dsh-forge-gitlab": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
