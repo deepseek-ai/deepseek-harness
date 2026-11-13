@@ -8,6 +8,10 @@ import { openBrowserWorker } from '../src/worker-client.ts'
 import type { NativeBrowserConfig, NativeBrowserRuntime } from '../src/native.ts'
 import { nativeModel } from './fixtures/stagehand.ts'
 
+function workerFailed(message: RegExp) {
+  return { name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED', message: expect.stringMatching(message) as string }
+}
+
 const state = vi.hoisted(() => ({ workers: [] as Worker[], entries: [] as string[] }))
 vi.mock('node:worker_threads', async (importActual) => {
   const actual = await importActual<typeof import('node:worker_threads')>()
@@ -94,18 +98,19 @@ it('terminates a Worker whose initialization overlaps acquisition cancellation',
 it('fails active and later operations when the Worker exits', async () => {
   const runtime = await open('crash')
   const exited = once(state.workers[0]!, 'exit')
-  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toThrow(/Worker (exited|reply channel closed)/u)
+  await expect(runtime.execute('tabs', { action: 'list' }))
+    .rejects.toMatchObject(workerFailed(/Worker (exited|reply channel closed)/u))
   await exited
-  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toThrow('Worker exited (23)')
-  await expect(runtime.close()).rejects.toThrow('Worker exited (23)')
+  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toMatchObject(workerFailed(/Worker exited \(23\)/u))
+  await expect(runtime.close()).rejects.toMatchObject({ name: 'StagehandDrainError', code: 'STAGEHAND_CLEANUP_FAILED', message: expect.stringContaining('Worker exited (23)') as string })
 })
 
 it.each(['closing', 'close-failure'])('rejects cleanup after an undrained extension (%s) even though its Worker terminates', async (scenario) => {
   const runtime = await openBrowserWorker({ ...config(scenario), shutdownGraceMs: 20 }, new AbortController().signal, warn)
   runtimes.push(runtime)
   const closing = runtime.close()
-  const rejected = expect(closing).rejects.toThrow(/cleanup timed out|did not drain/u)
-  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toThrow('Worker is closed')
+  const rejected = expect(closing).rejects.toMatchObject({ name: 'StagehandDrainError', code: 'STAGEHAND_CLEANUP_FAILED', message: expect.stringMatching(/cleanup timed out|did not drain/u) as string })
+  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toMatchObject(workerFailed(/Worker is closed/u))
   await rejected
   expect(warn).toHaveBeenCalledWith(expect.stringContaining('SDK cleanup did not finish'))
   expect(state.workers[0]?.threadId).toBe(-1)
@@ -114,7 +119,7 @@ it.each(['closing', 'close-failure'])('rejects cleanup after an undrained extens
 
 it('rejects cleanup after a Worker crashes', async () => {
   const runtime = await open('error')
-  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toThrow()
+  await expect(runtime.execute('tabs', { action: 'list' })).rejects.toMatchObject(workerFailed(/./u))
   await expect(runtime.close()).rejects.toThrow()
   expect(state.workers[0]?.threadId).toBe(-1)
 })

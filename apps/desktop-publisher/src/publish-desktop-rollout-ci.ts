@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
-import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
+import { readDesktopPublishConfig, readDesktopUploadCredentials, requireDesktopEdgeOneZoneId } from './desktop-publish-config.ts'
 import { desktopReleasesRoot } from './desktop-releases-root.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
 import { resolveRetainedDesktopPublication, retainedDesktopPublishApi } from './resolve-retained-desktop-publish-ci.ts'
@@ -36,8 +36,8 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
   const target = input === '' ? undefined : Number(input)
   const website = env.DESKTOP_UPLOAD_WEBSITE === 'true'
   if (target === undefined && !website) throw new Error('desktop rollout: select a percentage or website publication')
-  if (website && (route.preset !== 'production' || !/^zone-[a-z0-9]+$/u.test(env.DOWNLOAD_PROD_EO_ZONE_ID || ''))) {
-    throw new Error('desktop rollout: website publication requires production and DOWNLOAD_PROD_EO_ZONE_ID')
+  if (website && route.preset !== 'production') {
+    throw new Error('desktop rollout: website publication requires production')
   }
   const root = desktopReleasesRoot(env)
   const manifest = await readRetainedDesktopManifest(root, route.runId, route.attempt)
@@ -50,6 +50,7 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
     throw new Error('desktop rollout: repository or release qualification mismatch')
   }
   const config = await readDesktopPublishConfig(z.string().parse(env.DSH_PACKAGING_CONFIG_DIR), source.preset)
+  const zoneId = website ? requireDesktopEdgeOneZoneId(config) : undefined
   const environment = source.preset === 'test'
     ? { DSH_DESKTOP_AUTO_UPDATE_ENV: 'test', DOWNLOAD_TEST_ORIGIN: config.origin,
       DOWNLOAD_TEST_RELEASE_ID: source.testReleaseId ?? '', DOWNLOAD_TEST_COS_BUCKET: config.bucket }
@@ -62,7 +63,7 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
     throw new Error('desktop rollout: initial COS feed publication is not confirmed for this package')
   }
   const approval = createHash('sha256').update(JSON.stringify({ manifest, plan, target, website,
-    zoneId: website ? env.DOWNLOAD_PROD_EO_ZONE_ID : undefined })).digest('hex')
+    zoneId })).digest('hex')
   return { route, root, recordsRoot, config, manifest, plan, target, website, destination, approval }
 }
 

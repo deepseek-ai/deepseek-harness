@@ -128,6 +128,44 @@ describe('Liveshare global share manager', () => {
     expect(screen.getByText('First session')).toBeDefined()
   })
 
+  it('states a stop the holder of the share state refused, not a failed stop', async () => {
+    await showManager(async () => accepted({ shares: ROWS as never }), undefined, () => {}, {
+      stop: async () => refused('liveshareShares/owner-state-held', {}),
+    })
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: en['manage.cancelShare'] })[0]!)
+    })
+    const confirm = screen.getByRole('dialog', { name: en['manage.stop.title'] })
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('checkbox', { name: en['manage.stop.acknowledge'] }))
+    })
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('button', { name: en['dialog.stop'] }))
+    })
+    // The owner acts in the process holding the state, so this page names it instead of the failure.
+    expect(screen.getByRole('alert').textContent).toBe(en['dialog.ownerStateHeld'])
+    expect(screen.getByText('First session')).toBeDefined()
+  })
+
+  it('cancels the stop as failed when the call itself rejects', async () => {
+    await showManager(async () => accepted({ shares: ROWS as never }), undefined, () => {}, {
+      stop: async () => { throw new Error('gateway lost') },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: en['manage.cancelShare'] })[0]!)
+    })
+    const confirm = screen.getByRole('dialog', { name: en['manage.stop.title'] })
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('checkbox', { name: en['manage.stop.acknowledge'] }))
+    })
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('button', { name: en['dialog.stop'] }))
+    })
+    // A lost channel states the same failure as a refused stop; the share stays listed either way.
+    expect(screen.getByRole('alert').textContent).toBe(en['dialog.stopFailed'])
+    expect(screen.getByText('First session')).toBeDefined()
+  })
+
   it('cancels the stop confirmation without stopping the share', async () => {
     await showManager(async () => accepted({ shares: ROWS as never }))
     await act(async () => {

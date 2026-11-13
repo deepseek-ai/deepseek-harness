@@ -4,7 +4,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { z } from 'zod'
-import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
+import { readDesktopPublishConfig, readDesktopUploadCredentials, requireDesktopEdgeOneZoneId } from './desktop-publish-config.ts'
 import { desktopReleasesRoot } from './desktop-releases-root.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
 import { prepareWebsiteInstaller, uploadWebsiteInstaller } from './desktop-website-installer.ts'
@@ -48,8 +48,7 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
   const config = await readDesktopPublishConfig(z.string().parse(env.DSH_PACKAGING_CONFIG_DIR), 'production')
   const approval = websiteApproval(manifest, config.bucket)
   if (!env.DESKTOP_WEBSITE_APPROVAL || env.DESKTOP_WEBSITE_APPROVAL !== approval) throw new Error('website publication: approved build or destination changed')
-  const zoneId = env.DOWNLOAD_PROD_EO_ZONE_ID
-  if (!zoneId || !/^zone-[a-z0-9]+$/u.test(zoneId)) throw new Error('website publication: configure DOWNLOAD_PROD_EO_ZONE_ID before uploading')
+  const zoneId = requireDesktopEdgeOneZoneId(config)
   const directory = join(dirname(root), 'upload-records', `website-${env.GITHUB_RUN_ID}-${route.target}`)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const stateFile = join(directory, 'state.json')

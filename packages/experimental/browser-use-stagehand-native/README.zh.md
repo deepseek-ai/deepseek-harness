@@ -89,6 +89,8 @@ env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vitest run --config vite
 
 宿主在等待 CDP 就绪前即拥有启动的 Chromium 进程及其临时配置目录。Chromium 接收标准清理后的子进程环境，保留路径、区域设置和代理配置，排除凭据形式的变量及 DSH 身份信息。两种模式都在独立 Worker 中连接 SDK。Worker 除显式的源码 TypeScript 配置路径外不接收宿主环境，因此其 CDP 连接不继承宿主代理设置。SDK 关闭会等待活动操作。清理在配置的 SDK 宽限时间后终止连接 Worker；启动模式还会终止并等待自有 Chromium 进程退出，再移除配置目录。外部连接的浏览器保持运行。清理失败遵循下方的[所有权限制](#known-limitations-and-deferred-work)。
 
+失败调用在 `tool/result` 上带有 `error.name` 与 `error.code`。宿主在派发前验证参数，方法 schema 拒绝的参数以 `ToolArgsError`（`INVALID_ARGS`）失败；没有确切实时 Agent 的调用以 `ToolContextUnavailableError` 失败，所有权失败使用运行时库的 `BrowserSessionError` 代码。其他失败抛出 `StagehandError`，其代码为封闭集合：Stagehand 报告动作未成功时为 `STAGEHAND_ACT_FAILED`，标签页不可用时为 `STAGEHAND_TAB_NOT_FOUND`，其他 SDK 或浏览器失败为 `STAGEHAND_OPERATION_FAILED`，Worker 退出、关闭或违反消息协议时为 `STAGEHAND_WORKER_FAILED`，SDK 请求未能结束时由 `StagehandDrainError` 子类给出 `STAGEHAND_CLEANUP_FAILED`。Worker 回复在消息旁携带 `StagehandError` 的名称和代码，宿主据此重建相同代码；其他 Worker 失败，包括未知名称或代码，以 Worker 的消息成为 `STAGEHAND_OPERATION_FAILED`。
+
 [原生运行时](src/native.ts)将显式模型配置传入 Stagehand 的公开初始化 API。适配器将 Zod 固定为 Stagehand 要求的版本，因为提取操作会向 SDK 传递 Zod schema。Stagehand 在其浏览器扩展中负责模型请求、响应验证与 token 计量。DSH 通过现有 Session 日志记录浏览器工具输入和返回数据，包括 SDK 结果元数据。底层推理请求/响应捕获及其与 DSH Session 用量计量的集成均属暂缓工作。
 
 </details>

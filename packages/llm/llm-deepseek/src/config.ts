@@ -43,7 +43,7 @@ export interface Config {
   inlineImageOffloadByteQuantum: Volatile<number>
   /** Image-count removal step after the request exceeds its count bound (default 20). */
   imageOffloadCountQuantum: Volatile<number>
-  /** Maximum duration of one request-image Files API resolution (default one minute). */
+  /** Maximum duration of one request-image Files API resolution (default 20 seconds). */
   filesApiTimeoutMs: Volatile<number>
   /** Explicit lifetime assigned to each uploaded image (default seven days). */
   fileExpiresAfterSeconds: Volatile<number>

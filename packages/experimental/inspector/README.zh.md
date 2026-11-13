@@ -37,7 +37,7 @@ kind: "package-reference"
 
 启用此组件后，按 **Ctrl/Cmd+Shift+.** 可展开或收起整宽底部面板中的 **NodeJS 诊断**，无需选中 Session。拖动上边缘可调整面板高度，占用上方内容的可用空间；收起和切换页面时保留所选高度。聚焦分隔条后也可使用上/下方向键、Home 和 End。iframe 首次展开时加载，收起、切换 Session 或主面板时保持挂载；卸载此组件会重置前端。X 按钮和快捷键会在原打开控件仍连接时恢复其焦点。iframe 自动连接当前 Host 并打开 Console；不包含手动 Connection 面板。每个内嵌前端的 Console、Sources 和 Cordis 树只显示 Host 与嵌入它的页面所对应的 Client；打印的 `devtools://` 链接仍显示全部 Client。
 
-Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路径提供镜像后的 DevTools 前端，沿用现有 Web 登录鉴权。`inspector/devtools` 前缀重定向到该入口；GET 和 HEAD 提供文件，缺失资源返回 404，其他方法返回 405。其 `cdp` WebSocket 路由鉴权同一浏览器会话，只转发到当前 Inspector 的 Worker page target。底部面板将已声明的页面 `clientSourceId` 传给入口及自动 WebSocket 端点，重连时继续选择同一逻辑 Client。没有选择参数时包含全部 Client；指定 Client 不在线时保留 Host；空值或重复参数以 400 拒绝升级。显式 `ws` 或 `wss` query 参数覆盖自动端点及其选择范围。
+Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路径提供镜像后的 DevTools 前端，要求 WebServer 准入及 owner Peer。`inspector/devtools` 前缀重定向到该入口；GET 和 HEAD 提供文件，缺失资源返回 404，其他方法返回 405。其 `cdp` WebSocket 路由在打开上游连接前要求 owner Peer，只转发到当前 Inspector 的 Worker page target。底部面板将已声明的页面 `clientSourceId` 传给入口及自动 WebSocket 端点，重连时继续选择同一逻辑 Client。没有选择参数时包含全部 Client；指定 Client 不在线时保留 Host；空值或重复参数以 400 拒绝升级。显式 `ws` 或 `wss` query 参数覆盖自动端点及其选择范围。
 
 构建使用官方 `chrome-devtools-frontend@1.0.1638082` TypeScript 源码及根 workspace 固定的 [Vite 依赖](../../../package.json)。该 npm 快照是 Chromium 150 发布分支的祖先，不是其后续稳定版的逐字节副本。[源码配置](scripts/devtools/source.ts)与包清单共同固定版本。普通 npm 安装提供源码和工具链；构建不需要 appspot、下载或启动浏览器，也不需要提取 PAK。workspace 安装和发布包安装都不运行 DevTools 下载 hook。
 

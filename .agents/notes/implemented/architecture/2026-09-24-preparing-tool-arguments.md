@@ -49,7 +49,7 @@ Third-party tools receive the same view without registration or a separate subsc
 
 ### Argument declaration order
 
-`tool-bash` and `tool-pwsh` declare `description` before `command` and include the ordering instruction. Both `parameters` declarations of `run_code` put `description` before `code` and share a parameter description requesting that generation order for TypeScript and Python. Write/edit declare `file_path` first and ask for it before `content` or `old_string`/`new_string` in the path parameter description. Read retains its leading `file_path`; other tools retain their argument order.
+`tool-bash` and `tool-pwsh` declare `description` before `command` and include the ordering instruction. `run_code` puts `code` before `description` in both its static parameters and program-format-aware schema; it does not require a JSON member order. Write/edit declare `file_path` first and ask for it before `content` or `old_string`/`new_string` in the path parameter description. Read retains its leading `file_path`; other tools retain their argument order.
 
 ## Alternatives considered
 
