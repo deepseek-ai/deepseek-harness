@@ -113,7 +113,7 @@ describe('JSONL V2 PTC publication and restore', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-v2-ptc-'))
     ctx = new Context()
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
   })
 
   afterEach(async () => {
@@ -188,7 +188,7 @@ describe('JSONL V2 PTC publication and restore', () => {
 
     await ctx.fiber.dispose()
     ctx = new Context()
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
     const reloaded = await ctx.sessionPersistence.open(id, 'read')
     try {
       const restored = await reloaded.read()

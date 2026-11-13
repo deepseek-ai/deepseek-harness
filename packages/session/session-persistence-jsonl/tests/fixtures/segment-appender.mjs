@@ -12,7 +12,7 @@ import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-j
 const [root, sessionId, countText] = process.argv.slice(2)
 const count = Number(countText)
 const ctx = new Context()
-await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+await ctx.plugin(JsonlSessionPersistence, { root, storage: 'sqlite', compression: 'none' })
 const handle = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1000, isSeeded: false })
 process.stdout.write('ready\n')
 await once(process.stdin, 'data')

@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-在保留现有 Session 读写接口的同时，将 Session 历史保存到 SQLite。Session 持久化插件通过此库保存新 Session，并在首次打开时导入支持的 JSONL 历史。导入源文件保留用于归档。Node 主机使用 SQLite；浏览器 Worker 选择插件的 JSONL 后端。
+在保留现有 Session 读写接口的同时，将 Session 历史保存到 SQLite。Session 持久化插件通过此库保存新 Session，并在首次打开时导入支持的 JSONL 历史。导入源文件保留用于归档。Node 主机通过 `storage: 'sqlite'` 显式启用 SQLite，插件默认使用 JSONL；浏览器 Worker 选择插件的 JSONL 后端。
 
 ## 目录
 

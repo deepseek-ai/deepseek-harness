@@ -17,7 +17,7 @@ async function fixture(compression: 'none' | 'zstd') {
     await rm(root, { recursive: true, force: true })
   })
   await ctx.plugin(SessionStore)
-  await ctx.plugin(JsonlSessionPersistence, { root, compression })
+  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
   async function persist(session: Session) {
     const writer = await ctx.sessionPersistence.create(session.header, { inheritedEventCount: session.inheritedEventCount })
     try { await writer.append(session.snapshotEvents()) } finally { await writer.close() }

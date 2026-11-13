@@ -131,7 +131,7 @@ async function mount(compression: JsonlCompression): Promise<Context> {
   if (root === undefined) throw new Error('persistence fixture is not initialized')
   const ctx = new Context()
   contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { root, compression })
+  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
   return ctx
 }
 

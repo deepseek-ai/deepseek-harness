@@ -33,7 +33,7 @@ afterEach(async () => {
 async function mount(): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
   return ctx
 }
 

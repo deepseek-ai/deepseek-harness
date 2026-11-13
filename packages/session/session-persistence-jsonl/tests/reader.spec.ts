@@ -27,7 +27,7 @@ async function fixture() {
   await mkdir(dirname(path), { recursive: true })
   probe.path = path
   probe.opens = 0
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   return { path, header, reader: ctx.sessionPersistence }
 }
 

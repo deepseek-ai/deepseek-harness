@@ -41,7 +41,7 @@ it('discards an uncommitted transaction from a SIGKILLed writer process', { time
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(plugin, { root, compression: 'none' })
+  await ctx.plugin(plugin, { storage: 'sqlite', root, compression: 'none' })
   const id = SessionId('crash-target')
   const writer = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   await writer.append([event(0), event(1)])

@@ -20,7 +20,7 @@ async function fixture() {
   const mount = async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
-    await ctx.plugin(persistence, { root, compression: 'none' })
+    await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
     return ctx
   }
   return { root, mount }
@@ -108,7 +108,7 @@ it.each(['provider', 'root', 'consumer-first'] as const)('preserves the final ev
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   onTestFinished(() => { release.resolve(undefined) })
   await ctx.plugin(SessionStore)
-  const provider = await ctx.plugin(persistence, { root, compression: 'none' })
+  const provider = await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const consumer = await ctx.plugin({ name: 'review-final-writer', inject: ['sessionPersistence', 'sessions'],
     async apply(consumerCtx: Context) {
       const sessions = consumerCtx.sessions
@@ -143,7 +143,7 @@ it.each(['provider', 'root', 'consumer-first'] as const)('preserves the final ev
   await consumerStop
   const fresh = new Context()
   onTestFinished(() => fresh.fiber.dispose())
-  await fresh.plugin(persistence, { root, compression: 'none' })
+  await fresh.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const reader = await fresh.sessionPersistence.open(SessionId('final'), 'read')
   try { expect((await reader.read()).events.map(item => item.type)).toEqual(['turn/start', 'turn/end']) }
   finally { await reader.close() }

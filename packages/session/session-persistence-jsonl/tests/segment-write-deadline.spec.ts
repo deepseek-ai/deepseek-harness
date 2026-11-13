@@ -93,7 +93,7 @@ it('retains the published settlement event under an immediate-close interleaving
   const ctx = new Context()
   onTestFinished(async () => { try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
   await ctx.plugin(SessionStore)
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const session = ctx.sessions.create(SessionId('settlement-parity'))
   const writer = await ctx.sessionPersistence.create(session.header)
   if (!(writer instanceof SqliteTrace)) throw new Error('Missing provider handle')

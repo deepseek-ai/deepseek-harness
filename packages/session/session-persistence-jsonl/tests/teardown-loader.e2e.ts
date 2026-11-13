@@ -55,6 +55,7 @@ it('waits for consumer teardown, persists its final event, and releases listener
       "  name: '@deepseek-ai/dsh-session-persistence-jsonl'",
       '  config:',
       `    root: ${JSON.stringify(root)}`,
+      '    storage: sqlite',
       '    compression: none',
       '- id: consumer',
       '  name: async-persistence-consumer',

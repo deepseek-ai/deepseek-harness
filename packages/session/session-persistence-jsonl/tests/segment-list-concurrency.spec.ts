@@ -26,7 +26,7 @@ async function fixture() {
     interception.read = undefined
     try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) }
   })
-  await ctx.plugin(persistence, { root, compression: 'none', listConcurrency: 2 })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none', listConcurrency: 2 })
   for (let ordinal = 0; ordinal < 4; ordinal++) {
     const handle = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION, id: SessionId(`route-${ordinal}`), createdAt: ordinal, isSeeded: false,

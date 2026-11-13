@@ -47,7 +47,7 @@ describe.each(['none', 'zstd'] as const)('V3 interrupted-turn publication (%s)',
     async function mount() {
       const ctx = new Context()
       contexts.push(ctx)
-      await ctx.plugin(JsonlSessionPersistence, { root, compression })
+      await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
       return ctx
     }
     return { id, path, root, rows, mount }

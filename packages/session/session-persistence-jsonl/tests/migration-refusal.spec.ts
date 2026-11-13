@@ -186,7 +186,7 @@ afterEach(async () => {
 async function mount(compression: JsonlCompression): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { root, compression })
+  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
   return ctx
 }
 

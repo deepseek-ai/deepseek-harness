@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Save and resume Session history through one persistence plugin. The default SQLite backend imports supported JSONL history on first open and retains its source files. Select `storage: 'jsonl'` when a deployment needs per-session files; its logs use checksummed Zstandard frames by default, or plain lines with `compression: 'none'`. Browser Workers use JSONL without compression. Configure a storage root before mounting the plugin.
+Save and resume Session history through one persistence plugin. The default JSONL backend saves per-session files. Explicitly select `storage: 'sqlite'` to import supported JSONL history on first open while retaining its source files. JSONL logs use checksummed Zstandard frames by default, or plain lines with `compression: 'none'`. Browser Workers use JSONL without compression. Configure a storage root before mounting the plugin.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Mount this plugin when a composition needs durable Sessions. Load the Session se
 
 ### When to choose it
 
-Use the default [SQLite backend](../session-persistence-sqlite/README.md) for Node applications. Select JSONL for browser Workers or external line readers. Both backends keep history under the configured root.
+Use the default JSONL backend for per-session files, browser Workers, or external line readers. Node applications can opt into the [SQLite backend](../session-persistence-sqlite/README.md) with `storage: 'sqlite'`. Both backends keep history under the configured root.
 
 ### Minimal configuration
 
@@ -45,7 +45,7 @@ Use the default [SQLite backend](../session-persistence-sqlite/README.md) for No
 | Field | Default | Meaning |
 |---|---|---|
 | `root` | required | Root directory for all session files |
-| `storage` | `'sqlite'` | New Session storage; browser Workers use `'jsonl'` with `compression: 'none'` |
+| `storage` | `'jsonl'` | New Session storage; browser Workers use `'jsonl'` with `compression: 'none'` |
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
 | `listConcurrency` | `3` | Maximum directory, header, and stat reads in flight, shared by every concurrent listing of this backend |
 

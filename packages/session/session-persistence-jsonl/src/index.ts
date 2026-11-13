@@ -98,7 +98,7 @@ const DEFAULT_LIST_CONCURRENCY = 3
 
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
-  /** Storage for new Sessions; browser Workers select JSONL because node:sqlite is unavailable. */
+  /** Storage for Sessions; defaults to JSONL. SQLite explicitly enables legacy import. */
   storage?: 'sqlite' | 'jsonl'
   /**
    * Root directory for all session files. Required (no default): a default of
@@ -1892,7 +1892,7 @@ export const name = 'session-persistence-jsonl'
 
 /** Loader schema for the backend's root, physical encoding, and listing concurrency. */
 export const Config: z<Config> = z.object({
-  storage: z.union([z.const('sqlite'), z.const('jsonl')]).default('sqlite'),
+  storage: z.union([z.const('sqlite'), z.const('jsonl')]).default('jsonl'),
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(DEFAULT_LIST_CONCURRENCY),
@@ -1917,7 +1917,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       name: 'session-persistence-jsonl-service',
       apply(serviceCtx: Context) {
         const legacy = new JsonlSessionPersistence(serviceCtx, config, tracker)
-        if (config.storage === 'jsonl') {
+        if (config.storage !== 'sqlite') {
           tracker.install(segments.ctx)
           serviceCtx.provide('sessionPersistence', legacy)
           return

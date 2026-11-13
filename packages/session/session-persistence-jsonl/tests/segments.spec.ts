@@ -17,7 +17,7 @@ runPersistenceContract('segments', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segments-contract-'))
   const instance = async () => {
     const ctx = new Context()
-    const fiber = await ctx.plugin(persistence, { root })
+    const fiber = await ctx.plugin(persistence, { storage: 'sqlite', root })
     return { persistence: ctx.sessionPersistence, dispose: async () => { await fiber.dispose() } }
   }
   const primary = await instance()
@@ -44,7 +44,7 @@ runLiveWritePathContract('segments', 200, {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
-    await ctx.plugin(persistence, { root, compression: 'none' })
+    await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
     return ctx
   }
   return { ctx: await mount(), remount: mount }
@@ -55,7 +55,7 @@ it('registers persistence before creating the SQLite schema on first Session cre
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(persistence, { root })
+  await ctx.plugin(persistence, { storage: 'sqlite', root })
   expect(ctx.sessionPersistence).toBeDefined()
   await expect(stat(join(root, '.segments/sessions.sqlite'))).rejects.toMatchObject({ code: 'ENOENT' })
   const writer = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('first-create'), createdAt: 0, isSeeded: false })
@@ -74,7 +74,7 @@ it('creates SQLite events with the original plugin configuration', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const session = ctx.sessions.create(SessionId('default-jsonl'))
   const writer = await ctx.sessionPersistence.create(session.header)
   session.append('turn/start', { turn: 1 })
@@ -93,7 +93,7 @@ it('restores SQLite events and continues creating SQLite Sessions after restart'
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  const backend = await ctx.plugin(persistence, { root })
+  const backend = await ctx.plugin(persistence, { storage: 'sqlite', root })
   const session = ctx.sessions.create(SessionId('live'))
   const writer = await ctx.sessionPersistence.create(session.header)
   session.append('turn/start', { turn: 1 })
@@ -103,7 +103,7 @@ it('restores SQLite events and continues creating SQLite Sessions after restart'
   await backend.dispose()
   await ctx.fiber.dispose()
   const restarted = new Context()
-  const restored = await restarted.plugin(persistence, { root })
+  const restored = await restarted.plugin(persistence, { storage: 'sqlite', root })
   try {
     const reader = await restarted.sessionPersistence.open(session.id, 'read')
     const events = (await reader.read()).events

@@ -10,7 +10,7 @@ if (pause === 'start') {
   process.stdout.write('ready\n')
   await commands.next()
 }
-await ctx.plugin(persistence, { root, compression: 'none' })
+await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
 if (pause === 'pause') {
   const reader = Reflect.get(ctx.sessionPersistence, 'jsonl')
   const prepare = reader.prepare.bind(reader)

@@ -1,14 +1,13 @@
-/** Cold V2 restoration mounts the shipped PTC preset and persists its migrated history in SQLite. */
+/** Cold V2 restoration mounts the shipped PTC preset and publishes only the current successor. */
 
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { zstdCompressSync } from 'node:zlib'
+import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { generationLogPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
+import { scanZstdFrames } from '../../../packages/session/session-persistence-jsonl/src/zstd.ts'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { normalizeSessionSnapshots } from '@deepseek-ai/dsh-session-snapshot'
@@ -98,30 +97,21 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
         .resolves.toMatchObject({ hasMore: false })
       const childWriter = await scaffold.ctx.sessionPersistence.open(childId, 'write')
       await childWriter.close()
-      {
-        await using childReader = await scaffold.ctx.sessionPersistence.open(childId, 'read')
-        expect(sessionFormatCatalog.encodeCurrentHeader(
-          { ...childReader.header, delegationDepth: childReader.header.delegationDepth ?? 0 }, childReader.inheritedEventCount,
-        ))
-          .toEqual({ ...childHeader, version: SESSION_FORMAT_VERSION, agentPreset: 'ptc' })
-        expect((await childReader.read()).events).toEqual(childRows)
-      }
-      await expect(readFile(childSuccessor)).rejects.toMatchObject({ code: 'ENOENT' })
+      const childPublished = await readFile(childSuccessor)
+      const childText = Buffer.concat(scanZstdFrames(childPublished).frames
+        .map(({ start, end }) => zstdDecompressSync(childPublished.subarray(start, end)))).toString('utf8')
+      expect(childText.trimEnd().split('\n').map((line): unknown => JSON.parse(line))).toEqual([
+        { ...childHeader, version: SESSION_FORMAT_VERSION, agentPreset: 'ptc' }, ...childRows,
+      ])
       expect(await readFile(childPath)).toEqual(childSource)
       expect(await readFile(brokenPath)).toEqual(brokenSource)
       await expect(readFile(generationLogPath(scaffold.persistenceRoot, scaffold.workspaceCwd, brokenId, SESSION_FORMAT_VERSION, 'zstd')))
         .rejects.toMatchObject({ code: 'ENOENT' })
 
       await scaffold.ctx.sessions.flush(resolved.agent.session)
-      await using persisted = await scaffold.ctx.sessionPersistence.open(id, 'read')
-      const { events: persistedEvents } = await persisted.read()
-      const published = [sessionFormatCatalog.encodeCurrentHeader(
-        { ...persisted.header, delegationDepth: persisted.header.delegationDepth ?? 0 }, persisted.inheritedEventCount,
-      ),
-      ...persistedEvents.map(event => sessionFormatCatalog.encodeCurrentEvent({
-        ...event, data: snapshotSessionFormatJson(event.data),
-      })),
-      ].map(record => JSON.stringify(record)).join('\n') + '\n'
+      const publishedBytes = await readFile(successor)
+      const published = Buffer.concat(scanZstdFrames(publishedBytes).frames
+        .map(({ start, end }) => zstdDecompressSync(publishedBytes.subarray(start, end)))).toString('utf8')
       const expected = [
         { ...header, version: SESSION_FORMAT_VERSION, agentPreset: 'ptc' },
         ...rows.map(row => row['type'] === 'agent-preset/selected'
@@ -146,9 +136,7 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
       await expect(scaffold.ctx.sessionPersistence.open(corruptHeaderId, 'read')).rejects.toThrow(/invalid frame magic/)
       expect(await readFile(corruptHeaderPath)).toEqual(corruptHeaderSource)
       expect((await readdir(dirname(predecessor))).filter(name => name.endsWith('.jsonl.zstd')).sort())
-        .toEqual(['session.v2.jsonl.zstd'])
-      const database = await readFile(join(scaffold.persistenceRoot, '.segments', 'sessions.sqlite'))
-      expect(database.subarray(0, 16).toString()).toBe('SQLite format 3\0')
+        .toEqual(['session.v2.jsonl.zstd', `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`])
     } finally {
       await scaffold.close()
     }

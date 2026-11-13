@@ -28,7 +28,7 @@ const event = (seq: number): SessionEvent<'turn/start'> => ({ type: 'turn/start'
 async function mount(root: string) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(plugin, { root, compression: 'none' })
+  await ctx.plugin(plugin, { storage: 'sqlite', root, compression: 'none' })
   return ctx
 }
 

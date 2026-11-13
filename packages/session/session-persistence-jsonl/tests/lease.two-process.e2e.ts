@@ -50,7 +50,7 @@ describe('two-process SQLite write lock (built lib)', () => {
     dirs.push(root)
     const ctx = new Context()
     contexts.push(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
     const id = SessionId(SESSION)
     const pending = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION, id, createdAt: 1000, isSeeded: false, cwd: join(root, 'other-project'),
@@ -101,7 +101,7 @@ describe('two-process SQLite write lock (built lib)', () => {
 
       const ctx = new Context()
       contexts.push(ctx)
-      await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+      await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
       const mine = ctx.sessionPersistence
 
       // Excluded while the other process's descriptor holds the kernel lock.
@@ -133,7 +133,7 @@ describe('two-process Segment database writers (built lib)', () => {
     // Initialize the shared database before the writers start.
     const ctx = new Context()
     contexts.push(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
     const count = 200
     const ids = [SessionId('segment-writer-a'), SessionId('segment-writer-b')]
     const writers = ids.map(id => spawn(process.execPath, [APPENDER, root, id, String(count)], {

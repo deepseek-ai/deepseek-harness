@@ -37,7 +37,7 @@ async function persistentHarness(adapter: MockAdapter): Promise<{ ctx: Context; 
   return { ctx: await mountPersistentHarness(root, adapter), root }
 }
 
-async function mountPersistentHarness(root: string, adapter: MockAdapter, compression?: 'none'): Promise<Context> {
+async function mountPersistentHarness(root: string, adapter: MockAdapter, compression?: 'none', storage: 'jsonl' | 'sqlite' = 'jsonl'): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
@@ -48,7 +48,7 @@ async function mountPersistentHarness(root: string, adapter: MockAdapter, compre
   await ctx.plugin(AgentRegistry)
   // The backend mounts BEFORE the loop so root teardown unwinds the loop
   // first: live agents drain their writers into still-open handles.
-  await ctx.plugin(JsonlSessionPersistence, { root, ...compression === undefined ? {} : { compression } })
+  await ctx.plugin(JsonlSessionPersistence, { root, storage, ...compression === undefined ? {} : { compression } })
   await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], adapter)
   return ctx
@@ -581,7 +581,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     const sessionId = brandString<SessionId>('torn-tail-resume')
     const root = await mkdtemp(join(tmpdir(), 'dsh-resume-torn-'))
     dirs.push(root)
-    const ctx1 = await mountPersistentHarness(root, new MockAdapter([]), 'none')
+    const ctx1 = await mountPersistentHarness(root, new MockAdapter([]), 'none', 'sqlite')
     const header = ctx1.sessions.prepare(sessionId).header
     await ctx1.fiber.dispose()
 
@@ -593,7 +593,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     ].join('\n')
     await writeFile(path, bytes)
 
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]), 'none')
+    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]), 'none', 'sqlite')
     const handle = await ctx2.agents.resume({ resumeSessionId: sessionId })
     expect(handle.agent.session.snapshotEvents().map(event => event.type))
       .toEqual(['turn/start', 'turn/end', 'session/end-seed'])

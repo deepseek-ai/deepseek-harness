@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-通过一个持久化插件保存和恢复 Session 历史。默认 SQLite 后端在首次打开时导入支持的 JSONL 历史并保留源文件。部署需要按会话保存文件时选择 `storage: 'jsonl'`；其日志默认使用带校验和的 Zstandard 帧，或通过 `compression: 'none'` 保存纯文本行。浏览器 Worker 使用不压缩的 JSONL。挂载插件前配置存储根目录。
+通过一个持久化插件保存和恢复 Session 历史。默认 JSONL 后端按会话保存文件。显式选择 `storage: 'sqlite'` 才会在首次打开时导入支持的 JSONL 历史并保留源文件。JSONL 日志默认使用带校验和的 Zstandard 帧，或通过 `compression: 'none'` 保存纯文本行。浏览器 Worker 使用不压缩的 JSONL。挂载插件前配置存储根目录。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-Node 应用使用默认 [SQLite 后端](../session-persistence-sqlite/README.zh.md)。浏览器 Worker 或外部逐行读取工具选择 JSONL。两种后端都在配置的根目录下保留历史。
+按会话保存文件、浏览器 Worker 或外部逐行读取工具使用默认 JSONL 后端。Node 应用可通过 `storage: 'sqlite'` 显式启用 [SQLite 后端](../session-persistence-sqlite/README.zh.md)。两种后端都在配置的根目录下保留历史。
 
 ### 最小配置
 
@@ -45,7 +45,7 @@ Node 应用使用默认 [SQLite 后端](../session-persistence-sqlite/README.zh.
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `root` | 必填 | 所有会话文件的根目录 |
-| `storage` | `'sqlite'` | 新 Session 的存储后端；浏览器 Worker 使用 `'jsonl'` 和 `compression: 'none'` |
+| `storage` | `'jsonl'` | 新 Session 的存储后端；浏览器 Worker 使用 `'jsonl'` 和 `compression: 'none'` |
 | `compression` | `'zstd'` | 物理编码：`'zstd'` 带校验和帧，或 `'none'` 换行分隔 UTF-8 文本 |
 | `listConcurrency` | `3` | 同时进行的目录、header 与 stat 读取上限，由该后端所有并发的列举共用 |
 

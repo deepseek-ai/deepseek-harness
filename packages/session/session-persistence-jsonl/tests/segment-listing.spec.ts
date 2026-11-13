@@ -15,7 +15,7 @@ it('public list emits an identity once when first materialization completes afte
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-list-once-'))
   const ctx = new Context()
   onTestFinished(async () => { try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const id = SessionId('public-list-once')
   const writer = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   let writing: Promise<void> | undefined
@@ -40,7 +40,7 @@ it.each(['corrupt', 'unsupported'] as const)('omits %s headers whose first commi
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-list-omitted-'))
   const ctx = new Context()
   onTestFinished(async () => { try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const id = SessionId('omitted')
   const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }
   const writer = await ctx.sessionPersistence.create(header)
@@ -76,7 +76,7 @@ it('lists 201 durable SQLite sessions with one metadata query and no event paylo
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-list-query-'))
   const ctx = new Context()
   onTestFinished(async () => { try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const ids = Array.from({ length: 201 }, (_, index) => SessionId(`session-${String(index).padStart(3, '0')}`))
   const writer = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('session-000'), createdAt: 0, isSeeded: false })
   try { await writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }]) }

@@ -34,7 +34,7 @@ describe.each(modes)('retired content in JSONL ($compression, $access)', ({ comp
     const path = generationLogPath(root, undefined, id, version, compression)
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, bytes)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression })
+    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
     return { ctx, path, bytes, event }
   }
 

@@ -36,7 +36,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
         await writeFile(join(directory, 'session.jsonl'), JSON.stringify({
           type: 'session', version: 0, id, createdAt: 1, delegationDepth: 0,
         }) + '\\n')
-        await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+        await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
         const handle = await ctx.sessionPersistence.open(id, 'write')
         const { events } = await handle.read()
         const header = sessionFormatCatalog.encodeCurrentHeader(handle.header, handle.inheritedEventCount)

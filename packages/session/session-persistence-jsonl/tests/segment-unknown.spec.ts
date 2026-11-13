@@ -19,7 +19,7 @@ it.each(['commit', 'rollback'] as const)('isolates every SQLite handle after an 
   const ctx = new Context()
   onTestFinished(async () => { try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
   await ctx.plugin(SessionStore)
-  await ctx.plugin(persistence, { root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root, compression: 'none' })
   const session = ctx.sessions.create(SessionId('unknown'))
   const source = await ctx.sessionPersistence.create(session.header)
   await source.flush()

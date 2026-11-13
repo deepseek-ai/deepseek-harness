@@ -32,7 +32,7 @@ async function fixture() {
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(plugin, { root, compression: 'none' })
+  await ctx.plugin(plugin, { storage: 'sqlite', root, compression: 'none' })
   const storage = ctx.sessionPersistence
   if (!(storage instanceof TracePersistence)) throw new Error('Missing Segment operations')
   return { root, ctx, storage }
@@ -65,7 +65,7 @@ it('preserves seeded history and SQLite storage across provider replacement', as
   await expect(createChild()).rejects.toBeInstanceOf(SessionAlreadyExistsError)
   const other = new Context()
   onTestFinished(() => other.fiber.dispose())
-  await other.plugin(plugin, { root, compression: 'none' })
+  await other.plugin(plugin, { storage: 'sqlite', root, compression: 'none' })
   const reader = await other.sessionPersistence.open(child, 'read')
   expect((await reader.read()).events.map(item => item.seq)).toEqual([0, 1])
   await reader.close()
@@ -104,7 +104,7 @@ it('creates a SQLite Session when .segments has no routing records and the datab
   await mkdir(join(root, '.segments'))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(plugin, { root })
+  await ctx.plugin(plugin, { storage: 'sqlite', root })
   const writer = await ctx.sessionPersistence.create(header('new-jsonl'))
   await writer.flush(); await writer.close()
   expect(await ctx.sessionPersistence.stat(header('new-jsonl').id)).toBeDefined()
@@ -119,7 +119,7 @@ it('refuses new JSONL creation when routing records outlive a missing Segment da
   }
   const other = new Context()
   onTestFinished(() => other.fiber.dispose())
-  await other.plugin(plugin, { root })
+  await other.plugin(plugin, { storage: 'sqlite', root })
   await expect(other.sessionPersistence.create(header())).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
   await expect(stat(join(root, '.segments', 'sessions.sqlite'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect((await readdir(root, { recursive: true })).some(name => name.endsWith('.jsonl'))).toBe(false)

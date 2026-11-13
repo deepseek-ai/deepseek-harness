@@ -1,4 +1,4 @@
-/** Shipped JSONL selection for hosts without node:sqlite. @module */
+/** Default and explicit JSONL selection without SQLite initialization. @module */
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,7 @@ import { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqli
 import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
 import * as persistence from '../src/index.ts'
 
-it('stores and reads Sessions through JSONL without initializing SQLite', async () => {
+it.each([undefined, 'jsonl'] as const)('stores and reads Sessions without initializing SQLite with storage=%s', async (storage) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-selection-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -16,7 +16,7 @@ it('stores and reads Sessions through JSONL without initializing SQLite', async 
     finally { vi.restoreAllMocks(); await rm(root, { recursive: true, force: true }) }
   })
   const start = vi.spyOn(SqliteLogs.prototype, 'start').mockRejectedValue(new Error('SQLite unavailable'))
-  await ctx.plugin(persistence, { root, storage: 'jsonl', compression: 'none' })
+  await ctx.plugin(persistence, { root, ...(storage === undefined ? {} : { storage }), compression: 'none' })
   expect(await ctx.sessionPersistence.list()).toEqual([])
   const header = meta('jsonl-selected')
   await using writer = await ctx.sessionPersistence.create(header)

@@ -38,7 +38,7 @@ async function fixture(compression: 'none' | 'zstd' = 'none', seeded = false) {
   await writeFile(path, bytes)
   const mount = async () => {
     const ctx = new Context(); contexts.push(ctx)
-    await ctx.plugin(persistence, { root, compression })
+    await ctx.plugin(persistence, { storage: 'sqlite', root, compression })
     return ctx
   }
   const ctx = await mount()

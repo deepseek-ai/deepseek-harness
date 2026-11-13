@@ -58,7 +58,7 @@ it('initializes one database while two processes first open different Sessions',
   await Promise.all([first.exited, second.exited])
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(persistence, { root: b.root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root: b.root, compression: 'none' })
   for (const id of [b.id, otherId]) {
     await using read = await ctx.sessionPersistence.open(id, 'read')
     expect((await read.read()).events).toEqual(oneTurnLog())
@@ -87,7 +87,7 @@ it.each(['read', 'write'])('waits for another process to migrate and hands off %
   expect(await readFile(b.path)).toEqual(b.bytes)
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(persistence, { root: b.root, compression: 'none' })
+  await ctx.plugin(persistence, { storage: 'sqlite', root: b.root, compression: 'none' })
   await using read = await ctx.sessionPersistence.open(b.id, 'read')
   expect((await read.read()).events).toEqual(oneTurnLog())
 }, 30_000)

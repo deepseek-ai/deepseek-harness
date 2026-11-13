@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Save Session history in SQLite while keeping the existing Session read and write interface. The Session persistence plugin uses this library for new Sessions and imports supported JSONL history on first open. Imported source files remain available for archival purposes. Node hosts use SQLite; browser Workers select the plugin's JSONL backend.
+Save Session history in SQLite while keeping the existing Session read and write interface. The Session persistence plugin uses this library for new Sessions and imports supported JSONL history on first open. Imported source files remain available for archival purposes. Node hosts explicitly select `storage: 'sqlite'`; the plugin defaults to JSONL, and browser Workers select the plugin's JSONL backend.
 
 ## Table of Contents
 

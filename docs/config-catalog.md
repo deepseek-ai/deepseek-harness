@@ -3274,7 +3274,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ```ts config-catalog
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
-  /** Storage for new Sessions; browser Workers select JSONL because node:sqlite is unavailable. */
+  /** Storage for Sessions; defaults to JSONL. SQLite explicitly enables legacy import. */
   storage?: 'sqlite' | 'jsonl'
   /**
    * Root directory for all session files. Required (no default): a default of
