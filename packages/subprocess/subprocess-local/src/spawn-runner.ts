@@ -397,13 +397,19 @@ class WindowsJobRunner {
     if (!this.resultStarted) {
       this.resultStarted = true
       try {
-        this.resultDelivered = await sendMessage(this.host, { type: 'error', error: serializeRunnerError(error) }).then(() => true)
+        await this.deliverRunnerError(error)
       } catch (_parentDisconnected) {
         // The disconnected parent observes runner infrastructure failure.
       }
     }
     this.releaseOwnedJob()
     this.finish(127)
+  }
+
+  /** Send `error` as the runner result and record its delivery; rejects when the parent is gone. */
+  private async deliverRunnerError(error: unknown): Promise<void> {
+    await sendMessage(this.host, { type: 'error', error: serializeRunnerError(error) })
+    this.resultDelivered = true
   }
 
   private releaseOwnedJob(): void {
