@@ -181,6 +181,25 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 `PtcInspectableValue`, exported from `@deepseek-ai/dsh-ptc-runtime`, associates a lossless JSON object or array with host-authored text through `new PtcInspectableValue(value, text)`. The provider delivers the data itself to the program, without exposing the descriptor or adding program-visible properties. Direct `inspect` of the original result uses its text only while the data matches its initial snapshot; empty text emits nothing. Copies, field selections, modified results, and nested values use ordinary formatting. The Node process owns this association, which is neither serialized into Session logs nor transferred by copying a program value. See [`src/inspectable-value.ts`](../../packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts).
 
+The data may contain host-issued `PtcImage` descriptors. The provider preserves their program `Image` identities in the inspection snapshot. Direct inspection of the unchanged container displays its supplied text; inspecting an Image field displays that image.
+
+```ts public-api
+/** A binding result whose unchanged object or array displays the supplied text when inspected directly. */
+declare class PtcInspectableValue {
+  readonly [key: string]: PtcJsonValue;
+  /** The JSON object or array delivered unchanged to the program. */
+  readonly value: PtcJsonValue[] | { [key: string]: PtcJsonValue };
+  /** Text shown by a direct inspection of the unchanged value; empty text emits nothing. */
+  readonly text: string;
+  /**
+   * Associate an object or array with its host-authored inspection text.
+   * @param value - Lossless JSON data retained for programmatic access.
+   * @param text - Text to display instead of generic object formatting.
+   */
+  constructor(value: PtcJsonValue[] | { [key: string]: PtcJsonValue }, text: string);
+}
+```
+
 ## Captured output and the failure taxonomy
 
 `output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.

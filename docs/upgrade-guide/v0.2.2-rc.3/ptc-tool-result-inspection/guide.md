@@ -11,7 +11,9 @@ English | [中文](guide.zh.md)
 
 PTC tools keep their declared JSON return values. With or without inspection metadata, field access, copying, and JSON serialization operate on the original data; the host-only descriptor is not exposed to the program. Previously, `inspect(result)` formatted an object or array with Node's generic object formatter. It now displays the tool's final rendered text when the original result is unchanged and its output contains only text. The text includes completed output-policy changes; inspection neither reruns the tool nor calls `output.render` again. Log-only replacements do not affect it.
 
-Field selections, copies, modified results, and results nested inside another value still use generic formatting. Scalar results, Images, and mixed text/image outputs keep their behavior. This affects programs and checks that depend on the exact text produced by inspecting a complete tool result.
+Non-empty associated text occupies a separate output group. `inspect('result:', result, 'done')` emits the label and a newline, then the tool text, followed by `done` in another group. Ordinary values in one group remain space-separated.
+
+Field selections, copies, modified results, and results nested inside another value still use generic formatting. Scalar results, Images, and mixed text/image outputs keep their behavior. This affects programs and checks that depend on the exact text produced by inspecting a complete tool result. Inspectable containers may retain Image fields: direct inspection shows the supplied text; inspect the image field separately to display it.
 
 The Node bootstrap protocol changes from 3 to 4. `HostMethods.invoke` replies now use `{ value: flatWire, inspection?: string }`. Custom `launch.bootstrapPath` deployments must update their bootstrap; the bundled bootstrap updates with the host.
 

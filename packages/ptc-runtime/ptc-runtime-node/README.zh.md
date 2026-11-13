@@ -72,6 +72,10 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 将未修改的原结果直接作为参数传给 `inspect(...values)` 时，会使用绑定附带的文本。宿主绑定通过 `PtcInspectableValue` 提供文本；程序仍收到 JSON 对象或数组。拷贝、选定字段、修改后的结果，以及嵌套在其他值中的结果，使用普通格式。进程保存原值、初始快照与展示文本的关联；程序对象的属性不携带该关联。
 
+非空的绑定附带文本独占一个输出组，不与前面的字符串参数用空格拼接。执行 `inspect('result:', result, 'done')` 时，先输出标签并换行，再输出关联文本，`done` 另起后续输出组。同组普通值仍以空格分隔。
+
+可展示的数据中可以包含宿主提供的 Image。提供方在生成展示快照时保留这些程序 Image 的身份。直接展示未修改的容器时只输出附带文本；显式展示 Image 字段时输出该图片。
+
 对于其他值，`inspect(...values)` 直接渲染字符串，并使用 Node 的 `util.inspect` 格式化其他类型，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。注册的 Image 可以直接输出，也可以在 Node 格式化嵌套值时输出，包括 Map 条目、Set 的值以及可枚举的 Symbol 属性。自定义 inspect 方法决定会访问哪些嵌套值。文本和所选图片在共享输出预算内遵循参数顺序。如果对象格式化抛错，此前 inspect 的参数仍然可见。每个文本输出组以换行结尾，原始流写入则保留实际文本。
 
 所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”

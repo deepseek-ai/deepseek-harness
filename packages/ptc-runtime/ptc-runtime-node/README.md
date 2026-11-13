@@ -72,6 +72,10 @@ In `per-call` mode, programs are async function bodies: top-level `await` and `r
 
 `inspect(...values)` uses binding-supplied text for an unchanged result passed directly as an argument. A host binding supplies this text through `PtcInspectableValue`; the program still receives the JSON object or array. Copies, selected fields, modified results, and results nested inside another value use ordinary formatting. The process owns the association with the original value and its initial snapshot; program properties do not carry it.
 
+Non-empty binding-supplied text forms its own output group and does not join preceding string arguments with spaces. For `inspect('result:', result, 'done')`, the label is emitted with a newline, followed by the associated text; `done` starts a later group. Ordinary values within one group remain space-separated.
+
+Inspectable data may contain host-issued Images. The provider preserves their program Image identities when capturing the inspection snapshot. Direct inspection of the unchanged container displays its supplied text; inspect an Image field explicitly to display that image.
+
 For other values, `inspect(...values)` renders strings directly and uses Node's `util.inspect`, without depth, array-length or string-length preview limits. Undefined properties, Error objects and circular references remain visible. Registered Images are emitted directly or when Node's formatting reaches them in nested values, including Map entries, Set values and enumerable Symbol properties. Custom inspection methods determine which nested values are visited. Text and selected images follow argument order within the shared output budget. If object formatting throws, preceding inspected arguments remain visible. Each emitted text group ends in a newline; raw stream writes retain their original text.
 
 All execution modes provide the complete native Node console, whose stdout and stderr writes enter the captured output. Model instructions say: "Use inspect(...values) to display output. Do not use console."

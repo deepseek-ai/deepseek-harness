@@ -63,6 +63,22 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
+it('preserves registered Images while inspecting a binding container', async () => {
+  const h = await setup()
+  const shot = {}
+  const wire = encodePtcJsonWire({ shot }, candidate => candidate === shot ? {
+    kind: 'image', id: 'selected', attachmentId: 'sha256:selected', path: '/selected.png', width: 8, height: 4,
+  } : undefined)
+  h.methods.invoke = async () => ({ value: wire, inspection: 'selected screenshot' })
+  const images: string[] = []
+  h.methods.image = (id) => { images.push(id) }
+  const result = await h.run('const result = await tools.echo({}); inspect(result); inspect(result.shot); return result.shot.width')
+  expect(result.error).toBeUndefined()
+  expect(decodePtcJsonWire(result.value)).toBe(8)
+  expect(h.logs).toEqual(['selected screenshot\n'])
+  expect(images).toEqual(['selected'])
+})
+
 it.each(['function-body', 'repl', 'script'] as const)('provides console in the owning %s realm without replacing the host console', async (format) => {
   const h = await setup()
   const nativeConsole = Object.getOwnPropertyDescriptor(globalThis, 'console')!

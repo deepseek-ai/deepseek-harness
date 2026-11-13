@@ -177,7 +177,7 @@ export async function runNodeMain(
             const constructor = makeBindingErrorClass(descriptor)
             errors.set(namespace.global, { name: descriptor.name, memberNameProperty: descriptor.memberNameProperty, constructor })
           }
-          const namespaces = makeNamespaces(data, host, errorLookup, decodeImage, inspections)
+          const namespaces = makeNamespaces(data, host, errorLookup, inspections, decodeImage, image => images.has(image))
           for (const [index, namespace] of data.namespaces.entries()) {
             Object.defineProperty(evaluator.globals, namespace.global, { configurable: true, enumerable: true, value: namespaces[index] })
             if (namespace.errorClass) {

@@ -175,6 +175,27 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     })
   })
 
+  it.each(['renderer', 'policy'])('keeps an empty %s output silent while preserving program data', async (source) => {
+    ctx = await typedPtcModeHarness()
+    ctx.tools.register(defineTool({
+      name: 'silent_result', description: 'Return data without display text.', parameters: {},
+      output: {
+        schema: { type: 'object', properties: { answer: { type: 'number', required: true } }, additionalProperties: false },
+        render: () => source === 'renderer' ? [] : [{ type: 'text', text: 'original rendering' }],
+      },
+      execute: async () => ({ answer: 42 }),
+      ...source === 'policy' ? { finalizeContent: () => [] } : {},
+    }))
+    const result = await runCode(ctx, `
+      const value = await tools.silent_result({});
+      if (value.answer !== 42) throw new Error('program data changed');
+      inspect(value);
+    `)
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: '(run_code completed with no output)' }])
+    expect(result.value).toEqual({ logs: [], sandbox: { mode: 'danger-full-access', denied: false } })
+  })
+
   it('crosses a large intermediate value intact and exposes only typed tool failure fields', async () => {
     ctx = await typedPtcModeHarness()
     ctx.tools.register(defineTool({

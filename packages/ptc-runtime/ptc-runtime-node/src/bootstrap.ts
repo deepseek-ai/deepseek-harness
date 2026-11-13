@@ -29,20 +29,28 @@ export interface BindingInspection {
 }
 
 /** Compare data properties without invoking accessors or traversing model-created proxies. */
-function matchesInspection(value: object, snapshot: PtcJsonValue): boolean {
+function matchesInspection(value: object, snapshot: PtcJsonValue, images: Pick<WeakMap<object, string>, 'get'>): boolean {
   const pending: [unknown, PtcJsonValue][] = [[value, snapshot]]
-  for (let pair = pending.pop(); pair !== undefined; pair = pending.pop()) {
-    const [current, original] = pair
+  let size = 1
+  while (size > 0) {
+    const pair = pending[--size] as [unknown, PtcJsonValue]
+    const current = pair[0]
+    const original = pair[1]
     if (capturedObjectIs(current, original)) continue
     if (current === null || typeof current !== 'object' || original === null || typeof original !== 'object'
-      || isProxy(current) || capturedObjectGetPrototypeOf(current) !== capturedObjectGetPrototypeOf(original)) return false
+      || isProxy(current) || images.get(original) !== undefined
+      || capturedObjectGetPrototypeOf(current) !== capturedObjectGetPrototypeOf(original)) return false
     const keys = capturedOwnKeys(current)
     if (keys.length !== capturedOwnKeys(original).length) return false
-    for (const key of keys) {
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index] as string | symbol
       const actual = capturedObjectGetOwnPropertyDescriptor(current, key) as PropertyDescriptor
       const expected = capturedObjectGetOwnPropertyDescriptor(original, key)
       if (!expected || !('value' in actual) || actual.enumerable !== expected.enumerable) return false
-      pending.push([actual.value, expected.value as PtcJsonValue])
+      const slot = capturedObjectCreate(null) as PropertyDescriptor
+      slot.value = [actual.value, expected.value as PtcJsonValue]
+      slot.configurable = true
+      capturedObjectDefineProperty(pending, size++, slot)
     }
   }
   return true
@@ -160,7 +168,7 @@ export function makeInspect(
     }
     for (const arg of args) {
       const inspection = arg !== null && typeof arg === 'object' ? inspections?.get(arg) : undefined
-      if (inspection !== undefined && matchesInspection(arg as object, inspection.snapshot)) {
+      if (inspection !== undefined && matchesInspection(arg as object, inspection.snapshot, images)) {
         flush()
         if (inspection.text.length > 0) logs.push(inspection.text.endsWith('\n') ? inspection.text : inspection.text + '\n')
         continue
@@ -342,16 +350,18 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
  * @param data - Namespace declarations injected into the program.
  * @param host - Evaluation-scoped remote binding calls.
  * @param errorClasses - Constructors shared with program globals, resolved per invocation.
- * @param decodeImage - Optional decoder for host-issued images.
- * @param inspections - Process-owned inspection text indexed by decoded result identity.
+ * @param inspections - Required process-owned inspection text indexed by decoded result identity.
+ * @param decodeImage - Optional decoder for host-issued images; image tokens are rejected when absent.
+ * @param isImage - Optional recognition of decoded images; omission restricts inspection snapshots to JSON data.
  * @returns One namespace object per declaration.
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
   host: Pick<HostMethods, 'invoke'>,
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
+  inspections: Pick<WeakMap<object, BindingInspection>, 'set'>,
   decodeImage?: (wire: PtcImageWire) => PtcJsonValue,
-  inspections?: Pick<WeakMap<object, BindingInspection>, 'set'>,
+  isImage?: (value: object) => boolean,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
@@ -377,9 +387,9 @@ export function makeNamespaces(
             if (result === undefined) throw new CapturedError('binding resolution must be lossless JSON')
             if (inspection !== undefined) {
               if (result === null || typeof result !== 'object') throw new CapturedError('binding inspection requires an object or array')
-              const snapshot = snapshotPtcJsonValue(result)
+              const snapshot = snapshotPtcJsonValue(result, isImage)
               if (snapshot === undefined) throw new CapturedError('binding inspection requires lossless JSON data')
-              inspections?.set(result, { snapshot, text: inspection })
+              inspections.set(result, { snapshot, text: inspection })
             }
             return result
           } catch (error: unknown) {

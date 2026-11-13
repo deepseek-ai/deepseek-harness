@@ -1,5 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
-import { PtcInspectableValue, type PtcBindingNamespace, type PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcInspectableValue, type PtcBindingNamespace, type PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { describe, expect, it } from 'vitest'
 import { mountRuntime } from './setup.ts'
 
@@ -46,6 +48,24 @@ describe.each(modes)('binding inspection in $executionMode with script retention
       { type: 'text', text: text + '\n' },
       { type: 'text', text: 'three items\n' },
       { type: 'text', text: '42\n' },
+    ])
+  })
+
+  it('keeps host-issued Image fields usable inside inspectable containers', async () => {
+    const { runtime } = await mountRuntime(new Context(), mode)
+    const image = new PtcImage('/images/selected.png', {
+      attachmentId: brandString<AttachmentId>('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4,
+    })
+    const result = await runtime.run(runtime.resolve({
+      program: 'const result = await tools.capture({}); inspect(result); inspect(result.shot); inspect(result.shot.width);',
+      bindings: [{ global: 'tools', functions: { capture: async () => new PtcInspectableValue({ shot: image }, 'selected screenshot') } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output).toEqual([
+      { type: 'text', text: 'selected screenshot\n' },
+      { type: 'image', attachment: image.attachment },
+      { type: 'text', text: '8\n' },
     ])
   })
 
@@ -96,6 +116,28 @@ describe.each(modes)('binding inspection in $executionMode with script retention
     expect(result.output[1]).toEqual({ type: 'text', text: '0\n' })
     expect(result.output[2]).toMatchObject({ type: 'text', text: expect.stringContaining('[Circular *1]') as string })
   })
+})
+
+it('detects changed data when the program replaces Array.prototype.pop', async () => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'per-call' })
+  const result = await runtime.run(runtime.resolve({
+    program: `
+      const result = await tools.read({});
+      result.lines[0].text = 'changed';
+      const originalPop = Array.prototype.pop;
+      try {
+        Array.prototype.pop = () => undefined;
+        inspect(result);
+      } finally {
+        Array.prototype.pop = originalPop;
+      }
+    `,
+    bindings: bindings(), discardCompletion: true,
+  }))
+  expect(result.error).toBeUndefined()
+  const output = result.output.filter(block => block.type === 'text').map(block => block.text).join('')
+  expect(output).toContain("text: 'changed'")
+  expect(output).not.toContain('<path>')
 })
 
 it.each(modes.filter(mode => mode.executionMode === 'persistent-in-memory' || 'scriptPersistence' in mode))('retains inspection text with data across calls in %j', async (mode) => {

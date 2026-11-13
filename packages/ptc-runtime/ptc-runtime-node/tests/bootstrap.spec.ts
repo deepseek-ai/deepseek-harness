@@ -281,6 +281,24 @@ describe('binding inspection metadata', () => {
     expect(Reflect.ownKeys(object)).toEqual(['value'])
   })
 
+  it('falls back when an Image field is replaced with another identity having the same metadata', () => {
+    const images = new WeakMap<object, string>()
+    const inspections = new WeakMap<object, BindingInspection>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push: value => text.push(value) }, images, id => selected.push(id), inspections)
+    const original = inspectedImage(collectImage, '/same.png')
+    const replacement = inspectedImage(collectImage, '/same.png')
+    images.set(original, 'original')
+    images.set(replacement, 'replacement')
+    const value = { shot: original }
+    inspections.set(value, { snapshot: { shot: original }, text: 'original rendering' })
+    value.shot = replacement
+    inspect(value)
+    expect(text.join('')).not.toContain('original rendering')
+    expect(selected).toEqual(['replacement'])
+  })
+
   it.each([
     ['null field', (value: Record<string, unknown>) => { value.value = null }],
     ['scalar field', (value: Record<string, unknown>) => { value.value = 'one' }],
@@ -306,29 +324,32 @@ describe('binding inspection metadata', () => {
   it.each([null, 42, [], {}, { value: [undefined] }, { value: encodePtcJsonWire({}), inspection: 42 }])('rejects malformed binding result %j', async (resolution) => {
     const remote = host()
     remote.invoke = async () => resolution as never
-    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(tools.x?.({})).rejects.toThrow('binding resolution must be lossless JSON')
   })
 
   it.each([null, 42])('rejects inspection metadata for scalar %j', async (value) => {
     const remote = host()
     remote.invoke = async () => ({ value: encodePtcJsonWire(value), inspection: 'text' })
-    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(tools.x?.({})).rejects.toThrow('binding inspection requires an object or array')
   })
 
   it('rejects inspection metadata for non-JSON image identities', async () => {
     const remote = host()
     remote.invoke = async () => ({ value: [{ kind: 'image', id: 'one', attachmentId: 'one', path: '/one.png', width: 1, height: 1 }], inspection: 'text' })
-    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), () => Object.create({ image: true }) as Record<string, never>) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap(), () => Object.create({ image: true }) as Record<string, never>) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(tools.x?.({})).rejects.toThrow('binding inspection requires lossless JSON data')
   })
 
-  it('returns unchanged JSON when no inspection registry is requested', async () => {
+  it('registers inspection metadata while returning the original JSON value', async () => {
     const remote = host()
     remote.invoke = async () => ({ value: encodePtcJsonWire({ answer: 42 }), inspection: 'answer' })
-    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
-    await expect(tools.x?.({})).resolves.toEqual({ answer: 42 })
+    const inspections = new WeakMap<object, BindingInspection>()
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), inspections) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const value = await tools.x?.({})
+    expect(value).toEqual({ answer: 42 })
+    expect(inspections.get(value as object)).toEqual({ snapshot: { answer: 42 }, text: 'answer' })
   })
 })
 
@@ -448,7 +469,7 @@ describe('makeNamespaces', () => {
   it('rejects malformed remote results and keeps prototype-colliding function names callable', async () => {
     const remote = host()
     remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? { value: [undefined] as never } : { value: encodePtcJsonWire(`${name}-ok`) })
-    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     expect(Object.getPrototypeOf(tools)).toBeNull()
     for (const name of ['__proto__', 'constructor', 'toString']) await expect(tools[name]?.({})).resolves.toBe(`${name}-ok`)
     await expect(tools.bad?.({})).rejects.toThrow('binding resolution must be lossless JSON')
@@ -458,7 +479,7 @@ describe('makeNamespaces', () => {
     const remote = host()
     const data = { namespaces: [toolNamespace(['x'])] }
     const classes = new Map([['tools', makeBindingErrorClass(TOOL_ERROR_CLASS)]])
-    const [tools] = makeNamespaces(data, remote, classes) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces(data, remote, classes, new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     const decorated = [1]
     Object.defineProperty(decorated, 'extra', { value: true })
     const throwing = Object.defineProperty({}, 'value', { enumerable: true, get() { throw new Error('getter failed') } })
@@ -477,7 +498,7 @@ describe('makeNamespaces', () => {
   it('uses ordinary Error when the namespace declares no rejection class', async () => {
     const remote = host()
     remote.invoke = async () => { throw new Error('helper denied') }
-    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(helpers.x?.({})).rejects.toMatchObject({ name: 'Error', message: 'helper denied' })
     await expect(helpers.x?.(() => 1)).rejects.toThrow('binding arguments must be lossless JSON')
   })
