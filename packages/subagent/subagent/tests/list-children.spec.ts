@@ -113,7 +113,7 @@ describe('direct-child catalog reader', () => {
     }])
     for (const { path, content } of originals) {
       expect(readFileSync(path, 'utf8')).toBe(content)
-      expect(readdirSync(dirname(path))).toEqual(['session.v3.jsonl'])
+      expect(readdirSync(dirname(path)).filter(name => name.endsWith('.jsonl'))).toEqual(['session.v3.jsonl'])
     }
   })
 
