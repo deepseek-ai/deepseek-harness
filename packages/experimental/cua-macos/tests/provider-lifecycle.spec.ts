@@ -1270,7 +1270,7 @@ it.each([true, false])('shares the mouse control decision for a system button wi
   native.request.mockClear()
   const pending = f.execute('toggleMouse', { ...target, useSystemPointer: true })
   try {
-    await vi.waitFor(() => expect(f.ask).toHaveBeenCalledOnce())
+    await vi.waitFor(() => { expect(f.ask).toHaveBeenCalledOnce() })
     expect(native.request).not.toHaveBeenCalled()
   } finally {
     answer.resolve(allow ? f.approved : { answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
