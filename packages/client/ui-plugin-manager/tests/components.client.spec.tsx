@@ -3148,16 +3148,21 @@ describe('registry versions and updates', () => {
     expect(screen.getByText(en.updatesFailed)).toBeTruthy()
   })
 
-  it('says in the toolbar how far a manual refresh has come', () => {
+  it('counts a manual refresh\'s checks on the Refresh button and announces its progress', () => {
     const second = updatable({ name: 'dsh-second' })
     const { set } = renderTab({ packages: [updatable(), second], refreshStatus: 'refreshing', refreshProgress: { phase: 'loading' } })
-    const note = (): HTMLElement => within(document.querySelector<HTMLElement>('[data-plugin-toolbar]')!).getByRole('status')
+    const toolbar = (): HTMLElement => document.querySelector<HTMLElement>('[data-plugin-toolbar]')!
+    const note = (): HTMLElement => within(toolbar()).getByRole('status')
+    const refresh = (): HTMLElement => within(toolbar()).getByRole('button', { name: en.refresh })
     expect(note().textContent).toBe(en.loading)
+    expect(refresh().textContent).toBe(en.refresh)
     set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': { phase: 'checking' } }, refreshProgress: { phase: 'checking', current: 2, total: 2 } })
     expect(note().textContent).toBe(en.refreshChecking.replace('{current}', '2').replace('{total}', '2'))
+    expect(refresh().textContent).toBe(en.refreshCount.replace('{current}', '2').replace('{total}', '2'))
     // The spinner's minimum hold already shows what the checks found.
     set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': listed([]) }, refreshProgress: null })
     expect(note().textContent).toBe(en.updatesNone)
+    expect(refresh().textContent).toBe(en.refresh)
   })
 
   const base: UpdateState = {

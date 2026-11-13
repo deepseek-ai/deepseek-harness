@@ -1864,8 +1864,12 @@ label.registryOption {
 .updatesNote {
   font-size: 12px;
   line-height: 18px;
-  font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* The Refresh button's check count keeps its width while the digits change. */
+.refreshCount {
+  font-variant-numeric: tabular-nums;
 }
 
 .updatesNote[data-tone='info'] {
