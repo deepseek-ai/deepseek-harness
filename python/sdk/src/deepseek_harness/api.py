@@ -176,13 +176,15 @@ class DeepSeekHarness:
         self.start()
         return Session(self, session_id or f"session-{uuid.uuid4().hex}")
 
-    def resume_session(self, session_id: str) -> "Session":
-        """Restore persisted history from the configured Harness home without sending input.
+    def resume_session(self, session_id: str, *, permission_mode: str | None = None) -> "Session":
+        """Restore persisted history without sending input.
 
+        Omit permission_mode to retain saved permissions, or name a configured permission preset
+        to persist before resumed execution. Unsupported presets or profiles raise.
         Missing, unreadable, incompatible, or occupied sessions raise instead of creating a new session.
         """
         self.start()
-        self._client.resume_session(session_id)
+        self._client.resume_session(session_id, permission_mode=permission_mode)
         return Session(self, session_id)
 
     def run(

@@ -217,11 +217,14 @@ class HarnessClient:
         )
         return response.messageId
 
-    def resume_session(self, session_id: str) -> None:
-        """Restore a persisted session without sending a prompt; propagate restoration failures."""
+    def resume_session(self, session_id: str, *, permission_mode: str | None = None) -> None:
+        """Restore history; an explicit permission preset replaces saved permissions before execution."""
+        params: JsonObject = {"sessionId": session_id}
+        if permission_mode is not None:
+            params["permissionMode"] = permission_mode
         self.request(
             "session/resume",
-            {"sessionId": session_id},
+            params,
             response_model=_EmptyResponse,
         )
 

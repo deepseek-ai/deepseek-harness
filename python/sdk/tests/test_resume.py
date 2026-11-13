@@ -10,8 +10,10 @@ from deepseek_harness import DeepSeekHarness
 from deepseek_harness.errors import JsonRpcError
 
 
-@pytest.mark.parametrize("outcome", ["restored", "missing"])
-def test_resume_preserves_identity_and_propagates_failure(tmp_path: Path, outcome: str) -> None:
+@pytest.mark.parametrize("outcome,permission_mode", [("restored", None), ("restored", "danger-full-access"), ("missing", None)])
+def test_resume_preserves_identity_and_propagates_failure(
+    tmp_path: Path, outcome: str, permission_mode: str | None,
+) -> None:
     script = tmp_path / "runtime.py"
     requests = tmp_path / "requests.jsonl"
     script.write_text(
@@ -47,7 +49,8 @@ for line in sys.stdin:
         env={"OUTCOME": outcome, "REQUESTS": str(requests)},
     ) as harness:
         if outcome == "restored":
-            session = harness.resume_session("saved")
+            session = (harness.resume_session("saved") if permission_mode is None
+                       else harness.resume_session("saved", permission_mode=permission_mode))
             assert session.id == "saved"
             assert session.harness is harness
         else:
@@ -55,4 +58,7 @@ for line in sys.stdin:
                 harness.resume_session("saved")
     frames = [json.loads(line) for line in requests.read_text(encoding="utf-8").splitlines()]
     assert [frame["method"] for frame in frames] == ["initialize", "session/resume", "shutdown"]
-    assert frames[1]["params"] == {"sessionId": "saved"}
+    expected = {"sessionId": "saved"}
+    if permission_mode is not None:
+        expected["permissionMode"] = permission_mode
+    assert frames[1]["params"] == expected
