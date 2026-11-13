@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek chat import",
+    "description": "Upload a chat export ZIP from the DeepSeek website with the button next to New session; each conversation becomes a session in the workspace you choose.",
+    "detail": "docs/DETAIL.md"
+  }
+}
