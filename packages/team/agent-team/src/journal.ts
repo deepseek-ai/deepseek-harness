@@ -28,11 +28,11 @@ export class TeamJournal {
    * Read authoritative Team state for one exact live Lead.
    * @param root - exact live Team Lead.
    * @returns current projected state selected by the Lead Team id.
-   * @throws when the durable Team projection has failed.
+   * @throws {TeamError} `TEAM_STATE_CORRUPT` when the durable Team projection has failed.
    */
   state(root: Agent): TeamState {
     const projection = this.teamProjectionHandle.stateOf(root.session)
-    if (projection.failure !== undefined) throw new Error(projection.failure)
+    if (projection.failure !== undefined) throw new TeamError(projection.failure, 'TEAM_STATE_CORRUPT')
     return projection
   }
 

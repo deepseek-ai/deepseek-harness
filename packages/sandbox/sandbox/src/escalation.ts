@@ -25,8 +25,8 @@ import type { SandboxMode } from './index.ts'
  * Every {@link SandboxEscalationError} code:
  * - `SANDBOX_ESCALATION_INVALID_ARGUMENT` — the escalation fields are unpaired, the justification is blank, or the
  *   target is not strictly wider than the call's effective mode; the model corrects the request.
- * - `SANDBOX_ESCALATION_UNAVAILABLE` — the composition cannot ask for approval: no sandboxing executor, no approval
- *   service, no calling Agent, or no approval channel.
+ * - `SANDBOX_ESCALATION_UNAVAILABLE` — the composition cannot ask for approval: no approval service, no calling Agent,
+ *   or no approval channel.
  * - `SANDBOX_ESCALATION_REJECTED` — the user declined the escalation; the operation stays denied.
  * - `SANDBOX_ESCALATION_CANCELLED` — the approval request ended without a decision while the call itself was not cancelled.
  */

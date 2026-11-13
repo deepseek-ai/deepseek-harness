@@ -27,4 +27,4 @@ export const MAX_FILE_UPLOAD_RETRIES = 2
 /** Local wait after an upload is rate limited, in milliseconds. */
 export const DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS = 500
 /** Default deadline for resolving one request image through the Files API. */
-export const DEFAULT_FILES_API_TIMEOUT_MS = 60_000
+export const DEFAULT_FILES_API_TIMEOUT_MS = 20_000

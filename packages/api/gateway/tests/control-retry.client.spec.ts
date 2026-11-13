@@ -4,6 +4,7 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   RemoteStreamCarrierError,
   RemoteStream,
+  type RemoteStreamCarrierFailure,
 } from '../src/client/index.ts'
 
 const GENERATION = { id: 1, host: { home: '/home/fixture' } }
@@ -116,6 +117,48 @@ describe('RemoteStream', () => {
     })
     expect(carrierFailed).toHaveBeenNthCalledWith(1, first)
     expect(carrierFailed).toHaveBeenNthCalledWith(2, repeated)
+  })
+
+  it('reconnects on a plain Error carrying the carrier code and stops on one without it', async () => {
+    const carrierLoss = Object.assign(new Error('domain stream ended'), { code: 'gateway/carrier-lost' as const })
+    const carrierFailed = vi.fn<(error: RemoteStreamCarrierFailure) => void>()
+    const reconnecting = new RemoteStream(hostSource(true).connection, {
+      name: 'fixture stream',
+      open: scripted([{ values: ['first'] }, { values: ['second'], hold: true }]),
+      ended: accepted => accepted ? carrierLoss : new Error('generation ended before acceptance'),
+      carrierFailed,
+    })
+    const iterator = reconnecting[Symbol.asyncIterator]()
+    const first = await iterator.next()
+    if (first.done) throw new Error('fixture generation ended early')
+    first.value.accept()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { generation: 2, value: 'second' } })
+    expect(carrierFailed).toHaveBeenCalledExactlyOnceWith(carrierLoss)
+    await reconnecting.dispose()
+
+    const plain = new Error('domain stream ended')
+    const terminal = new RemoteStream(hostSource(true).connection, {
+      name: 'fixture stream',
+      open: scripted([{ values: ['first'] }, { values: ['unreached'] }]),
+      ended: () => plain,
+    })
+    const stopping = terminal[Symbol.asyncIterator]()
+    const opened = await stopping.next()
+    if (opened.done) throw new Error('fixture generation ended early')
+    opened.value.accept()
+    await expect(stopping.next()).rejects.toMatchObject({
+      isDSHRemoteError: true, code: 'gateway/internal', message: 'domain stream ended', cause: plain,
+    })
+    expect(new RemoteStreamCarrierError('socket lost').code).toBe('gateway/carrier-lost')
+  })
+
+  it('terminates on a Host RemoteError even when it carries the carrier code', async () => {
+    const hostFailure = new RemoteError('gateway/carrier-lost' as never, 'host reused the carrier code', {} as never)
+    const carrierFailed = vi.fn<(error: RemoteStreamCarrierFailure) => void>()
+    const stream = supervisor(hostSource(true).connection, [{ terminal: hostFailure }, { values: ['unreached'] }], carrierFailed)
+
+    await expect(stream[Symbol.asyncIterator]().next()).rejects.toBe(hostFailure)
+    expect(carrierFailed).not.toHaveBeenCalled()
   })
 
   it('folds a non-Error terminal escape into a marked gateway/internal failure', async () => {

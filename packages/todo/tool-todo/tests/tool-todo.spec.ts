@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -159,6 +159,7 @@ describe('dsh-tool-todo', () => {
       const result = await callTodo(ctx, { todos: parallel }, { agent })
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('at most one task may be in_progress')
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       // A rejected call must not reach the durable log.
       expect(agent.session.snapshotEvents().some(e => e.type === 'todo/write')).toBe(false)
     })
@@ -200,6 +201,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(fragment)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a non-agent caller (the list has no owning session)', async () => {
@@ -207,6 +209,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos: [{ content: 'a', status: 'pending' }] }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('owning agent session')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('presents the call with a stable title and the list as raw input', async () => {

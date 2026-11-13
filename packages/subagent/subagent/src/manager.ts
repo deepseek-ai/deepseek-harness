@@ -836,7 +836,9 @@ export class SubagentManager {
           child.session.append('subagent/descriptor', create.descriptor)
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
-          if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
+          if (workingDirectory === undefined) {
+            throw new SubagentError('local subagents require the working-directory service', 'WORKING_DIRECTORY_UNAVAILABLE')
+          }
           await workingDirectory.set(child, create.cwd, inputs.signal)
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
@@ -1216,7 +1218,16 @@ export class SubagentManager {
       using source = await this.observeContinuation(childId, signal)
       this.assertAdmitting(root)
       const ownEvents = source.events.slice(source.inheritedEventCount)
-      const descriptor = foldSubagentDescriptor(ownEvents)
+      let descriptor: ReturnType<typeof foldSubagentDescriptor>
+      try {
+        descriptor = foldSubagentDescriptor(ownEvents)
+      } catch (error: unknown) {
+        throw new SubagentError(
+          `subagent "${childId}" has a corrupt continuation descriptor and cannot be resumed; choose a different target`,
+          'NOT_RESUMABLE',
+          { cause: error },
+        )
+      }
       if (descriptor === undefined || descriptor.mode !== 'continuable') {
         throw new SubagentError(
           `subagent "${childId}" has no supported continuation state and cannot be resumed; choose a different target`,

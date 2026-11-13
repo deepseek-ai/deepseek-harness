@@ -47,19 +47,19 @@ const result = await ctx.ptcRuntime.run(spec)
 <a id="choose-a-backend"></a>
 ### 选择后端
 
-后端以 `language` 与 `isolation` 提供诊断描述符；两者都不授予权限或证明约束。[`dsh-ptc-runtime-node`](../ptc-runtime-node/README.zh.md) 在全新的受管 Node 进程中按已解析沙箱策略执行可擦除 TypeScript。私有的 [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.zh.md) 提供方在全新 CPython 子进程中执行 Python，不提供文件约束。`sandboxMode` 声明提供方的部署文件策略模式；不支持该能力时则缺省。
+后端以 `language` 与 `isolation` 提供诊断描述符；两者都不授予权限或证明约束。[`dsh-ptc-runtime-node`](../ptc-runtime-node/README.zh.md) 在全新的受管 Node 进程中按已解析沙箱策略执行可擦除 TypeScript。`sandboxMode` 声明提供方的部署文件策略模式；不支持该能力时则缺省。
 
 使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
 
 `registerEnvironmentInitializer(program)` 注册一段源码，在每个新环境安装本次绑定后、执行用户代码前运行一次。必须在首次接纳运行前注册，且只允许注册一个初始化程序。初始化与首次运行共享日志、截止时间、取消和输出预算，其完成值会被丢弃。失败会阻止用户代码执行并丢弃环境，但不回滚外部效果。调用方负责管理返回的异步注销函数；它会取消已接纳的运行，等待这些运行结束，并释放环境。清理失败会阻止新的执行，直到重试注销成功。即使所有环境都已释放，首次接纳运行后仍不能注册。不支持的提供方和模式会拒绝注册；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
 
-### 可移植地命名绑定
+### 命名绑定
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za-z_][A-Za-z0-9_]*`，避开每个可移植目标语言的保留字，并避开后端拥有的槽位，因此同一份命名空间列表对每个后端都有效。`$tools`、`lambda`、`console` 或 `inspect` 之类的名称会在运行开始前失败；确切的排除集是 seam 约定的一部分。
+binding-global 与 error-class 名称必须匹配 `[A-Za-z_$][A-Za-z0-9_$]*`，且不得使用 ECMAScript 关键字或严格模式名称（`RESERVED_BINDING_WORDS`）。`RESERVED_BINDING_GLOBALS` 保留运行时输出 global `console`、`inspect` 和 `Image`。error-member 名称必须非空，且不得使用 `name`、`message` 或 `stack`（`RESERVED_ERROR_MEMBERS`）；其他自有属性名均可使用。无效名称使 `run()` 在启动进程前 reject。
 
 ### 可能出什么问题
 
-失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。
+失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。契约误用以 `PtcRuntimeError` 拒绝：无效的请求或 spec 为 `PTC_RUNTIME_INVALID_ARGUMENT`，资源释放后或保留环境清理未完成时为 `PTC_RUNTIME_UNAVAILABLE`，同一所有者的并发运行或保留环境以其他沙箱策略启动时为 `PTC_RUNTIME_CONFLICT`。
 
 -----
 
@@ -89,15 +89,15 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za
 
 `PtcRunRequest` 携带程序、Host 绑定、取消和可选执行选择。`PtcRunSpec` 要求已解析的 cwd 和明确的数值或 null 截止选择。`PtcBindingNamespace` 声明程序全局对象与可选的类型化拒绝构造器。`PtcRunResult` 将输出／值、失败与 `PtcRunSandbox` 事实分开；确切字段与提供方义务见 [`src/types.ts`](src/types.ts)。
 
-### 可移植标识符
+### 绑定排除规则
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配标识符子集 `[A-Za-z_][A-Za-z0-9_]*`（不含 JS 专有的 `$`）并通过 seam 导出的排除集，因此同一份 `bindings` 列表对每个后端都有效。本包导出每个后端都执行的约定——`PORTABLE_RESERVED_WORDS`（ECMAScript ∪ Python 保留字）、`RESERVED_BINDING_GLOBALS`（如 `console`、`inspect`、`Image`、`__dsh_main__` 等后端拥有的 global）、`RESERVED_ERROR_MEMBERS` 与 `DUNDER_MEMBER`（error-member 排除）——因此 `$tools`、`lambda` 或 `__dsh_main__` 之类的名称会让 `run()` 在任何后端上作为 seam 误用而 reject。确切集合见 `src/index.ts`。
+运行时导出 `RESERVED_BINDING_WORDS`、`RESERVED_BINDING_GLOBALS` 与 `RESERVED_ERROR_MEMBERS`，用于绑定验证；确切集合见 [`src/index.ts`](src/index.ts)。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：抽象 `PtcRuntime` 服务与可移植标识符排除集 |
+| [`src/index.ts`](src/index.ts) | 插件入口：抽象 `PtcRuntime` 服务与绑定排除集 |
 | [`src/types.ts`](src/types.ts) | 词汇：`PtcRunRequest`、`PtcRunSpec`、绑定、结果、失败与沙箱事实 |
 
 </details>
@@ -111,7 +111,6 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 
 - [PTC mode Agent Note](../../../.agents/notes/implemented/feature/2026-06-15-ptc.zh.md)——工具注册表如何消费 `ctx.ptcRuntime` 并把 `run_code` 呈现给模型。
 - [Node 进程后端](../ptc-runtime-node/README.zh.md)——已发布的 TypeScript 执行后端。
-- [实验性 Python 后端](../../experimental/ptc-runtime-python/README.zh.md)——私有的 CPython 子进程提供方及其 fd-3 协议。
 - [PTC 运行时子系统参考](../../../docs/subsystems/ptc-runtime.zh.md)——请求／结果词汇、绑定与 `ctx.ptcRuntime` 的 cordis 接口面。
 - [能力 seam](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)——Service Definition / Service Provider / Consumer 拆分。
 
@@ -135,7 +134,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 
 - **`run()` 是一次性的**——`output` 只有在 `PtcRunResult` resolve 后才能获得；seam 不提供正在运行的程序所产生输出的流式日志或进度接口。
 - **保留内存可以丢失**：提供方可以为显式所有者保留状态；重启、释放以及提供方指定的失败会清除状态。程序、绑定调用和结果仍由消费者记录；运行中的对象不会被序列化或回放。
-- **提供方的约束能力不同**——已发布 Node 提供方强制执行已解析文件策略，私有实验性 Python 提供方拒绝显式策略。不提供容器提供方。
+- **不提供容器提供方**——已发布 Node 提供方通过组合的沙箱后端强制执行已解析文件策略。
 - **提供方之间没有统一的绑定字节上限**——各提供方负责自己的传输限制；绑定仍可能在结果到达这些限制前分配内存。
 
 <a id="dev-note"></a>

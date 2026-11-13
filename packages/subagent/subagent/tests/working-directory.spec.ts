@@ -102,7 +102,11 @@ describe('subagent working directories', () => {
         provider: 'spawn', label: 'unavailable directory service', childId,
         parent, cwd: second, prompt: [{ type: 'text', text: 'child' }],
         signal: new AbortController().signal,
-      })).rejects.toThrow(/subagents require the working-directory service/)
+      })).rejects.toMatchObject({
+        name: 'SubagentError',
+        code: 'WORKING_DIRECTORY_UNAVAILABLE',
+        message: expect.stringMatching(/subagents require the working-directory service/) as string,
+      })
 
       expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
       expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toEqual([])

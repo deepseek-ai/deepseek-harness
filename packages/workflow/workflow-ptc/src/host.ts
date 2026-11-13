@@ -12,7 +12,7 @@ import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import { assertNever, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
-import type { WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowMeta, WorkflowResult, WorkflowRun } from '@deepseek-ai/dsh-workflow'
+import type { WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowErrorCode, WorkflowMeta, WorkflowResult, WorkflowRun } from '@deepseek-ai/dsh-workflow'
 import { WORKFLOW_GUEST_SOURCE } from './guest-source.ts'
 import type { WorkflowProgress } from './guest-types.ts'
 import { renderThrown } from './realm.ts'
@@ -94,6 +94,18 @@ function progressBatch(value: unknown): WorkflowProgress[] {
   return value.map(progress)
 }
 
+/** Every fatal code a guest may report; `satisfies` keeps the set aligned with the seam union. */
+const WORKFLOW_ERROR_CODES: ReadonlySet<string> = new Set(Object.keys({
+  SCRIPT_PARSE: true, META_INVALID: true, INVALID_ARGUMENT: true, UNSUPPORTED_OPTION: true, UNSUPPORTED_SCHEMA: true,
+  AGENT_CAP: true, ITEM_CAP: true, AGENT_START: true, AGENT_RESULT: true, RESULT_UNSERIALIZABLE: true, CANCELLED: true,
+  RUN_FAILED: true,
+} satisfies Record<WorkflowErrorCode, true>))
+
+function errorCode(value: unknown): WorkflowErrorCode {
+  if (typeof value !== 'string' || !WORKFLOW_ERROR_CODES.has(value)) throw new Error('invalid workflow error code')
+  return value as WorkflowErrorCode
+}
+
 function workflowResult(value: unknown): WorkflowResult {
   const result = object(value)
   if (result.stopReason !== 'completed' && result.stopReason !== 'error' && result.stopReason !== 'cancelled') throw new Error('invalid workflow stop reason')
@@ -104,6 +116,7 @@ function workflowResult(value: unknown): WorkflowResult {
     stopReason: result.stopReason,
     agentsStarted: result.agentsStarted as number,
     ...result.error === undefined ? {} : { error: text(result.error, 'error') },
+    ...result.errorCode === undefined ? {} : { errorCode: errorCode(result.errorCode) },
   }
 }
 

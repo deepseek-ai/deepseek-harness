@@ -555,6 +555,7 @@ describe('ask_user_question tool', () => {
     expect(result).toMatchObject({
       isError: true,
       content: [{ type: 'text', text: 'Error: timed questions require a live agent' }],
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
     })
   })
 
@@ -571,6 +572,7 @@ describe('ask_user_question tool', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ type: 'text' })
     expect(result.content[0]?.type === 'text' ? result.content[0].text : '').toMatch(/timeout.*integer/i)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects duplicate question ids before dispatching a timed call', async () => {
@@ -590,7 +592,8 @@ describe('ask_user_question tool', () => {
 
     expect(result).toMatchObject({
       isError: true,
-      content: [{ type: 'text', text: 'Error: question id "scope" must be unique within this call' }],
+      content: [{ type: 'text', text: 'Error: invalid arguments: question id "scope" must be unique within this call' }],
+      error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
     })
     expect(answerer).not.toHaveBeenCalled()
   })

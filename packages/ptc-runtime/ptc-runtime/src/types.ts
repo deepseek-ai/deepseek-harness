@@ -37,13 +37,11 @@ export type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | {
  * of a particular consumer such as PTC mode.
  */
 export interface PtcBindingErrorClass {
-  /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link PtcBindingNamespace.global}. */
+  /** Constructor global and resulting `Error.name`; same identifier rule as {@link PtcBindingNamespace.global}. */
   name: string
   /**
-   * Non-empty own property for the member name. The portable exclusion set is
-   * `RESERVED_ERROR_MEMBERS` plus dunder-form names (`__x__`, non-empty
-   * middle), enforced identically by every backend; any other name —
-   * identifiers or not — is accepted everywhere.
+   * Non-empty own property for the member name, excluding `name`, `message`,
+   * and `stack` (`RESERVED_ERROR_MEMBERS`). Other property names are accepted.
    */
   memberNameProperty: string
 }
@@ -57,14 +55,10 @@ export interface PtcBindingErrorClass {
  */
 export interface PtcBindingNamespace {
   /**
-   * The global identifier the program sees. Must match the LANGUAGE-PORTABLE
-   * identifier subset `[A-Za-z_][A-Za-z0-9_]*` and no language's reserved
-   * words, so the same namespace list works against every backend regardless
-   * of `language` — a JS-only spelling like `$tools` is rejected by design,
-   * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
-   * `__dsh_main__`) are also refused everywhere; see its declaration for the
-   * exact set and why each entry is reserved.
+   * The global identifier the program sees. Must match `[A-Za-z_$][A-Za-z0-9_$]*`
+   * and exclude ECMAScript keywords and strict-mode names (`RESERVED_BINDING_WORDS`).
+   * Runtime output globals (`console`, `inspect`, `Image` in `RESERVED_BINDING_GLOBALS`)
+   * are also refused.
    */
   global: string
   /** The callable members, keyed by the exact name the program calls. */

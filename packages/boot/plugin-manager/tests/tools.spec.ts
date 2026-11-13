@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
@@ -16,6 +16,8 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type PluginManager from '../src/index.ts'
 import type { BundleInfo } from '../src/types.ts'
 import * as tool from '../src/tools.ts'
+import { PluginManagerError } from '../src/error.ts'
+import { FileLockError } from '@deepseek-ai/dsh-atomic-write'
 
 function resultText(result: ToolExecutionResult): string {
   if (typeof result.value !== 'string') throw new Error('Expected a serialized manager result')
@@ -275,7 +277,19 @@ it.each([
   { action: 'set_version_exemption', target: 'plugin@1.0.0', runtimeVersion: '1.0.0' },
 ])('rejects incomplete or unbounded tool inputs: %j', async (args) => {
   const { call } = await fixture()
-  expect((await call(args)).isError).toBe(true)
+  const result = await call(args)
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+})
+
+it('reports profile read, lock, and disposal failures with their error codes', async () => {
+  const { manager, call } = await fixture()
+  manager.listBundles.mockRejectedValueOnce(new PluginManagerError('plugin-manager: failed to read the profile: bad JSON', 'PLUGIN_MANAGER_PROFILE_READ_FAILED'))
+  manager.setBundleEnabled.mockRejectedValueOnce(new FileLockError('/profile/package.json.lock'))
+  manager.removeBundle.mockRejectedValueOnce(new PluginManagerError('plugin-manager: the manager is disposed', 'PLUGIN_MANAGER_UNAVAILABLE'))
+  expect((await call({ action: 'list_bundles' })).error?.info).toEqual({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_PROFILE_READ_FAILED' })
+  expect((await call({ action: 'set_bundle', target: 'bundle', enabled: false })).error?.info).toEqual({ name: 'FileLockError', code: 'FILE_LOCK_TIMEOUT' })
+  expect((await call({ action: 'remove_bundle', target: 'bundle' })).error?.info).toEqual({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_UNAVAILABLE' })
 })
 
 it('presents reads and changes distinctly and disposes its registration', async () => {

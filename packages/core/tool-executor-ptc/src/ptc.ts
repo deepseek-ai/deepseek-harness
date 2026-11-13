@@ -22,7 +22,10 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool, parameterSchemaSpecToJsonSchema, projectToolSchema, RUN_CODE_NAME, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import {
+  defineTool, parameterSchemaSpecToJsonSchema, projectToolSchema, RUN_CODE_NAME, TOOL_ABORTED, ToolArgsError,
+  ToolContextUnavailableError,
+} from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
@@ -36,7 +39,7 @@ import type {} from './types.ts'
 /** The model-facing name of the PTC mode tool. */
 export { RUN_CODE_NAME }
 
-/** Language-specific tool and code-parameter descriptions. */
+/** Tool and code-parameter descriptions for one program format. */
 interface RunCodeFlavor {
   /** The tool `description` the model sees for this language. */
   readonly description: string
@@ -64,46 +67,33 @@ const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', TYPESCRIPT_OUTPUT
   programDescription: 'the BODY of an async function (erasable syntax only; top-level `await` and `return` work)',
   codeDescription: 'The program: the body of an async TypeScript function.',
 })
-const PYTHON_FLAVOR = runCodeFlavor('Python', 'Curate the program output. Image-bearing subtool results are attached after the run.')
-
-/** Languages with both a transport schema and an SDK renderer. */
-export type PtcSdkLanguage = 'typescript' | 'python'
-
-type SupportedPtcRuntime = PtcRuntime & { readonly language: PtcSdkLanguage }
-
-const RUN_CODE_FLAVORS = {
-  typescript: TYPESCRIPT_FLAVOR,
-  python: PYTHON_FLAVOR,
-} satisfies Record<PtcSdkLanguage, RunCodeFlavor>
-
 /**
  * Read the active runtime, rejecting missing providers and unsupported languages.
  * @param ctx - executor context containing the runtime provider.
- * @returns the runtime with a supported SDK language.
+ * @returns the mounted TypeScript provider.
  */
-export function requirePtcRuntime(ctx: Context): SupportedPtcRuntime {
+export function requirePtcRuntime(ctx: Context): PtcRuntime {
   const runtime = ctx.get('ptcRuntime')
   if (runtime === undefined) {
-    throw new Error('dsh-tools: mode "ptc" requires a PTC runtime — load a ctx.ptcRuntime implementation (e.g. @deepseek-ai/dsh-ptc-runtime-node) or load @deepseek-ai/dsh-tool-executor-native')
+    throw new ToolContextUnavailableError('dsh-tools: mode "ptc" requires a PTC runtime — load a ctx.ptcRuntime implementation (e.g. @deepseek-ai/dsh-ptc-runtime-node) or load @deepseek-ai/dsh-tool-executor-native')
   }
   return requireRuntimeLanguage(runtime)
 }
 
-/** Resolve the SDK flavor for a mounted or explicitly supplied provider. */
-function requireRuntimeLanguage(runtime: PtcRuntime): SupportedPtcRuntime {
-  if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language)) {
-    const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
-    throw new Error(`dsh-tools: no SDK renderer registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
+/**
+ * Reject providers whose source language the executor cannot present.
+ * @param runtime - Mounted or explicitly supplied provider.
+ * @returns The supported provider.
+ * @throws ToolContextUnavailableError for a language other than TypeScript.
+ */
+export function requireRuntimeLanguage(runtime: PtcRuntime): PtcRuntime {
+  if (runtime.language !== 'typescript') {
+    throw new ToolContextUnavailableError(`dsh-tools: unsupported PTC runtime language ${JSON.stringify(runtime.language)}; use a TypeScript provider (language: "typescript")`)
   }
-  return runtime as SupportedPtcRuntime
+  return runtime
 }
 
-/**
- * The `description` parameter's model-facing description: language-independent
- * (the UI label contract is the same for every runtime), shared between the
- * static spec and the language-aware `parameters` getter so the two emissions
- * can never drift.
- */
+/** The shared UI-label description for the static spec and program-format-aware parameters getter. */
 const RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION
   = 'Clear, concise description of what this program does in active voice, '
     + '5-10 words (shown in the UI). '
@@ -134,10 +124,9 @@ function escalationGuidance(mode: PtcRuntime['sandboxMode']): string {
     : ' A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.'
 }
 
-/** Match schema text to the runtime language and program syntax. */
-function resolveFlavor(runtime: SupportedPtcRuntime): RunCodeFlavor {
-  return runtime.language === 'typescript' && runtime.programFormat === 'function-body'
-    ? TYPESCRIPT_FUNCTION_FLAVOR : RUN_CODE_FLAVORS[runtime.language]
+/** Match schema text to the runtime program syntax. */
+function resolveFlavor(runtime: PtcRuntime): RunCodeFlavor {
+  return runtime.programFormat === 'function-body' ? TYPESCRIPT_FUNCTION_FLAVOR : TYPESCRIPT_FLAVOR
 }
 
 
@@ -164,98 +153,13 @@ function jsonNormalizeArgs(value: unknown): { dispatched: unknown; logged: unkno
   return { dispatched: snapshot, logged }
 }
 
-/** Two-space JSON presentation, matching the existing shallow `run_code` text contract. */
-const JSON_INDENT = '  '
-
-/**
- * ECMAScript caps `JSON.stringify`'s `space` string at ten characters. The
- * renderer also caps TOTAL indentation there, compacting deeper subtrees, so
- * formatted output remains linear in the canonical JSON size.
- */
-const MAX_JSON_INDENT_CHARS = 10
-
-/** A pending fragment in the iterative JSON presentation traversal. */
-type JsonRenderTask =
-  | { kind: 'text'; text: string }
-  | { kind: 'value'; value: JsonValue; depth: number; compact: boolean }
-
-/** Render one non-string JSON root without recursive traversal or unbounded indentation growth. */
-function renderJsonValue(value: Exclude<JsonValue, string>): string {
-  const chunks: string[] = []
-  const tasks: JsonRenderTask[] = [{ kind: 'value', value, depth: 0, compact: false }]
-  for (let task = tasks.pop(); task !== undefined; task = tasks.pop()) {
-    if (task.kind === 'text') {
-      chunks.push(task.text)
-      continue
-    }
-
-    const current = task.value
-    if (current === null || typeof current === 'boolean' || typeof current === 'number') {
-      chunks.push(String(current))
-      continue
-    }
-    if (typeof current === 'string') {
-      chunks.push(JSON.stringify(current))
-      continue
-    }
-
-    const compact = task.compact || (task.depth + 1) * JSON_INDENT.length > MAX_JSON_INDENT_CHARS
-    const childDepth = task.depth + 1
-    if (Array.isArray(current)) {
-      chunks.push('[')
-      if (current.length === 0) {
-        chunks.push(']')
-        continue
-      }
-      tasks.push({ kind: 'text', text: compact ? ']' : `\n${JSON_INDENT.repeat(task.depth)}]` })
-      for (let index = current.length - 1; index >= 0; index--) {
-        const item = current[index]
-        /* v8 ignore next -- canonical JsonValue arrays are dense. */
-        if (item === undefined) throw new Error('cannot render a sparse JSON array')
-        tasks.push({ kind: 'value', value: item, depth: childDepth, compact })
-        tasks.push({
-          kind: 'text',
-          text: compact
-            ? index === 0 ? '' : ','
-            : `${index === 0 ? '\n' : ',\n'}${JSON_INDENT.repeat(childDepth)}`,
-        })
-      }
-      continue
-    }
-
-    const keys = Object.keys(current)
-    chunks.push('{')
-    if (keys.length === 0) {
-      chunks.push('}')
-      continue
-    }
-    tasks.push({ kind: 'text', text: compact ? '}' : `\n${JSON_INDENT.repeat(task.depth)}}` })
-    for (let index = keys.length - 1; index >= 0; index--) {
-      const key = keys[index]
-      /* v8 ignore next -- the loop is bounded by the captured key count. */
-      if (key === undefined) throw new Error('cannot render a missing JSON object key')
-      const item = current[key]
-      /* v8 ignore next -- canonical JsonValue records contain no undefined properties. */
-      if (item === undefined) throw new Error('cannot render an undefined JSON object property')
-      tasks.push({ kind: 'value', value: item, depth: childDepth, compact })
-      tasks.push({
-        kind: 'text',
-        text: compact
-          ? `${index === 0 ? '' : ','}${JSON.stringify(key)}:`
-          : `${index === 0 ? '\n' : ',\n'}${JSON_INDENT.repeat(childDepth)}${JSON.stringify(key)}: `,
-      })
-    }
-  }
-  return chunks.join('')
-}
-
-/** Render one present program completion value for the model-facing result text. */
-function renderValue(value: JsonValue): string {
-  return typeof value === 'string' ? value : renderJsonValue(value)
+/** Whether a rejection is the caller's cancellation rather than a failure of its own. */
+function isCancellation(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))
 }
 
 /** Canonical value returned by the outer PTC mode transport. */
-type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandbox }
+type RunCodeOutput = { logs: string[]; sandbox?: PtcRunSandbox }
 
 /** Render captured text, selected images, and the applied file policy in emission order. */
 function renderRunOutput(
@@ -277,7 +181,6 @@ function renderRunOutput(
   }
   appendText(remaining.join(''))
   const details: string[] = []
-  if (value.result !== undefined) details.push(renderValue(value.result))
   if (value.sandbox?.enforcement === 'partial') details.push('File sandbox enforcement is partial on this host.')
   if (value.sandbox?.denied) details.push(`The ${value.sandbox.mode} file sandbox denied an operation.${guidance}`)
   appendText(details.filter(text => text.length > 0).join('\n'))
@@ -288,14 +191,14 @@ function renderRunOutput(
 async function resolveWorkingDirectory(ctx: Context, exec: ToolRunContext): Promise<string | undefined> {
   if (exec.agent === undefined) return undefined
   const directories = ctx.get('workingDirectory')
-  if (directories === undefined) throw new Error('dsh-tools: run_code with an Agent requires workingDirectory')
+  if (directories === undefined) throw new ToolContextUnavailableError('dsh-tools: run_code with an Agent requires workingDirectory')
   return directories.ensure(exec.agent, exec.signal)
 }
 
 /** Resolve standing authority for a runtime that enforces file policy. */
 function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecutionPolicy {
   const policy = ctx.get('sandboxPolicy')
-  if (policy === undefined) throw new Error('dsh-tools: confined PTC runtime requires sandboxPolicy')
+  if (policy === undefined) throw new ToolContextUnavailableError('dsh-tools: confined PTC runtime requires sandboxPolicy')
   return policy.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
 }
 
@@ -352,12 +255,7 @@ export function createRunCodeTransport(
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const definition = defineTool({
     name: toolName,
-    // The description and `code` parameter description are placeholders here:
-    // the language-aware getters installed below replace both, resolving the
-    // loaded runtime's flavor at schema-emission time so the schema the MODEL
-    // sees matches the SDK section's language. Argument VALIDATION still keys
-    // off this static spec (defineTool closes over it), which is language-
-    // independent (one required string `code`).
+    // Getters below project the current program format; argument validation uses this static spec.
     description: TYPESCRIPT_FLAVOR.description,
     parameters: {
       code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
@@ -374,7 +272,6 @@ export function createRunCodeTransport(
         additionalProperties: false,
         properties: {
           logs: { type: 'array', required: true, items: { type: 'string' } },
-          result: { type: 'json' },
           sandbox: {
             type: 'object',
             additionalProperties: false,
@@ -391,31 +288,35 @@ export function createRunCodeTransport(
     },
     async execute(args, exec): Promise<RunCodeOutput> {
       if (args.description.trim().length === 0) {
-        throw new Error('invalid description: expected a non-empty string')
+        throw new ToolArgsError(['invalid description: expected a non-empty string'])
       }
       const runtime = getRuntime()
       const run = async (callSignal: AbortSignal): Promise<RunCodeOutput> => {
+        // The schema omits both fields without runtime confinement; reject them before pairing checks.
+        if (runtime.sandboxMode === undefined && (args.sandbox_permissions !== undefined || args.justification !== undefined)) {
+          throw new ToolArgsError(['sandbox_permissions and justification are not available for this PTC runtime'])
+        }
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
-          throw new Error('timeoutMs is not available for this PTC runtime')
+          throw new ToolArgsError(['timeoutMs is not available for this PTC runtime'])
         }
         if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
-          throw new Error('invalid timeoutMs: expected a positive finite number')
+          throw new ToolArgsError(['invalid timeoutMs: expected a positive finite number'])
         }
         const standingPolicy = runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec)
         let policy = standingPolicy
         if (args.sandbox_permissions !== undefined && args.justification !== undefined) {
-          if (standingPolicy === undefined) throw new Error('sandbox_permissions is not available for this PTC runtime')
+          const confined = standingPolicy as SandboxExecutionPolicy
           const approvedMode = await approveEscalation({
             requestedMode: args.sandbox_permissions,
             justification: args.justification,
-            effectiveMode: standingPolicy.mode,
+            effectiveMode: confined.mode,
             subject: 'program',
           }, {
             approver: ctx.get('approval'), agent: exec.agent, callId: exec.callId,
             toolName, signal: callSignal,
           })
-          policy = { ...standingPolicy, mode: approvedMode }
+          policy = { ...confined, mode: approvedMode }
         }
         const cwd = await resolveWorkingDirectory(ctx, { ...exec, signal: callSignal })
         callSignal.throwIfAborted()
@@ -554,7 +455,7 @@ export function createRunCodeTransport(
         const binding = (schema: ToolSchema): PtcBindingFunction => async (rawArgs: unknown): Promise<JsonValue> => {
           const { name } = schema
           // FIXME: Let image-producing tools declare their program result adaptation.
-          const usesProgramImage = runtime.language === 'typescript' && (name === 'read_image' || name === 'cua')
+          const usesProgramImage = name === 'read_image' || name === 'cua'
           if (runOver()) {
             throw new Error(`${toolName} run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
@@ -746,7 +647,7 @@ export function createRunCodeTransport(
             }
             const spec = runtime.resolve({
               program: args.code,
-              ...runtime.language === 'typescript' ? { discardCompletion: true } : {},
+              discardCompletion: true,
               ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
                 global: 'tools',
@@ -761,6 +662,11 @@ export function createRunCodeTransport(
             maxSubCalls = spec.timeoutMs === null ? Infinity
               : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute)
             result = await runtime.run(spec)
+          } catch (error) {
+            // Runtimes reject only contract misuse; a rejection without its own code becomes CODE_RUN_FAILED.
+            // The cancellation itself passes through for the registry to classify as ABORTED.
+            if (error instanceof HarnessError || isCancellation(error, callSignal)) throw error
+            throw new CodeRunFailedError(`code run failed: ${toolErrorMessage(error)}`, 'CODE_RUN_FAILED', { cause: error })
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before
             // closing the turn (queued-unstarted ones are abandoned unlogged).
@@ -800,7 +706,6 @@ export function createRunCodeTransport(
           const value: RunCodeOutput = {
             logs,
             ...result.sandbox === undefined ? {} : { sandbox: result.sandbox },
-            ...runtime.language !== 'typescript' && result.value !== undefined ? { result: result.value } : {},
           }
           if (hasImages) inspections.set(exec, { value, output: result.output })
           return value

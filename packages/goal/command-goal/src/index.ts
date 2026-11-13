@@ -5,7 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands/types'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { GoalError } from '@deepseek-ai/dsh-goal'
 import type { GoalPhase, GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
@@ -177,7 +177,8 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
       default: return assertNever(command, 'goal command')
     }
   } catch (error: unknown) {
-    if (error instanceof GoalError) {
+    // Corrupt goal state is not a command-shape problem; the command runtime reports its cause.
+    if (error instanceof GoalError && error.code !== 'GOAL_STATE_CORRUPT') {
       return {
         kind: 'error',
         text: 'The goal command is not valid for the current state. Run /goal to view available commands.',

@@ -47,19 +47,19 @@ const result = await ctx.ptcRuntime.run(spec)
 <a id="choose-a-backend"></a>
 ### Choose a backend
 
-Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. The private [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.md) provider executes Python in a fresh CPython subprocess without file confinement. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
+Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
 
 For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-repl), pass the same `stateOwner` object across runs and await `release(owner)` at the owner's end. Different object identities never share an environment; omitted owners use a temporary environment. Stateless providers ignore ownership. Calls for one retained owner must not overlap.
 
 `registerEnvironmentInitializer(program)` registers source that prepares each new environment once before user code, after current bindings are installed. Register before the first run is admitted; only one initializer may be registered. Initialization shares the first run's logs, deadline, cancellation and output budget, and its completion value is discarded. Failure prevents user execution and discards the environment without rolling back external effects. Own the returned async disposer: it cancels and drains admitted runs and releases environments. Failed cleanup blocks new execution until disposal succeeds on retry. Registration after admission of the first run remains invalid even after all environments are released. Unsupported providers and modes reject registration; see the [Node provider](../ptc-runtime-node/README.md#persistent-repl) for supported syntax.
 
-### Name your bindings portably
+### Name your bindings
 
-Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, `console`, or `inspect` fails the run before it starts; the exact exclusion sets are part of the seam contract.
+Binding-global and error-class names must match `[A-Za-z_$][A-Za-z0-9_$]*` and exclude ECMAScript keywords and strict-mode names (`RESERVED_BINDING_WORDS`). Runtime output globals `console`, `inspect`, and `Image` are reserved by `RESERVED_BINDING_GLOBALS`. Error-member names must be non-empty and exclude `name`, `message`, and `stack` (`RESERVED_ERROR_MEMBERS`); other own property names are accepted. Invalid names make `run()` reject before a process starts.
 
 ### What can go wrong
 
-Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal.
+Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal. Contract misuse rejects with `PtcRuntimeError`: `PTC_RUNTIME_INVALID_ARGUMENT` for an invalid request or spec, `PTC_RUNTIME_UNAVAILABLE` after disposal or while a retained environment's cleanup is incomplete, and `PTC_RUNTIME_CONFLICT` for a concurrent run for one owner or a retained environment launched under another sandbox policy.
 
 -----
 
@@ -89,15 +89,15 @@ The exhaustive semantics live in the [PTC runtime subsystem reference](../../../
 
 `PtcRunRequest` carries the program, host bindings, cancellation and optional execution choices. `PtcRunSpec` requires the resolved cwd and an explicit numeric or null deadline choice. `PtcBindingNamespace` declares program globals and optional typed rejection constructors. `PtcRunResult` separates output/value, failure and `PtcRunSandbox` facts; exact fields and provider obligations live in [`src/types.ts`](src/types.ts).
 
-### Portable identifiers
+### Binding exclusions
 
-Binding-global and error-class names are language-portable: they must match the identifier subset `[A-Za-z_][A-Za-z0-9_]*` (no JS-only `$`) and clear the seam-exported exclusion sets, so one `bindings` list is valid against every backend. The package exports the contract every backend enforces — `PORTABLE_RESERVED_WORDS` (ECMAScript ∪ Python reserved words), `RESERVED_BINDING_GLOBALS` (backend-owned globals such as `console`, `inspect`, `Image` and `__dsh_main__`), `RESERVED_ERROR_MEMBERS` and `DUNDER_MEMBER` (error-member exclusions) — so a name like `$tools`, `lambda`, or `__dsh_main__` makes `run()` reject as seam misuse on any backend. See `src/index.ts` for the exact sets.
+The runtime exports `RESERVED_BINDING_WORDS`, `RESERVED_BINDING_GLOBALS`, and `RESERVED_ERROR_MEMBERS` for binding validation; see [`src/index.ts`](src/index.ts) for the exact sets.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: abstract `PtcRuntime` service and the portable-identifier exclusion sets |
+| [`src/index.ts`](src/index.ts) | Plugin entry: abstract `PtcRuntime` service and the binding exclusion sets |
 | [`src/types.ts`](src/types.ts) | Vocabulary: `PtcRunRequest`, `PtcRunSpec`, bindings, results, failures and sandbox facts |
 
 </details>
@@ -111,7 +111,6 @@ Read these when the package-level contract is not enough. They move from the PTC
 
 - [PTC mode Agent Note](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) — how the tool registry consumes `ctx.ptcRuntime` and presents `run_code` to the model.
 - [Node process backend](../ptc-runtime-node/README.md) — the shipped TypeScript execution backend.
-- [Experimental Python backend](../../experimental/ptc-runtime-python/README.md) — the private CPython subprocess provider and its fd-3 protocol.
 - [PTC runtime subsystem reference](../../../docs/subsystems/ptc-runtime.md) — request/result vocabulary, bindings, and the `ctx.ptcRuntime` cordis surface.
 - [Capability seams](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) — the Service Definition / Service Provider / Consumer split.
 
@@ -135,7 +134,7 @@ These limits define what the seam cannot do; they are current package constraint
 
 - **`run()` is one-shot** — `output` arrives only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
 - **Retained memory is disposable**: providers may keep state for an explicit owner; restart, release, and provider-specific failures discard it. Programs, binding calls and results remain logged by consumers; live objects are neither serialized nor replayed.
-- **Providers have different confinement capabilities** — the shipped Node provider enforces a resolved file policy, while the private experimental Python provider rejects an explicit policy. No container provider is supplied.
+- **No container provider is supplied** — the shipped Node provider enforces the resolved file policy through the composed sandbox backend.
 - **No uniform binding byte cap applies across providers** — each provider owns its transport limits; a binding can still allocate memory before its result reaches those limits.
 
 <a id="dev-note"></a>

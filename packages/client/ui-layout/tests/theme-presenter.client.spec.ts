@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FontFamilies, ThemePreference, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { fontFamilyVariable } from '@deepseek-ai/dsh-client-ui-theme/src/theme-settings.ts'
 import { DARK_ATTRIBUTE, THEME_SOURCE_ATTRIBUTE, ThemePresenter } from '@deepseek-ai/dsh-client-ui-layout/src/client/theme-presenter.ts'
@@ -67,6 +67,75 @@ describe('ThemePresenter', () => {
     expect(themeColorMeta()).toBe(meta)
     expect(meta?.content).toBe(LIGHT_THEME_COLOR)
     expect(document.head.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1)
+  })
+
+  it('updates theme metadata when styles arrive after the initial snapshot and change later', async () => {
+    const palette = document.head.querySelector<HTMLStyleElement>('style[data-theme-presenter-test]')!
+    palette.textContent = `body { background-color: ${LIGHT_THEME_COLOR}; }`
+    const presenter = new ThemePresenter()
+    const observe = vi.spyOn(MutationObserver.prototype, 'observe')
+    try {
+      presenter.start()
+      presenter.start()
+      expect(observe).toHaveBeenCalledTimes(1)
+      presenter.apply(snapshot('dark'))
+      expect(themeColorMeta()?.content).toBe(LIGHT_THEME_COLOR)
+
+      const installed = document.createElement('style')
+      installed.dataset.themePresenterTest = ''
+      installed.textContent = `body[${DARK_ATTRIBUTE}] { background-color: ${DARK_THEME_COLOR}; }`
+      document.head.append(installed)
+      await Promise.resolve()
+      expect(themeColorMeta()?.content).toBe(DARK_THEME_COLOR)
+
+      installed.textContent = `body[${DARK_ATTRIBUTE}] { background-color: rgb(40, 41, 42); }`
+      await Promise.resolve()
+      expect(themeColorMeta()?.content).toBe('rgb(40, 41, 42)')
+
+      const read = vi.spyOn(globalThis, 'getComputedStyle')
+      try {
+        installed.firstChild!.textContent = `body[${DARK_ATTRIBUTE}] { background-color: rgb(50, 51, 52); }`
+        await Promise.resolve()
+        expect(read).toHaveBeenCalledTimes(1)
+      } finally {
+        read.mockRestore()
+      }
+      installed.remove()
+      await Promise.resolve()
+      expect(themeColorMeta()?.content).toBe(LIGHT_THEME_COLOR)
+    } finally {
+      observe.mockRestore()
+      presenter.dispose()
+    }
+  })
+
+  it('ignores unrelated head mutations and stops observing when disposed', async () => {
+    const presenter = new ThemePresenter()
+    presenter.start()
+    presenter.apply(snapshot('dark'))
+    await Promise.resolve()
+    const read = vi.spyOn(globalThis, 'getComputedStyle')
+    const foreign = document.createElement('meta')
+    try {
+      foreign.name = 'fixture-other'
+      document.head.append(foreign)
+      themeColorMeta()!.content = 'rgb(1, 2, 3)'
+      await Promise.resolve()
+      expect(read).not.toHaveBeenCalled()
+
+      const installed = document.createElement('style')
+      installed.dataset.themePresenterTest = ''
+      installed.textContent = 'body { background-color: rgb(4, 5, 6); }'
+      document.head.append(installed)
+      presenter.dispose()
+      await Promise.resolve()
+      expect(read).not.toHaveBeenCalled()
+      expect(themeColorMeta()).toBeNull()
+    } finally {
+      foreign.remove()
+      read.mockRestore()
+      presenter.dispose()
+    }
   })
 
   it('applies tokens as inline variables and clears the previous set on theme change', () => {

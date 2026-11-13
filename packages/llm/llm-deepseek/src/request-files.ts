@@ -3,7 +3,7 @@
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type { DeepSeekFileStore, DeepSeekFileConnection, DeepSeekFilePolicy } from './file-store.ts'
+import { FILES_API_TIMEOUT, type DeepSeekFileStore, type DeepSeekFileConnection, type DeepSeekFilePolicy, type FileRequestBackoff } from './file-store.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 
 /** Position of an image occurrence in the request's conversation messages. */
@@ -95,6 +95,7 @@ function normalizedImageDiagnostic(
 export class RequestFiles {
   private used: UsedRequestFile[] = []
   private retried = false
+  private readonly backoff: FileRequestBackoff = {}
 
   constructor(
     private readonly files: DeepSeekFileStore,
@@ -121,12 +122,12 @@ export class RequestFiles {
     const worker = async () => {
       for (const [id, version] of pending) {
         if (signal.aborted) return
-        using limit = deadline(signal, this.policy.uploadTimeoutMs, 'DEEPSEEK_FILES_API_TIMEOUT')
+        using limit = deadline(signal, this.policy.uploadTimeoutMs, FILES_API_TIMEOUT)
         try {
-          const result = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal)
+          const result = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal, this.backoff)
           ids.set(id, result.record.fileId)
         } catch (error) {
-          batch.abort(error)
+          batch.abort(new FileResolutionFailure(error))
           return
         }
         this.activity()
@@ -134,7 +135,7 @@ export class RequestFiles {
     }
     await Promise.all(Array.from({ length: Math.min(versions.size, this.policy.uploadConcurrency) }, worker))
     this.signal.throwIfAborted()
-    if (batch.signal.aborted) throw new FileResolutionFailure(batch.signal.reason)
+    batch.signal.throwIfAborted()
     return ids
   }
 

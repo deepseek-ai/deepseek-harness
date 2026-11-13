@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/cua-agents-without-preset/guide.md
+/:
+  en: a41f467ec275275e
+  zh: a153444f63573c24
+/cua-gives-agents-without-a-preset-cua-run-code:
+  en: a1239aa92ca148ae
+  zh: 296675426f099c08
+/cua-gives-agents-without-a-preset-cua-run-code/change:
+  en: e2892031d9d69540
+  zh: 08fc2399c0aeaf16
+/cua-gives-agents-without-a-preset-cua-run-code/migration:
+  en: 9c8e020d8d709ea1
+  zh: a315232645d22905

@@ -132,7 +132,10 @@ describe('dsh-subagent-spawn-in-process', () => {
     const { ctx, parent } = await setup([])
     // parent is depth 0, child would be depth 1 — cap at 0 forbids any child.
     await expect(start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent, maxDepth: 0 }))
-      .rejects.toThrow('subagent depth 1 exceeds maxDepth 0')
+      .rejects.toMatchObject({
+        name: 'SubagentDepthError', code: 'DEPTH_EXCEEDED', message: 'subagent depth 1 exceeds maxDepth 0',
+        attemptedDepth: 1, maxDepth: 0,
+      })
   })
 
   it('maps a child that hit its token ceiling to stopReason "max-tokens"', async () => {

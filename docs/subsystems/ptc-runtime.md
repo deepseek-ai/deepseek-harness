@@ -126,13 +126,11 @@ Each `PtcBindingNamespace` becomes a global object of async callables; PTC passe
  * of a particular consumer such as PTC mode.
  */
 interface PtcBindingErrorClass {
-  /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link PtcBindingNamespace.global}. */
+  /** Constructor global and resulting `Error.name`; same identifier rule as {@link PtcBindingNamespace.global}. */
   name: string
   /**
-   * Non-empty own property for the member name. The portable exclusion set is
-   * `RESERVED_ERROR_MEMBERS` plus dunder-form names (`__x__`, non-empty
-   * middle), enforced identically by every backend; any other name —
-   * identifiers or not — is accepted everywhere.
+   * Non-empty own property for the member name, excluding `name`, `message`,
+   * and `stack` (`RESERVED_ERROR_MEMBERS`). Other property names are accepted.
    */
   memberNameProperty: string
 }
@@ -148,14 +146,10 @@ interface PtcBindingErrorClass {
  */
 interface PtcBindingNamespace {
   /**
-   * The global identifier the program sees. Must match the LANGUAGE-PORTABLE
-   * identifier subset `[A-Za-z_][A-Za-z0-9_]*` and no language's reserved
-   * words, so the same namespace list works against every backend regardless
-   * of `language` — a JS-only spelling like `$tools` is rejected by design,
-   * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
-   * `__dsh_main__`) are also refused everywhere; see its declaration for the
-   * exact set and why each entry is reserved.
+   * The global identifier the program sees. Must match `[A-Za-z_$][A-Za-z0-9_$]*`
+   * and exclude ECMAScript keywords and strict-mode names (`RESERVED_BINDING_WORDS`).
+   * Runtime output globals (`console`, `inspect`, `Image` in `RESERVED_BINDING_GLOBALS`)
+   * are also refused.
    */
   global: string
   /** The callable members, keyed by the exact name the program calls. */
@@ -236,7 +230,7 @@ interface PtcRunFailure {
 
 ## The service
 
-`PtcRuntime` is defined in [`src/index.ts`](../../packages/ptc-runtime/ptc-runtime/src/index.ts). `resolve(request)` returns complete execution inputs, and `run(spec)` executes them. `executionInstructions` supplies provider-owned usage guidance for consumer presentation. `timeout` reports the configured elapsed-time default and maximum when per-call overrides are supported; `resolve` still validates and caps each request. `language` selects supported program presentation; `isolation` describes the substrate without claiming security. `sandboxMode` advertises file-policy support, with `undefined` for a provider that does not supply confinement. Each implementation keeps program state separate between runs and terminates and awaits active executions during disposal.
+`PtcRuntime` is defined in [`src/index.ts`](../../packages/ptc-runtime/ptc-runtime/src/index.ts). `resolve(request)` returns complete execution inputs, and `run(spec)` executes them. `executionInstructions` supplies provider-owned usage guidance for consumer presentation. `timeout` reports the configured elapsed-time default and maximum when per-call overrides are supported; `resolve` still validates and caps each request. `language` identifies the source language so consumers can check their requirements (see the [PTC executor](../../packages/core/tool-executor-ptc/README.md)); `isolation` describes the substrate without claiming security. `sandboxMode` advertises file-policy support, with `undefined` for a provider that does not supply confinement. Each implementation keeps program state separate between runs and terminates and awaits active executions during disposal.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -250,7 +244,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.ptcRuntime` — `PtcRuntime` (abstract seam)
 
-Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
+Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects, with PtcRuntimeError. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
 
 ```ts cordis-catalog
 /**
@@ -281,7 +275,7 @@ registerEnvironmentInitializer(program: string): () => Promise<void>
  * Resolve supported options and provider defaults before execution.
  * @param request - Program, bindings, cancellation and optional execution choices.
  * @returns Complete directory, deadline and supported authority for run.
- * @throws When an explicit choice is invalid or unsupported by this provider.
+ * @throws When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.
  */
 abstract resolve(request: PtcRunRequest): PtcRunSpec
 

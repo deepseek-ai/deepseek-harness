@@ -537,8 +537,8 @@ describe('dsh-tool-team', () => {
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
       cursor: 1,
     })))).not.toHaveProperty('nextCursor')
-    expect((await execute(ctx, lead, 'team_task_list', { cursor: -1 })).isError).toBe(true)
-    expect((await execute(ctx, lead, 'team_task_list', { limit: 101 })).isError).toBe(true)
+    expect(await execute(ctx, lead, 'team_task_list', { cursor: -1 })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(await execute(ctx, lead, 'team_task_list', { limit: 101 })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
 
     const edited = await execute(ctx, lead, 'team_task_update', {
       task_id: first.id,
@@ -596,7 +596,7 @@ describe('dsh-tool-team', () => {
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'unowned' })))).toMatchObject({ tasks: [{ id: assigned.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: true })))).toMatchObject({ tasks: [{ id: pending.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: false })))).toMatchObject({ tasks: [{ id: assigned.id }] })
-    expect((await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).isError).toBe(true)
+    expect(await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
     await child.dispose()
   })
 
@@ -1034,7 +1034,7 @@ describe('dsh-tool-team', () => {
 
   it.each([
     new Error('root lookup failed'),
-    new SubagentError('root lookup failed', 'INTERNAL_FAILURE'),
+    new SubagentError('root lookup failed', 'CONTINUATION_UNAVAILABLE'),
   ])('propagates unexpected identity lookup failures: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })

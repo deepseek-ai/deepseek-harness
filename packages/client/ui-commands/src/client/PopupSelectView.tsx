@@ -48,8 +48,8 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
-  const rows = useMemo(() => filterOptions(state.options, state.search, state.searchMode),
-    [state.options, state.search, state.searchMode])
+  const rows = useMemo(() => filterOptions(state.options, state.search),
+    [state.options, state.search])
   const groups = useMemo(() => groupOptions(rows), [rows])
   useEffect(() => {
     const viewport = viewportRef.current

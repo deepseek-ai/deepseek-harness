@@ -2,7 +2,7 @@
 
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import { RemoteStreamCarrierError } from './stream-client.ts'
+import { isRemoteStreamCarrierFailure, type RemoteStreamCarrierFailure } from './stream-client.ts'
 
 /** One item annotated with the physical Remote-stream generation that delivered it. */
 export interface RemoteStreamItem<Item> {
@@ -22,10 +22,13 @@ export interface RemoteStreamOptions<Item> {
   readonly name: string
   /** Open one physical generation of the logical stream. */
   readonly open: (signal: AbortSignal) => AsyncIterable<Item>
-  /** Classify a normal generation end after or before its opening item was accepted. */
+  /**
+   * Classify a normal generation end after or before its opening item was accepted; a returned error whose `code` is
+   * `gateway/carrier-lost` reconnects, and any other error is terminal.
+   */
   readonly ended: (accepted: boolean) => Error
   /** Observe a retryable carrier loss before the supervisor waits or reopens. */
-  readonly carrierFailed?: (error: RemoteStreamCarrierError) => void
+  readonly carrierFailed?: (error: RemoteStreamCarrierFailure) => void
 }
 
 /**
@@ -129,7 +132,7 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
         } catch (error) {
           if (isAborted(this.lifetime.signal)) return
           if (revision !== this.revision) continue
-          if (!(error instanceof RemoteStreamCarrierError)) throw terminalStreamFailure(error)
+          if (!isRemoteStreamCarrierFailure(error)) throw terminalStreamFailure(error)
           this.options.carrierFailed?.(error)
           if (revision !== this.revision) continue
           attempt++
@@ -159,7 +162,7 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
 
 async function waitForRemoteStreamRetry(
   connection: Pick<ConnectionHandle, 'generation'>,
-  error: RemoteStreamCarrierError,
+  error: RemoteStreamCarrierFailure,
   attempt: number,
   signal: AbortSignal,
 ): Promise<void> {
@@ -199,7 +202,7 @@ async function waitForRemoteStreamRetry(
 /**
  * Mark a terminal escape before it crosses the stream boundary: consumers
  * discriminate failures by code, so an unmarked throw reads as a local bug.
- * Marked failures pass through verbatim. The carrier class never escapes as a
+ * Marked failures pass through verbatim. A carrier failure never escapes as a
  * terminal outcome — it stays the retry-internal signal fed to `carrierFailed`
  * and the `ended(true)` retry trigger.
  */

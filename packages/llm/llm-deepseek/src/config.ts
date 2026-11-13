@@ -49,7 +49,7 @@ export interface Config {
   fileUploadMaxRetries: Volatile<number>
   /** Local wait after upload throttling, in milliseconds (default 500). */
   fileUploadRetryDelayMs: Volatile<number>
-  /** Maximum duration of one request-image Files API resolution (default one minute). */
+  /** Maximum duration of one request-image Files API resolution (default 20 seconds). */
   filesApiTimeoutMs: Volatile<number>
   /** Explicit lifetime assigned to each uploaded image (default seven days). */
   fileExpiresAfterSeconds: Volatile<number>

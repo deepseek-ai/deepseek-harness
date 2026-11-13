@@ -24,6 +24,9 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../core/scope"
     },
     {

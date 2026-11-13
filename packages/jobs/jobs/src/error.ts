@@ -4,7 +4,6 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link JobError} code:
- * - `JOB_BACKGROUND_DISABLED` — the calling tool's configuration turns background execution off.
  * - `JOB_CONTROLLER_UNAVAILABLE` — the jobs service is composed but no attached job controller serves the
  *   job's owner. A call whose composition lacks the jobs service itself throws `ToolContextUnavailableError`.
  * - `JOB_NOT_FOUND` — the job id names no listed job.
@@ -14,7 +13,6 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
  * - `JOB_LIMIT_REACHED` — the registry's configured job limit is reached.
  */
 export const JOB_ERROR_CODES = [
-  'JOB_BACKGROUND_DISABLED',
   'JOB_CONTROLLER_UNAVAILABLE',
   'JOB_NOT_FOUND',
   'JOB_FOREIGN_SESSION',

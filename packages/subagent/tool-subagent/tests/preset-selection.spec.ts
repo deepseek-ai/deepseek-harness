@@ -99,6 +99,7 @@ describe('spawn preset selection', () => {
     const forced = await callSubagent(ctx, { ...args, agent_preset: 'writer' })
     expect(forced.isError).toBe(true)
     expect(text(forced)).toContain('selection is disabled')
+    expect(forced.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_SELECTION_DISABLED' })
     expect(onStart).toHaveBeenCalledTimes(1)
   })
 
@@ -135,8 +136,13 @@ describe('spawn preset selection', () => {
 
   it('rejects forced selection at the model JSON resolver', () => {
     const selection = new SubagentPresetSelection({ allowedAgentPresets: ['writer'] })
-    expect(() => selection.resolve({ agent_preset: 'unlisted' })).toThrow(/must be one of/)
-    expect(() => selection.resolve({ agent_preset: 1 })).toThrow(/must be one of/)
+    for (const agent_preset of ['unlisted', 1]) {
+      expect(() => selection.resolve({ agent_preset })).toThrow(expect.objectContaining({
+        name: 'SubagentError',
+        code: 'PRESET_NOT_ALLOWED',
+        message: 'agent_preset must be one of: writer',
+      }))
+    }
   })
 
   it('requires the preset service when selection is configured', async () => {
@@ -157,6 +163,7 @@ describe('spawn preset selection', () => {
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('Unknown agent preset: absent')
+    expect(result.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/not-found' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -174,6 +181,7 @@ describe('spawn preset selection', () => {
     const result = await callSubagent(ctx, args, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('missing-plugin')
+    expect(result.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/invalid' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -358,6 +366,7 @@ describe('spawn preset selection', () => {
     const failed = await callSubagent(ctx, args, { agent: handle.agent })
     expect(failed.isError).toBe(true)
     expect(text(failed)).toContain('Unknown agent preset: later')
+    expect(failed.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/not-found' })
 
     await ctx.agentPresets.register({ id: 'later', plugins: [] })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('reviewed')]))

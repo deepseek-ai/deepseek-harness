@@ -139,6 +139,8 @@ describe('in-process structured output', () => {
       const events = run.localAgent.session.snapshotEvents()
       const first = events.find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'before-input')
       expect(first?.type === 'tool/result' && first.data.message.isError).toBe(true)
+      expect(first?.type === 'tool/result' && first.data.error)
+        .toEqual({ name: 'SubagentError', code: 'STRUCTURED_OUTPUT_PENDING_INPUT' })
       expect(events.some(event => event.type === 'user/message' && event.data.id === messageId)).toBe(true)
       expect(JSON.stringify(adapter.requests.at(-1)?.messages)).toContain('Correction: submit answer 42 instead.')
     } finally {
