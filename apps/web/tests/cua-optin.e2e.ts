@@ -8,7 +8,7 @@ import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { load } from 'js-yaml'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
@@ -155,9 +155,9 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
     expect(saved).not.toContain('executionMode:')
     if (selectedDefault === undefined) {
-      expect(load(saved)).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'agent-preset-registry' })]))
+      expect(parseEntryYaml(saved)).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'agent-preset-registry' })]))
     } else {
-      expect(load(saved)).toEqual(expect.arrayContaining([
+      expect(parseEntryYaml(saved)).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault } }),
       ]))
     }
@@ -263,7 +263,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(true)
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(3)
     const confirmedSettings = await readFile(settingsPath, 'utf8')
-    expect(load(confirmedSettings)).toEqual(expect.arrayContaining([
+    expect(parseEntryYaml(confirmedSettings)).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault: 'ptc' } }),
     ]))
     await toggle.click()

@@ -49,8 +49,6 @@
     "@deepseek-ai/dsh-plugin-detail": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:~",
-    "@types/js-yaml": "^4.0.9",
-    "js-yaml": "^4.3.2"
+    "@deepseek-ai/schemastery": "workspace:~"
   }
 }
