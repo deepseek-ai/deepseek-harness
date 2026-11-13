@@ -17,6 +17,8 @@ import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/P
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
 import type { createNavigationStore } from '../src/client/navigation-store.ts'
+import type { PluginsSettingsLinkInjected } from '../src/client/PluginsSettingsLink.tsx'
+import type { ClientSyncFace } from '../src/client/PluginManagerPage.tsx'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -91,10 +93,13 @@ async function bench(allows: ((action: string) => boolean) | 'switchable' = () =
   })
   const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
   const selectPanel = vi.fn<ILayout['selectPanel']>((activePanelId) => { panelInfo.set({ activePanelId }) })
+  const clientSync = createSnapshotStore({ syncing: false, failures: [] as { id: string; message: string }[] })
+  const retryClient = vi.fn(() => Promise.resolve())
+  ctx.provide('modules', { entries: { state: clientSync, retry: retryClient } })
   ctx.provide('layout', { panelInfo, selectPanel, beginNavigation: () => new AbortController().signal,
     toggleSidebar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn() })
   await ctx.plugin(settings).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo, access }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo, access, clientSync, retryClient }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -160,6 +165,42 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(b.list).not.toHaveBeenCalled()
   })
 
+  it('keeps a Settings entry that opens the Plugins list while the page is registered', async () => {
+    const b = await bench()
+    const removeRoot = b.slots.register({
+      name: 'root',
+      children: {
+        'main': { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+        'sidebar.panellist': { kind: 'list', scope: 'root' },
+        'settings.section': { kind: 'list', scope: 'root' },
+      },
+    } as never, () => null)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const link = b.slots.entries('settings.section')[0]!
+    expect(link.options).toMatchObject({ id: PANEL_ID, order: 15 })
+    expect(resolveSlotLabel(link.options.label)).toBe('插件管理')
+    const navigation = (b.slots.entries('main')[0]!.store as ReturnType<typeof createNavigationStore>).create()
+    navigation.actions.setView({ kind: 'more' })
+    const linkInjected: object = link.inject!()
+    ;(linkInjected as PluginsSettingsLinkInjected).openPlugins()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    // The page reads this page's client synchronization from the module system and retries through it.
+    const pageInjected: object = b.slots.entries('main')[0]!.inject!()
+    const sync = pageInjected as ClientSyncFace
+    expect(sync.hooks.clientSync).toBe(b.clientSync)
+    sync.retryClient()
+    expect(b.retryClient).toHaveBeenCalledOnce()
+    const logged = vi.spyOn(b.ctx.logger('ui-plugin-manager'), 'error')
+    b.retryClient.mockRejectedValueOnce(new Error('retry failed'))
+    sync.retryClient()
+    await vi.waitFor(() => { expect(b.retryClient).toHaveBeenCalledTimes(2) })
+    removeRoot()
+    expect(b.slots.entries('settings.section')).toEqual([])
+    logged.mockRestore()
+  })
+
   it('shares refresh failures with the overlay after navigation and releases both registrations across reloads', async () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
@@ -197,7 +238,7 @@ describe('ui-plugin-manager browser plugin', () => {
   })
 
   it('declares only the services the page and its Remote methods use', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'remoteAccess'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'remoteAccess', 'modules'])
   })
 
   it('reads the Host again on a later grant after showing the page, and not while access is withdrawn', async () => {
@@ -284,7 +325,7 @@ describe('ui-plugin-manager browser plugin', () => {
     b.locale.setLocale('en')
     expect(face.resolveText(text)).toBe('Local tools')
     b.locale.setLocale('zh')
-    expect(face.hooks.configLedger.getSnapshot()).toEqual({ items: [], bundles: new Set(), rows: new Set() })
+    expect(face.hooks.configLedger.getSnapshot()).toEqual({ items: [], bundles: new Set(), rows: new Set(), sections: [] })
     // A Host change before the first render is not a reason to read.
     b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
     b.ctx.emit('connection/reset')

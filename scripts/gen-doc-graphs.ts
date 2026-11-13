@@ -174,7 +174,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'plugin-manager',
     title: 'Current-profile plugin and bundle management',
     mode: 'core',
-    consumers: ['plugin-manager', 'ui-settings-plugin-inventory'],
+    consumers: ['plugin-manager'],
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {

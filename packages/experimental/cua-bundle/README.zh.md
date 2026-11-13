@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。
+在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。启用后，详情页在配图下方、设置项上方显示使用建议，Windows 用户还可查看辅助程序的配置步骤。
 
 在 macOS 上，组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。请为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。
 
