@@ -55,7 +55,14 @@ export function LiveshareManageSharesDialog({ shares, onOpenShare, onClose, t }:
     setError('')
     try {
       const stopped = await shares.stop({ shareId: target.shareId })
-      if (!stopped.ok) throw new Error('stop refused')
+      // A Host whose share state another running process holds refuses the write; the share stays
+      // listed, and the owner acts on it in the process holding the state.
+      if (!stopped.ok) {
+        setError(stopped.error.code === 'liveshareShares/owner-state-held'
+          ? t('dialog.ownerStateHeld')
+          : t('dialog.stopFailed'))
+        return
+      }
       setShareList(current => current.filter(share => share.shareId !== target.shareId))
       setStopTarget(undefined)
       setStopAcknowledged(false)

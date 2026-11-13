@@ -10,10 +10,11 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { canonicalPath, writableRoots } from '@deepseek-ai/dsh-sandbox'
-import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { auditStartupEntries, composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 // These imports carry the tools/sandboxPolicy/approval Context merges.
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
@@ -35,7 +36,7 @@ const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
 const HEADLESS_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/headless/cordis.patch.yml')
 const AUTO_PROVIDER = 'shipped-auto-review-test'
 const AUTO_MODEL = 'same-route'
-const AUTO_CALL_ID = ToolCallId('shipped-auto-review-denied-delete')
+const AUTO_CALL_ID = brandString<ToolCallId>('shipped-auto-review-denied-delete')
 const AUTO_RAW_REASON = `  direct user authorized inspection only\nTEST_ONLY_SECRET_${'x'.repeat(16_384)}  `
 const AUTO_FINAL_TEXT = 'SHIPPED_AUTO_REVIEW_REJECTION_OBSERVED'
 const AUTO_CHILD_AUTHORIZED = 'AUTO_CHILD_AUTHORIZED'
@@ -173,7 +174,7 @@ function toolChunks(
   name: string,
   args: Readonly<Record<string, unknown>>,
 ): StreamChunk[] {
-  const callId = ToolCallId(id)
+  const callId = brandString<ToolCallId>(id)
   const argumentsJson = JSON.stringify(args)
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -536,9 +537,11 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   const ctx = scaffold.ctx
   expect(ctx.llm.listProviders().some(provider => provider.id === 'deepseek-messages')).toBe(false)
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
-  const index = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}`, {
+  const index = await scaffold.hostFetch('/', {
     headers: { 'accept-encoding': 'gzip' },
   })
+  expect(index.status).toBe(200)
+  expect(index.headers.get('content-type')).toContain('text/html')
   expect(index.headers.get('content-encoding')).toBe('gzip')
   expect(index.headers.get('vary')).toContain('Accept-Encoding')
   await index.body?.cancel()
@@ -604,7 +607,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     'working_directory', 'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
   ])
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-composition'),
+    sessionId: brandString<SessionId>('shipped-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
   try {
@@ -642,7 +645,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   expect(headlessRows.some(row => row.id === 'auto-review')).toBe(false)
 
   const commandHandle = await scaffold.ctx.agents.create({
-    sessionId: SessionId('shipped-command-catalog'),
+    sessionId: brandString<SessionId>('shipped-command-catalog'),
     meta: { cwd: scaffold.workspaceCwd },
     agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   })
@@ -662,7 +665,7 @@ it('ships PTC with run_code but without the general workflow SDK binding', async
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
   const ctx = scaffold.ctx
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-ptc-composition'),
+    sessionId: brandString<SessionId>('shipped-ptc-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'ptc').then(() => undefined),
   })
   try {
@@ -680,7 +683,7 @@ it('lets a preset producer reach the background-job registry', async () => {
   scaffold = await launchWebScaffold()
   const ctx = scaffold.ctx
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-background-job'),
+    sessionId: brandString<SessionId>('shipped-background-job'),
     meta: { cwd: scaffold.workspaceCwd },
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
@@ -691,7 +694,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // fails here — with every task control still listed in the catalog above.
     const started = await executeModelToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-bash-background'),
+      callId: brandString<ToolCallId>('shipped-bash-background'),
       name: 'bash',
       arguments: {
         command: 'printf SHIPPED_BACKGROUND_OK',
@@ -713,7 +716,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // owner. A per-preset registry would list nothing here even on success.
     const listed = await executeToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-task-list'),
+      callId: brandString<ToolCallId>('shipped-task-list'),
       name: 'job_list',
       arguments: {},
       agent: handle.agent,
@@ -726,7 +729,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // through a preset-plane control, which is the linkage the realm severed.
     const collected = await executeToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-task-output'),
+      callId: brandString<ToolCallId>('shipped-task-output'),
       name: 'job_output',
       arguments: { job_id: jobId, wait: true },
       agent: handle.agent,
@@ -759,7 +762,7 @@ it('routes one browser-authored Auto request through the same model and asks the
   const created = await remote<{ sessionId: string }>(scaffold, 'session/create', {
     request: { cwd: scaffold.workspaceCwd },
   })
-  const sessionId = SessionId(created.sessionId)
+  const sessionId = brandString<SessionId>(created.sessionId)
   await remote(scaffold, 'session/selectModel', {
     request: { sessionId, provider: AUTO_PROVIDER, model: AUTO_MODEL },
   })
@@ -857,7 +860,7 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
   const created = await remote<{ sessionId: string }>(scaffold, 'session/create', {
     request: { cwd: scaffold.workspaceCwd },
   })
-  const parentId = SessionId(created.sessionId)
+  const parentId = brandString<SessionId>(created.sessionId)
   adapter.setParent(parentId)
   await remote(scaffold, 'session/selectModel', {
     request: { sessionId: parentId, provider: AUTO_PROVIDER, model: AUTO_MODEL },
@@ -1035,7 +1038,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
     expect(warnings.join('\n')).toContain('preset "auto" is already registered')
 
     const handle = await ctx.agents.create({
-      sessionId: SessionId('shipped-auto-init-rollback'),
+      sessionId: brandString<SessionId>('shipped-auto-init-rollback'),
       meta: { cwd: scaffold.workspaceCwd },
       setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
     })
@@ -1048,7 +1051,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
       // Auto execution behavior.
       const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
-        callId: ToolCallId('shipped-auto-init-rollback-write'),
+        callId: brandString<ToolCallId>('shipped-auto-init-rollback-write'),
         name: 'write',
         arguments: { file_path: targetPath, content: 'INITIALIZATION_ROLLED_BACK\n' },
         agent: handle.agent,
@@ -1076,7 +1079,7 @@ it('withdraws Auto on shipped Loader unload and does not restore migrated live s
   const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.id === 'auto-review')
   if (autoEntry === undefined) throw new Error('shipped Auto review Loader entry is missing')
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-auto-hot-plug'),
+    sessionId: brandString<SessionId>('shipped-auto-hot-plug'),
     meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
     setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
   })

@@ -29,7 +29,7 @@ export interface SnapshotHeaderManifest {
   promptChanges?: number
 }
 
-/** Replay facts that cannot be reconstructed from successful model chunks. */
+/** Scenario behavior absent from the selected fixture, including retained-program adaptations. */
 export interface SnapshotReplayManifest {
   /** A scenario-local `replay.override.json` replaces or patches the recorded model script. */
   override: true

@@ -1,8 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold,
   seedSession, watchConsole, webSnapshotMode,
@@ -17,8 +18,8 @@ const LONG_ARGS = { ...ARGS, command: `${COMMAND} --token=${'x'.repeat(1024)}` }
 
 /** A settled shell call rendered from durable arguments and its original result. */
 function shellFixture(arguments_: typeof ARGS, output: string): string {
-  const session = Session.create(SessionId('shell-command-details-source'))
-  const callId = ToolCallId('shell-command-details-background')
+  const session = Session.create(brandString<SessionId>('shell-command-details-source'))
+  const callId = brandString<ToolCallId>('shell-command-details-background')
   const args = JSON.stringify(arguments_)
   session.append('turn/start', { turn: 1 })
   session.append('user/message', createUserMessage({
@@ -90,7 +91,7 @@ it.each([
       await input.waitFor()
       const background = args.run_in_background
       const selectableText = args.command.split('\n')[0]!
-      const inputSection = card.locator('[data-terminal] [class*="_header_"]')
+      const inputSection = card.locator('[data-terminal-banner]')
       expect(await input.textContent()).toBe(selectableText)
       if (background) {
         expect(await commands.allTextContents()).toEqual([args.command])
@@ -162,7 +163,7 @@ it.each([
       const resolved = await scaffold.ctx.sessionController.resolveAgent(id)
       if ('error' in resolved) throw resolved.error
       const session = resolved.agent.session
-      const callId = ToolCallId(`status-dot-${name}-${background ? 'background' : 'foreground'}`)
+      const callId = brandString<ToolCallId>(`status-dot-${name}-${background ? 'background' : 'foreground'}`)
       const args = JSON.stringify({ command: LONG_ARGS.command, description: `Long ${name} command`, run_in_background: background })
       session.append('turn/start', { turn: 2 })
       session.append('user/message', createUserMessage({
@@ -187,7 +188,7 @@ it.each([
       await card.waitFor()
       await card.evaluate((element) => { element.style.width = '380px' })
       await card.scrollIntoViewIfNeeded()
-      const header = card.locator('[class*="_header_"]')
+      const header = card.locator('[data-terminal-banner]')
       const mountedCard = await card.elementHandle()
       if (mountedCard === null) throw new Error('Running command card is not mounted')
       expect(await header.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)

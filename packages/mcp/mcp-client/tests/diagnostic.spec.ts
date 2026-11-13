@@ -2,7 +2,9 @@
 // verbatim, and hostile shapes (cycles, empty messages, bare values) cannot
 // break the status text they feed.
 import { describe, expect, it } from 'vitest'
-import { describeError, redactSecrets } from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
+import { describeError, McpLocalError, mcpRequestError, redactSecrets } from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
+import { withDeadline } from '@deepseek-ai/dsh-mcp-client/src/deadline.ts'
+import { MissingTemplateValue, resolveTemplateString } from '@deepseek-ai/dsh-mcp-client/src/templates.ts'
 
 describe('describeError', () => {
   it('keeps a plain error as its own string', () => {
@@ -52,6 +54,35 @@ describe('describeError', () => {
     const b = new Error('b', { cause: a })
     a.cause = b
     expect(describeError(a)).toBe('Error: a, cause: b')
+  })
+})
+
+describe('local failure codes', () => {
+  it('rejects an elapsed deadline as MCP_TIMEOUT', async () => {
+    await expect(withDeadline(new Promise(() => {}), 1, 'MCP operation timed out')).rejects.toMatchObject({
+      name: 'McpLocalError', code: 'MCP_TIMEOUT', message: 'MCP operation timed out',
+    })
+  })
+
+  it('reports an unconfigured credential as MCP_CREDENTIAL_NOT_FOUND', async () => {
+    const failure = resolveTemplateString('${credential:MISSING}', 'env.TOKEN', async () => undefined)
+    await expect(failure).rejects.toBeInstanceOf(MissingTemplateValue)
+    await expect(failure).rejects.toMatchObject({ name: 'McpLocalError', code: 'MCP_CREDENTIAL_NOT_FOUND' })
+  })
+
+  it('keeps a local failure unchanged when classifying a request failure', () => {
+    const closed = new McpLocalError('MCP connection closed', 'MCP_CONNECTION_CLOSED')
+    expect(mcpRequestError(closed, 'resources/read', () => 'replaced')).toBe(closed)
+  })
+
+  it('keeps the original failure as cause only when no redaction applies', () => {
+    const failure = new Error('rejected secret-value')
+    expect(mcpRequestError(failure, 'resources/read')).toMatchObject({
+      message: 'MCP resources/read failed: Error: rejected secret-value', cause: failure,
+    })
+    const redacted = mcpRequestError(failure, 'resources/read', text => text.replace('secret-value', '[redacted]'))
+    expect(redacted.message).toBe('MCP resources/read failed: Error: rejected [redacted]')
+    expect(redacted.cause).toBeUndefined()
   })
 })
 

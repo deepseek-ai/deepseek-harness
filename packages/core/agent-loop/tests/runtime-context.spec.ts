@@ -2,8 +2,9 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, ContextSnapshotSection } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import { RuntimeContextProjection } from '../src/runtime-context.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -24,7 +25,7 @@ async function harness() {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
-  return { ctx, session: ctx.sessions.create(SessionId('runtime-context-replay')) }
+  return { ctx, session: ctx.sessions.create(brandString<SessionId>('runtime-context-replay')) }
 }
 
 function contextMessage(text: string, contributions?: readonly ContextSnapshotSection[]) {
@@ -59,7 +60,7 @@ describe('RuntimeContextProjection', () => {
       },
     })
 
-    const other = ctx.sessions.create(SessionId('runtime-context-other'))
+    const other = ctx.sessions.create(brandString<SessionId>('runtime-context-other'))
     other.append('user/message', contextMessage('other'), { surfaceOp: 'append' })
     expect(projection.project(sections('retained'))).toBeUndefined()
   })

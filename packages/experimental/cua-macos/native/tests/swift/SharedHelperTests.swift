@@ -33,14 +33,6 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     }
 }
 
-@Test func readsSystemPointerHoverFromEachConnection() throws {
-    #expect(try HelperConfiguration(hello: hello(), runtimeKey: runtimeKey).systemPointerHover == nil)
-    for allowed in [true, false] {
-        let configuration = try HelperConfiguration(hello: hello(overrides: ["systemPointerHover": .bool(allowed)]), runtimeKey: runtimeKey)
-        #expect(configuration.systemPointerHover == allowed)
-    }
-}
-
 @Test func resolvesClickHoldLimitFromHelperArguments() throws {
     #expect(try HelperConfiguration(arguments: []).maxClickHoldMs == 5000)
     for limit in [0, 7000] {
@@ -56,7 +48,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
     ("maxClickHoldMs", .number(-1)), ("maxClickHoldMs", .number(0.5)),
-    ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)), ("systemPointerHover", .string("true")),
+    ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)), ("systemPointerHover", .bool(true)),
 ])
 func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throws {
     #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: hello(overrides: [name: value]), runtimeKey: runtimeKey) }

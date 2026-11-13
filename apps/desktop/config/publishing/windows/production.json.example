@@ -1,5 +1,6 @@
 {
   "bucket": "replace-with-bucket-1250000000",
+  "edgeOneZoneId": "zone-replacewithproductionzone",
   "origin": "https://download.deepseek.com",
   "credentialsFile": "C:/absolute/path/to/packaging/secrets/cos-production.json",
   "windows": {

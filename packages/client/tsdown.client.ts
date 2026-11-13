@@ -1,11 +1,11 @@
 /**
  * Shared tsdown preset for UI plugin client bundles. Emits a closure-factory
- * artifact: the bundle calls window.__ModuleLoader__.load({id, factory})
+ * artifact: the bundle calls window.__ModuleLoader__.load({id, factory, meta})
  * and resolves externals through the injected require (loader module table —
  * cordis DI entities, no globals, no import map). CSS is compiled by
  * lightningcss inside the bundle: `x.module.css` yields its hashed class map
- * and injects a tagged style at factory execution, while `x.css?inline`
- * exports compiled text for a plugin-owned lifecycle effect. The virtual
+ * while each output chunk exposes deferred stylesheet text through its metadata
+ * factory. `x.css?inline` exports compiled text without registering a resource. The virtual
  * loaders register each real stylesheet as a watch dependency. Images under
  * `src/client/assets/`, imported from Client code or referenced by relative
  * `url()` in the package's own stylesheets, are emitted under `lib/assets/`
@@ -35,7 +35,7 @@ import {
   packageAssetRevisionedPath,
 } from './modules/src/assets.ts'
 import { optionalStringArray } from './modules/src/client/manifest.ts'
-import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from './web/src/platform.ts'
+import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS, STATIC_MODULE_MANIFEST_EXPORT } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
 import { isExperimentalPackageName } from '../../scripts/experimental-package-policy.ts'
 import { BundleInputIsolation, physicalBundleInput } from '../../scripts/bundle-input-isolation.ts'
@@ -51,29 +51,44 @@ const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const INLINE_CSS_QUERY = '?inline'
 
+/** Compiled stylesheet expression retained until its resource's text function runs. */
+interface CompiledClientStyle {
+  /** Stylesheet path within the importing package, the key of its metadata record. */
+  readonly path: string
+  readonly expression: string
+}
+
 /**
- * Emit one plugin-owned style injector and an optional CSS Modules export.
- * @param css - JavaScript expression yielding the stylesheet text; see {@link stylesheetSource}.
+ * Name a compiled stylesheet by its path within the importing package: the package's own files by their
+ * `src`-relative path, and a dependency's file as `node_modules/<package>/<path>`.
+ * @param id - Importing package, used in diagnostics.
+ * @param packageDir - Importing package directory.
+ * @param fileId - Physical stylesheet path.
+ * @param expression - Compiled stylesheet text expression.
+ * @returns The stylesheet's metadata key and expression.
  */
-function styleInjectionModule(
+function compiledClientStyle(
   id: string,
+  packageDir: string,
   fileId: string,
-  css: string,
-  classMap?: Readonly<Record<string, string>>,
-): string {
-  const source = [
-    `const css = ${css};`,
-    `const tagId = ${JSON.stringify(`${id}/${basename(fileId)}`)};`,
-    'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
-    '  const tag = document.createElement(\'style\');',
-    `  tag.dataset.plugin = ${JSON.stringify(id)};`,
-    '  tag.dataset.pluginCss = tagId;',
-    '  tag.textContent = css;',
-    '  document.head.appendChild(tag);',
-    '}',
-  ]
-  source.push(classMap === undefined ? 'export {};' : `export default ${JSON.stringify(classMap)};`)
-  return source.join('\n')
+  expression: string,
+): CompiledClientStyle {
+  // Rolldown canonicalizes module ids through symbolic links; the package directory arrives as the caller wrote it.
+  const file = realpathSync(fileId)
+  const local = pathBelow(realpathSync(packageDir), file)
+  if (local !== undefined) return { path: local.split(sep).join('/').replace(/^lib\/types\//, 'src/'), expression }
+  let directory = dirname(file)
+  while (dirname(directory) !== directory) {
+    const manifestPath = join(directory, 'package.json')
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
+      if (typeof manifest.name === 'string') {
+        return { path: `node_modules/${manifest.name}/${relative(directory, file).split(sep).join('/')}`, expression }
+      }
+    }
+    directory = dirname(directory)
+  }
+  throw new Error(`tsdown: ${id}: stylesheet ${fileId} has no package owner`)
 }
 
 /**
@@ -82,7 +97,7 @@ function styleInjectionModule(
  * Everything else under @deepseek-ai/* is either a module-table entry
  * (external) or a leak the purity gate rejects.
  */
-export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
+export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|error|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-text-search|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
 
 /**
  * Vendored framework libraries: rescoped into @deepseek-ai, so the gate below
@@ -154,44 +169,37 @@ export function clientBundle(
 }
 
 /**
- * Build the tsdown config for a client library the compile shell links
- * statically (the static assembly channel: `apps/web` resolves the package
- * name, bundles the artifact, and owns the chunk layout and the CSS pipeline).
- *
- * Calling this preset is what puts a package in the static assembly channel,
- * so the call sites are the roster: gates read it through
- * {@link isStaticLinkedConfig} rather than a second hand-kept list. A package on
- * this roster must not be a module-table row as well — the browser would take
- * the statically linked copy and a provider's bytes would sit unused in its
- * bundle.
- *
- * Four artifact contracts:
- * 1. every bare specifier stays an import. The shell attributes chunk bytes by
- *    `node_modules/<pkg>`, so a dependency inlined into a workspace file is
- *    attributed to no npm package and its bytes fall into the index chunk,
- *    which collapses the vendor/index cache split.
- * 2. `esm` on `platform: 'browser'` — the shell is the only consumer.
- * 3. sourcemaps, chained through the tsc maps under `lib/types` to the sources.
- * 4. stylesheets ship with the package: a relative `.css` import survives as a
- *    relative external and the sheet is emitted under `lib/` at its
- *    `src`-relative path, so vite stays the only owner of class hashing.
- * @param packageDir - the package's own directory, normally the config's
- * `import.meta.dirname`; its `package.json` name is used in tsdown diagnostics.
- * @param libEntry - emitted JavaScript entries consumed from `lib/types`, one
- * bundle each: a multi-entry build would emit a hash-named shared chunk that
- * the exact `files` list cannot publish.
- * @returns ENV-selected tsdown config for the Client build face.
- * @throws {Error} when `<packageDir>/package.json` is unreadable or declares no name.
+ * Build one statically delivered Client module as an ESM manifest in `lib/index.js`.
+ * Shared workspace dependencies resolve through the module loader; third-party
+ * imports remain ESM dependencies of the final shell build.
+ * @param packageDir - Package directory containing the module's package.json.
+ * @param libEntry - Single emitted index entry consumed from `lib/types`.
+ * @returns ENV-selected config for the Client build face.
+ * @throws {Error} when the package manifest or index entry is invalid.
  */
 export function staticLinked(packageDir: string, libEntry: readonly string[]): BuildFaceConfig {
-  const id = readPackageManifest(packageDir).name
-  // Each entry names its own output file, so two entries with the same basename
-  // would overwrite one artifact instead of emitting two.
+  const manifest = readPackageManifest(packageDir)
+  const entry = libEntry[0]
+  if (libEntry.length !== 1 || entry === undefined || basename(entry, '.js') !== 'index') {
+    throw new Error(`tsdown: ${manifest.name} staticLinked requires one index entry`)
+  }
+  return clientOnly([staticManifestConfig(manifest.name, packageDir, entry)])
+}
+
+/**
+ * Build native ESM bootstrap entries whose CSS loads before the module renderer.
+ * Bare imports remain available for the final shell bundle to resolve.
+ * @param packageDir - Package directory containing the shell's package.json.
+ * @param libEntry - Emitted JavaScript entries, each with a distinct output basename.
+ * @returns ENV-selected configs for the Client build face.
+ */
+export function clientShell(packageDir: string, libEntry: readonly string[]): BuildFaceConfig {
+  const { name } = readPackageManifest(packageDir)
   const names = new Set(libEntry.map(entry => basename(entry, '.js')))
   if (names.size !== libEntry.length) {
-    throw new Error(`tsdown: ${id} entries collide on an output name: ${libEntry.join(', ')}`)
+    throw new Error(`tsdown: ${name} entries collide on an output name: ${libEntry.join(', ')}`)
   }
-  return clientOnly(libEntry.map(entry => staticLinkedConfig(id, entry)))
+  return clientOnly(libEntry.map(entry => staticLinkedConfig(name, entry)))
 }
 
 /**
@@ -199,7 +207,7 @@ export function staticLinked(packageDir: string, libEntry: readonly string[]): B
  * The roster has no separate list: gates load each package's own
  * `tsdown.config.ts`, call it for the Client face, and ask this.
  * @param configs - configs a package's build-face function returned.
- * @returns true when at least one config was built by {@link staticLinked}.
+ * @returns true when at least one config belongs to static module or shell assembly.
  */
 export function isStaticLinkedConfig(configs: readonly UserConfig[]): boolean {
   return configs.some(config => (config.plugins as readonly { name?: string }[] | undefined ?? [])
@@ -303,7 +311,9 @@ interface AssetContext extends AssetEmitter {
   addWatchFile(id: string): void
 }
 
-function staticLinkedConfig(id: string, entry: string, outputName = basename(entry, '.js')): UserConfig {
+function staticLinkedConfig(
+  id: string, entry: string, outputName = basename(entry, '.js'),
+): UserConfig {
   const emitted = new Set<string>()
   const isolation = clientInputIsolation(id)
   return {
@@ -326,10 +336,9 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
       sourcemapPathTransform: isolation.sourcePath,
     },
     plugins: [{
-      // Contract 1. `pre` because tsdown's own deps plugin would otherwise
-      // resolve and inline every specifier missing from the npm production
-      // sections, which is the coupling this preset exists to remove. The name
-      // is also the roster marker {@link isStaticLinkedConfig} reads.
+      // Resolve before tsdown's dependency plugin so the shell retains bare
+      // imports independently of npm dependency sections. The name also marks
+      // this config for the static assembly roster.
       name: STATIC_LINKED_PLUGIN,
       resolveId: {
         order: 'pre' as const,
@@ -340,8 +349,7 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
         },
       },
     }, tscSourceMapPlugin(), isolation.plugin, {
-      // Contract 4. The import survives verbatim and the sheet lands beside the
-      // JavaScript, so the shell's CSS Modules pipeline sees a real stylesheet.
+      // Preserve stylesheet imports for the shell's final CSS build.
       name: 'dsh-css-asset',
       async resolveId(this: AssetEmitter, source: string, importer: string | undefined) {
         if (!source.endsWith('.css') || importer === undefined) return null
@@ -358,6 +366,169 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
       },
     }],
   }
+}
+
+/**
+ * An ordinary ESM library with one more export, the {@link STATIC_MODULE_MANIFEST_EXPORT} manifest. Every import stays
+ * for the shell build, including third-party stylesheets; one that names a module-table entry also leaves a `require`
+ * call in the manifest factory, as in a dynamic bundle, so Modules records the dependency. The package's own CSS
+ * imports become the manifest's deferred stylesheet metadata instead of installing styles.
+ */
+function staticManifestConfig(id: string, packageDir: string, entry: string): UserConfig {
+  const config = staticLinkedConfig(id, entry, 'index')
+  const styles = new Map<string, CompiledClientStyle>()
+  const imports = new Map<string, string>()
+  const emitted = new Set<string>()
+  const sourceRoot = realDirectory(resolvePath(packageDir, 'src'))
+  const resource = (context: AssetContext, file: string): string => {
+    const real = realpathSync(file)
+    context.addWatchFile(real)
+    const local = pathBelow(sourceRoot, real)
+    if (local !== undefined) {
+      const name = local.split(sep).join('/')
+      if (!emitted.has(name)) {
+        emitted.add(name)
+        context.emitFile({ type: 'asset', fileName: name, source: readFileSync(real), originalFileName: real })
+      }
+      return `new URL(${JSON.stringify(`./${name}`)}, import.meta.url).href`
+    }
+    let directory = dirname(real)
+    while (dirname(directory) !== directory) {
+      const manifestPath = join(directory, 'package.json')
+      if (existsSync(manifestPath)) {
+        const owner = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
+        if (typeof owner.name === 'string') {
+          const specifier = `${owner.name}/${relative(directory, real).split(sep).join('/')}?url`
+          let binding = imports.get(specifier)
+          if (binding === undefined) {
+            binding = `__dshStaticAsset${imports.size}`
+            imports.set(specifier, binding)
+          }
+          return binding
+        }
+      }
+      directory = dirname(directory)
+    }
+    throw new Error(`tsdown: ${id}: asset ${file} has no package owner`)
+  }
+  const css: TsdownPlugin = {
+    name: 'dsh-static-css-metadata',
+    buildStart() { styles.clear(); imports.clear(); emitted.clear() },
+    resolveId: {
+      order: 'pre',
+      handler(source, importer) {
+        if (importer === undefined) return null
+        const file = source.endsWith(INLINE_CSS_QUERY) ? source.slice(0, -INLINE_CSS_QUERY.length) : source
+        // A third-party stylesheet stays a bare import, so the shell's Vite build applies its own processing.
+        if (!file.endsWith('.css') || isBareSpecifier(file)) return null
+        const resolved = sourceAssetPath(file, importer)
+        return (source.endsWith(INLINE_CSS_QUERY) ? INLINE_CSS_VIRTUAL_PREFIX : CSS_VIRTUAL_PREFIX) + resolved + CSS_VIRTUAL_SUFFIX
+      },
+    },
+    async load(virtualId) {
+      const inline = virtualId.startsWith(INLINE_CSS_VIRTUAL_PREFIX)
+      if (!inline && !virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null
+      const file = virtualId.slice((inline ? INLINE_CSS_VIRTUAL_PREFIX : CSS_VIRTUAL_PREFIX).length, -CSS_VIRTUAL_SUFFIX.length)
+      this.addWatchFile(file)
+      const references = new Map<string, string>()
+      const nonce = randomBytes(8).toString('hex')
+      const rewrite = (url: Url): Url | undefined => {
+        if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return undefined
+        const parts = /^([^?#]+)(.*)$/.exec(url.url)!
+        const expression = resource(this, resolvePath(dirname(file), decodeURIComponent(parts[1]!)))
+        const marker = `__dshStaticCss_${nonce}_${references.size}__`
+        references.set(marker, parts[2] === '' ? expression : `(${expression} + ${JSON.stringify(parts[2])})`)
+        return { ...url, url: marker }
+      }
+      const result = transform({ filename: file, code: await readFile(file), minify: true,
+        ...(file.endsWith('.module.css') ? { cssModules: { pattern: '[hash]_[local]' } } : {}),
+        visitor: {
+          Url: rewrite,
+          Image(image) {
+            if (image.type !== 'image-set') return undefined
+            return { ...image, value: { ...image.value, options: image.value.options.map(option => {
+              const url = option.image.type === 'url' ? rewrite(option.image.value) : undefined
+              return url === undefined ? option : { ...option, image: { type: 'url' as const, value: url } }
+            }) } }
+          },
+        },
+      })
+      const text = result.code.toString()
+      const pieces: string[] = []
+      let last = 0
+      if (references.size > 0) for (const match of text.matchAll(new RegExp([...references.keys()].join('|'), 'gu'))) {
+        pieces.push(JSON.stringify(text.slice(last, match.index)), references.get(match[0])!)
+        last = match.index + match[0].length
+      }
+      pieces.push(JSON.stringify(text.slice(last)))
+      const expression = pieces.join(' + ')
+      if (inline) return `export default ${expression};`
+      const classMap = Object.fromEntries(Object.entries(result.exports ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [key, value.name]))
+      styles.set(virtualId, compiledClientStyle(id, packageDir, file, expression))
+      return { code: `export default ${JSON.stringify(classMap)};`, moduleSideEffects: 'no-treeshake' }
+    },
+  }
+  const envelope: TsdownPlugin = {
+    name: 'dsh-static-module-manifest',
+    renderChunk(code, chunk) {
+      if (!chunk.isEntry) throw new Error(`tsdown: ${id}: static module unexpectedly emitted ${chunk.fileName}`)
+      const output = new Rolldown.RolldownMagicString(code)
+      const imported: string[] = []
+      const getters: string[] = []
+      const stars: string[] = []
+      // Each module-table import also leaves a require in the factory, so Modules records the dependency.
+      const required = new Set<string>()
+      const table = (specifier: string): void => {
+        if ((PLATFORM_MODULES as readonly string[]).includes(specifier)) required.add(specifier)
+      }
+      let exportObject = '__dshModuleExports'
+      while (code.includes(exportObject)) exportObject += '_'
+      const key = (name: { type: string; name?: string; value?: unknown }): string => name.type === 'Identifier' ? name.name! : String(name.value)
+      const getter = (exported: string, value: string): void => {
+        if (exported === STATIC_MODULE_MANIFEST_EXPORT) throw new Error(`tsdown: ${id}: ${exported} is reserved for the module manifest`)
+        getters.push(`${JSON.stringify(exported)}: { enumerable: true, get: () => ${value} }`)
+      }
+      // The ordinary exports stay as written; the manifest factory returns live views of the same bindings.
+      for (const statement of this.parse(code).body) {
+        if (statement.type === 'ImportDeclaration') {
+          table(String(statement.source.value))
+        } else if (statement.type === 'ExportNamedDeclaration') {
+          if (statement.declaration !== null) throw new Error(`tsdown: ${id}: unsupported generated declaration export`)
+          let source: string | undefined
+          if (statement.source !== null) {
+            table(String(statement.source.value))
+            source = `__dshReexport${imported.length}`
+            imported.push(`import * as ${source} from ${JSON.stringify(String(statement.source.value))};`)
+          }
+          for (const specifier of statement.specifiers) {
+            getter(key(specifier.exported), source === undefined ? key(specifier.local) : `${source}[${JSON.stringify(key(specifier.local))}]`)
+          }
+        } else if (statement.type === 'ExportAllDeclaration') {
+          table(String(statement.source.value))
+          const binding = `__dshReexport${imported.length}`
+          imported.push(`import * as ${binding} from ${JSON.stringify(String(statement.source.value))};`)
+          if (statement.exported !== null) getter(key(statement.exported), binding)
+          else stars.push(binding)
+        } else if (statement.type === 'ExportDefaultDeclaration') {
+          throw new Error(`tsdown: ${id}: unsupported generated default declaration`)
+        }
+      }
+      for (const [source, binding] of imports) imported.push(`import ${binding} from ${JSON.stringify(source)};`)
+      const resources = Object.keys(chunk.modules).flatMap(module => {
+        const style = styles.get(module)
+        return style === undefined ? [] : [`${JSON.stringify(style.path)}: { text: (context) => ${style.expression} }`]
+      })
+      if (imported.length > 0) output.prepend(`${imported.join('\n')}\n`)
+      const starExports = stars.map(binding => `for (const key of Object.keys(${binding})) if (key !== 'default' && !Object.hasOwn(${exportObject}, key)) Object.defineProperty(${exportObject}, key, { enumerable: true, get: () => ${binding}[key] });`).join('\n')
+      const metadata = resources.length === 0 ? '' : `, meta: () => ({ stylesheets: {${resources.join(',')}} })`
+      const requires = [...required].map(specifier => `require(${JSON.stringify(specifier)});\n`).join('')
+      output.append(`\nexport const ${STATIC_MODULE_MANIFEST_EXPORT} = { id: ${JSON.stringify(id)}, factory: (require) => {\n${requires}`
+        + `const ${exportObject} = Object.defineProperties({}, {${getters.join(',')}});\n${starExports}\nreturn ${exportObject};\n}${metadata} };\n`)
+      return output
+    },
+  }
+  config.plugins = [css, ...(config.plugins as TsdownPlugin[]).filter(plugin => plugin.name !== 'dsh-css-asset'), envelope]
+  return config
 }
 
 /** Whether a specifier names a package rather than a file next to its importer. */
@@ -541,14 +712,16 @@ function packageAssetCall(reference: string): string {
  * or drops a declaration.
  * @param css - stylesheet text after the rewrite.
  * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
+ * @param resolver - Resolver expression in the generated factory's execution context.
  * @returns a string literal, or a concatenation of literals and resolver calls.
  */
-function stylesheetSource(css: string, references: ReadonlyMap<string, string>): string {
+function stylesheetSource(css: string, references: ReadonlyMap<string, string>, resolver = PACKAGE_ASSET_CALL): string {
   if (references.size === 0) return JSON.stringify(css)
   const parts: string[] = []
   let last = 0
   for (const match of css.matchAll(new RegExp([...references.keys()].join('|'), 'gu'))) {
-    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(references.get(match[0]) as string))
+    const reference = JSON.stringify(references.get(match[0]) as string)
+    parts.push(JSON.stringify(css.slice(last, match.index)), `${resolver}(${reference})`)
     last = match.index + match[0].length
   }
   parts.push(JSON.stringify(css.slice(last)))
@@ -787,6 +960,12 @@ function clientConfig(
   const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
   const isolation = clientInputIsolation(id)
   const assets = packageAssets(manifest, packageDir)
+  const styles = new Map<string, CompiledClientStyle>()
+  const packageRequire = createRequire(resolvePath(packageDir, 'package.json'))
+  const resolveStylesheet = (source: string, importer: string | undefined): string => isBareSpecifier(source)
+    ? packageRequire.resolve(source)
+    : importer === undefined ? source : sourceAssetPath(source, importer)
+  const styleMarker = `/*__dshChunkStyles_${randomBytes(16).toString('hex')}__*/`
   return {
     name: `${id}/client`,
     entry: { client: entry },
@@ -864,10 +1043,29 @@ function clientConfig(
         )
       },
     }, tscSourceMapPlugin(), asyncChunkRequirePlugin(), isolation.plugin, {
+      name: 'dsh-client-style-factory',
+      renderChunk(code, chunk) {
+        const marker = code.indexOf(styleMarker)
+        if (marker < 0 || code.indexOf(styleMarker, marker + styleMarker.length) !== -1) {
+          throw new Error(`tsdown: ${id}: missing or repeated style factory marker in ${chunk.fileName}`)
+        }
+        const resources = new Map<string, CompiledClientStyle>()
+        for (const moduleId of Object.keys(chunk.modules)) {
+          const style = styles.get(moduleId)
+          if (style !== undefined) resources.set(style.path, style)
+        }
+        const expression = [...resources.values()].map(style =>
+          `${JSON.stringify(style.path)}: { text: (context) => ${style.expression} }`).join(',')
+        const output = new Rolldown.RolldownMagicString(code)
+        output.overwrite(marker, marker + styleMarker.length,
+          resources.size === 0 ? '' : `, meta: () => ({ stylesheets: {${expression}} })`)
+        return output
+      },
+    }, {
       name: 'dsh-css-modules-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith('.module.css')) return null
-        const abs = importer !== undefined ? sourceAssetPath(source, importer) : source
+        const abs = resolveStylesheet(source, importer)
         return CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
       },
       async load(virtualId: string) {
@@ -888,14 +1086,16 @@ function clientConfig(
         const exportEntries = Object.entries(cssExports ?? {})
           .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         for (const [local, exp] of exportEntries) classMap[local] = exp.name
-        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references), classMap)
+        styles.set(virtualId, compiledClientStyle(id, packageDir, fileId,
+          stylesheetSource(code.toString(), stylesheetAssets.references, 'context.asset')))
+        return { code: `export default ${JSON.stringify(classMap)};`, moduleSideEffects: 'no-treeshake' }
       },
     }, {
       name: 'dsh-css-text-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith(`.css${INLINE_CSS_QUERY}`)) return null
         const stylesheet = source.slice(0, -INLINE_CSS_QUERY.length)
-        const abs = importer !== undefined ? sourceAssetPath(stylesheet, importer) : stylesheet
+        const abs = resolveStylesheet(stylesheet, importer)
         return INLINE_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
       },
       async load(virtualId: string) {
@@ -904,14 +1104,19 @@ function clientConfig(
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
         const stylesheetAssets = assets.urlRewrite(this, fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        const { code } = transform({
+          filename: fileId,
+          code: source,
+          minify: true,
+          ...stylesheetAssets.options,
+        })
         return `export default ${stylesheetSource(code.toString(), stylesheetAssets.references)};`
       },
     }, {
       name: 'dsh-css-global-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith('.css') || source.endsWith('.module.css')) return null
-        const abs = importer !== undefined ? sourceAssetPath(source, importer) : source
+        const abs = resolveStylesheet(source, importer)
         return GLOBAL_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
       },
       async load(virtualId: string) {
@@ -921,7 +1126,9 @@ function clientConfig(
         const source = await readFile(fileId)
         const stylesheetAssets = assets.urlRewrite(this, fileId)
         const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
-        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references))
+        styles.set(virtualId, compiledClientStyle(id, packageDir, fileId,
+          stylesheetSource(code.toString(), stylesheetAssets.references, 'context.asset')))
+        return { code: 'export {};', moduleSideEffects: 'no-treeshake' }
       },
     }, assets.plugin],
     outputOptions: {
@@ -943,7 +1150,7 @@ function clientConfig(
         const prefix = clientBanner?.(chunk.fileName)
         return prefix === undefined ? '' : `${prefix}\n`
       },
-      footer: 'return module.exports; } });',
+      footer: `return module.exports; }${styleMarker} });`,
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },
   }

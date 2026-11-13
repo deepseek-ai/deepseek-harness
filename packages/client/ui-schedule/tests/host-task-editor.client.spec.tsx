@@ -14,12 +14,13 @@ import { createEditorStore } from '../src/client/editor-store.ts'
 import type { CatalogSnapshot } from '../src/client/catalog-source.ts'
 import { rruleFromDraft, timingFromRecord } from '../src/client/editor-timing.ts'
 import { createAtScheduleRecord, createDailyScheduleRecord, createRRuleScheduleRecord, createWeeklyScheduleRecord } from '../../../schedule/schedule/src/domain.ts'
-import { ScheduleId as createScheduleId } from '../../../schedule/schedule/src/domain.ts'
+import type { ScheduleId as createScheduleId } from '../../../schedule/schedule/src/types.ts'
 import { draftTarget, reapplyTaskDraft, taskDraft, taskDraftIssue, taskDraftPatch } from '../src/client/TaskEditorFields.tsx'
 import { formatAvailableAt, formatScheduleFrequency, orderScheduleRecords, zoneLabel, zoneName } from '../src/client/schedule-format.ts'
 import { en, zh, ja, es, fr, de, ru, pt } from '../src/client/task-manager-locales.ts'
 import { pinSystemZone } from './zone-fixture.ts'
 import css from '../src/client/TaskManagerPage.module.css'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const targetSession = 'existing-session' as SessionId
 const task: ScheduleCatalogEntry = { kind: 'rrule',
@@ -429,7 +430,7 @@ describe('Host task editor on the existing manager', () => {
     vi.setSystemTime('2026-10-14T08:07:30.000Z')
     await act(async () => { fireEvent.click(within(modal).getByRole('button', { name: en['host.create'] })) })
     const request = vi.mocked(h.props.onCreateTask).mock.calls[0]![0]
-    expect(createRRuleScheduleRecord(createScheduleId('saved-interval'), request.title, request.prompt, rruleOf(request.timing), Date.now()).scheduledAt).toBe(next)
+    expect(createRRuleScheduleRecord(brandString<createScheduleId>('saved-interval'), request.title, request.prompt, rruleOf(request.timing), Date.now()).scheduledAt).toBe(next)
   })
 
   it('preserves the linked conversation and recurrence when editing an existing task', async () => {
@@ -504,7 +505,7 @@ describe('Host task editor on the existing manager', () => {
     const request = vi.mocked(h.props.hostActions.edit).mock.calls[0]![0]
     if (request.action !== 'update') throw new Error('expected a timing update')
     expect(Object.keys(request.patch)).toEqual(['timing'])
-    expect(createRRuleScheduleRecord(createScheduleId('edited-interval'), task.title, task.prompt, rruleOf(request.patch.timing), Date.now()).scheduledAt)
+    expect(createRRuleScheduleRecord(brandString<createScheduleId>('edited-interval'), task.title, task.prompt, rruleOf(request.patch.timing), Date.now()).scheduledAt)
       .toBe('2026-10-14T08:12:00.000Z')
   })
 
@@ -1154,14 +1155,16 @@ describe('rule editing', () => {
   ])('saves a weekday edit with a real first occurrence on the $zone spring transition', ({ zone, now, next }) => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse(now))
     const { rrule: _rrule, kind: _kind, ...common } = task
-    const record: ScheduleCatalogEntry = { ...common, ...createWeeklyScheduleRecord(createScheduleId(task.id), task.prompt,
+    const record: ScheduleCatalogEntry = { ...common, ...createWeeklyScheduleRecord(brandString<createScheduleId>(task.id), task.prompt,
       { time: '02:30:00', time_zone: zone, weekdays: [5] }, Date.now(), task.title) }
     const draft = { ...taskDraft(record), weekdays: [1, 5] }
     const changes = taskDraftPatch(draft, record, true)
     expect(taskDraftIssue(draft, changes)).toBeUndefined()
     expect(changes.timing?.kind).toBe('rrule')
     if (changes.timing?.kind !== 'rrule') throw new Error('expected a guided rule')
-    expect(createRRuleScheduleRecord(createScheduleId(task.id), task.title, task.prompt, changes.timing.rrule, Date.now()).scheduledAt)
+    expect(createRRuleScheduleRecord(
+      brandString<createScheduleId>(task.id), task.title, task.prompt, changes.timing.rrule, Date.now(),
+    ).scheduledAt)
       .toBe(next)
   })
 
@@ -1173,14 +1176,16 @@ describe('rule editing', () => {
   ] as const)('keeps the current $frequency period when a clock falls in a gap', ({ frequency, interval, next }) => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-03-08T16:00:00.000Z'))
     const { rrule: _rrule, kind: _kind, ...common } = task
-    const record: ScheduleCatalogEntry = { ...common, ...createDailyScheduleRecord(createScheduleId(task.id), task.prompt,
+    const record: ScheduleCatalogEntry = { ...common, ...createDailyScheduleRecord(brandString<createScheduleId>(task.id), task.prompt,
       { time: '09:00:00', time_zone: 'America/New_York' }, Date.now(), task.title) }
     const draft = { ...taskDraft(record), frequency, interval, dailyTime: '02:30', start: '2026-03-09T02:30:00',
       weekdays: [1, 5], monthDay: 9 }
     const changes = taskDraftPatch(draft, record, true)
     expect(taskDraftIssue(draft, changes)).toBeUndefined()
     if (changes.timing?.kind !== 'rrule') throw new Error('expected a guided rule')
-    expect(createRRuleScheduleRecord(createScheduleId(task.id), task.title, task.prompt, changes.timing.rrule, Date.now()).scheduledAt)
+    expect(createRRuleScheduleRecord(
+      brandString<createScheduleId>(task.id), task.title, task.prompt, changes.timing.rrule, Date.now(),
+    ).scheduledAt)
       .toBe(next)
   })
 
@@ -1199,7 +1204,7 @@ describe('rule editing', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse(now))
     const { rrule: _rrule, kind: _kind, ...common } = task
     const record: ScheduleCatalogEntry = { ...common,
-      ...createAtScheduleRecord(createScheduleId(task.id), task.prompt, at, Date.now(), task.title) }
+      ...createAtScheduleRecord(brandString<createScheduleId>(task.id), task.prompt, at, Date.now(), task.title) }
     const initial = taskDraft(record)
     expect(initial).toMatchObject({ frequency: 'once', timeZone: zone, start })
     expect(taskDraftPatch({ ...initial, title: 'Renamed' }, record)).toEqual({ title: 'Renamed' })
@@ -1207,7 +1212,9 @@ describe('rule editing', () => {
     const changes = taskDraftPatch(draft, record, true)
     if (changes.timing?.kind !== 'rrule') throw new Error('expected a guided rule')
     systemZone.mockRestore()
-    expect(createRRuleScheduleRecord(createScheduleId(task.id), task.title, task.prompt, changes.timing.rrule, Date.now()).scheduledAt)
+    expect(createRRuleScheduleRecord(
+      brandString<createScheduleId>(task.id), task.title, task.prompt, changes.timing.rrule, Date.now(),
+    ).scheduledAt)
       .toBe(next)
   })
 
@@ -1615,6 +1622,38 @@ describe('time zone menu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
     await save(detail)
     expectSavedRule(h, 'DTSTART;TZID=Europe/Bucharest:20990101T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE')
+  })
+
+  it("keeps the row's own zone when a search names several zones of the row or none alone", () => {
+    pinSystemZone('UTC')
+    vi.mocked(Intl.supportedValuesOf).mockReturnValue(['Europe/Athens', 'Europe/Bucharest'])
+    // The stored zone makes Bucharest the shared row's own zone, while Athens is the row's first zone.
+    mount([{ ...task, rrule: task.rrule.replace('TZID=UTC', 'TZID=Europe/Bucharest') }])
+    const detail = openEdit()
+    // `eur` names both zones; `athens bucharest` names neither zone with both terms.
+    for (const query of ['eur', 'athens bucharest']) {
+      openZones(detail)
+      searchZones(query)
+      fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
+      expect((JSON.parse(localStorage.getItem(RECENT)!) as string[])[0]).toBe('Europe/Bucharest')
+    }
+  })
+
+  it('saves the zone a fuzzy or full-width search names inside a shared row', async () => {
+    pinSystemZone('UTC')
+    vi.mocked(Intl.supportedValuesOf).mockReturnValue(['Europe/Athens', 'Europe/Bucharest'])
+    expect(zoneName('Europe/Bucharest', 'UTC', t)).toContain('European')
+    // The last query's second term matches only the shared label, not a zone id.
+    for (const query of ['bchrst', 'ＢＵＣＨＡＲＥＳＴ', 'bucharest european']) {
+      const h = mount()
+      const detail = openEdit()
+      openZones(detail)
+      searchZones(query)
+      fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
+      await save(detail)
+      expectSavedRule(h, 'DTSTART;TZID=Europe/Bucharest:20990101T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE')
+      cleanup()
+    }
   })
 
   it('offers the system zone alone without a separator and says when no zone matches', () => {

@@ -65,7 +65,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Observable outcomes and failures
 
-A foreground send returns the terminal's new output plus `wait: <reason>` and the session status; `session_exit` means the top-level shell exited, while `inferred_idle` or `timeout` never proves the foreground command exited. Opening a session with an unregistered backend type fails. Results larger than `maxResultBytes` are truncated at a UTF-8 boundary with a marker.
+A foreground send returns the terminal's new output plus `wait: <reason>` and the session status; `session_exit` means the top-level shell exited, while `inferred_idle` or `timeout` never proves the foreground command exited. Opening a session with an unregistered backend type fails. Failed calls carry a structured error identity: an empty `type` or `sessionId` is a `ToolArgsError` (`INVALID_ARGS`), a call without a calling Agent or a background send without the jobs service is a `ToolContextUnavailableError`, a background send with `enableRunInBackground: false` is a `ToolArgsError` (`INVALID_ARGS`) because the schema does not offer `run_in_background`, a cancelled foreground send is an `AbortError`, and terminal service failures keep their `TerminalError` code. Results larger than `maxResultBytes` are truncated at a UTF-8 boundary with a marker.
 
 -----
 

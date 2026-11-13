@@ -14,10 +14,10 @@ vi.mock('@deepseek-ai/dsh-cua', async importOriginal => ({
 }))
 vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: vi.fn() }))
 
-it.each([false, true])('forwards systemPointerHover=%s and native limits to each channel', async (systemPointerHover) => {
+it('forwards native limits to each channel', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  const config = Config({ helperPath: resolve('fixture-helper'), systemPointerHover })
+  const config = Config({ helperPath: resolve('fixture-helper') })
   const channel: NativeChannel = {
     stdin: new PassThrough(), stdout: new PassThrough(), done: Promise.resolve(),
     close() {}, waitForClose: async () => {},
@@ -32,5 +32,5 @@ it.each([false, true])('forwards systemPointerHover=%s and native limits to each
   const owner = { subprocess: { spawn: vi.fn() } }
   const native = { ...config, helperPath: resolve('fixture-helper'), cwd: process.cwd() }
   expect(backend.createChannel(owner, native)).toBe(channel)
-  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native, systemPointerHover)
+  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native)
 })

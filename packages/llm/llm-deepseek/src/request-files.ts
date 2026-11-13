@@ -2,7 +2,7 @@
 
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type { DeepSeekFileStore, DeepSeekFileConnection, DeepSeekFilePolicy } from './file-store.ts'
+import { FILES_API_TIMEOUT, type DeepSeekFileStore, type DeepSeekFileConnection, type DeepSeekFilePolicy } from './file-store.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 
 /** Position of an image occurrence in the request's conversation messages. */
@@ -114,7 +114,7 @@ export class RequestFiles {
    * @returns the reusable provider id.
    */
   async resolve(version: RequestImageAttachment, location: ImageWireLocation): Promise<DeepSeekFileId> {
-    using limit = deadline(this.signal, this.timeoutMs, 'DEEPSEEK_FILES_API_TIMEOUT')
+    using limit = deadline(this.signal, this.timeoutMs, FILES_API_TIMEOUT)
     let resolved: Awaited<ReturnType<DeepSeekFileStore['ensureUploaded']>>
     try {
       resolved = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal)

@@ -15,8 +15,7 @@ import type { ToolFileInjected } from '../tool/file-menu.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Keyed Tool view dispatched by wire name, including custom tools.
-     * Register with `key: '<tool name>'`; a typo never renders.
+     * Key by wire name, including custom tools. Use `key: '<tool name>'`; a typo never renders.
      * Occupied keys replace the view; unclaimed keys use the generic row. Owner
      * phase data includes `name` and lazy `args`; preparing arguments may be incomplete.
      */

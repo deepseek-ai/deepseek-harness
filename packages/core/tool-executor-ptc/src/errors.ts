@@ -8,37 +8,47 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 export class ToolCallLimitExceededError extends Error {
   /**
    * Describe the rejected call and how to correct the program.
-   * @param limit - Timeout-derived maximum tool-call attempts for one run_code invocation.
+   * @param limit - Timeout-derived maximum tool-call attempts for one program.
    * @param callNumber - One-based attempt rejected without invoking the tool.
-   * @param callsPerMinute - Attempts granted per minute of run_code timeout.
+   * @param callsPerMinute - Attempts granted per minute of program timeout.
+   * @param toolName - Program tool name.
    */
-  constructor(limit: number, callNumber: number, callsPerMinute: number) {
-    super(`run_code exceeded its limit of ${limit} tool calls (${callsPerMinute} per minute of its timeout); `
-      + `call ${callNumber} was not dispatched. The run_code program may contain an infinite loop. `
-      + 'Check loop termination or split the work into smaller run_code calls.')
+  constructor(limit: number, callNumber: number, callsPerMinute: number, toolName: string) {
+    super(`${toolName} exceeded its limit of ${limit} tool calls (${callsPerMinute} per minute of its timeout); `
+      + `call ${callNumber} was not dispatched. The ${toolName} program may contain an infinite loop. `
+      + `Check loop termination or split the work into smaller ${toolName} calls.`)
     this.name = 'ToolCallLimitExceededError'
   }
 }
 
 /**
- * Structured error codes carried by {@link CodeRunFailedError}: output delivery
- * failures use CODE_OUTPUT_INVALID or CODE_OUTPUT_LIMIT; every other execution
- * failure uses CODE_RUN_FAILED.
+ * Every {@link CodeRunFailedError} code:
+ * - `CODE_RUN_FAILED`: the program run failed, or the runtime rejected it without its own error code.
+ * - `CODE_RUN_UNAVAILABLE`: the executor was disposed before the run started.
+ * - `CODE_OUTPUT_LIMIT`: output exceeded its budget; execution may be partial and earlier actions remain applied.
  */
-export type CodeRunFailureCode = 'CODE_RUN_FAILED' | 'CODE_OUTPUT_INVALID' | 'CODE_OUTPUT_LIMIT'
+export const CODE_RUN_ERROR_CODES = ['CODE_RUN_FAILED', 'CODE_RUN_UNAVAILABLE', 'CODE_OUTPUT_LIMIT'] as const
+
+/** One {@link CodeRunFailedError} code. */
+export type CodeRunErrorCode = typeof CODE_RUN_ERROR_CODES[number]
 
 /**
- * Failed program execution or output delivery. Earlier effects are not rolled
- * back. Caller cancellation uses AbortError / ABORTED instead.
+ * Thrown by `run_code` when the program run itself failed — a program
+ * exception, a budget expiry, a runtime-local abort, or substrate death — or
+ * could not start, or output exceeded its budget. Caller cancellation uses the shared `AbortError` /
+ * `ABORTED` tool outcome. Extends {@link HarnessError} with a code from
+ * {@link CODE_RUN_ERROR_CODES}; the registry's execution pipeline converts it
+ * into a structured `isError` result with the failure kind. Captured text and
+ * images accompany the original diagnostic; outer result replacements remain
+ * authoritative.
  */
 export class CodeRunFailedError extends HarnessError {
-  /**
-   * @param message - Model-facing diagnostic, including captured logs and recovery guidance.
-   * @param code - Failure classification; defaults to CODE_RUN_FAILED.
-   */
-  constructor(message: string, code: CodeRunFailureCode = 'CODE_RUN_FAILED') {
-    super(message, code)
+  override readonly code: CodeRunErrorCode
+
+  constructor(message: string, code: CodeRunErrorCode = 'CODE_RUN_FAILED', options?: ErrorOptions) {
+    super(message, code, options)
     this.name = 'CodeRunFailedError'
+    this.code = code
   }
 }
 

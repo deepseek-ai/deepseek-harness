@@ -31,7 +31,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-browser-use'
 ```
 
-服务没有配置。提供方 插件注入 `browserUse` 并调用 `ctx.browserUse.register(BrowserUseProviderName(name))`；品牌类型从 `@deepseek-ai/dsh-browser-use/brand` 导出。返回的 effect 清理器释放该注册。
+服务没有配置。提供方插件注入 `browserUse` 并调用 `ctx.browserUse.register(brandString<BrowserUseProviderName>(name))`，其中 `brandString` 来自 `@deepseek-ai/dsh-brand`，类型来自 `@deepseek-ai/dsh-browser-use/types`。返回的 effect 清理器释放该注册。
 
 提供方 在释放注册前停止接收工具调用、关闭资源并等待自己拥有的工作结束。`ctx.browserUse.providerName` 在释放之前持续报告已注册名称。
 

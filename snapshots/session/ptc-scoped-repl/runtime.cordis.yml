@@ -1,0 +1,10 @@
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory
+    replScoped: true
+
+# The live recording and its replay both use the DeepSeek flash model.
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-flash

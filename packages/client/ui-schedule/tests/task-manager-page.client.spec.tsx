@@ -706,6 +706,11 @@ describe('Task manager catalog', () => {
     expect(taskNames()).toEqual([])
     fireEvent.change(input, { target: { value: 'numbers' } })
     expect(taskNames()).toEqual(['Quarterly report'])
+    // Names match fuzzily; the long instruction matches only contiguous text.
+    fireEvent.change(input, { target: { value: 'qrtly' } })
+    expect(taskNames()).toEqual(['Quarterly report'])
+    fireEvent.change(input, { target: { value: 'sndnum' } })
+    expect(taskNames()).toEqual([])
   })
 
   it('combines search with the status filter and keeps both behind the empty state action', () => {

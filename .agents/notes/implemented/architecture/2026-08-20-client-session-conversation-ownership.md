@@ -57,7 +57,7 @@ Each standard hook belongs to the `ui-*` package closest to its data semantics.
 | `useSessions` | `client/ui-session` | Session Controller global list |
 | `useSession` | `client/ui-session` | Bound Session snapshot |
 | `useProjection` | `client/ui-session` | Bound Session keyed projection |
-| `useSessionStatus` | `client/ui-session` | Running, effective pending request, and unread completion |
+| `useSessionStatus` | `client/ui-session-status` | Running, effective pending request, and unread completion |
 | `useSessionRetainInfo` | `client/ui-session` | Read-only Controller reference-source counts |
 | `useWorkspaces` | `client/ui-workspace` | Workspace Controller list |
 | `useConversation` | `client/ui-conversation` | Conversation binding snapshot |
@@ -80,7 +80,8 @@ Adding a target does not add a branch to the renderer or Session Controller. The
 | --- | --- | --- |
 | `api/session-controller/client` | Session objects, catalog, references, source counts, commands, projections, event windows, and Agent Contexts | Navigation, completion reminders, Conversation targets, React, Slots, Workspace |
 | `api/workspace-controller/client` | Workspace objects, ordering, archive state, commands, and snapshots | React, Session navigation policy, directory UI |
-| `client/ui-session` | Explicit Session scope, standard sources, `SessionProvider`, and unified UI status | Session transport, reference ownership, Conversation assembly, Approval/Question results |
+| `client/ui-session` | Explicit Session scope, standard sources, `SessionProvider`, and effective pending interactions | Session transport, reference ownership, Conversation assembly, Approval/Question results, unified UI status |
+| `client/ui-session-status` | Unified UI status: running state, effective pending request, and completion reminders; Host reading records and their Client copy; main-view reading acknowledgement | Pending-interaction registration, Session transport, React |
 | `client/ui-workspace` | Workspace hook, browser UI, main-area reference, and cross-Controller navigation policy | Workspace transport, copies of Session data |
 | `client/ui-conversation` | Conversation core, registries, bindings, shell, input, composer, queue, and View navigation | Session transport, Chat/Trajectory snapshots |
 | `client/ui-chat` | Chat target, Node definitions, renderers, selection, details, and locale | Session lifecycle, generic View navigation, Trajectory, historical-image cache |
@@ -120,7 +121,7 @@ Session data reaches the UI through this path:
 
 Workspace data enters the Workspace Controller from `ctx.remote.workspace`, then `ui-workspace` exposes it as `useWorkspaces`. `ui-workspace` reads explicit targets for cross-domain navigation and owns the main-area reference without making it a default business Context.
 
-Approval and Question arrive from the Host waterfall through `ctx.remote.$on` at their respective UI owners. Each owner publishes a Pending object; `ui-session.sessionStatus` supplies the same effective object to Workspace indicators and Conversation composer selection.
+Approval and Question arrive from the Host waterfall through `ctx.remote.$on` at their respective UI owners. Each owner publishes a Pending object through `ui-session`; `ctx.uiSession.sessionStatus` from `ui-session-status` supplies the same effective object to Workspace indicators and Conversation composer selection.
 
 ## Session Controller Client
 
@@ -178,9 +179,9 @@ This cleanup does not require the Session Controller to know the roster of upper
 - supplies `SessionProvider` rendering semantics;
 - supplies built-in Session snapshot, projection, and sessionId sources;
 - accepts Session-scoped source contributions from other domain packages;
-- aggregates domain-owned pending interactions with running and completion-reminder facts in `sessionStatus`.
+- selects each Session's effective domain-owned pending interaction and publishes it read-only as `pendingInteractions`.
 
-It does not own Session transport, event folding, Conversation targets, or concrete business results.
+It does not own Session transport, event folding, Conversation targets, or concrete business results. `client/ui-session-status` combines the effective pending interactions with running and completion-reminder facts in the `uiSession.sessionStatus` service, read as `ctx.uiSession.sessionStatus`.
 
 ### Standard source registration
 
@@ -221,7 +222,7 @@ Concurrent objects with the same key are rejected; replacement requests use a ne
 
 `ui-session` selects each Session's effective object using domain precedence. Higher precedence wins; at equal precedence, the later valid object in traversal order wins.
 
-The pending aggregate is private to `ui-session`; its effective request appears unchanged as `sessionStatus.getSnapshot().get(id)?.pendingInteraction`. `useSessionStatus` is the public UI read face.
+The pending aggregate is private to `ui-session`; `pendingInteractions` exposes each Session's effective request read-only, and the same object appears as `ctx.uiSession.sessionStatus.getSnapshot().get(id)?.pendingInteraction`. `useSessionStatus` is the public UI read face.
 
 Session navigation state and composer takeover read the same effective object. They do not maintain separate status maps or takeover rosters.
 

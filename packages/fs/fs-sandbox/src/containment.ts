@@ -8,6 +8,7 @@
 import type { BigIntStats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { dirname, sep } from 'node:path'
+import { fsErrorFromErrno } from '@deepseek-ai/dsh-fs'
 
 const MISSING_CODES: ReadonlySet<NodeJS.ErrnoException['code']> = new Set(['ENOENT', 'ENOTDIR'])
 
@@ -32,10 +33,8 @@ async function statIfPresent(path: string): Promise<BigIntStats | undefined> {
   try {
     return await stat(path, { bigint: true })
   } catch (error: unknown) {
-    /* v8 ignore else -- a non-missing stat failure requires a host permission or I/O fault after resolve reached this ancestor. */
     if (isMissing(error)) return undefined
-    /* v8 ignore next -- requires a host permission or I/O fault after resolve already reached this ancestor. */
-    throw error
+    throw fsErrorFromErrno('stat', path, error)
   }
 }
 
@@ -54,6 +53,7 @@ function sameIdentity(left: BigIntStats, right: BigIntStats): boolean {
  * @param caseSensitive - whether lexical comparison preserves case; defaults
  *   to the host filesystem convention used by supported platforms.
  * @returns whether the target is the root or a descendant of it.
+ * @throws FsError when an ancestor or the root cannot be inspected, coded by the Node errno.
  */
 export async function isPathUnder(
   path: string,

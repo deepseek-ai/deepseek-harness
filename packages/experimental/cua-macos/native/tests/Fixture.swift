@@ -37,6 +37,7 @@ class DragPad: NSView {
     }
 }
 final class AlternateHoverPad: DragPad {
+    private(set) var defaultUIRequests = 0
     override func isAccessibilityElement() -> Bool { true }
     override func accessibilityRole() -> NSAccessibility.Role? { .group }
     override func accessibilityLabel() -> String? { "Alternate hover controls" }
@@ -44,6 +45,7 @@ final class AlternateHoverPad: DragPad {
         hoverButton.isHidden = false; changed?(); return true
     }
     override func accessibilityPerformShowDefaultUI() -> Bool {
+        defaultUIRequests += 1
         hoverButton.isHidden = true; changed?(); return true
     }
 }
@@ -130,7 +132,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         content.addSubview(scroll)
-        second = NSWindow(contentRect: NSRect(x: 560, y: 100, width: 320, height: 180), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        second = NSWindow(contentRect: NSRect(x: 560, y: 100, width: 320, height: 180), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         second.title = "DSH CUA secondary fixture"
         second.isReleasedWhenClosed = false
         second.animationBehavior = .none
@@ -209,12 +211,13 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             ? CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(overlayID)) as? [[String: Any]] : nil
         let overlayOnScreen = overlayRows?.contains { ($0[kCGWindowIsOnscreen as String] as? Bool) == true } ?? false
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
-            "rowCount": rowCount, "primaryWindowId": window.windowNumber,
+            "rowCount": rowCount, "primaryWindowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
+            "defaultUIRequests": (dragPad as? AlternateHoverPad)?.defaultUIRequests ?? 0,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
-            "overlayMode": overlayMode, "overlayWindowId": inputOverlay?.windowNumber ?? 0,
-            "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow,
+            "overlayMode": overlayMode, "overlayWindowId": overlayID > 0 ? String(overlayID) as Any : NSNull(),
+            "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow > 0 ? String(hoverHitWindow) as Any : NSNull(),
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],
