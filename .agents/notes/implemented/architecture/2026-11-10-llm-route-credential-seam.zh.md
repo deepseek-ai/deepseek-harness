@@ -14,7 +14,7 @@ Status: implemented
 
 `@deepseek-ai/dsh-llm-deepseek` 不读取任何凭据。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回授权或 `undefined`；`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`；`credential` 声明发布的种类、引用和存在性检查。列表缓存以端点和凭据请求头的哈希划分作用域。
 
-路由插件拥有凭据。`llm-deepseek-api-key` 通过 `@deepseek-ai/dsh-credentials` 新增的 `resolveCredentialRef` 和 `credentialRefConfigured` 读取密钥，二者把已挂载的凭据服务视为权威，仅在没有该服务时读取启动环境；它发布种类 `api-key` 并附带 `apiKeyEnv` 引用。`llm-deepseek-account` 读取 `ctx.deepseekAccount.resolveRequestCredential(endpoint)`，把 HTTP 401 映射为 `ACCOUNT_TOKEN_INVALID`、配额失败映射为 `ACCOUNT_QUOTA`，没有凭据时以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，发布种类 `account`，并拥有退登策略：在 `deepseek-account/signed-out` 时取消其运行中的 Agent，并向账号服务注册运行中任务报告。
+路由插件拥有凭据。`llm-deepseek-api-key` 通过 `@deepseek-ai/dsh-credentials` 新增的 `resolveCredentialRef` 和 `credentialRefConfigured` 读取密钥，二者把已挂载的凭据服务视为权威，仅在没有该服务时读取启动环境；它发布种类 `api-key` 并附带 `apiKeyEnv` 引用，且只对其基础地址所在 origin 下的目的地释放密钥。`llm-deepseek-account` 读取 `ctx.deepseekAccount.resolveRequestCredential(endpoint)`，把 HTTP 401 映射为 `ACCOUNT_TOKEN_INVALID`、配额失败映射为 `ACCOUNT_QUOTA`，没有凭据时以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，发布种类 `account`，并拥有退登策略：在 `deepseek-account/signed-out` 时取消其运行中的 Agent，并向账号服务注册运行中任务报告。
 
 `@deepseek-ai/dsh-deepseek-account` 释放请求凭据。`resolveRequestCredential(url)` 返回 `x-dsh-auth-token` 请求头、裸 token 和 `reject()`；`reject()` 仅在授权仍一致时删除它并隔离存储失败。`registerRunningTaskReport(report)` 为 `hasRunningAccountTasks()` 提供答案。该服务不检查任何 Agent，也不依赖 `dsh-agent` 或 `dsh-llm`。包以不变的名字位于 `packages/account/` 组。
 

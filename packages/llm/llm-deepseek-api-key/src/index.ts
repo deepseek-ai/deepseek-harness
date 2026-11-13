@@ -41,7 +41,17 @@ export function apply(ctx: Context, config: Config): void {
     const value = await resolveCredentialRef(ctx, connection.apiKeyEnv)
     return value === undefined ? undefined : assertUsableApiKey(value, settingsNs, connection.apiKeyEnv)
   }
-  const resolveAuth = async (connection: ResolvedDeepSeekOptions): Promise<DeepSeekRequestAuth | undefined> => {
+  /**
+   * Whether `endpoint` belongs to the deployment this route sends its key to: the origin of the route's base URL,
+   * without credentials embedded in the URL.
+   */
+  const servedByRoute = (connection: ResolvedDeepSeekOptions, endpoint: string): boolean => {
+    const destination = new URL(endpoint)
+    return destination.origin === new URL(connection.baseURL).origin && destination.username === '' && destination.password === ''
+  }
+  const resolveAuth = async (connection: ResolvedDeepSeekOptions, endpoint: string): Promise<DeepSeekRequestAuth | undefined> => {
+    // The store is read only for a destination this route serves, as the presence check below.
+    if (!servedByRoute(connection, endpoint)) return undefined
     const key = await resolveApiKey(connection)
     return key === undefined ? undefined : { headers: { 'x-api-key': key }, value: key }
   }
@@ -52,7 +62,7 @@ export function apply(ctx: Context, config: Config): void {
   )
   const listings = createModelListingCache(ctx, name, PROVIDER, {
     settings: () => options().listing,
-    credential: async () => (await resolveAuth(options()))?.headers,
+    credential: async url => (await resolveAuth(options(), url))?.headers,
   })
   let reportedListing: ModelListing | undefined
   /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
@@ -98,7 +108,8 @@ export function apply(ctx: Context, config: Config): void {
     credential: {
       kind: 'api-key',
       reference: connection => connection.apiKeyEnv,
-      configured: connection => credentialRefConfigured(ctx, connection.apiKeyEnv),
+      configured: async (connection, endpoint) =>
+        servedByRoute(connection, endpoint) && await credentialRefConfigured(ctx, connection.apiKeyEnv),
     },
     admit: (connection, model) => { refuseListedModel(model, connection.refusals.get(model)) },
     discoverModels: async (provider) => {

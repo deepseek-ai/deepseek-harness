@@ -94,3 +94,31 @@ it('publishes the route API key for its consumers from the credential planes it 
     vi.unstubAllEnvs()
   }
 })
+
+it.each([
+  'https://other-origin.example/v1/tools/search',
+  'http://route.deepseek.test/v1/tools/search',
+  'https://route.deepseek.test:8443/v1/tools/search',
+  'https://user@route.deepseek.test/v1/tools/search',
+  'https://:secret@route.deepseek.test/v1/tools/search',
+])('releases no key for %s, a destination outside the origin of its base URL, without reading the credential store', async (endpoint) => {
+  const resolve = vi.fn(async () => ({ value: 'stored-key' }))
+  const describe = vi.fn(async () => ({ configured: true }))
+  const ctx = new Context()
+  try {
+    ctx.provide('credentials', { resolve, describe } as never)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
+    const credential = ctx.llm.routeCredential('deepseek-official')
+    await expect(credential!.configured(endpoint)).resolves.toBe(false)
+    await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
+    expect(resolve).not.toHaveBeenCalled()
+    expect(describe).not.toHaveBeenCalled()
+    // The same store answers for a destination under the route's origin.
+    const served = 'https://route.deepseek.test/v1/tools/search'
+    await expect(credential!.configured(served)).resolves.toBe(true)
+    await expect(credential!.resolve(served)).resolves.toEqual({ headers: { 'x-api-key': 'stored-key' }, value: 'stored-key' })
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
