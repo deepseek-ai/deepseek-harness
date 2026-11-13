@@ -228,8 +228,12 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.change(search, { target: { value: '运行会话命令' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
     expect(screen.getByRole('button', { name: '会话执行器, include:preset-runner, 已启用' })).toBeTruthy()
+    // The Chinese page still finds the row by its English description.
     fireEvent.change(search, { target: { value: 'Run per session' } })
+    expect(screen.getByRole('button', { name: '会话执行器, include:preset-runner, 已启用' })).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'no such plugin' } })
     expect(screen.getByText(zh.emptySearch)).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'Run per session' } })
     locale.setLocale('en')
     view.rerender(<PluginInventorySettingsTab {...pageProps} />)
     expect(screen.getByRole('button', { name: 'Session runner, include:preset-runner, Enabled' })).toBeTruthy()
@@ -288,7 +292,9 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
     locale.setLocale('en')
     view.rerender(<PluginInventorySettingsTab {...pageProps} />)
-    expect(screen.getByText(en.emptySearch)).toBeTruthy()
+    // The English page still finds the row by its Chinese description, shown in English.
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.queryByText('中文主题说明。')).toBeNull()
     fireEvent.change(screen.getByRole('searchbox', { name: en.search }), { target: { value: '@acme/dsh-theme/client' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
     expect(screen.getByRole('button', { name: '@acme/dsh-theme, include:theme, Enabled' }).getAttribute('aria-describedby')).toBeNull()

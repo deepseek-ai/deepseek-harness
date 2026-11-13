@@ -134,7 +134,6 @@ export function apply(ctx: ClientContext): void {
       available: session => sessions.subagentAddress(session.sessionId) === undefined,
       ui: {
         kind: 'popupSelect',
-        searchMode: 'fuzzy-label',
         searchLabels: () => ({
           placeholder: t('search.placeholder'),
           empty: t('empty.models'),
