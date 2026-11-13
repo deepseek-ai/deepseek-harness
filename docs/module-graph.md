@@ -318,6 +318,7 @@ flowchart TD
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
     pkg_skill_badge["skill-badge"]
     pkg_terminal_panel["terminal-panel"]
+    pkg_timeline["timeline"]
     pkg_tool_ralph["tool-ralph"]
     pkg_tool_session_query["tool-session-query"]
     pkg_tool_terminal["tool-terminal"]
@@ -1002,6 +1003,10 @@ flowchart TD
   pkg_terminal_panel --> pkg_output_retention
   pkg_terminal_panel --> pkg_terminal
   pkg_terminal_panel --> pkg_tools
+  pkg_timeline --> pkg_error
+  pkg_timeline --> pkg_scope
+  pkg_timeline --> pkg_session
+  pkg_timeline --> pkg_tools
   pkg_tool_terminal --> pkg_agent
   pkg_tool_terminal --> pkg_jobs
   pkg_tool_terminal --> pkg_llm
@@ -1863,6 +1868,7 @@ flowchart TD
 | [`hooks-codex`](../packages/experimental/hooks-codex) | `experimental` | [`agent`](../packages/core/agent), [`hook-protocol`](../packages/experimental/hook-protocol), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`session-title-all-prompts-llm`](../packages/experimental/session-title-all-prompts-llm) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`session-title-llm`](../packages/session/session-title-llm) |
 | [`terminal-panel`](../packages/experimental/terminal-panel) | `experimental` | [`api-terminal-controller`](../packages/api/terminal-controller), [`output-retention`](../packages/util/output-retention), [`terminal`](../packages/terminal/terminal), [`tools`](../packages/core/tools) |
+| [`timeline`](../packages/experimental/timeline) | `experimental` | [`error`](../packages/util/error), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`tools`](../packages/core/tools) |
 | [`tool-terminal`](../packages/experimental/tool-terminal) | `experimental` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`system-prompt`](../packages/core/system-prompt), [`terminal`](../packages/terminal/terminal), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | `extensions` | [`agent`](../packages/core/agent), [`error`](../packages/util/error), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
 | [`message-feedback`](../packages/feedback/message-feedback) | `feedback` | [`command-feedback`](../packages/feedback/command-feedback), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`typert-protocol`](../packages/typert/protocol) |
