@@ -26,6 +26,7 @@
 - button "Branch into a new conversation"
 - text: {{clock}} Keep working until I stop you again. {{clock}}
 - button "Copy"
+- button "Context injection subagent-user-message Direct user message"
 - paragraph: partial
 - status: Deep diving
 - text: Deep diving for {{duration}} ···

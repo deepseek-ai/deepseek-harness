@@ -105,7 +105,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 服务入口：提供方注册表、启动与继续 API、生命周期事件 |
 | [`src/manager.ts`](src/manager.ts) | 统一管理启动、消息准入、冷恢复、运行归属、结算与释放 |
 | [`src/activation.ts`](src/activation.ts) | 执行期记录、容量槽、子级锁与本地输出捕获 |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | agent 消息、返回指引与结算通知 |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | agent 消息、真人消息归属、返回指引与结算通知 |
 | [`src/structured.ts`](src/structured.ts) | Activation 局部结构化捕获与保护 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |
@@ -169,6 +169,28 @@ kind: "package-reference"
 
 <a id="model-experience"></a>
 ## 模型体验
+
+### 用户直接发送的消息
+
+#### 模型看到什么
+
+本地子 agent 在每条浏览器用户发送的 Queue 或 Steer 消息前收到以下 user-role 提示，冷恢复后也一样。提示与原消息分别记录在 Session 中；排队编辑保留来源归属，用户的文本和图片保持不变。初始委派任务和 agent 之间的消息不会标记为真人消息。主 agent 不增加此提示。
+
+##### 真人消息来源提示
+
+```markdown
+<system-reminder>
+The following message was sent directly by the human user.
+</system-reminder>
+```
+
+#### Token 影响
+
+每条被消费的真人消息增加一条固定提示。待处理或已移除的输入不会增加提示。
+
+#### KV Cache 影响
+
+提示随新消费的消息追加；已有历史保持不变。
 
 ### 结算通知
 

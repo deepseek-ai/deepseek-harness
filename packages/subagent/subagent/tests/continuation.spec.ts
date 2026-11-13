@@ -1256,6 +1256,76 @@ describe('target-only Queue residency routing', () => {
 })
 
 describe('continuable human steering delivery', () => {
+  it.each(['queue', 'steer'] as const)('attributes cold %s input without relabeling delegated tasks or agent messages', async (delivery) => {
+    const { ctx, parent, adapter } = await setup([
+      textResponse('root answer'), textResponse('child answer'), textResponse('human answer'), textResponse('agent answer'),
+    ])
+    const rootMessage = createUserMessage({
+      content: message('root question'),
+      source: { kind: 'user', rpcId: 'root-question' as SubagentPromptRequestId },
+    })
+    parent.followup(rootMessage)
+    await parent.whenIdle()
+    parkParent(ctx, parent)
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await expect(started.result).resolves.toMatchObject({ stopReason: 'completed' })
+
+    const receipt = await humanPrompt(ctx, started.childId, 'human question', delivery)
+    await waitNoActivation(ctx, started.childId)
+    await ctx.subagents.sendMessage(parent, started.childId, message('agent question'), { signal: testSignal })
+    await waitNoActivation(ctx, started.childId)
+
+    expect(adapter.requests).toHaveLength(4)
+    for (const request of adapter.requests.slice(0, 2)) {
+      expect(request.messages.some(item => item.source?.kind === 'subagent-user-message')).toBe(false)
+    }
+    const messages = adapter.requests[2]!.messages
+    const index = messages.findIndex(item => item.id === receipt.messageId)
+    expect(index).toBeGreaterThan(0)
+    expect(messages[index - 1]).toMatchObject({
+      role: 'user',
+      source: { kind: 'subagent-user-message', form: 'notice' },
+      content: message('<system-reminder>\nThe following message was sent directly by the human user.\n</system-reminder>'),
+    })
+    expect(messages[index]).toMatchObject({ content: message('human question'), source: { kind: 'user' } })
+    expect(adapter.requests[3]!.messages.filter(item => item.source?.kind === 'subagent-user-message')).toHaveLength(1)
+    const stored = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    const persisted = stored.events.flatMap(event => event.type === 'user/message' ? [event.data] : [])
+    const persistedIndex = persisted.findIndex(item => item.id === receipt.messageId)
+    expect(persisted.slice(persistedIndex - 1, persistedIndex + 1)).toEqual(messages.slice(index - 1, index + 1))
+  })
+
+  it.each(['queue', 'steer'] as const)('attributes edited resident %s input only when consumed', async (delivery) => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('first'), gate: release.promise },
+      { chunks: textResponse('edited answer') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    parkParent(ctx, parent)
+    try {
+      const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+      const child = ctx.agents.get(started.childId)!
+      const receipt = await humanPrompt(ctx, started.childId, 'original question', delivery)
+      const pending = [...child.inbox.nextTurn, ...child.inbox.nextStep].find(item => item.id === receipt.messageId)!
+      expect(pending.content).toEqual(message('original question'))
+      expect(child.session.deriveMessages().some(item => item.source?.kind === 'subagent-user-message')).toBe(false)
+      child.inbox.replace(pending.id, { ...pending, content: message('edited question') })
+      release.resolve(undefined)
+      await waitNoActivation(ctx, started.childId)
+      const messages = adapter.requests[1]!.messages
+      const index = messages.findIndex(item => item.id === receipt.messageId)
+      expect(index).toBeGreaterThan(0)
+      expect(messages[index - 1]?.source?.kind).toBe('subagent-user-message')
+      expect(messages[index]?.content).toEqual(message('edited question'))
+      expect(messages.filter(item => item.source?.kind === 'subagent-user-message')).toHaveLength(1)
+    } finally {
+      release.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('places resident steering in nextStep with its durable identity and source', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
