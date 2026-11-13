@@ -277,7 +277,7 @@ def _runtime(
     # Raw JSONL permits an independent read at the compaction durability boundary.
     patch.write_text(
         "- id: session-persistence-jsonl\n  config:\n    root: " + json.dumps(str(logs))
-        + "\n    compression: none\n",
+        + "\n    storage: jsonl\n    compression: none\n",
         encoding="utf-8",
     )
     if max_goal_rounds is not None:
