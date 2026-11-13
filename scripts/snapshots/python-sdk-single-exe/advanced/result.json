@@ -2698,6 +2698,10 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
                   },
                   {
@@ -2706,7 +2710,9 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -2969,6 +2975,10 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
                   },
                   {
@@ -2977,7 +2987,9 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -3150,6 +3162,10 @@
             "content": [
               {
                 "type": "text",
+                "text": "Agent lead sent a message: "
+              },
+              {
+                "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
               },
               {
@@ -3158,7 +3174,9 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "agent-message",
+              "form": "relay",
+              "senderSessionId": "{{parent}}"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -3272,33 +3290,13 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
-          "type": "session/title",
-          "seq": 24,
-          "time": 0,
-          "data": {
-            "title": "Reply with exactly DIRECT_CHILD_OK and",
-            "messageSeqs": [
-              20
-            ],
-            "source": {
-              "kind": "fallback"
-            }
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-1}}",
-        "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 25,
+          "seq": 24,
           "time": 0,
           "data": {
             "sessionId": "{{child-1}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 24
+            "throughSeq": 23
           }
         }
       }
@@ -3309,7 +3307,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "assistant/message",
-          "seq": 26,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3423,7 +3421,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/end",
-          "seq": 27,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3438,7 +3436,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 28,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3795,11 +3793,17 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -3995,11 +3999,17 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -4172,11 +4182,17 @@
             "content": [
               {
                 "type": "text",
+                "text": "Agent lead sent a message: "
+              },
+              {
+                "type": "text",
                 "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "agent-message",
+              "form": "relay",
+              "senderSessionId": "{{parent}}"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -4290,33 +4306,13 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
-          "type": "session/title",
-          "seq": 24,
-          "time": 0,
-          "data": {
-            "title": "Reply with exactly WORKFLOW_CHILD_OK and",
-            "messageSeqs": [
-              20
-            ],
-            "source": {
-              "kind": "fallback"
-            }
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-2}}",
-        "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 25,
+          "seq": 24,
           "time": 0,
           "data": {
             "sessionId": "{{child-2}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 24
+            "throughSeq": 23
           }
         }
       }
@@ -4327,7 +4323,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "assistant/message",
-          "seq": 26,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4441,7 +4437,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/end",
-          "seq": 27,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4456,7 +4452,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 28,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,

@@ -168,9 +168,9 @@ describe('dsh-tool-subagent-control', () => {
     const prompt = loaded.events[promptIndex]
     if (prompt?.type !== 'user/message') throw new Error('expected the initial fork task')
     const texts = prompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-    expect(texts[0]).toBe('fork task')
-    expect(texts[1]).toContain('Your final answer is delivered automatically')
-    expect(texts[1]).not.toContain('send_message')
+    expect(texts.slice(0, 2)).toEqual(['Agent lead sent a message: ', 'fork task'])
+    expect(texts[2]).toContain('Your final answer is delivered automatically')
+    expect(texts[2]).not.toContain('send_message')
     expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('You are a subagent delegated by agent')
     expect(loaded.events.some(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
       && JSON.stringify(event.data.content).includes('You are a subagent delegated by agent'))).toBe(true)
@@ -424,6 +424,7 @@ describe('dsh-tool-subagent-control', () => {
         : [])
       : [])
     expect(prompts).toEqual([
+      'Agent lead sent a message: ',
       'long work',
       'Agent lead sent a message: ',
       'also consider Y',
@@ -578,6 +579,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
         : [])
       : [])
     expect(prompts).toEqual([
+      'Agent lead sent a message: ',
       'long work',
       'Agent lead sent a message: ',
       'parked follow-up',
