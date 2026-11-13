@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-13-no-new-cordis-root-reads.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-11-13-no-new-cordis-root-reads.md
+/agent-note-prohibit-new-reads-of-the-cordis-root-context:
+  en: b46331d0804f9d45
+  zh: d8b3d8a47541c838
+/agent-note-prohibit-new-reads-of-the-cordis-root-context/problem:
+  en: c6935cb7ef54f299
+  zh: 214ed828b3201539
+/agent-note-prohibit-new-reads-of-the-cordis-root-context/decision:
+  en: 458cdad9fce26157
+  zh: 6ac3b9d7404b4996
+/agent-note-prohibit-new-reads-of-the-cordis-root-context/alternatives-considered:
+  en: 81d959fa34f3e682
+  zh: 861f22528134e255
+/agent-note-prohibit-new-reads-of-the-cordis-root-context/consequences:
+  en: 6067864f7a2ff1c8
+  zh: df4c9af26a1abd5d
