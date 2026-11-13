@@ -1257,6 +1257,39 @@ it('requires an explicit system-pointer request on every move and asks only once
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
+it.each([true, false])('shares the mouse control decision for a system button with drag and move (allow=%s)', async (allow) => {
+  const f = await hoverFixture()
+  const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
+  for (const params of [target, { ...target, useSystemPointer: false }]) {
+    expect((await f.execute('toggleMouse', params)).isError).toBe(false)
+    expect(native.request.mock.lastCall?.[1]).toEqual(target)
+  }
+  expect(f.ask).not.toHaveBeenCalled()
+  const answer = Promise.withResolvers<typeof f.approved>()
+  f.ask.mockImplementationOnce(() => answer.promise)
+  native.request.mockClear()
+  const pending = f.execute('toggleMouse', { ...target, useSystemPointer: true })
+  try {
+    await vi.waitFor(() => expect(f.ask).toHaveBeenCalledOnce())
+    expect(native.request).not.toHaveBeenCalled()
+  } finally {
+    answer.resolve(allow ? f.approved : { answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  }
+  const results = [await pending, await f.execute('mouseMove', physicalHover),
+    await f.execute('toggleMouse', { ...target, direction: 'up', useSystemPointer: true })]
+  if (allow) {
+    expect(results.every(result => !result.isError)).toBe(true)
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemPointer]))
+      .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', true]])
+    f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+    expect(native.cleanup).toHaveBeenCalledWith('releaseSystemButton', {})
+  } else {
+    for (const result of results) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    expect(native.request).not.toHaveBeenCalled()
+  }
+  expect(f.ask).toHaveBeenCalledOnce()
+})
+
 it.each([true, false])('asks before a system drag and shares the session decision with hover (allow=%s)', async (allow) => {
   const f = await hoverFixture()
   const target = { appHandle: 'app-one', windowId: '7', relative: true, fromX: 100, fromY: 200, toX: 300, toY: 400 }

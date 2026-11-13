@@ -51,7 +51,7 @@ Application consent precedes launch, observation, capture, and input. Session ac
 
 Actions return a `dispatched` boolean; `mouseMove` also reports `hoverRoute` and `systemPointerMoved`, and `show()` adds `windowId` and `foregroundChanged`. Read fresh state to verify the result. Screenshots and pointer actions are available only on explicit window objects. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 999 after a successful AX observation covering the window or a screenshot. Selecting a window alone does not establish this observation. Values are divided by 1000 and scaled to the window dimensions, then clamped inside the window. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to the provider’s native window coordinates. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
-On providers with system-pointer support, `win.drag(from, to, { useSystemPointer: true })` shares the session’s mouse permission with `win.mouseMove`. Request the system pointer explicitly for each gesture.
+On providers with system-pointer support, `mouseMove`, `drag`, and `toggleMouse` share session mouse approval. Pass `{ useSystemPointer: true }` on each system mouse operation.
 
 To hold a button across calls, use `win.toggleMouse('left', 'down')`, then explicitly call `win.toggleMouse('left', 'up')` on the same window. Left, right, and middle are supported. Each call sends one event at the current pointer position.
 

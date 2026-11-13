@@ -8,6 +8,7 @@ import Dispatch
         let continuation: CheckedContinuation<Void, any Error>
     }
     let heldKeys = HeldKeys()
+    let systemPointer = SystemPointerInput()
     private var owner: UUID?
     private var waiting: [Waiting] = []
 

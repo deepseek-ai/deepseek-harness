@@ -51,7 +51,7 @@ kind: "package-reference"
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-提供方声明支持系统指针时，`win.drag(from, to, { useSystemPointer: true })` 和 `win.mouseMove` 共用本次会话的鼠标授权。每次需要移动系统指针时都要显式传入该选项。
+支持系统指针的提供方在 `mouseMove`、`drag` 和 `toggleMouse` 之间共用会话鼠标授权。每次操作系统鼠标都要显式传 `{ useSystemPointer: true }`。
 
 要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 

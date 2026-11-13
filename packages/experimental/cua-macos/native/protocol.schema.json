@@ -486,6 +486,9 @@
                 "down",
                 "up"
               ]
+            },
+            "useSystemPointer": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -1525,6 +1528,29 @@
           "required": [
             "runId"
           ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseSystemButton"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
           "additionalProperties": false
         }
       },

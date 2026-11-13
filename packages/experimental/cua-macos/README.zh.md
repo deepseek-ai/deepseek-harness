@@ -62,7 +62,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `screenshotTarget` | 未设置 | 截图使用的固定 `{ longEdge, maxBytes }` 请求图片目标。未设置时按 Agent 的模型路由解析，该路由未声明图片输入时拒绝截图。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
-| `requireSystemPointerApproval` | `true` | 主任务首次显式请求使用系统鼠标移动或拖动时询问用户。 |
+| `requireSystemPointerApproval` | `true` | 主任务首次请求移动系统指针、拖动或操作系统鼠标键时询问用户。 |
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
@@ -123,7 +123,7 @@ inspect(await window.getScreenshot())
 
 普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemPointer: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemPointer: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
 
-`win.toggleMouse(button, direction)` 直接向所选窗口发送事件，不移动光标，也不改变系统鼠标按键状态。按下时，应用必须在前台，指针必须命中所选窗口，否则返回 `FOREGROUND_REQUIRED`。指针移出或应用失去焦点后，仍可向原窗口发送松开事件。
+默认情况下，`win.toggleMouse(button, direction)` 在当前指针位置向所选窗口发送事件。按下要求指针命中前台应用的所选窗口，否则返回 `FOREGROUND_REQUIRED`。松开允许指针移出窗口或应用失去焦点。只有控件需要读取系统鼠标键状态时，才在按下和松开时都传 `{ useSystemPointer: true }`。系统模式与拖动共用会话审批，按住期间用户移动鼠标也可能触发拖动。任务回合结束或连接关闭时会松开剩余的系统按键。
 
 默认拖动向目标窗口发送鼠标事件。需要系统鼠标按键状态的控件可使用 `win.drag(from, to, { useSystemPointer: true })`。该操作与系统指针移动共用会话授权，起点和拖动路径必须位于可接收输入的前台窗口内。取消或失去目标窗口时，helper 在最后投递的位置释放鼠标键。
 
@@ -220,12 +220,12 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
 ## Simulated mouse
-Leave useSystemPointer unset for ordinary mouseMove and drag calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request the system pointer only when the user explicitly asks for it or the intended effect requires it.
+Leave useSystemPointer unset for ordinary mouseMove, drag, and toggleMouse calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request the system pointer only when the user explicitly asks for it or the intended effect requires it.
 
 Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
 - mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. With useSystemPointer omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
-- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — send one button event at the current pointer without moving it. After down, explicitly send up to the same window. The press requires the pointer over the selected window of the foreground app. Both events go directly to that window, including a release after the pointer leaves or the app loses focus.
+- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemPointer?: boolean }) -> ActionResult — send one button event at the current pointer without moving it. After down, explicitly send up to the same window. Press over the selected foreground window. By default the window receives the events, even a release outside it, and the system button stays up. For a system hold, pass useSystemPointer: true on both down and up. Physical moves can then drag, including your own mouse movements. The turn ending or the connection closing releases a remaining system hold.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
 - drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean, useSystemPointer?: boolean }) -> ActionResult — drag between two points of one window. Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control. An explicit system drag shares the session decision with mouseMove and holds the chosen button along the path in the unobscured foreground window.
@@ -241,7 +241,7 @@ Available at app or window level depending on the platform.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 
-Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.
+Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system mouse control.
 ```
 
 #### Token 影响
@@ -260,6 +260,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 默认窗口模式下，程序结束时不会自动补发松开事件。调用方应在 `finally` 中向原窗口发送 `up`。
 - 最低支持 macOS 14；设置导航、拖放接收和权限刷新需要在各支持版本验收。若 macOS 要求在修改屏幕录制权限后退出并重新打开 helper，权限检查在重启前可能仍返回未授权。可以关闭引导框，不必终止其他连接。
 - 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
 - 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、AX 差分、无法确认应用归属的系统面板和仅后台辅助类型的应用。

@@ -65,7 +65,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint), systemButtonDown(WindowRoute, CGMouseButton) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -382,7 +382,11 @@ actor AXWorker {
             } else {
                 window = try NativePlatform.ownedWindow(identity.pid, id)
             }
-            try await inputs().1.toggleMouse(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds),
+            let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
+            if try params.optionalBoolean("useSystemPointer") == true {
+                return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
+            }
+            try await inputs().1.toggleMouse(in: route,
                                              button: params.string("mouseButton"), isDown: isDown)
         case "click", "mouseMove":
             let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false

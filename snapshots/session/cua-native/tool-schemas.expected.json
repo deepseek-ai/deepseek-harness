@@ -494,6 +494,10 @@
                       "down",
                       "up"
                     ]
+                  },
+                  "useSystemPointer": {
+                    "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                    "type": "boolean"
                   }
                 },
                 "required": [

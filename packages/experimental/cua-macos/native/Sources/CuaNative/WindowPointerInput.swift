@@ -28,24 +28,7 @@ final class WindowPointerInput {
         Double(durationMs) / Double(steps) / 1000
     }
 
-    /// Move the visible cursor without restoring the prior point or reserving the application.
-    @MainActor static func mouseMove(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
-        try checkCancellation()
-        try Self.validate(point, in: route)
-        try validateWindow(route)
-        let screen = screenPoint(point, in: route)
-        try checkSystemHit(route, at: screen)
-        guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
-                                  mouseCursorPosition: screen, mouseButton: .left) else {
-            throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
-        }
-        event.flags = []
-        try checkCancellation()
-        event.post(tap: .cghidEventTap)
-        try checkCancellation()
-    }
-
-    private static func validateWindow(_ route: WindowRoute) throws {
+    static func validateWindow(_ route: WindowRoute) throws {
         try NativePlatform.verify(route.owner)
         try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
         let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
@@ -54,7 +37,7 @@ final class WindowPointerInput {
         }
     }
 
-    @MainActor private static func checkSystemHit(_ route: WindowRoute, at screen: CGPoint) throws {
+    @MainActor static func checkSystemHit(_ route: WindowRoute, at screen: CGPoint) throws {
         try requireSystemPointerTarget(route, frontPID: NativePlatform.frontPID(), hitWindowID: NativePlatform.mouseWindow(at: screen))
     }
 
@@ -76,7 +59,6 @@ final class WindowPointerInput {
         let point = WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y)
         if isDown {
             try await Self.checkSystemHit(route, at: screen)
-            try Self.validate(point, in: route)
         }
         let event = try mouseEvent(source: Self.source(), route: route, screen: screen, local: point,
                                    type: isDown ? Self.down(selected) : Self.up(selected),
@@ -189,18 +171,11 @@ final class WindowPointerInput {
                 return try mouseEvent(source: source, route: route, screen: screen, local: point, type: type,
                                       button: selected, clickState: 1, subtype: 0, group: group, flags: flags)
             }
-            guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: selected) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system drag event")
-            }
-            event.flags = flags
-            event.setIntegerValueField(.mouseEventNumber, value: group)
-            event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : 1)
-            return event
+            return try SystemPointerInput.event(type, source: source, at: screen, button: selected, group: group, flags: flags)
         }
         func post(_ event: CGEvent) {
             if useSystemPointer {
-                event.timestamp = DispatchTime.now().uptimeNanoseconds
-                event.post(tap: .cghidEventTap)
+                SystemPointerInput.post(event)
             } else {
                 poster.post(event, to: route.owner.pid)
             }
@@ -244,7 +219,7 @@ final class WindowPointerInput {
         CGEventSource.buttonState(.combinedSessionState, button: $0)
     }) throws {
         if [CGMouseButton.left, .right, .center].contains(where: isPressed) {
-            throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting a system drag")
+            throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting system mouse input")
         }
     }
 
@@ -346,7 +321,7 @@ final class WindowPointerInput {
         }
     }
 
-    private static func screenPoint(_ point: WindowPoint, in route: WindowRoute) -> CGPoint {
+    static func screenPoint(_ point: WindowPoint, in route: WindowRoute) -> CGPoint {
         CGPoint(x: CGFloat(route.bounds.x + point.x), y: CGFloat(route.bounds.y + point.y))
     }
 

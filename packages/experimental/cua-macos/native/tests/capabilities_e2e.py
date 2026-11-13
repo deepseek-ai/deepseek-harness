@@ -46,7 +46,8 @@ def stop_application(pid):
     raise AssertionError("fixture did not exit after SIGTERM")
 
 
-def check_toggle_mouse(call, owner, state_file, executable):
+def check_toggle_mouse(helper, owner, state_file, executable):
+    call = helper.call
     def cursor(*position):
         return json.loads(subprocess.check_output([executable, "--cursor", *map(str, position)], text=True))
 
@@ -58,6 +59,7 @@ def check_toggle_mouse(call, owner, state_file, executable):
             assert result == {"dispatched": True}, result
 
     toggle("left", "down", "FOREGROUND_REQUIRED")
+    assert json.loads(state_file.read_text())["events"] == state["events"]
     call("activate", owner)
     state = wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
     bounds = next(w["bounds"] for w in call("listWindows", owner) if w["windowId"] == window["windowId"])
@@ -68,6 +70,7 @@ def check_toggle_mouse(call, owner, state_file, executable):
     try:
         assert cursor(*outside) == outside
         toggle("left", "down", "FOREGROUND_REQUIRED")
+        assert json.loads(state_file.read_text())["events"] == state["events"]
         for index, (button, down, up) in enumerate([("left", 1, 2), ("right", 3, 4), ("middle", 25, 26)]):
             assert cursor(*inside) == inside
             count = len(state["events"])
@@ -92,6 +95,44 @@ def check_toggle_mouse(call, owner, state_file, executable):
             assert [(e["type"], e["button"]) for e in events] == [(down, index), (up, index)], events
             assert events[1]["point"][0] == outside[0] - bounds["x"], events
             assert cursor() == outside
+        call("activate", owner)
+        wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+        call("getState", {**window, "maxElements": 300, "maxDepth": 20})
+        key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
+        socket = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
+        for index, (button, down, moved, up) in enumerate([("left", 1, 6, 2), ("right", 3, 7, 4), ("middle", 25, 27, 26)]):
+            assert cursor(*inside) == inside
+            params = {**window, "mouseButton": button, "useSystemPointer": True}
+            count = len(json.loads(state_file.read_text())["events"])
+            call("toggleMouse", {**params, "direction": "down"})
+            try:
+                state = wait_for_state(state_file, lambda s: len(s["events"]) > count)
+                assert state["events"][-1]["pressedButtons"] & (1 << index), state
+                call("toggleMouse", {**params, "direction": "down"}, "INPUT_BUSY")
+                call("mouseMove", {**window, "x": inside[0] - bounds["x"] + 15, "y": inside[1] - bounds["y"],
+                                   "useSystemPointer": True})
+                state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)
+                assert state["events"][-1]["type"] == moved, state
+                assert cursor() == [inside[0] + 15, inside[1]]
+            finally:
+                call("toggleMouse", {**params, "direction": "up"})
+            events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 3)["events"][count:]
+            assert [e["type"] for e in events] == [down, moved, up], events
+            assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
+        for ending in ("releaseSystemButton", "disconnect"):
+            connection = Connection(socket, key)
+            try:
+                app = connection.call("getApp", {"selector": str(state["pid"])})
+                count = len(json.loads(state_file.read_text())["events"])
+                connection.call("toggleMouse", {**params, "appHandle": app["appHandle"], "direction": "down"})
+                wait_for_state(state_file, lambda s: len(s["events"]) > count)
+                call("toggleMouse", {**params, "direction": "up"}, "INVALID_ARGUMENT")
+                if ending != "disconnect":
+                    connection.call(ending, {})
+            finally:
+                connection.close()
+            events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)["events"][count:]
+            assert [e["type"] for e in events] == [25, 26] and events[-1]["pressedButtons"] == 0, events
     finally:
         run_cleanup(lambda: cursor(*original), *([lambda: stop(other)] if other else []))
 
@@ -296,7 +337,7 @@ def main():
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
             if args.toggle_only:
-                check_toggle_mouse(call, owner, state_file, executable)
+                check_toggle_mouse(helper, owner, state_file, executable)
                 print("PASS: single window-directed transitions, outside release and stationary cursor for all three buttons")
                 return
             if args.drag_only:

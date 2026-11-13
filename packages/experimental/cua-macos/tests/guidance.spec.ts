@@ -38,6 +38,8 @@ it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a s
   expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
   expect(instructions).toContain('The question interrupts the user.')
   expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
+  expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemPointer?: boolean }")
+  expect(instructions).toContain('pass useSystemPointer: true on both down and up')
   const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
   expect(drag).toContain('useSystemPointer?: boolean')
   expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
