@@ -2022,9 +2022,11 @@ it.skipIf(MODE === 'record')('reviews a change request by layer, hides test file
   const lens = view.getByRole('radiogroup', { name: '分层透镜', exact: true })
   const tree = view.getByRole('navigation')
   await expect.poll(() => lens.getByRole('radio').allTextContents()).toEqual(['全部6', '接口1', '实现2', '测试3'])
-  // The lens spans the file tree with the filter field's insets, and its divider continues the tree's border.
+  // The lens spans the file tree with the filter field's insets, and its divider continues the tree's border. The radio group
+  // sits in the element that measures it, inside the toolbar cell above the tree.
   const [lensBox, fieldBox, cellBox, treeBox] = await Promise.all([
-    lens.boundingBox(), tree.locator('input').locator('xpath=..').boundingBox(), lens.locator('xpath=..').boundingBox(), tree.locator('xpath=..').boundingBox(),
+    lens.boundingBox(), tree.locator('input').locator('xpath=..').boundingBox(), lens.locator('xpath=../..').boundingBox(),
+    tree.locator('xpath=..').boundingBox(),
   ])
   if (lensBox === null || fieldBox === null || cellBox === null || treeBox === null) throw new Error('Lens and tree must be visible')
   expect([lensBox.x, lensBox.x + lensBox.width]).toEqual([fieldBox.x, fieldBox.x + fieldBox.width])
