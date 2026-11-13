@@ -68,13 +68,12 @@ class GatedAdapter extends LlmAdapter {
   }
 }
 
-// Each persistence-backed temp root cleans up by closing its handle before
-// removing the directory: Windows rmSync over a dir holding a still-open handle
-// fails with EPERM.
+// Close later contexts that reopen a root before its owning cleanup removes it;
+// Windows rejects removal while any SQLite connection still holds the files.
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   const errors: unknown[] = []
-  for (const cleanup of cleanups.splice(0)) {
+  for (const cleanup of cleanups.splice(0).reverse()) {
     try { await cleanup() } catch (error) { errors.push(error) }
   }
   if (errors.length === 1) throw errors[0]
