@@ -26,7 +26,7 @@ it('persists live events arriving while close drains an earlier batch', async ()
   const session = ctx.sessions.create(SessionId('close-live-events'))
   const writer = await ctx.sessionPersistence.create(session.header)
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-  const acquire = SessionWriteLease.acquire
+  const acquire = SessionWriteLease.acquire.bind(SessionWriteLease)
   const spy = vi.spyOn(SessionWriteLease, 'acquire').mockImplementationOnce(async (dir, id) => {
     entered.resolve(undefined)
     await release.promise

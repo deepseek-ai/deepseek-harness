@@ -113,6 +113,7 @@ it('waits for a legacy writer to release before importing for read', async () =>
   const b = await fixture()
   const lease = await SessionWriteLease.acquire(sessionDir(b.root, b.header.cwd, b.header.id), b.header.id)
   const contended = Promise.withResolvers<undefined>()
+  // oxlint-disable-next-line typescript/unbound-method -- the spy calls the original with its explicit receiver.
   const acquire = SqliteLogs.prototype.acquireSessionLease
   vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementation(async function (this: SqliteLogs, header) {
     try { return await acquire.call(this, header) }
@@ -129,6 +130,7 @@ it('cancels a read waiting for legacy ownership without importing', async () => 
   const b = await fixture(), controller = new AbortController()
   const lease = await SessionWriteLease.acquire(sessionDir(b.root, b.header.cwd, b.header.id), b.header.id)
   const contended = Promise.withResolvers<undefined>()
+  // oxlint-disable-next-line typescript/unbound-method -- the spy calls the original with its explicit receiver.
   const acquire = SqliteLogs.prototype.acquireSessionLease
   vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementation(async function (this: SqliteLogs, header) {
     try { return await acquire.call(this, header) }

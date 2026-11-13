@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-persistence-jsonl` 把每个会话存为当前的仅追加 JSONL 日志，并保留不可变的历史格式 generation——默认以带校验和的 Zstandard 帧存储，禁用压缩时以换行分隔的原始文本行存储。它通过持久化句柄提供当前逻辑 `SessionEvent` 流，因此格式迁移、压缩、历史解码与崩溃恢复仍是存储内部细节。当消费方需要按会话的磁盘文件时选择它；选择 `compression: 'none'` 后日志可作为纯文本按行读取。根目录是唯一必填配置；持久性、延迟实体化、[受支持的历史格式迁移](../session-format-catalog/README.zh.md)与撕裂尾部崩溃恢复都随后端提供。
+通过一个持久化插件保存和恢复 Session 历史。默认 SQLite 后端在首次打开时导入支持的 JSONL 历史并保留源文件。部署需要按会话保存文件时选择 `storage: 'jsonl'`；其日志默认使用带校验和的 Zstandard 帧，或通过 `compression: 'none'` 保存纯文本行。浏览器 Worker 使用不压缩的 JSONL。挂载插件前配置存储根目录。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当组合需要由按会话文件支撑的持久会话时挂载此后端。常用路径是显式的：加载会话服务、挂载后端，然后给出根目录。
+组合需要持久 Session 时挂载此插件。加载 Session 服务，并为插件配置存储根目录。
 
 ### 何时选择
 
-当消费方受益于每会话一份产物——导航、外部工具或可逐行读取的原始日志——时选择此后端。它是唯一的第一方会话持久化提供方。后端把会话保存在部署控制的根下：项目本地、共享、临时或集中式。
+Node 应用使用默认 [SQLite 后端](../session-persistence-sqlite/README.zh.md)。浏览器 Worker 或外部逐行读取工具选择 JSONL。两种后端都在配置的根目录下保留历史。
 
 ### 最小配置
 
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 磁盘布局
 
-每个会话在可读项目目录下获得一个会话自有目录。每个规范 generation 都以版本与文件名一致的物理 header 开始。当前格式为每个持久事件存储一行；冻结的 v0 与 v1 reader 也能理解其历史 packed Assistant delta 行。当前格式在 header 中存储 `isSeeded`，并从最后一个带标记的 `session/end-seed` 推导 inherited cut；历史 codec 则转换其数字 `seedLength`。格式 catalog 会在句柄暴露当前逻辑值之前完成该转换。当前存储记录使用下文所述的无损来源序列表示：
+以下各节说明 `storage: 'jsonl'` 及保留的导入源文件。SQLite 存储与所有权见 [SQLite 库](../session-persistence-sqlite/README.zh.md)。每个 JSONL 会话在可读项目目录下获得一个会话自有目录。每个规范 generation 都以版本与文件名一致的物理 header 开始。当前格式为每个持久事件存储一行；冻结的 v0 与 v1 reader 也能理解其历史 packed Assistant delta 行。当前格式在 header 中存储 `isSeeded`，并从最后一个带标记的 `session/end-seed` 推导 inherited cut；历史 codec 则转换其数字 `seedLength`。格式 catalog 会在句柄暴露当前逻辑值之前完成该转换。当前存储记录使用下文所述的无损来源序列表示：
 
 ```text
 <root>/
