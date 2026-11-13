@@ -13,10 +13,11 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { type ToolCallId } from '@deepseek-ai/dsh-llm'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -85,9 +86,9 @@ describe('worktree tool through real Loader composition', () => {
     await context.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
     await context.loader.await()
 
-    const agent = await context.agentLoop.create(SessionId('worktree-loader'), {}, { cwd: repository })
+    const agent = await context.agentLoop.create(brandString<SessionId>('worktree-loader'), {}, { cwd: repository })
     const invoke = (name: string, agentValue = agent) => executeToolFixture(context!, {
-      name: 'create_worktree', callId: ToolCallId(name), arguments: { name }, agent: agentValue, signal: new AbortController().signal,
+      name: 'create_worktree', callId: brandString<ToolCallId>(name), arguments: { name }, agent: agentValue, signal: new AbortController().signal,
     })
     const result = await invoke('new-checkout')
     const path = join(repository, '.agents/worktrees/new-checkout')
@@ -98,14 +99,19 @@ describe('worktree tool through real Loader composition', () => {
     expect(await readFile(join(path, 'file.txt'), 'utf8')).toBe('committed\n')
 
     const failure = await executeToolFixture(context, {
-      name: 'create_worktree', callId: ToolCallId('no-agent'), arguments: {}, signal: new AbortController().signal,
+      name: 'create_worktree', callId: brandString<ToolCallId>('no-agent'), arguments: {}, signal: new AbortController().signal,
     })
     expect(failure.isError).toBe(true)
     expect(failure.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
-    expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({ card: 'generic', title: 'create_worktree', rawInput: { name: 'named' } })
+    expect(failure.isError && failure.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    const existing = await invoke('new-checkout')
+    expect(existing.isError && existing.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({
+      card: 'generic', title: 'create_worktree', rawInput: { name: 'named' },
+    })
 
     const exit = (agentValue?: typeof agent) => executeToolFixture(context!, {
-      name: 'exit_worktree', callId: ToolCallId('exit'), arguments: {}, signal: new AbortController().signal,
+      name: 'exit_worktree', callId: brandString<ToolCallId>('exit'), arguments: {}, signal: new AbortController().signal,
       ...agentValue === undefined ? {} : { agent: agentValue },
     })
     const left = await exit(agent)
@@ -114,11 +120,10 @@ describe('worktree tool through real Loader composition', () => {
     expect(left.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
     expect(context.workingDirectory.get(agent.session)).toBe(repository)
     const outside = await exit(agent)
-    expect(outside.isError).toBe(true)
+    expect(outside.isError && outside.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_NOT_ENTERED' })
     expect(outside.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('no recorded worktree contains the working directory')
     const agentless = await exit()
-    expect(agentless.isError).toBe(true)
-    expect(agentless.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
+    expect(agentless.isError && agentless.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(context.tools.get('exit_worktree')!.presentCall!({})).toEqual({ card: 'generic', title: 'exit_worktree', rawInput: {} })
 
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')

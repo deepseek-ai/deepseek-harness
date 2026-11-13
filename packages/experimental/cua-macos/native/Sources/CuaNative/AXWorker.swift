@@ -23,6 +23,7 @@ struct CaptureTarget: Sendable {
     let appHandle: String
     let process: ProcessIdentity
     let window: WindowInfo
+    let recovery: AXChildRecoveryBudget
 }
 struct ForegroundPlan: Sendable {
     let appHandle: String
@@ -41,8 +42,8 @@ struct ForegroundObservation: Sendable {
     }
     var json: JSONValue {
         .object(["frontPid": frontPID.map { .number(Double($0)) } ?? .null,
-                 "focusedWindowId": focusedWindowID.map { .number(Double($0)) } ?? .null,
-                 "frontWindowId": frontWindowID.map { .number(Double($0)) } ?? .null,
+                 "focusedWindowId": focusedWindowID.map { .string(String($0)) } ?? .null,
+                 "frontWindowId": frontWindowID.map { .string(String($0)) } ?? .null,
                  "frontWindowPid": frontWindowPID.map { .number(Double($0)) } ?? .null])
     }
 }
@@ -141,12 +142,12 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
-    private func acquire(_ identity: ProcessIdentity) throws -> String {
+    private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }
             forget(old.key)
         }
-        let id = try identifier("app")
+        let id = try pendingHandle ?? identifier("app")
         targets[id] = .running(identity)
         return id
     }
@@ -172,25 +173,11 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to window \(source); read getAccessibilityTree on window \(windowID)")
         }
     }
-    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
-        try WindowGeometry.resolve(owner: identity, windowID: windowID, readWindow: { pid, id in
-            trace?.mark("window-info.begin")
-            let window = try NativePlatform.ownedWindow(pid, id)
-            trace?.mark("window-info.end")
-            return window
-        }) {
-            // Capture without Accessibility permission retains its CG/SCK checks.
-            guard AXIsProcessTrusted() else { return nil }
-            trace?.mark("ax-geometry.begin")
-            let bounds = try ax().windowBounds(windowID, owner: identity)
-            trace?.mark("ax-geometry.end")
-            return bounds
-        }
-    }
-    private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
-        let window = try coordinateWindow(identity, windowID)
-        try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: window.bounds)
-        return window
+    private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget,
+                                          forClick: Bool = false) throws -> (window: WindowInfo, element: AXUIElement?) {
+        let target = try ax().coordinateWindow(identity, windowID, budget: &budget, forClick: forClick)
+        try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: target.window.bounds)
+        return target
     }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true)]) }
     /// Select the element's default action; Press takes precedence over Pick.
@@ -201,10 +188,11 @@ actor AXWorker {
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
-        guard failure.accessibilityError == AXError.invalidUIElement.rawValue else { return failure }
-        return NativeFailure(code: "STALE_SNAPSHOT",
-                             message: "Accessibility tree changed during observation; read fresh getAccessibilityTree",
-                             accessibilityError: failure.accessibilityError)
+        guard failure.accessibilityError == AXError.invalidUIElement.rawValue
+                || failure.accessibilityError == AXError.cannotComplete.rawValue else { return failure }
+        return NativeFailure(code: "AX_OBSERVATION_UNAVAILABLE",
+                             message: "Accessibility observation failed: \(failure.message). Read fresh state or use a screenshot; do not repeat input automatically",
+                             accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
 
     func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
@@ -215,12 +203,13 @@ actor AXWorker {
             try keyboard?.releaseHeldKeys(run: params.string("runId"))
             return .result(Self.actionResult)
         }
+        var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
             let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
-                return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog)
+                return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
             }
             return .result(.object(["dispatched": .bool(dispatched)]))
         }
@@ -230,11 +219,19 @@ actor AXWorker {
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null]))
         }
-        if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
+        if method == "listApps" {
+            // listApps enumerates running applications only, so each entry reports its running state.
+            return .result(.array(catalog.selectableApplications.map { app in
+                var value = app.json.object ?? [:]
+                value["isRunning"] = .bool(true)
+                return .object(value)
+            }))
+        }
         try NativePlatform.requireUnlocked(locked)
         if method == "getApp" {
             let selector = try params.string("selector")
-            let matches = catalog.applications.filter { $0.matches(selector) }
+            let candidates = catalog.selectableApplications
+            let matches = installed.map { candidates.filter($0.matchesProcess) } ?? candidates.filter { $0.matches(selector) }
             if matches.isEmpty, let installed {
                 let authorization = try ApplicationAuthorization.describeInstalled(installed)
                 let previous = targets.filter { if case .pending(let app, _) = $0.value { return app.path == installed.path }; return false }
@@ -247,7 +244,7 @@ actor AXWorker {
                 return .result(pendingApplication(installed, handle: handle, authorization: authorization))
             }
             guard !matches.isEmpty else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "No running or installed application matches selector") }
-            guard matches.count == 1, let app = matches.first else { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps") }
+            guard matches.count == 1, let app = matches.first else { throw Self.ambiguousApplication }
             let identity = try NativePlatform.identity(app.pid)
             let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
             let handle = try acquire(identity)
@@ -265,6 +262,10 @@ actor AXWorker {
             guard try ApplicationAuthorization.describeInstalled(app) == authorization else {
                 forget(handle)
                 throw NativeFailure(code: "STALE_APP", message: "Application executable changed before launch; select it again")
+            }
+            guard catalog.selectableApplications.filter(app.matchesProcess).count <= 1 else {
+                forget(handle)
+                throw Self.ambiguousApplication
             }
             return .launch(ApplicationLaunch(handle: handle, application: app, authorization: authorization))
         }
@@ -298,7 +299,7 @@ actor AXWorker {
             let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
                                                        afterPID: afterPID, afterWindow: afterWindow)
             return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
+                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":
@@ -324,19 +325,21 @@ actor AXWorker {
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
-            return .result(.object(["appHandle": .string(handle),
-                "windowId": window.map { .number(Double($0)) } ?? .null,
-                "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
+            var state: [String: JSONValue] = ["appHandle": .string(handle),
+                "windowId": window.map { .string(String($0)) } ?? .null,
+                "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
-                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
+                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]
+            if projection.hasUnreadableElements { state["hasUnreadableElements"] = .bool(true) }
+            return .result(.object(state))
         case "screenshot":
             trace?.mark("screen-permission.begin")
             try NativePlatform.requireScreenRecording()
             trace?.mark("screen-permission.end")
             trace?.mark("geometry.before.begin")
-            let window = try coordinateWindow(identity, params.windowID(), trace: trace)
+            let window = try ax().coordinateWindow(identity, params.windowID(), budget: &recovery, trace: trace).window
             trace?.mark("geometry.before.end")
-            return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
+            return .capture(CaptureTarget(appHandle: handle, process: identity, window: window, recovery: recovery))
         case "listActions":
             return .result(.array(try ax().listActions(element(handle, params)).map { .string($0) }))
         case "paste":
@@ -346,10 +349,10 @@ actor AXWorker {
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
             try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
-                try ax().keyboardRecipient(identity, catalog: catalog)
+                try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
         case "typeText", "pressKey":
-            let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
+            let recipient = try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
             else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
@@ -399,7 +402,7 @@ actor AXWorker {
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
-                window = try observedCoordinateWindow(handle, identity, id)
+                (window, elementWindow) = try observedCoordinateWindow(handle, identity, id, budget: &recovery, forClick: method == "click")
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
@@ -413,8 +416,8 @@ actor AXWorker {
                 return .mouseMove(route, point)
             }
             var clickRoute = route
-            if AXIsProcessTrusted(), let node = try elementWindow ?? ax().windowElement(window.windowID, owner: identity),
-               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog) {
+            if let node = elementWindow,
+               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog, budget: &recovery) {
                 let serviceWindow = try NativePlatform.ownedWindow(panel.process.pid, panel.windowID)
                 guard serviceWindow.bounds == window.bounds else {
                     throw NativeFailure(code: "WINDOW_CHANGED", message: "File panel and its input window have different frames; read fresh window state")
@@ -427,16 +430,17 @@ actor AXWorker {
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
-            let window = try observedCoordinateWindow(handle, identity, id)
+            let window = try observedCoordinateWindow(handle, identity, id, budget: &recovery).window
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
             if method == "scroll" {
                 let dx = params.contains("deltaLinesX") ? try params.integer("deltaLinesX", in: -10...10) : 0
                 let dy = params.contains("deltaLinesY") ? try params.integer("deltaLinesY", in: -10...10) : 0
                 try inputs().1.scroll(in: route, at: params.point(), deltaLinesX: Int32(dx), deltaLinesY: Int32(dy))
             } else {
-                try inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
+                try await inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
                     durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240),
-                                      button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers())
+                    button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers(),
+                    useSystemPointer: params.optionalBoolean("useSystemPointer") ?? false)
             }
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }
@@ -453,24 +457,31 @@ actor AXWorker {
         try ax().perform(command, "AXPress")
     }
 
+    private static let ambiguousApplication = NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps")
+
     private func pendingApplication(_ app: InstalledApplication, handle: String, authorization: JSONValue) -> JSONValue {
         var value: [String: JSONValue] = ["appHandle": .string(handle), "running": .bool(false), "name": .string(app.name), "authorization": authorization]
         if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
         return .object(value)
     }
-    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32) throws -> JSONValue {
+    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32, catalog: ApplicationCatalogSnapshot) throws -> JSONValue {
         do {
             try cancellation.check()
             guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
                   try ApplicationAuthorization.describeInstalled(app) == original else {
                 throw NativeFailure(code: "STALE_APP", message: "Application selection changed during launch")
             }
+            guard !catalog.selectableApplications.contains(where: { $0.pid != pid && app.matchesProcess($0) }) else {
+                throw Self.ambiguousApplication
+            }
             let identity = try NativePlatform.identity(pid)
             let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
             if original["persistable"] == .bool(true), actual["id"] != original["id"] {
                 throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
             }
-            targets[plan.handle] = .running(identity)
+            guard try acquire(identity, pendingHandle: plan.handle) == plan.handle else {
+                throw NativeFailure(code: "STALE_APP", message: "This connection already has a handle for this process. Use the existing handle or retrieve it with getApp")
+            }
             var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
             if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
             return .object(value)
@@ -495,7 +506,8 @@ actor AXWorker {
         try NativePlatform.requireUnlocked(observeSession())
         try NativePlatform.requireScreenRecording()
         trace?.mark("geometry.after.begin")
-        let after = try coordinateWindow(identity, target.window.windowID, trace: trace)
+        var recovery = target.recovery
+        let after = try ax().coordinateWindow(identity, target.window.windowID, budget: &recovery, trace: trace).window
         trace?.mark("geometry.after.end")
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
         observedWindowBounds[target.appHandle, default: [:]][after.windowID] = after.bounds
@@ -505,7 +517,7 @@ actor AXWorker {
         trace?.mark("postflight.end")
         return .object(["mimeType": .string("image/png"), "data": .string(encoded),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
-            "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
+            "coordinateSpace": .string("window-points"), "windowId": .string(String(after.windowID))])
     }
     static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])

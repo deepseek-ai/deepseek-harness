@@ -11,6 +11,7 @@ import { FIBER_STATE } from '../src/loader-status.ts'
 const BOOTSTRAP_ID = '@deepseek-ai/dsh-client-modules'
 const REQUIRED_ID = '@deepseek-ai/dsh-client-ui-chat'
 const OTHER_REQUIRED_ID = '@deepseek-ai/dsh-client-ui-layout'
+const SESSION_STATUS_ID = '@deepseek-ai/dsh-client-ui-session-status'
 
 function graphOf(ids: readonly string[]): WebBootGraph {
   const entries: WebBootEntry[] = ids.map(id => ({ id, url: `/${id}.js`, rev: '1' }))
@@ -33,7 +34,9 @@ function modulesOf(graph: WebBootGraph, staticModules: Record<string, unknown>):
   }
   const modules = target.create({
     boot: graph,
-    staticModules,
+    staticModules: Object.entries(staticModules).map(([id, exports]) => ({
+      id, factory: () => exports as Record<string, unknown>,
+    })),
     loadBundle: async (url) => { loaded.push(url) },
   })
   return { modules, loaded }
@@ -128,6 +131,33 @@ describe('bootClient', () => {
     // `failed to import`; the creation error itself is in the log asserted above.
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       'web boot: warning: 1 entry did not activate\ninvalid: import failed (see console for the import error)',
+    )
+  })
+
+  it('rejects startup when the Session status row cannot be imported', async () => {
+    const { modules } = modulesOf(graphOf(['seeded']), { seeded: { apply: () => {} } })
+    const manifest = parseBootManifest(graphOf(['seeded', SESSION_STATUS_ID]))
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { error.mockRestore() })
+
+    await expect(bootClient({ ctx, modules, manifest })).rejects.toThrow(
+      `web boot: 1 required entry did not activate\n${SESSION_STATUS_ID} (required): import failed (see console for the import error)`,
+    )
+  })
+
+  it('rejects startup when the Session status row fails to apply', async () => {
+    const { modules } = modulesOf(graphOf([SESSION_STATUS_ID]), {
+      [SESSION_STATUS_ID]: { apply: () => { throw new Error('status table failed') } },
+    })
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { error.mockRestore() })
+
+    await expect(bootClient({ ctx, modules, manifest: modules.manifest })).rejects.toThrow(
+      `web boot: 1 required entry did not activate\n${SESSION_STATUS_ID} (required): failed: Error: status table failed`,
     )
   })
 

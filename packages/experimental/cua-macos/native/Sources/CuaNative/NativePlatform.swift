@@ -12,9 +12,9 @@ struct ApplicationInfo: Sendable {
     let executablePath: String?
     let regular: Bool
     func matches(_ selector: String) -> Bool {
-        regular && name != nil && (name?.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
+        name?.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
             || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
-                == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path))
+                == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path)
     }
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
@@ -26,6 +26,7 @@ struct ApplicationInfo: Sendable {
 struct ApplicationCatalogSnapshot: Sendable {
     let applications: [ApplicationInfo]
     let frontPID: Int32?
+    var selectableApplications: [ApplicationInfo] { applications.filter { $0.regular && $0.name != nil } }
     func application(_ pid: Int32) -> ApplicationInfo? { applications.first { $0.pid == pid } }
 }
 @MainActor enum ApplicationCatalog {

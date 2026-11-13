@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture() {
   const scratch = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workspace-root-')))
@@ -24,7 +25,7 @@ async function fixture() {
     await ctx.plugin(LocalFileSystem, { cwd: root })
     await ctx.plugin(WorkingDirectory, {})
     const harness = await mountAgentLoopTestHarness(ctx)
-    const agent = await harness.create(SessionId('root-owner'), {}, { cwd: root })
+    const agent = await harness.create(brandString<SessionId>('root-owner'), {}, { cwd: root })
     return {
       ctx, root, worktree, outside, agent, harness,
       notices: () => harness.claim(agent, 'next-step', 1).map(message => message.content.map(block => block.type === 'text' ? block.text : '').join('')),
@@ -96,11 +97,11 @@ describe('Session workspace roots', () => {
   it('restores the root from the log, and a change without the marker moves only the directory', async () => {
     await using f = await fixture()
     await f.ctx.workingDirectory.set(f.agent, f.worktree)
-    const restored = f.ctx.sessions.create(SessionId('restored'), { meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents() })
+    const restored = f.ctx.sessions.create(brandString<SessionId>('restored'), { meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents() })
     expect(f.ctx.workingDirectory.rootOf(restored)).toBe(f.worktree)
     expect(f.ctx.sessionProjections.snapshot(restored).values.workspaceRoot).toBe(f.worktree)
 
-    const unmarked = f.ctx.sessions.create(SessionId('unmarked'), { meta: { cwd: f.root } })
+    const unmarked = f.ctx.sessions.create(brandString<SessionId>('unmarked'), { meta: { cwd: f.root } })
     unmarked.append('working-directory/change', { cwd: join(f.worktree, 'src') })
     expect(f.ctx.workingDirectory.get(unmarked)).toBe(join(f.worktree, 'src'))
     expect(f.ctx.workingDirectory.rootOf(unmarked)).toBe(f.root)
@@ -109,7 +110,7 @@ describe('Session workspace roots', () => {
 
   it('moves the root onto a directory recorded without the marker, without a notice', async () => {
     await using f = await fixture()
-    const agent = await f.harness.create(SessionId('unmarked-owner'), {}, { cwd: f.root })
+    const agent = await f.harness.create(brandString<SessionId>('unmarked-owner'), {}, { cwd: f.root })
     agent.session.append('working-directory/change', { cwd: f.worktree })
     await expect(f.ctx.workingDirectory.set(agent, f.worktree)).resolves.toBe(f.worktree)
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
@@ -126,7 +127,7 @@ describe('Session workspace roots', () => {
 
   it('uses the deployment default as the root of a Session without origin metadata until a change is recorded', async () => {
     await using f = await fixture()
-    const agent = await f.harness.create(SessionId('without-origin'))
+    const agent = await f.harness.create(brandString<SessionId>('without-origin'))
     const fallback = f.ctx.workingDirectory.defaultDirectory
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(fallback)
     expect(f.ctx.sessionProjections.snapshot(agent.session).values.workspaceRoot).toBeNull()
@@ -144,7 +145,7 @@ describe('Session workspace roots', () => {
     await using f = await fixture()
     const link = join(dirname(f.root), 'link')
     await symlink(f.root, link)
-    const agent = await f.harness.create(SessionId('linked-origin'), {}, { cwd: link })
+    const agent = await f.harness.create(brandString<SessionId>('linked-origin'), {}, { cwd: link })
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(link)
     await f.ctx.workingDirectory.set(agent, f.worktree)
     await expect(f.ctx.workingDirectory.set(agent, link)).resolves.toBe(f.root)

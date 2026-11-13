@@ -12,7 +12,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -21,6 +21,7 @@ import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
 import { AUTO_PRESET } from '@deepseek-ai/dsh-permission-presets'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function harness(options: {
   withPermission?: boolean
@@ -40,7 +41,7 @@ async function harness(options: {
   })
   await ctx.plugin(ApprovalService)
   if (options.withPermission !== false) await ctx.plugin(PermissionPresetService, options.config ?? {})
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('perm-projected') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('perm-projected') })
   return { ctx, session: agent.session }
 }
 
@@ -77,7 +78,7 @@ describe('permissions projection unit', () => {
     expect(permissionChanges).toHaveLength(3)
     expect(permissionChanges.at(-1)).toMatchObject({ key: 'permissions', value: { currentValue: 'danger-full-access' } })
     session.append('turn/start', { turn: 1 })
-    expect(changes).toHaveLength(3)
+    expect(changes.filter(change => change.key === 'permissions')).toEqual(permissionChanges)
   })
 
   it('projects custom as a current value when the knobs match no preset', async () => {

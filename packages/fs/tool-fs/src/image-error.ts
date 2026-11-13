@@ -5,14 +5,14 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
 /**
  * Every `read_image` failure the tool classifies itself, before the attachment store sees the bytes:
  *
- * - `IMAGE_UNSUPPORTED_MODEL`: the calling route does not declare image input; switch to an image-capable model.
+ * - `MODEL_DOES_NOT_SUPPORT_IMAGES`: the calling route does not declare image input; switch to an image-capable model.
  * - `IMAGE_UNSUPPORTED_FORMAT`: the extension, the file signature, or the deployment's accepted media types
  *   exclude the format; convert the file to an accepted format or read another file.
  *
  * Failures the attachment store classifies keep their `AttachmentError` codes.
  */
 export const IMAGE_INPUT_ERROR_CODES = [
-  'IMAGE_UNSUPPORTED_MODEL',
+  'MODEL_DOES_NOT_SUPPORT_IMAGES',
   'IMAGE_UNSUPPORTED_FORMAT',
 ] as const
 

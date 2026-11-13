@@ -21,7 +21,8 @@ Client Session objects, Agent-scoped Client Contexts, references, consumer-sourc
 | Owner | Responsibility |
 | --- | --- |
 | Client Session Controller | Catalog, live generations, references, source counts, bindings, history windows, and existing Session control state |
-| `ui-session` | Explicit Session Provider integration and the unified UI status source |
+| `ui-session` | Explicit Session Provider integration and the effective pending-interaction source |
+| `ui-session-status` | The unified UI status source |
 | View or operation | Its own reference, target, source identifier, and release point |
 | Workspace UI | Main-area target and reference, navigation, persisted target, and creation flow |
 | UI composition boundary | Supplies an owner-provided reference to one explicit `SessionProvider` |
@@ -89,28 +90,22 @@ Window-level consumers may inspect source markers. Session business operations s
 
 ### Unified UI Session status
 
-`ui-session` owns a React-free `sessionStatus` source and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
+`ui-session-status` owns the React-free `uiSession.sessionStatus` service, read as `ctx.uiSession.sessionStatus`, and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
 
 | Field | Value | Meaning and owner |
 | --- | --- | --- |
 | `running` | `boolean` or `undefined` | Latest known Session running fact; absence of a baseline is not confirmed idle |
 | `pendingInteraction` | `SessionPendingInteraction` or `undefined` | Effective domain-owned request, or absence when no request is pending |
-| `completionUnread` | `boolean` | UI reminder for an observed stop that has not been acknowledged |
+| `completionUnread` | `boolean` | Host reading record carries a manual unread mark or an unacknowledged completed turn |
+| `completionFailed` | `boolean` | The Session is unread and its latest completed turn ended with an execution error |
 
 Source counts remain authoritative in `SessionListState.byId[id].retainedBy`; UI status reads them for acknowledgement policy without owning another reference registry. Titles, Workspace associations, history, queues, and projection data remain with their existing owners.
 
-Pending domains retain `SessionPendingInteractionMap`, request identities, precedence, publication disposers, and teardown delegation. The unified status includes the same effective request object; it does not copy requests or create a second pending registry. Workspace status indicators and Conversation composer selection read `useSessionStatus` instead of separate `useSessionPendingInteraction` and `useCompletedSessionIds` hooks.
+Pending domains retain `SessionPendingInteractionMap`, request identities, precedence, publication disposers, and teardown delegation in `ui-session`, which publishes each Session's effective request read-only as `ctx.uiSession.pendingInteractions`. The unified status includes the same effective request object; it does not copy requests or create a second pending registry. Workspace status indicators and Conversation composer selection read `useSessionStatus` instead of separate `useSessionPendingInteraction` and `useCompletedSessionIds` hooks.
 
-Completion tracking subscribes to the existing `api-session/status` events so a running-to-idle transition is not lost in batched catalog snapshots. Host-list rows (`ids`) establish initial and reconnect running baselines; synthetic catalog and retained rows preserve independently observed status. A pending empty catalog is not evidence that Sessions disappeared. The update rules are:
+Running tracking subscribes to the existing `api-session/status` events so a running-to-idle transition is not lost in batched catalog snapshots. Host-list rows (`ids`) establish initial and reconnect running baselines; synthetic catalog and retained rows preserve independently observed status. A pending empty catalog is not evidence that Sessions disappeared, and removing a Session clears its running baseline; pending-request teardown stays with the request's domain.
 
-- An initial idle baseline does not create a completion reminder.
-- Observing running clears an earlier reminder and records the running baseline.
-- A known running-to-idle transition sets `completionUnread` only when the Session lacks main-view ownership.
-- Acquiring main-view ownership clears the reminder; retaining from an unrelated source does not.
-- Releasing main-view ownership does not manufacture a reminder for an earlier stop.
-- Removing a Session clears its completion reminder and running baseline; pending-request teardown stays with the request's domain.
-
-The reminder denotes an observed stop, not successful task completion or completion of a particular queued message. Main-view ownership preserves selection-based acknowledgement even while a global panel temporarily hides the Conversation. The design has no `ui-session/view-presence` event, mounted-Provider index, or implicit acknowledgement from Provider mount.
+Completion reminders follow the Host reading records described in [Host-memory Session reading state](../feature/2026-10-23-session-reading-memory.md), which supersedes this note's earlier Client-local reminder rules: running changes and main-view ownership neither set nor clear a reminder, and the visible main view acknowledges a completed turn only after its body arrives. The reminder denotes a completed turn, not successful task completion or completion of a particular queued message. Main-view ownership preserves selection-based acknowledgement even while a global panel temporarily hides the Conversation. The design has no `ui-session/view-presence` event, mounted-Provider index, or implicit acknowledgement from Provider mount.
 
 The Session Controller publishes running and reference-source facts but owns no completion-reminder set, `consumeCompletion` method, or pending-interaction presentation. Reference acquisition does not execute completion-reminder business logic.
 

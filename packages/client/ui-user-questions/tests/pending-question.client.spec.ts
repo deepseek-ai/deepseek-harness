@@ -1,11 +1,12 @@
 /** Card and waterfall settlement edges the composer and plugin specs do not reach. */
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createWaterfallRequest, PendingQuestion } from '../src/client/contract/slots.ts'
 
 const SID = 's1' as SessionId
-const CALL = ToolCallId('call-1')
+const CALL = brandString<ToolCallId>('call-1')
 const QUESTIONS = [{ id: 'mode', question: 'Choose a mode' }]
 const ANSWER = { answers: [{ id: 'mode', selected: ['Fast'] }] }
 

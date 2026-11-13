@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { preflightDesktopPublishLocal } from '../scripts/preflight-desktop-publish-local.mjs'
+import { preflightDesktopPublishLocal } from '@deepseek-ai/dsh-desktop-publisher/preflight-desktop-publish-local.mjs'
 
 it('checks the retained preset before approval and the approved preset before upload without opening credentials', async () => {
   const root = await mkdtemp(join(tmpdir(), 'publish-preflight-'))
@@ -39,8 +39,8 @@ it('runs the local preflight before dependency installation in both self-hosted 
   const workflow = await readFile('.github/workflows/desktop-publish.yml', 'utf8')
   for (const job of ['prepare', 'publish']) {
     const section = workflow.split(`\n  ${job}:`)[1]!.split(/\n  \w+:/u)[0]!
-    expect(section.indexOf('node apps/desktop/scripts/preflight-desktop-publish-local.mjs')).toBeGreaterThan(0)
-    expect(section.indexOf('node apps/desktop/scripts/preflight-desktop-publish-local.mjs')).toBeLessThan(section.indexOf('pnpm install --frozen-lockfile'))
+    expect(section.indexOf('node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs')).toBeGreaterThan(0)
+    expect(section.indexOf('node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs')).toBeLessThan(section.indexOf('pnpm install --frozen-lockfile'))
   }
 })
 

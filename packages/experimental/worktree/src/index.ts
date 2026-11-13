@@ -14,8 +14,10 @@ import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { within, WorktreeReclamation } from './archive.ts'
+import { WorktreeError } from './error.ts'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { generatedWorktreeName } from './name.ts'
 import { runCommand, scanCommand } from './process.ts'
@@ -34,6 +36,7 @@ export type {
 export { generatedWorktreeName } from './name.ts'
 export { CREATED_RECORD, createdWorktreeSchema, worktreeProjection } from './projection.ts'
 export type { WorktreeProjectionState } from './projection.ts'
+export { WorktreeError, type WorktreeErrorCode } from './error.ts'
 
 /** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
 export interface Config {
@@ -124,7 +127,7 @@ export class WorktreeService extends Service {
       }
     }
     ctx.effect(() => async () => {
-      this.lifetime.abort(new Error('worktree service disposed'))
+      this.lifetime.abort(new WorktreeError('worktree service disposed', 'WORKTREE_UNAVAILABLE'))
       await Promise.allSettled(this.pending)
     })
     // The Forge panel draws the retain switch on this row's Plugins page.
@@ -158,6 +161,8 @@ export class WorktreeService extends Service {
    * @param signal - cancellation of lookup, creation, and working-directory publication.
    * @param onPhase - receives each stage before it begins; it must not throw.
    * @returns canonical checkout path, branch name, pinned commit, and source repository root.
+   * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
+   *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
    */
   async create(
     agent: Agent,
@@ -189,6 +194,8 @@ export class WorktreeService extends Service {
    * @param signal - cancellation of the restoration.
    * @param onPhase - receives each stage before it begins; it must not throw.
    * @returns the directory and whether the branch was created again.
+   * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
+   *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
    */
   async restore(
     agent: Agent,
@@ -214,8 +221,9 @@ export class WorktreeService extends Service {
    * @param agent - caller whose current directory lies in a recorded worktree.
    * @param signal - cancellation of directory validation and of the working-directory change.
    * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
-   * @throws when no recorded worktree contains the current directory, or the working-directory
-   *   service's error when the source checkout no longer exists.
+   * @throws {WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and
+   *   `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service's error when the source
+   *   checkout no longer exists.
    */
   async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
@@ -225,7 +233,9 @@ export class WorktreeService extends Service {
     for (const { worktree } of this.projection.stateOf(agent.session).created) {
       if (within(worktree.path, cwd) && (left === undefined || worktree.path.length >= left.path.length)) left = worktree
     }
-    if (left === undefined) throw new Error(`worktree: no recorded worktree contains the working directory ${JSON.stringify(cwd)}`)
+    if (left === undefined) {
+      throw new WorktreeError(`cannot exit a worktree: no recorded worktree contains the working directory ${JSON.stringify(cwd)}`, 'WORKTREE_NOT_ENTERED')
+    }
     await this.ctx.workingDirectory.set(agent, left.repositoryRoot, operationSignal)
     return left
   }
@@ -268,9 +278,9 @@ export class WorktreeService extends Service {
 
   private resolve(agent: Agent, request: CreateWorktreeRequest): WorktreeSpec {
     const branch = request.name ?? generatedWorktreeName(this.config.namePrefix, agent.session.id)
-    if (!relativePath(branch) || branch.startsWith('-')) throw new Error('worktree name must be a relative Git branch name')
+    if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree name must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
     const revision = request.from ?? 'HEAD'
-    if (revision.length === 0) throw new Error('worktree from must name a local commit, branch, or tag')
+    if (revision.length === 0) throw new WorktreeError('worktree from must name a local commit, branch, or tag', 'WORKTREE_INVALID_ARGUMENT')
     return { branch, revision }
   }
 
@@ -284,19 +294,19 @@ export class WorktreeService extends Service {
     const cwd = await this.ctx.workingDirectory.ensure(agent, signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
-    await run(cwd, ['check-ref-format', `refs/heads/${branch}`])
+    await assertBranchName(run, cwd, branch, 'worktree name')
     const rootOutput = await run(cwd, ['rev-parse', '--show-toplevel'])
     const rootTarget = await this.ctx.fs.resolve(rootOutput.stdout.replace(/\r?\n$/, ''), { cwd, signal })
     const repositoryRoot = this.ctx.fs.processPath(rootTarget)
     const base = await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`])
     const baseCommit = base.stdout.trim()
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
-    if (existing.exitCode === 0) throw new Error(`worktree branch already exists: ${branch}`)
+    if (existing.exitCode === 0) throw new WorktreeError(`worktree branch already exists: ${branch}`, 'WORKTREE_ALREADY_EXISTS')
     const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
     const poolPath = this.ctx.fs.processPath(pool)
     const destination = await this.ctx.fs.resolve(branch, { cwd: poolPath, signal })
     const path = this.ctx.fs.processPath(destination)
-    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
     try {
       await this.prepareDirectory(policy, repositoryRoot, poolPath, path, signal)
       await run(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
@@ -308,7 +318,7 @@ export class WorktreeService extends Service {
       appendPluginRecord(agent.session, CREATED_RECORD, created)
       return created
     } catch (error) {
-      throw new Error(`Could not finish worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      throw retainedFailure(`Could not finish worktree ${branch} at ${path}. Any created checkout and branch are retained.`, error, signal)
     }
   }
 
@@ -321,18 +331,20 @@ export class WorktreeService extends Service {
     onPhase?.('prepare')
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
-    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
-    if (!relativePath(branch) || branch.startsWith('-')) throw new Error('worktree branch must be a relative Git branch name')
-    if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(baseCommit)) throw new Error('worktree baseCommit must be a full commit object name')
+    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
+    if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree branch must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
+    if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(baseCommit)) throw new WorktreeError('worktree baseCommit must be a full commit object name', 'WORKTREE_INVALID_ARGUMENT')
     const identity = await checkoutIdentity(this.ctx, this.config.directory, { path, branch, baseCommit, repositoryRoot }, run, signal)
-    if (identity === null) throw new Error('worktree restoration must use a canonical directory inside the configured pool of the source checkout root')
-    await run(repositoryRoot, ['check-ref-format', `refs/heads/${branch}`])
+    if (identity === null) {
+      throw new WorktreeError('worktree restoration must use a canonical directory inside the configured pool of the source checkout root', 'WORKTREE_INVALID_ARGUMENT')
+    }
+    await assertBranchName(run, repositoryRoot, branch, 'worktree branch')
     await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
     const scan = this.gitScanner(policy, signal)
     const fields = await registration(this.ctx, { path, branch, baseCommit, repositoryRoot }, identity.target, scan, signal)
     if (fields !== undefined) {
-      if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new Error(`worktree is locked: ${path}`)
-      if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+      if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new WorktreeError(`worktree is locked: ${path}`, 'WORKTREE_LOCKED')
+      if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
       await run(repositoryRoot, ['worktree', 'remove', '--', path])
     }
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
@@ -349,7 +361,7 @@ export class WorktreeService extends Service {
       await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', 'HEAD'], undefined, overrides)
       return { path, branchRecreated }
     } catch (error) {
-      throw new Error(`Could not restore worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      throw retainedFailure(`Could not restore worktree ${branch} at ${path}. Any created checkout and branch are retained.`, error, signal)
     }
   }
 
@@ -381,6 +393,41 @@ export class WorktreeService extends Service {
     await runCommand(this.ctx, this.config, policy, repositoryRoot,
       [this.config.nodeCommand, '--input-type=module', '-e', PREPARE_DIRECTORY, poolPath, path], signal)
   }
+}
+
+/**
+ * Reject a name Git does not accept as a branch.
+ * @param run - confined Git runner.
+ * @param directory - repository directory for the check.
+ * @param branch - candidate branch name.
+ * @param field - request field named in the failure.
+ */
+async function assertBranchName(run: GitRun, directory: string, branch: string, field: string): Promise<void> {
+  const checked = await run(directory, ['check-ref-format', `refs/heads/${branch}`], [0, 1])
+  if (checked.exitCode !== 0) throw new WorktreeError(`${field} must be a valid Git branch name`, 'WORKTREE_INVALID_ARGUMENT')
+}
+
+/**
+ * Add retained-artifact context to a failure without changing its routable identity:
+ * a `HarnessError` keeps its `name` and `code`, and caller cancellation stays an `AbortError`.
+ * A `HarnessError` subclass other than `WorktreeError` is rebuilt as a plain `HarnessError`, so
+ * callers route on `name` and `code` rather than on `instanceof` the original subclass.
+ * @param context - operation summary placed before the original message.
+ * @param error - failure thrown after allocation began.
+ * @param signal - operation cancellation.
+ * @returns the error to throw, with `error` as its cause.
+ */
+function retainedFailure(context: string, error: unknown, signal: AbortSignal): Error {
+  const message = `${context} ${error instanceof Error ? error.message : String(error)}`
+  if (error instanceof WorktreeError) return new WorktreeError(message, error.code, { cause: error })
+  if (error instanceof HarnessError) {
+    const wrapped = new HarnessError(message, error.code, { cause: error })
+    wrapped.name = error.name
+    return wrapped
+  }
+  const wrapped = new Error(message, { cause: error })
+  if (signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))) wrapped.name = 'AbortError'
+  return wrapped
 }
 
 /**

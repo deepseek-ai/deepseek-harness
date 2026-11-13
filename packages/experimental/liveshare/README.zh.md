@@ -97,7 +97,7 @@ Liveshare 服务端地址在首次使用时设置：在分享弹窗的地址输�
 
 可分享给 viewer 的方法是已安装插件注册的 Remote 方法，由 Host 的 Typert registry 在 [`shareable-catalog.ts`](src/host/shareable-catalog.ts) 动态枚举。DSH 核心服务命名空间被排除（[`EXCLUDED_SHARE_NAMESPACES`](src/host/shareable-catalog.ts) 列出这些命名空间），插件管理器报告为核心 profile bundle 组件的插件也被排除；其他用户安装的插件和 DSH 实验性插件保留。所有者可以一次性开放全部已安装插件，也可以按插件设为不可用、全部方法或部分方法。这里没有读写之分：只有当前目录与该 share 的策略同时点名某个方法、且资源对读者可见时，该方法才可被调用。
 
-Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒绝目标缺失或无效的调用。查看页的会话列表和工作区成员裁剪为源会话及该查看者自己的分叉会话。页面从读者的访问快照读取每个会话自己的答案，因此切换选择不会把前一会话的权限带过去。未知或无法读取的模式默认拒绝。Owner 为源会话与分叉会话调用重新检查准入；撤权会取消受影响的调用和流，分享准入收窄时还会停止共享会话正在运行的轮次。页面区分认证、访问、过期、停止分享、所有者离线和传输失败，仅重试明确分类为可重试的失败。
+Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒绝目标缺失或无效的调用。查看页的会话列表和工作区成员裁剪为源会话及该查看者自己的分叉会话。页面从读者的访问快照读取每个会话自己的答案，因此切换选择不会把前一会话的权限带过去。未知或无法读取的模式默认拒绝。Owner 为源会话与分叉会话调用重新检查准入；撤权会取消受影响的调用和流，分享准入收窄时只停止由查看者发起的正在运行轮次。页面区分认证、访问、过期、停止分享、所有者离线和传输失败，仅重试明确分类为可重试的失败。
 
 -----
 
@@ -109,7 +109,7 @@ Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒
 
 查看页就是 Owner 自己的 Web shell。Liveshare 服务端通过 `asset` 读取取得 Owner 渲染好的 index 文档，并把 [viewer-carrier.ts](../liveshare-protocol/src/viewer-carrier.ts) 生成的载体脚本放在文档最前面。Shell 资源、客户端插件 bundle，以及 index 相对文档基准引用的三个确切顶层文件（`manifest.webmanifest`、`favicon.svg`、`favicon-dark.svg`）都经同一读取取得，来自 Owner 的前端读取服务和客户端模块注册表，因此页面以 Owner 的版本运行 Owner 的全部插件。任何 asset 路径上的 source map 都被拒绝，且该判定是权威的：经 Liveshare 服务端转发的 `asset` 读取会原样到达这里，因此 Liveshare 服务端侧的同名规则只覆盖它自己的页面资源路由；被服务的文档还会去掉自己的 manifest 链接，否则浏览器会不带凭据地抓取它。载体把 Connection 调用和 Gateway 流转换为 `POST {base}/__share/rpc` 请求，并把 Liveshare 服务端无法作答的只读页面源 Owner 路由（`/open-in-app/apps` 与 `/api/present.host`）也经该通道转发，而不是留给 Liveshare 服务端尾部。Liveshare 服务端在不透明请求体之外提供已认证主体。Owner 读取处理器把每位读者的调用和流以「每个分享、每位读者一个 Peer」分派进自己的 Connection 与 Gateway，该 Peer 的 `share-viewer` principal 携带分享与服务端断言的身份。Gateway 依据本包注册的 `share-viewer` 策略，经 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md) 判定该 Peer 的调用以及转发给它的会话通知：受服务的读者持有共享会话、其自己的 fork 及包含它们的工作区上的读取角色，持有条件按分享档位与其自身 fork 开关判定的 fork 与写入角色，此外别无授权；附件上传随读取角色生效。读取处理器保留分享生命周期拒绝、Liveshare 服务端授权刷新、冷会话准备和 fork 编排，在准备或分派提示词与停止之前读取策略的写入规则，并在授权结束、分享停止或过期、或复检拒绝时释放读者的 Peer。读者索取页面或打开流时也会开始准备该分享的源会话，因此宿主重启时该会话的 agent 尚未存活也能补上驱动所需的层；无法被 confine 的分享会如实说明该状态，而不再声明只读。存在载体写入的 `__DSH_LIVESHARE_VIEWER__` 全局变量时，本包的浏览器端挂载查看页界面，否则挂载分享操作。读者收到的 index 把读者自己的访问快照赋给每个 index 设为所有者基线的同一全局变量，页面随后跟随读者的 `remoteAccess/follow` 快照；CSS 隐藏不构成授权。
 
-Fork 请求绑定主体、分享、源会话、操作身份和已完成前缀。持久化预留记录与已记录的分叉会话使重试已记录的操作时重放同一分叉会话；owner 的 `SessionForkRequest` 自己生成分叉会话 id，因此在分叉会话已创建、但尚未记录时中断的请求会再次 fork。注册表变更为异步操作，仅在加锁的读取、修改与原子发布后完成；调用方必须等待预留、记录与撤销。冷态激活使用 Host 常规 Agent lookup，由串行 `agent/created` 在排队输入运行前安装限制，不使用 Remote `session/prepare` 端点。分叉会话作用域保留单个默认拒绝的 guard；重连替换其限制安装，释放旧安装不会移除继任。
+Fork 请求绑定主体、分享、源会话、操作身份和已完成前缀。持久化预留记录与已记录的分叉会话使重试已记录的操作时重放同一分叉会话；owner 的 `SessionForkRequest` 自己生成分叉会话 id，因此在分叉会话已创建、但尚未记录时中断的请求会再次 fork。注册表变更为异步操作，仅在加锁的读取、修改与原子发布后完成；调用方必须等待预留、记录与撤销。冷态激活使用 Host 常规 Agent lookup，由串行 `agent/created` 在排队输入运行前安装限制，不使用 Remote `session/prepare` 端点。分叉会话作用域保留单个默认拒绝的 guard；重连替换其限制安装，释放旧安装不会移除继任。无论由 guard 还是受限替换工具判定，同一种拒绝只有一个标识：授权工作区外的路径为 `FsError` `FS_SANDBOX_DENIED`；fork 的限制或分享当前授权不允许的工具或写入为 `LiveshareForkDeniedError` `FORK_TOOL_NOT_PERMITTED`；guard 的其他拒绝使用 [fork-errors.ts](src/host/fork-errors.ts) 中其余的 `FORK_*` code；替换工具无法限制的参数以 `ToolArgsError` 失败。
 
 读者的提示词以 `user-rpc` 消息进入会话，其 `source.principal` 指明该读者；pre-step 在每条进入消息到达模型前，按 Relay 的准入重新检查其查看者。执行按轮次受限：只要有分享处于活跃状态，已准入输入中带有 share-viewer principal 的轮次就运行 Host 挂载的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）受限替代、保留无本地文件副作用工具（`todo_write`、`skill`、`web_search`、`web_fetch`）的原生定义、放行选定执行器提供的 PTC 传输工具 `run_code`，以及（当某个分享允许写入时）有界 `edit` 与 `write`。其余所有工具对该轮次一律拒绝，且每次允许的调用声明的每个路径都会解析并按获授根目录检查。所有者自己发起的轮次保留会话原生工具，直到最后一个分享停止或过期。该轮次判定只存在于 Host 内存，按轮次重算，不写入会话日志。每次操作都会重新读取分享当前的 Relay 授权，并按获授根目录检查解析后的目标。读者的停止与提示词一样经 Gateway 分派：`share-viewer` 策略在分享档位确立且会话受沙箱限制时放行，随后由所有者自己的会话控制器停止该会话当前运行的轮次，包括所有者发起的轮次。读写保留正常写入观察策略。执行规则见 [LiveShare 子系统](../../../docs/subsystems/liveshare.zh.md)。
 
@@ -139,6 +139,7 @@ Fork 请求绑定主体、分享、源会话、操作身份和已完成前缀。
 
 - [LiveShare 子系统](../../../docs/subsystems/liveshare.zh.md)
 - [Owner 决策记录](../../../.agents/notes/implemented/feature/2026-09-13-liveshare-protocol-and-owner-surfaces.zh.md)
+- [单一宿主认领房主状态](../../../.agents/notes/implemented/feature/2026-11-11-liveshare-owner-state-host-claim.zh.md)
 - [Web 组合包](../../bundle/web-app/README.zh.md)
 
 -----
@@ -165,10 +166,10 @@ viewer 的 prompt 以普通用户输入进入共享会话，因此扩展的是�
 - 端点能力从 Typert registry 枚举已安装插件的 Remote 方法（见 [`shareable-catalog.ts`](src/host/shareable-catalog.ts)），DSH 核心服务命名空间被排除。方法调用不经过沙箱，也没有读写分类：开放一个方法即信任该已安装插件的代码，它在 Host 进程中执行。被选中的方法会在 policy 绑定的资源上被任意已认证分享读者调用，覆盖 `global`、`session`、`workspace` 三种资源种类。
 - owner 在分享面板里通过全局开关和按插件行选择已安装插件的方法。全局开关为“不可用”（全部关闭）、“自定义”（按插件列表）或“全部允许”（开放当前目录全部方法）。每个插件再设为不可用、全部方法或部分方法；部分选择保存显式方法列表，因此目录之后新增的方法不会自动开放，直到 owner 再次保存。插件行优先显示包内本地化名称，取不到时回退到包名末段或 namespace；搜索与限高滚动让大目录仍可操作。选择是分享级的：每位已准入查看者都可以在 policy 绑定的资源上调用被选中的方法，尚未建立逐查看者方法级别。方法授权独立于会话档位，Session 与 Workspace 调用仍由核心分享角色决定。目录不再提供的方法即使留在记录里也不暴露。
 - 工作区不再包含读者可见的会话后，要到该工作区或工作区顺序下次变化时才离开读者的工作区订阅（[remote access 限制](../../api/remote-access/README.zh.md#known-limitations-and-deferred-work)）。
-- 注册表文件锁防止并发文件写入丢失持久条目，但每个注册表读取自身内存快照。多个 Host 之间不协调 Owner 分享状态更新与网关归属；每个 home 只使用一个活动 Owner Host。这不是多宿主授权服务。
+- 注册表文件锁防止并发文件写入丢失持久条目，但每个注册表读取自身内存快照。一个正在运行的 Host 通过 `owner-host.json` 认领 owner 状态目录，因此同一 home 上的第二个 Host 只读取分享、不再注册或修改它们，任何会改动记录或为该记录联系 Liveshare 服务端的 `liveshareShares` 操作都以 `liveshareShares/owner-state-held` 拒绝，包括在分享对话框里添加源 Session、分享列表和审计读取。它仍可导入凭据，因为那是它自己的登录，但该导入不再认领分享、也不再重新注册任何分享。被后继者取代的 Host 会在下一次分享操作时发现这一点，并以同样的方式拒绝。该认领是建议性的，持有进程消失后会被回收，也仍不是多宿主授权服务。
 - 不发布运行时 invariant 配套模块：授权在操作本身检查，本包没有单独的 invariant 观察器。
 - Worker 重启会重新注册保留分享，但不重放查看流；查看者通过传输层恢复。注册被 401、403、410 或 426 拒绝时，该分享的重连就此停止，直到有别的操作把它重新注册：重新发布或改档位都会重新注册，为该 Liveshare 服务端存入凭据也会，它会把该地址下未在线的分享重新注册。恢复分享时出示的是本机为该分享所属 Liveshare 服务端保存的凭据，与本机自己对凭据过期的判断无关，因为 Liveshare 服务端会在背后为登录续期，凭据是否仍然授权只由 Liveshare 服务端决定；新建分享时仍按本机这一判断拒绝。
-- 访问档位授予 `view` 准入，有效 fork/write 权限来自分享模式。尚未建立逐查看者执行级别或立即跨实例停止／取消完成保证；取消不能撤回已提交写入。写入降为只读的快照会拒绝后续写入，但不承诺立即取消正在运行的分叉会话轮次。
+- 访问档位授予 `view` 准入，有效 fork/write 权限来自分享模式。尚未建立逐查看者执行级别或立即跨实例停止／取消完成保证；取消不能撤回已提交写入。分享结束只停止各来源会话中由查看者发起的正在运行轮次，所有者自己的轮次会继续运行；本机无法归因的轮次随分享一起停止。写入降为只读的快照会拒绝后续写入，但不承诺立即取消正在运行的分叉会话轮次。
 - 功能达到发布条件前，仍须完成最终装配快照验证。
 - 在查看页上，绕过 Connection 载体的客户端读取（交付物读取、open-in-app、PDF 资源、HMR 事件）到达的是 Liveshare 服务端而不是 Owner；index 文档中以根路径开头的 manifest 和图标链接在 Liveshare 服务端前缀下无法解析。
 

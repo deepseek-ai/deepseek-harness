@@ -1,10 +1,10 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, type TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   TerminalBackend,
@@ -17,12 +17,13 @@ import type {
   TerminalSignal,
 } from '@deepseek-ai/dsh-terminal'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const agentScopeDisposers = new WeakMap<Agent, () => Promise<void>>()
 const ptyServiceDisposers = new WeakMap<Context, () => Promise<void>>()
 
 function stubAgent(ctx: Context, rawId: string): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const scopeFiber = ctx.plugin(() => {})
   const session = Session.create(id)
   const agent: Agent = {
@@ -138,7 +139,7 @@ async function disposeTerminalSessionService(ctx: Context): Promise<void> {
 
 describe('TerminalSessionService backend registry', () => {
   it('preserves the id brand and disposes exact backend contributions', async () => {
-    expectTypeOf(TerminalSessionId('pty-1')).toEqualTypeOf<TerminalSessionIdType>()
+    expectTypeOf(brandString<TerminalSessionId>('pty-1')).toEqualTypeOf<TerminalSessionIdType>()
     const ctx = await harness()
     const first = backend()
     const dispose = ctx.terminals.registerBackend(first.provider)

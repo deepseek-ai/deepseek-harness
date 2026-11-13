@@ -127,7 +127,6 @@ These limits define what the shell owns versus what its occupants own; they are 
 
 - **Session state-dot rendering is owned by ui-workspace** — no done/error notification sources are available to this shell.
 - **Workspace browser behavior is composition-owned** — grouping, ordering, search, and row state belong to ui-workspace, not this shell.
-- **"New task completed" unread marking is local viewing state** — completion-time > last-seen never reaches the host.
 - **Copying the local-build version is mouse-only** — keyboard activation of the brand starts a session.
 - **Only wheel and trackpad input crosses the navigation boundary in one gesture** — touch drags keep native nested scrolling and stop where the viewport reaches its end; browsers without scroll-state container queries scroll the section first. Wheel steps split in JavaScript run on the main thread without smooth-scrolling animation or overscroll bounce.
 

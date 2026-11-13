@@ -7,7 +7,7 @@ import './fonts-dom.client.ts'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { CHANGES_KIND, changesAddress, type ChangesParams, type ChangesSource } from '../src/client/changes-address.ts'
@@ -18,20 +18,26 @@ import { ViewedFiles } from '../src/client/viewed-files.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../src/client/ChangesTab.tsx'
 import { en, zh } from '../src/client/locales.ts'
-import type { PanelSnapshot } from '../src/client/source.ts'
+import type { HostStream, PanelSnapshot, StreamSnapshot } from '../src/client/source.ts'
+import type { ForgeLensDescription } from '../src/client/changes-service.ts'
+import type { ViewAnnotations } from '../src/client/annotations.ts'
+import type { ForgeChangesToolbarProps } from '../src/client/slots.ts'
+import { lensVersion } from '../src/lens-version.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
 import type {
-  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeLensId, ForgeLocalDiff,
+  ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import type {
   ChangeRequestKey, ForgeCommitList, ForgeReviewData, ForgeReviewId, ForgeReviewThread, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 const TAB = 'tab-changes' as TabId
 const URL7 = 'https://github.com/octo/demo/pull/7'
 const HEAD = 'a'.repeat(40)
@@ -186,12 +192,23 @@ function hookOf<T>(instance: { subscribe: (listener: () => void) => () => void; 
   }
 }
 
+/** A Host stream that yields `frames`, then fails with `failure` when one is given. */
+function hostStream<F>(frames: readonly F[], failure?: unknown): HostStream<F> {
+  return {
+    dispose: vi.fn(),
+    async *[Symbol.asyncIterator]() {
+      for (const frame of frames) yield frame
+      if (failure !== undefined) throw failure
+    },
+  }
+}
+
 /** Let the Remote reads the view awaits settle. */
 async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 }
 
-type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks' | 'viewedFiles'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
+type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks' | 'hooks' | 'viewedFiles'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
   readonly translate?: typeof t
@@ -204,6 +221,19 @@ interface MountOptions {
   readonly setup?: (faces: Faces) => void
   /** Viewed marks; each mount otherwise reads the Session's marks from browser storage. */
   readonly viewedFiles?: ViewedFiles
+  /** The Host's lenses and annotation limit; null stands for facts not reported yet. */
+  readonly extensions?: ForgeExtensionState | null
+  /** Lens titles Client plugins describe. */
+  readonly lenses?: readonly ForgeLensDescription[]
+  /** Plugin annotations of the view by path, or null while the renderer has no source for the view. */
+  readonly annotations?: ViewAnnotations | null
+}
+
+/** One plugin slot the view drew: its name, the owner props, and the dispatch options. */
+interface SlotCall {
+  readonly key: string
+  readonly owner: unknown
+  readonly options: unknown
 }
 
 function mount(options: MountOptions = {}) {
@@ -270,8 +300,27 @@ function mount(options: MountOptions = {}) {
     changeRequestReviewWrite: vi.fn<ChangesTabInjected['changeRequestReviewWrite']>(async () => ok<ForgeReviewWriteResult>({ ok: true })),
     createChangeRequest: vi.fn<ChangesTabInjected['createChangeRequest']>(),
     report: vi.fn<ChangesTabInjected['report']>(),
+    changesLens: vi.fn<ChangesTabInjected['changesLens']>(() => hostStream([])),
   }
   options.setup?.(faces)
+  const extensions = createSnapshotStore<StreamSnapshot<ForgeExtensionState | null>>({
+    state: options.extensions === undefined ? { lenses: [], maxAnnotationsPerFile: 100 } : options.extensions, disconnected: false,
+  })
+  const lenses = createSnapshotStore<readonly ForgeLensDescription[]>(options.lenses ?? [])
+  const annotations = createSnapshotStore<ViewAnnotations | undefined>(
+    options.annotations === null ? undefined : options.annotations ?? new Map())
+  const useAnnotationsOf = bindSnapshotSelector(annotations)
+  function useAnnotations(key: string): ViewAnnotations | undefined
+  function useAnnotations<S>(key: string, select: (value: ViewAnnotations | undefined) => S): S
+  function useAnnotations<S>(_key: string, select?: (value: ViewAnnotations | undefined) => S): S | ViewAnnotations | undefined {
+    return select === undefined ? useAnnotationsOf(value => value) : useAnnotationsOf(select)
+  }
+  const slotCalls: SlotCall[] = []
+  // Records each plugin slot the view draws and draws nothing for it.
+  const renderSlot = ((key: string, owner: unknown, slotOptions?: unknown) => {
+    slotCalls.push({ key, owner, options: slotOptions })
+    return null
+  }) as ChangesTabProps['renderSlot']
   const viewedFiles = options.viewedFiles ?? new ViewedFiles(SESSION)
   const props: ChangesTabProps = {
     useTabInfo: () => ({
@@ -286,6 +335,10 @@ function mount(options: MountOptions = {}) {
     useStore: hookOf(store),
     actions: store.actions,
     usePanel,
+    useExtensions: bindSnapshotSelector(extensions),
+    useLenses: bindSnapshotSelector(lenses),
+    useAnnotations,
+    renderSlot,
     ...faces,
     viewedFiles,
     t: options.translate ?? t,
@@ -298,7 +351,10 @@ function mount(options: MountOptions = {}) {
     return element
   }
   const paths = (): (string | null)[] => [...view.container.querySelectorAll('[data-forge-diff-file]')].map(element => element.getAttribute('data-forge-diff-file'))
-  return { view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, viewedFiles, section, paths }
+  return {
+    view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, viewedFiles, section, paths, extensions, lenses,
+    annotations, slotCalls,
+  }
 }
 
 /** Visible texts of the rows a section draws, in order. */
@@ -2374,6 +2430,73 @@ describe('ChangesTab review threads', () => {
     expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
   })
 
+  it.each(['before', 'after'] as const)('keeps context arriving %s a review refresh of the same diff', async (order) => {
+    const m = mount({ source, setup: reviewed() })
+    await settle()
+    const reviews = m.faces.changeRequestReview.mock.calls.length
+    const marks = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestViewed>>>()
+    const text = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestText>>>()
+    m.faces.changeRequestViewed.mockReturnValueOnce(marks.promise)
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const current = m.panel.getSnapshot()
+    const state = current?.state
+    if (current === undefined || state === undefined || state === null) throw new Error('the panel has no state')
+    const announced = state.changeRequests.map(item => ({ ...item, reviewRevision: 1 }))
+    act(() => { m.panel.set({ ...current, state: { ...state, changeRequests: announced } }) })
+    await settle()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(reviews + 1)
+    expect(m.faces.changeRequestViewed.mock.results.at(-1)?.value).toBe(marks.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    if (order === 'before') {
+      text.resolve(ok(APP_TEXT))
+      await settle()
+      expect(rowTexts(section)).toContain(APP_LINES[0])
+    }
+    marks.resolve(ok(null))
+    await settle()
+    if (order === 'after') text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).toContain(APP_LINES[0])
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
+  })
+
+  it.each(['head', 'patch'] as const)('drops pending context when the change request %s changes', async (changed) => {
+    const m = mount({ source })
+    await settle()
+    const text = Promise.withResolvers<RemoteResult<string>>()
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    const next = changed === 'head' ? { ...CHANGE, headSha: OLD } : {
+      ...CHANGE, files: CHANGE.files.map(file => file.path === APP.path
+        ? { ...file, digest: 'changed-base-patch', hunks: file.hunks.slice(0, 1) } : file),
+    }
+    m.faces.changeRequestDiff.mockResolvedValueOnce(ok(next))
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).not.toContain(APP_LINES[0])
+    expect(within(section).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('clears a filter lens that hides the file of a thread the reader opens from the thread list', async () => {
+    const lens = 'fixture/exports'
+    const m = mount({ source, extensions: { lenses: [{ id: lens, version: '1' }], maxAnnotationsPerFile: 5 }, params: { lens }, setup: (faces) => {
+      reviewed()(faces)
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: { 'docs/notes.txt': {} } }]))
+    } })
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-diff-file="src/app.ts"]')).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: /^Review threads, / }))
+    scrolled.mockClear()
+    fireEvent.click(m.view.getByRole('complementary').querySelector('[data-forge-thread-item="on-row"]')!)
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    await settle()
+    expect(scrolled.mock.contexts).toContain(card(m, 'on-row'))
+  })
+
   it('draws a file a thread jump targets before its section comes within reach, and keeps it drawn', async () => {
     // A double that never reports a section as reached, as for files far below the scrollport.
     vi.stubGlobal('IntersectionObserver', class {
@@ -2475,5 +2598,145 @@ describe('ChangesTab review threads', () => {
     act(() => { m.visibility.set(true) })
     await settle()
     expect(card(m, 'on-row')).toBeNull()
+  })
+})
+
+describe('ChangesTab extensions', () => {
+  const EXPORTS = 'fixture/exports'
+  const KEPT = { 'src/app.ts': { ranges: { old: [], new: [{ start: 3, end: 3 }] } }, 'src/new.ts': {}, 'docs/gone.txt': { ranges: { old: [], new: [] } } }
+  const describedLenses: readonly ForgeLensDescription[] = [{ id: EXPORTS as ForgeLensId, title: () => 'Exports' }]
+  const UNUSED = { id: 'lint/unused', version: '1' }
+  const hosted: ForgeExtensionState = { lenses: [UNUSED, { id: EXPORTS, version: '1' }], maxAnnotationsPerFile: 5 }
+
+  it('offers the Host lenses by their descriptions and filters the files to those a chosen lens keeps, folding the hunks it is not about', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, setup: (faces) => {
+      faces.changesLens.mockReturnValueOnce(hostStream([{ kind: 'progress', done: 1, total: 6 }, { kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    const trigger = m.view.getByRole('button', { name: 'Filter lens' })
+    act(() => { trigger.click() })
+    expect(within(document.body).getAllByRole('menuitem').map(row => row.textContent)).toEqual(['No lens', 'Exports—', 'lint/unused—'])
+    act(() => { within(document.body).getByRole('menuitem', { name: 'Exports—' }).click() })
+    await settle()
+    expect(m.faces.changesLens.mock.calls[0]?.[0]).toEqual({
+      source: { kind: 'local', scope: { kind: 'branch', base: null, commits: null } }, version: lensVersion(LOCAL.files), lens: EXPORTS,
+    })
+    expect(m.paths()).toEqual(['docs/gone.txt', 'src/app.ts', 'src/new.ts'])
+    const chosen = m.view.getByRole('button', { name: 'Filter lens: Exports' })
+    expect(chosen.textContent).toBe('Exports3')
+    expect(chosen.closest(`.${css.lensSlot}`)).not.toBeNull()
+    expect(m.view.getByRole('radiogroup', { name: 'Review layer' }).textContent).toBe('All3Interface0Implementation3Tests0')
+    const fold = m.section('src/app.ts').querySelector<HTMLElement>('[data-forge-lens-fold]')
+    expect(fold?.textContent).toBe('1 changes unrelated to “Exports” foldedShow')
+    act(() => { fold?.click() })
+    expect(m.section('src/app.ts').querySelector('[data-forge-lens-fold]')).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-old-line="11"]')).not.toBeNull()
+    act(() => { m.section('docs/gone.txt').querySelector<HTMLElement>('[data-forge-lens-fold]')?.click() })
+    expect(m.section('docs/gone.txt').querySelector('[data-old-line="1"]')).not.toBeNull()
+
+    act(() => { chosen.click() })
+    act(() => { within(document.body).getByRole('menuitem', { name: 'No lens' }).click() })
+    expect(m.paths()).toHaveLength(6)
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+  })
+
+  it('chooses the lens a navigation names, and stops filtering with a notice once the Host withdraws it', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens.mockReturnValue(hostStream([{ kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    expect(m.paths()).toEqual(['docs/gone.txt', 'src/app.ts', 'src/new.ts'])
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED] }, disconnected: false }) })
+    expect(m.paths()).toHaveLength(6)
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    expect(m.faces.report).toHaveBeenCalledWith('filterLens.removed', { lens: 'Exports' })
+  })
+
+  it('asks again for a lens registered at another version and for equal files of another scope', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    // The same registrations published again reuse the result.
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [{ ...UNUSED }, { id: EXPORTS, version: '1' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED, { id: EXPORTS, version: '2' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(2)
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Unstaged' }))
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(3)
+    expect(m.faces.changesLens.mock.calls[2]?.[0])
+      .toEqual({ source: { kind: 'local', scope: { kind: 'unstaged' } }, version: lensVersion(LOCAL.files), lens: EXPORTS })
+  })
+
+  it('reports a failed lens with a retry and a clear, and a lens refused for files read again with a refresh', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens
+        .mockReturnValueOnce(hostStream([], new RemoteError('forgePanel/lens-failed', 'the lens failed: parser crashed', {})))
+        .mockReturnValueOnce(hostStream([], new RemoteError('forgePanel/lens-stale', 'read again', {})))
+        .mockReturnValueOnce(hostStream([]))
+    } })
+    await settle()
+    expect(m.view.getByText('The lens “Exports” did not finish: the lens failed: parser crashed')).toBeTruthy()
+    act(() => { m.view.getByRole('button', { name: 'Retry' }).click() })
+    await settle()
+    expect(m.view.getByText('The changes were read again; refresh to filter them by “Exports”')).toBeTruthy()
+    const reads = m.faces.localDiff.mock.calls.length
+    act(() => { m.view.getAllByRole('button', { name: 'Refresh changes' }).at(-1)?.click() })
+    await settle()
+    expect(m.faces.localDiff.mock.calls.length).toBeGreaterThan(reads)
+    expect(m.view.getByText('The lens “Exports” stopped before it finished')).toBeTruthy()
+    act(() => { m.view.getByRole('button', { name: 'Clear lens' }).click() })
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    expect(m.view.queryByRole('button', { name: 'Clear lens' })).toBeNull()
+  })
+
+  it('draws the plugin slots of the toolbar, the More menu, the line annotations, the file menu, and the comment form', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ extensions: hosted, lenses: describedLenses, annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]) })
+    await settle()
+    const target = { sessionId: SESSION, source: { kind: 'local' } }
+    const calls = (name: string): readonly SlotCall[] => m.slotCalls.filter(call => call.key === name)
+    const bar = calls('forge.changes.toolbar')[0]?.owner as ForgeChangesToolbarProps | undefined
+    expect(bar).toMatchObject({ target, form: 'bar' })
+    // The row has no menu to close.
+    expect(() => { bar?.close() }).not.toThrow()
+    expect(calls('forge.diff.line.annotation')[0]).toEqual({ key: 'forge.diff.line.annotation', owner: { target, path: 'src/app.ts', annotation }, options: { entryKey: 'notes' } })
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation="notes/n1"]')).not.toBeNull()
+
+    act(() => { m.view.getByRole('button', { name: 'More view options' }).click() })
+    expect(within(document.body).getAllByRole('menuitem').map(row => row.textContent)).toContain('Exports—')
+    expect(calls('forge.changes.toolbar').at(-1)?.owner).toMatchObject({ target, form: 'menu' })
+    act(() => { within(document.body).getByRole('menuitem', { name: 'Exports—' }).click() })
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBe(EXPORTS)
+
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }).click() })
+    expect(calls('forge.changes.file.menu')).toHaveLength(1)
+    expect(calls('forge.changes.file.menu')[0]?.owner).toMatchObject({ target, file: { path: 'src/app.ts' } })
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'Select line R4' }).click() })
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'Add comment' }).click() })
+    expect(calls('forge.diff.comment.actions')[0]?.owner).toMatchObject({ target, selection: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4 } })
+  })
+})
+
+describe('ChangesTab extensions before the Host reports them', () => {
+  it('offers no lens and draws no annotations until the Host names its lenses and annotation limit', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ extensions: null, annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]) })
+    await settle()
+    expect(m.view.queryByRole('button', { name: 'Filter lens' })).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-forge-hidden-annotations]')).toBeNull()
+  })
+
+  it('draws no annotations while the renderer has no source for the view', async () => {
+    const m = mount({ annotations: null })
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+    expect(m.view.container.querySelector('[data-forge-annotation]')).toBeNull()
   })
 })

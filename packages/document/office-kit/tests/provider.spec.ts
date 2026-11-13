@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
-import OfficeKit, { Config, OfficeSourceKey, type OfficeKitRequest } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import OfficeKit, { Config, type OfficeSourceKey, type OfficeKitRequest } from '../src/index.ts'
 import { resolveKitModule, type KitModuleResolution } from '../src/locate.ts'
 import { expectDefaultOutputsUntouched } from './default-outputs.ts'
 
@@ -32,11 +33,11 @@ const absentKit = Object.assign(new Error('Cannot find package'), { code: 'ERR_M
 const pdf = Buffer.from('%PDF-1.7\npreview\n%%EOF\n')
 const input = new Uint8Array([80, 75, 3, 4])
 const request: OfficeKitRequest = { extension: 'docx', priority: 'foreground', source: {
-  key: OfficeSourceKey('source'), version: 'v1', bytes: input.length,
+  key: brandString<OfficeSourceKey>('source'), version: 'v1', bytes: input.length,
   read: async () => ({ bytes: input, version: 'v1' }),
 } }
 function distinct(index: number): OfficeKitRequest {
-  return { ...request, source: { ...request.source, key: OfficeSourceKey(`source-${index}`),
+  return { ...request, source: { ...request.source, key: brandString<OfficeSourceKey>(`source-${index}`),
     read: async () => ({ bytes: new Uint8Array([80, 75, 3, index]), version: 'v1' }) } }
 }
 let ctx: Context

@@ -10,7 +10,7 @@
 
 默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
 
-`exit_worktree` 工具调用的 `ctx.worktrees.exit(agent)` 找到包含 Session 当前目录的已记录工作树，把 Session 送回它的源检出；检出目录与分支保留。嵌套的工作树每次退出一层。取消或失败也可能留下部分产物；错误会指出它们的位置。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
+`exit_worktree` 工具调用的 `ctx.worktrees.exit(agent)` 找到包含 Session 当前目录的已记录工作树，把 Session 送回它的源检出；检出目录与分支保留。嵌套的工作树每次退出一层。取消或失败也可能留下部分产物；错误会指出它们的位置。worktree 失败抛出带 `WORKTREE_*` code 的 `WorktreeError`；分配开始后的失败保留被包装错误的 `name` 与 `code`，调用方取消仍为 `AbortError`。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
 
 ## 请求与结果
 
@@ -124,6 +124,8 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
  * @param signal - cancellation of lookup, creation, and working-directory publication.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
+ * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
+ *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
 
@@ -140,6 +142,8 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param signal - cancellation of the restoration.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns the directory and whether the branch was created again.
+ * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
+ *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 
@@ -150,8 +154,9 @@ async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSign
  * @param agent - caller whose current directory lies in a recorded worktree.
  * @param signal - cancellation of directory validation and of the working-directory change.
  * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
- * @throws when no recorded worktree contains the current directory, or the working-directory
- *   service's error when the source checkout no longer exists.
+ * @throws {WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and
+ *   `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service's error when the source
+ *   checkout no longer exists.
  */
 async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>
 

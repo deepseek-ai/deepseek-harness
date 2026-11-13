@@ -6,7 +6,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamProjectionState, TeamState } from './projection.ts'
 
-import { TeamId } from './types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TeamId } from './types.ts'
 import { TeamError } from './error.ts'
 import type { TeamTaskSnapshot } from './types.ts'
 
@@ -27,11 +28,11 @@ export class TeamJournal {
    * Read authoritative Team state for one exact live Lead.
    * @param root - exact live Team Lead.
    * @returns current projected state selected by the Lead Team id.
-   * @throws when the durable Team projection has failed.
+   * @throws {TeamError} `TEAM_STATE_CORRUPT` when the durable Team projection has failed.
    */
   state(root: Agent): TeamState {
     const projection = this.teamProjectionHandle.stateOf(root.session)
-    if (projection.failure !== undefined) throw new Error(projection.failure)
+    if (projection.failure !== undefined) throw new TeamError(projection.failure, 'TEAM_STATE_CORRUPT')
     return projection
   }
 
@@ -60,7 +61,7 @@ export class TeamJournal {
    * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED after append when flush fails or has no listener; read the task before retrying.
    */
   async appendAndFlush(root: Agent, task: TeamTaskSnapshot): Promise<void> {
-    root.session.append('team/task', { version: 2, teamId: TeamId(root.id), task })
+    root.session.append('team/task', { version: 2, teamId: brandString<TeamId>(root.id), task })
     try {
       const participated = await this.ctx.sessions.flush(root.session)
       if (!participated) throw new Error('No session durability listener participated')

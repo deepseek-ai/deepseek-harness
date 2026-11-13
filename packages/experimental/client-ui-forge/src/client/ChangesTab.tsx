@@ -22,15 +22,16 @@ import {
   Menu, StateDot, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
-  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeLocalCommits, ForgeLocalDiff,
-  ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeExtensionState, ForgeLensFrame,
+  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
+import { lensVersion } from '../lens-version.ts'
 import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
   ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
@@ -57,12 +58,17 @@ import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
+import type { ForgeLensDescription } from './changes-service.ts'
+import type { SourcedAnnotation, ViewAnnotations } from './annotations.ts'
+import { foldedHunks, useLensRun } from './lens-filter.ts'
+import { LensFilterMenu, type LensChoice } from './LensFilter.tsx'
+import type {} from './slots.ts'
 import { observeToolbarFold } from './toolbar-fold.ts'
 import type { FileThreads, ThreadActions, ThreadFocus, ThreadWrite } from './ReviewThreads.tsx'
 import { inFileOrder, type ThreadFilter } from './review-threads.ts'
 import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
 import { ThreadList } from './ThreadList.tsx'
-import type { PanelSnapshot } from './source.ts'
+import type { HostStream, PanelSnapshot, StreamSnapshot } from './source.ts'
 import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf } from './status.ts'
 import css from './ChangesTab.module.css'
 
@@ -85,8 +91,21 @@ export interface ChangesTabInjected {
   readonly reviewQueue: (tab: Pick<SidebarRightTabInfo['tab'], 'id' | 'signal'>) => ReviewQueue
   /** Publish one comment or a completed review; never retries mutations. */
   readonly submitReview: (url: string, request: ForgeReviewRequest) => Promise<RemoteResult<ForgeReviewResult>>
-  /** Panel source while visible; the renderer releases the subscription for an inactive key. */
-  readonly keyedHooks: { readonly panel: (visibility: string) => HostObservable<PanelSnapshot> | undefined }
+  /**
+   * Panel source while visible, which the renderer releases for an inactive key; and the plugin annotations of a view by
+   * its address, which the renderer binds as `useAnnotations`.
+   */
+  readonly keyedHooks: {
+    readonly panel: (visibility: string) => HostObservable<PanelSnapshot> | undefined
+    readonly annotations: (address: string) => HostObservable<ViewAnnotations>
+  }
+  /** Lens titles Client plugins describe and the Host's lenses and annotation limit; bound as `useLenses` and `useExtensions`. */
+  readonly hooks: {
+    readonly lenses: HostObservable<readonly ForgeLensDescription[]>
+    readonly extensions: HostObservable<StreamSnapshot<ForgeExtensionState | null>>
+  }
+  /** Classify the shown files with a Host lens; `signal` aborts the stream. */
+  readonly changesLens: (request: ForgeLensRequest, signal: AbortSignal) => HostStream<ForgeLensFrame>
   /** Open the panel stream again after it ended. */
   readonly reconnect: () => void
   /** Read the local changes of one scope; `signal` aborts the read. */
@@ -135,6 +154,8 @@ export interface ChangesTabInjected {
 /** Full props of the changes tab body. */
 export type ChangesTabProps =
   Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useTabInfo' | 'sessionId'>
+  & Pick<PropsRenderSlots<'forge.changes.toolbar' | 'forge.changes.file.menu' | 'forge.diff.line.annotation' | 'forge.diff.comment.actions'>,
+    'renderSlot'>
   & PropsStore<ReturnType<typeof createChangesStore>>
   & InjectFace<ChangesTabInjected>
   & PropsLocale<typeof NS>
@@ -174,9 +195,9 @@ interface WriteRefusal {
   readonly unknown: boolean
 }
 
-/** Unchanged lines read for one loaded diff: each file's new side and its expanded gaps. */
+/** Unchanged lines and expanded gaps belong to one comparison. A local checkout can change between reads. */
 interface Expansion {
-  readonly data: ChangesData | null
+  readonly source: string | Extract<ChangesData, { kind: 'local' }> | null
   readonly texts: Readonly<Record<string, readonly string[] | 'loading'>>
   readonly open: Readonly<Record<string, ReadonlySet<number>>>
 }
@@ -188,6 +209,15 @@ const LARGE_FILE_LINES = 1000
 const OPEN_LINES = 5000
 
 const NO_GAPS: ReadonlySet<number> = new Set()
+
+const NO_FOLDS: ReadonlyMap<string, { readonly hunks: ReadonlySet<number>; readonly lens: string }> = new Map()
+
+const NO_PATHS: ReadonlySet<string> = new Set()
+
+const NO_ANNOTATIONS: ViewAnnotations = new Map()
+
+/** The toolbar row's close action, which has no menu to close. */
+function noop(): void {}
 
 const SCOPE_LABEL: Record<ScopeKind, ForgePanelKey> = {
   branch: 'diff.scope.branch',
@@ -311,9 +341,12 @@ function initiallyOpen(files: readonly ForgeDiffFile[], marks: ViewedMarks): Rea
   return open
 }
 
-/** Whether a file shows under a lens while test files hide or not. */
-function shownBy(file: ForgeDiffFile, lens: ChangesLens, hideTests: boolean): boolean {
+/** Whether a file shows under a layer while test files hide or not, and among the files a filter lens keeps when one applies. */
+function shownBy(
+  file: ForgeDiffFile, lens: ChangesLens, hideTests: boolean, kept: Readonly<Record<string, ForgeLensKeep>> | null = null,
+): boolean {
   return !(hideTests && file.layer === 'test') && (lens === 'all' || file.layer === lens)
+    && (kept === null || Object.hasOwn(kept, file.path))
 }
 
 /** What a rename badge names: the old file name, or the old path when only the directory changed. */
@@ -485,7 +518,8 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
   changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles, changeRequestViewed, setFileViewed,
-  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, t,
+  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses, useExtensions,
+  useAnnotations, changesLens, renderSlot, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
@@ -585,6 +619,8 @@ export function ChangesTab({
   useEffect(() => {
     if (choices?.navigated === navigation.revision) return
     actions.navigated(tab.id, navigation.revision)
+    const lensParam = navigation.params?.lens
+    if (lensParam !== undefined) actions.filtered(tab.id, lensParam)
     const path = navigation.params?.path
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
@@ -622,7 +658,10 @@ export function ChangesTab({
   // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
   const head = entry?.snapshot?.headSha ?? (pending ? null : '')
-  const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}` : head
+  // An accepted review change the host announced, from any plugin, reads a change request's viewed marks again.
+  const hostRevision = entry?.reviewRevision ?? 0
+  const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}`
+    : head === null ? null : `${head}\n${hostRevision}`
   const headCommit = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.commit : null
   // The commits change with the head of a change request, with the local HEAD, branch, or base, and on a refresh.
   const commitsVersion = `${attempt}\n${source.kind === 'local'
@@ -669,7 +708,7 @@ export function ChangesTab({
   const prHead = entry?.snapshot?.headSha ?? null
   const prAuthor = entry?.snapshot?.author ?? null
   const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
-    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision, read: changeRequestReview })
+    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision + hostRevision, read: changeRequestReview })
   const review = data?.kind === 'change' && threadRead.review !== null && threadRead.review.headSha === prHead
     && (data.commits !== null || data.headSha === prHead) ? threadRead.review : null
   const placed = usePlacedThreads(review, data?.kind === 'change' ? { head: prHead ?? '', end: data.headSha, commits: data.commits } : null)
@@ -682,9 +721,66 @@ export function ChangesTab({
   const threadsToggle = useRef<HTMLButtonElement>(null)
   const [focus, setFocus] = useState<ThreadFocus | null>(null)
   const allFiles = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
-  const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests)), [allFiles, lens, hideTests])
+  // A Host filter lens keeps files only once its result for the shown files arrived; until then every file shows.
+  const extensions = useExtensions(current => current.state)
+  const descriptions = useLenses(current => current)
+  const hostLenses = extensions?.lenses ?? null
+  const chosenLens = choices?.filterLens ?? null
+  const activeEntry = chosenLens === null ? null : hostLenses?.find(item => item.id === chosenLens) ?? null
+  const activeLens = activeEntry?.id ?? null
+  const lensSource = useMemo((): ForgeLensRequest['source'] | null => data === null ? null
+    : data.kind === 'local' ? { kind: 'local', scope: data.scope } : { kind: 'change', url: data.url, commits: data.commits }, [data])
+  const filesVersion = useMemo(() => data === null ? null : lensVersion(data.files), [data])
+  const [lensAttempt, setLensAttempt] = useState(0)
+  const lensRun = useLensRun({
+    visible: tab.visible, lens: activeEntry, source: lensSource, version: filesVersion, attempt: lensAttempt, open: changesLens,
+  })
+  const kept = lensRun.run.kind === 'ready' ? lensRun.run.files : null
+  const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests, kept)), [allFiles, lens, hideTests, kept])
   const lensCounts = useMemo(() => Object.fromEntries(LENSES.map(item => [item,
-    allFiles.filter(file => shownBy(file, item, hideTests)).length])) as Record<ChangesLens, number>, [allFiles, hideTests])
+    allFiles.filter(file => shownBy(file, item, hideTests, kept)).length])) as Record<ChangesLens, number>, [allFiles, hideTests, kept])
+  const lensTitle = (id: string): string => {
+    const described = descriptions.find(item => item.id === id)
+    return described === undefined ? id : described.title()
+  }
+  // The described lenses come in their described order, then the lenses no Client plugin describes, by their identity.
+  const offered = hostLenses ?? []
+  const lensChoices: readonly LensChoice[] = [
+    ...descriptions.flatMap(item => offered.filter(entry => entry.id === item.id)),
+    ...offered.filter(entry => !descriptions.some(item => item.id === entry.id)),
+  ].map((entry) => {
+    const result = lensRun.resultOf(entry)
+    const count = result === undefined ? null : allFiles.filter(file => shownBy(file, lens, hideTests, result)).length
+    return { id: entry.id, title: lensTitle(entry.id), count }
+  })
+  const chosenChoice = lensChoices.find(item => item.id === activeLens) ?? null
+  // A lens the Host withdrew, as when its plugin unloaded, stops filtering; the reader is told once.
+  const withdrawn = chosenLens !== null && hostLenses !== null && activeEntry === null ? chosenLens : null
+  useEffect(() => {
+    if (withdrawn === null) return
+    actions.filtered(tab.id, null)
+    report('filterLens.removed', { lens: live.current.lensTitle(withdrawn) })
+  }, [withdrawn, actions, tab.id, report])
+  const chooseLens = (next: string | null): void => { actions.filtered(tab.id, next) }
+  // The hunks each kept file folds stay folded until the reader shows them for that file; a new result folds again.
+  const [unfolded, setUnfolded] = useState<{ readonly kept: typeof kept; readonly paths: ReadonlySet<string> }>(
+    { kept: null, paths: new Set() })
+  const shownPaths = unfolded.kept === kept ? unfolded.paths : NO_PATHS
+  const foldTitle = chosenChoice?.title ?? ''
+  const folds = useMemo(() => {
+    if (kept === null) return NO_FOLDS
+    const map = new Map<string, { readonly hunks: ReadonlySet<number>; readonly lens: string }>()
+    for (const file of allFiles) {
+      const keep = kept[file.path]
+      if (keep === undefined || shownPaths.has(file.path)) continue
+      const hunks = foldedHunks(file.hunks, keep)
+      if (hunks.size > 0) map.set(file.path, { hunks, lens: foldTitle })
+    }
+    return map
+  }, [allFiles, kept, shownPaths, foldTitle])
+  const annotations = useAnnotations(tab.contentId) ?? NO_ANNOTATIONS
+  // Annotations wait for the Host's limit.
+  const annotationLimit = extensions?.maxAnnotationsPerFile
   const shownSource = useMemo(() => data === null ? null : reviewSourceOf(data), [data])
   const viewedKey = shownSource === null ? '' : viewedSourceOf(shownSource)
   const localMarks = useSyncExternalStore(viewedFiles.subscribe, () => viewedFiles.marksOf(viewedKey))
@@ -699,10 +795,14 @@ export function ChangesTab({
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
-  const [expansion, setExpansion] = useState<Expansion>({ data: null, texts: {}, open: {} })
-  const current = expansion.data === data ? expansion : { data, texts: {}, open: {} }
-  const latest = useRef(data)
-  useEffect(() => { latest.current = data }, [data])
+  // Review marks can refresh while a file read is in flight. The commit supplies its text and the patch digests identify its gaps.
+  const expansionSource = useMemo(() => data?.kind === 'change'
+    ? JSON.stringify([data.url, data.headSha, data.commits?.from, data.commits?.to, data.files.map(file => file.digest)])
+    : data, [data])
+  const [expansion, setExpansion] = useState<Expansion>({ source: null, texts: {}, open: {} })
+  const current = expansion.source === expansionSource ? expansion : { source: expansionSource, texts: {}, open: {} }
+  const latest = useRef(expansionSource)
+  useLayoutEffect(() => { latest.current = expansionSource }, [expansionSource])
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
   // The line budget counts the files not marked viewed when the diff loads, so later marks leave it unchanged. A file stays
   // collapsed while it is marked viewed unless the reader expands it; a file whose change differs from its mark expands
@@ -728,11 +828,12 @@ export function ChangesTab({
   const jumpPosition = useRef<{ readonly data: ChangesData; readonly top: number } | null>(null)
   useLayoutEffect(() => {
     if (!tab.visible || wanted === null || data === null) return
-    // A file the lens or the test switch hides is shown before the view scrolls to it.
-    const hidden = allFiles.find(file => file.path === wanted.path && !shownBy(file, lens, hideTests))
+    // A file the layer, the test switch, or the filter lens hides is shown before the view scrolls to it.
+    const hidden = allFiles.find(file => file.path === wanted.path && !shownBy(file, lens, hideTests, kept))
     if (hidden !== undefined) {
       if (lens !== 'all') actions.lensed(tab.id, 'all')
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
+      if (kept !== null && !Object.hasOwn(kept, hidden.path)) actions.filtered(tab.id, null)
       return
     }
     // The browser's scroll anchoring keeps the section in place while the sections above it draw their lines.
@@ -750,7 +851,7 @@ export function ChangesTab({
     }
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
-  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
+  }, [tab.visible, wanted, data, allFiles, lens, hideTests, kept, actions, tab.id])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
@@ -766,28 +867,27 @@ export function ChangesTab({
     <Button size="sm" variant="outline" onClick={() => { actions.committed(tab.id, null) }}>{t('commits.showAll')}</Button>
   )
 
-  /** Apply a change to the unchanged lines of `owner`, unless newer changes replaced it. */
-  const update = (owner: ChangesData, change: (value: Expansion) => Expansion): void => {
+  const update = (change: (value: Expansion) => Expansion): void => {
     setExpansion((previous) => {
-      if (latest.current !== owner) return previous
-      return change(previous.data === owner ? previous : { data: owner, texts: {}, open: {} })
+      if (latest.current !== expansionSource) return previous
+      return change(previous.source === expansionSource ? previous : { source: expansionSource, texts: {}, open: {} })
     })
   }
   const expand = (owner: ChangesData, file: ForgeDiffFile, index: number): void => {
     const path = file.path
-    update(owner, value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
+    update(value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
     if (current.texts[path] !== undefined) return
-    update(owner, value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
+    update(value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
     const reading = owner.kind === 'local' ? localText(owner.scope, path) : changeRequestText(owner.url, owner.headSha, path)
     void reading.then((result) => {
       const lines = result.ok ? textLines(result.value) : undefined
       if (lines !== undefined && matchesHunks(lines, file.hunks)) {
-        update(owner, value => ({ ...value, texts: { ...value.texts, [path]: lines } }))
+        update(value => ({ ...value, texts: { ...value.texts, [path]: lines } }))
         return
       }
       if (result.ok) report('toast.expandStale')
       else report('toast.expandFailed', { message: result.error.message })
-      update(owner, (value) => {
+      update((value) => {
         const { [path]: _text, ...texts } = value.texts
         const { [path]: _open, ...open } = value.open
         return { ...value, texts, open }
@@ -1010,7 +1110,8 @@ export function ChangesTab({
   // an effect would hand them the previous diff's links. A render React discards leaves values derived from the same
   // props and state, which the retried render assigns again.
   const callbacks = {
-    data, expandedByDefault, expand, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread, t,
+    data, expandedByDefault, expand, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread, lensTitle,
+    renderSlot, kept, t,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1041,7 +1142,14 @@ export function ChangesTab({
     },
     nextThread: (path) => { live.current.nextThread(path) },
     reach,
-  }), [reach])
+    annotation: (path, item: SourcedAnnotation) => live.current.renderSlot('forge.diff.line.annotation',
+      { target, path, annotation: item.annotation }, { entryKey: item.source }),
+    fileMenu: (file, dismiss) => live.current.renderSlot('forge.changes.file.menu', { target, file, dismiss }),
+    unfold: (path) => {
+      const { kept: current } = live.current
+      setUnfolded(value => ({ kept: current, paths: new Set([...(value.kept === current ? value.paths : []), path]) }))
+    },
+  }), [reach, target])
   const reviewStarted = pendingReview !== null
   const publishingBlocked = reviewState.uncertain !== null
   // Comments on a commit range or on local changes go to the input only; a whole change request also takes GitHub comments:
@@ -1053,6 +1161,7 @@ export function ChangesTab({
   const fileReview = useMemo((): ReviewActions | undefined => shownSource === null ? undefined : {
     source: shownSource,
     addToInput: addReviewToInput,
+    renderActions: owner => live.current.renderSlot('forge.diff.comment.actions', { target, ...owner }),
     records: queue, openLink, reviewStarted,
     onQuoted: (selection) => { if (!queue.recordAgent(selection)) live.current.report('review.saveFailed') },
     publishingBlocked,
@@ -1063,7 +1172,7 @@ export function ChangesTab({
           url => queue.published(selection, url))
         : Promise.resolve(live.current.t('review.stale')),
     } : {},
-  }, [shownSource, addReviewToInput, queue, openLink, reviewStarted, publishingBlocked, queueable, single])
+  }, [shownSource, addReviewToInput, queue, openLink, reviewStarted, publishingBlocked, queueable, single, target])
 
   let body: ReactNode
   if (data === null) {
@@ -1121,6 +1230,9 @@ export function ChangesTab({
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
               threads={fileThreads.get(path)}
+              annotations={annotations.get(path)}
+              annotationLimit={annotationLimit}
+              folded={folds.get(path)}
               drawNow={wanted !== null && wanted.center !== null && wanted.path === path}
               viewed={viewedStateOf(marks, path, file.digest)}
               viewedNote={host === null ? t('viewed.hint') : host.unavailable ? t('viewed.unavailable')
@@ -1193,7 +1305,14 @@ export function ChangesTab({
           {allFiles.length > 0 && <span className={css.foldTests}>
             <HideTestsSwitch hidden={hideTests} toggle={toggleTests} t={t} />
           </span>}
+          {tab.visible && allFiles.length > 0 && lensChoices.length > 0 && (
+            // A chosen lens stays in the row, where it says what the files are filtered by.
+            <span className={activeLens === null ? css.foldTests : css.lensSlot}>
+              <LensFilterMenu lenses={lensChoices} chosen={chosenChoice} run={lensRun.run} choose={chooseLens} visible t={t} />
+            </span>
+          )}
           <span className={css.spacer} data-fold-spacer="" />
+          <span className={css.foldPlugins}>{renderSlot('forge.changes.toolbar', { target, form: 'bar', close: noop })}</span>
           {/* A truncated read keeps the list, whose footer says so, even when it kept no thread. */}
           {review !== null && (review.threads.length > 0 || review.truncated) && (
             <button ref={threadsToggle} type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
@@ -1242,6 +1361,8 @@ export function ChangesTab({
             <ViewOptionsMenu visible={tab.visible} options={{
               anyExpanded, hasFiles: files.length > 0, toggleExpansion, split, toggleSplit, wrap, toggleWrap,
               hideTests: allFiles.length > 0 ? hideTests : undefined, toggleTests, refresh,
+              lenses: allFiles.length > 0 && activeLens === null ? lensChoices : [], chooseLens,
+              plugins: close => renderSlot('forge.changes.toolbar', { target, form: 'menu', close }),
             }} t={t} />
           </span>
         </div>
@@ -1257,6 +1378,18 @@ export function ChangesTab({
         <Notice>{t('diff.stale', { count: data.localAhead })}</Notice>
       )}
       {data?.kind === 'local' && data.omitted > 0 && <Notice>{t('diff.omitted', { count: data.omitted })}</Notice>}
+      {lensRun.run.kind === 'failed' && chosenChoice !== null && (
+        <Notice action={<span className={css.noticeAction}>
+          {lensRun.run.code === 'forgePanel/lens-stale'
+            ? <Button size="sm" variant="outline" onClick={refresh}>{t('diff.refresh')}</Button>
+            : <Button size="sm" variant="outline" onClick={() => { setLensAttempt(value => value + 1) }}>{t('retry')}</Button>}
+          <Button size="sm" variant="outline" onClick={() => { chooseLens(null) }}>{t('filterLens.clear')}</Button>
+        </span>}>
+          {lensRun.run.code === 'forgePanel/lens-stale' ? t('filterLens.stale', { lens: chosenChoice.title })
+            : lensRun.run.code === 'forgePanel/lens-interrupted' ? t('filterLens.interrupted', { lens: chosenChoice.title })
+              : t('filterLens.failed', { lens: chosenChoice.title, message: lensRun.run.message })}
+        </Notice>
+      )}
       {data?.kind === 'change' && data.viewed?.kind === 'failed' && (
         <Notice action={<Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>}>
           {t('viewed.readFailed', { message: data.viewed.message })}

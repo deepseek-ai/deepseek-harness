@@ -19,6 +19,7 @@ kind: "package-reference"
 - [引用预览](#reference-previews)
 - [Chat 隐藏的行](#system-prompt-row)
 - [指令与失败行](#command-and-failure-rows)
+- [继承历史分隔线](#inherited-history-divider)
 - [轮次 token 用量](#turn-token-usage)
 - [已完成轮次的页脚](#completed-turn-footer)
 - [轮次过程折叠](#turn-process-folding)
@@ -72,6 +73,13 @@ Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，
 通用指令行在所有生命周期状态中都保留普通指令图标；失败仍通过行状态与摘要表达。每个终止轮次都渲染自己的红点行；欠费失败的行使用中立的 `message.failure.quota` 文案，而不是提供方消息。新追加的 `QUOTA` 或 `ACCOUNT_QUOTA` 产生的瞬时提示来自本包注册在 `shell.overlay` 的全局条目，它不随 Chat 面板消失：该条目把唯一一条实时提示交给 `shell.quota-notice` 链，并在无人接管时回退到自己的警告 Toast，接管该错误码的条目会替换该回退。只有本 Client 已绑定并已物化的 Session 会发布提示；它从未打开的 Session 中的欠费不会发布。更新的提示会替换当前提示，除非认领条目用 `keepOpen()` 保持住当前提示：该调用返回一个由调用方持有、必须在卸载时调用的释放函数，只要存在保持，认领条目就继续挂载，后续提示被丢弃，释放后恢复后续提示但不重放已丢弃的提示。回退 Toast 自身没有延后策略：当 Desktop 账号的不透明原生 Platform 页盖住本页时，它仍会在下方运行，其显示计时器可能在不可见时走完并自行撤下提示，因此只留下持久化失败行。释放只移除自己的保持，因此它在关闭或更新的保持之后执行时不会影响更新的保持。关闭与退出登录会清空所有保持；被丢弃的提示不排队，其对应的持久化失败行仍会渲染。历史替换和分页不会发布提示。中间重试不会创建终止行；输出 token 上限使用琥珀色警告点。重启恢复以 `interrupted` 结束的轮次会渲染本地化的停止行，说明 DSH 进程在轮次中途退出，不显示代码标签，其过程摘要显示“已停止”。
 
 Chat 在 `MarkdownDelegateProvider.getTriggerProps` 接入处适配 Markdown 目标。助手节点 Slot 直接获取 `useContextMenu`，向可选的文件引用服务传入路径适配函数；消息流和节点中间层不再携带菜单回调。手势发生时按原始 Session 的当前工作目录解析路径，菜单保留捕获的路径和行号，不受焦点变化影响。未声明的插件链接保留原生行为。
+
+-----
+
+<a id="inherited-history-divider"></a>
+## 继承历史分隔线
+
+分叉产生的会话（例如 fork 子智能体或分支出的对话）在最后一个继承的 `session/end-seed` 标记处显示一条标注“以上为继承的历史消息”的分隔线，把复制来的历史与该会话自己的消息分开。切点位于某个 Turn 内部时，分隔线留在该 Turn 的过程折叠之外。分隔线在包含标记的历史页加载后才出现，因此继承历史较长时，可能要向上滚动才能看到。没有继承历史的会话不显示分隔线。
 
 -----
 

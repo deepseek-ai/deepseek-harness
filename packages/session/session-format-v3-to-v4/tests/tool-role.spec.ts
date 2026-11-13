@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionFormatEvent, SessionFormatHeader, SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
 import { SessionFormatEventCollector, SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { createSessionFormatV3ToV4, releasedV4SessionFormatCodec, restoreReleasedV4Artifact, sessionFormatV3ToV4 } from '../src/index.ts'
 import { assertV4ToolResultMessage, liftToolResult } from '../src/tool-role.ts'
 
@@ -41,7 +42,7 @@ function firstClassMessage(callId = 'call-1', text = 'result', isError: boolean 
 describe('V4 tool-role view and lift', () => {
   it.each([false, true])('serializes lifted result fields in current writer order with isError=%s', (isError) => {
     const content = [{ type: 'text' as const, text: 'result' }]
-    const current = createToolResultMessage({ callId: ToolCallId('call-1'), content, isError })
+    const current = createToolResultMessage({ callId: brandString<ToolCallId>('call-1'), content, isError })
     const row = event(0, 'tool/result', { turn: 1, step: 1, message: {
       ...wrapperMessage(),
       content: [{ type: 'tool-result', toolCallId: 'call-1', content, isError }],

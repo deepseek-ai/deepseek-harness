@@ -11,7 +11,7 @@ import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from 
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { IconBranchOutlineRegular, IconFolderCloseRegular, IconWarningTriangleOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { changesAddress } from '../src/client/changes-address.ts'
 import { ForgeTab, type ForgeTabProps } from '../src/client/ForgeTab.tsx'
 import { en } from '../src/client/locales.ts'
@@ -19,11 +19,12 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ForgeTab.module.css'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 const unused = (): never => { throw new Error('the forge tab does not call this tab action') }
 
 /** Tab information of a forge tab whose visibility the test sets. */
@@ -66,6 +67,8 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const reportVisible = vi.fn<(visible: boolean) => void>()
   const createChangeRequest = vi.fn<() => void>()
   const openResource = vi.fn<SidebarRightTabActions['openResource']>()
+  // Draws nothing for the card's plugin slot.
+  const renderSlot = (() => null) as ForgeTabProps['renderSlot']
   const props: ForgeTabProps = {
     useTabInfo: () => tabInfo(useVisibility(current => current), openResource),
     sessionId: SESSION,
@@ -73,7 +76,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
     reconnect, refresh, remove, markReady, merge, readChecks, rerunChecks, requestReviews, reviewerCandidates, updateBranch, restore,
-    openLink, copyText, copyPath, reportVisible, createChangeRequest, t,
+    openLink, copyText, copyPath, reportVisible, createChangeRequest, renderSlot, t,
   }
   const view = render(<ForgeTab {...props} />)
   return {
