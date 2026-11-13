@@ -536,6 +536,12 @@ describe('RowActionToast', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it.each([t, tEn])('reports an unknown reading write outcome', async (translate) => {
+    const { notify } = await toastSurface(undefined, translate)
+    notify({ kind: 'readingFailed' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.readingFailed'))
+  })
+
   it.each([t, tEn])('reports clipboard success and failure through the global toast', async (translate) => {
     const { notify } = await toastSurface(undefined, translate)
     notify({ kind: 'sessionIdCopied' })

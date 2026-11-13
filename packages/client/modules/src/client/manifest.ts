@@ -7,15 +7,14 @@
  * owns code arrival.
  *
  * Lazy CJS model: executing a plugin bundle only REGISTERS its
- * factory (`window.__ModuleLoader__.load({id, factory})`); every module body
- * side effect — including CSS injection — lives inside the factory closure
- * and runs at materialization, not at script execution. Materialization
+ * factory and deferred metadata producer. JavaScript module body side effects
+ * run at materialization, not registration; metadata remains opaque to the loader. Materialization
  * (factory(require) → exports) happens on first import/require and is
  * memoized in {@link ClientModuleLoader.loadCache}; a factory that requires
  * another registered-but-unmaterialized module materializes it recursively,
  * so load order needs no external sequencing.
  *
- * Resolution branch order (import): seed word → shell instance; memoized
+ * Resolution branch order (import): memoized
  * record → exports; graph row → register its dependency factories and own
  * factory; registered factory → materialize; anything else → throw (loud —
  * the runtime mirror of the build-time bundle purity gate).
@@ -30,7 +29,12 @@
  */
 
 import type {} from '@deepseek-ai/cordis'
-import type { DshClientManifest } from '@deepseek-ai/dsh-package-manifest'
+import type {
+  DshClientManifest, ClientModuleMetaFactory,
+  DshClientModuleManifest,
+} from '@deepseek-ai/dsh-package-manifest'
+import type { ScriptRealm } from '@deepseek-ai/dsh-client-script-realm/client'
+export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
 
@@ -345,41 +349,16 @@ export function readRelease(wire: unknown): WebBootRelease | undefined {
   return decodeRelease((wire as Record<string, unknown>).release) ?? undefined
 }
 
-/** Module resolver passed into a registered Client bundle factory. */
-export interface ClientBundleRequire {
-  /** Resolve a module-table dependency synchronously. */
-  (specifier: string): unknown
-  /** Load and resolve a package-local dynamic chunk asynchronously. */
-  async(specifier: string): Promise<unknown>
-  /**
-   * Resolve a package-asset reference (`plugins/<package>/assets/<path>`) the
-   * build compiled from an asset import or stylesheet `url()` to the URL the
-   * page loads; the reference itself unless the carrier maps it.
-   */
-  asset(reference: string): string
-}
-
-/** One client bundle's factory registration submitted through `window.__ModuleLoader__.load`. */
-export interface ClientBundleRegistration {
-  /** Plugin id (package name) — the registration key; must match the graph row being executed. */
-  id: string
-  /** Package-local chunk filename; absent for the package's `client.js` entry. */
-  chunk?: string
-  /**
-   * Closure factory holding the whole bundle body: receives the module-table
-   * require whose `async` operation loads generated chunks, and returns the
-   * bundle's exports. The factory runs once, at materialization.
-   */
-  factory: (require: ClientBundleRequire) => Record<string, unknown>
-}
+/** Registration face of one shared browser artifact manifest. */
+export type ClientBundleRegistration = DshClientModuleManifest
 
 /** Inputs passed by the web entry when it creates the client module system. */
 export interface ClientModuleCreateOptions {
   /** Raw Host-injected boot graph; the modules bundle owns validation and projection. */
   boot: unknown
-  /** Module-table seed: platform-singleton specifier → shell instance. */
-  staticModules: Record<string, unknown>
-  /** Bundle-load hook. Defaults to a same-origin classic `<script src>` element. */
+  /** Initially delivered manifests; registration does not evaluate their JavaScript or metadata. */
+  staticModules: readonly DshClientModuleManifest[]
+  /** Execution hook for the module system’s Main Realm; defaults to the page script transport. */
   loadBundle?: (url: string) => Promise<void>
   /** Package-asset reference hook behind {@link ClientBundleRequire.asset}. Defaults to returning the reference. */
   resolveAsset?: (reference: string) => string
@@ -417,10 +396,12 @@ export interface DshWindow {
 export interface ClientModuleRecord {
   /** Module id (entry name / package name). */
   id: string
+  /** Package identity shared by its entry and package-local chunks. */
+  readonly ownerId: string
   /** Materialized exports (`module.exports` from a factory or bootstrap registration). */
   exports: unknown
-  /** Owned `<style data-plugin>` tag ids (`data-plugin-css` values) injected during materialization. */
-  styles: string[]
+  /** Deferred metadata producer; JavaScript materialization does not evaluate it. */
+  meta?: ClientModuleMetaFactory
   /** Observed `require()` edges (module-graph boundary; only table words can appear). */
   edges: Set<string>
 }
@@ -431,6 +412,25 @@ export interface ClientModuleRecord {
  * as `ctx.modules`.
  */
 export interface ClientModuleLoader {
+  /**
+   * Observe changes to {@link activeRecords} and to their cross-package dependency edges.
+   * @param listener - Called after a record materializes, records are released, or a record requests another package.
+   * @returns The subscription disposer.
+   */
+  subscribeModules(listener: () => void): () => void
+  /**
+   * Records whose code can still be running: every {@link loadCache} record, plus the previous records of a
+   * package under live replacement until its old runtime has been torn down.
+   * @returns Previous records of replaced packages, then materialized records in registry order.
+   */
+  activeRecords(): Iterable<ClientModuleRecord>
+  /**
+   * Resolve an asset reference through the startup carrier.
+   * @param reference - Compiled package-asset reference.
+   * @returns The carrier's resolved URL.
+   */
+  resolveAsset(this: void, reference: string): string
+
   /** Discriminant against Node's internal loader shapes ('v1'/'v2'). */
   version: 'client'
   /** Latest parsed Host graph, updated by live entry reconciliation. */
@@ -439,6 +439,10 @@ export interface ClientModuleLoader {
   entries: ClientEntries
   /** Materialized-module registry: entry or package-local chunk id → record. */
   loadCache: Map<string, ClientModuleRecord>
+  /** Initial execution environment, fixed when the module system is constructed. */
+  readonly mainRealm: Pick<ScriptRealm, 'id' | 'execute' | 'dispose'>
+  /** Stop accepting scripts and await pending carrier operations. */
+  dispose(): Promise<void>
   /**
    * Internal contract consumed by the vendored Loader's `tree.import`. Resolves
    * `specifier` through the branch order documented on the module, fetching
@@ -485,13 +489,13 @@ export interface ClientModuleLoader {
 export interface ClientModuleSystemOptions {
   /** Boot graph validated by {@link parseBootManifest}, owned by the resulting module system. */
   manifest: BootManifest
-  /** Module-table seed: platform-singleton specifier → shell instance. */
-  staticModules: Record<string, unknown>
+  /** Initially delivered manifests; registration does not evaluate their JavaScript or metadata. */
+  staticModules: readonly DshClientModuleManifest[]
   /** Stable HTML-installed registration facade to switch from queue to live mode. */
   registrationTarget: ClientModuleLoaderTarget
   /** Already-materialized modules bundle consumed while creating the system. */
   bootstrapModule: ClientBootstrapModule
-  /** Bundle-load hook. Defaults to a same-origin classic `<script src>` element. */
+  /** Execution hook for the module system’s Main Realm; defaults to the page script transport. */
   loadBundle?: (url: string) => Promise<void>
   /** Package-asset reference hook behind {@link ClientBundleRequire.asset}. Defaults to returning the reference. */
   resolveAsset?: (reference: string) => string

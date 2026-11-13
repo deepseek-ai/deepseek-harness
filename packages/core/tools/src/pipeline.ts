@@ -295,7 +295,11 @@ export class ToolExecutionPipeline {
   /**
    * Run around-dispatch and the tool body. Tool and unknown-tool failures still
    * receive post-execute; pipeline failures are already final. Started bodies
-   * drain on cancellation before a successful outcome becomes `ABORTED`.
+   * drain on cancellation before a successful outcome becomes `ABORTED`. After
+   * caller cancellation, a wrapper that throws the caller signal's reason or an
+   * `Error` named `AbortError` without `HarnessError` identity keeps its message
+   * and gains `ABORTED`, or `ABORTED_BEFORE_DISPATCH` when the body never
+   * started; a wrapper's `HarnessError` and other failures stay unchanged.
    * @param exec - the execution returned by this pipeline's prepare stage.
    * @returns whether the result still needs post-execute.
    */
@@ -327,8 +331,17 @@ export class ToolExecutionPipeline {
           : resultWithDeferredContexts,
       }
     } catch (error: unknown) {
-      return { kind: 'final-result', result: toolErrorResult(error) }
+      return { kind: 'final-result', result: this.wrapperFailureResult(exec, error) }
     }
+  }
+
+  /** Classify a failure thrown around dispatch; see {@link dispatch}. */
+  private wrapperFailureResult(exec: ToolRunContext, error: unknown): ToolExecutionResult {
+    const state = this.cancellationStates.get(exec)
+    /* v8 ignore next -- only registry-minted executions reach the staged scheduler methods */
+    if (state === undefined) throw new Error('tool registry scheduler invariant violated: missing cancellation state')
+    if (!isAborted(state.callerSignal) || !isUnclassifiedCancellation(error, state.callerSignal)) return toolErrorResult(error)
+    return toolErrorResult(error, { name: 'AbortError', code: state.bodyInvoked ? TOOL_ABORTED : TOOL_ABORTED_BEFORE_DISPATCH })
   }
 
   /**

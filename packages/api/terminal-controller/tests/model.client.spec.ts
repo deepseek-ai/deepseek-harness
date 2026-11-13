@@ -287,6 +287,15 @@ it('classifies a discovery carrier failure as disconnected and supports explicit
   expect(remote.create).toHaveBeenCalledOnce()
 })
 
+it('classifies a Host RemoteError carrying the carrier code as failed, not disconnected', async () => {
+  const { model, remote } = fixture()
+  vi.mocked(remote.environment).mockRejectedValueOnce(
+    new RemoteError('gateway/carrier-lost' as never, 'host reused the carrier code', {} as never),
+  )
+  await model.refresh()
+  expect(model.state.getSnapshot()).toMatchObject({ phase: 'failed', error: 'host reused the carrier code' })
+})
+
 it('retains state when disposal overtakes successful allocation or a failed discovery', async () => {
   for (const operation of ['creation', 'discovery'] as const) {
     const { model, remote } = fixture()

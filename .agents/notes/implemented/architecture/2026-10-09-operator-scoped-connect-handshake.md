@@ -10,7 +10,7 @@ Automatically subscribing automation clients to forwarded events lets method-onl
 
 ## Decision
 
-Browsers retain their existing signed Cookie, root launch-token exchange, shared `connection.browserPeer` with owner principal and `interactions: 'answer'`, and recovery behavior. Only API callers create independent Peers through `GET /connect?token=<launch-token>&interactions=answer|none`. The endpoint is API-only, defaults to `none`, rejects invalid or repeated declarations with 400, and retains Host/Origin checks and token authentication. It returns 302 with the Remote Mux destination and an API Cookie.
+Browsers retain their existing signed Cookie, root launch-token exchange, the Token Provider's shared Peer with owner principal and `interactions: 'answer'`, and recovery behavior. Only API callers create independent Peers through `GET /connect?token=<launch-token>&interactions=answer|none`. The endpoint is API-only, defaults to `none`, rejects invalid or repeated declarations with 400, and retains Host/Origin checks and token authentication. It returns 302 with the Remote Mux destination and an API Cookie.
 
 ### Admission and ownership
 
@@ -52,4 +52,4 @@ The [recorded approval scenario](../../../../apps/web/tests/approval-composer.e2
 
 Unconnected API records need not be promptly reclaimed; resource-heavy additions to idle Peers require revisiting that choice. API Cookies cannot restore a Peer after its socket closes or the Host restarts. Browser Cookie format and authentication behavior remain unchanged, with no reauthentication migration. API and browser Cookies use the same authority-specific name, so API callers keep their own Cookie storage rather than exchanging credentials in a shared browser jar. Any launch-token holder may request `answer`; this is interaction participation, not user isolation.
 
-The [duplex-stream decision](2026-09-19-remote-duplex-stream.md) retains Peer scopes and stream framing. The [browser authentication decision](2026-08-24-browser-token-authentication.md) retains browser token, signature, authority, and lifetime semantics; only independent API admission is added here. Both records remain active.
+The [duplex-stream decision](2026-09-19-remote-duplex-stream.md) retains Peer scopes and stream framing. The [browser authentication decision](2026-08-24-browser-token-authentication.md) retains browser token, signature, authority, and lifetime semantics; only independent API admission is added here. Both records remain active. The [Provider integration](2026-11-07-browser-authentication-development.md) owns the current registration and Socket-middleware placement without replacing this protocol and lifetime decision.

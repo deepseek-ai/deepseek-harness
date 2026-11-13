@@ -150,7 +150,7 @@ export async function expectWrappedCommandText(
 export async function expectWrappedTerminalCommand(page: Page, card: Locator, expected: string, width: number) {
   const originalWidth = await card.evaluate(element => element.style.width)
   const command = card.locator('[data-command-text]').first()
-  const header = card.locator('[class*="_header_"]').first()
+  const header = card.locator('[data-terminal-banner]')
   const observations: ({ colorScheme: 'light' | 'dark' } & Awaited<ReturnType<typeof expectWrappedCommandText>>)[] = []
   try {
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -177,11 +177,11 @@ export async function expectWrappedTerminalCommand(page: Page, card: Locator, ex
  * @returns Resolves after the dot fits inside the banner and aligns with the first line.
  */
 export async function expectFirstLineTerminalState(card: Locator, state: 'ongoing' | 'done'): Promise<void> {
-  const dot = card.locator('[class*="_runState_"][data-state]')
+  const dot = card.locator('[data-terminal-banner] [data-state]')
   await expect.poll(() => dot.getAttribute('data-state')).toBe(state)
   const geometry = await dot.evaluate((element) => {
-    const prompt = element.closest('[class*="_promptLine_"]')
-    const header = element.closest('[class*="_header_"]')
+    const prompt = element.parentElement
+    const header = element.closest('[data-terminal-banner]')
     if (prompt === null || header === null) throw new Error('Terminal status has no prompt banner')
     const bounds = element.getBoundingClientRect()
     const viewport = header.getBoundingClientRect()

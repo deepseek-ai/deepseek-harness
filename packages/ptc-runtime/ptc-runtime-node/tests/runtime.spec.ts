@@ -110,6 +110,19 @@ describe('Node program process', () => {
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
+  it('executes TypeScript binding names and own error members without cross-language exclusions', async () => {
+    const { run } = await setup()
+    const result = await run({
+      program: 'const value = await $tools.echo({}); try { await __dsh_main__.fail({}) } catch (error) { return [value, error instanceof lambda, error.name, error.__proto__, error.message]; }',
+      bindings: [
+        { global: '$tools', functions: { echo: async () => 'ok' } },
+        { global: '__dsh_main__', functions: { fail: async () => { throw new Error('denied') } }, errorClass: { name: 'lambda', memberNameProperty: '__proto__' } },
+      ],
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual(['ok', true, 'lambda', 'fail', 'denied'])
+  })
+
   it('returns cleanly while an unawaited binding call is still running', async () => {
     const { run } = await setup()
     const release = Promise.withResolvers<null>()

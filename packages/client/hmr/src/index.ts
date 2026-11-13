@@ -181,6 +181,7 @@ export function apply(ctx: Context, config: Config): void {
     const disposeRoute = ctx.webServer.register({
       kind: 'exact',
       path: EVENTS_ENDPOINT,
+      auth: 'anonymous',
       handler: (req, res) => {
         // Named routes match ahead of the carrier's method gate; keep the old
         // global 405 semantics for non-GET hits on this endpoint.

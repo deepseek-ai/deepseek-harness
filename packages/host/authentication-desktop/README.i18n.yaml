@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/host/authentication-desktop/README.md
+/:
+  en: 31484da58ba0fa12
+  zh: 1ba978273620bf0f
+/deepseek-ai-dsh-host-authentication-desktop:
+  en: 9f56b15c58dca9eb
+  zh: 77dd9cacf037d6ac
+/deepseek-ai-dsh-host-authentication-desktop/summary:
+  en: 2beda6371f4c6463
+  zh: afdb9ecabd6f3eb1
+/deepseek-ai-dsh-host-authentication-desktop/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: f84d50f3f752145c
+/deepseek-ai-dsh-host-authentication-desktop/use-this-package:
+  en: 9ab26d23b93107ab
+  zh: 35f2606748529d85
+/deepseek-ai-dsh-host-authentication-desktop/understand-the-implementation:
+  en: 02ac97d0f273bd76
+  zh: 6285bb9e911cec3a
+/deepseek-ai-dsh-host-authentication-desktop/further-exploration:
+  en: 6b669dabd7d42226
+  zh: bfac21ab8d8cefaa
+/deepseek-ai-dsh-host-authentication-desktop/model-experience:
+  en: afca588fd56333d6
+  zh: 3b7c196ac96f56d9
+/deepseek-ai-dsh-host-authentication-desktop/model-experience/kv-cache-effect:
+  en: bc510c5c25c0204f
+  zh: 55366b46ba23f1eb
+/deepseek-ai-dsh-host-authentication-desktop/known-limitations-and-deferred-work:
+  en: be88a23eed13dc51
+  zh: 9b399741e8be49c3
+/deepseek-ai-dsh-host-authentication-desktop/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

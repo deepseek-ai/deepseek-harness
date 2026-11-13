@@ -151,7 +151,7 @@ hook 不返回上下文时没有成本。Hook 文本取决于数据，会被记�
 
 #### 模型看到什么
 
-提供方提供的原因逐字传递。缺失原因时，已拒绝工具变为 `Error: blocked by PreToolUse hook`，已阻塞工具后反馈精确为 `blocked by PostToolUse hook`，阻塞 stop 则精确添加 steering `continue: blocked by Stop hook`；已阻塞提示词不会产生任何模型可见消息，而是以 `blocked` 结束该轮次。Codex `systemMessage` 不会呈现。
+提供方提供的原因逐字传递。缺失原因时，已拒绝工具变为 `Error: blocked by PreToolUse hook`，已阻塞工具后反馈精确为 `blocked by PostToolUse hook`，阻塞 stop 则精确添加 steering `continue: blocked by Stop hook`；已阻塞提示词不会产生任何模型可见消息，而是以 `blocked` 结束该轮次。已拒绝的工具调用在 `tool/result` 上记录 `HookError` 与 `HOOK_DENIED`，已阻塞的工具后结果记录 `HookError` 与 `HOOK_BLOCKED`。Codex `systemMessage` 不会呈现。
 
 #### Token 影响
 
