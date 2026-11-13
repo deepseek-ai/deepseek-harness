@@ -6,11 +6,11 @@
 .panel {
   position: absolute;
   top: 12px;
-  right: 16px;
+  right: 8px;
   box-sizing: border-box;
-  /* The docked width keeps 48px clear of the transcript column and its width handle,
-     as the back-to-bottom control computes the same gutter. */
-  width: clamp(280px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2 - 64px), 340px);
+  /* The docked width keeps 40px clear of the transcript column, past its width handle,
+     and 8px from the end edge, from the same gutter the back-to-bottom control computes. */
+  width: clamp(300px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2 - 48px), 360px);
   /* Stops above the composer stack, whose seat fades and takes presses across the body's full width. */
   max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   overflow-y: auto;
@@ -35,10 +35,10 @@
   animation: dsh-session-panel-enter 120ms ease-out;
 }
 
-/* Over the transcript the panel takes the prominent elevation. */
+/* Over the transcript the panel is narrower than docked, so it covers less of
+   the transcript, and takes the prominent elevation. */
 .panel[data-session-panel='overlay'] {
-  right: 12px;
-  width: min(340px, calc(100% - 24px));
+  width: min(280px, calc(100% - 16px));
   box-shadow: var(--dsw-elevation-prominent);
 }
 
