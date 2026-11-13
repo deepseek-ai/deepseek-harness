@@ -29,4 +29,11 @@ describe('JobsSection.module.css', () => {
     expect(rule('.stop')).toMatch(/height:\s*24px/)
     expect(rule('.stop')).toMatch(/margin:\s*-2px -4px/)
   })
+
+  it('keeps the 28px line while the stop control is armed, its pill filling the row padding', () => {
+    expect(rule('.stopArmed')).toMatch(/height:\s*20px/)
+    expect(rule('.stopArmed')).toMatch(/margin:\s*0;/)
+    expect(rule('.stopArmed')).toMatch(/padding:\s*0 6px/)
+    expect(rule('.stopLabel')).toMatch(/line-height:\s*18px/)
+  })
 })

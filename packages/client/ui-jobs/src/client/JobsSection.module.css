@@ -209,11 +209,13 @@ button.row:focus-visible {
 }
 
 /* The armed press widens into a labeled danger pill so the confirm step is
-   legible without hover; the state-error token is the one StateDot uses. */
+   legible without hover; the state-error token is the one StateDot uses. The
+   pill is the 20px the row's padding leaves, so arming keeps the 28px line. */
 .stopArmed {
   gap: 4px;
+  height: 20px;
   margin: 0;
-  padding: 0 7px;
+  padding: 0 6px;
   border-radius: var(--dsw-radius-sm);
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
   color: var(--dsw-alias-state-error-primary);
