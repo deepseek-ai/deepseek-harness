@@ -137,6 +137,14 @@ describe('SDK persisted session resume', () => {
     }
   })
 
+  it('rejects unknown resume fields before restoring a session', async () => {
+    const { server } = await initialized(await storageRoot())
+    const resume = vi.spyOn(server, 'resume')
+    const params = { sessionId: 'saved', permission_mode: 'read-only' }
+    await expect(server.handleRequest('session/resume', params)).rejects.toThrow('permission_mode')
+    expect(resume).not.toHaveBeenCalled()
+  })
+
   it('rejects independent subagent restoration before opening or repairing its log', async () => {
     const root = await storageRoot()
     const { ctx, server } = await initialized(root)

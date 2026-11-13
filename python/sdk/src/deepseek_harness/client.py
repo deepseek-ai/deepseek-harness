@@ -220,8 +220,14 @@ class HarnessClient:
     def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> None:
         """Restore history; an explicit permission preset replaces saved permissions before execution."""
         params: JsonObject = {"sessionId": session_id}
-        if options is not None and "permission_mode" in options:
-            params["permissionMode"] = options["permission_mode"]
+        if options is not None:
+            if not isinstance(options, dict):
+                raise TypeError("resume_session options must be a dict or None")
+            for key in options:
+                if key != "permission_mode":
+                    raise TypeError(f"unknown resume_session option {key!r}; expected 'permission_mode'")
+            if "permission_mode" in options:
+                params["permissionMode"] = options["permission_mode"]
         self.request(
             "session/resume",
             params,

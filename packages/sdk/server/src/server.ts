@@ -518,11 +518,14 @@ export class HarnessSdkJsonRpcServer {
         })
       }
       case 'session/resume': {
-        const sessionId = params?.sessionId
-        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+        if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0) {
           throw new TypeError('session/resume requires a non-empty sessionId string')
         }
-        const permissionMode = params?.permissionMode
+        const unknownKey = Object.keys(params).find(key => key !== 'sessionId' && key !== 'permissionMode')
+        if (unknownKey !== undefined) {
+          throw new TypeError(`unknown session/resume parameter ${JSON.stringify(unknownKey)}; expected sessionId and optional permissionMode`)
+        }
+        const { sessionId, permissionMode } = params
         if (permissionMode !== undefined && (typeof permissionMode !== 'string' || permissionMode.length === 0)) {
           throw new TypeError('session/resume permissionMode must be a non-empty string')
         }

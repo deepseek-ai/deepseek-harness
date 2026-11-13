@@ -180,7 +180,7 @@ class DeepSeekHarness:
         """Restore persisted history without sending input.
 
         Omit options to retain saved permissions, or set options["permission_mode"] to a configured preset
-        to persist before resumed execution. Unsupported presets or profiles raise.
+        to persist before resumed execution. Invalid option keys raise TypeError. Unsupported presets or profiles raise.
         Missing, unreadable, incompatible, or occupied sessions raise instead of creating a new session.
         """
         self.start()

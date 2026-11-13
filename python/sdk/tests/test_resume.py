@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from deepseek_harness import DeepSeekHarness, ResumeSessionOptions
+from deepseek_harness import DeepSeekHarness, HarnessClient, ResumeSessionOptions
 from deepseek_harness.errors import JsonRpcError
 
 
@@ -63,3 +64,16 @@ for line in sys.stdin:
     frames = [json.loads(line) for line in requests.read_text(encoding="utf-8").splitlines()]
     assert [frame["method"] for frame in frames] == ["initialize", "session/resume", "shutdown"]
     assert frames[1]["params"] == expected_params
+
+
+@pytest.mark.parametrize(("options", "error"), [
+    ({"permissionMode": "read-only"}, "permissionMode"),
+    ({"permission_mode": "read-only", "permision_mode": "read-only"}, "permision_mode"),
+    ("read-only", "dict"),
+])
+def test_invalid_resume_options_do_not_send_a_request(options: object, error: str) -> None:
+    client = HarnessClient()
+    with patch.object(client, "request") as request:
+        with pytest.raises(TypeError, match=error):
+            client.resume_session("saved", options)
+        request.assert_not_called()
