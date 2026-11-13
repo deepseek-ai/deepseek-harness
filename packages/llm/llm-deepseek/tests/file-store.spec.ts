@@ -95,11 +95,8 @@ describe('DeepSeekFileStore', () => {
       const calls = fetch.mock.calls.length
       for (let i = 0; i < count; i++) {
         await expect(store.ensureUploaded(cached, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: false })
-        // The two cache misses are images from one model request.
-        const request = {}
-        const missing = [VERSION, { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'e'.repeat(64)}`) }]
-        await Promise.all(missing.map(image => expect(store.ensureUploaded(image, CONNECTION, POLICY, undefined, request))
-          .rejects.toMatchObject({ code: 'TIMEOUT' })))
+        await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY))
+          .rejects.toMatchObject({ code: 'FILES_API_SKIPPED', cause: { code: FILES_API_TIMEOUT } })
       }
       expect(fetch).toHaveBeenCalledTimes(calls)
       await expect(store.ensureUploaded(VERSION, { ...CONNECTION, headers: { 'x-api-key': 'other' } }, POLICY)).resolves.toBeDefined()
@@ -108,14 +105,39 @@ describe('DeepSeekFileStore', () => {
     await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
     const fresh = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'d'.repeat(64)}`) }
     await expire(fresh)
+    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
+    // The failed probe starts while the old interval still exists; another image succeeds before it times out.
+    const started = Promise.withResolvers<undefined>()
+    fetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      started.resolve(undefined)
+      init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+    }))
+    const controller = new AbortController()
+    const probe = store.ensureUploaded(fresh, CONNECTION, POLICY, controller.signal)
+    await started.promise
+    const other = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'f'.repeat(64)}`) }
+    await expect(store.ensureUploaded(other, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+    controller.abort(reason)
+    await expect(probe).rejects.toBe(reason)
     // Two independent requests race for the last skip. The other must upload.
     const competing = await Promise.allSettled([
       store.ensureUploaded(fresh, CONNECTION, POLICY), store.ensureUploaded(fresh, CONNECTION, POLICY),
     ])
-    expect(competing).toEqual(expect.arrayContaining([
-      expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({ code: 'TIMEOUT' }) }),
-      expect.objectContaining({ status: 'fulfilled', value: expect.objectContaining({ uploaded: true }) }),
-    ]))
+    expect(competing.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'FILES_API_SKIPPED' } })
+    expect(competing.find(result => result.status === 'fulfilled')).toMatchObject({ value: { uploaded: true } })
+  })
+
+  it.each([
+    [503, '{}', 'SERVER'], [200, '{}', 'INVALID_RESPONSE'],
+  ] as const)('retries the next upload after HTTP %i fails with %s', async (status, body, code) => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-http-failure-'))
+    roots.push(dir)
+    const fetch = vi.fn(uploadFetch().fetchImpl).mockResolvedValueOnce(new Response(body, { status }))
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('does not count a Files deadline reached before the upload starts', async () => {
@@ -170,7 +192,7 @@ describe('DeepSeekFileStore', () => {
       upload.response.resolve(await remote.fetchImpl(CONNECTION.baseURL, { method: 'POST' }))
     }
     await writes.promise
-    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
     await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
   })
 
@@ -291,6 +313,7 @@ describe('DeepSeekFileStore', () => {
         }, { once: true })
       })
     }) as typeof fetch
+    vi.spyOn(index, 'get').mockResolvedValue(undefined)
     const store = new DeepSeekFileStore({ index, now: () => NOW, fetch: fetchImpl })
     const controller = new AbortController()
 
@@ -304,7 +327,7 @@ describe('DeepSeekFileStore', () => {
     await expect(cancelled).rejects.toBe(reason)
     expect(uploadSignal?.aborted).toBe(false)
     if (reason instanceof TimeoutReason) {
-      await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
+      await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'FILES_API_SKIPPED' })
     }
     complete?.(new Response(JSON.stringify({
       id: 'file-api-shared',

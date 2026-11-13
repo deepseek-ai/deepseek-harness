@@ -539,7 +539,9 @@ describe('DeepSeekAdapter against a mock server', () => {
   it('sends successive image requests inline after one 20-second upload timeout', async () => {
     vi.useFakeTimers()
     const started = Promise.withResolvers<undefined>()
-    const upload = vi.fn<typeof fetch>((_url, init) => new Promise((_resolve, reject) => {
+    const upload = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      id: 'file-probe', type: 'file', size_bytes: 3, created_at: new Date().toISOString(), filename: 'probe.png', mime_type: 'image/png',
+    }))).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
       started.resolve(undefined)
       init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
     }))
@@ -547,9 +549,10 @@ describe('DeepSeekAdapter against a mock server', () => {
     const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
     const messages = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => successfulSseResponse())
     const adapter = adapterOf({ baseURL: 'https://deepseek.invalid' }, attachments, files)
-    const request = () => drain(adapter.stream({
+    const second = { ...imageRef, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`) }
+    const request = (images = [imageRef]) => drain(adapter.stream({
       provider: 'deepseek-official', model: 'deepseek-flash',
-      messages: [createUserMessage({ content: [{ type: 'image', attachment: imageRef }], source: { kind: 'user' } })],
+      messages: [createUserMessage({ content: images.map(attachment => ({ type: 'image', attachment })), source: { kind: 'user' } })],
     }))
 
     try {
@@ -561,11 +564,14 @@ describe('DeepSeekAdapter against a mock server', () => {
       await first
       await vi.advanceTimersByTimeAsync(3_600_000)
       await drain(adapter.stream({ provider: 'deepseek-official', model: 'deepseek-flash', messages: [] }))
-      await request()
+      await request([imageRef, second])
       expect(upload).toHaveBeenCalledTimes(1)
       expect(messages).toHaveBeenCalledTimes(3)
       expect(messages.mock.calls[0]?.[1]?.body).toEqual(expect.stringContaining('base64'))
-      expect(messages.mock.calls[2]?.[1]?.body).toEqual(expect.stringContaining('base64'))
+      expect(String(messages.mock.calls[2]?.[1]?.body).match(/"type":"base64"/gu)).toHaveLength(2)
+      await request()
+      expect(upload).toHaveBeenCalledTimes(2)
+      expect(messages.mock.calls[3]?.[1]?.body).toEqual(expect.stringContaining('file-probe'))
     } finally {
       messages.mockRestore()
     }

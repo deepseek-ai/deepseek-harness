@@ -1,9 +1,8 @@
 /** Shared Files resolution, bounded stale-id recovery, and normalized-image diagnostics. */
 
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { FILES_API_TIMEOUT } from './file-store.ts'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type { DeepSeekFileStore, DeepSeekFileConnection, DeepSeekFilePolicy, FileUploadRequest } from './file-store.ts'
+import { FILES_API_TIMEOUT, type DeepSeekFileStore, type DeepSeekFileConnection, type DeepSeekFilePolicy } from './file-store.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 
 /** Position of an image occurrence in the request's conversation messages. */
@@ -95,7 +94,6 @@ function normalizedImageDiagnostic(
 export class RequestFiles {
   private used: UsedRequestFile[] = []
   private retried = false
-  private readonly uploadRequest: FileUploadRequest = {}
 
   constructor(
     private readonly files: DeepSeekFileStore,
@@ -119,7 +117,7 @@ export class RequestFiles {
     using limit = deadline(this.signal, this.timeoutMs, FILES_API_TIMEOUT)
     let resolved: Awaited<ReturnType<DeepSeekFileStore['ensureUploaded']>>
     try {
-      resolved = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal, this.uploadRequest)
+      resolved = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal)
     } catch (error) {
       if (this.signal.aborted) throw error
       throw new FileResolutionFailure(error)
