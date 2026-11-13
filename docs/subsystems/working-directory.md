@@ -2,13 +2,13 @@
 
 English | [中文](working-directory.zh.md)
 
-A Session's active directory is owned by [`dsh-working-directory`](../../packages/session/working-directory/README.md). The immutable header identifies the original project; `working-directory/change` records the effective directory used by later directory-based operations. The generated [persistence catalog](../persistence-catalog.md) owns the event declaration.
+A Session's active directory is owned by [`dsh-working-directory`](../../packages/session/working-directory/README.md). The immutable header identifies the original project; `workspace-root/change` records each move of the directory used by later directory-based operations. The generated [persistence catalog](../persistence-catalog.md) owns the event declaration.
 
 ## Directory selection
 
 `ctx.workingDirectory.get(session)` reads the logged value. `ensure(agent)` validates it and restores the original project when the directory disappeared. `set(agent, path)` validates and records a move that a Host operation chose, such as worktree creation, the forge panel, or an SDK request; the model has no tool that moves the directory. Sessions without a header directory use the configured runtime fallback; an unavailable fallback produces an error.
 
-`rootOf(session)` reads the workspace root. Every change the service records carries `workspace: true` and moves the root with the directory, so the two are equal. They differ only in a Session whose log holds a change without that marker, recorded while the model could move the directory: such a change moves the directory and leaves the root at the original project until the next recorded change.
+`rootOf(session)` reads the workspace root. Every change the service records is a `workspace-root/change`, which moves the root with the directory, so the two are equal. They differ only in a Session whose log holds a `working-directory/change`, recorded while the model could move the directory: that deprecated event has no writer, moves the directory, and leaves the root at the original project until the next recorded change.
 
 Changes are local to one Session. The model's relative filesystem operations and the processes its tools start use the current directory. What the user sees follows the workspace root: the sandbox `workspace-write` boundary, the Files tree and directory listings, the change summaries, new sidebar terminals, `@` file completion, the skill catalog, project-instruction discovery, and the LSP workspace. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
 
@@ -30,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 One owner for each Session's directory, its workspace root, and their model-visible changes.
 
-A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a change without the `workspace` marker.
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a `working-directory/change`.
 
 ```ts cordis-catalog
 /**
@@ -43,7 +43,7 @@ get(session: Session): string
 /**
  * Read the committed workspace root without filesystem I/O.
  * @param session - Session whose root is requested.
- * @returns the directory of the last change that moved the workspace, the original project before any,
+ * @returns the directory of the last `workspace-root/change`, the original project before any,
  * or the deployment default when none is recorded.
  */
 rootOf(session: Session): string
@@ -51,7 +51,7 @@ rootOf(session: Session): string
 /**
  * Read the recorded workspace root without the deployment fallback and without filesystem I/O.
  * @param session - Session whose root is requested.
- * @returns the directory of the last change that moved the workspace, the original project before any,
+ * @returns the directory of the last `workspace-root/change`, the original project before any,
  * or undefined while the log records neither; consumers apply their own fallback.
  */
 recordedRootOf(session: Session): string | undefined

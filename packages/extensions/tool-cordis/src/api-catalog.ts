@@ -4775,7 +4775,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'workingDirectory',
     summary: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.',
-    description: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a change without the `workspace` marker.',
+    description: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a `working-directory/change`.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4792,13 +4792,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'rootOf(session: Session): string',
         description: 'Read the committed workspace root without filesystem I/O.',
         parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
-        returns: 'the directory of the last change that moved the workspace, the original project before any, or the deployment default when none is recorded.',
+        returns: 'the directory of the last `workspace-root/change`, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'recordedRootOf(session: Session): string | undefined',
         description: 'Read the recorded workspace root without the deployment fallback and without filesystem I/O.',
         parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
-        returns: 'the directory of the last change that moved the workspace, the original project before any, or undefined while the log records neither; consumers apply their own fallback.',
+        returns: 'the directory of the last `workspace-root/change`, the original project before any, or undefined while the log records neither; consumers apply their own fallback.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',

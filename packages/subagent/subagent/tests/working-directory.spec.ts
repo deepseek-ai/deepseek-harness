@@ -67,7 +67,7 @@ describe('subagent working directories', () => {
     await run.dispose()
   })
 
-  it('starts a child in the parent workspace root, not in a directory a change without the marker recorded', async () => {
+  it('starts a child in the parent workspace root, not in a directory a working-directory/change recorded', async () => {
     const { ctx, parent, origin, first } = await fixture()
     parent.session.append('working-directory/change', { cwd: await realpath(first) })
     const run = await startTestActivation(ctx, 'spawn', {
@@ -96,8 +96,8 @@ describe('subagent working directories', () => {
     await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeUndefined() })
     using observed = await ctx.sessionQuery.observeSession(started.childId)
     expect(observed.header.cwd).toBe(origin)
-    const last = observed.events.findLast(event => event.type === 'working-directory/change')
-    expect(last?.data).toEqual({ cwd: selected, workspace: true })
+    const last = observed.events.findLast(event => event.type === 'workspace-root/change')
+    expect(last?.data).toEqual({ cwd: selected })
   })
 
   it('rolls back a local child whose setup realm has no directory service', async () => {

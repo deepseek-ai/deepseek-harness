@@ -83,7 +83,8 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:turn/start` | event | `aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8` | [`{ type: "turn/start" }`](#persistence-type-sha256-aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8) |
 | `event:user/message` | event | `fb6a6e338625067ac582f55dde412a583040cd738bb8fc6820cb0b941c59f05a` | [`{ type: "user/message" }`](#persistence-type-sha256-fb6a6e338625067ac582f55dde412a583040cd738bb8fc6820cb0b941c59f05a) |
 | `event:web/deepseek-search-llm-request` | event | `0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52` | [`{ type: "web/deepseek-search-llm-request" }`](#persistence-type-sha256-0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52) |
-| `event:working-directory/change` | event | `d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a` | [`{ type: "working-directory/change" }`](#persistence-type-sha256-d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a) |
+| `event:working-directory/change` | event | `124aa62078ca3311353b39cc3bf6c75da281338be6bbf672f8b361d828cddca3` | [`{ type: "working-directory/change" }`](#persistence-type-sha256-124aa62078ca3311353b39cc3bf6c75da281338be6bbf672f8b361d828cddca3) |
+| `event:workspace-root/change` | event | `025f11632cd02aaecc23a46c3b5bf43b9009d88293ed9b35ccbc1139d73334dc` | [`{ type: "workspace-root/change" }`](#persistence-type-sha256-025f11632cd02aaecc23a46c3b5bf43b9009d88293ed9b35ccbc1139d73334dc) |
 | `event:workspace/changes` | event | `e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72` | [`{ type: "workspace/changes" }`](#persistence-type-sha256-e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72) |
 
 ## Event envelope
@@ -1322,20 +1323,19 @@ Source: [`packages/web/web-search-deepseek/src/provider.ts:89`](../packages/web/
 #### `working-directory/change` — log-only
 
 ```ts persistence-catalog
-/** Effective working directory; the immutable Session header retains the original project. */
+/**
+ * Directory change of a stored Session that leaves its workspace root where it is; the immutable
+ * Session header retains the original project.
+ * @deprecated Read only: no writer records this event. `WorkingDirectoryService.set` records
+ * `workspace-root/change`.
+ */
 'working-directory/change': {
   /** Absolute directory used by subsequent directory-based operations. */
   cwd: string
-  /**
-   * Present when the change moves the Session's workspace: `cwd` is the workspace root from this
-   * event on. The service sets it on every change it records. A change without it, recorded while
-   * the model could move the directory, moves only the current directory.
-   */
-  workspace?: true
 }
 ```
 
-Source: [`packages/session/working-directory/src/index.ts:55`](../packages/session/working-directory/src/index.ts)
+Source: [`packages/session/working-directory/src/index.ts:60`](../packages/session/working-directory/src/index.ts)
 
 ### `workspace/*`
 
@@ -1353,6 +1353,22 @@ Source: [`packages/session/working-directory/src/index.ts:55`](../packages/sessi
 ```
 
 Source: [`packages/deliverables/workspace-changes/src/types.ts:106`](../packages/deliverables/workspace-changes/src/types.ts)
+
+### `workspace-root/*`
+
+<a id="workspace-rootchange--log-only"></a>
+
+#### `workspace-root/change` — log-only
+
+```ts persistence-catalog
+/** Workspace move: the Session's current directory and its workspace root both become `cwd`. */
+'workspace-root/change': {
+  /** Absolute directory used by subsequent directory-based operations and as the workspace root. */
+  cwd: string
+}
+```
+
+Source: [`packages/session/working-directory/src/index.ts:65`](../packages/session/working-directory/src/index.ts)
 
 ## Resolved persistence types
 
@@ -3083,6 +3099,14 @@ SHA-256: `7b1ce60193fa8b69292e5843858d9cee7dc565dcb40d33c136e5d7e8b8d4296a`
 SHA-256: `d4c799e3d51cae1040362ba4968efc484739e14416c9c1df20c2f108b4ef2eb5`
 
 `"working-directory/change"`
+
+<a id="persistence-type-sha256-5f22f22ce033e6ce2913445ff1fd80e5dab629a9ac9c19bcffdde8a895b163dd"></a>
+
+### `"workspace-root/change"`
+
+SHA-256: `5f22f22ce033e6ce2913445ff1fd80e5dab629a9ac9c19bcffdde8a895b163dd`
+
+`"workspace-root/change"`
 
 <a id="persistence-type-sha256-a3edd1efd1fef21b72c55e213c8a8b24196b091abde2b89db52be0b2aaae3cfa"></a>
 
@@ -6216,18 +6240,17 @@ Sources: [`packages/compaction/compaction/src/types.ts:24`](../packages/compacti
 | `sourceCommandId` | optional | `string` |
 | `turn` | required | [`OptionalSessionSeq`](#persistence-type-sha256-3bd652ebfa8726b3ce3937a4f1bd2759e02f86b3a08a20f9e41a8513656fbc5f) |
 
-<a id="persistence-type-sha256-57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9"></a>
+<a id="persistence-type-sha256-da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582"></a>
 
-### `{ cwd, workspace? }`
+### `{ cwd }`
 
-SHA-256: `57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9`
+SHA-256: `da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582`
 
-Sources: [`packages/session/working-directory/src/index.ts:55`](../packages/session/working-directory/src/index.ts)
+Sources: [`packages/session/working-directory/src/index.ts:60`](../packages/session/working-directory/src/index.ts) · [`packages/session/working-directory/src/index.ts:65`](../packages/session/working-directory/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
 | `cwd` | required | `string` |
-| `workspace` | optional | `true` |
 
 <a id="persistence-type-sha256-8ad45ad053b4d89f8865c17cc9ff3b8748e86045f3f0fb816269a34af2619141"></a>
 
@@ -9399,21 +9422,37 @@ Sources: [`packages/web/web-search-deepseek/src/provider.ts:71`](../packages/web
 | `name` | required | `"web_search"` |
 | `type` | required | `"web_search_20250305"` |
 
-<a id="persistence-type-sha256-d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a"></a>
+<a id="persistence-type-sha256-124aa62078ca3311353b39cc3bf6c75da281338be6bbf672f8b361d828cddca3"></a>
 
 <a id="persistence-type-eventworking-directorychange"></a>
 
 ### `{ type: "working-directory/change" }`
 
-SHA-256: `d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a`
+SHA-256: `124aa62078ca3311353b39cc3bf6c75da281338be6bbf672f8b361d828cddca3`
 
 | Property | Presence | Type |
 |---|---|---|
-| `data` | required | [`{ cwd, workspace? }`](#persistence-type-sha256-57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9) |
+| `data` | required | [`{ cwd }`](#persistence-type-sha256-da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582) |
 | `ignorable` | optional | `true` |
 | `seq` | required | `number` |
 | `time` | required | `number` |
 | `type` | required | `"working-directory/change"` |
+
+<a id="persistence-type-sha256-025f11632cd02aaecc23a46c3b5bf43b9009d88293ed9b35ccbc1139d73334dc"></a>
+
+<a id="persistence-type-eventworkspace-rootchange"></a>
+
+### `{ type: "workspace-root/change" }`
+
+SHA-256: `025f11632cd02aaecc23a46c3b5bf43b9009d88293ed9b35ccbc1139d73334dc`
+
+| Property | Presence | Type |
+|---|---|---|
+| `data` | required | [`{ cwd }`](#persistence-type-sha256-da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582) |
+| `ignorable` | optional | `true` |
+| `seq` | required | `number` |
+| `time` | required | `number` |
+| `type` | required | `"workspace-root/change"` |
 
 <a id="persistence-type-sha256-e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72"></a>
 

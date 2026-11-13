@@ -43,7 +43,7 @@ describe('creating and entering retained worktrees', () => {
     expect(ctx.workingDirectory.rootOf(agent.session)).toBe(result.path)
     const events = agent.session.snapshotEvents()
     const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
-    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'working-directory/change'))
+    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'workspace-root/change'))
     expect(pluginRecordOf(events[created]!)?.data).toEqual(result)
     expect(await git(result.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
@@ -80,7 +80,7 @@ describe('creating and entering retained worktrees', () => {
     expect(await git(root, 'rev-parse', '--verify', 'refs/heads/inner')).toBe(inner.baseCommit)
   })
 
-  it('exits a worktree whose subdirectory a change without the workspace marker recorded', async () => {
+  it('exits a worktree whose subdirectory a working-directory/change recorded', async () => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)

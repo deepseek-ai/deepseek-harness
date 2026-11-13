@@ -292,10 +292,10 @@ export class SandboxPolicyService extends Service {
     })
     ctx.on('session/created', (session) => { this.prewarm(session) })
     ctx.on('session/event', (session, event) => {
-      if (event.type !== 'working-directory/change') return
+      if (event.type !== 'workspace-root/change') return
       // A Host move of the workspace reads the entered root's layout again: a root settled
       // without administration directories may have become a linked worktree since.
-      if (event.data.workspace === true) this.gitAdministration.delete(this.rootOf(session))
+      this.gitAdministration.delete(this.rootOf(session))
       this.prewarm(session)
     })
     ctx.on('tools/pre-execute', async (exec, next) => {

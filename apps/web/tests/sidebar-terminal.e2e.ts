@@ -263,7 +263,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const sandbox = agent.ctx.get('sandbox')
     if (sandbox === undefined) throw new Error('Session sandbox provider is missing')
     const confine = vi.spyOn(sandbox, 'confine')
-    // A change without the workspace marker, as earlier logs hold, moves the current directory, not the root a new terminal starts in.
+    // A working-directory/change, as earlier logs hold, moves the current directory, not the root a new terminal starts in.
     agent.session.append('working-directory/change', { cwd: child })
 
     await openTerminal(page)

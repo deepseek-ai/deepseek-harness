@@ -97,6 +97,7 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
     case 'working-directory/change':
+    case 'workspace-root/change':
       return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:

@@ -51,16 +51,20 @@ declare module '@deepseek-ai/dsh-llm' {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** Effective working directory; the immutable Session header retains the original project. */
+    /**
+     * Directory change of a stored Session that leaves its workspace root where it is; the immutable
+     * Session header retains the original project.
+     * @deprecated Read only: no writer records this event. `WorkingDirectoryService.set` records
+     * `workspace-root/change`.
+     */
     'working-directory/change': {
       /** Absolute directory used by subsequent directory-based operations. */
       cwd: string
-      /**
-       * Present when the change moves the Session's workspace: `cwd` is the workspace root from this
-       * event on. The service sets it on every change it records. A change without it, recorded while
-       * the model could move the directory, moves only the current directory.
-       */
-      workspace?: true
+    }
+    /** Workspace move: the Session's current directory and its workspace root both become `cwd`. */
+    'workspace-root/change': {
+      /** Absolute directory used by subsequent directory-based operations and as the workspace root. */
+      cwd: string
     }
   }
 }
@@ -69,7 +73,7 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Recorded current directory for Session observations, or null when none is recorded. */
     workingDirectory: string | null
-    /** Workspace root: the directory of the last change that moved the workspace, else the original project; null when none is recorded. */
+    /** Workspace root: the directory of the last `workspace-root/change`, else the original project; null when none is recorded. */
     workspaceRoot: string | null
   }
 }
@@ -86,7 +90,7 @@ export interface Config {
  * A Session works in one directory. Relative paths resolve from it, and it is the workspace root that
  * the write boundary, file views, and discovery follow. Only Host operations move it, through {@link set}
  * or the recovery of {@link ensure}; every such change moves both. The two differ only in a Session whose
- * log holds a change without the `workspace` marker.
+ * log holds a `working-directory/change`.
  */
 export class WorkingDirectoryService extends Service {
   static inject = ['fs', 'sessionProjections', 'systemPrompt']
@@ -119,7 +123,7 @@ export class WorkingDirectoryService extends Service {
       stateVersion: 1,
       stateSchema: directorySchema,
       init: header => header.cwd ?? null,
-      apply: (state, event) => event.type === 'working-directory/change' ? event.data.cwd : state,
+      apply: (state, event) => event.type === 'working-directory/change' || event.type === 'workspace-root/change' ? event.data.cwd : state,
       wire: { viewSchema: directorySchema, view: state => state },
     })
     this.workspaceRootProjectionHandle = await ctx.sessionProjections.register({
@@ -127,7 +131,7 @@ export class WorkingDirectoryService extends Service {
       stateVersion: 1,
       stateSchema: directorySchema,
       init: header => header.cwd ?? null,
-      apply: (state, event) => event.type === 'working-directory/change' && event.data.workspace === true ? event.data.cwd : state,
+      apply: (state, event) => event.type === 'workspace-root/change' ? event.data.cwd : state,
       wire: { viewSchema: directorySchema, view: state => state },
     })
     ctx.systemPrompt.context({
@@ -169,7 +173,7 @@ export class WorkingDirectoryService extends Service {
   /**
    * Read the committed workspace root without filesystem I/O.
    * @param session - Session whose root is requested.
-   * @returns the directory of the last change that moved the workspace, the original project before any,
+   * @returns the directory of the last `workspace-root/change`, the original project before any,
    * or the deployment default when none is recorded.
    */
   rootOf(session: Session): string {
@@ -179,7 +183,7 @@ export class WorkingDirectoryService extends Service {
   /**
    * Read the recorded workspace root without the deployment fallback and without filesystem I/O.
    * @param session - Session whose root is requested.
-   * @returns the directory of the last change that moved the workspace, the original project before any,
+   * @returns the directory of the last `workspace-root/change`, the original project before any,
    * or undefined while the log records neither; consumers apply their own fallback.
    */
   recordedRootOf(session: Session): string | undefined {
@@ -204,7 +208,7 @@ export class WorkingDirectoryService extends Service {
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
         if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
-          agent.session.append('working-directory/change', { cwd: current, workspace: true })
+          agent.session.append('workspace-root/change', { cwd: current })
         }
         return current
       }
@@ -265,8 +269,8 @@ export class WorkingDirectoryService extends Service {
     agent.ctx.fiber.assertActive()
     const previous = this.get(agent.session)
     if (previous === directory && this.rootOf(agent.session) === directory) return
-    agent.session.append('working-directory/change', { cwd: directory, workspace: true })
-    // Only the root moved: the directory was recorded by a change without the workspace marker.
+    agent.session.append('workspace-root/change', { cwd: directory })
+    // Only the root moved: a `working-directory/change` recorded the directory.
     if (previous === directory) return
     const notice = createUserMessage({
       content: [{

@@ -701,7 +701,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-worktree',
     source: 'packages/experimental/tool-worktree/src/index.ts',
     requires: ['ctx.tools', 'ctx.worktrees', 'a calling Agent'],
-    writes: ['tool/call', 'Git branch and checkout', 'working-directory/change', 'tool/result'],
+    writes: ['tool/call', 'Git branch and checkout', 'workspace-root/change', 'tool/result'],
     async mount(ctx) {
       ctx.provide('worktrees', {
         create: () => Promise.reject(new Error('gen-tool-catalog: worktree creation is unavailable during schema harvest')),
