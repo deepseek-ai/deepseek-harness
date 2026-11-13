@@ -187,7 +187,7 @@ describe('cordis-walk scan reach', () => {
     expect(events).toEqual(['second/changed'])
   })
 
-  it('reads string-literal and identifier member names from an Events merge', () => {
+  it('reads string-literal and identifier service and event names', () => {
     const sf = ts.createSourceFile('x.ts', [
       "declare module '@deepseek-ai/cordis' {",
       '  interface Events {',
@@ -196,6 +196,8 @@ describe('cordis-walk scan reach', () => {
       '  }',
       '  interface Context {',
       '    thing: ThingService',
+      "    'connection.authentication': AuthenticationService",
+      '    "connection.other": OtherService',
       '  }',
       '}',
       '',
@@ -206,6 +208,10 @@ describe('cordis-walk scan reach', () => {
       : null
     if (!body) throw new Error('fixture did not parse to a module block')
     expect(eventNameList(body, sf)).toEqual(['scope/list', 'plain'])
-    expect([...contextKeyMap(body, sf)]).toEqual([['thing', 'ThingService']])
+    expect([...contextKeyMap(body, sf)]).toEqual([
+      ['thing', 'ThingService'],
+      ['connection.authentication', 'AuthenticationService'],
+      ['connection.other', 'OtherService'],
+    ])
   })
 })

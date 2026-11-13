@@ -34,7 +34,9 @@ function modulesOf(graph: WebBootGraph, staticModules: Record<string, unknown>):
   }
   const modules = target.create({
     boot: graph,
-    staticModules,
+    staticModules: Object.entries(staticModules).map(([id, exports]) => ({
+      id, factory: () => exports as Record<string, unknown>,
+    })),
     loadBundle: async (url) => { loaded.push(url) },
   })
   return { modules, loaded }

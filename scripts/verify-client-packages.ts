@@ -359,7 +359,10 @@ function collectModuleViolations(facts: ClientPackageFacts): string[] {
       if (supplier === pkg.name) {
         violations.push(pkg.manifest + ': dsh.client.external names its own row ' + JSON.stringify(specifier))
       } else if (supplier !== undefined) {
-        if (pkg.manifest.startsWith(CLIENT_FEATURE_PREFIX) && !isInfrastructureRow(byName.get(supplier))) {
+        // The iframe provider shares the registry's Realm error identity; this is an infrastructure edge, not UI composition.
+        const realmProvider = pkg.name === '@deepseek-ai/dsh-client-script-realm-iframe'
+          && specifier === '@deepseek-ai/dsh-client-script-realm/client'
+        if (pkg.manifest.startsWith(CLIENT_FEATURE_PREFIX) && !isInfrastructureRow(byName.get(supplier)) && !realmProvider) {
           violations.push(
             pkg.manifest + ': client feature package requests runtime external ' + JSON.stringify(specifier)
             + '; request only rows under ' + INFRASTRUCTURE_PREFIX + ', import shared types only,'

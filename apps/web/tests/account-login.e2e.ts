@@ -93,7 +93,7 @@ async function mockPlatform() {
   await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('account login: missing mock listener')
-  const origin = `http://127.0.0.1:${String(address.port)}`
+  const origin = `http://localhost:${String(address.port)}`
   return {
     origin, inits, pages, avatarRequests: () => avatarRequests, notificationLists: () => notificationLists,
     close: () => new Promise<void>((resolve) => { server.close(() => { resolve() }); server.closeAllConnections() }),
@@ -132,8 +132,10 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek account sign-in in a plain
     const menu = page.getByRole('button', { name: 'Account menu', exact: true })
     await menu.click()
     const tab = context.waitForEvent('page')
+    const callback = context.waitForEvent('request', request => new URL(request.url()).pathname === '/oauth/callback')
     await page.getByRole('menuitem', { name: 'Sign in', exact: true }).click()
     const authorization = await tab
+    expect((await (await callback).allHeaders())['sec-fetch-site']).toBe('cross-site')
     await authorization.waitForURL(url => url.pathname === '/dsh/authorized', { timeout: 30_000 })
     expect(await authorization.evaluate(() => window.opener === null)).toBe(true)
     await expect.poll(() => menu.textContent(), { timeout: 30_000 }).toBe('Web User')

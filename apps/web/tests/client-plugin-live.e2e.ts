@@ -42,6 +42,12 @@ it('keeps ordered legacy Session menu rows before Archive and removes them with 
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     const row = page.getByRole('treeitem').filter({ has: page.getByText(SESSION_TITLE, { exact: true }) })
     await row.waitFor({ timeout: 20_000 })
+    // Static library styles follow their module dependencies: dockkit imports primitives, so primitives install first.
+    const styleOwners = await page.evaluate(() => [...document.head.querySelectorAll('style[data-plugin]')].map(style => style.getAttribute('data-plugin')))
+    const primitives = styleOwners.flatMap((owner, index) => owner === '@deepseek-ai/dsh-client-ui-primitives' ? [index] : [])
+    const dockkit = styleOwners.indexOf('@deepseek-ai/dsh-client-ui-dockkit')
+    expect(primitives.length).toBeGreaterThan(0)
+    expect(dockkit).toBeGreaterThan(Math.max(...primitives))
     const trigger = row.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
 
     const trailing = row.locator('[data-session-trailing]')

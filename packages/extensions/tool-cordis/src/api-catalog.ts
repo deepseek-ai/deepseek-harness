@@ -760,7 +760,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly browserPeer: PeerScope',
-        description: 'The owner Peer every authenticated browser connection shares.',
+        description: 'Connection-owned Peer for trusted in-process callers, not network authentication.',
         parameters: [],
       },
       {
@@ -775,40 +775,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Fetch handler for trusted, authenticated requests.',
       },
       {
-        signature: 'requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection',
-        description: 'Apply Connection\'s Host/Origin checks and browser authentication to another Web route.',
-        parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
-        returns: 'rejection status, or undefined when the route may accept the request.',
-      },
-      {
         signature: 'admit(request: ConnectionTrustRequest): PeerAdmission',
-        description: 'Admit an HTTP request against its signed browser or API credential and live Peer.',
+        description: 'Apply Host/Origin checks and admit the first live Peer returned by a registered credential verifier.',
         parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
         returns: 'the credential\'s Peer, or the rejection status.',
       },
       {
         signature: 'createPeer(options: { readonly principal: Principal; readonly interactions?: \'answer\' | \'none\' }): PeerScope',
         description: 'Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.',
-        parameters: [{ name: 'options', description: 'fixed principal and optional interaction participation (default `answer`).' }],
+        parameters: [{ name: 'options', description: 'fixed principal and interaction participation (default answer).' }],
         returns: 'a new Peer distinct from every other Peer.',
       },
       {
-        signature: 'admitConnection(request: ConnectionTrustRequest): ConnectionAdmission',
-        description: 'Claim a physical socket for an API Peer; browser sockets share their owner Peer.',
-        parameters: [{ name: 'request', description: 'authenticated upgrade request headers.' }],
-        returns: 'the Peer and idempotent release, or 409 for duplicate API ownership. The carrier releases on socket termination or failed upgrade; release removes API admission synchronously without cancelling independent HTTP calls.',
+        signature: 'readonly authentication: ConnectionAuthentication',
+        description: 'Credential verifier sub-service; consumers inject `connection.authentication`.',
+        parameters: [],
+      },
+    ],
+  },
+  {
+    key: 'connection.authentication',
+    summary: 'Credential verifier registry whose registrations belong to the calling plugin.',
+    description: 'Credential verifier registry whose registrations belong to the calling plugin.',
+    methods: [
+      {
+        signature: 'register(provider: AuthenticationProvider): () => Promise<void>',
+        description: 'Add a credential verifier after the existing registrations.',
+        parameters: [{ name: 'provider', description: 'verifier owning its credential and Peer selection.' }],
+        returns: 'disposer withdrawing this registration; the calling scope also withdraws it on unload.',
       },
       {
-        signature: 'authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean',
-        description: 'Authenticate one frontend index request, owning a token redirect or 401. The cookie this mints is `Secure` when the mounted Web carrier serves TLS, which only that listener\'s protocol decides.',
-        parameters: [{ name: 'request', description: 'root or configured-index HTTP request.' }, { name: 'response', description: 'response owned when the result is false.' }],
-        returns: 'true only when the frontend may serve index.html.',
-      },
-      {
-        signature: 'authenticatedUrl(baseUrl: string): string',
-        description: 'Add the fresh process token to an ordinary Web application URL.',
-        parameters: [{ name: 'baseUrl', description: 'clean application URL whose authority and mount are preserved.' }],
-        returns: 'tokenized URL for initial login; a mount proxy strips its prefix before {@link authorizeIndex}.',
+        signature: 'authenticate(request: ConnectionTrustRequest): PeerAdmission',
+        description: 'Verify credentials without applying an HTTP response or source policy.',
+        parameters: [{ name: 'request', description: 'current carrier headers and cancellation facts.' }],
+        returns: 'the first live Peer, 401 if no provider accepts, or 503 when verification failed without success.',
       },
     ],
   },
@@ -2718,7 +2718,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'abstract readonly language: string',
-        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tool-executor-ptc` presents. The shipped Node backend reports `\'typescript\'`.',
+        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. The shipped Node backend and `dsh-tool-executor-ptc` support `\'typescript\'`. Other languages require their own consumers.',
         parameters: [],
       },
       {
@@ -4694,7 +4694,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'webServer',
     summary: 'The browser HTTP carrier service.',
-    description: 'The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers.',
+    description: 'The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers. HTTP and upgrade admission refusals carry `Cache-Control: no-store`.',
     methods: [
       {
         signature: 'getOrigin(): string',
@@ -4716,14 +4716,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer removing the route.',
       },
       {
-        signature: 'registerFallback(fallback: WebRoute[\'handler\'] | Pick<WebResourceRoute, \'resource\'>): () => void',
+        signature: 'registerFallback(fallback: WebRoute[\'handler\'] | WebFallback): () => void',
         description: 'Claim the fallback seat: the handler or resource answering every request no named route matches (the SPA dist server in the shipped Web composition). One owner only — a second registration throws, because two fallbacks cannot compose.',
-        parameters: [{ name: 'fallback', description: 'a handler owning the full response lifecycle of unmatched requests, or `{ resource }` answering them.' }],
+        parameters: [{ name: 'fallback', description: 'a handler owning the full response lifecycle of unmatched requests, or an object declaring `handler` or `resource` and auth.' }],
         returns: 'the disposer releasing the seat.',
       },
       {
         signature: 'async readResource(request: Request, peer: PeerScope): Promise<Response>',
-        description: 'Read the response an HTTP request for the same URL would receive, as the resource computes it for `peer`, without an HTTP exchange. The request path picks the responder by the HTTP match order — exact, longest prefix, then the fallback — and only a resource answers. This method checks no cookie, Host, or Origin: the caller admits the reader before reading.',
+        description: 'Read the response an HTTP request for the same URL would receive, as the resource computes it for `peer`, without an HTTP exchange. The request path picks the responder by the HTTP match order — exact, longest prefix, then the fallback — and only a resource answers. This method checks no cookie, Host, or Origin: the caller admits the reader before reading. A resolved deny policy returns 403 even for an explicitly admitted Peer.',
         parameters: [{ name: 'request', description: 'the read; its URL path selects the responder.' }, { name: 'peer', description: 'the Peer the read speaks for, passed to the resource.' }],
         returns: 'the resource\'s response, without a body for HEAD as over HTTP; 405 with `Allow: GET, HEAD` for any other method, checked before matching, where over HTTP a handler route or an unmatched path answers such a method itself; 404 when the path matches a handler route, or reaches the fallback seat while it is unclaimed or holds a handler. A resource that throws rejects the read, where an HTTP request would receive 400.',
       },
@@ -5633,6 +5633,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'timeline/priority',
+    mode: 'emit',
+    signature: '\'timeline/priority\'(session: Session): void',
+    summary: 'A saved user edit entered or left P0.',
+    description: 'A saved user edit entered or left P0. Model task patches do not emit it.',
+    parameters: [{ name: 'session', description: 'the session that owns the task.' }],
+  },
+  {
     name: 'tools/change',
     mode: 'emit',
     signature: '\'tools/change\'(): void',
@@ -5697,12 +5705,44 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'webserver/authorize',
+    mode: 'bail',
+    signature: '\'webserver/authorize\'(request: WebAuthRequest, policy: WebAuthPolicy): WebAdmission | undefined',
+    summary: 'Admit a matched request synchronously; the first decision wins.',
+    description: 'Admit a matched request synchronously; the first decision wins.',
+    parameters: [{ name: 'request', description: 'headers, target, transport, and available cancellation state.' }, { name: 'policy', description: 'resolved route policy; deny never emits this event.' }],
+  },
+  {
+    name: 'webserver/entry-url',
+    mode: 'emit',
+    signature: '\'webserver/entry-url\'(baseUrl: string, entries: WebEntryUrl[]): void',
+    summary: 'Collect complete entry URLs for an advertised server address.',
+    description: 'Collect complete entry URLs for an advertised server address.',
+    parameters: [{ name: 'baseUrl', description: 'advertised server base URL without provider credentials.' }, { name: 'entries', description: 'entries appended synchronously in listener order.' }],
+  },
+  {
     name: 'webserver/index-inject',
     mode: 'emit',
     signature: '\'webserver/index-inject\'(table: IndexInjection[], peer: PeerScope): void',
     summary: 'Collect the structured index injection table for the page `peer` speaks for.',
     description: 'Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row\'s data is read fresh at emit time.',
     parameters: [{ name: 'table', description: 'Mutable row table; listeners append in activation order.' }, { name: 'peer', description: 'The Peer the rendered page speaks for.' }],
+  },
+  {
+    name: 'webserver/request',
+    mode: 'waterfall',
+    signature: '\'webserver/request\'(request: IncomingMessage, response: ServerResponse, next: () => Promise<void>): Promise<void>',
+    summary: 'Handle an HTTP request before named-route and fallback dispatch.',
+    description: 'Handle an HTTP request before named-route and fallback dispatch.',
+    parameters: [{ name: 'request', description: 'original incoming HTTP request.' }, { name: 'response', description: 'response owned by the listener or its delegated handler.' }, { name: 'next', description: 'dispatch to the next listener or the matching route.' }],
+  },
+  {
+    name: 'webserver/upgrade',
+    mode: 'waterfall',
+    signature: '\'webserver/upgrade\'( request: IncomingMessage, socket: Duplex, head: Buffer, peer: PeerScope | undefined, next: () => Promise<void>, ): Promise<void>',
+    summary: 'Handle an admitted upgrade before its registered protocol handler.',
+    description: 'Handle an admitted upgrade before its registered protocol handler.',
+    parameters: [{ name: 'request', description: 'original upgrade request.' }, { name: 'socket', description: 'transport owned by the upgrade.' }, { name: 'head', description: 'bytes received after the HTTP headers.' }, { name: 'peer', description: 'authenticated identity, absent for anonymous admission.' }, { name: 'next', description: 'delegate to the next listener or protocol handler.' }],
   },
   {
     name: 'workflow/agent-end',
@@ -6105,6 +6145,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthenticationProvider',
+    declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -6365,8 +6409,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
-    name: 'ConnectionAdmission',
-    declaration: 'export type ConnectionAdmission = {\n    readonly peer: PeerScope;\n    readonly release: () => Promise<void>;\n} | {\n    readonly rejection: 401 | 403 | 409;\n};',
+    name: 'ConnectionAuthentication',
+    declaration: 'export class ConnectionAuthentication extends Service {\n    constructor(ctx: Context);\n    register(provider: AuthenticationProvider): () => Promise<void>;\n    authenticate(request: ConnectionTrustRequest): PeerAdmission;\n}',
   },
   {
     name: 'ConnectionFetchHandler',
@@ -6381,20 +6425,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ConnectionFetchRoute {\n    readonly path: string;\n    readonly methods: readonly ConnectionFetchMethod[];\n    readonly requestBody: ConnectionRequestBodyMode;\n    readonly fetch: (request: Request) => Promise<Response>;\n}',
   },
   {
-    name: 'ConnectionIndexRequest',
-    declaration: 'export interface ConnectionIndexRequest extends ConnectionTrustRequest {\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
-  },
-  {
-    name: 'ConnectionIndexResponse',
-    declaration: 'export interface ConnectionIndexResponse {\n    writeHead(status: number, headers?: Readonly<Record<string, string>>): unknown;\n    end(body?: string): unknown;\n}',
-  },
-  {
     name: 'ConnectionRequestBodyMode',
     declaration: 'export type ConnectionRequestBodyMode = \'buffered\' | \'streaming\';',
-  },
-  {
-    name: 'ConnectionRequestRejection',
-    declaration: 'export type ConnectionRequestRejection = 401 | 403 | undefined;',
   },
   {
     name: 'ConnectionRpcAttachment',
@@ -6422,7 +6454,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionTrustRequest',
-    declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n}',
+    declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    readonly signal?: AbortSignal | undefined;\n    readonly socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
   },
   {
     name: 'ContentBlockMap',
@@ -8114,7 +8146,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PeerAdmission',
-    declaration: 'export type PeerAdmission = {\n    readonly peer: PeerScope;\n} | {\n    readonly rejection: 401 | 403;\n};',
+    declaration: 'export type PeerAdmission = {\n    readonly peer: PeerScope;\n} | {\n    readonly rejection: 401 | 403 | 503;\n};',
   },
   {
     name: 'PeerId',
@@ -10637,6 +10669,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ViewerPluginPolicy {\n    readonly plugin: string;\n    readonly mode: \'all\' | \'none\' | \'selected\';\n    readonly endpoints?: readonly string[];\n}',
   },
   {
+    name: 'WebAdmission',
+    declaration: 'export type WebAdmission = {\n    kind: \'allow\';\n    peer?: PeerScope;\n} | {\n    kind: \'deny\';\n    status: 401 | 403 | 503;\n};',
+  },
+  {
+    name: 'WebAuthenticationRule',
+    declaration: 'export type WebAuthenticationRule = WebAuthPolicy | ((request: WebAuthRequest) => WebAuthPolicy);',
+  },
+  {
+    name: 'WebAuthPolicy',
+    declaration: 'export type WebAuthPolicy = \'anonymous\' | \'required\' | \'deny\';',
+  },
+  {
+    name: 'WebAuthRequest',
+    declaration: 'export interface WebAuthRequest {\n    headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    method?: string | undefined;\n    url: URL;\n    transport: \'http\' | \'upgrade\';\n    signal?: AbortSignal | undefined;\n    socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n}',
+  },
+  {
     name: 'WebBootBatch',
     declaration: 'export interface WebBootBatch {\n    phase: WebBootBatchPhase;\n    url: string;\n    rev: string;\n    entries: string[];\n}',
   },
@@ -10655,6 +10703,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebBootRelease',
     declaration: 'export interface WebBootRelease {\n    version: string;\n    commit?: string;\n}',
+  },
+  {
+    name: 'WebEntryUrl',
+    declaration: 'export interface WebEntryUrl {\n    readonly label: string;\n    readonly url: string;\n    readonly open: boolean;\n}',
+  },
+  {
+    name: 'WebFallback',
+    declaration: 'export type WebFallback = Pick<WebRoute, \'handler\' | \'auth\'> | Pick<WebResourceRoute, \'resource\' | \'auth\'>;',
   },
   {
     name: 'WebFetchBody',
@@ -10722,7 +10778,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebResourceRoute',
-    declaration: 'export interface WebResourceRoute {\n    kind: WebRouteKind;\n    path: string;\n    resource: WebResource;\n}',
+    declaration: 'export interface WebResourceRoute {\n    kind: WebRouteKind;\n    path: string;\n    resource: WebResource;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WebResultView',
@@ -10730,7 +10786,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebRoute',
-    declaration: 'export interface WebRoute {\n    kind: WebRouteKind;\n    path: string;\n    handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;\n}',
+    declaration: 'export interface WebRoute {\n    kind: WebRouteKind;\n    path: string;\n    handler: (req: IncomingMessage, res: ServerResponse, peer?: PeerScope) => void | Promise<void>;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WebRouteKind',
@@ -10770,7 +10826,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebUpgradeRoute',
-    declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>;\n}',
+    declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer, peer?: PeerScope) => void | Promise<void>;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WeeklyInput',

@@ -40,4 +40,4 @@ Status: implemented
 
 context meter 是独立于挂载历史的逐会话事实。Preset 使用宿主 meter 进行 token 记账，并选择自己的压缩后端；`minimal` 同时支持自动压缩和用户 `/compact` 命令。
 
-生产入口必须显式组装 Agent；仅安装注册表不会自动绑定。未加入的 Agent 不会获得工具、提示词段落或 skill，也不会报告错误。
+生产入口必须显式组装 Agent；仅安装注册表不会自动绑定。未加入的 Agent 不会获得 preset 所拥有的工具、提示词段落或 skill，未加入这一点也不会报告错误。CUA 提供方在 preset 之外注册：它为未加入的 Agent 提供 `cua_run_code` 及其指引，并在该工具的程序服务不可用时拒绝创建这个 Agent（[未组合 preset 的 Agent 使用 CUA 程序工具](2026-11-12-cua-program-tool-without-presets.zh.md)）。

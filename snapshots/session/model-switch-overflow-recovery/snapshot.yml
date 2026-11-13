@@ -1,0 +1,12 @@
+version: 1
+scenario: model-switch-overflow-recovery
+profile: headless
+composition: model-switch-overflow-recovery
+recording: authored
+platform: posix
+header:
+  class: model-switch-overflow-recovery
+  pin: true
+  systemPromptSource: model-switch-compaction
+  changes: 2
+  promptChanges: 1

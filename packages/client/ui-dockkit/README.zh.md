@@ -88,7 +88,7 @@ Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间�
 <a id="build-shape"></a>
 ## 构建形态
 
-本包静态链接：tsdown 的 `staticLinked` 预设在 `lib/index.js` 产出一个浏览器 ESM bundle（所有裸说明符保持为 import，sourcemap 链回源码），并把样式表按其相对 `src` 的路径放到 `lib/` 下；Web 外壳按包名解析并自行打包该产物，因此 vite 仍是 class 哈希的唯一拥有者。有一个后果至关重要——套件只保留**一张**样式表 `dockkit.module.css`，因为消费方按文件名去重注入的样式表，撞名会静默丢掉一张。
+本包静态链接：tsdown 的 `staticLinked` 预设在 `lib/index.js` 产出一个浏览器 ESM bundle（所有裸说明符保持为 import，sourcemap 链回源码），Web 外壳按包名解析并自行打包该产物。预设以 `<hash>_<local>` 形式的类名编译 `dockkit.module.css`，其文本随 bundle 的 `__$dsh_client_module_manifest` 导出交付；renderer 将它安装为一个 style 元素，带 `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` 和 `data-path="src/components/dockkit.module.css"`。
 
 <a id="model-experience"></a>
 ## 模型体验

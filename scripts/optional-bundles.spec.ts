@@ -109,6 +109,15 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
+  it.each(['web', 'desktop'] as const)('requires explicit selection of Timeline on %s', (surface) => {
+    const name = '@deepseek-ai/dsh-timeline'
+    const layers = profileLayers(surface)
+    expect(OPTIONAL_BUNDLES).toContain(name)
+    expect(flattenRows(composeEntries(layers)).some(row => row.name === name)).toBe(false)
+    expect(flattenRows(composeEntries([...layers, bundle(name).patches])))
+      .toContainEqual(expect.objectContaining({ id: 'timeline-experimental', name }))
+  })
+
   // A bundle that composes a profile of its own is never layered over a GUI profile; HIDDEN_BUNDLES keeps it off the plugin page.
   const standalone = OPTIONAL_BUNDLES.filter(name => STANDALONE_PROFILE_BUNDLES.includes(name))
   const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))

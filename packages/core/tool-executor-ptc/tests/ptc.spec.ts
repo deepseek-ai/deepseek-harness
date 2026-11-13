@@ -275,22 +275,19 @@ describe('mode-aware wire contribution', () => {
     await runtime.dispose()
     await expect(runCode(ctx, 'return 1')).rejects.toThrow('selected tool executor is unavailable')
 
-    await ctx.plugin(FakeRuntime, { language: 'python' })
+    await ctx.plugin(FakeRuntime)
     await executor.await()
     const replacement = await ctx.systemPrompt.assemble()
     expect(replacement.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
-    expect(replacement.tools[0]?.description).toContain('Python')
+    expect(replacement.tools[0]?.description).toContain('TypeScript')
   })
 
   it('rejects a non-positive PTC concurrency limit in configuration', () => {
     expect(() => PtcToolExecutor.Config({ maxParallelSubCalls: 0 })).toThrow()
   })
 
-  it.each([
-    { mode: 'ptc', language: 'typescript' },
-    { mode: 'ptc', language: 'python' },
-  ] as const)('preserves literal braces in the $language SDK under $mode', async ({ mode, language }) => {
-    const { ctx, systemPrompt } = await setup({ mode, runtime: { language } })
+  it('preserves literal braces in the TypeScript SDK', async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'ptc' })
     try {
       systemPrompt.variable('model', () => 'actual-model')
       const description = 'Expand {{item}} with {{model}} or {{ model }}.'
@@ -545,25 +542,35 @@ describe('mode-aware wire contribution', () => {
     await expect(systemPrompt.assemble()).rejects.toThrow(/requires a PTC runtime/)
   })
 
-  it('rejects every assembly when the runtime language has no registered SDK renderer', async () => {
-    const { systemPrompt } = await setup({ mode: 'ptc', runtime: { language: 'ruby' } })
-    await expect(systemPrompt.assemble()).rejects.toThrow(/no SDK renderer registered for runtime language "ruby"/)
+  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s through the mounted plugin without native fallback', async (language) => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeRuntime, { language })
+    const runtime = ctx.ptcRuntime as FakeRuntime
+    const calls = registerEcho(ctx)
+    const selection = ctx.plugin(PtcToolExecutor)
+    await selection.await()
+    const error = { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
+    await expect(ctx.systemPrompt.assemble()).rejects.toThrow(expect.objectContaining(error))
+    const result = await executeCall(ctx, {
+      signal: testToolSignal, callId: brandString<ToolCallId>('unsupported-language'),
+      name: RUN_CODE_NAME, arguments: { code: 'program', description: 'Try an unsupported runtime' },
+    })
+    expect(result).toMatchObject({ isError: true, error: { info: error } })
+    const direct = await executeCall(ctx, {
+      signal: testToolSignal, callId: brandString<ToolCallId>('no-native-fallback'),
+      name: 'echo', arguments: { value: 'must not execute' },
+    })
+    expect(direct).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+    expect(calls).toEqual([])
+    expect(runtime.lastRequest).toBeUndefined()
   })
 
-  it('assembles under a python runtime by picking the Python SDK renderer', async () => {
-    const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language: 'python' } })
-    registerEcho(ctx)
-    const assembly = await systemPrompt.assemble()
-    const sdk = assembly.sections.find(section => section.name === 'tools:sdk')
-    expect(sdk?.text).toContain('class Tools(Protocol):')
-    expect(sdk?.text).toContain('async def echo(self, args:')
-    expect(sdk?.text).toContain('and `description`, a short summary of what the program does')
-    expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
-    expect(assembly.tools[0]?.description).toContain('Execute a Python program')
-  })
-
-  it.each(['typescript', 'python'])('lists code before description for a %s runtime', async (language) => {
-    const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language } })
+  it('lists code before description for the TypeScript runtime', async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'ptc' })
     try {
       const parameters = new PtcExecutor(ctx)['requirePtcTransport']().parameters
       expect(Object.keys(parameters.properties as Record<string, unknown>).slice(0, 2))
@@ -618,23 +625,10 @@ describe('mode-aware wire contribution', () => {
     }
   })
 
-  it('emits a Python-flavored run_code schema under a python runtime (matches the SDK language)', async () => {
-    const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language: 'python' } })
-    registerEcho(ctx)
-    const assembly = await systemPrompt.assemble()
-    const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
-    expect(runCodeSchema?.description).toContain('Execute a Python program')
-    expect(runCodeSchema?.description).toContain('`code`')
-    expect(runCodeSchema?.description).toContain('`description`')
-    expect(runCodeSchema?.description).not.toContain('TypeScript')
-    const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe("The Python program to execute, following this tool's execution instructions.")
-  })
-
-  it.each(['ruby', 'constructor'])('rejects transport schema reads for unsupported runtime language %s', async (language) => {
+  it.each(['python', 'ruby', 'constructor'])('rejects transport schema reads for unsupported runtime language %s', async (language) => {
     const { ctx } = await setup({ mode: 'ptc', runtime: { language } })
     const definition = new PtcExecutor(ctx)['requirePtcTransport']()
-    const message = `no SDK renderer registered for runtime language "${language}" (known: "typescript", "python")`
+    const message = `unsupported PTC runtime language "${language}"; use a TypeScript provider`
     expect(() => definition.description).toThrow(message)
     expect(() => definition.parameters).toThrow(message)
   })
@@ -1652,8 +1646,8 @@ describe('the run_code dispatch bridge', () => {
     ])
   })
 
-  it.each(['typescript', 'python'])('records image-bearing sub-call results for a %s runtime', async (language) => {
-    const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language } })
+  it('records image-bearing sub-call results for the TypeScript runtime', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
     ctx.tools.register(defineContentToolFixture({
       name: 'image_result',
       description: 'Return one durable image.',
@@ -2244,50 +2238,6 @@ describe('the run_code dispatch bridge', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'proto-tool-ok' })
   })
 
-  it('renders Python completion values as pretty JSON while preserving strings raw', async () => {
-    const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language: 'python' } })
-    runtime.behavior = () => Promise.resolve({ output: [], value: { n: 42, ok: true } })
-    expect((await runCode(ctx, 'object')).content[0]).toEqual({ type: 'text', text: '{\n  "n": 42,\n  "ok": true\n}' })
-    runtime.behavior = () => Promise.resolve({ output: [], value: {} })
-    expect((await runCode(ctx, 'empty object')).content[0]).toEqual({ type: 'text', text: '{}' })
-    const nested = { outer: [{ inner: true }] }
-    runtime.behavior = () => Promise.resolve({ output: [], value: nested })
-    expect((await runCode(ctx, 'nested')).content[0]).toEqual({ type: 'text', text: JSON.stringify(nested, null, 2) })
-    runtime.behavior = () => Promise.resolve({ output: [], value: ['x', 2] })
-    expect((await runCode(ctx, 'array')).content[0]).toEqual({ type: 'text', text: '[\n  "x",\n  2\n]' })
-    runtime.behavior = () => Promise.resolve({ output: [], value: [] })
-    expect((await runCode(ctx, 'empty array')).content[0]).toEqual({ type: 'text', text: '[]' })
-    runtime.behavior = () => Promise.resolve({ output: [], value: null })
-    expect((await runCode(ctx, 'null')).content[0]).toEqual({ type: 'text', text: 'null' })
-    runtime.behavior = () => Promise.resolve({ output: [], value: 'raw' })
-    expect((await runCode(ctx, 'string')).content[0]).toEqual({ type: 'text', text: 'raw' })
-    runtime.behavior = () => Promise.resolve({ output: [] })
-    const absent = await runCode(ctx, 'undefined')
-    expect(absent.content[0]).toEqual({ type: 'text', text: '(run_code completed with no output)' })
-    expect(absent.isError ? undefined : absent.value).toEqual({ logs: [] })
-  })
-
-  it('renders deeply nested Python completions without recursive traversal or quadratic indentation', async () => {
-    const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language: 'python' } })
-    let value: JsonValue = {
-      emptyArray: [],
-      emptyObject: {},
-      pair: ['leaf', 2],
-      record: { first: true, second: null },
-    }
-    for (let depth = 0; depth < 5_000; depth++) value = [value]
-    runtime.behavior = () => Promise.resolve({ output: [], value })
-
-    const result = await runCode(ctx, 'deep result')
-
-    expect(result.isError).toBe(false)
-    const text = (result.content[0] as { type: 'text'; text: string }).text
-    expect(text.startsWith('[\n  [\n    [')).toBe(true)
-    expect(text).toContain('"leaf"')
-    expect(text.endsWith(']')).toBe(true)
-    expect(text.length).toBeLessThan(11_000)
-  })
-
   it('short-circuits a pre-aborted outer signal before the PTC runtime', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     const calls = registerEcho(ctx)
@@ -2348,7 +2298,7 @@ describe('the run_code dispatch bridge', () => {
     })
   })
 
-  describe.each(['typescript', 'python'])('%s caller cancellation', (language) => {
+  describe('TypeScript caller cancellation', () => {
     it.each<AgentCancelCause | undefined>([
       { kind: 'user' },
       { kind: 'parent' },
@@ -2356,7 +2306,7 @@ describe('the run_code dispatch bridge', () => {
       { kind: 'disposed' },
       undefined,
     ])('maps reason %j to the native tool abort result', async (cause) => {
-      const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language } })
+      const { ctx, runtime } = await setup({ mode: 'ptc' })
       onTestFinished(async () => { await ctx.fiber.dispose() })
       const controller = new AbortController()
       runtime.behavior = async (request) => {
@@ -2863,21 +2813,21 @@ describe('per-program execution controls', () => {
       expect(schema.description).toContain('Programs start with an empty environment.')
       expect(schema.description).toContain("Each program starts in the Session's current directory. Running programs keep their initial directory.")
     } finally { await ctx.fiber.dispose() }
-    const python = await setup({ runtime: { language: 'python' } })
+    const unsupportedControls = await setup()
     try {
-      const schema = (await python.systemPrompt.assemble()).tools.find(tool => tool.name === RUN_CODE_NAME)!
+      const schema = (await unsupportedControls.systemPrompt.assemble()).tools.find(tool => tool.name === RUN_CODE_NAME)!
       expect(JSON.stringify(schema.parameters)).not.toContain('timeoutMs')
       expect(JSON.stringify(schema.parameters)).not.toContain('sandbox_permissions')
       expect(schema.description).not.toContain('Programs start with an empty environment.')
       expect(schema.description).toContain("Each program starts in the Session's current directory. Running programs keep their initial directory.")
-      const rejected = await python.tools.execute({
+      const rejected = await unsupportedControls.tools.execute({
         callId: brandString<ToolCallId>('hidden-timeout'), name: RUN_CODE_NAME, signal: testToolSignal,
-        arguments: { code: 'pass', description: 'Try unsupported timeout', timeoutMs: 5 },
+        arguments: { code: '1', description: 'Try unsupported timeout', timeoutMs: 5 },
       })
       expect(rejected.isError).toBe(true)
       expect(rejected.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
-      expect(python.runtime.lastRequest).toBeUndefined()
-    } finally { await python.ctx.fiber.dispose() }
+      expect(unsupportedControls.runtime.lastRequest).toBeUndefined()
+    } finally { await unsupportedControls.ctx.fiber.dispose() }
   })
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, '1000', null])('rejects invalid timeout %s before runtime execution', async (timeoutMs) => {
@@ -3058,15 +3008,14 @@ describe('PTC state ownership', () => {
     } finally { format.mockRestore(); release.mockRestore(); await agentContext.fiber.dispose(); await ctx.fiber.dispose() }
   })
 
-  it('keeps provider evaluation instructions independent of language and program format', async () => {
-    const { ctx, runtime } = await setup({ runtime: { language: 'python' } })
+  it('keeps provider evaluation instructions independent of program format', async () => {
+    const { ctx, runtime } = await setup()
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
-    const instructions = vi.spyOn(runtime, 'executionInstructions', 'get').mockReturnValue('Each call evaluates Python expressions in a fresh environment.')
+    const instructions = vi.spyOn(runtime, 'executionInstructions', 'get').mockReturnValue('Each call evaluates TypeScript expressions in a fresh environment.')
     try {
       const description = new PtcExecutor(ctx).describe([]).schemas.find(tool => tool.name === 'run_code')?.description
-      expect(description).toContain('Each call evaluates Python expressions in a fresh environment.')
+      expect(description).toContain('Each call evaluates TypeScript expressions in a fresh environment.')
       expect(description).not.toContain('persistent-in-memory')
-      expect(description).not.toContain('TypeScript')
     } finally { format.mockRestore(); instructions.mockRestore(); await ctx.fiber.dispose() }
   })
 })

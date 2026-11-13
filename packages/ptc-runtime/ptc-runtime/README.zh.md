@@ -53,9 +53,9 @@ const result = await ctx.ptcRuntime.run(spec)
 
 `registerEnvironmentInitializer(program)` 注册一段源码，在每个新环境安装本次绑定后、执行用户代码前运行一次。必须在首次接纳运行前注册，且只允许注册一个初始化程序。初始化与首次运行共享日志、截止时间、取消和输出预算，其完成值会被丢弃。失败会阻止用户代码执行并丢弃环境，但不回滚外部效果。调用方负责管理返回的异步注销函数；它会取消已接纳的运行，等待这些运行结束，并释放环境。清理失败会阻止新的执行，直到重试注销成功。即使所有环境都已释放，首次接纳运行后仍不能注册。不支持的提供方和模式会拒绝注册；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
 
-### 可移植地命名绑定
+### 命名绑定
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za-z_][A-Za-z0-9_]*`，避开每个可移植目标语言的保留字，并避开后端拥有的槽位，因此同一份命名空间列表对每个后端都有效。`$tools`、`lambda`、`console` 或 `inspect` 之类的名称会在运行开始前失败；确切的排除集是 seam 约定的一部分。
+binding-global 与 error-class 名称必须匹配 `[A-Za-z_$][A-Za-z0-9_$]*`，且不得使用 ECMAScript 关键字或严格模式名称（`RESERVED_BINDING_WORDS`）。`RESERVED_BINDING_GLOBALS` 保留运行时输出 global `console`、`inspect` 和 `Image`。error-member 名称必须非空，且不得使用 `name`、`message` 或 `stack`（`RESERVED_ERROR_MEMBERS`）；其他自有属性名均可使用。无效名称使 `run()` 在启动进程前 reject。
 
 ### 可能出什么问题
 
@@ -89,15 +89,15 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za
 
 `PtcRunRequest` 携带程序、Host 绑定、取消和可选执行选择。`PtcRunSpec` 要求已解析的 cwd 和明确的数值或 null 截止选择。`PtcBindingNamespace` 声明程序全局对象与可选的类型化拒绝构造器。`PtcRunResult` 将输出／值、失败与 `PtcRunSandbox` 事实分开；确切字段与提供方义务见 [`src/types.ts`](src/types.ts)。
 
-### 可移植标识符
+### 绑定排除规则
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配标识符子集 `[A-Za-z_][A-Za-z0-9_]*`（不含 JS 专有的 `$`）并通过 seam 导出的排除集，因此同一份 `bindings` 列表对每个后端都有效。本包导出每个后端都执行的约定——`PORTABLE_RESERVED_WORDS`（ECMAScript ∪ Python 保留字）、`RESERVED_BINDING_GLOBALS`（如 `console`、`inspect`、`Image`、`__dsh_main__` 等后端拥有的 global）、`RESERVED_ERROR_MEMBERS` 与 `DUNDER_MEMBER`（error-member 排除）——因此 `$tools`、`lambda` 或 `__dsh_main__` 之类的名称会让 `run()` 在任何后端上作为 seam 误用而 reject。确切集合见 `src/index.ts`。
+运行时导出 `RESERVED_BINDING_WORDS`、`RESERVED_BINDING_GLOBALS` 与 `RESERVED_ERROR_MEMBERS`，用于绑定验证；确切集合见 [`src/index.ts`](src/index.ts)。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：抽象 `PtcRuntime` 服务与可移植标识符排除集 |
+| [`src/index.ts`](src/index.ts) | 插件入口：抽象 `PtcRuntime` 服务与绑定排除集 |
 | [`src/types.ts`](src/types.ts) | 词汇：`PtcRunRequest`、`PtcRunSpec`、绑定、结果、失败与沙箱事实 |
 
 </details>

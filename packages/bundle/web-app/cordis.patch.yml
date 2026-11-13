@@ -193,19 +193,18 @@
 
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
-    # frontend-static fallback owner, registers the bash runtime variable,
-    # prints the URL line, and opens the canonical URL after the full Loader
-    # tree settles and the required-entry audit passes. Invocation-only values
-    # come from the webStartup provider; the advertised application URL is
+    # frontend-static fallback owner and registers the bash runtime variable.
+    # Providers contribute entry URLs; this row owns printing and browser handoff.
+    # Invocation-only values come from webStartup; the advertised URL is
     # this row's `publicUrl`, otherwise the bind-address URL.
     - id: web-runtime
       name: '@deepseek-ai/dsh-web-app'
       inject: [webStartup]
       config:
-        openBrowser: !!js ctx.webStartup.openBrowser
-        printUrl: true
         publicUrl: !!js ctx.webStartup.publicUrl
         surfaceContext: true
+        openBrowser: !!js ctx.webStartup.openBrowser
+        printUrl: true
 
     # Model context for an agent that inspects or extends the harness serving
     # this GUI: value-free prompt sections plus the current checkout and GUI
@@ -243,6 +242,9 @@
         # deployment values, for example: ['app.internal', ...ctx.webStartup.trustedHosts].
         # The listener's bind IP is accepted separately from this list.
         trustedHosts: !!js ctx.webStartup.trustedHosts
+
+    - id: authentication-token
+      name: '@deepseek-ai/dsh-host-authentication-token'
 
     # Raw Blob and ReadableStream uploads run independently of Connection's
     # RPC and generation service.

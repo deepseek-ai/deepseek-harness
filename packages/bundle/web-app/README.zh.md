@@ -54,10 +54,12 @@ dsh --profile web --no-open --port 8080
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `openBrowser` | `true` | 启动后用默认浏览器打开；SSH 启动会抑制它 |
-| `printUrl` | `true` | 启动时打印 `dsh web:` URL 行 |
+| `printUrl` | `true` | 启动就绪后打印贡献的入口 URL |
+| `openBrowser` | `true` | 启动后打开首个允许自动打开的入口，SSH 下除外 |
 | `surfaceContext` | `true` | 把 `DSH_WEB_URL` 暴露给 agent 的 shell 命令 |
 | `publicUrl` | 未设置 | 对外公告的 HTTP(S) 应用根；否则公告绑定地址 URL |
+
+WebApp 拥有 `printUrl` 与 `openBrowser`。本组合启用 URL 打印，并把解析后的 `--no-open` 设置传给 runtime。就绪后，同步 `webserver/entry-url` 监听器贡献完整入口。启用打印时，WebApp 按 `label: url` 逐行打印；启用浏览器打开且不在 SSH 下时，仅打开首个 `open: true` 的入口。没有入口则不输出、不打开。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。
 
@@ -84,7 +86,7 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 无论是公告 URL 还是浏览器信任栅栏都不保护端口本身，因此请把端口限制在可信代理或网络内。
 
-打印的 URL 包含进程凭据，只应与预期用户分享。`printUrl: false` 无论是否配置 `--public-url` 都会抑制该行，凭据也绝不会出现在模型上下文或 `DSH_WEB_URL` 中。
+打印的 URL 包含进程凭据，只应与预期用户分享。WebApp runtime 上的 `printUrl: false` 无论是否配置 `--public-url` 都会抑制该行，凭据也绝不会出现在模型上下文或 `DSH_WEB_URL` 中。
 
 ### 通过 SSH 运行
 
@@ -106,7 +108,7 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 <details>
 <summary>实现细节——点击展开</summary>
 
-此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告、bash 变量和就绪通知。`office-kit` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-kit/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方，转换后的文件保存在 `$DSH_HOME/office-kit/outputs`。`standard` 和 `ptc` 预设在所有 profile 中挂载 [Office 工具](../../document/tool-office/README.zh.md)，无论是否安装 Kit，并在加载 Office 技能后声明它们；`minimal` 预设不挂载它们。转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
+此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告和 bash 变量。WebApp 负责启动 URL 发布与浏览器交接；[Token 认证插件](../../host/authentication-token/README.zh.md)贡献带签名的入口 URL。`office-kit` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-kit/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方，转换后的文件保存在 `$DSH_HOME/office-kit/outputs`。`standard` 和 `ptc` 预设在所有 profile 中挂载 [Office 工具](../../document/tool-office/README.zh.md)，无论是否安装 Kit，并在加载 Office 技能后声明它们；`minimal` 预设不挂载它们。转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
 
 `skill-office` 行在所有 profile 中从包内 assets 挂载 [Office 技能](../../skill/skill-office/README.zh.md)。`DSH_PRIMARY_RUNTIME` 非空的 Desktop 还挂载内置依赖查询行，并选择 `pythonEnvironment: 'workspace-dependencies'`；其他 profile 以及没有主运行时的 Desktop 选择 `pythonEnvironment: 'user'`，并禁用依赖查询行。资源打包由 [Desktop 应用](../../../apps/desktop/README.zh.md#bundled-workspace-dependencies)负责。
 
@@ -120,21 +122,20 @@ patch 会替换目标行的整个 `config`，因此每个 Web 行都重述自己
 
 ### 就绪宣告
 
-URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发起 RPC，浏览器一打开就请求页面，因此两者只在 Loader 配置树结算、通过 required 启动检查且 Connection 认证可用后运行——在没有 Loader 的手工构建树中则立即运行。此时 client combo JavaScript 和 source map 仍未物化。可选插件失败不会阻止就绪宣告；required 启动失败或启动中途被释放的树不会宣告任何内容。
+URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发起 RPC，浏览器一打开就请求页面，因此两者只在 Loader 配置树结算并通过 required 启动检查后运行——在没有 Loader 的手工构建树中则立即运行。此时 client combo JavaScript 和 source map 仍未物化。可选插件失败不会阻止就绪宣告；required 启动失败或启动中途被释放的树不会宣告任何内容。入口收集传入普通基地址和可变入口列表；监听器同步追加标签、完整 URL 和自动打开资格。每个根应用仅发布一次；未贡献入口的 Provider 不产生输出行。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `web-app` 粘合插件：dist 解析、公告应用 URL、bash 变量、URL 行、浏览器交接 |
+| [`src/index.ts`](src/index.ts) | `web-app` 粘合插件：dist 解析、公告应用 URL、bash 变量 |
 | [`src/public-url.ts`](src/public-url.ts) | 公告根的校验与尾斜杠归一化；供本地导入的叶子模块，不属于包 API |
 | [`src/startup.ts`](src/startup.ts) | `web-startup` 提供方：`--host`、`--port`、`--tls-cert`、`--tls-key`、`--public-url`、`--trusted-host`、`--no-open`、`--help` |
 | [`cordis.patch.yml`](cordis.patch.yml) | Web patch：重述的基础值、Web 宿主行、浏览器名录、preset 注册表 |
 | [`presets/`](presets) | 每个随发行版交付的 preset（`standard`、`ptc`、`minimal`、`cordis`）各一条 `@deepseek-ai/dsh-agent-preset` 声明，各自一个补丁文件 |
-| [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | dist index 锚定、公告 URL 发布与警告、bash 变量、就绪宣告发布 |
+| [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | dist index 锚定、公告 URL 发布与警告、bash 变量 |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
 | [`tests/public-url.spec.ts`](tests/public-url.spec.ts) | 公告根的解析与归一化 |
-| [`tests/browser-open.spec.ts`](tests/browser-open.spec.ts) | 页面可达后的默认浏览器交接 |
 
 </details>
 

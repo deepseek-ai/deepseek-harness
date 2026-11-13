@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop-Authentifizierung",
+    "description": "Authentifiziert Desktop-Anfragen mit einem privaten Zugangsschlüssel, den sich der übergeordnete Prozess und der Host-Prozess teilen."
+  }
+}

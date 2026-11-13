@@ -162,6 +162,11 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     },
   },
   'desktop-ptc-context': { expectedFinalResponse: 'SDK snapshot OK' },
+  'cua-run-code': {
+    expectedFinalResponse: 'The retained application and window report Count: 2. The counter persisted across calls, and the program exposes only tools.cua. The screenshot was attached after the first call.',
+    environment: { DSH_PERMISSION_MODE: 'danger-full-access' },
+    patches: [fileURLToPath(new URL('./cua-run-code/runtime.cordis.yml', import.meta.url))],
+  },
   'manual-compact': {
     expectedFinalResponse: 'SDK_COMPACT_OK',
     patches: [fileURLToPath(new URL('./manual-compact/capture.cordis.yml', import.meta.url))],

@@ -11,6 +11,7 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/cua-macos': '@deepseek-ai/dsh-cua-macos',
   'packages/experimental/cua-mcp': '@deepseek-ai/dsh-cua-mcp',
   'packages/experimental/cua-windows': '@deepseek-ai/dsh-cua-windows',
+  'packages/experimental/timeline': '@deepseek-ai/dsh-timeline',
   'packages/experimental/tool-session-query': '@deepseek-ai/dsh-tool-session-query',
   'packages/experimental/session-title-all-prompts-llm': '@deepseek-ai/dsh-session-title-all-prompts-llm',
   'packages/experimental/tool-terminal': '@deepseek-ai/dsh-tool-terminal',

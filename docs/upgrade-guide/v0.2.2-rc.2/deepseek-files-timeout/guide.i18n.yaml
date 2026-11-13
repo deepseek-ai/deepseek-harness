@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/deepseek-files-timeout/guide.md
+/:
+  en: 1370bf136032cde9
+  zh: 851fe36b91456e4b
+/deepseek-image-upload-timeout:
+  en: 6105efb69d8b3524
+  zh: baf5c376969d9493
+/deepseek-image-upload-timeout/change:
+  en: 2fcab2b99d847c24
+  zh: e7b7a7104ebffa68
+/deepseek-image-upload-timeout/migration:
+  en: aef253836119c9e2
+  zh: 6f569fb7cc8dd724

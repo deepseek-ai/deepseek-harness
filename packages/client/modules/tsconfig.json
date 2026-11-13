@@ -12,6 +12,7 @@
     {"path": "../../../vendor/loader"},
     {"path": "../../host/webserver"},
     {"path": "../../util/package-manifest"},
+    {"path": "../script-realm"},
     {"path": "../store"}
   ]
 }

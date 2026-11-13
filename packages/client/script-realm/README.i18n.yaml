@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/script-realm/README.md
+/:
+  en: 4eced660e4d69854
+  zh: cad086b985cadcf9
+/deepseek-ai-dsh-client-script-realm:
+  en: a9339a964382ce06
+  zh: c6f792d2275c56cb
+/deepseek-ai-dsh-client-script-realm/summary:
+  en: 69e4223146739d2f
+  zh: 823c8887f603eaca
+/deepseek-ai-dsh-client-script-realm/table-of-contents:
+  en: 23386452a66b2fbd
+  zh: dc8dd4f5941b9f74
+/deepseek-ai-dsh-client-script-realm/use-this-package:
+  en: 8fca85c2eed966ca
+  zh: c9c3df51a8d61d29
+/deepseek-ai-dsh-client-script-realm/understand-the-implementation:
+  en: ef5a1eabb8d274e2
+  zh: 1ef625ab08552773
+/deepseek-ai-dsh-client-script-realm/further-exploration:
+  en: f0659a0a6d6e9876
+  zh: 66d902d62dd6cd0e
+/deepseek-ai-dsh-client-script-realm/model-experience:
+  en: 91701b5ed41296fe
+  zh: caf84df42b9f91a8
+/deepseek-ai-dsh-client-script-realm/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-client-script-realm/known-limitations-and-deferred-work:
+  en: 7070fdaeccbc6fcf
+  zh: 1b18d96a6f426193
+/deepseek-ai-dsh-client-script-realm/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914
