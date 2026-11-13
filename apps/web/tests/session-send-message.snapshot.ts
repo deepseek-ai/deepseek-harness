@@ -24,6 +24,7 @@ const DIR = fileURLToPath(new URL('../../../snapshots/web/session-send-message',
 const OVERLAY = join(REPO_ROOT, 'apps/cli/config/examples/session-control.overlay.yml')
 const MODE = webSnapshotMode()
 const TARGET = brandString<SessionId>('snapshot-independent-recipient')
+const SUBAGENT_TARGET = brandString<SessionId>('snapshot-unavailable-child')
 
 it.skipIf(MODE === 'record')('delivers Web Session messages through the Session controller', async () => {
   const paths = await Promise.all(['session.v4.jsonl', 'session.1.v4.jsonl']
@@ -52,6 +53,12 @@ it.skipIf(MODE === 'record')('delivers Web Session messages through the Session 
     await recipient.dispose()
     expect(ctx.agents.get(TARGET)).toBeUndefined()
 
+    // An attached child of another root is unavailable through ordinary Session routing.
+    const subagentTarget = ctx.sessions.create(SUBAGENT_TARGET, {
+      meta: { cwd: targetCwd, origin: 'subagent', parentSession: TARGET },
+    })
+    const subagentEvents = subagentTarget.snapshotEvents()
+
     const results: { isError: boolean; text: string }[] = []
     ctx.on('tools/execute', async (exec, next) => {
       if (exec.name !== 'session_send_message') return next()
@@ -72,17 +79,21 @@ it.skipIf(MODE === 'record')('delivers Web Session messages through the Session 
       content: [{
         type: 'text',
         text: `Recipient Session: ${TARGET}\nSend FIRST and SECOND to the recipient with session_send_message, `
-          + 'then attempt THIRD after it is archived. Reply with exactly SESSION_CONTROL_OK.',
+          + `then attempt THIRD after it is archived and FOURTH to subagent Session ${SUBAGENT_TARGET}. `
+          + 'Reply with exactly SESSION_CONTROL_OK.',
       }],
       source: { kind: 'user' },
     }))
     await sender.whenIdle()
     await ctx.sessions.flush(sender.session)
 
-    expect(results.map(result => result.isError)).toEqual([false, false, true])
+    expect(results.map(result => result.isError)).toEqual([false, false, true, true])
     const receipts = results.slice(0, 2).map(result => (JSON.parse(result.text) as { message_id: string }).message_id)
     expect(new Set(receipts).size).toBe(2)
     expect(results[2]!.text).toContain('is archived; unarchive it before sending a message')
+    expect(results[3]!.text).toBe(`Error: session "${SUBAGENT_TARGET}" is not available to session_send_message`)
+    expect(subagentTarget.snapshotEvents()).toEqual(subagentEvents)
+    expect(ctx.agents.get(SUBAGENT_TARGET)).toBeUndefined()
 
     // The restored recipient is a new Session object for the original identity.
     const target = sessions.findLast(session => session.id === TARGET)

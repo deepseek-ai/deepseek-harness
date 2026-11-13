@@ -70,7 +70,6 @@ export function apply(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'session_send_message',
-    preserveSuccessOnCancellation: true,
     description: 'Send a message to an independent session. A working session receives it at its next input boundary; an idle session starts a turn, and an inactive session resumes first. Returns an acceptance receipt without waiting for a reply.',
     parameters: {
       session_id: {
@@ -113,7 +112,7 @@ export function apply(ctx: Context): void {
       if ('error' in found) {
         if (found.error.code !== 'session/agent-busy') throw found.error
         throw new SessionMessageError(
-          `session "${id}" is a subagent; message it with send_message and its agent name`,
+          `session "${id}" is not available to session_send_message`,
           'SESSION_MESSAGE_SUBAGENT_OWNED',
           { cause: found.error },
         )

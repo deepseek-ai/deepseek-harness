@@ -62,8 +62,8 @@ A successful result contains `message_id`. It confirms inbox acceptance, without
 ## Delivery limits
 
 - Archived Sessions reject messages and stay archived. Unarchive a target explicitly before messaging it.
-- Subagent targets use the existing `send_message` tool and its tree-local names and permissions. `session_send_message` rejects them and does not bypass subagent restoration rules.
-- Cancellation stops work before acceptance; it does not retract a message already accepted. Keep a successful receipt, and do not repeat a send automatically when its outcome is unknown.
+- Subagent targets are unavailable to `session_send_message`. Use `send_message` only for members of the caller's own subagent tree.
+- Cancellation before acceptance prevents delivery. After acceptance, cancellation can return `ABORTED` without retracting the message. Do not repeat a send automatically after cancellation or another unknown outcome.
 - The tool sends text only. It does not wait for the recipient's answer or communicate with another Harness process.
 
 <a id="further-exploration"></a>

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-让 Web profile 中的 Agent 向另一个普通会话发送消息（包括位于其他 Workspace 或目录的会话），并在接收方接收后继续工作。运行中的接收方会在下一个输入边界读取消息；空闲接收方会开始一轮执行，不在线的接收方会先恢复。接收方看到的发送者是调用方会话。本工具默认关闭，只存在于 Web 组合中，且从不等待回复；subagent 目标使用 `send_message`。
+让 Web profile 中的 Agent 向另一个普通会话发送消息（包括位于其他 Workspace 或目录的会话），并在接收方接收后继续工作。运行中的接收方会在下一个输入边界读取消息；空闲接收方会开始一轮执行，不在线的接收方会先恢复。接收方看到的发送者是调用方会话。本工具默认关闭，只存在于 Web 组合中，且从不等待回复；subagent 目标对本工具不可用。
 
 ## 目录
 
@@ -50,11 +50,11 @@ kind: "package-reference"
 | 消息只有空白字符 | `ToolArgsError`（`INVALID_ARGS`），在激活之前 |
 | 目标是调用方自己的会话 | `SESSION_MESSAGE_SELF` |
 | 目标在激活前或激活后已归档 | `SESSION_MESSAGE_ARCHIVED`；目标保持归档 |
-| 目标归 subagent 路由所有 | `SESSION_MESSAGE_SUBAGENT_OWNED`，并指引调用方使用 `send_message` |
+| 目标归 subagent 路由所有 | `SESSION_MESSAGE_SUBAGENT_OWNED`；目标对本工具不可用 |
 | 接收前目标已开始释放 | `SESSION_MESSAGE_INPUT_CLOSED`；没有接收任何内容 |
 | 其他 Session 控制器失败，包括未知会话或没有工作目录的会话 | 控制器的 `RemoteError` 错误码，例如 `session/not-found` 或 `session/writer-held` |
 
-`SESSION_MESSAGE_*` 失败均为 `SessionMessageError` 实例，在目标收件箱接收消息之前抛出。接收前的取消会使调用失败并立即停止等待；已在进行的恢复会在 Session 控制器下继续，工具在取消后不会投递任何内容。接收后的取消保留成功回执。工具从不自动重试。
+`SESSION_MESSAGE_*` 失败均为 `SessionMessageError` 实例，在目标收件箱接收消息之前抛出。接收前的取消会使调用失败并立即停止等待；已在进行的恢复会在 Session 控制器下继续，工具在取消后不会投递任何内容。接收后的取消可能返回 `ABORTED`，即使消息已经送达。取消不会撤回已接收的输入，也不能证明消息未送达。工具从不自动重试。
 
 -----
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-工具从运行时的调用智能体获取发送者，因此模型无法选择发送者身份。它先检查 Workspace 注册表的归档列表，在与调用方取消信号竞争的同时等待 Session 控制器完成激活，随后再次检查取消状态和归档列表。它使用 `@deepseek-ai/dsh-subagent` 声明的 `agent-message` 来源构造消息，记录调用方的 `senderSessionId`，沿用 `send_message` 的 `Agent <sender> sent a message: ` 前缀并以调用方的 Session id 作为发送者名称，然后对目标调用 `steer()`。正在释放的目标抛出的 `AgentInputClosedError` 会变为 `SESSION_MESSAGE_INPUT_CLOSED`；其他收件箱失败原样传播。定义设置了 `preserveSuccessOnCancellation`，因此[工具流水线](../../core/tools/README.zh.md)会在之后到达的取消中保留已接收的回执。Host 展示器显示目标 id 和消息正文；[Web 工具卡片](../../client/ui-tool/README.zh.md)从已记录的结果中推导接收状态和消息 ID。
+工具从运行时的调用智能体获取发送者，因此模型无法选择发送者身份。它先检查 Workspace 注册表的归档列表，在与调用方取消信号竞争的同时等待 Session 控制器完成激活，随后再次检查取消状态和归档列表。它使用 `@deepseek-ai/dsh-subagent` 声明的 `agent-message` 来源构造消息，记录调用方的 `senderSessionId`，沿用 `send_message` 的 `Agent <sender> sent a message: ` 前缀并以调用方的 Session id 作为发送者名称，然后对目标调用 `steer()`。正在释放的目标抛出的 `AgentInputClosedError` 会变为 `SESSION_MESSAGE_INPUT_CLOSED`；其他收件箱失败原样传播。[工具流水线](../../core/tools/README.zh.md)沿用普通取消行为。Host 展示器显示目标 id 和消息正文；[Web 工具卡片](../../client/ui-tool/README.zh.md)从已记录的结果中推导接收状态和消息 ID。
 
 ### 源码地图
 
@@ -93,7 +93,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-session-control)定义确切 schema。Schema 既不提供发送者身份，也不提供权限覆盖参数。成功调用返回一个 JSON 文本块 `{"message_id":"..."}`，确认消息已被接收，不表示执行完成或对方已回复。被拒绝的调用返回 `Error: <message>`；subagent 目标的消息为 `session "<id>" is a subagent; message it with send_message and its agent name`。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-session-control)定义确切 schema。Schema 既不提供发送者身份，也不提供权限覆盖参数。成功调用返回一个 JSON 文本块 `{"message_id":"..."}`，确认消息已被接收，不表示执行完成或对方已回复。被拒绝的调用返回 `Error: <message>`；subagent 目标的消息为 `session "<id>" is not available to session_send_message`。
 
 #### Token 影响
 
@@ -122,7 +122,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **仅限 Web 组合** — 只有 dsh-web-app bundle 声明该行；`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 不挂载 Session 控制器，也不提供 `session_send_message`。
-- **subagent 目标使用 `send_message`** — 工具拒绝归 subagent 路由所有的目标，不会绕过树内名称、权限或恢复规则。
+- **subagent 目标不可用** — 工具拒绝归 subagent 路由所有的目标。独立的 `send_message` 工具只能访问调用方自身 subagent 树内的成员。
 - **仅文本，不等待回复** — 消息只包含文本；工具不附加文件，也不等待接收方的轮次或回答。
 - **恢复出的 Agent 保持驻留** — 为投递消息而冷恢复的目标会在 Session 控制器下保持加载，与在 GUI 中打开的会话相同。
 - **结果未知时不可安全重试** — 接收不具备幂等性；调用方必须保留已知成功的回执，且不得自动重复发送。

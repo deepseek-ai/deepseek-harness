@@ -128,7 +128,7 @@ describe('Session message tool', () => {
     expect(agentMessages(target)).toEqual([])
   })
 
-  it('directs subagent targets to send_message and keeps other controller failures', async () => {
+  it('reports subagent targets as unavailable and keeps other controller failures', async () => {
     const { ctx, caller, resolveAgent } = await setup()
     const ownership = new RemoteError('session/agent-busy', 'session "child" is owned by subagent routing', {
       reason: 'use subagent delivery for this child session',
@@ -140,7 +140,7 @@ describe('Session message tool', () => {
       error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_SUBAGENT_OWNED' } },
     })
     expect(subagent.content).toEqual([{
-      type: 'text', text: 'Error: session "child" is a subagent; message it with send_message and its agent name',
+      type: 'text', text: 'Error: session "child" is not available to session_send_message',
     }])
     expect(await call(ctx, { session_id: 'missing', message: 'Hello' }, caller)).toMatchObject({
       isError: true,
@@ -190,7 +190,7 @@ describe('Session message tool', () => {
     expect(result.error?.info?.code).not.toBe('SESSION_MESSAGE_INPUT_CLOSED')
   })
 
-  it('retains an accepted receipt when cancellation arrives from the inbox notification', async () => {
+  it('reports cancellation after acceptance without retracting the delivered message', async () => {
     const { ctx, caller, target } = await setup()
     const controller = new AbortController()
     ctx.on('agent/inbox/inserted', ({ agent }) => {
@@ -199,10 +199,17 @@ describe('Session message tool', () => {
     const result = await call(ctx, { session_id: target.id, message: 'Hello' }, caller, controller.signal)
     await target.whenIdle()
     const [message] = agentMessages(target)
-    expect(result).toMatchObject({
-      isError: false,
-      content: [{ type: 'text', text: JSON.stringify({ message_id: message!.id }) }],
+    expect(message).toMatchObject({
+      source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
+      content: [{ type: 'text', text: `Agent ${caller.id} sent a message: ` }, { type: 'text', text: 'Hello' }],
     })
+    expect(agentMessages(target)).toHaveLength(1)
+    expect(result).toMatchObject({
+      isError: true,
+      content: [{ type: 'text', text: 'Error: tool call aborted' }],
+      error: { info: { name: 'AbortError', code: 'ABORTED' } },
+    })
+    expect(result).not.toHaveProperty('value')
   })
 
   it('keeps the pure Host presentation and removes the tool on unload', async () => {

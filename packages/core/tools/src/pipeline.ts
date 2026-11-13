@@ -46,7 +46,6 @@ interface ToolAskResolution {
 /** Caller cancellation and dispatch state kept outside the around-wrapper view. */
 interface ToolCancellationState {
   readonly callerSignal: AbortSignal
-  readonly preserveSuccessOnCancellation: boolean
   bodyInvoked: boolean
 }
 
@@ -149,7 +148,6 @@ export class ToolExecutionPipeline {
     // Capture callbacks before argument getters run; rejected calls retain finalization only when aborted.
     const capturedFinalizer = visible?.finalizeContent?.bind(visible)
     const capturedProjector = visible?.projectContent?.bind(visible)
-    const preserveSuccessOnCancellation = visible?.preserveSuccessOnCancellation === true
     const finalizerFor = (): ToolDefinition['finalizeContent'] | undefined =>
       rejected && !signal.aborted ? undefined : capturedFinalizer
     try {
@@ -163,7 +161,6 @@ export class ToolExecutionPipeline {
       if (!rejected) this.contentProjectors.set(execution, capturedProjector)
       this.cancellationStates.set(execution, {
         callerSignal: signal,
-        preserveSuccessOnCancellation,
         bodyInvoked: false,
       })
       if (rejected) {
@@ -244,12 +241,11 @@ export class ToolExecutionPipeline {
     return state.callerSignal.aborted
   }
 
-  /** Preserve declared acceptance receipts; otherwise classify cancellation by dispatch state. */
+  /** Canonical cancellation outcome selected by whether the tool body started. */
   private cancellationResult(exec: ToolRunContext, prior?: ToolExecutionResult): ToolExecutionResult {
     const state = this.cancellationStates.get(exec)
     /* v8 ignore next -- only registry-minted executions reach the staged scheduler methods */
     if (state === undefined) throw new Error('tool registry scheduler invariant violated: missing cancellation state')
-    if (state.bodyInvoked && state.preserveSuccessOnCancellation && prior?.isError === false) return prior
     return state.bodyInvoked
       ? toolAbortedResult(prior)
       : toolAbortedBeforeDispatchResult(prior)
@@ -258,8 +254,7 @@ export class ToolExecutionPipeline {
   /**
    * Dispatch the registered body with the original caller signal fused back
    * into any around-wrapper replacement. Cancellation never abandons the body:
-   * a started promise reaches quiescence before cancellation is classified.
-   * Declared acceptance receipts retain their successful outcome.
+   * a started promise reaches quiescence before its outcome becomes `ABORTED`.
    * After cancellation, a thrown signal reason or an `Error` named
    * `AbortError` without `HarnessError` identity keeps its message and gains
    * the `ABORTED` identity, whichever operation inside the body aborted; a
@@ -285,7 +280,7 @@ export class ToolExecutionPipeline {
       const returned = await tool.execute(exec.arguments, exec)
       const result = this.createSuccessResult(exec, tool, returned)
       return isAborted(signal)
-        ? this.cancellationResult(exec, result)
+        ? toolAbortedResult(result)
         : result
     } catch (error: unknown) {
       return isAborted(signal) && isUnclassifiedCancellation(error, signal)
@@ -300,8 +295,7 @@ export class ToolExecutionPipeline {
   /**
    * Run around-dispatch and the tool body. Tool and unknown-tool failures still
    * receive post-execute; pipeline failures are already final. Started bodies
-   * drain on cancellation before a successful outcome becomes `ABORTED`, unless
-   * the definition preserves successful acceptance receipts. After
+   * drain on cancellation before a successful outcome becomes `ABORTED`. After
    * caller cancellation, a wrapper that throws the caller signal's reason or an
    * `Error` named `AbortError` without `HarnessError` identity keeps its message
    * and gains `ABORTED`, or `ABORTED_BEFORE_DISPATCH` when the body never
@@ -353,8 +347,8 @@ export class ToolExecutionPipeline {
   /**
    * Run post-execute when required, apply definition-owned content finalization,
    * and publish the lossless, frozen result. Policy and finalization failures
-   * become error results. Cancellation replaces a successful outcome unless
-   * its definition preserves acceptance receipts; tool-owned errors remain intact.
+   * become error results. Cancellation replaces a successful outcome before
+   * final materialization; tool-owned errors remain intact.
    * @param exec - the execution returned by this pipeline's prepare stage.
    * @param outcome - the preparation or dispatch result awaiting completion.
    * @returns the same materialized result delivered to final observers.

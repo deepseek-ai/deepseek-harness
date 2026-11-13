@@ -42,7 +42,6 @@ export function apply(ctx: Context, config: Config = {}): void {
   registerWaitAgent(ctx)
   const sendMessage = defineTool({
     name: 'send_message',
-    preserveSuccessOnCancellation: true,
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
       + 'Returns delivery confirmation.',

@@ -62,8 +62,8 @@ pnpm dsh --profile web --patch apps/cli/config/examples/session-control.overlay.
 ## 投递限制
 
 - 已归档 Session 拒绝消息并保持归档状态。发送前需显式取消目标的归档。
-- subagent 目标使用现有 `send_message` 工具及其树内名称和权限。`session_send_message` 拒绝这类目标，不会绕过 subagent 恢复规则。
-- 取消可阻止尚未接收的消息进入收件箱，不会撤回已接收的消息。保留成功回执；结果未知时不要自动重复发送。
+- subagent 目标对 `session_send_message` 不可用。只有调用方自身 subagent 树内的成员才能使用 `send_message` 访问。
+- 接收前的取消会阻止投递。接收后的取消可能返回 `ABORTED`，但不会撤回消息。取消后或结果未知时不要自动重复发送。
 - 该工具只发送文本。它不等待接收方回答，也不与另一个 Harness 进程通信。
 
 <a id="further-exploration"></a>

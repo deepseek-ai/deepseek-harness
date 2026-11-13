@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Let an Agent in a Web profile send a message to another ordinary Session, including one in a different Workspace or directory, and continue working once the recipient accepts it. A running recipient reads the message at its next input boundary; an idle recipient starts a turn, and an inactive recipient resumes first. The recipient sees the calling Session as the sender. The tool is off by default, exists only in Web compositions, and never waits for a reply; subagent targets use `send_message`.
+Let an Agent in a Web profile send a message to another ordinary Session, including one in a different Workspace or directory, and continue working once the recipient accepts it. A running recipient reads the message at its next input boundary; an idle recipient starts a turn, and an inactive recipient resumes first. The recipient sees the calling Session as the sender. The tool is off by default, exists only in Web compositions, and never waits for a reply; subagent targets are unavailable to this tool.
 
 ## Table of Contents
 
@@ -50,11 +50,11 @@ Call `session_send_message({ session_id: "target-id", message: "Please review th
 | Whitespace-only message | `ToolArgsError` (`INVALID_ARGS`), before activation |
 | Target is the caller's own Session | `SESSION_MESSAGE_SELF` |
 | Target is archived before or after activation | `SESSION_MESSAGE_ARCHIVED`; the target stays archived |
-| Subagent routing owns the target | `SESSION_MESSAGE_SUBAGENT_OWNED`, directing the caller to `send_message` |
+| Subagent routing owns the target | `SESSION_MESSAGE_SUBAGENT_OWNED`; the target is unavailable to this tool |
 | Target disposal began before acceptance | `SESSION_MESSAGE_INPUT_CLOSED`; nothing was accepted |
 | Other Session controller failure, including an unknown Session or one without a working directory | The controller's `RemoteError` code, such as `session/not-found` or `session/writer-held` |
 
-`SESSION_MESSAGE_*` failures are `SessionMessageError` instances raised before the target inbox accepted the message. Cancellation before acceptance fails the call and stops waiting immediately; a restoration already in progress continues under the Session controller, and the tool delivers nothing after cancellation. Cancellation after acceptance keeps the successful receipt. The tool never retries automatically.
+`SESSION_MESSAGE_*` failures are `SessionMessageError` instances raised before the target inbox accepted the message. Cancellation before acceptance fails the call and stops waiting immediately; a restoration already in progress continues under the Session controller, and the tool delivers nothing after cancellation. Cancellation after acceptance can return `ABORTED` even though the message was delivered. Cancellation does not retract accepted input or prove that nothing was delivered. The tool never retries automatically.
 
 -----
 
@@ -64,7 +64,7 @@ Call `session_send_message({ session_id: "target-id", message: "Please review th
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The tool takes the sender from the runtime's calling Agent, so the model cannot choose a sender identity. It checks the Workspace registry's archive list, waits for the Session controller's activation while racing the caller's signal, then rechecks cancellation and the archive list. It builds the message with the `agent-message` source that `@deepseek-ai/dsh-subagent` declares, records the caller's `senderSessionId`, uses the same `Agent <sender> sent a message: ` prefix as `send_message` with the caller's Session id, and calls `steer()` on the target. `AgentInputClosedError` from a disposing target becomes `SESSION_MESSAGE_INPUT_CLOSED`; other inbox failures propagate unchanged. The definition sets `preserveSuccessOnCancellation`, so the [tool pipeline](../../core/tools/README.md) keeps an accepted receipt when cancellation arrives later. The Host presenter shows the target id and message text; the [Web tool card](../../client/ui-tool/README.md) derives the accepted state and message ID from the recorded result.
+The tool takes the sender from the runtime's calling Agent, so the model cannot choose a sender identity. It checks the Workspace registry's archive list, waits for the Session controller's activation while racing the caller's signal, then rechecks cancellation and the archive list. It builds the message with the `agent-message` source that `@deepseek-ai/dsh-subagent` declares, records the caller's `senderSessionId`, uses the same `Agent <sender> sent a message: ` prefix as `send_message` with the caller's Session id, and calls `steer()` on the target. `AgentInputClosedError` from a disposing target becomes `SESSION_MESSAGE_INPUT_CLOSED`; other inbox failures propagate unchanged. The [tool pipeline](../../core/tools/README.md) applies its ordinary cancellation behavior. The Host presenter shows the target id and message text; the [Web tool card](../../client/ui-tool/README.md) derives the accepted state and message ID from the recorded result.
 
 ### Source map
 
@@ -93,7 +93,7 @@ The tool takes the sender from the runtime's calling Agent, so the model cannot 
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-session-control) defines the exact schema. The schema exposes neither sender identity nor permission overrides. A successful call returns one JSON text block, `{"message_id":"..."}`, that confirms acceptance, not completion or a reply. A rejected call returns `Error: <message>`; a subagent target reads `session "<id>" is a subagent; message it with send_message and its agent name`.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-session-control) defines the exact schema. The schema exposes neither sender identity nor permission overrides. A successful call returns one JSON text block, `{"message_id":"..."}`, that confirms acceptance, not completion or a reply. A rejected call returns `Error: <message>`; a subagent target reads `session "<id>" is not available to session_send_message`.
 
 #### Token effect
 
@@ -122,7 +122,7 @@ Append-only in the recipient; the message joins at its next input boundary witho
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Web compositions only** — only the dsh-web-app bundle declares the row; the `headless`, `sdk`, `sdk-minimal`, and `acp` profiles mount no Session controller and offer no `session_send_message`.
-- **Subagent targets use `send_message`** — the tool rejects a target that subagent routing owns and does not bypass tree-local names, permissions, or restoration rules.
+- **Subagent targets are unavailable** — the tool rejects a target that subagent routing owns. The separate `send_message` tool can address only members of the caller's own subagent tree.
 - **Text only, no reply wait** — messages carry text only; the tool attaches no files and does not wait for the recipient's turn or answer.
 - **Restored Agents stay resident** — a cold target restored for a message stays loaded under the Session controller, like a Session opened in the GUI.
 - **No safe retry after an unknown outcome** — acceptance is not idempotent; callers must retain known successful receipts and must not repeat a send automatically.
