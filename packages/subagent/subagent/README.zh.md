@@ -174,11 +174,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-本地可续聊 agent 收到的初始委派任务与后续 agent 间消息都使用 `agent-message` source，并记录实际发送方的 Session ID。两者均以 `Agent <sender name> sent a message: ` 开头，后接原始内容块。真人直接发送的消息在主、子会话中都保留 `user` source 和原始内容，冷恢复后也一样。已有历史不改写。
+本地可续聊 agent 收到的初始委派任务与后续 agent 间消息都使用 `agent-message` source，并记录实际发送方的 Session ID。两者均以 `Agent <sender name> sent a message: ` 开头，后接原始内容块。真人直接发给子会话的消息在进入模型步骤时加上 `This message is from the human user.` 前缀，冷恢复后也一样。原始内容块、消息 ID 和 `user` source 保持不变；排队编辑先于前缀生效。主 agent 的输入与已有历史不变。
 
 #### Token 影响
 
-每条初始委派任务或 agent 间消息增加一个简短作者前缀。真人输入不增加来源 token。
+每条初始委派任务、agent 间消息或发给子 agent 的真人消息增加一个简短作者前缀。主 agent 的真人输入不增加来源 token。
 
 #### KV Cache 影响
 

@@ -125,7 +125,7 @@ it.skipIf(MODE === 'record')('distinguishes the delegated task from a direct hum
     const received = child.deriveMessages().find(message => message.id === receipt.messageId)
     expect(received).toMatchObject({
       source: { kind: 'user', rpcId: 'human-question' },
-      content,
+      content: [{ type: 'text', text: 'This message is from the human user.\n\n' }, ...content],
     })
     await assertSubagentSessions(scaffold, [parent.session, child], paths, expected)
   } finally {

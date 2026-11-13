@@ -174,11 +174,11 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-Local continuable agents receive initial delegated tasks and later agent-to-agent messages with the `agent-message` source and the actual sender's Session id. Both start with `Agent <sender name> sent a message: ` followed by the supplied content blocks. Direct human messages retain their `user` source and original content in root and child sessions, including after cold resume. Retained history is not rewritten.
+Local continuable agents receive initial delegated tasks and later agent-to-agent messages with the `agent-message` source and the actual sender's Session id. Both start with `Agent <sender name> sent a message: ` followed by the supplied content blocks. Direct human messages in child sessions start with `This message is from the human user.` when admitted to a model step, including after cold resume. Their original content blocks, message id and `user` source remain intact; pending edits are applied before the prefix. Root input and retained history are unchanged.
 
 #### Token effect
 
-One short author prefix per initial delegated task or agent-to-agent message. Human input adds no attribution tokens.
+One short author prefix per initial delegated task, agent-to-agent message or direct human message to a child. Root human input adds no attribution tokens.
 
 #### KV Cache effect
 

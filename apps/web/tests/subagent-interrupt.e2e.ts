@@ -181,8 +181,13 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the 
     // runtime-context snapshots as non-user-source messages.
     const userTexts = events.flatMap(event => event.type === 'user/message'
       && event.data.source.kind === 'user'
-      ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
+      ? event.data.content.flatMap((block, index) => block.type === 'text' && index > 0 ? [block.text] : [])
       : [])
+    for (const event of events) {
+      if (event.type === 'user/message' && event.data.source.kind === 'user') {
+        expect(event.data.content[0]).toEqual({ type: 'text', text: 'This message is from the human user.\n\n' })
+      }
+    }
     expect(userTexts).toEqual([FOLLOWUP, WAKING])
     const delegatedTask = events.find(event => event.type === 'user/message'
       && event.data.source.kind === 'agent-message')

@@ -171,6 +171,22 @@ export class SubagentManager {
       const activation = this.resident.get(agent.id)
       return activation !== undefined && activationAgent(activation) === agent ? activation.ancestors : undefined
     }, session => host.identityOf(session))
+    ctx.on('agent/pre-step', async ({ agent }, next) => {
+      const decision = await next()
+      if (decision.kind === 'reject' || agent.session.header.origin !== 'subagent') return decision
+      return {
+        ...decision,
+        messages: decision.messages.map((message) => {
+          const first = message.content[0]
+          if (message.source.kind !== 'user'
+            || first?.type === 'text' && first.text === 'This message is from the human user.\n\n') return message
+          return {
+            ...message,
+            content: [{ type: 'text' as const, text: 'This message is from the human user.\n\n' }, ...message.content],
+          }
+        }),
+      }
+    })
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
       const activation = this.resident.get(agent.id)

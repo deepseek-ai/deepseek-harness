@@ -44,7 +44,7 @@ const LABEL = 'event-sourcing researcher'
 const CHILD_NAME = 'agent-1'
 const ONE_SHOT_LABEL = 'event-sourcing reviewer'
 const NESTED_LABEL = 'example editor'
-const CHILD_TITLE = 'Now give the same explanation'
+const CHILD_TITLE = 'This message is from the'
 const PARENT_PROMPT = 'Ask a research subagent to explain event sourcing.'
 const INITIAL_PROMPT = 'Explain event sourcing in one sentence.'
 /** The grandchild's own first message; its arrival is what says its history finished loading. */
@@ -779,7 +779,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       { timeout: 10_000 },
     ).toBe('running')
     await ended
-    await expect.poll(() => page.getByText(FOLLOWUP, { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+    await expect.poll(() => page.getByText(`This message is from the human user. ${FOLLOWUP}`, { exact: true }).count(), { timeout: 10_000 }).toBe(1)
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
     expect(await page.getByRole('button', { name: 'Stop generating' }).count()).toBe(0)
   })

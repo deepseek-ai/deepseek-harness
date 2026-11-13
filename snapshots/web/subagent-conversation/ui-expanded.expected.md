@@ -29,7 +29,7 @@
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation"
-- text: {{clock}} Now give the same explanation to a human reader. {{clock}}
+- text: {{clock}} This message is from the human user. Now give the same explanation to a human reader. {{clock}}
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]

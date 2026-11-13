@@ -149,6 +149,7 @@ function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
     ? event.data.content.flatMap((block, index) => block.type === 'text'
       && !(event.data.source.kind === 'agent-message' && index === 0)
+      && !(event.data.source.kind === 'user' && index === 0 && block.text === 'This message is from the human user.\n\n')
       && !block.text.startsWith('Your final answer is delivered automatically ')
       ? [block.text]
       : [])
@@ -930,6 +931,7 @@ describe('continuable image Queue prompts', () => {
     const delivered = loaded.events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'image'))
     expect(delivered?.type === 'user/message' && delivered.data.content).toEqual([
+      { type: 'text', text: 'This message is from the human user.\n\n' },
       { type: 'text', text: 'compare' },
       imageBlock,
     ])
@@ -1257,6 +1259,28 @@ describe('target-only Queue residency routing', () => {
 })
 
 describe('continuable human steering delivery', () => {
+  it.each([
+    { content: [], label: 'empty input' },
+    { content: message('This message is from the human user.\n\n'), label: 'an existing prefix' },
+  ])('adds exactly one human prefix to $label', async ({ content }) => {
+    const { ctx, parent, adapter } = await setup([textResponse('task answer'), textResponse('human answer')])
+    try {
+      parkParent(ctx, parent)
+      const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await started.result
+      const ended = Promise.withResolvers<undefined>()
+      ctx.on('subagent/end', (info) => { if (info.id === started.childId) ended.resolve(undefined) })
+      const id = await subagentManager(ctx).deliverPrompt(started.childId, content, {
+        delivery: 'queue', source: { kind: 'user' }, signal: testSignal,
+      })
+      await ended.promise
+      expect(adapter.requests[1]!.messages.find(item => item.id === id)?.content)
+        .toEqual(message('This message is from the human user.\n\n'))
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it.each(['queue', 'steer'] as const)('distinguishes delegated tasks from cold %s input without RPC metadata', async (delivery) => {
     const { ctx, parent, adapter } = await setup([
       textResponse('root answer'), textResponse('child answer'), textResponse('human answer'), textResponse('agent answer'),
@@ -1294,7 +1318,7 @@ describe('continuable human steering delivery', () => {
       const received = adapter.requests[2]!.messages.find(item => item.id === id)
       expect(received).toMatchObject({
         role: 'user', source: { kind: 'user' },
-        content: message('human question'),
+        content: [{ type: 'text', text: 'This message is from the human user.\n\n' }, ...message('human question')],
       })
       expect(adapter.requests[3]!.messages.findLast(item => item.source?.kind === 'agent-message')?.content)
         .toEqual([{ type: 'text', text: 'Agent lead sent a message: ' }, ...message('agent question')])
@@ -1325,7 +1349,7 @@ describe('continuable human steering delivery', () => {
       await started.result
       const received = adapter.requests[1]!.messages.find(item => item.id === receipt.messageId)
       expect(received).toMatchObject({
-        content: message('edited question'),
+        content: [{ type: 'text', text: 'This message is from the human user.\n\n' }, ...message('edited question')],
         source: pending.source,
       })
     } finally {
