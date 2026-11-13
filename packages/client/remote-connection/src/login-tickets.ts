@@ -27,7 +27,9 @@ export class LoginTickets {
     const token = encodeBase64Url(randomBytes(32))
     const id = brandString<RemoteLoginId>(randomUUID())
     const expiresAt = Date.now() + lifetimeMs
-    const url = new URL('remote-login', root.endsWith('/') ? root : `${root}/`)
+    const url = new URL(root)
+    if (!url.pathname.endsWith('/')) url.pathname += '/'
+    url.search = '?login=qr'
     url.hash = token
     // Version 40 with medium error correction carries at most 2331 byte-mode bytes.
     if (Buffer.byteLength(url.href, 'utf8') > 2331) {

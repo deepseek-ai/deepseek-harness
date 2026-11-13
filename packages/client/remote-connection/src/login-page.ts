@@ -1,10 +1,12 @@
-/** Remote-owned anonymous login and QR exchange documents, without Client boot data. */
+/** Remote-owned anonymous login document, without Client boot data. */
 import { loginLocales } from './login-locales.ts'
 
 /** Public capabilities and rejection feedback shown by the anonymous login page. */
 export interface AuthenticationPageOptions {
   /** Whether the default Token provider has published its login entry. */
   readonly tokenLoginEnabled: boolean
+  /** Whether the root entry exchanges a QR invitation instead of showing sign-in choices; defaults to false. */
+  readonly qrLogin?: boolean
   /** Whether this document follows a rejected Token submission. */
   readonly tokenRejected?: boolean
 }
@@ -131,14 +133,21 @@ export function enterAuthenticationPage(locales: typeof loginLocales, tokenRejec
 }
 
 /**
- * Render Remote's public login page, without a Token value or private boot data.
- * @param options - public Token availability and optional rejection feedback.
- * @returns self-contained HTML with a native Token form and same-origin submission handling.
+ * Render Remote's root login page, without a Token value or private boot data.
+ * @param options - public Token availability, QR exchange mode, and optional rejection feedback.
+ * @returns self-contained HTML for sign-in choices or the selected QR exchange at the same root entry.
  */
 export function renderAuthenticationPage(options: AuthenticationPageOptions): string {
   const t = loginLocales.en
-  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
-  return documentHtml(t.authenticationTitle, content, `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},${options.tokenRejected === true})`)
+  const qrLogin = options.qrLogin === true
+  const title = qrLogin ? t.title : t.authenticationTitle
+  const content = qrLogin
+    ? `<p id="status" role="status">${t.pending}</p><a id="open" href="./">${t.open}</a><noscript><p>${t.scriptRequired}</p></noscript>`
+    : `<p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
+  const script = qrLogin
+    ? `(${enterBrowser.toString()})(${scriptJson(loginLocales)})`
+    : `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},${options.tokenRejected === true})`
+  return documentHtml(title, `<h1 id="title">${title}</h1>${content}`, script)
 }
 
 /**
@@ -146,6 +155,11 @@ export function renderAuthenticationPage(options: AuthenticationPageOptions): st
  * @param locales - Copy embedded beside the entry, before Client plugins load.
  */
 export function enterBrowser(locales: typeof loginLocales): void {
+  const current = new URL(location.href)
+  const token = current.hash.slice(1)
+  const target = new URL(current.pathname, current)
+  target.searchParams.set('login', 'qr')
+  history.replaceState(null, '', target)
   const language = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const t = locales[language]
   document.documentElement.lang = language
@@ -155,16 +169,15 @@ export function enterBrowser(locales: typeof loginLocales): void {
   const open = document.getElementById('open') as HTMLElement
   title.textContent = t.title
   open.textContent = t.open
-  const token = location.hash.slice(1)
-  history.replaceState(null, '', location.pathname)
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
     status.textContent = t.invalid
     return
   }
   status.textContent = t.pending
   const lifetime = new AbortController()
-  window.addEventListener('pagehide', () => { lifetime.abort() }, { once: true })
-  void fetch(location.pathname, {
+  const abort = lifetime.abort.bind(lifetime, undefined)
+  window.addEventListener('pagehide', abort, { once: true })
+  void fetch(`${target.pathname}${target.search}`, {
     method: 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
@@ -173,19 +186,11 @@ export function enterBrowser(locales: typeof loginLocales): void {
     body: token,
     signal: lifetime.signal,
   }).then((response) => {
+    if (lifetime.signal.aborted) return
     if (response.status === 204) location.replace('./')
     else status.textContent = response.status === 410 ? t.invalid : t.failed
   }).catch(() => {
     // A lost response may follow a successful single-use exchange; checking the app is safe.
-    status.textContent = t.failed
-  })
-}
-
-/**
- * Render the public exchange page without authenticated application injections.
- * @returns HTML whose inline script removes the credential fragment before exchanging it with a same-origin POST.
- */
-export function renderLoginPage(): string {
-  const content = `<h1 id="title">${loginLocales.en.title}</h1><p id="status" role="status">${loginLocales.en.pending}</p><a id="open" href="./">${loginLocales.en.open}</a><noscript><p>${loginLocales.en.scriptRequired}</p></noscript>`
-  return documentHtml(loginLocales.en.title, content, `(${enterBrowser.toString()})(${scriptJson(loginLocales)})`)
+    if (!lifetime.signal.aborted) status.textContent = t.failed
+  }).finally(() => { window.removeEventListener('pagehide', abort) })
 }

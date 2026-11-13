@@ -32,7 +32,7 @@ Web bundle 挂载此插件。Host 端依赖 `connection`、`connection.authentic
 <a id="authentication-and-failures"></a>
 ## 认证与失败处理
 
-二维码在 URL fragment 中携带独立生成的 256 位凭据，始终不使用进程启动 token。公开的 `remote-login` 页面移除 fragment，并通过同源 POST 兑换凭据。GET 和 HEAD 不会兑换凭据。WebServer 在执行匿名路由前检查请求来源。Remote 检查公布地址的 authority，消费一次性凭据，再签发自己的 owner 浏览器 cookie。已兑换、过期、取消、被替换和重启前生成的邀请均不能再次兑换。
+二维码使用公布的应用根地址，在查询参数中携带 `login=qr`，在 URL fragment 中携带独立生成的 256 位凭据，始终不使用进程启动 token。根地址的登录页面移除 fragment，并向带 `login=qr` 的同源根地址 POST 兑换凭据。GET 和 HEAD 不会兑换凭据。Remote 在读取兑换请求前应用 WebServer 的匿名来源检查，核对公布地址的 authority，消费一次性凭据，再签发自己的 owner 浏览器 cookie。已兑换、过期、取消、被替换和重启前生成的邀请均不能再次兑换。
 
 只有已认证的 owner 可以创建、查询或取消邀请。Host 保留凭据摘要，不保留可重复使用的明文。公开页面不包含已认证应用的初始化注入，也不会向第三方发送凭据。兑换中断时 cookie 可能已经签发；页面提供干净的应用链接以检查结果，不会自动重试一次性凭据。
 
@@ -40,7 +40,7 @@ Web bundle 挂载此插件。Host 端依赖 `connection`、`connection.authentic
 
 Remote 拥有持久的 `client-remote-connection/browser-session` 凭据记录。其签名密钥和 v1 cookie 格式独立于 Token；cookie 绑定监听协议与规范化 Host，携带固定签发及到期时间，并使用 `HttpOnly`、`SameSite=Strict` 和 `Path=/`。验证不续期。记录损坏会使插件激活失败，不会替换密钥。保留此记录可让有效登录跨重启继续使用；替换或删除记录会在下次激活时使旧 cookie 失效。
 
-Remote 也拥有根地址的匿名 HTML。来源可信但尚未登录的 GET 返回 HTTP 401 登录文档，HEAD 保留 401 且不返回正文。文档不暴露 Token 值或私有应用注入，仅在 Token 发布入口时显示 Token 表单。已认证请求使用实际 Peer 渲染原应用，不再次验证凭据。来源拒绝保持 403；认证故障且没有其它成功提供者时保持 503。
+Remote 在根地址使用同一份登录文档处理普通登录和二维码兑换。来源可信但尚未登录的普通根地址访问返回 HTTP 401，HEAD 保留 401 且不返回正文。`login=qr` 模式以 HTTP 200 返回登录文档，即使浏览器已有登录 cookie。文档不暴露 Token 值或私有应用注入；普通登录模式仅在 Token 发布入口时显示 Token 表单。已登录且未指定二维码模式的访问使用实际 Peer 渲染应用，不再次验证凭据。来源拒绝保持 403；认证故障且没有其它成功提供者时保持 503。
 
 <a id="replace-the-settings-panel"></a>
 ## 替换设置面板

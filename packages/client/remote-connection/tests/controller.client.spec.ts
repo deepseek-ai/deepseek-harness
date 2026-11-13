@@ -6,7 +6,7 @@ import type { RemoteConnectionStatus, RemoteLoginId, RemoteLoginTicket, RemoteLo
 import { RemoteConnectionController, type RemoteConnectionApi } from '../src/client/remote-connection-controller.ts'
 
 const deployment: RemoteConnectionStatus = { url: 'https://host.example/app/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 }
-const ticket: RemoteLoginTicket = { id: 'invitation-a' as RemoteLoginId, url: 'https://host.example/app/remote-login#token=private-a', lifetimeMs: 10_000 }
+const ticket: RemoteLoginTicket = { id: 'invitation-a' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private-a', lifetimeMs: 10_000 }
 const failure = { ok: false as const, error: new RemoteError('gateway/internal', 'unavailable', {}) }
 const controllers: RemoteConnectionController[] = []
 
@@ -97,7 +97,7 @@ describe('Remote connection invitation state', () => {
     remote.create.mockReturnValueOnce(pending.promise)
     const replacement = controller.create()
     expect(state()).toMatchObject({ phase: 'creating', ticket: null, retainDetails: true, remainingSeconds: 9 })
-    const next = { ...ticket, id: 'invitation-b' as RemoteLoginId, url: 'https://host.example/app/remote-login#token=private-b', lifetimeMs: 20_000 }
+    const next = { ...ticket, id: 'invitation-b' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private-b', lifetimeMs: 20_000 }
     pending.resolve({ ok: true, value: next })
     await replacement
     expect(state()).toMatchObject({ phase: 'pending', ticket: next, retainDetails: false, remainingSeconds: 20 })

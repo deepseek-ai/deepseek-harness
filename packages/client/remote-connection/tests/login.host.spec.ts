@@ -5,6 +5,7 @@ import type { Principal, RemoteInvocation } from '@deepseek-ai/dsh-typert-protoc
 import * as Token from '@deepseek-ai/dsh-host-authentication-token'
 import { IncomingMessage, type ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
+import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import * as Connection from '@deepseek-ai/dsh-client-connection'
 import { MemoryCredentials } from '../../../credentials/credentials/tests/memory.ts'
@@ -36,7 +37,7 @@ function caller(ctx: Context, principal: Principal = { kind: 'owner' }): RemoteC
   return ctx.extend({ invocation }).remoteConnection
 }
 
-async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'https:' = 'https:') {
+async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'https:' = 'https:', withToken = true) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   const routes: (WebRoute | WebResourceRoute)[] = []
@@ -50,25 +51,17 @@ async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'htt
   } as WebServer)
   ctx.provide('webApp', { getAdvertisedUrl: () => url })
   await ctx.plugin(Connection, { trustedHosts: ['login.example', 'other.example'] })
-  await ctx.plugin(Token, { cookieMaxAgeDays: 30 })
+  if (withToken) await ctx.plugin(Token, { cookieMaxAgeDays: 30 })
   const fiber = ctx.plugin(RemoteConnection, RemoteConnection.Config({ ticketLifetimeMs: 120_000, pollIntervalMs: 1000 }))
   await fiber
-  const registered = routes.find((entry): entry is WebRoute => entry.path === '/remote-login' && 'handler' in entry)!
+  const registered = routes.find((entry): entry is WebResourceRoute => entry.path === '/' && 'resource' in entry)!
   const route: WebRoute = {
-    ...registered,
+    kind: 'exact', path: '/', auth: 'anonymous',
     async handler(request, response) {
-      const facts = {
-        headers: request.headers, method: request.method,
-        url: new URL(request.url ?? '/', 'http://fixture.invalid'), transport: 'http' as const, socket: request.socket,
-      }
-      const policy = typeof registered.auth === 'function' ? registered.auth(facts) : registered.auth ?? 'required'
-      const admission = ctx.bail(ctx.webServer, 'webserver/authorize', facts, policy)
-      if (admission?.kind === 'deny') {
-        response.writeHead(admission.status)
+      await ctx.waterfall(ctx.webServer, 'webserver/request', request, response, async () => {
+        response.writeHead(404)
         response.end()
-        return
-      }
-      await registered.handler(request, response, admission?.peer)
+      })
     },
   }
   return { ctx, routes, fiber, route, registered, service: caller(ctx) }
@@ -77,7 +70,7 @@ async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'htt
 function streamingRequest(method: string, headers: Record<string, string> = {}): IncomingMessage {
   const socket = new Socket()
   const request = Object.assign(new IncomingMessage(socket), {
-    method, url: '/remote-login', headers: { host: 'login.example', origin: 'https://login.example', 'content-type': 'text/plain', ...headers },
+    method, url: '/?login=qr', headers: { host: 'login.example', origin: 'https://login.example', 'content-type': 'text/plain', ...headers },
   })
   onTestFinished(() => { request.destroy(); socket.destroy() })
   return request
@@ -92,14 +85,17 @@ function request(method: string, body = '', headers: Record<string, string> = {}
 
 function response() {
   const state = { status: 0, headers: {} as Readonly<Record<string, string>>, body: undefined as string | undefined }
-  const value = {
+  const events = new EventEmitter()
+  const value = Object.assign(events, {
+    destroyed: false, writableEnded: false, headersSent: false,
     writeHead(status: number, headers: Readonly<Record<string, string>> = {}) {
       state.status = status
       state.headers = headers
+      this.headersSent = true
       return this
     },
-    end(body?: string) { state.body = body; return this },
-  } as ServerResponse
+    end(body?: string) { state.body = body; this.writableEnded = true; events.emit('finish'); return this },
+  }) as ServerResponse
   return { value, state }
 }
 
@@ -114,7 +110,7 @@ it('issues a prefix-preserving one-use invitation and a Remote-owned browser coo
   expect(service.status(null)).toEqual({ url: 'https://login.example/ui/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 })
   const ticket = service.create()
   expect(ticket.lifetimeMs).toBe(120_000)
-  expect(ticket.url).toMatch(/^https:\/\/login\.example\/ui\/remote-login#[A-Za-z0-9_-]{43}$/)
+  expect(ticket.url).toMatch(/^https:\/\/login\.example\/ui\/\?login=qr#[A-Za-z0-9_-]{43}$/)
   expect(ticket.url).not.toContain('token=')
   expect(service.status(ticket.id).ticket).toBe('pending')
   const result = await exchange(route, credential(ticket))
@@ -134,23 +130,32 @@ it('issues a prefix-preserving one-use invitation and a Remote-owned browser coo
   expect(ctx.connection.admit({ headers: { host: 'login.example', cookie } })).toEqual(admitted)
 })
 
-it('never consumes a ticket on page reads or malformed and cross-origin requests', async () => {
-  const { route, service } = await mount()
+it('delegates requests outside an unambiguous root QR POST without consuming an invitation', async () => {
+  const { route, service } = await mount('https://login.example/ui/', 'https:', false)
   const ticket = service.create()
-  for (const method of ['GET', 'HEAD']) {
+  for (const method of ['GET', 'HEAD', 'PUT']) {
     const res = response()
     await route.handler(request(method), res.value)
-    expect(res.state.status).toBe(200)
-    expect(res.state.headers['cache-control']).toBe('no-store')
-    expect(res.state.headers['referrer-policy']).toBe('no-referrer')
-    expect(res.state.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    expect(res.state.status).toBe(404)
     expect(res.state.headers['set-cookie']).toBeUndefined()
-    if (method === 'HEAD') expect(res.state.body).toBeUndefined()
-    else expect(res.state.body).toContain('<html')
   }
-  const put = response()
-  await route.handler(request('PUT'), put.value)
-  expect(put.state.status).toBe(405)
+  for (const url of [
+    '/', '/?login=other', '/remote-login', '/other?login=qr',
+    '/?login=qr&login=qr', '/?login=qr&login=other', '/?login=qr&token=invalid',
+  ]) {
+    const req = request('POST', credential(ticket))
+    req.url = url
+    const res = response()
+    await route.handler(req, res.value)
+    expect(res.state.status).toBe(404)
+    expect(res.state.headers['set-cookie']).toBeUndefined()
+  }
+  expect(service.status(ticket.id).ticket).toBe('pending')
+})
+
+it('never consumes a ticket on malformed or cross-origin exchanges', async () => {
+  const { route, service } = await mount()
+  const ticket = service.create()
   for (const headers of [
     { host: 'evil.example' },
     { host: 'other.example', origin: 'https://other.example' },
@@ -164,6 +169,71 @@ it('never consumes a ticket on page reads or malformed and cross-origin requests
   expect((await exchange(route, 'x'.repeat(43))).status).toBe(410)
   expect(service.status(ticket.id).ticket).toBe('pending')
   expect((await exchange(route, credential(ticket), { host: 'login.example:443' })).status).toBe(204)
+})
+
+it.each(['close', 'socket', 'destroyed'] as const)('does not read or consume an invitation when %s ends the exchange before admission completes', async (closed) => {
+  const { ctx, route, service } = await mount('https://login.example/ui/', 'https:', false)
+  const ticket = service.create()
+  const req = request('POST', credential(ticket))
+  const res = response()
+  if (closed === 'socket') req.socket.destroy()
+  if (closed === 'destroyed') res.value.destroyed = true
+  const source = vi.fn(() => {
+    if (closed === 'close') res.value.emit('close')
+    return { kind: 'allow' as const }
+  })
+  ctx.on('webserver/authorize', source, { prepend: true })
+  await route.handler(req, res.value)
+  expect(source).toHaveBeenCalledOnce()
+  expect(res.state.status).toBe(0)
+  expect(res.state.headers['set-cookie']).toBeUndefined()
+  expect(res.value.listenerCount('close')).toBe(0)
+  expect(req.readableEnded).toBe(false)
+  expect(service.status(ticket.id).ticket).toBe('pending')
+})
+
+it('refuses exchange when no source-admission provider answers', async () => {
+  const { ctx, route, service } = await mount()
+  const ticket = service.create()
+  const admission = vi.spyOn(ctx, 'bail').mockReturnValueOnce(undefined)
+  const refused = await exchange(route, credential(ticket))
+  expect(refused.status).toBe(503)
+  expect(refused.headers['cache-control']).toBe('no-store')
+  expect(refused.headers['set-cookie']).toBeUndefined()
+  expect(admission).toHaveBeenCalledWith(ctx.webServer, 'webserver/authorize', expect.objectContaining({ method: 'POST', transport: 'http' }), 'anonymous')
+  admission.mockRestore()
+  expect(service.status(ticket.id).ticket).toBe('pending')
+  expect((await exchange(route, credential(ticket))).status).toBe(204)
+})
+
+it.each(['close', 'destroyed'] as const)('does not consume a complete invitation when the response becomes %s before issuance', async (closed) => {
+  const { route, service } = await mount()
+  const ticket = service.create()
+  const req = request('POST', credential(ticket))
+  const res = response()
+  const ended = vi.fn(() => {
+    if (closed === 'close') res.value.emit('close')
+    else res.value.destroyed = true
+  })
+  req.once('end', ended)
+  await route.handler(req, res.value)
+  expect(ended).toHaveBeenCalledOnce()
+  expect(req.readableEnded).toBe(true)
+  expect(res.state.status).toBe(0)
+  expect(res.state.headers['set-cookie']).toBeUndefined()
+  expect(res.value.listenerCount('close')).toBe(0)
+  expect(service.status(ticket.id).ticket).toBe('pending')
+  expect((await exchange(route, credential(ticket))).status).toBe(204)
+})
+
+it('keeps a slashless advertised application directory when creating the QR root URL', async () => {
+  const { route, service } = await mount('https://login.example/ui')
+  const ticket = service.create()
+  const target = new URL(ticket.url)
+  expect(target.pathname).toBe('/ui/')
+  expect(target.search).toBe('?login=qr')
+  expect(target.hash).toMatch(/^#[A-Za-z0-9_-]{43}$/u)
+  expect((await exchange(route, credential(ticket))).status).toBe(204)
 })
 
 it('returns the process-token login URL without consuming or replacing the QR invitation', async () => {
@@ -274,7 +344,7 @@ it('signs in over HTTP with a non-Secure Remote cookie and rejects replay', asyn
   const { ctx, route, service } = await mount('http://login.example/ui/', 'http:')
   expect(service.status(null).availability).toBe('available')
   const ticket = service.create()
-  expect(ticket.url).toMatch(/^http:\/\/login\.example\/ui\/remote-login#[A-Za-z0-9_-]{43}$/)
+  expect(ticket.url).toMatch(/^http:\/\/login\.example\/ui\/\?login=qr#[A-Za-z0-9_-]{43}$/)
   expect((await exchange(route, credential(ticket), { origin: 'http://evil.example' })).status).toBe(403)
   expect(service.status(ticket.id).ticket).toBe('pending')
   const headers = { host: 'login.example:80', origin: 'http://login.example' }
@@ -296,7 +366,7 @@ it('refuses anonymous exchanges while the advertised deployment is unreachable',
   expect((await exchange(route, 'a'.repeat(43), { host: 'localhost', origin: 'http://localhost' })).status).toBe(403)
 })
 
-it('removes the route and invalidates pending requests when the plugin unloads', async () => {
+it('removes the root resource and exchange listener and invalidates pending requests when the plugin unloads', async () => {
   const { route, registered, routes, fiber, service } = await mount()
   const ticket = service.create()
   const stream = streamingRequest('POST')
@@ -309,6 +379,7 @@ it('removes the route and invalidates pending requests when the plugin unloads',
   expect(res.state.status).toBe(410)
   expect(res.state.headers['set-cookie']).toBeUndefined()
   expect(routes).not.toContain(registered)
+  expect((await exchange(route, credential(ticket))).status).toBe(404)
   expect(() => service.create()).toThrow(expect.objectContaining({ code: 'remote-connection/disposed' }))
   expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/disposed' }))
 })

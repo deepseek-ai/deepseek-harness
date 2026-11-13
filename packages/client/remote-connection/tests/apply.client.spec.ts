@@ -146,7 +146,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
       if (endpoint === 'remoteConnection/create') {
-        return { ok: true, value: { id: 'invitation-a', url: 'https://host.example/remote-login#private', lifetimeMs: 120_000 } }
+        return { ok: true, value: { id: 'invitation-a', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
       }
       return { ok: true, value: status }
     })
@@ -180,7 +180,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
       if (endpoint === 'remoteConnection/create') {
-        return { ok: true, value: { id: 'invitation-b', url: 'https://host.example/remote-login#private', lifetimeMs: 120_000 } }
+        return { ok: true, value: { id: 'invitation-b', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
       }
       if (endpoint === 'remoteConnection/cancel') return { ok: true, value: 'cancelled' }
       return { ok: true, value: { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 60_000 } }

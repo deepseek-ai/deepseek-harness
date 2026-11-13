@@ -30,7 +30,7 @@ The advertised application URL supports HTTP and HTTPS, must name a non-loopback
 
 ## Authentication and failures
 
-The QR contains an independently generated 256-bit credential in the URL fragment, never the process launch token. The public `remote-login` page removes the fragment and exchanges it with a same-origin POST. GET and HEAD do not redeem it. WebServer checks the request source before the anonymous route runs. Remote checks the advertised authority, consumes the credential once, and signs its own owner browser cookie. Redeemed, expired, cancelled, replaced, and pre-restart invitations cannot be exchanged again.
+The QR uses the advertised application root with `?login=qr` and an independently generated 256-bit credential in the URL fragment, never the process launch token. The root login page removes the fragment and exchanges it with a same-origin POST to `?login=qr`. GET and HEAD do not redeem it. Remote applies WebServer’s anonymous source checks before reading the exchange, checks the advertised authority, consumes the credential once, and signs its own owner browser cookie. Redeemed, expired, cancelled, replaced, and pre-restart invitations cannot be exchanged again.
 
 Only an authenticated owner can create, inspect, or cancel invitations. The Host retains a digest of the credential, not its reusable plaintext. The public page has no authenticated application injections and sends no credential to third parties. An interrupted exchange may already have issued the cookie; the page offers a clean application link to check the result and never retries the one-use credential automatically.
 
@@ -38,7 +38,7 @@ The owner-only `loginUrl()` method reads the same WebServer instance’s Token e
 
 Remote owns the persistent `client-remote-connection/browser-session` credential record. Its signing key and v1 cookie format are independent of Token; a cookie binds the listener protocol and normalized Host, carries fixed issue and expiry times, and uses `HttpOnly`, `SameSite=Strict`, and `Path=/`. Validation never renews it. Corrupt records fail activation rather than replacing the key. Preserve the record across restarts to retain valid logins; replacing or deleting it invalidates old cookies on the next activation.
 
-Remote also owns the root anonymous HTML. A trusted but unauthenticated GET receives the login document with HTTP 401; HEAD retains 401 without a body. The document exposes no Token value or private application injections. The Token form appears only when Token publishes an entry. Authenticated requests render the existing application with their actual Peer and no second credential check. Source rejection remains 403, and authentication failure without another successful provider remains 503.
+Remote uses one root login document for ordinary sign-in and QR exchange. A trusted but unauthenticated visit to the ordinary root receives HTTP 401; HEAD retains 401 without a body. The `login=qr` mode returns the login document with HTTP 200 even when the browser already has a login cookie. The document exposes no Token value or private application injections; the ordinary login mode shows the Token form only when Token publishes an entry. Authenticated visits without QR mode render the application with their actual Peer and no second credential check. Source rejection remains 403; authentication failure without another successful provider remains 503.
 
 ## Replace the settings panel
 

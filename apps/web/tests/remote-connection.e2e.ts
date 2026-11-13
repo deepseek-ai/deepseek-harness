@@ -34,8 +34,8 @@ async function createCode(page: Page, section: Locator): Promise<string> {
   expect(envelope.result.ok).toBe(true)
   const url = envelope.result.value.url
   const parsed = new URL(url)
-  expect(parsed.pathname).toBe('/remote-login')
-  expect(parsed.search).toBe('')
+  expect(parsed.pathname).toBe('/')
+  expect(parsed.search).toBe('?login=qr')
   expect(parsed.hash).toMatch(/^#[A-Za-z0-9_-]{43}$/)
   await section.getByRole('img', { name: '一次性登录二维码' }).waitFor()
   return url
@@ -340,7 +340,7 @@ describe('web e2e: one-use QR browser login', () => {
       const phonePage = await phone.newPage()
       const pageErrors: string[] = []
       phonePage.on('pageerror', (error) => { pageErrors.push(error.message) })
-      const exchanged = phonePage.waitForResponse(response => new URL(response.url()).pathname === '/remote-login'
+      const exchanged = phonePage.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await phonePage.goto(qrUrl)
       expect((await exchanged).status()).toBe(204)
@@ -421,7 +421,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await mobileSection.getByRole('img').count()).toBe(0)
 
       const reusedPage = await stranger.newPage()
-      const refused = reusedPage.waitForResponse(response => new URL(response.url()).pathname === '/remote-login'
+      const refused = reusedPage.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await reusedPage.goto(qrUrl)
       expect((await refused).status()).toBe(410)
@@ -431,6 +431,32 @@ describe('web e2e: one-use QR browser login', () => {
       expect(pageErrors).toEqual([])
     } finally {
       await Promise.all([desktop.close(), phone.close(), stranger.close()])
+    }
+  })
+
+  it('redeems a QR invitation at the root when the phone already has a Token login', async () => {
+    const desktop = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE })
+    const phone = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE, viewport: MOBILE })
+    try {
+      const owner = await desktop.newPage()
+      await owner.goto(secure.authenticatedUrl)
+      const settings = await remoteSettings(owner)
+      const qrUrl = await createCode(owner, settings)
+      const page = await phone.newPage()
+      await page.goto(secure.authenticatedUrl)
+      await page.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
+      expect((await phone.cookies()).some(cookie => cookie.name.startsWith('dsh-auth-'))).toBe(true)
+      expect((await phone.cookies()).some(cookie => cookie.name.startsWith('dsh-remote-'))).toBe(false)
+      const exchanged = page.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
+        && response.request().method() === 'POST')
+      await page.goto(qrUrl)
+      expect((await exchanged).status()).toBe(204)
+      await page.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
+      expect(page.url()).toBe(secure.url)
+      expect((await phone.cookies()).some(cookie => cookie.name.startsWith('dsh-remote-'))).toBe(true)
+      await settings.getByText('二维码已使用，请在手机上确认是否已登录', { exact: true }).waitFor()
+    } finally {
+      await Promise.all([desktop.close(), phone.close()])
     }
   })
 
@@ -561,7 +587,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await section.getByRole('img').count()).toBe(0)
       await snapshot(page, secure, 'cancelled')
       const other = await phone.newPage()
-      const refused = other.waitForResponse(response => new URL(response.url()).pathname === '/remote-login'
+      const refused = other.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await other.goto(qrUrl)
       expect((await refused).status()).toBe(410)
@@ -661,7 +687,7 @@ describe('web e2e: one-use QR browser login', () => {
       await snapshot(desktopPage, fixture, 'http-link-copied')
 
       const phonePage = await phone.newPage()
-      const exchanged = phonePage.waitForResponse(response => new URL(response.url()).pathname === '/remote-login'
+      const exchanged = phonePage.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await phonePage.goto(qrUrl)
       expect((await exchanged).status()).toBe(204)
@@ -683,7 +709,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(returning.url()).toBe(fixture.url)
 
       const reusedPage = await stranger.newPage()
-      const refused = reusedPage.waitForResponse(response => new URL(response.url()).pathname === '/remote-login'
+      const refused = reusedPage.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await reusedPage.goto(qrUrl)
       expect((await refused).status()).toBe(410)

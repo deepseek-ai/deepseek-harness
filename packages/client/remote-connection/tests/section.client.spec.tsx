@@ -19,7 +19,7 @@ const ready: RemoteConnectionState = {
   deployment: { url: 'https://host.example/app/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
   phase: 'ready', ticket: null, error: null, remainingSeconds: 120, retainDetails: false,
 }
-const ticket = { id: 'code-a' as RemoteLoginId, url: 'https://host.example/app/remote-login#token=private', lifetimeMs: 120_000 }
+const ticket = { id: 'code-a' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private', lifetimeMs: 120_000 }
 
 function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 'zh' = 'en', linkOverrides: Partial<LoginLinkState> = {}) {
   const state = createSnapshotStore({ ...ready, ...overrides })

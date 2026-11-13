@@ -9,7 +9,7 @@ import type { PeerScope } from '@deepseek-ai/dsh-client-connection'
 import type { WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { LoginTickets } from './login-tickets.ts'
-import { handleLogin } from './host-route.ts'
+import { handleLogin, isQrLogin } from './host-route.ts'
 import { RemoteBrowserAuth } from './remote-auth.ts'
 import { renderAuthenticationPage } from './login-page.ts'
 import type { RemoteConnectionStatus, RemoteLoginId, RemoteLoginState, RemoteLoginTicket } from './types.ts'
@@ -69,19 +69,40 @@ export default class RemoteConnection extends TypertRemoteService {
       yield ctx.connection.authentication.register({
         authenticate: request => !this.stopped && auth.isAuthenticated(request, ctx.webServer.protocol === 'https:') ? peer : undefined,
       })
-      yield ctx.webServer.register({
-        kind: 'exact', path: '/remote-login', auth: 'anonymous',
-        handler: async (request, response) => {
+      yield ctx.on('webserver/request', async (request, response, next) => {
+        /* v8 ignore next -- node:http always supplies the incoming request URL. */
+        const url = new URL(request.url ?? '/', 'http://dsh.invalid')
+        if (request.method !== 'POST' || url.pathname !== '/' || !isQrLogin(url) || this.stopped) {
+          await next()
+          return
+        }
+        const disconnected = new AbortController()
+        const signal = AbortSignal.any([disconnected.signal, this.lifetime.signal])
+        const onClose = (): void => { disconnected.abort() }
+        response.once('close', onClose)
+        try {
+          const admission = ctx.bail(ctx.webServer, 'webserver/authorize', {
+            headers: request.headers, method: request.method, url, transport: 'http', signal, socket: request.socket,
+          }, 'anonymous')
+          if (signal.aborted || request.socket.destroyed || response.destroyed) return
+          if (admission === undefined || admission.kind === 'deny') {
+            response.writeHead(admission?.status ?? 503, { 'cache-control': 'no-store' })
+            response.end()
+            return
+          }
           this.requests.add(request)
           const task = handleLogin({
             root: ctx.webApp.getAdvertisedUrl(),
-            available: !this.stopped && this.deployment().availability === 'available',
+            available: this.deployment().availability === 'available',
             consume: token => !this.stopped && this.tickets.consume(token),
             issueCookie: facts => auth.createSessionCookie(facts, ctx.webServer.protocol === 'https:'),
+            signal,
           }, request, response)
           this.pending.add(task)
           try { await task } finally { this.pending.delete(task); this.requests.delete(request) }
-        },
+        } finally {
+          response.off('close', onClose)
+        }
       })
       yield ctx.webServer.register({
         kind: 'exact', path: '/', auth: 'anonymous',
@@ -111,15 +132,18 @@ export default class RemoteConnection extends TypertRemoteService {
     const admission = admitted === undefined
       ? this.owner.connection.authentication.authenticate({ headers: request.headers, method: request.method, url: request.url, signal })
       : { peer: admitted }
-    if ('rejection' in admission) {
+    const qrLogin = isQrLogin(new URL(request.url))
+    if ('rejection' in admission || qrLogin) {
       const headers = {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer',
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
       }
-      if (admission.rejection !== 401) return new Response('authentication unavailable', { status: admission.rejection, headers })
-      const html = renderAuthenticationPage({ tokenLoginEnabled: this.tokenLoginUrl(this.owner.webApp.getAdvertisedUrl()) !== undefined })
-      return new Response(request.method === 'HEAD' ? null : html, { status: 401, headers })
+      if ('rejection' in admission && admission.rejection !== 401) return new Response('authentication unavailable', { status: admission.rejection, headers })
+      const html = renderAuthenticationPage({
+        tokenLoginEnabled: this.tokenLoginUrl(this.owner.webApp.getAdvertisedUrl()) !== undefined, qrLogin,
+      })
+      return new Response(request.method === 'HEAD' ? null : html, { status: qrLogin ? 200 : 401, headers })
     }
     // The Web application owns index.html; the explicit Peer avoids a second authentication pass.
     return this.owner.webServer.readResource(new Request(new URL('index.html', request.url), { method: request.method, headers: request.headers, signal }), admission.peer)

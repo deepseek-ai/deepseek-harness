@@ -1,13 +1,13 @@
 /** Anonymous one-use credential exchange; application RPC remains authenticated. */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ConnectionTrustRequest } from '@deepseek-ai/dsh-client-connection'
-import { renderLoginPage } from './login-page.ts'
 
 interface LoginRoute {
   readonly root: string
   readonly available: boolean
   readonly consume: (token: string) => boolean
   readonly issueCookie: (request: ConnectionTrustRequest) => string | undefined
+  readonly signal: AbortSignal
 }
 
 const HEADERS = {
@@ -18,9 +18,18 @@ const HEADERS = {
 }
 
 /**
- * Serve the public page or redeem its raw base64url credential over POST.
- * GET and HEAD never consume credentials. The POST is bound to the advertised
- * authority after WebServer's source checks; only a successful one-use
+ * Identify the explicit QR mode without accepting mixed Token credentials.
+ * @param url - application root URL whose query selects the login mode.
+ * @returns whether exactly one login parameter selects QR exchange without a Token query.
+ */
+export function isQrLogin(url: URL): boolean {
+  const modes = url.searchParams.getAll('login')
+  return modes.length === 1 && modes[0] === 'qr' && !url.searchParams.has('token')
+}
+
+/**
+ * Redeem a raw base64url credential after anonymous source admission.
+ * The POST is bound to the advertised authority; only a successful one-use
  * exchange receives a Remote browser cookie.
  * @param route - owning service's current availability and credential consumer.
  * @param request - incoming request with an at-most-43-byte credential body.
@@ -30,16 +39,6 @@ export async function handleLogin(route: LoginRoute, request: IncomingMessage, r
   const root = new URL(route.root)
   if (new URL(`${root.protocol}//${request.headers.host}`).host !== root.host) {
     response.writeHead(403, HEADERS)
-    response.end()
-    return
-  }
-  if (request.method === 'GET' || request.method === 'HEAD') {
-    response.writeHead(200, { ...HEADERS, 'content-type': 'text/html; charset=utf-8' })
-    response.end(request.method === 'HEAD' ? undefined : renderLoginPage())
-    return
-  }
-  if (request.method !== 'POST') {
-    response.writeHead(405, { ...HEADERS, allow: 'GET, HEAD, POST' })
     response.end()
     return
   }
@@ -82,6 +81,7 @@ export async function handleLogin(route: LoginRoute, request: IncomingMessage, r
     }
     return
   }
+  if (route.signal.aborted || response.destroyed) return
   const token = Buffer.concat(chunks).toString('utf8')
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
     response.writeHead(400, HEADERS)

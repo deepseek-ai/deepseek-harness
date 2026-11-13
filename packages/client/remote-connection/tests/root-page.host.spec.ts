@@ -86,7 +86,7 @@ async function mounted(withToken = false, releaseHeldRead?: () => void) {
     })
   const redeem = async () => {
     const ticket = service.create()
-    return send('/remote-login', 'POST', { 'content-type': 'text/plain', origin: publicUrl.slice(0, -1) }, new URL(ticket.url).hash.slice(1))
+    return send('/?login=qr', 'POST', { 'content-type': 'text/plain', origin: publicUrl.slice(0, -1) }, new URL(ticket.url).hash.slice(1))
   }
   return { ctx, config, origin, authority, publicUrl, remote, token, service, send, redeem, renderedPeers }
 }
@@ -128,6 +128,43 @@ it('offers an anonymous root page without Token and renders the admitted Remote 
   expect(authenticate).toHaveBeenCalledTimes(1)
 })
 
+it('serves QR mode from the root even to a browser already authenticated through Token', async () => {
+  const { service, send, renderedPeers } = await mounted(true)
+  const ticket = service.create()
+  const entry = new URL(ticket.url)
+  expect(entry.pathname).toBe('/')
+  expect(entry.search).toBe('?login=qr')
+  const token = new URL(service.loginUrl())
+  const authenticated = cookie(await send(token.pathname + token.search))
+  const application = await send('/', 'GET', { cookie: authenticated })
+  expect(application.status).toBe(200)
+  expect(application.body).toContain('PRIVATE_APPLICATION')
+  const rendered = renderedPeers.length
+  for (const headers of [{}, { cookie: authenticated }]) {
+    const page = await send('/?login=qr', 'GET', headers)
+    expect(page.status).toBe(200)
+    expect(page.headers['content-type']).toContain('text/html')
+    expect(page.headers['cache-control']).toBe('no-store')
+    expect(page.headers['referrer-policy']).toBe('no-referrer')
+    expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    expect(page.body).toContain('id="status"')
+    expect(page.body).not.toContain('PRIVATE_APPLICATION')
+    expect(page.body).not.toContain('PRIVATE_BOOT_DATA')
+    expect(page.headers['set-cookie']).toBeUndefined()
+    const head = await send('/?login=qr', 'HEAD', headers)
+    expect(head.status).toBe(200)
+    expect(head.body).toBe('')
+    expect(service.status(ticket.id).ticket).toBe('pending')
+  }
+  expect(renderedPeers).toHaveLength(rendered)
+  const exchanged = await send('/?login=qr', 'POST', {
+    'content-type': 'text/plain', cookie: authenticated,
+  }, entry.hash.slice(1))
+  expect(exchanged.status).toBe(204)
+  expect(cookie(exchanged)).toMatch(/^dsh-remote-/u)
+  expect(service.status(ticket.id).ticket).toBe('used')
+})
+
 it('keeps source refusals outside the root page and invitation exchange', async () => {
   const { ctx, publicUrl, send, service, renderedPeers } = await mounted()
   const ticket = service.create()
@@ -140,13 +177,16 @@ it('keeps source refusals outside the root page and invitation exchange', async 
   ]) {
     const page = await send('/', 'GET', headers)
     expect(page.status).toBe(403)
+    const qrPage = await send('/?login=qr', 'GET', headers)
+    expect(qrPage.status).toBe(403)
+    expect(qrPage.body).not.toContain('<html')
     expect(page.body).not.toContain('<html')
-    expect((await send('/remote-login', 'POST', { 'content-type': 'text/plain', ...headers }, secret)).status).toBe(403)
+    expect((await send('/?login=qr', 'POST', { 'content-type': 'text/plain', ...headers }, secret)).status).toBe(403)
     expect(service.status(ticket.id).ticket).toBe('pending')
   }
   expect(authenticate).not.toHaveBeenCalled()
   expect(renderedPeers).toHaveLength(0)
-  const exchanged = await send('/remote-login', 'POST', { 'content-type': 'text/plain', origin: publicUrl.slice(0, -1) }, secret)
+  const exchanged = await send('/?login=qr', 'POST', { 'content-type': 'text/plain', origin: publicUrl.slice(0, -1) }, secret)
   expect(exchanged.status).toBe(204)
 })
 
@@ -232,7 +272,7 @@ it('keeps copied Token links and Remote credentials independent across provider 
   expect(ctx.connection.admit({ headers: { host: authority, cookie: tokenCookie } })).toEqual({ rejection: 401 })
   expect((await send('/', 'GET', { cookie: remoteCookie })).status).toBe(200)
   const otherTicket = owner(ctx).create()
-  expect((await send('/remote-login', 'POST', { 'content-type': 'text/plain' }, new URL(otherTicket.url).hash.slice(1))).status).toBe(204)
+  expect((await send('/?login=qr', 'POST', { 'content-type': 'text/plain' }, new URL(otherTicket.url).hash.slice(1))).status).toBe(204)
 })
 
 it('trusts an explicitly admitted in-process Peer without authenticating it again', async () => {
@@ -339,15 +379,15 @@ it('does not write a second response when an applicant disconnects during its cr
   const entered = Promise.withResolvers<{ readonly response: ServerResponse; readonly writes: () => number }>()
   const handled = Promise.withResolvers<undefined>()
   ctx.on('webserver/request', async (request, response, next) => {
-    if (request.url !== '/remote-login') { await next(); return }
+    if (request.url !== '/?login=qr') { await next(); return }
     const writes = vi.spyOn(response, 'writeHead')
     entered.resolve({ response, writes: () => writes.mock.calls.length })
     try { await next() } finally { handled.resolve(undefined) }
-  })
+  }, { prepend: true })
   const ticket = service.create()
   const secret = new URL(ticket.url).hash.slice(1)
   const errors: Error[] = []
-  const request = httpRequest(new URL('/remote-login', origin), {
+  const request = httpRequest(new URL('/?login=qr', origin), {
     method: 'POST', headers: { host: authority, origin: publicUrl.slice(0, -1), 'content-type': 'text/plain' },
   })
   request.on('error', error => errors.push(error))
@@ -361,7 +401,7 @@ it('does not write a second response when an applicant disconnects during its cr
     expect(accepted.writes()).toBe(0)
     expect(errors.every(error => Reflect.get(error, 'code') === 'ECONNRESET')).toBe(true)
     expect(service.status(ticket.id).ticket).toBe('pending')
-    const completed = await send('/remote-login', 'POST', { 'content-type': 'text/plain' }, secret)
+    const completed = await send('/?login=qr', 'POST', { 'content-type': 'text/plain' }, secret)
     expect(completed.status).toBe(204)
   } finally {
     request.destroy()
@@ -372,10 +412,12 @@ it('does not write a second response when an applicant disconnects during its cr
 it('reports provider faults as unavailable without rendering a login page or private data', async () => {
   const { ctx, send, renderedPeers } = await mounted()
   ctx.connection.authentication.register({ authenticate() { throw new Error('unavailable fixture provider') } })
-  const page = await send('/')
-  expect(page.status).toBe(503)
-  expect(page.body).not.toContain('<html')
-  expect(page.body).not.toContain('PRIVATE_APPLICATION')
-  expect(page.body).not.toContain('PRIVATE_BOOT_DATA')
+  for (const path of ['/', '/?login=qr']) {
+    const page = await send(path)
+    expect(page.status).toBe(503)
+    expect(page.body).not.toContain('<html')
+    expect(page.body).not.toContain('PRIVATE_APPLICATION')
+    expect(page.body).not.toContain('PRIVATE_BOOT_DATA')
+  }
   expect(renderedPeers).toHaveLength(0)
 })
