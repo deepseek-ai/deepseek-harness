@@ -1,6 +1,7 @@
 /** Searchable editable shortcut reference and its General Settings row. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Button, IconCloseOutlineRegular, IconRefreshOutlineRegular, Modal, ShortcutKeys, Tooltip, Toast, focusWithoutRing, isBehindModal, rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Button, IconCloseOutlineRegular, IconRefreshOutlineRegular, Modal, ShortcutKeys, Tooltip, Toast, focusWithoutRing, isBehindModal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot, PropsStore } from '@deepseek-ai/dsh-client-store'
 import type { ShortcutCatalogEntry, ShortcutPlatform, Shortcuts } from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -133,7 +134,7 @@ export function ShortcutReference({
     if (open && input !== null && !isBehindModal(input)) focusWithoutRing(input)
   }, [open, focusRequest])
   // Stop stays after the other fixed input actions.
-  const entries = [
+  const entryIndex = useMemo(() => new TextSearchIndex([
     ...catalog.map(row => ({
       ...row,
       names: [...row.aliases, row.keys.filter(key => key !== '+').join('+'), row.keys.filter(key => key !== '+').join(''), row.aria ?? '', row.aria?.replace('Meta', 'Cmd') ?? ''],
@@ -142,9 +143,8 @@ export function ShortcutReference({
     ...fixedCatalog.map(row => ({ ...row, names: [row.id, row.keys.join(' ')] })),
   ].sort((left, right) => Number(left.id === 'response.stop') - Number(right.id === 'response.stop')
     || (coreActionOrder.get(left.id) ?? coreActionOrder.size) - (coreActionOrder.get(right.id) ?? coreActionOrder.size)
-    || Number(left.id > right.id) - Number(left.id < right.id))
-  const ranked = rankByName(entries.flatMap(row => row.names.map(name => ({ name, label: row.label, row }))), query.trim())
-  const matches = [...new Set(ranked.map(match => match.row))]
+    || Number(left.id > right.id) - Number(left.id < right.id)), row => ({ fuzzy: [row.label, ...row.names] })), [catalog, fixedCatalog])
+  const matches = entryIndex.search(query)
   const modifiedCount = Object.keys(config.document.profiles[`${runtime}:${platform}`] ?? {}).length
   useLayoutEffect(() => {
     const input = search.current

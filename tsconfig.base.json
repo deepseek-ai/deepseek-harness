@@ -416,6 +416,7 @@
       "@deepseek-ai/dsh-experimental-liveshare/viewer-declarations": ["./packages/experimental/liveshare/src/viewer-declarations.ts"],
       "@deepseek-ai/dsh-experimental-liveshare-protocol": ["./packages/experimental/liveshare-protocol/src"],
       "@deepseek-ai/dsh-util-crypto": ["./packages/util/crypto/src"],
+      "@deepseek-ai/dsh-util-text-search": ["./packages/util/text-search/src"],
       "@deepseek-ai/dsh-util-values": ["./packages/util/values/src"],
       "@deepseek-ai/dsh-util-code-language": ["./packages/util/code-language/src"],
       // util/ folders are role-named without the util- prefix their npm names carry,
