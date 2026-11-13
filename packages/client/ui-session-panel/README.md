@@ -44,7 +44,7 @@ Plugins share a title by registering rows in a section owner's row slot. The bui
 
 Marks that must stay visible while the panel is hidden, such as an attention dot, go in the `conversation.session.panel.indicator` list. Each occupant is one element: the toggle sizes it to a 6px dot at the glyph's corner, and the occupant sets its `background` and includes text that names it, which becomes part of the toggle's accessible name. Occupants overlap, and a higher `order` paints above a lower one. The `panelShown` owner prop lets a mark that only repeats the panel's content render nothing while the panel shows.
 
-Summary rows from every package use the `PanelRow` primitive, so icon, text, and trailing areas line up across sections; put a row's More button in its `menu` so every row highlights as a whole and reveals its actions the same way.
+The plugin offers its row as the `conversation.session.panel.row` Component Factory. Sections and Environment rows from every package render their rows with `renderFactorySlot('conversation.session.panel.row', props)`, so icon, text, and trailing areas line up across sections. A row has a 16px decorative icon that inherits the row ink, single-line content that clips with an ellipsis, and an optional trailing value or control. `menu` holds row actions, such as a More button, after the trailing area in a 16px column whose center sits 14px from the row's end; a plain `button` there gets a 24px target and a tertiary glyph that darkens on hover without a fill, so it needs no tooltip of its own. They show on row hover, on focus inside the row, and while one has its menu open, and always without hover. `onActivate` makes the whole row one button while the trailing area and the menu stay separate controls; a row with an action or row actions fills as a whole on hover and while one of its menus is open. `className` adds to the row's class, and `attributes`, such as `role`, `data-*` markers, and context-menu trigger props, reach the row element; other props are ignored.
 
 -----
 
@@ -60,12 +60,13 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 
 | File | Role |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the toggle, the panel, the Environment section, and the project row |
+| [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the row Factory, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, the shared visibility state, and each Session's room to dock |
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
+| [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | The panel row behind the `conversation.session.panel.row` Factory |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
 
 </details>
@@ -78,7 +79,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 - [Web Client Slots](../../../docs/subsystems/slots.md) — list, keyed, and owner-prop semantics the sections rely on.
 - [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its end gutter source.
 - [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the Session header utilities.
-- [`dsh-client-ui-primitives`](../ui-primitives/README.md#component-catalog) — `PanelRow` and `PathLabel`.
+- [`dsh-client-ui-primitives`](../ui-primitives/README.md#component-catalog) — `Button`, `Tooltip`, the icons, and the modal and composition guards.
 
 -----
 

@@ -1,7 +1,8 @@
 /**
  * Session panel plugin, browser half: a Session header toggle and a floating
  * panel in the Chat View's aside. The panel draws the titles of the sections
- * other plugins register and ships the Environment section with the working
+ * other plugins register, offers the row Component Factory those sections
+ * render their rows with, and ships the Environment section with the working
  * folder row.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -13,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { EnvironmentSection } from './EnvironmentSection.tsx'
+import { PanelRow } from './PanelRow.tsx'
 import { ProjectRow } from './ProjectRow.tsx'
 import { SessionPanel } from './SessionPanel.tsx'
 import { SessionPanelToggle } from './SessionPanelToggle.tsx'
@@ -28,6 +30,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+export type { PanelRowAttributes, PanelRowProps } from './PanelRow.tsx'
 export type {
   EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
   SessionPanelPresentation, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
@@ -38,8 +41,8 @@ export type {
 export const inject = ['slots', 'locale', 'remote']
 
 /**
- * Client plugin body: register the dictionaries, the header toggle, the panel,
- * and the Environment section with its project row.
+ * Client plugin body: register the dictionaries, the row Component Factory,
+ * the header toggle, the panel, and the Environment section with its project row.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -52,6 +55,8 @@ export function apply(ctx: ClientContext): void {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
   }
+
+  ctx.slots.registerFactory({ name: 'conversation.session.panel.row', scope: 'root' }, PanelRow)
 
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities',

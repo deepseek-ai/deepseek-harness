@@ -44,7 +44,7 @@ kind: "package-reference"
 
 面板隐藏时也要可见的标记（例如需要处理的红点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。
 
-各包的摘要行都使用 `PanelRow` 原语，使不同分栏的图标、文字与尾部区域对齐；行的「更多」按钮放进它的 `menu`，各行就以同样的方式整行高亮并显示操作。
+插件把面板的行作为 Component Factory `conversation.session.panel.row` 提供。各包的分栏与环境行都用 `renderFactorySlot('conversation.session.panel.row', props)` 渲染自己的行，使不同分栏的图标、文字与尾部区域对齐。每行有一个沿用行文字颜色的 16px 装饰图标、单行内容（溢出时以省略号截断），以及可选的尾部数值或控件。`menu` 放在尾部区域之后的行操作（例如「更多」按钮），位于 16px 宽的一列，中心距行末端 14px；其中的普通 `button` 有 24px 点击区和三级文字色图标，悬停时图标变深、没有底色，因此不需要自己的 tooltip。鼠标悬停在行上、焦点在行内或其菜单打开时显示，没有悬停能力的设备上始终显示。传入 `onActivate` 时整行成为一个按钮，尾部区域与 `menu` 仍是各自独立的控件；带操作或行操作的行在悬停时以及菜单打开期间整行填充。`className` 追加到行的类名上，`attributes`（例如 `role`、`data-*` 标记与右键菜单触发属性）落在行元素上，其余属性被忽略。
 
 -----
 
@@ -60,12 +60,13 @@ kind: "package-reference"
 
 | 文件 | 作用 |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
+| [`src/client/index.ts`](src/client/index.ts) | 字典、行 Factory、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | 停靠阈值、呈现方式、共享可见性状态与每个会话的停靠空间 |
 | [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、分栏标题与 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
+| [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | `conversation.session.panel.row` Factory 渲染的面板行 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
 
 </details>
@@ -78,7 +79,7 @@ kind: "package-reference"
 - [Web Client Slots](../../../docs/subsystems/slots.zh.md)——分栏依赖的 list、keyed 与 owner props 语义。
 - [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership)——`conversation.chat.aside` 图层及其末端留白数据源。
 - [`dsh-client-ui-conversation`](../ui-conversation/README.zh.md)——会话标题栏工具区。
-- [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md#component-catalog)——`PanelRow` 与 `PathLabel`。
+- [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md#component-catalog)——`Button`、`Tooltip`、图标，以及模态层与输入法组合的判断。
 
 -----
 

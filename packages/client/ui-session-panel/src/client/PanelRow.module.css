@@ -1,4 +1,4 @@
-/* One summary-panel fact: [16px icon] gap 8 [content 13/28] [trailing] [menu].
+/* One Session panel fact: [16px icon] gap 8 [content 13/28] [trailing] [menu].
    The icon inherits the row ink so a fact and its glyph share one foreground.
    A row with an action or row actions highlights as a whole; the action's
    button covers the row, and the trailing area and menu sit above it. The

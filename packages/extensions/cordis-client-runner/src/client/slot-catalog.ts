@@ -2469,7 +2469,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.environment.row\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.environment.row\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:44',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:57',
   },
   {
     key: 'conversation.session.panel.indicator',
@@ -2529,7 +2529,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.indicator\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.indicator\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:37',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:50',
   },
   {
     key: 'conversation.session.panel.section',
@@ -2593,7 +2593,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.section\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.section\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:22',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:35',
   },
   {
     key: 'conversation.session.panel.section.actions',
@@ -2639,7 +2639,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.section.actions\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.section.actions\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:28',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:41',
   },
   {
     key: 'conversation.trajectory.images',

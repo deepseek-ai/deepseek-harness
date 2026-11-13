@@ -57,8 +57,9 @@ describe('ui-session-panel browser half', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote'])
   })
 
-  it('registers the toggle first among the header utilities, the panel in the Chat aside, the Environment section, and the project row', async () => {
+  it('registers the row Factory, the toggle first among the header utilities, the panel in the Chat aside, the Environment section, and the project row', async () => {
     const { ctx } = await bench()
+    expect(ctx.slots.snapshot('factory:conversation.session.panel.row')).toHaveLength(1)
     const toggle = ctx.slots.entries('conversation.session.header.utilities').find(entry => entry.options.id === 'session-panel')
     expect(toggle?.options.order).toBe(-10)
     expect(ctx.slots.entries('conversation.chat.aside')).toHaveLength(1)
@@ -124,6 +125,7 @@ describe('ui-session-panel browser half', () => {
   it('removes every contribution with the fiber (HMR safety)', async () => {
     const { ctx, fiber } = await bench()
     await fiber.dispose()
+    expect(ctx.slots.snapshot('factory:conversation.session.panel.row')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.chat.aside')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.session.panel.section')).toHaveLength(0)

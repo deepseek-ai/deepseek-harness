@@ -1,12 +1,20 @@
-// PanelRow: one icon-led fact row of a summary panel, shared by every
-// contributor so rows from different packages keep one geometry.
+/**
+ * One icon-led fact row of the Session panel. The plugin offers it as the
+ * `conversation.session.panel.row` Component Factory, so rows that other
+ * packages contribute keep one geometry.
+ */
 
 import type { HTMLAttributes, ReactNode } from 'react'
 import clsx from 'clsx'
 import css from './PanelRow.module.css'
 
-/** Props of one summary-panel row. */
-export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'children' | 'onClick'> {
+/** Attributes of the row element, such as `role`, `data-*` markers, and a context-menu trigger's handlers. */
+export type PanelRowAttributes =
+  Omit<HTMLAttributes<HTMLElement>, 'children' | 'className' | 'onClick'>
+  & { readonly [marker: `data-${string}`]: string | undefined }
+
+/** Props of one Session panel row. */
+export interface PanelRowProps {
   /** Leading 16px glyph; decorative, so the row text carries the meaning. */
   readonly icon: ReactNode
   /** Primary single-line content; overflow clips with an ellipsis. */
@@ -21,16 +29,22 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
   readonly menu?: ReactNode
   /** Make the whole row one button with this action; the trailing area and the menu stay separate controls above it. */
   readonly onActivate?: (() => void) | undefined
+  /** Class of the row element, added to the row's own. */
+  readonly className?: string | undefined
+  /** Attributes of the row element; the row keeps its own class and `data-panel-row`. */
+  readonly attributes?: PanelRowAttributes | undefined
 }
 
 /**
- * Render one summary-panel row: icon, single-line content, an optional
+ * Render one Session panel row: icon, single-line content, an optional
  * trailing area, and optional row actions. A row with an action or row
  * actions highlights as a whole on hover and while one of its menus is open.
- * @param props - row content, the optional action and row actions, and attributes for the outer element.
+ * Props outside {@link PanelRowProps}, such as the ones a Factory occurrence
+ * adds, are ignored.
+ * @param props - row content, the optional action and row actions, and attributes for the row element.
  * @returns the row element.
  */
-export function PanelRow({ icon, children, trailing, menu, onActivate, className, ...attributes }: PanelRowProps) {
+export function PanelRow({ icon, children, trailing, menu, onActivate, className, attributes }: PanelRowProps): ReactNode {
   const body = (
     <>
       <span className={css.icon} aria-hidden="true">{icon}</span>
