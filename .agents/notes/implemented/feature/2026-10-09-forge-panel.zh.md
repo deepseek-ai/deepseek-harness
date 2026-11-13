@@ -14,7 +14,7 @@ Status: implemented
 
 评审与工作树控件服务于同一个代码修改流程。统一插件入口让用户可以一次启用这些能力，无需根据底层包的拆分判断应该开启哪张卡片。包与两套工作树服务仍保持独立，分别负责会话开始前和对话中创建工作树的流程。
 
-Remote 通过 Session 的子进程提供方，按其[解析出的权限与查询限制](../bug-fix/2026-10-28-forge-git-session-permissions.zh.md)检查检出，因此它读到的与 Session 命令看到的相同。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
+Remote 通过 Session 的子进程提供方，按其[解析出的权限与查询限制](../bug-fix/2026-10-28-forge-git-session-permissions.zh.md)检查检出，因此它读到的与 Session 命令看到的相同。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `workspace-root/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
 
 状态轮询跟随面板订阅：只有该 Session 的某个界面挂载时才监听其绑定，注册表停止轮询无人监听的变更请求。每张卡片保留最近一次轮询得到的快照，因此短暂的失败不会让标题与编号消失。Session 只有一个打开的变更请求时，它的卡片默认展开；有多个时全部折叠；用户第一次展开或收起卡片后，以用户的选择为准。
 
