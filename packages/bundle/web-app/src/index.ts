@@ -4,7 +4,7 @@
  * manifest field). The plugin owns the browser-surface glue: it resolves
  * the built frontend dist (workspace knowledge of this bundle, never user
  * config), mounts the `frontend-static` fallback owner over it, registers the
- * bash-visible web runtime variable, the process-token URL line, and the
+ * bash-visible web runtime variable, the entry URL lines, and the
  * default-browser handoff, and provides the `webApp` service. An advertised
  * `publicUrl` replaces the published bind-address URL. Non-loopback
  * HTTP binds trigger an exposure warning. App command-line values arrive
@@ -15,12 +15,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import * as FrontendStatic from '@deepseek-ai/dsh-host-frontend-static'
-import { bindUrlHost, isLoopbackHost } from '@deepseek-ai/dsh-host-webserver'
+import { bindUrlHost, isLoopbackHost, type WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
 import { launchedThroughSsh, launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -55,7 +55,7 @@ export const inject = ['webServer']
 export interface Config {
   /** Permit default-browser handoff after the Loader tree settles; an SSH launch suppresses it. */
   openBrowser: boolean
-  /** Print the URL line on activation; a non-interactive layer can turn it off. */
+  /** Print the URL lines on activation; a non-interactive layer can turn them off. */
   printUrl: boolean
   /**
    * Register the `DSH_WEB_URL` bash variable naming this GUI. A one-shot
@@ -143,18 +143,26 @@ function spawnBrowserLauncher(url: string): ChildProcess {
 }
 
 /** Hand one URL to the operating system's default browser. */
-async function openBrowser(url: string): Promise<void> {
+async function openBrowser(url: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   const launcher = spawnBrowserLauncher(url)
   let launcherStderr = ''
   launcher.stderr?.setEncoding('utf8')
   launcher.stderr?.on('data', (chunk: string) => { launcherStderr += chunk })
   await new Promise<void>((resolve, reject) => {
+    const abort = (): void => { launcher.kill() }
     function onError(error: Error): void {
       launcher.off('close', onClose)
+      signal?.removeEventListener('abort', abort)
       reject(error)
     }
     function onClose(code: number | null): void {
       launcher.off('error', onError)
+      signal?.removeEventListener('abort', abort)
+      if (signal?.aborted) {
+        reject(signal.reason instanceof Error ? signal.reason : new Error('Browser handoff cancelled', { cause: signal.reason }))
+        return
+      }
       if (code !== 0) {
         const firstLine = launcherStderr.trim().split(/\r?\n/u)[0]
         const reason = firstLine === undefined || firstLine === ''
@@ -168,18 +176,20 @@ async function openBrowser(url: string): Promise<void> {
     }
     launcher.once('error', onError)
     launcher.once('close', onClose)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
   })
 }
 
 /** Test hooks for the built dist and native browser handoff; production never mutates them. */
 export const internals: {
   resolveDistIndex: () => string
-  openBrowser: (url: string) => Promise<void>
+  openBrowser: (url: string, signal?: AbortSignal) => Promise<void>
 } = { resolveDistIndex, openBrowser }
 
 /**
- * Mount the Web runtime: dist serving, the bash runtime variable, the URL
- * line, and the default-browser handoff.
+ * Mount the Web runtime: dist serving, the bash runtime variable, entry URL
+ * publication, and the default-browser handoff.
  * @param ctx - plugin context carrying the webServer service.
  * @param config - validated {@link Config}.
  */
@@ -216,46 +226,40 @@ export function apply(ctx: Context, config: Config): void {
     })
   }
   if (config.printUrl || handoffBrowser) {
-    ctx.inject(['connection'], (connectionCtx) => {
-      // The URL line and browser handoff are readiness signals: supervisors RPC
-      // as soon as they observe the line, while a browser requests the page as
-      // soon as it opens. Neither may run while sibling rows such as the /api
-      // route owner are still mounting. Await Loader settlement first; a
-      // hand-built tree without a Loader is already the complete tree.
-      const announceReady = (): void => {
-        if (ANNOUNCED_ROOTS.has(connectionCtx.root)) return
-        const webUrl = appRootUrl()
-        const authenticatedUrl = connectionCtx.connection.authenticatedUrl(webUrl)
-        ANNOUNCED_ROOTS.add(connectionCtx.root)
-        if (config.printUrl) {
-          console.log(`dsh web: ${authenticatedUrl}`)
-        }
-        if (handoffBrowser) {
-          console.log('dsh web: opening the default browser; pass --no-open to disable')
-          void internals.openBrowser(authenticatedUrl).catch((error: unknown) => {
-            const reason = error instanceof Error ? error.message : String(error)
-            console.error(`web-app: could not open the default browser because ${reason}; use the dsh web URL printed at startup`)
-          })
-        }
+    const lifetime = new AbortController()
+    let opening: Promise<void> | undefined
+    ctx.effect(() => async () => {
+      lifetime.abort()
+      await opening
+    }, 'web-app: startup handoff')
+    const announceReady = (): void => {
+      if (lifetime.signal.aborted || ctx.get('webServer') === undefined || ANNOUNCED_ROOTS.has(ctx[Context.root])) return
+      const entries: WebEntryUrl[] = []
+      ctx.emit(ctx.webServer, 'webserver/entry-url', appRootUrl(), entries)
+      ANNOUNCED_ROOTS.add(ctx[Context.root])
+      if (config.printUrl) {
+        for (const entry of entries) console.log(`${entry.label}: ${entry.url}`)
       }
-      // This row's own activation can precede a sibling failure. The app owns
-      // readiness by waiting for its Loader tree, or announces at once in a
-      // hand-built tree without Loader.
-      const settled = connectionCtx.get('loader')?.await()
-      if (settled === undefined) announceReady()
-      else {
-        void settled.then(async () => {
-          await auditStartupEntries(connectionCtx.root, 'dsh web', () => {})
-          // The tree can be disposed while the boot was in flight (early
-          // SIGTERM); a URL line or browser tab for a dead server would only
-          // mislead, and reading torn-down services would turn a clean shutdown
-          // into a crash.
-          if (connectionCtx.get('webServer') !== undefined
-            && connectionCtx.get('connection') !== undefined) announceReady()
-        }).catch(() => {
-          // Boot owns the failure diagnostic; readiness remains unpublished.
+      const entry = entries.find(entry => entry.open)
+      if (handoffBrowser && entry !== undefined) {
+        console.log('dsh web: opening the default browser; pass --no-open to disable')
+        opening = internals.openBrowser(entry.url, lifetime.signal).catch((error: unknown) => {
+          if (lifetime.signal.aborted) return
+          const reason = (error instanceof Error ? error.message : String(error)).replaceAll(entry.url, '[login URL]')
+          console.error(`web-app: could not open the default browser because ${reason}; use the dsh web URL printed at startup`)
         })
       }
-    })
+    }
+    const settled = ctx.get('loader')?.await()
+    if (settled === undefined) announceReady()
+    else {
+      void settled.then(async () => {
+        if (lifetime.signal.aborted) return
+        await auditStartupEntries(ctx[Context.root], 'dsh web', () => {})
+        announceReady()
+      }).catch(() => {
+        // The Loader/startup audit owns failure diagnostics; failed startup remains unpublished.
+      })
+    }
   }
 }

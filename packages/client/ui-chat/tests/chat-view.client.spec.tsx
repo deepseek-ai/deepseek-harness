@@ -33,6 +33,7 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-s
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type {} from '@deepseek-ai/dsh-working-directory/client'
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -789,6 +790,44 @@ describe('Chat node rendering', () => {
     const view = render(<h.ChatView {...h.props} />)
     fireEvent.click(view.getByRole('button', { name: 'source' }))
     expect(h.openFile).toHaveBeenCalledWith('src/index.ts', { line: 24 })
+  })
+
+  it('resolves each message\'s relative images and links from the directory current when it was written', () => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'draw'), assistant(2, '![before](tmp/a.png) [notes](notes.md)', 1),
+        user(6, 'again'), assistant(7, '![after](tmp/a.png) [notes again](notes.md)', 2),
+      ],
+      turnEnds: new Map([[1, 2], [2, 7]]),
+    })
+    const sessions = createSnapshotStore<SessionListState>({
+      ids: [SID], phase: 'ready', projectionsBySession: {},
+      byId: { [SID]: { id: SID, displayTitle: 'proj', cwd: '/proj', running: false, blank: false, updatedAt: 1, retainedBy: {} } },
+    })
+    h.props.useSessions = bindSnapshotSelector(sessions)
+    const projections = createSnapshotStore<Record<string, unknown>>({
+      workingDirectory: '/proj/w',
+      workingDirectoryHistory: [{ seq: 0, cwd: '/proj' }, { seq: 4, cwd: '/proj/w' }],
+    })
+    const useProjections = bindSnapshotSelector(projections)
+    const useOther = h.props.useProjection
+    h.props.useProjection = (key: 'inbox', selector?: (value: never) => unknown) => {
+      const value: unknown = useProjections(values => values[key])
+      const other: unknown = useOther(key)
+      const picked = key in projections.getSnapshot() ? value : other
+      return selector === undefined ? picked : selector(picked as never)
+    }
+    const view = render(<h.ChatView {...h.props} />)
+    const source = (name: string) => new URL(view.getByRole('img', { name }).getAttribute('src')!, document.baseURI).searchParams.get('path')
+    expect(source('before')).toBe('/proj/tmp/a.png')
+    expect(source('after')).toBe('/proj/w/tmp/a.png')
+    fireEvent.click(view.getByRole('button', { name: 'notes' }))
+    expect(h.openFile).toHaveBeenLastCalledWith('/proj/notes.md')
+    fireEvent.click(view.getByRole('button', { name: 'notes again' }))
+    expect(h.openFile).toHaveBeenLastCalledWith('/proj/w/notes.md')
+    // Without a history, relative destinations fall back to the current directory.
+    act(() => { projections.set({ workingDirectory: '/proj/w', workingDirectoryHistory: undefined }) })
+    expect(source('before')).toBe('/proj/w/tmp/a.png')
   })
 
   it('threads the injected file-mention vocabulary into the closing prose only', () => {
@@ -3723,6 +3762,7 @@ describe('ChatView', () => {
     const own = view.getByText('own question')
     expect(inherited.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(separator.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(separator.querySelector('[data-icon="dsw-icon-branch-outline-regular"]')).not.toBeNull()
   })
 
   it('disables fork when the indexed Turn has a later steering Node', () => {

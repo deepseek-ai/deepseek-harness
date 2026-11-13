@@ -3,17 +3,15 @@ import { PassThrough } from 'node:stream'
 import type { AddressInfo } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
 import type { IndexInjection, WebServer, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
+import * as Connection from '@deepseek-ai/dsh-client-connection'
 import open from 'open'
 import WebSocket, { type RawData } from 'ws'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, inject, name, startInspector } from '../src/index.ts'
 import { isPlainObject } from '../src/shared/json.ts'
 import { INSPECTOR_BOOTSTRAP_PATH } from '../src/shared/web.ts'
-
-/** The Peer an index render speaks for; this listener reads no field of it. */
-const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
+import { dispatchUpgrade } from './fixtures/web-carrier.ts'
 
 vi.mock('open', () => ({ default: vi.fn(async () => undefined), apps: { chrome: 'chrome' } }))
 
@@ -41,12 +39,11 @@ describe('experimental Inspector Host plugin', () => {
     const registerUpgrade = vi.fn<(_route: WebUpgradeRoute) => () => void>(() => releaseUpgrade)
     const routes: Pick<WebServer, 'register' | 'registerUpgrade'> = { register: registerRoute, registerUpgrade }
     let authenticated = false
-    const auth: Pick<BrowserAuth, 'isAuthenticated' | 'authenticateApi'> = {
-      isAuthenticated: () => authenticated,
-      authenticateApi: () => undefined,
-    }
     context.provide('webServer', routes as WebServer)
-    const connection = new HostConnectionService(context, [], auth as BrowserAuth)
+    await context.plugin(Connection).await()
+    const connection = context.connection
+    registerRoute.mockClear()
+    context.connection.authentication.register({ authenticate: () => authenticated ? connection.browserPeer : undefined })
     const fiber = context.plugin(
       { name, inject: [...inject], Config, apply },
       { port: 0, captureFetch: false },
@@ -54,7 +51,7 @@ describe('experimental Inspector Host plugin', () => {
     await fiber.await()
 
     const rows: IndexInjection[] = []
-    context.emit('webserver/index-inject', rows, PAGE_PEER)
+    context.emit('webserver/index-inject', rows, connection.browserPeer)
     const bootstrap = rows.find(row => row.kind === 'global' && row.name === '__DSH_INSPECTOR__')
     expect(bootstrap).toMatchObject({ kind: 'global', name: '__DSH_INSPECTOR__' })
     expect(log).toHaveBeenCalledWith(expect.stringMatching(/^dsh inspector: devtools:\/\//u))
@@ -64,14 +61,14 @@ describe('experimental Inspector Host plugin', () => {
     const upgrade = registerUpgrade.mock.calls[0]![0]
     for (const [origin, status] of [['http://127.0.0.1', 401], ['http://untrusted.invalid', 403]] as const) {
       const socket = new PassThrough()
-      await upgrade.handler({ headers: { host: '127.0.0.1', origin } } as IncomingMessage, socket, Buffer.alloc(0))
+      await dispatchUpgrade(context, upgrade, { headers: { host: '127.0.0.1', origin } } as IncomingMessage, socket, Buffer.alloc(0))
       expect(String(socket.read())).toContain(`HTTP/1.1 ${status}`)
       socket.destroy()
     }
     authenticated = true
     for (const query of ['clientSourceId=', 'clientSourceId=a&clientSourceId=b']) {
       const socket = new PassThrough()
-      await upgrade.handler({ url: `/inspector/devtools/cdp?${query}`, headers: { host: '127.0.0.1', origin: 'http://127.0.0.1' } } as IncomingMessage, socket, Buffer.alloc(0))
+      await dispatchUpgrade(context, upgrade, { url: `/inspector/devtools/cdp?${query}`, headers: { host: '127.0.0.1', origin: 'http://127.0.0.1' } } as IncomingMessage, socket, Buffer.alloc(0))
       expect(String(socket.read())).toContain('HTTP/1.1 400')
       socket.destroy()
     }
@@ -117,10 +114,10 @@ describe('experimental Inspector Host plugin', () => {
     await fiber.dispose()
     expect(releaseRoute).toHaveBeenCalledOnce()
     expect(releaseUpgrade).toHaveBeenCalledOnce()
-    expect(rows).toHaveLength(1)
+    expect(rows.filter(row => row.kind === 'global' && row.name === '__DSH_INSPECTOR__')).toHaveLength(1)
     const afterDispose: IndexInjection[] = []
-    context.emit('webserver/index-inject', afterDispose, PAGE_PEER)
-    expect(afterDispose).toEqual([])
+    context.emit('webserver/index-inject', afterDispose, connection.browserPeer)
+    expect(afterDispose.some(row => row.kind === 'global' && row.name === '__DSH_INSPECTOR__')).toBe(false)
     expect((await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)).status).toBe(404)
   })
 
@@ -129,7 +126,8 @@ describe('experimental Inspector Host plugin', () => {
     context = new Context()
     const routes: Pick<WebServer, 'register' | 'registerUpgrade'> = { register: () => () => {}, registerUpgrade: () => () => {} }
     context.provide('webServer', routes as WebServer)
-    new HostConnectionService(context, [], {} as BrowserAuth)
+    new ConnectionAuthentication(context)
+    new HostConnectionService(context, [])
     context.provide('inspector', {
       publish: () => undefined,
       cordis: { getTree: () => Promise.reject(new Error('unused test service')) },
@@ -151,7 +149,8 @@ describe('experimental Inspector Host plugin', () => {
     const routes: Pick<WebServer, 'register' | 'registerUpgrade'> = { register: () => () => {}, registerUpgrade: () => () => {} }
     context.provide('webServer', routes as WebServer)
     context.provide('cmdlineArgs', { get: () => ['--inspect'] })
-    const connection = new HostConnectionService(context, [], {} as BrowserAuth)
+    new ConnectionAuthentication(context)
+    const connection = new HostConnectionService(context, [])
     vi.mocked(open).mockRejectedValueOnce(new Error('Chrome unavailable'))
     const fiber = context.plugin({ name, inject: [...inject], Config, apply }, { port: 0, captureFetch: false })
     await fiber.await()

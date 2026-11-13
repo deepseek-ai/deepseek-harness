@@ -760,7 +760,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly browserPeer: PeerScope',
-        description: 'The owner Peer every authenticated browser connection shares.',
+        description: 'Connection-owned Peer for trusted in-process callers, not network authentication.',
         parameters: [],
       },
       {
@@ -775,40 +775,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Fetch handler for trusted, authenticated requests.',
       },
       {
-        signature: 'requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection',
-        description: 'Apply Connection\'s Host/Origin checks and browser authentication to another Web route.',
-        parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
-        returns: 'rejection status, or undefined when the route may accept the request.',
-      },
-      {
         signature: 'admit(request: ConnectionTrustRequest): PeerAdmission',
-        description: 'Admit an HTTP request against its signed browser or API credential and live Peer.',
+        description: 'Apply Host/Origin checks and admit the first live Peer returned by a registered credential verifier.',
         parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
         returns: 'the credential\'s Peer, or the rejection status.',
       },
       {
         signature: 'createPeer(options: { readonly principal: Principal; readonly interactions?: \'answer\' | \'none\' }): PeerScope',
         description: 'Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.',
-        parameters: [{ name: 'options', description: 'fixed principal and optional interaction participation (default `answer`).' }],
+        parameters: [{ name: 'options', description: 'fixed principal and interaction participation (default answer).' }],
         returns: 'a new Peer distinct from every other Peer.',
       },
       {
-        signature: 'admitConnection(request: ConnectionTrustRequest): ConnectionAdmission',
-        description: 'Claim a physical socket for an API Peer; browser sockets share their owner Peer.',
-        parameters: [{ name: 'request', description: 'authenticated upgrade request headers.' }],
-        returns: 'the Peer and idempotent release, or 409 for duplicate API ownership. The carrier releases on socket termination or failed upgrade; release removes API admission synchronously without cancelling independent HTTP calls.',
+        signature: 'readonly authentication: ConnectionAuthentication',
+        description: 'Credential verifier sub-service; consumers inject `connection.authentication`.',
+        parameters: [],
+      },
+    ],
+  },
+  {
+    key: 'connection.authentication',
+    summary: 'Credential verifier registry whose registrations belong to the calling plugin.',
+    description: 'Credential verifier registry whose registrations belong to the calling plugin.',
+    methods: [
+      {
+        signature: 'register(provider: AuthenticationProvider): () => Promise<void>',
+        description: 'Add a credential verifier after the existing registrations.',
+        parameters: [{ name: 'provider', description: 'verifier owning its credential and Peer selection.' }],
+        returns: 'disposer withdrawing this registration; the calling scope also withdraws it on unload.',
       },
       {
-        signature: 'authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean',
-        description: 'Authenticate one frontend index request, owning a token redirect or 401. The cookie this mints is `Secure` when the mounted Web carrier serves TLS, which only that listener\'s protocol decides.',
-        parameters: [{ name: 'request', description: 'root or configured-index HTTP request.' }, { name: 'response', description: 'response owned when the result is false.' }],
-        returns: 'true only when the frontend may serve index.html.',
-      },
-      {
-        signature: 'authenticatedUrl(baseUrl: string): string',
-        description: 'Add the fresh process token to an ordinary Web application URL.',
-        parameters: [{ name: 'baseUrl', description: 'clean application URL whose authority and mount are preserved.' }],
-        returns: 'tokenized URL for initial login; a mount proxy strips its prefix before {@link authorizeIndex}.',
+        signature: 'authenticate(request: ConnectionTrustRequest): PeerAdmission',
+        description: 'Verify credentials without applying an HTTP response or source policy.',
+        parameters: [{ name: 'request', description: 'current carrier headers and cancellation facts.' }],
+        returns: 'the first live Peer, 401 if no provider accepts, or 503 when verification failed without success.',
       },
     ],
   },
@@ -1106,6 +1106,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'deepseekChatImport',
+    summary: 'Serves the owner-only export upload route and the limits the browser checks first.',
+    description: 'Serves the owner-only export upload route and the limits the browser checks first.',
+    methods: [
+      {
+        signature: '@Remote limits(signal: AbortSignal): DeepseekChatImportLimits',
+        description: 'Report the limits the browser checks before uploading. Only the owner may import, so every other principal is refused.',
+        parameters: [{ name: 'signal', description: 'Client cancellation or Remote withdrawal.' }],
+        returns: 'the largest accepted archive size.',
+        throws: ['{RemoteError} `deepseekChatImport/owner-only` for a caller that is not the owner.'],
+      },
+    ],
+  },
+  {
     key: 'deepseekLlmApiExtensions',
     summary: 'Registry of independently owned top-level fields for official DeepSeek requests.',
     description: 'Registry of independently owned top-level fields for official DeepSeek requests.',
@@ -1231,19 +1245,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'register(provider: ForgeProvider): () => Promise<void>',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
-        parameters: [{ name: 'provider', description: 'provider to serve `provider.forge`.' }],
+        parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
         returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
-        throws: ['when another provider already serves the same forge.'],
+        throws: ['when another provider already serves the same forge or one of the same hosts, compared without case.'],
+      },
+      {
+        signature: 'describe(forge: string): ForgeDescription | undefined',
+        description: 'Name a forge family and its change requests for readers.',
+        parameters: [{ name: 'forge', description: 'forge family name, such as `github`.' }],
+        returns: 'the registered provider\'s description, or undefined when no provider serves the family.',
       },
       {
         signature: 'repositoryFromRemote(url: string): ForgeRepository | undefined',
-        description: 'Map a Git remote URL to a repository through the first provider that serves it.',
+        description: 'Map a Git remote URL to a repository through the provider that serves its host.',
         parameters: [{ name: 'url', description: 'fetch or push URL as Git reports it.' }],
         returns: 'the repository, or undefined when no provider serves the URL.',
       },
       {
         signature: 'changeRequestFromUrl(url: string): ChangeRequestRef | undefined',
-        description: 'Map a change request web URL through the first provider that serves it.',
+        description: 'Map a change request web URL through the provider that serves its host.',
         parameters: [{ name: 'url', description: 'web URL of a pull or merge request.' }],
         returns: 'the change request, or undefined when no provider serves the URL.',
       },
@@ -1815,8 +1835,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forgeSession',
     summary: 'Session-scoped change request bindings.',
-    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from the results of the creation and reference commands that forge providers register through `registerCommands`, from `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
     methods: [
+      {
+        signature: 'registerCommands(rule: ForgeCommandRule): () => void',
+        description: 'Register the commands of one forge CLI as an effect on the calling fiber. A rule that changes the recognized rule set re-registers the `forgeChangeRequests` projection at the new set\'s state version, so every Session refolds its log with the new rules when next read, including commands that ran before the registration, and watchers receive the refolded bindings. Disposal does not change the recognized set: the rule keeps recognizing commands until the service restarts or another rule replaces its id or executable, so unloading a provider, including at shutdown, leaves the checkpointed state version unchanged. Only live registrations run reference lookups, so a disposed rule starts no CLI process; lookups that started before a change finish with the rules they started with.',
+        parameters: [{ name: 'rule', description: 'the CLI\'s executable, subcommands, change request page path, and selection.' }],
+        returns: 'the disposer that ends the registration.',
+        throws: ['when the rule is malformed, or a live registration has its id or executable.'],
+      },
       {
         signature: 'changeRequests(session: Session): SessionChangeRequest[]',
         description: 'List the change requests bound to a Session and not dismissed.',
@@ -3581,13 +3608,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async listCandidates( agent: Agent, query: string = \'\', limit: number = this.config.candidateLimit, signal?: AbortSignal, ): Promise<SessionReferenceCandidate[]>',
         description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.',
-        parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional case-insensitive session-id/cwd/title/display-title substring.' }, { name: 'limit', description: 'optional positive result cap.' }, { name: 'signal', description: 'optional cancellation boundary for host autocomplete teardown.' }],
+        parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional search text: label and display title match fuzzily, session id and working directory as substrings. Matches keep the working-directory affinity order; relevance breaks ties within it.' }, { name: 'limit', description: 'optional positive result cap.' }, { name: 'signal', description: 'optional cancellation boundary for host autocomplete teardown.' }],
         returns: 'candidates with canonical mention labels and presentation titles.',
       },
       {
         signature: '@Remote(\'candidates\') async remoteExportCandidates( agent: Agent, query: string, signal: AbortSignal, ): Promise<SessionReferenceMentionCandidate[]>',
         description: 'Remote face of listCandidates: the configured candidate limit applies, and every candidate carries the canonical mention a host inserts into the prompt draft.',
-        parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional case-insensitive session-id/cwd/title substring.' }, { name: 'signal', description: 'caller cancellation.' }],
+        parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional search text, matched as {@link listCandidates} matches it.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'mention-carrying candidates in rank order.',
       },
       {
@@ -4863,7 +4890,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'webServer',
     summary: 'The browser HTTP carrier service.',
-    description: 'The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers.',
+    description: 'The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers. HTTP and upgrade admission refusals carry `Cache-Control: no-store`.',
     methods: [
       {
         signature: 'getOrigin(): string',
@@ -4885,14 +4912,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer removing the route.',
       },
       {
-        signature: 'registerFallback(fallback: WebRoute[\'handler\'] | Pick<WebResourceRoute, \'resource\'>): () => void',
+        signature: 'registerFallback(fallback: WebRoute[\'handler\'] | WebFallback): () => void',
         description: 'Claim the fallback seat: the handler or resource answering every request no named route matches (the SPA dist server in the shipped Web composition). One owner only — a second registration throws, because two fallbacks cannot compose.',
-        parameters: [{ name: 'fallback', description: 'a handler owning the full response lifecycle of unmatched requests, or `{ resource }` answering them.' }],
+        parameters: [{ name: 'fallback', description: 'a handler owning the full response lifecycle of unmatched requests, or an object declaring `handler` or `resource` and auth.' }],
         returns: 'the disposer releasing the seat.',
       },
       {
         signature: 'async readResource(request: Request, peer: PeerScope): Promise<Response>',
-        description: 'Read the response an HTTP request for the same URL would receive, as the resource computes it for `peer`, without an HTTP exchange. The request path picks the responder by the HTTP match order — exact, longest prefix, then the fallback — and only a resource answers. This method checks no cookie, Host, or Origin: the caller admits the reader before reading.',
+        description: 'Read the response an HTTP request for the same URL would receive, as the resource computes it for `peer`, without an HTTP exchange. The request path picks the responder by the HTTP match order — exact, longest prefix, then the fallback — and only a resource answers. This method checks no cookie, Host, or Origin: the caller admits the reader before reading. A resolved deny policy returns 403 even for an explicitly admitted Peer.',
         parameters: [{ name: 'request', description: 'the read; its URL path selects the responder.' }, { name: 'peer', description: 'the Peer the read speaks for, passed to the resource.' }],
         returns: 'the resource\'s response, without a body for HEAD as over HTTP; 405 with `Allow: GET, HEAD` for any other method, checked before matching, where over HTTP a handler route or an unmatched path answers such a method itself; 404 when the path matches a handler route, or reaches the fallback seat while it is unclaimed or holds a handler. A resource that throws rejects the read, where an HTTP request would receive 400.',
       },
@@ -5802,6 +5829,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'timeline/priority',
+    mode: 'emit',
+    signature: '\'timeline/priority\'(session: Session): void',
+    summary: 'A saved user edit entered or left P0.',
+    description: 'A saved user edit entered or left P0. Model task patches do not emit it.',
+    parameters: [{ name: 'session', description: 'the session that owns the task.' }],
+  },
+  {
     name: 'tools/change',
     mode: 'emit',
     signature: '\'tools/change\'(): void',
@@ -5866,12 +5901,44 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'webserver/authorize',
+    mode: 'bail',
+    signature: '\'webserver/authorize\'(request: WebAuthRequest, policy: WebAuthPolicy): WebAdmission | undefined',
+    summary: 'Admit a matched request synchronously; the first decision wins.',
+    description: 'Admit a matched request synchronously; the first decision wins.',
+    parameters: [{ name: 'request', description: 'headers, target, transport, and available cancellation state.' }, { name: 'policy', description: 'resolved route policy; deny never emits this event.' }],
+  },
+  {
+    name: 'webserver/entry-url',
+    mode: 'emit',
+    signature: '\'webserver/entry-url\'(baseUrl: string, entries: WebEntryUrl[]): void',
+    summary: 'Collect complete entry URLs for an advertised server address.',
+    description: 'Collect complete entry URLs for an advertised server address.',
+    parameters: [{ name: 'baseUrl', description: 'advertised server base URL without provider credentials.' }, { name: 'entries', description: 'entries appended synchronously in listener order.' }],
+  },
+  {
     name: 'webserver/index-inject',
     mode: 'emit',
     signature: '\'webserver/index-inject\'(table: IndexInjection[], peer: PeerScope): void',
     summary: 'Collect the structured index injection table for the page `peer` speaks for.',
     description: 'Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row\'s data is read fresh at emit time.',
     parameters: [{ name: 'table', description: 'Mutable row table; listeners append in activation order.' }, { name: 'peer', description: 'The Peer the rendered page speaks for.' }],
+  },
+  {
+    name: 'webserver/request',
+    mode: 'waterfall',
+    signature: '\'webserver/request\'(request: IncomingMessage, response: ServerResponse, next: () => Promise<void>): Promise<void>',
+    summary: 'Handle an HTTP request before named-route and fallback dispatch.',
+    description: 'Handle an HTTP request before named-route and fallback dispatch.',
+    parameters: [{ name: 'request', description: 'original incoming HTTP request.' }, { name: 'response', description: 'response owned by the listener or its delegated handler.' }, { name: 'next', description: 'dispatch to the next listener or the matching route.' }],
+  },
+  {
+    name: 'webserver/upgrade',
+    mode: 'waterfall',
+    signature: '\'webserver/upgrade\'( request: IncomingMessage, socket: Duplex, head: Buffer, peer: PeerScope | undefined, next: () => Promise<void>, ): Promise<void>',
+    summary: 'Handle an admitted upgrade before its registered protocol handler.',
+    description: 'Handle an admitted upgrade before its registered protocol handler.',
+    parameters: [{ name: 'request', description: 'original upgrade request.' }, { name: 'socket', description: 'transport owned by the upgrade.' }, { name: 'head', description: 'bytes received after the HTTP headers.' }, { name: 'peer', description: 'authenticated identity, absent for anonymous admission.' }, { name: 'next', description: 'delegate to the next listener or protocol handler.' }],
   },
   {
     name: 'workflow/agent-end',
@@ -6274,6 +6341,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthenticationProvider',
+    declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -6404,6 +6475,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ChangeRequestListener',
     declaration: 'export type ChangeRequestListener = (update: ChangeRequestUpdate) => void;',
+  },
+  {
+    name: 'ChangeRequestNoun',
+    declaration: 'export type ChangeRequestNoun = \'pull-request\' | \'merge-request\';',
   },
   {
     name: 'ChangeRequestRef',
@@ -6550,8 +6625,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
-    name: 'ConnectionAdmission',
-    declaration: 'export type ConnectionAdmission = {\n    readonly peer: PeerScope;\n    readonly release: () => Promise<void>;\n} | {\n    readonly rejection: 401 | 403 | 409;\n};',
+    name: 'ConnectionAuthentication',
+    declaration: 'export class ConnectionAuthentication extends Service {\n    constructor(ctx: Context);\n    register(provider: AuthenticationProvider): () => Promise<void>;\n    authenticate(request: ConnectionTrustRequest): PeerAdmission;\n}',
   },
   {
     name: 'ConnectionFetchHandler',
@@ -6566,20 +6641,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ConnectionFetchRoute {\n    readonly path: string;\n    readonly methods: readonly ConnectionFetchMethod[];\n    readonly requestBody: ConnectionRequestBodyMode;\n    readonly fetch: (request: Request) => Promise<Response>;\n}',
   },
   {
-    name: 'ConnectionIndexRequest',
-    declaration: 'export interface ConnectionIndexRequest extends ConnectionTrustRequest {\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
-  },
-  {
-    name: 'ConnectionIndexResponse',
-    declaration: 'export interface ConnectionIndexResponse {\n    writeHead(status: number, headers?: Readonly<Record<string, string>>): unknown;\n    end(body?: string): unknown;\n}',
-  },
-  {
     name: 'ConnectionRequestBodyMode',
     declaration: 'export type ConnectionRequestBodyMode = \'buffered\' | \'streaming\';',
-  },
-  {
-    name: 'ConnectionRequestRejection',
-    declaration: 'export type ConnectionRequestRejection = 401 | 403 | undefined;',
   },
   {
     name: 'ConnectionRpcAttachment',
@@ -6607,7 +6670,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionTrustRequest',
-    declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n}',
+    declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    readonly signal?: AbortSignal | undefined;\n    readonly socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
   },
   {
     name: 'ContentBlockMap',
@@ -7066,6 +7129,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeCheckoutState = {\n    readonly state: \'pending\';\n} | {\n    readonly state: \'none\';\n} | {\n    readonly state: \'failed\';\n    readonly message: string;\n} | {\n    readonly state: \'ready\';\n    readonly checkout: ForgeCheckout;\n};',
   },
   {
+    name: 'ForgeCommandArguments',
+    declaration: 'export interface ForgeCommandArguments {\n    readonly kind: \'reference\' | \'api-request\';\n    readonly subcommand: readonly string[];\n    readonly operands: readonly string[];\n    readonly values: readonly (readonly [\n        option: string,\n        value: string\n    ])[];\n}',
+  },
+  {
+    name: 'ForgeCommandGroup',
+    declaration: 'export interface ForgeCommandGroup {\n    readonly subcommands: readonly (readonly string[])[];\n    readonly valueOptions: readonly string[];\n    readonly flagOptions: readonly string[];\n}',
+  },
+  {
+    name: 'ForgeCommandRule',
+    declaration: 'export interface ForgeCommandRule {\n    readonly id: string;\n    readonly version: number;\n    readonly executable: string;\n    readonly creates: readonly (readonly string[])[];\n    readonly references: ForgeCommandGroup;\n    readonly apiRequests: ForgeCommandGroup;\n    readonly changeRequestPath: string;\n    readonly urlMembers: readonly string[];\n    select(command: ForgeCommandArguments, environment: Readonly<Record<string, string>>): ForgeCommandSelection | undefined;\n}',
+  },
+  {
+    name: 'ForgeCommandSelection',
+    declaration: 'export type ForgeCommandSelection = {\n    readonly url: string;\n} | {\n    readonly lookup: readonly string[];\n};',
+  },
+  {
     name: 'ForgeCommentAuthor',
     declaration: 'export interface ForgeCommentAuthor {\n    readonly login: string;\n    readonly avatarUrl: string | null;\n    readonly bot: boolean;\n}',
   },
@@ -7084,6 +7163,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeCommitRange',
     declaration: 'export interface ForgeCommitRange {\n    readonly from: string;\n    readonly to: string;\n}',
+  },
+  {
+    name: 'ForgeDescription',
+    declaration: 'export interface ForgeDescription {\n    readonly forge: string;\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n}',
   },
   {
     name: 'ForgeDiffFile',
@@ -7175,7 +7258,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePanelChangeRequest',
-    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
+    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly forge: ForgeDescription | null;\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
   },
   {
     name: 'ForgePanelState',
@@ -7191,11 +7274,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSig /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readin /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
-    declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n}',
+    declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n    readonly signIn: {\n        readonly command: string;\n    } | null;\n}',
   },
   {
     name: 'ForgeRegisteredLens',
@@ -7215,7 +7298,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeReviewChangeRequest',
-    declaration: 'export interface ForgeReviewChangeRequest {\n    readonly url: string;\n    readonly ref: ChangeRequestRef;\n    readonly update: ChangeRequestUpdate | null;\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
+    declaration: 'export interface ForgeReviewChangeRequest {\n    readonly url: string;\n    readonly ref: ChangeRequestRef;\n    readonly forge: ForgeDescription | null;\n    readonly update: ChangeRequestUpdate | null;\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
   },
   {
     name: 'ForgeReviewComment',
@@ -7227,7 +7310,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeReviewData',
-    declaration: 'export interface ForgeReviewData {\n    readonly headSha: string;\n    readonly viewer: string | null;\n    readonly threads: readonly ForgeReviewThread[];\n    readonly truncated: boolean;\n    readonly pendingReview: ForgePendingReview | null;\n    readonly viewerCanReview: boolean;\n}',
+    declaration: 'export interface ForgeReviewData {\n    readonly headSha: string;\n    readonly viewer: string | null;\n    readonly threads: readonly ForgeReviewThread[];\n    readonly truncated: boolean;\n    readonly pendingReview: ForgePendingReview | null;\n    readonly viewerCanReview: boolean;\n    readonly reviewEvents: readonly ForgeReviewEvent[];\n}',
   },
   {
     name: 'ForgeReviewerCandidate',
@@ -8339,7 +8422,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PeerAdmission',
-    declaration: 'export type PeerAdmission = {\n    readonly peer: PeerScope;\n} | {\n    readonly rejection: 401 | 403;\n};',
+    declaration: 'export type PeerAdmission = {\n    readonly peer: PeerScope;\n} | {\n    readonly rejection: 401 | 403 | 503;\n};',
   },
   {
     name: 'PeerId',
@@ -10862,6 +10945,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ViewerPluginPolicy {\n    readonly plugin: string;\n    readonly mode: \'all\' | \'none\' | \'selected\';\n    readonly endpoints?: readonly string[];\n}',
   },
   {
+    name: 'WebAdmission',
+    declaration: 'export type WebAdmission = {\n    kind: \'allow\';\n    peer?: PeerScope;\n} | {\n    kind: \'deny\';\n    status: 401 | 403 | 503;\n};',
+  },
+  {
+    name: 'WebAuthenticationRule',
+    declaration: 'export type WebAuthenticationRule = WebAuthPolicy | ((request: WebAuthRequest) => WebAuthPolicy);',
+  },
+  {
+    name: 'WebAuthPolicy',
+    declaration: 'export type WebAuthPolicy = \'anonymous\' | \'required\' | \'deny\';',
+  },
+  {
+    name: 'WebAuthRequest',
+    declaration: 'export interface WebAuthRequest {\n    headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    method?: string | undefined;\n    url: URL;\n    transport: \'http\' | \'upgrade\';\n    signal?: AbortSignal | undefined;\n    socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n}',
+  },
+  {
     name: 'WebBootBatch',
     declaration: 'export interface WebBootBatch {\n    phase: WebBootBatchPhase;\n    url: string;\n    rev: string;\n    entries: string[];\n}',
   },
@@ -10880,6 +10979,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebBootRelease',
     declaration: 'export interface WebBootRelease {\n    version: string;\n    commit?: string;\n}',
+  },
+  {
+    name: 'WebEntryUrl',
+    declaration: 'export interface WebEntryUrl {\n    readonly label: string;\n    readonly url: string;\n    readonly open: boolean;\n}',
+  },
+  {
+    name: 'WebFallback',
+    declaration: 'export type WebFallback = Pick<WebRoute, \'handler\' | \'auth\'> | Pick<WebResourceRoute, \'resource\' | \'auth\'>;',
   },
   {
     name: 'WebFetchBody',
@@ -10947,7 +11054,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebResourceRoute',
-    declaration: 'export interface WebResourceRoute {\n    kind: WebRouteKind;\n    path: string;\n    resource: WebResource;\n}',
+    declaration: 'export interface WebResourceRoute {\n    kind: WebRouteKind;\n    path: string;\n    resource: WebResource;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WebResultView',
@@ -10955,7 +11062,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebRoute',
-    declaration: 'export interface WebRoute {\n    kind: WebRouteKind;\n    path: string;\n    handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;\n}',
+    declaration: 'export interface WebRoute {\n    kind: WebRouteKind;\n    path: string;\n    handler: (req: IncomingMessage, res: ServerResponse, peer?: PeerScope) => void | Promise<void>;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WebRouteKind',
@@ -10995,7 +11102,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebUpgradeRoute',
-    declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>;\n}',
+    declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer, peer?: PeerScope) => void | Promise<void>;\n    auth?: WebAuthenticationRule;\n}',
   },
   {
     name: 'WeeklyInput',
@@ -11223,7 +11330,7 @@ export const INHERITED_CTX_API: readonly InheritedApiEntry[] = [
   { name: 'ctx.effect', summary: 'Register a disposable side effect tied to the fiber.' },
   { name: 'ctx.get / ctx.set / ctx.provide / ctx.accessor / ctx.mixin', summary: 'Low-level service-store access and binding.' },
   { name: 'ctx.extend / ctx.isolate / ctx.intercept', summary: 'Derive a child context (scoped services / isolation / interception).' },
-  { name: 'ctx.root / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger', summary: 'Ambient handles onto the running context graph.' },
+  { name: 'ctx[Context.root] / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger', summary: 'Ambient handles onto the running context graph.' },
   { name: 'ctx.timer (+ interval / timeout / throttle / debounce)', summary: 'Disposable timer helpers. The `timer` key is provided at runtime; the four supported helpers are mixed onto ctx directly (declared via Pick).' },
   { name: 'ctx.loader', summary: 'The config Loader that booted the app (present under the loader).' },
 ]

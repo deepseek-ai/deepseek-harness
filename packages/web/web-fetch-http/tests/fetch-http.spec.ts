@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { AddressInfo } from 'node:net'
+import { AddressInfo, createServer as createNetServer } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import { HttpFetchProvider, LOCAL_FETCH_PROVIDER_ID } from '@deepseek-ai/dsh-web-fetch-http'
@@ -452,10 +452,19 @@ describe('HttpFetchProvider invalid URLs and abort', () => {
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_FETCH_TIMEOUT' }))
   })
 
-  it('maps a connection failure to WEB_PROVIDER_ERROR', async () => {
-    // Port 1 on loopback is not listening: a real connection failure (not abort).
-    await expect(provider().fetch({ url: 'http://127.0.0.1:1/' }))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  it('classifies a closed connection and names the transport error', async () => {
+    // The test owns this listener throughout; it closes each connection once the request arrives.
+    const closing = createNetServer(socket => socket.once('data', () => socket.end()))
+    await new Promise<void>(resolve => closing.listen(0, '127.0.0.1', resolve))
+    const { port } = closing.address() as AddressInfo
+    try {
+      await expect(provider().fetch({ url: `http://127.0.0.1:${port}/` })).rejects.toThrow(expect.objectContaining({
+        code: 'WEB_FETCH_CONNECTION_INTERRUPTED',
+        message: 'web fetch failed: the connection was interrupted (UND_ERR_SOCKET): other side closed',
+      }))
+    } finally {
+      await new Promise<void>(resolve => closing.close(() => { resolve() }))
+    }
   })
 })
 

@@ -1,7 +1,8 @@
 /** Review page frame builders shared by the browser-side review page tests. */
 
 import type {
-  ChangeRequestDescription, ChangeRequestKey, ChangeRequestSnapshot, ChangeRequestSummary, ForgeFailure, ForgeViewerFilter,
+  ChangeRequestDescription, ChangeRequestKey, ChangeRequestSnapshot, ChangeRequestSummary, ForgeDescription, ForgeFailure,
+  ForgeViewerFilter,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { vi } from 'vitest'
 import type { HostStream } from '../src/client/source.ts'
@@ -63,10 +64,13 @@ export function description(body: string, overrides: Partial<ChangeRequestDescri
   return { body, labels: [], labelsTruncated: false, images: {}, imagesExpireAt: null, createdAt: '2026-10-01T00:00:00Z', ...overrides }
 }
 
+/** How the GitHub provider names itself and its change requests. */
+export const GITHUB: ForgeDescription = { forge: 'github', label: 'GitHub', changeRequestNoun: 'pull-request' }
+
 /** The review page's frame of pull request `number` whose latest poll returned `status`, or that has not been polled yet. */
 export function reviewed(number: number, status: ChangeRequestSnapshot | ForgeFailure | null = snapshot(number)): ForgeReviewChangeRequest {
   const key = `github:github.com/octo/demo#${number}` as ChangeRequestKey
-  const base = { url: prUrl(number), ref: ref(number), reviewRevision: 0 }
+  const base = { url: prUrl(number), ref: ref(number), forge: GITHUB, reviewRevision: 0 }
   if (status === null) return { ...base, update: null, snapshot: null }
   if ('code' in status) return { ...base, update: { key, fetchedAt: 1, failure: status }, snapshot: null }
   return { ...base, update: { key, fetchedAt: 1, snapshot: status }, snapshot: status }

@@ -3,9 +3,8 @@
 import type {} from '@deepseek-ai/dsh-typert-protocol'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type {
-  ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestSummary, ChangeRequestUpdate, ForgeCommit, ForgeFailure, ForgeReadiness,
-  ForgeRepository,
-  ForgeViewerFilter,
+  ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestSummary, ChangeRequestUpdate, ForgeCommit, ForgeDescription, ForgeFailure,
+  ForgeReadiness, ForgeRepository, ForgeViewerFilter,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
@@ -230,6 +229,8 @@ export interface ForgeReviewChangeRequest {
   readonly url: string
   /** Parsed reference. */
   readonly ref: ChangeRequestRef
+  /** How readers name the change request's code host and its change requests, or null once its provider left. */
+  readonly forge: ForgeDescription | null
   /** Latest polling result, or null before the first poll. */
   readonly update: ChangeRequestUpdate | null
   /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
@@ -240,6 +241,8 @@ export interface ForgeReviewChangeRequest {
 
 /** One bound change request in the panel state. */
 export interface ForgePanelChangeRequest extends SessionChangeRequest {
+  /** How readers name the change request's code host and its change requests, or null when no provider serves its URL. */
+  readonly forge: ForgeDescription | null
   /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
   readonly snapshot: ChangeRequestSnapshot | null
   /**

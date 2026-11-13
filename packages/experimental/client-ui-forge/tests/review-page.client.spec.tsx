@@ -103,6 +103,7 @@ function changesFaces(threads: readonly ForgeReviewThread[] = []): ReviewChanges
     changeRequestText: vi.fn(async () => ok(APP_TEXT)),
     changeRequestReview: vi.fn(async () => ok({
       headSha: HEAD, viewer: 'lin', threads, truncated: false, pendingReview: null, viewerCanReview: true,
+      reviewEvents: ['comment', 'approve', 'request-changes'] as const,
     })),
     changeRequestReviewWrite: vi.fn(async () => ok({ ok: true as const })),
     submitReview: vi.fn(async () => ok({ ok: true as const, url: URL7 })),

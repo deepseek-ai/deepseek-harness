@@ -120,7 +120,7 @@ export function flagOf(snapshot: ChangeRequestSnapshot): ChangeRequestFlag | und
  * The fields of one change request that the cards, the changes view, and the review page read: a Session binding, or a
  * change request the review page shows without one.
  */
-export type ChangeRequestEntry = Pick<ForgePanelChangeRequest, 'url' | 'ref' | 'update' | 'snapshot' | 'reviewRevision'>
+export type ChangeRequestEntry = Pick<ForgePanelChangeRequest, 'url' | 'ref' | 'forge' | 'update' | 'snapshot' | 'reviewRevision'>
 
 /** The panel facts the changes view reads: a Session's panel state, or one change request the review page shows. */
 export type ChangesPanelState = Pick<ForgePanelState, 'checkout' | 'repository' | 'local'> & {

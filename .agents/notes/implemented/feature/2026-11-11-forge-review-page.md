@@ -28,4 +28,4 @@ A left-navigation Code review page in [`dsh-experimental-client-ui-forge`](../..
 
 ## Consequences
 
-The forge registry gains a fifth optional capability family and a `rate-limited` failure code, recorded in the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.2/forge-rate-limited-failure/guide.md). A Host restart before the chat's first message forgets the staged binding.
+The forge registry gains a fifth optional capability family and a `rate-limited` failure code, recorded in the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.3/forge-rate-limited-failure/guide.md). A Host restart before the chat's first message forgets the staged binding.

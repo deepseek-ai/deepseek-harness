@@ -664,6 +664,17 @@ describe('session reference discovery and preparation', () => {
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'LATEST', 1)).resolves.toEqual([
       { sessionId: brandString<SessionId>('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
     ])
+    // Titles match fuzzily; the working directory matches only contiguous text.
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'lttl', 1)).resolves.toEqual([
+      { sessionId: brandString<SessionId>('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
+    ])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '/se')).resolves.toEqual([])
+    // An untitled Session's label falls back to its id, which matches only as a substring:
+    // `a1` occurs in this id only as scattered characters.
+    ctx.sessions.create(brandString<SessionId>('a0000000-0000-4000-8000-000000000001'), { meta: { cwd: '/same', createdAt: 50 } })
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'a1')).resolves.toEqual([])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '0001')).resolves
+      .toMatchObject([{ sessionId: brandString<SessionId>('a0000000-0000-4000-8000-000000000001'), label: 'a0000000-0000-4000-8000-000000000001' }])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 0))
       .rejects.toThrow(expectCode('SESSION_REFERENCE_INVALID_REFERENCE'))
 

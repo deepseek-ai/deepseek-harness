@@ -192,6 +192,34 @@ describe('package modes', () => {
 })
 
 describe('module requests', () => {
+  it('accepts the iframe provider registry edge without allowing other client feature edges', () => {
+    const registry = declaration('script-realm')
+    const specifier = registry.name + '/client'
+    const provider = declaration('script-realm-iframe', {
+      external: [specifier],
+      runtimeSourceSpecifiers: { [specifier]: ['packages/client/script-realm-iframe/src/client/iframe.ts'] },
+    })
+    expect(collectClientPackageViolations(facts([], { declarations: [provider, registry] }))).toEqual([])
+    const feature = declaration('feature', {
+      external: [specifier],
+      runtimeSourceSpecifiers: { [specifier]: ['packages/client/feature/src/client/index.ts'] },
+    })
+    expect(collectClientPackageViolations(facts([], { declarations: [feature, registry] })))
+      .toContain(feature.manifest + ': client feature package requests runtime external '
+        + JSON.stringify(specifier) + '; request only rows under packages/api/'
+        + ', import shared types only, or call an injected Cordis service')
+    const stale = { ...provider, runtimeSourceSpecifiers: {} }
+    expect(collectClientPackageViolations(facts([], { declarations: [stale, registry] })))
+      .toContain(provider.manifest + ': dsh.client.external ' + JSON.stringify(specifier)
+        + ' has no runtime import or re-export in production source; remove the stale declaration')
+    const other = declaration('other')
+    const unrelated = { ...provider, external: [other.name + '/client'] }
+    expect(collectClientPackageViolations(facts([], { declarations: [unrelated, registry, other] })))
+      .toContain(provider.manifest + ': client feature package requests runtime external '
+        + JSON.stringify(other.name + '/client') + '; request only rows under packages/api/'
+        + ', import shared types only, or call an injected Cordis service')
+  })
+
   it('rejects runtime requests from one client feature package to another dynamic row', () => {
     const ui = declaration('ui', {
       external: ['@deepseek-ai/dsh-client-slots/client'],

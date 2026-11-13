@@ -32,11 +32,13 @@ import type {
 import type {
   ChangeRequestKey, ForgeCommitList, ForgeReviewData, ForgeReviewId, ForgeReviewThread, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { entry, ready, snapshot } from './client-fixtures.client.ts'
+import { entry, hostCopy, ready, snapshot } from './client-fixtures.client.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-const t = makeTranslate(en)
+const english = makeTranslate(en)
+/** Copy of a view of a GitHub pull request, which names the code host and the noun. */
+const t = (key: string, params?: Record<string, unknown>): string => english(key, { forge: 'GitHub', noun: 'PR', ...params })
 const SESSION = brandString<SessionId>('s1')
 const TAB = 'tab-changes' as TabId
 const URL7 = 'https://github.com/octo/demo/pull/7'
@@ -139,7 +141,9 @@ function ok<T>(value: T): RemoteResult<T> {
 
 /** Threads of #7 at its head, none of them yet, read for `lin`, who may review the change request `octo` opened. */
 function reviewData(overrides: Partial<ForgeReviewData> = {}): ForgeReviewData {
-  return { headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, ...overrides }
+  return {
+    headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment', 'approve', 'request-changes'], ...overrides,
+  }
 }
 
 /** The pending review of `octo` on #7. */
@@ -1397,7 +1401,7 @@ describe('line review actions', () => {
     m.publish()
     await settle()
     expect(m.sectionQueries.queryByRole('textbox')).toBeNull()
-    expect(m.faces.report).toHaveBeenCalledWith('review.published')
+    expect(m.faces.report).toHaveBeenCalledWith('review.published', { forge: 'GitHub', noun: 'PR' })
     expect(m.section('src/app.ts').querySelector('[data-forge-review-thread="published"]')).not.toBeNull()
   })
   it.each(['rejected', 'remote-error', 'receipt-storage'] as const)('holds an uncertain %s result for explicit reconciliation', async (kind) => {
@@ -1410,12 +1414,12 @@ describe('line review actions', () => {
     m.publish()
     await settle()
     expect(records.getSnapshot().uncertain).not.toBeNull()
-    fireEvent.click(m.view.getByRole('button', { name: en['review.recheck'] }))
+    fireEvent.click(m.view.getByRole('button', { name: hostCopy('review.recheck') }))
     expect(m.faces.openLink).toHaveBeenCalledWith(URL7)
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review' }))
     const dialog = within(m.view.getByRole('dialog'))
     expect(dialog.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
-    fireEvent.click(dialog.getByRole('button', { name: en['review.recheck'] }))
+    fireEvent.click(dialog.getByRole('button', { name: hostCopy('review.recheck') }))
     fireEvent.click(dialog.getByRole('button', { name: 'Checked; allow resubmission' }))
     expect(records.getSnapshot().uncertain).toBeNull()
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }))
@@ -1483,7 +1487,7 @@ describe('line review actions', () => {
     expect(publish).toBeDefined()
     expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
-    } })).toBe(en['review.stale'])
+    } })).toBe(hostCopy('review.stale'))
     expect(m.faces.submitReview).not.toHaveBeenCalled()
   })
   it('extends a range on one side and adds successive frozen references without submitting a message', async () => {
@@ -1561,7 +1565,7 @@ describe('line review actions', () => {
     fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
     await settle()
     expect(m.faces.changeRequestReviewWrite).toHaveBeenLastCalledWith(URL7, { kind: 'discard-pending', headSha: HEAD, review: 'review-1' })
-    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeStale'])
+    expect(dialog.getByRole('alert').textContent).toBe(hostCopy('thread.writeStale'))
     expect(m.faces.report).not.toHaveBeenCalled()
     fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
     await settle()
@@ -1591,7 +1595,7 @@ describe('line review actions', () => {
     expect(queue).toBeDefined()
     expect(await queue!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
-    } })).toBe(en['review.stale'])
+    } })).toBe(hostCopy('review.stale'))
     expect(m.faces.changeRequestReviewWrite).not.toHaveBeenCalled()
   })
   it('keeps a pending review submission whose outcome is unknown blocked until the reader checks GitHub', async () => {
@@ -1609,7 +1613,7 @@ describe('line review actions', () => {
     await settle()
     const records = m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal })
     expect(records.getSnapshot().uncertain).toEqual({ kind: 'review', headSha: HEAD, event: 'comment', body: 'Looks good', comments: [] })
-    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeUnknown'])
+    expect(dialog.getByRole('alert').textContent).toBe(hostCopy('thread.writeUnknown'))
     expect(dialog.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
     expect(m.faces.submitReview).not.toHaveBeenCalled()
     fireEvent.click(dialog.getByRole('button', { name: 'Checked; allow resubmission' }))
@@ -1641,10 +1645,10 @@ describe('line review actions', () => {
   it.each([
     ['an unsupported write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unsupported', message: 'no writes' }), en['thread.writeUnsupported'], 1],
     ['a refused write', ok<ForgeReviewWriteResult>({ ok: false, code: 'failed', message: 'Locked' }), t('thread.writeFailed', { message: 'Locked' }), 2],
-    ['a stale write', ok<ForgeReviewWriteResult>({ ok: false, code: 'stale', message: 'moved' }), en['thread.writeStale'], 1],
-    ['an unknown write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unknown', message: 'timeout' }), en['thread.writeUnknown'], 2],
+    ['a stale write', ok<ForgeReviewWriteResult>({ ok: false, code: 'stale', message: 'moved' }), hostCopy('thread.writeStale'), 1],
+    ['an unknown write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unknown', message: 'timeout' }), hostCopy('thread.writeUnknown'), 2],
     ['an unbound change request', REFUSED.notBound, t('thread.writeFailed', { message: 'not bound' }), 1],
-    ['a lost connection', REFUSED.failed, en['thread.writeUnknown'], 2],
+    ['a lost connection', REFUSED.failed, hostCopy('thread.writeUnknown'), 2],
   ] as const)('keeps the comment after %s, reading the threads again only when they may have changed', async (_label, answer, message, reads) => {
     const m = await comment({ setup: (faces) => { faces.changeRequestReviewWrite.mockResolvedValueOnce(answer) } })
     fireEvent.click(m.sectionQueries.getByRole('button', { name: 'Start review' }))
@@ -1682,27 +1686,25 @@ describe('line review actions', () => {
     expect(section.getByRole('button', { name: 'Add to review' })).toBeTruthy()
     expect(section.queryByRole('button', { name: 'GitHub comment options' })).toBeNull()
   })
-  it('lets the author of the change request only comment in the review dialog', async () => {
+  it('offers only the decisions the code host allows in the review dialog', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
-      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'OCTO', pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'octo', pendingReview: PENDING_REVIEW, reviewEvents: ['comment'] })))
     } })
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
     const dialog = within(m.view.getByRole('dialog'))
-    expect(dialog.getByText(en['review.ownChangeRequest'])).toBeTruthy()
+    expect(dialog.getByText('GitHub lets you comment on this PR, but not approve it or request changes.')).toBeTruthy()
     expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', true)
+    expect(dialog.getByRole('radio', { name: 'Request changes' })).toHaveProperty('disabled', true)
   })
-  it.each([
-    ['another reviewer', 'reviewer'],
-    ['an unnamed viewer', null],
-  ] as const)('lets %s choose every review decision', async (_label, viewer) => {
+  it('lets the reader choose every review decision the code host allows', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
-      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer, pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'octo', pendingReview: PENDING_REVIEW })))
     } })
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
     const dialog = within(m.view.getByRole('dialog'))
-    expect(dialog.queryByText(en['review.ownChangeRequest'])).toBeNull()
+    expect(dialog.queryByText('GitHub lets you comment on this PR, but not approve it or request changes.')).toBeNull()
     expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', false)
   })
   it('offers no pending review action while the threads are unread, the user may not review, or chosen commits show', async () => {
@@ -1871,13 +1873,13 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.view.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('1 / 3 viewed')
 
     const gone = box(m, 'docs/gone.txt', 'gone.txt')
-    expect(gone.closest('label')?.title).toBe(en['viewed.hintHost'])
+    expect(gone.closest('label')?.title).toBe(hostCopy('viewed.hintHost'))
     fireEvent.click(gone)
     expect(m.faces.setFileViewed).toHaveBeenCalledWith(URL7, { path: 'docs/gone.txt', viewed: true, headSha: HEAD })
     expect(marks(m)[0]).toEqual(['docs/gone.txt', 'viewed', 'closed'])
     // While its write is in flight the mark stays put, also for V.
     expect(gone.disabled).toBe(true)
-    expect(gone.closest('label')?.title).toBe(en['viewed.saving'])
+    expect(gone.closest('label')?.title).toBe(hostCopy('viewed.saving'))
     fireEvent.keyDown(m.section('docs/gone.txt'), { key: 'v' })
     expect(m.faces.setFileViewed).toHaveBeenCalledOnce()
     await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
@@ -1888,8 +1890,8 @@ describe('ChangesTab viewed marks the host keeps', () => {
   })
 
   it.each([
-    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { message: 'Resource not accessible' }]],
-    ['stale', REFUSED.staleHead, ['viewed.syncStale']],
+    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'Resource not accessible' }]],
+    ['stale', REFUSED.staleHead, ['viewed.syncStale', { forge: 'GitHub', noun: 'PR' }]],
   ] as const)('returns a %s mark to what the host keeps and says why', async (_label, result, report) => {
     const m = mount({ source, setup: (faces) => {
       faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' }))
@@ -1922,7 +1924,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     const notice = m.view.getByText('Could not read viewed files from GitHub, so files cannot be marked: API rate limit exceeded')
     const app = box(m, 'src/app.ts', 'app.ts')
     expect(app.disabled).toBe(true)
-    expect(app.closest('label')?.title).toBe(en['viewed.unavailable'])
+    expect(app.closest('label')?.title).toBe(hostCopy('viewed.unavailable'))
     fireEvent.click(app)
     fireEvent.keyDown(m.section('src/app.ts'), { key: 'v' })
     expect(m.faces.setFileViewed).not.toHaveBeenCalled()
@@ -2004,7 +2006,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(marks(m).map(row => row[1])).toEqual(['viewed', 'viewed', 'unviewed'])
     expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(true)
-    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { message: 'late' })
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'late' })
     await act(async () => { next.resolve(ok(undefined)); await Promise.resolve() })
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(false)
   })
@@ -2241,7 +2243,7 @@ describe('ChangesTab review threads', () => {
     line('missing', 'src/missing.ts', 'R', 1),
     line('missing-no-url', 'src/missing.ts', 'R', 2, { comments: [reviewComment({ url: null })] }),
   ]
-  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false, pendingReview: null, viewerCanReview: false }
+  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false, pendingReview: null, viewerCanReview: false, reviewEvents: [] }
   const reviewed = (review: ForgeReviewData = REVIEW) => (faces: Faces): void => {
     faces.changeRequestDiff.mockImplementation(async () => ok({ ...CHANGE, files: FILES }))
     faces.changeRequestReview.mockImplementation(async () => ok(review))
@@ -2335,7 +2337,7 @@ describe('ChangesTab review threads', () => {
     m.faces.openLink.mockClear()
     fireEvent.click(list.querySelector('[data-forge-thread-item="missing-no-url"]')!)
     expect(m.faces.openLink).not.toHaveBeenCalled()
-    fireEvent.click(within(list).getByRole('button', { name: en['thread.openAll'] }))
+    fireEvent.click(within(list).getByRole('button', { name: hostCopy('thread.openAll') }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     fireEvent.keyDown(list, { key: 'Enter' })
     expect(list.isConnected).toBe(true)

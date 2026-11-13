@@ -64,8 +64,11 @@ export interface GitHubLimits {
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
 export class GitHubProvider implements ForgeProvider {
   readonly forge = 'github'
+  readonly hosts: readonly string[]
+  readonly label = 'GitHub'
+  readonly changeRequestNoun = 'pull-request'
   readonly viewer: ForgeViewerCapability
-  private readonly hosts: ReadonlySet<string>
+  private readonly served: ReadonlySet<string>
 
   async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
     const failure = this.hostFailure(ref.repository.host)
@@ -102,8 +105,9 @@ export class GitHubProvider implements ForgeProvider {
    * viewed files, and listed viewer pull requests.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
-    this.hosts = new Set(hosts.map(host => host.toLowerCase()))
-    this.viewer = { hosts: [...this.hosts], filters: VIEWER_FILTERS, maxItems: limits.maxViewerItems }
+    this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
+    this.served = new Set(this.hosts)
+    this.viewer = { hosts: this.hosts, filters: VIEWER_FILTERS, maxItems: limits.maxViewerItems }
   }
 
   /**
@@ -142,13 +146,13 @@ export class GitHubProvider implements ForgeProvider {
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const location = parseRemoteUrl(url)
-    if (location === undefined || !this.hosts.has(location.host)) return undefined
+    if (location === undefined || !this.served.has(location.host)) return undefined
     return { forge: this.forge, ...location }
   }
 
   changeRequestFromUrl(url: string): ChangeRequestRef | undefined {
     const parsed = parsePullRequestUrl(url)
-    if (parsed === undefined || !this.hosts.has(parsed.host)) return undefined
+    if (parsed === undefined || !this.served.has(parsed.host)) return undefined
     return { repository: { forge: this.forge, host: parsed.host, owner: parsed.owner, name: parsed.name }, number: parsed.number }
   }
 
@@ -408,13 +412,17 @@ export class GitHubProvider implements ForgeProvider {
 
   async readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {
     const failure = this.hostFailure(host)
-    if (failure !== undefined) return { state: 'unavailable', message: failure.message }
+    if (failure !== undefined) return { state: 'unavailable', message: failure.message, signIn: null }
     try {
       const output = await this.gh(['auth', 'status', '--hostname', host], signal)
-      if (output.exitCode === 0) return { state: 'ready', message: null }
-      return { state: 'unauthenticated', message: firstLine(output.stderr) ?? firstLine(output.stdout) ?? `gh is not signed in to ${host}` }
+      if (output.exitCode === 0) return { state: 'ready', message: null, signIn: null }
+      return {
+        state: 'unauthenticated',
+        message: firstLine(output.stderr) ?? firstLine(output.stdout) ?? `gh is not signed in to ${host}`,
+        signIn: { command: `gh auth login --hostname ${host}` },
+      }
     } catch (error) {
-      if (error instanceof GhUnavailableError) return { state: 'unavailable', message: error.message }
+      if (error instanceof GhUnavailableError) return { state: 'unavailable', message: error.message, signIn: null }
       throw error
     }
   }
@@ -483,7 +491,7 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   private hostFailure(host: string): ForgeFailure | undefined {
-    return this.hosts.has(host.toLowerCase()) ? undefined : {
+    return this.served.has(host.toLowerCase()) ? undefined : {
       code: 'unavailable', message: `forge-github: host ${JSON.stringify(host)} is not configured`,
     }
   }

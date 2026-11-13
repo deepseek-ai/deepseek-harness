@@ -12,12 +12,11 @@ import { inspect, parseEnv } from 'node:util'
 import { captureStartupComposition, type StartupCompositionDiagnostic } from './startup-diagnostics.ts'
 export type { StartupCompositionDiagnostic, StartupPluginState, StartupServiceState } from './startup-diagnostics.ts'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
-import * as yaml from 'js-yaml'
 import { Context, type Fiber, type FiberState } from '@deepseek-ai/cordis'
 import Loader, { type Entry, type EntryGroup, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import Include, { applyEntryPatches, parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
-import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { dshHomePath, dshPath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 export { readBundlePatches, readProfilePatches, resolveTelemetryPatch, type ProfileContext, type ProfilePnpmInvocation } from './profile-context.ts'
 export { sanitizeProfile } from './profile-sanitize.ts'
@@ -44,6 +43,8 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    /** Harness-home category path resolver available to Loader `!!js` config expressions. */
+    dshPath?: typeof dshPath
   }
 
   interface Events {
@@ -277,13 +278,6 @@ export function loadLayeredEnv(
 }
 
 const bootstrapIncludes = new WeakMap<Context, Entry>()
-
-// The include's YAML dialect (`!!js` scalars become expression nodes the
-// Loader interpolates against each entry's injection-ready context), imported
-// from the include itself so patch parsing and config dumping can never drift
-// from what the include mounts. User patch layers share it so they may
-// reference `process.env`.
-const userPatchesSchema = entryListSchema
 
 /** What a caller of {@link recomposeProfile} already did and requires. */
 export interface ProfileRecompositionOptions {
@@ -593,7 +587,7 @@ function parsePatchList(
 ): PatchOptions[] {
   let parsed: unknown
   try {
-    parsed = yaml.load(content, { schema: userPatchesSchema })
+    parsed = parseEntryYaml(content)
   } catch (error) {
     throw new Error(`${binName}: failed to parse ${label} ${file}: ${String(error)}`)
   }
@@ -662,7 +656,7 @@ export function renderConfigDump(
   }
   let parsed: unknown
   try {
-    parsed = yaml.load(content, { schema: entryListSchema })
+    parsed = parseEntryYaml(content)
   } catch (error) {
     throw new Error(`${binName}: failed to parse config ${absoluteConfigPath}: ${String(error)}`)
   }
@@ -723,7 +717,7 @@ function groupedDump(
   const flush = (): void => {
     if (currentLabel === undefined || group.length === 0) return
     lines.push(`# == ${currentLabel}`)
-    lines.push(yaml.dump(group, { schema: entryListSchema, noRefs: true }).trimEnd())
+    lines.push(stringifyEntryYaml(group).trimEnd())
     group = []
   }
   for (let index = 0; index < composed.length; index += 1) {
@@ -1241,6 +1235,7 @@ export async function boot(
   try {
     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
     ctx.provide('dshHomePath', dshHomePath)
+    ctx.provide('dshPath', dshPath)
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'

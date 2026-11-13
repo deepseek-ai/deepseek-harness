@@ -140,7 +140,7 @@ function SignIn({ state, copyText, t }: {
   if (readiness.state === 'unavailable') {
     return <div className={css.banner} role="status">{t('signin.unavailable', { host, message: readiness.message ?? '' })}</div>
   }
-  const command = repository.forge === 'github' ? `gh auth login --hostname ${host}` : undefined
+  const command = readiness.signIn?.command
   return (
     <div className={css.banner} role="status">
       <span>{t('signin.title', { host })}</span>

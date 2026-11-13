@@ -101,6 +101,9 @@ const polled = (frame: ForgeReviewChangeRequest): boolean => frame.snapshot !== 
 
 const VIEWED: ForgeRepository = { forge: 'viewer', host: 'view.test', owner: 'octo', name: 'demo' }
 
+/** How the bench's provider names itself and its change requests. */
+const FAKE = { forge: 'fake', label: 'Fake', changeRequestNoun: 'pull-request' }
+
 const UNREAD: ForgeFailure = { code: 'not-found', message: 'not read by this provider' }
 
 /**
@@ -109,7 +112,10 @@ const UNREAD: ForgeFailure = { code: 'not-found', message: 'not read by this pro
  */
 class ViewerProvider implements ForgeProvider {
   readonly forge = 'viewer'
-  readonly viewer = { hosts: ['view.test'], filters: new Set<ForgeViewerFilter>(['review-requested', 'authored']), maxItems: 30 }
+  readonly hosts = ['view.test']
+  readonly label = 'Viewer'
+  readonly changeRequestNoun = 'pull-request'
+  readonly viewer = { hosts: this.hosts, filters: new Set<ForgeViewerFilter>(['review-requested', 'authored']), maxItems: 30 }
   /** List reads in call order. */
   readonly queries: ForgeViewerQuery[] = []
   /** Answers each list read. */
@@ -148,7 +154,7 @@ class ViewerProvider implements ForgeProvider {
   }
 
   readiness(): Promise<ForgeReadiness> {
-    return Promise.resolve({ state: 'ready', message: null })
+    return Promise.resolve({ state: 'ready', message: null, signIn: null })
   }
 
   markReady(): Promise<ForgeActionFailure | undefined> {
@@ -185,10 +191,12 @@ describe('forgePanel.reviewChangeRequest', () => {
     const opened = await page()
     const stream = changeRequest(opened, pullUrl(7))
 
-    await expect(stream.pull()).resolves.toEqual({ url: pullUrl(7), ref: ref(7), update: null, snapshot: null, reviewRevision: 0 })
+    await expect(stream.pull()).resolves.toEqual({
+      url: pullUrl(7), ref: ref(7), forge: FAKE, update: null, snapshot: null, reviewRevision: 0,
+    })
     const first = await stream.until(polled)
     expect(first).toEqual({
-      url: pullUrl(7), ref: ref(7), snapshot: snapshot(ref(7)), reviewRevision: 0,
+      url: pullUrl(7), ref: ref(7), forge: FAKE, snapshot: snapshot(ref(7)), reviewRevision: 0,
       update: { key: changeRequestKey(ref(7)), fetchedAt: ANY_TIME, snapshot: snapshot(ref(7)) },
     })
     // A second stream of a polled change request starts from its latest result and shares its polling.
@@ -207,6 +215,19 @@ describe('forgePanel.reviewChangeRequest', () => {
     await Promise.all([stream.stop(), joined.stop(), late.stop()])
     await expect(stream.pull()).resolves.toBeUndefined()
     expect(opened.ctx.forge.latest(ref(7))).toBeUndefined()
+  })
+
+  it('names how the change request\'s provider calls itself, and nothing once that provider left', async () => {
+    const opened = await page()
+    const { registration } = await registerViewer(opened)
+    const viewed: ChangeRequestRef = { repository: VIEWED, number: 5 }
+    const stream = changeRequest(opened, 'https://view.test/octo/demo/pull/5')
+    await expect(stream.pull()).resolves.toMatchObject({ forge: { forge: 'viewer', label: 'Viewer', changeRequestNoun: 'pull-request' } })
+
+    await registration.dispose()
+    await opened.ctx.parallel('forge/review-changed', viewed, { kind: 'submit', headSha: HEAD })
+    await expect(stream.until(frame => frame.forge === null)).resolves.toMatchObject({ forge: null, reviewRevision: 1 })
+    await stream.stop()
   })
 
   it('publishes a streamed change request again with the count of review changes announced for it', async () => {

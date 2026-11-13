@@ -1,0 +1,61 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/timeline/README.md
+/:
+  en: fb02a2609189915a
+  zh: 539ff1072963249c
+/timeline:
+  en: 5050791e05aed9eb
+  zh: c543d3872cc458d1
+/timeline/summary:
+  en: 6a6f62da57280029
+  zh: d252dd27df5eeacc
+/timeline/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: ef37133ee1299caa
+/timeline/use-this-package:
+  en: 431ec5f85980ee8c
+  zh: 80c217916a801152
+/timeline/use-this-package/replace-todo-and-track-progress:
+  en: f96039a9de710328
+  zh: 40c9ee19f70059dd
+/timeline/use-this-package/read-reports-at-several-intervals:
+  en: 823860275b707e56
+  zh: 8dfc85d657a83e91
+/timeline/use-this-package/discuss-and-direct-work:
+  en: f510c9ba93a4cfc9
+  zh: 731a47bd67b0eb9d
+/timeline/use-this-package/move-a-task-tree:
+  en: daef804239af6185
+  zh: e804042a7259b2bc
+/timeline/use-this-package/set-languages-and-writing-guidance:
+  en: ccbb1946bd40ab32
+  zh: ce8475d539c7c6ed
+/timeline/understand-the-implementation:
+  en: cad7b87b882f7c16
+  zh: 2e200333ef2a77c9
+/timeline/further-exploration:
+  en: 253ff779b9cb9b17
+  zh: 35a1f32b918213fe
+/timeline/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/timeline/model-experience/task-tracking-and-reports:
+  en: fc6a87cfaa0b9c4e
+  zh: 7d8019e2b2f02e70
+/timeline/model-experience/task-tracking-and-reports/what-the-model-sees:
+  en: 97162aea097c6e49
+  zh: 2514283ba783c083
+/timeline/model-experience/task-tracking-and-reports/token-effect:
+  en: 81feaad2beddd2e8
+  zh: 772402ef6982cfcf
+/timeline/model-experience/task-tracking-and-reports/kv-cache-effect:
+  en: df0c5657116a80f8
+  zh: cbe1726d5ecb3f27
+/timeline/known-limitations-and-deferred-work:
+  en: 9a433c4e11c11eae
+  zh: 2914a07e576c777f
+/timeline/known-limitations-and-deferred-work/dev-note:
+  en: f03a3dd8e2045f62
+  zh: bc8c5a213ba7fd45

@@ -28,4 +28,4 @@ Status: implemented
 
 ## Consequences
 
-forge 注册表增加第五组可选能力和 `rate-limited` 失败码，记录在[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/forge-rate-limited-failure/guide.zh.md)中。在对话的首条消息之前重启 Host 会丢失暂存的绑定。
+forge 注册表增加第五组可选能力和 `rate-limited` 失败码，记录在[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/forge-rate-limited-failure/guide.zh.md)中。在对话的首条消息之前重启 Host 会丢失暂存的绑定。

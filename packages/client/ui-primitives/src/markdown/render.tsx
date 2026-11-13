@@ -187,6 +187,16 @@ export function collectReferenceTargets(
  * documented fallback (the image's alt text). Rewritten destinations must be
  * absolute; the renderer re-checks their protocol before emitting them.
  */
+/**
+ * Map one decoded local destination before it reaches the enclosing
+ * `MarkdownDelegate`'s file opener, image resolver, drag address, and object
+ * menus, for example against the directory current when a message was written.
+ * Rendered labels, titles, and alt text keep the authored path.
+ * @param path - Destination as the document authored it.
+ * @returns Path passed to the delegate.
+ */
+export type MarkdownPathResolver = (path: string) => string
+
 export interface MarkdownPathImages {
   /**
    * Resolve one authored image destination.
@@ -233,6 +243,8 @@ export interface MarkdownRenderContext {
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
   readonly pathImages: MarkdownPathImages | undefined
+  /** Local-destination mapping applied before delegate calls; absent wherever destinations pass unchanged. */
+  readonly resolvePath: MarkdownPathResolver | undefined
   /** Raw HTML renders nothing instead of literal text. */
   readonly omitHtml: boolean
   /** Inside an anchor's children: interactive mentions must not nest there. */
@@ -392,7 +404,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'link':
       return renderAnchor(
         node.url, renderChildren(node.children, { ...context, inLink: true }), key,
-        !anchorWrapsOnlyImages(node.children), context.streaming,
+        !anchorWrapsOnlyImages(node.children), context,
       )
     case 'linkReference':
       return renderLinkReference(node, key, context)
@@ -625,34 +637,36 @@ function MarkdownAnchor({ href, glyph, children }: {
 }
 
 /** Local destinations use the scoped file delegate after settlement. */
-function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true, streaming = false): ReactNode {
+function renderAnchor(url: string, children: ReactNode[], key: Key, glyph: boolean, context: MarkdownRenderContext): ReactNode {
   const file = parseFileLink(url)
   if (file !== undefined) {
-    if (streaming) return <Fragment key={key}>{children}</Fragment>
-    return <MarkdownFileLink key={key} file={file} glyph={glyph}>{children}</MarkdownFileLink>
+    if (context.streaming) return <Fragment key={key}>{children}</Fragment>
+    return <MarkdownFileLink key={key} file={file} glyph={glyph} resolvePath={context.resolvePath}>{children}</MarkdownFileLink>
   }
   return renderSafeLink(normalizeUri(url), children, key, glyph)
 }
 
-function MarkdownFileLink({ file, glyph, children }: {
+function MarkdownFileLink({ file, glyph, resolvePath, children }: {
   readonly file: { path: string; line?: number }
   readonly glyph: boolean
+  readonly resolvePath: MarkdownPathResolver | undefined
   readonly children: ReactNode[]
 }): ReactNode {
   const { openFile, fileImages, getTriggerProps } = useMarkdownDelegate()
   const [load] = useState(nextImageLoad)
   if (openFile === undefined) return <>{children}</>
+  const target = { ...file, path: resolvePath?.(file.path) ?? file.path }
   // Pure-image anchors already contain their preview and keep one navigation target.
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
-  const resolved = preview?.resolve(file.path)
+  const resolved = preview?.resolve(target.path)
   const src = resolved === undefined ? undefined : freshImageUrl(resolved, load)
   const anchor = (
     <button
       type="button"
       className={clsx(css.fileMention, css.fileLink)}
       title={src === undefined ? file.path : undefined}
-      {...getTriggerProps?.({ kind: 'file', ...file })}
-      onClick={() => { openFile(file.path, file.line === undefined ? undefined : { line: file.line }) }}
+      {...getTriggerProps?.({ kind: 'file', ...target })}
+      onClick={() => { openFile(target.path, target.line === undefined ? undefined : { line: target.line }) }}
     >
       {glyph && <LinkIconMedium kind={classifyLinkPath(file.path)} className={css.linkIcon} />}
       {children}
@@ -682,30 +696,35 @@ function inlineCodeHttpUrl(value: string): string | undefined {
 }
 
 function renderImage(url: string, alt: string, key: Key, context: MarkdownRenderContext): ReactNode {
-  return <MarkdownImage key={`${key}:${url}`} destination={url} alt={alt}
-    pathImages={context.pathImages} streaming={context.streaming} inLink={context.inLink === true} />
+  return <MarkdownImage key={`${key}:${url}`} destination={url} alt={alt} pathImages={context.pathImages}
+    resolvePath={context.resolvePath} streaming={context.streaming} inLink={context.inLink === true} />
 }
 
-function MarkdownImage({ destination, alt, pathImages, streaming, inLink }: {
+function MarkdownImage({ destination, alt, pathImages, resolvePath, streaming, inLink }: {
   destination: string
   alt: string
   pathImages: MarkdownPathImages | undefined
+  resolvePath: MarkdownPathResolver | undefined
   streaming: boolean
   inLink: boolean
 }): ReactNode {
   const { fileImages } = useMarkdownDelegate()
   const [load] = useState(nextImageLoad)
   const file = streaming ? undefined : parseFileLink(destination)
-  const resolved = file === undefined ? undefined : fileImages?.resolve(file.path)
+  const targetPath = file === undefined ? undefined : resolvePath?.(file.path) ?? file.path
+  const resolved = targetPath === undefined ? undefined : fileImages?.resolve(targetPath)
   const src = resolved === undefined ? imageSource(destination, pathImages, load) : freshImageUrl(resolved, load)
   if (src === undefined) return <span className={css.imageAlt}>{alt}</span>
-  return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} preview={inLink ? undefined : fileImages} />
+  return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} targetPath={targetPath}
+    preview={inLink ? undefined : fileImages} />
 }
 
-function LoadedMarkdownImage({ src, alt, destination, preview }: {
+function LoadedMarkdownImage({ src, alt, destination, targetPath, preview }: {
   src: string
   alt: string
   destination: string
+  /** Mapped local path of `destination`; undefined for non-file destinations and streaming renders. */
+  targetPath: string | undefined
   preview: ReturnType<typeof useMarkdownDelegate>['fileImages']
 }): ReactNode {
   const { getTriggerProps } = useMarkdownDelegate()
@@ -714,7 +733,7 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const close = useCallback(() => { setOpen(false) }, [])
   if (failed) return <span className={css.imageAlt}>{preview === undefined ? '' : `${preview.labels.failed} · `}{alt || destination}</span>
   const file = parseFileLink(destination)
-  const contextMenuProps = getTriggerProps?.({ kind: 'image', url: src, ...(file === undefined ? {} : { path: file.path }) })
+  const contextMenuProps = getTriggerProps?.({ kind: 'image', url: src, ...(targetPath === undefined ? {} : { path: targetPath }) })
   const imageProps = { className: css.image, src, alt, onError: () => { setFailed(true) },
     loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
   if (preview === undefined) return <img {...imageProps} {...contextMenuProps} />
@@ -724,7 +743,7 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const img = <DraggableImage
     fileDrag={preview.fileDrag}
     {...imageProps}
-    resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
+    resourceAddress={targetPath === undefined ? undefined : preview.resourceAddress?.(targetPath)}
     name={exportName}
   />
   return <>
@@ -757,7 +776,7 @@ function renderLinkReference(
     return <Fragment key={key}>{'['}{renderChildren(node.children, context)}{referenceSuffix(node)}</Fragment>
   }
   const rendered = renderChildren(node.children, { ...context, inLink: true })
-  return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming)
+  return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context)
 }
 
 function renderImageReference(

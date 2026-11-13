@@ -1,5 +1,5 @@
 /**
- * Browser-trust fence for every /api request. Defends the two confused-deputy
+ * Browser-trust fence for WebServer routes and direct Connection admission. Defends the two confused-deputy
  * paths a browser opens against a local HTTP API — DNS rebinding (Host names
  * the attacker's domain while the socket reaches this server) and cross-site
  * requests fired from a malicious page. The Host fence binds every request,
@@ -111,7 +111,7 @@ function isBindAddressAuthority(hostUrl: URL, bindHost: string | undefined): boo
 }
 
 /**
- * Decide whether one /api request may reach the RPC bridge.
+ * Decide whether one request satisfies the deployment's source policy.
  * @param request - Node HTTP or Fetch request facts (headers).
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.
  * @param bindHost - the listener's own bind IP literal, accepted on any port independently of `trustedHosts`.

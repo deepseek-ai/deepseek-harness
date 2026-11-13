@@ -341,7 +341,10 @@ export class ForgePanelController extends TypertRemoteService {
     const reader = new Reader<ForgeReviewChangeRequest>(signal)
     let update: ChangeRequestUpdate | null = this.home.forge.latest(ref) ?? null
     let snapshot = update !== null && 'snapshot' in update ? update.snapshot : null
-    const emit = (): void => { reader.push({ url, ref, update, snapshot, reviewRevision: this.reviewRevisions.get(key) ?? 0 }) }
+    const emit = (): void => {
+      const forge = this.home.forge.describe(ref.repository.forge) ?? null
+      reader.push({ url, ref, forge, update, snapshot, reviewRevision: this.reviewRevisions.get(key) ?? 0 })
+    }
     const follower = { key, emit }
     this.reviewFollowers.add(follower)
     const stop = this.home.forge.watch(ref, (next) => {
