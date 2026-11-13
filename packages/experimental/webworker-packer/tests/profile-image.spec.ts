@@ -10,8 +10,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, type TestContext } from 'vitest'
 import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
-import yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { HOME_PATCH_PATH, MANIFEST_PATH, packVfsImage } from '../src/pack.ts'
 import { installationManifest, platformHomePatch, profileRoster } from '../src/repository.ts'
 
@@ -93,7 +92,7 @@ describe('image layout', () => {
     expect(HOME_PATCH_PATH).toBe('home/cordis.patch.yml')
     const text = new TextDecoder().decode(result.files[HOME_PATCH_PATH])
     expect(text).toContain("!!js dshHomePath('sessions')")
-    expect(yaml.load(text, { schema: entryListSchema })).toEqual(homePatch)
+    expect(parseEntryYaml(text)).toEqual(homePatch)
   })
 
   it('refuses an installation that is also a roster package', (test) => {

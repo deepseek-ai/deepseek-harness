@@ -33,8 +33,7 @@ import { expect } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import yaml from 'js-yaml'
+import { stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
@@ -808,7 +807,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       const fixtureDir = join(profileDir, 'node_modules', SCAFFOLD_DEFAULTS_BUNDLE)
       await mkdir(fixtureDir, { recursive: true })
       await writeFile(join(fixtureDir, 'package.json'), JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-      await writeFile(join(fixtureDir, 'cordis.patch.yml'), yaml.dump(formDefaults, { schema: entryListSchema }))
+      await writeFile(join(fixtureDir, 'cordis.patch.yml'), stringifyEntryYaml(formDefaults))
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)
