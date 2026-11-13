@@ -305,7 +305,7 @@ Credit frames wait until a consumer that needs sustained high-volume uplink appe
 
 | Item | Rule |
 | --- | --- |
-| Authentication | Same as today: `connection.requestRejection(req)` at upgrade; descriptor and lookup-parameter validation at open. Uplink items belong to an already authenticated stream and are not authenticated again |
+| Authentication | WebServer admission supplies the Peer at upgrade; descriptor and lookup-parameter validation runs at open. Uplink items belong to an already authenticated stream and are not authenticated again |
 | Peer | Admitted at upgrade as one `PeerScope`; `invocation.peer` of every stream on that socket is that Peer |
 | Item validation | With an uplink codec, every item is decoded strictly, and a failure fails the whole stream with the existing `gateway/input-invalid` (details `{ endpoint, field: 'uplink' }`); without a codec, only JSON-safety validation applies |
 | Frame size | A single frame keeps the `maxPayload` of `ws`; the inbox limit bounds the accumulated total |

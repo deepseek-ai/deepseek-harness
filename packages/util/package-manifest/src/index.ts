@@ -4,6 +4,16 @@
  */
 
 export type {
+  ClientModuleStylesheetDescriptor,
+  ClientModuleStyleContext,
+  ClientModuleMeta,
+  ClientModuleMetaFactory,
+  ClientBundleRequire,
+  ClientModuleFactory,
+  DshClientModuleManifest,
+} from './client-module.ts'
+
+export type {
   DshBundleManifest,
   DshClientManifest,
   DshEnginesManifest,

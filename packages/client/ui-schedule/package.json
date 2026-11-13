@@ -81,7 +81,8 @@
     "clsx": "^2.1.1",
     "@deepseek-ai/cordis": "workspace:~",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-util-text-search": "workspace:*"
   },
   "files": [
     "locale/*.json",

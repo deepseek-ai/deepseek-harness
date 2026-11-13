@@ -1,7 +1,7 @@
 /** Cursor, page, and live-tail coordination over a reconnecting Remote stream. */
 
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { RemoteStreamCarrierError } from './stream-client.ts'
+import { RemoteStreamCarrierError, type RemoteStreamCarrierFailure } from './stream-client.ts'
 import type {
   RemoteStream,
   RemoteStreamItem,
@@ -75,7 +75,7 @@ export interface RemoteJournalStreamOptions<Page, Entry, Cursor, Notification = 
   /** Apply one complete journal-window change or cursorless notification. */
   readonly publish: (change: RemoteJournalChange<Page, Entry, Notification>) => void
   /** Observe a retryable carrier loss before reconnection. */
-  readonly carrierFailed?: (error: RemoteStreamCarrierError) => void
+  readonly carrierFailed?: (error: RemoteStreamCarrierFailure) => void
   /** Publish a terminal stream, page, or protocol failure after opening. */
   readonly failed: (error: unknown) => void
 }

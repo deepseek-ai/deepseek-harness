@@ -27,20 +27,20 @@ id: 2026-10-19-plugin-reference-source
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-10-27-retry-control-input"
-    after: "b07af8f880b773b29eed29990eeedd84f8fccdcae7225b1c2b5cc61e9ff85e49"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "1730344fc2b73b282bc8065cd729388c3454a1966ffc2557bda89c177162f05e"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-10-27-retry-control-input"
-    after: "8ae60ac78f577885d613bd4e0d626eacee5a264173157ffd916a4eab9634740f"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "0f8fa34035bd1a85ca754bafa2471820f0960d6560b9682a3a703f61932f322f"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-10-27-retry-control-input"
-    after: "658270d5960087ef3794fa4988838203446b7a57c129d8f7786736487cb48f92"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "9bd33bff02f1b5a1fe4b55c2e26210631f03b78f3e641f56cc72d27d59b911f2"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-10-27-retry-control-input"
-    after: "897e77386649c13194b34430ffe352a51916a6bbbb7dacf8461044a4926aef15"
+    previous: "2026-11-05-timeline-priority-notice"
+    after: "8a21956a397f18ddf306b055e199fa9818e102eaf67a82348e7a0e18633287dd"
     decision: same-version
 ```
 

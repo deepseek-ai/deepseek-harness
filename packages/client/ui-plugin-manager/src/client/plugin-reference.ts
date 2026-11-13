@@ -8,7 +8,8 @@ import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import {
   formatPluginMention, isPluginPackageName, nextPluginMention, packageNameOfPluginMention,
 } from '@deepseek-ai/dsh-plugin-manager/grammar'
-import { localizedTextValues, type Translate } from './presentation.ts'
+import { localizedValues } from '@deepseek-ai/dsh-util-text-search'
+import type { Translate } from './presentation.ts'
 import { PluginReference } from './PluginReference.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
@@ -58,7 +59,7 @@ export function createPluginReferenceSource(deps: PluginReferenceDeps): InputTri
           packageName: bundle.name,
           title,
           description,
-          search: [bundle.name, ...localizedTextValues(bundle.meta?.title), ...localizedTextValues(bundle.meta?.description)],
+          search: [bundle.name, ...localizedValues(bundle.meta?.title), ...localizedValues(bundle.meta?.description)],
         }
       })
         .filter(row => needle === '' || row.search.some(value => value.toLowerCase().includes(needle)))

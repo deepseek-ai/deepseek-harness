@@ -448,12 +448,30 @@ describe('writeClipboard', () => {
     expect(writeText).toHaveBeenCalledWith('payload')
   })
 
-  it('reports false when the Clipboard API rejects', async () => {
+  it('reports false when the Clipboard API rejects and no fallback exists', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: undefined })
     await expect(writeClipboard('payload')).resolves.toBe(false)
+  })
+
+  it('falls back to execCommand when the Clipboard API rejects', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    let selected: string | undefined
+    const exec = vi.fn(() => {
+      selected = document.querySelector<HTMLTextAreaElement>('textarea[readonly]')?.value
+      return true
+    })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec })
+    await expect(writeClipboard('payload')).resolves.toBe(true)
+    expect(exec).toHaveBeenCalledWith('copy')
+    expect(selected).toBe('payload')
+    expect(document.querySelector('textarea')).toBeNull()
   })
 
   it('selects a detached textarea for the execCommand fallback and removes it after', async () => {
@@ -468,6 +486,25 @@ describe('writeClipboard', () => {
     expect(exec).toHaveBeenCalledWith('copy')
     expect(selected).toBe('payload')
     expect(document.querySelector('textarea')).toBeNull()
+  })
+
+  it('returns focus to the copy control after the execCommand fallback', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => true) })
+    const button = document.createElement('button')
+    document.body.appendChild(button)
+    button.focus()
+    await expect(writeClipboard('payload')).resolves.toBe(true)
+    expect(document.activeElement).toBe(button)
+    button.remove()
+  })
+
+  it('copies through the fallback when nothing had focus', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => true) })
+    const activeElement = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null)
+    await expect(writeClipboard('payload')).resolves.toBe(true)
+    activeElement.mockRestore()
   })
 
   it('reports execCommand\'s own refusal verbatim', async () => {

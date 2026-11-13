@@ -2,9 +2,6 @@
   "apps/cli/tests/built-bin.e2e.ts": {
     "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
   },
-  "apps/desktop/scripts/desktop-publish.ts": {
-    "d37e8639087921e2491d45d40d63b44e72b30a516ad3a5f3155f467c7f5c3ac7": 1
-  },
   "apps/desktop/src/client/WelcomePage.tsx": {
     "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
   },

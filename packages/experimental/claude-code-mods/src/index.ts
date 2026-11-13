@@ -48,7 +48,7 @@ export type { BoxProps, ButtonProps, TextProps, UiElement, UiElements, UiNode } 
 export { defineMod, type ModConfig, type ModPlugin, type ModSpec } from './define-mod.ts'
 export { DEFAULT_TOOL_ALIASES } from './tool-names.ts'
 export { KNOWN_EVENTS } from './matcher.ts'
-export { MODS_API_VERSION } from './host-ops.ts'
+export { ModUnansweredError, MODS_API_VERSION } from './host-ops.ts'
 
 /** Plugin config: the limits mod hooks run under. */
 export interface Config {

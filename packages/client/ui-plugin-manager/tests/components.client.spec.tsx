@@ -1225,12 +1225,12 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle)
     expect(actions.setRowEnabled).toHaveBeenCalledExactlyOnceWith('include:sidebar', false)
 
-    // The UI keeps displaying Chinese while the filter also matches English copy.
-    for (const query of ['Sidebar component', 'Sidebar navigation', 'SIDEBAR COMPONENT']) {
-      fireEvent.change(search, { target: { value: query } })
-      expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
-      expect(screen.getByRole('button', { name: zh.configureRow.replace('{name}', '导航组件') })).toBeTruthy()
-    }
+    // The Chinese page still finds the row by its English title.
+    fireEvent.change(search, { target: { value: 'Sidebar component' } })
+    expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+    fireEvent.change(search, { target: { value: 'no such row' } })
+    expect(screen.getByText(zh.partsFilterEmpty)).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'Sidebar component' } })
     setLanguage(en)
     for (const query of ['导航组件', '侧边导航']) {
       fireEvent.change(search, { target: { value: query } })

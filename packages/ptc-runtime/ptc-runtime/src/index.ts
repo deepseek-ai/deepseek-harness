@@ -25,61 +25,19 @@ export type {
   PtcRunSandbox,
 } from './types.ts'
 
-/**
- * Globals reserved by the language-portable binding contract, independently of
- * the installed provider. Node uses `console`, `inspect`, and `Image` for output.
- * Python presentation reserves `__dsh_main__` for a program wrapper and
- * `__builtins__`/`__name__` for module globals; Python also rejects assignment to
- * `__debug__` at compile time. The executor supports externally supplied Python
- * runtimes, so every provider enforces the same exclusions. A namespace list
- * valid for one provider remains valid when the runtime language changes.
- * Binding globals reserve only these listed names; error members reject every
- * dunder form through {@link DUNDER_MEMBER}.
- */
-export const RESERVED_BINDING_GLOBALS: ReadonlySet<string> = new Set([
-  'console', 'inspect', 'Image',
-  '__dsh_main__', '__builtins__', '__name__', '__debug__',
-])
+/** Output globals reserved for the runtime's console, inspection function, and image constructor. */
+export const RESERVED_BINDING_GLOBALS: ReadonlySet<string> = new Set(['console', 'inspect', 'Image'])
 
-/**
- * `PtcBindingErrorClass.memberNameProperty` names EVERY backend refuses, as
- * one shared contract so a request valid on one backend is valid on all. The
- * JS `Error` exclusions (`name`, `message`, `stack`) and Python's
- * exception-protocol members (`args`, `with_traceback`, `add_note`) are
- * listed by name; dunder-form names (`__x__`, non-empty middle) are refused
- * wholesale — several are constrained CPython descriptors whose `setattr`
- * raises while constructing the rejection, and the exact set is an interpreter
- * version detail. Any other non-empty own property name is accepted everywhere.
- */
-export const RESERVED_ERROR_MEMBERS: ReadonlySet<string> = new Set([
-  'name', 'message', 'stack',
-  'args', 'with_traceback', 'add_note',
-])
+/** Error fields unavailable as PtcBindingErrorClass.memberNameProperty. */
+export const RESERVED_ERROR_MEMBERS: ReadonlySet<string> = new Set(['name', 'message', 'stack'])
 
-/**
- * Dunder form (`__x__`, non-empty middle): object-protocol slots in Python,
- * refused as {@link RESERVED_ERROR_MEMBERS | error members} on every backend.
- */
-export const DUNDER_MEMBER = /^__.+__$/
-
-/**
- * ECMAScript and Python reserved words, rejected for binding globals and error
- * class names by every provider. The executor presents both languages, including
- * externally supplied Python runtimes. A shared set keeps namespace declarations
- * portable: `lambda` is rejected even by a TypeScript provider. Adding another
- * language requires reviewing this union against existing binding names.
- */
-export const PORTABLE_RESERVED_WORDS: ReadonlySet<string> = new Set([
-  // ECMAScript reserved words and reserved-in-strict-mode names.
+/** ECMAScript keywords and strict-mode names unavailable as binding globals or error class names. */
+export const RESERVED_BINDING_WORDS: ReadonlySet<string> = new Set([
   'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
   'else', 'enum', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'in',
   'instanceof', 'new', 'null', 'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof',
   'var', 'void', 'while', 'with', 'yield', 'let', 'static', 'implements', 'interface', 'package',
   'private', 'protected', 'public', 'arguments', 'eval',
-  // Python 3.x keywords and soft keywords not already above ('type' and '_'
-  // are soft keywords: legal names in practice, reserved here for safety).
-  'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'def', 'del', 'elif', 'except', 'from',
-  'global', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'match', 'type', '_',
 ])
 
 declare module '@deepseek-ai/cordis' {
@@ -130,8 +88,8 @@ export abstract class PtcRuntime extends Service {
    * lowercase identifier. Informational, not gating — a consumer that
    * generates language-specific presentation (typed SDK stubs, usage
    * instructions) switches on it and fails loud on a language it cannot
-   * present. Well-known values: `'typescript'` and `'python'`, those
-   * `dsh-tool-executor-ptc` presents. The shipped Node backend reports `'typescript'`.
+   * present. The shipped Node backend and `dsh-tool-executor-ptc` support
+   * `'typescript'`. Other languages require their own consumers.
    */
   abstract readonly language: string
 

@@ -2,7 +2,7 @@
 /** The assembled viewer page mounts the normal DSH client UI for the Session its carrier names. */
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createFixtureFaces } from './viewer-fixture.client.ts'
 import type { FixtureWorld } from './viewer-fixture.client.ts'
 import { installViewerInputFixture } from './viewer-input-fixture.client.ts'
@@ -52,6 +52,9 @@ describe('Assembled liveshare viewer page', () => {
     Object.defineProperty(navigator, 'languages', { value: ['en-US'], configurable: true })
     owner = createFixtureFaces({ presented: true })
     stopRelay = installViewerRelay({ owner: owner.rpc })
+    // The owner-only reading stream is never opened for a viewer, so its synchronization failure is never reported.
+    const reported = vi.spyOn(console, 'error')
+    onTestFinished(() => { reported.mockRestore() })
 
     // The carrier names the share and the one Session it presents; the viewer opens that Session by
     // itself because it carries no session list of its own.
@@ -184,5 +187,6 @@ describe('Assembled liveshare viewer page', () => {
       expect(document.body.textContent).toContain('This page cannot open workspace files')
     }, { timeout: 15_000 })
     expect(document.body.textContent).not.toContain('no registered tab type claims')
+    expect(reported.mock.calls.filter(([message]) => String(message).startsWith('[session-status]'))).toEqual([])
   }, 120_000)
 })
