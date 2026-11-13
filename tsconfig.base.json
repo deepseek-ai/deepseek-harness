@@ -271,6 +271,7 @@
       "@deepseek-ai/dsh-mcp-manager/types": ["./packages/mcp/mcp-manager/src/types.ts"],
       "@deepseek-ai/dsh-plugin-market/types": ["./packages/boot/plugin-market/src/types.ts"],
       "@deepseek-ai/dsh-plugin-market/tools": ["./packages/boot/plugin-market/src/tools.ts"],
+      "@deepseek-ai/dsh-plugin-market-index/source": ["./packages/util/plugin-market-index/src/source.ts"],
       "@deepseek-ai/dsh-plugin-detail/types": ["./packages/util/plugin-detail/src/types.ts"],
       "@deepseek-ai/dsh-tool-cordis/host": ["./packages/extensions/tool-cordis/src/host.ts"],
       "@deepseek-ai/dsh-host-plugin-inventory": ["./packages/host/plugin-inventory/src"],

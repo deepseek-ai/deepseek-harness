@@ -2879,14 +2879,14 @@ export interface Config {
 
 - `inject`: `pluginManager`
 - `refs`: [`NpmFileSource`](subsystems/boot.zh.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/boot/plugin-market/src/index.ts:44`](../packages/boot/plugin-market/src/index.ts)
+- `source`: [`packages/boot/plugin-market/src/index.ts:45`](../packages/boot/plugin-market/src/index.ts)
 
 ```ts config-catalog
 /** Index sources and fetch limits. */
 export interface Config {
   /** Index URLs in display order; Settings and `setIndexes` write this field without remounting the service. */
   indexes: Volatile<string[]>
-  /** Deadline for one index fetch, including the body. */
+  /** Deadline for an HTTP index or detail file request, including its body. */
   fetchTimeoutMs: number
   /** Largest accepted index body in bytes. */
   maxBytes: number
@@ -2902,7 +2902,7 @@ export interface Config {
   detailCacheMaxBytes: number
   /** Directory of the partial clones, relative to the profile directory; absent means `.plugin-market/repositories`. */
   detailCacheDir?: string
-  /** Deadline of one Git command of the clone fallback. */
+  /** Deadline for a Git index read and for each Git command used to read an index or plugin details. */
   detailGitTimeoutMs: number
   /** npm file CDNs read in order; a read's `npmFileSources` moves the CDNs it names first. */
   detailNpmFileSources: NpmFileSource[]
@@ -5181,7 +5181,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-working-directory`
 
 - `inject`: `fs` · `sessionProjections` · `systemPrompt`
-- `source`: [`packages/session/working-directory/src/index.ts:65`](../packages/session/working-directory/src/index.ts)
+- `source`: [`packages/session/working-directory/src/index.ts:70`](../packages/session/working-directory/src/index.ts)
 
 ```ts config-catalog
 /** Deployment default for Sessions without an original project directory. */

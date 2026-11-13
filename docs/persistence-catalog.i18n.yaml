@@ -300,8 +300,8 @@
   en: e8dd0cebbb930eb7
   zh: e8dd0cebbb930eb7
 /session-persistence-event-catalog/events/working-directory/working-directory-change-log-only:
-  en: fbdf3777f155f458
-  zh: 98dc9a9351c07415
+  en: 27f0761cbdd6fe2f
+  zh: 33528f333498132d
 /session-persistence-event-catalog/events/workspace:
   en: 63ee1a85e4b59ae3
   zh: 63ee1a85e4b59ae3
@@ -1503,8 +1503,8 @@
   en: bef51e0442ebb903
   zh: 240ebeb160533d8c
 /session-persistence-event-catalog/resolved-persistence-types/cwd:
-  en: 6a6f06c1421739c3
-  zh: 0e28ae71c2e84a1d
+  en: 2809c921c6996791
+  zh: 80b15177561766d7
 /session-persistence-event-catalog/resolved-persistence-types/decision-durationms-exitcode-handlerid:
   en: a99ac57bbec0370f
   zh: 9073329e324a66e0
@@ -1941,8 +1941,8 @@
   en: c6e1e91281b3f9c2
   zh: 33225e83b0bd8cff
 /session-persistence-event-catalog/resolved-persistence-types/kind-working-directory:
-  en: 01a24645da83d178
-  zh: 8d816fb734e836db
+  en: 16930ced5bfa8c81
+  zh: 612f573405163e6f
 /session-persistence-event-catalog/resolved-persistence-types/label-packagename:
   en: 3cd4272a8c092325
   zh: 0c9a51e3ab5295e7

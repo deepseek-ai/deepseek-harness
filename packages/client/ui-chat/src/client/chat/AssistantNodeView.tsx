@@ -1,10 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
-import type {} from '@deepseek-ai/dsh-working-directory/client'
 import type { ChatFileMentions, ChatNodeViewProps, PresentationInjected, TurnTailOwnerProps } from '../contract/slots.ts'
 import { AssistantMarkdown } from './AssistantMarkdown.tsx'
-import { directoryAt } from './directory-at.ts'
 
 /** Business readers owned by the assistant renderer's existing Slot registration. */
 export interface AssistantNodeInjected extends PresentationInjected {
@@ -20,7 +17,7 @@ type AssistantNodeViewProps = ChatNodeViewProps<'assistant-step'> & InjectFace<A
 /** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
 export const AssistantNodeView = memo(function AssistantNodeView({
   node, groupPart, useDisclosure, useGroupAction, useTurnData, turnProcess, openFile, loadImage, fileMentions,
-  usePresentation, renderSlot, t, sessionId, useContextMenu, resolveFilePath, useProjection,
+  usePresentation, renderSlot, t, sessionId, useContextMenu, resolveFilePath,
 }: AssistantNodeViewProps) {
   const { getTriggerProps } = useContextMenu()
   const getFileTriggerProps = useCallback((path: string) => getTriggerProps(() => ({
@@ -49,12 +46,6 @@ export const AssistantNodeView = memo(function AssistantNodeView({
       : turnProcess.spec.answerStep === data.step && turnProcess.spec.inlineReasoning)
     && !turnProcess.open
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
-  // Relative destinations name files in the directory that was current when this message was written.
-  const directory = useProjection('workingDirectoryHistory', history => directoryAt(history, node.anchorSeq))
-  const resolvePath = useMemo(
-    () => directory === undefined ? undefined : (path: string) => resolveWorkspacePath(directory, path),
-    [directory],
-  )
   return (
     <AssistantMarkdown
       blocks={data.blocks}
@@ -70,7 +61,6 @@ export const AssistantNodeView = memo(function AssistantNodeView({
       renderSlot={renderSlot}
       revealProcess={revealProcess}
       mentions={mentions}
-      resolvePath={resolvePath}
       t={t}
     />
   )
