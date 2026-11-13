@@ -1,4 +1,6 @@
 /** Session artifact directories shared by persistence backends. @module */
+// JSONL retains a separate copy so the two backends need no shared helper exports.
+/* jscpd:ignore-start */
 import { join } from 'node:path'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 
@@ -84,3 +86,4 @@ export function projectDir(root: string, cwd: string | undefined): string {
 export function sessionDir(root: string, cwd: string | undefined, id: SessionId): string {
   return join(projectDir(root, cwd), encodeSegment(id))
 }
+/* jscpd:ignore-end */

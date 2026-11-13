@@ -194,6 +194,7 @@ describe('one-time V4 migration command', () => {
     })
     const target = join(source.directory, generationLogFilename(4, compression))
     const targetBytes = await readFile(target)
+    expect(existsSync(join(root, '.segments'))).toBe(false)
     const decoded = compression === 'none' ? targetBytes : Buffer.concat(await Promise.all(
       scanZstdFrames(targetBytes).frames.map(frame => decompressZstdFrame(targetBytes.subarray(frame.start, frame.end))),
     ))
@@ -340,7 +341,7 @@ describe('one-time V4 migration command', () => {
       const ctx = new Context();
       let prototype;
       try {
-        await ctx.plugin(Backend, { root: ${JSON.stringify(temporaryRoot())} });
+        await ctx.plugin(Backend, { root: ${JSON.stringify(temporaryRoot())}, storage: 'jsonl' });
         prototype = Object.getPrototypeOf(ctx.sessionPersistence);
       } finally {
         await ctx.fiber.dispose();

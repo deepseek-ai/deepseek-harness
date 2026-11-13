@@ -27,6 +27,8 @@
  * already excludes every writer.
  * @module @deepseek-ai/dsh-session-persistence-sqlite/lease
  */
+// JSONL retains a separate copy so the two backends need no shared helper exports.
+/* jscpd:ignore-start */
 
 import { mkdir, open, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
@@ -133,3 +135,4 @@ export class SessionWriteLease {
     await this.held.handle.close()
   }
 }
+/* jscpd:ignore-end */

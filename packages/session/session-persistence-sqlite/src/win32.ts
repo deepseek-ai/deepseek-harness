@@ -10,6 +10,8 @@
  *
  * @module dsh-session-persistence-sqlite/win32
  */
+// JSONL retains a separate copy so the two backends need no shared helper exports.
+/* jscpd:ignore-start */
 
 import { createHash } from 'node:crypto'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
@@ -206,3 +208,4 @@ async function createLeafDirectoryWin32(parent: string, target: string): Promise
     throw error
   }
 }
+/* jscpd:ignore-end */

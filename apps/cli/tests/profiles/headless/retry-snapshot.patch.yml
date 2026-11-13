@@ -9,6 +9,7 @@
   disabled: true
 
 - id: agent-loop
+  inject: [sessionPersistence]
   config:
     agents:
       - id: main
