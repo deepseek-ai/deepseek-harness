@@ -6,8 +6,7 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import TypertGateway from '@deepseek-ai/dsh-api-gateway'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection/src/rpc-host.ts'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import { createWebConnectionRpc } from '@deepseek-ai/dsh-client-connection/src/client/rpc.ts'
 import WorkspaceFiles, { type WorkspaceByteReadOptions } from '../src/index.ts'
 import { openWorkspace, type Harness } from './harness.ts'
@@ -22,7 +21,7 @@ beforeEach(async () => {
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(RemoteAccessService)
   await ctx.plugin(TypertGateway)
-  await ctx.plugin((scope) => { new HostConnectionService(scope, [], {} as BrowserAuth) })
+  await ctx.plugin((scope) => { new ConnectionAuthentication(scope); new HostConnectionService(scope, []) })
   await ctx.plugin(WorkspaceFiles, {
     maxBytes: 8,
     maxFileBytes: 4,

@@ -9,7 +9,7 @@ const c = 'fake:c#3' as ChangeRequestKey
 
 /** A read with no threads, told apart by its head, whose length sets its size. */
 function review(head: string): ForgeReviewData {
-  return { headSha: head, viewer: null, threads: [], truncated: false, pendingReview: null, viewerCanReview: false }
+  return { headSha: head, viewer: null, threads: [], truncated: false, pendingReview: null, viewerCanReview: false, reviewEvents: [] }
 }
 
 const size = Buffer.byteLength(JSON.stringify(review('x')))

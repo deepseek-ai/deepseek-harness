@@ -1,4 +1,4 @@
-/** Cordis rc.11 updates retain dependency ownership and publish only current configuration. */
+/** Cordis lifecycle since rc.11 (vendored Core): updates retain dependency ownership and publish only current configuration. */
 import type { Awaitable } from '@deepseek-ai/cosmokit'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -110,7 +110,8 @@ describe('Cordis rc.11 lifecycle', () => {
       await isolated.plugin((child) => { expect(child.rc11View).toBe('inner') })
       await withdraw()
       expect(owner.rc11View).toBe('outer')
-      expect(isolated.rc11View).toBe('outer')
+      // Since rc.12, the isolated context does not fall back to the injected view once its own provision is withdrawn.
+      expect(() => isolated.rc11View).toThrow('without inject')
     })
     await ctx.plugin((owner) => {
       owner.isolate('rc11Private').provide('rc11Private', true)

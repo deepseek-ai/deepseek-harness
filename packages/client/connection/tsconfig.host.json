@@ -8,7 +8,7 @@
   "files": [
     "src/api-path.ts",
     "src/api-request-trust.ts",
-    "src/browser-auth.ts",
+    "src/authentication.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
     "src/connect-protocol.ts",

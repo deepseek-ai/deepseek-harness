@@ -1068,7 +1068,7 @@ describe('boot', () => {
     }
   })
 
-  it('exposes dshHomePath to Loader config expressions', async () => {
+  it('exposes dshHomePath and dshPath to Loader config expressions', async () => {
     const dir = tmp()
     const dshHome = join(dir, 'home')
     vi.stubEnv('DSH_HOME', dshHome)
@@ -1076,6 +1076,7 @@ describe('boot', () => {
       'export const name = "capture"',
       'export function apply(ctx, config) {',
       '  ctx.provide("capturedPath", config.path)',
+      '  ctx.provide("capturedStatePath", config.state)',
       '}',
       '',
     ].join('\n'))
@@ -1084,12 +1085,14 @@ describe('boot', () => {
       '  name: ./capture.mjs',
       '  config:',
       "    path: !!js dshHomePath('sessions')",
+      "    state: !!js dshPath('state', 'capture')",
       '',
     ].join('\n'))
     let ctx: Context | undefined
     try {
       ctx = await boot(NAME, join(dir, 'cordis.yml'))
       expect(ctx.get('capturedPath')).toBe(join(dshHome, 'sessions'))
+      expect(ctx.get('capturedStatePath')).toBe(join(dshHome, 'state', 'capture'))
     } finally {
       await ctx?.fiber.dispose()
       vi.unstubAllEnvs()
@@ -1105,7 +1108,7 @@ describe('boot', () => {
     writeFileSync(join(dir, 'exiting.mjs'), [
       'export const name = "exiting"',
       'export function apply(ctx) {',
-      '  void ctx.root.fiber.dispose()',
+      '  void ctx[Symbol.for("cordis.root")].fiber.dispose()',
       '}',
       '',
     ].join('\n'))

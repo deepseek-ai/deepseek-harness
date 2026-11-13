@@ -21,9 +21,45 @@ const JsExpr = new yaml.Type('tag:yaml.org,2002:js', {
   represent: (data) => data['__jsExpr'],
 })
 
-/** YAML dialect preserving child-owned JavaScript expression nodes. */
-export const entryListSchema = yaml.JSON_SCHEMA.extend(JsExpr)
-const schema = entryListSchema
+const schema = yaml.JSON_SCHEMA.extend(JsExpr)
+
+/** Options for {@link stringifyEntryYaml}. */
+export interface EntryYamlStringifyOptions {
+  /** Column at which long scalars are folded; `-1` disables folding. Defaults to 80. */
+  lineWidth?: number
+}
+
+/**
+ * Parse text in Include's YAML dialect. A `!!js` scalar becomes a child-owned JavaScript expression node that stays
+ * literal until its owning Loader entry evaluates it.
+ * @param content - YAML source text.
+ * @returns the parsed value, or `undefined` for an empty document.
+ * @throws the parser's syntax error; {@link entryYamlErrorPosition} reads its location.
+ */
+export function parseEntryYaml(content: string): unknown {
+  return yaml.load(content, { schema })
+}
+
+/**
+ * Serialize a value in Include's YAML dialect. JavaScript expression nodes are written as `!!js` scalars. The output
+ * never contains anchors or aliases: repeated object references are written out in full, and no option changes this.
+ * @param value - entry list, patch list, or entry fragment to serialize.
+ * @param options - output formatting.
+ * @returns YAML text ending with a newline.
+ */
+export function stringifyEntryYaml(value: unknown, options: EntryYamlStringifyOptions = {}): string {
+  return yaml.dump(value, { schema, noRefs: true, lineWidth: options.lineWidth ?? 80 })
+}
+
+/**
+ * Locate a syntax error thrown by {@link parseEntryYaml}.
+ * @param error - any caught value; only a parse error thrown by {@link parseEntryYaml} yields a position.
+ * @returns the one-based line and column of the error, or `undefined` when the error carries no source location.
+ */
+export function entryYamlErrorPosition(error: unknown): { line: number; column: number } | undefined {
+  if (!(error instanceof yaml.YAMLException) || !error.mark) return undefined
+  return { line: error.mark.line + 1, column: error.mark.column + 1 }
+}
 
 const types: Record<string, string> = {
   '.json': 'application/json',
@@ -133,7 +169,7 @@ export class Include extends EntryTree {
   }
 
   private warn = (format: string, ...args: any[]) => {
-    this.ctx.root.logger?.('loader').warn(format, ...args)
+    this.ctx[Context.root].logger?.('loader').warn(format, ...args)
   }
 
   async* [Service.init]() {
@@ -255,7 +291,7 @@ export class Include extends EntryTree {
     let data: any
     try {
       data = this.type === 'application/yaml'
-        ? yaml.load(content, { schema })
+        ? parseEntryYaml(content)
         : JSON.parse(content)
     } catch (error) {
       throw new ConfigFileError('parse', this.filename, error)

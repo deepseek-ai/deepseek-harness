@@ -50,6 +50,8 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/client/script-realm': { kind: 'none', reason: 'Optional browser execution-provider registration contributes no model input.' },
+  'packages/client/script-realm-iframe': { kind: 'none', reason: 'Same-origin browser script environments contribute no model input.' },
   'packages/client/ui-context-menu': { kind: 'none', reason: 'Client menu presentation and contributed callbacks add no model input.' },
   'packages/client/ui-file-actions': { kind: 'none', reason: 'Explicit user file saves and clipboard operations add no model input.' },
   'packages/client/ui-entry-customization': { kind: 'none', reason: 'Controls browser launchers and prepares a reviewable Creator draft without submitting model input.' },
@@ -69,11 +71,14 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },
+  'packages/host/authentication-token': { kind: 'none', reason: 'Launch-token exchange and Cookie verification authenticate HTTP callers without contributing model input.' },
+  'packages/host/authentication-desktop': { kind: 'none', reason: 'Private Desktop credential verification authenticates HTTP callers without contributing model input.' },
   'packages/api/terminal-controller': { kind: 'indirect', reason: 'Working-directory recovery owns directory context; user terminal screens never enter model requests.' },
   'packages/client/ui-sidebar-terminal': { kind: 'none', reason: 'The browser renders user terminal screens without exposing them to the model.' },
   'packages/ssh/ssh-helper-runtime': { kind: 'none', reason: 'The private executable carrier registers no model-facing content; its providers and consumers own operation results.' },
   'packages/experimental/forge': { kind: 'none', reason: 'Providers and watchers exchange code host status without contributing model context.' },
   'packages/experimental/forge-github': { kind: 'none', reason: 'The provider reads pull request status for host-side watchers without contributing model context.' },
+  'packages/experimental/forge-gitlab': { kind: 'none', reason: 'The provider reads merge request status for host-side watchers without contributing model context.' },
   'packages/experimental/client-ui-forge': { kind: 'indirect', reason: 'Switching a Session directory from the panel reaches the model through the working-directory notice; inspection and status stay on the host.' },
   'packages/experimental/forge-bundle': { kind: 'indirect', reason: 'The worktree tool and panel own the model-visible schemas, results, and directory notices selected by the bundle.' },
   'packages/experimental/forge-session': { kind: 'none', reason: 'Bindings, discovery records, and polled status stay on the host; binding records never enter model requests.' },
@@ -104,6 +109,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },
+  'packages/util/text-search': { kind: 'none', reason: 'Filters caller-owned in-memory lists for UI search boxes; registers nothing model-facing.' },
   'packages/util/crypto': { kind: 'indirect', reason: 'Pure identifier minting; the ids consumers mint with it never enter prompts as semantic content.' },
   'packages/util/deque': { kind: 'none', reason: 'In-process collection primitive; registers nothing model-facing.' },
   'packages/deliverables/workspace-changes': { kind: 'none', reason: 'The recorder appends a log-only Session event that only clients read; it registers nothing model-facing.' },
