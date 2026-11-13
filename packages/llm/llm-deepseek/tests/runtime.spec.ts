@@ -555,20 +555,19 @@ describe('DeepSeekAdapter against a mock server', () => {
   it('counts each ten-image request once after upload timeouts and retries only after HTTP 429', async () => {
     vi.useFakeTimers()
     const started = Array.from({ length: 2 }, () => Promise.withResolvers<undefined>())
-    const throttled = Promise.withResolvers<undefined>()
+    const throttled = Array.from({ length: 2 }, () => Promise.withResolvers<undefined>())
     const upload = vi.fn<typeof fetch>(async () => Response.json({
       id: 'file-probe', type: 'file', size_bytes: 3, created_at: new Date().toISOString(), filename: 'probe.png', mime_type: 'image/png',
     }))
-    for (const gate of started) {
+    for (const [round, gate] of started.entries()) {
       upload.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
         gate.resolve(undefined)
         init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
-      }))
+      })).mockImplementationOnce(async () => {
+        throttled[round]!.resolve(undefined)
+        return new Response(null, { status: 429 })
+      })
     }
-    upload.mockImplementationOnce(async () => {
-      throttled.resolve(undefined)
-      return new Response(null, { status: 429 })
-    })
     const index = new Protocol.DeepSeekUploadIndex()
     vi.spyOn(index, 'get').mockResolvedValue(undefined)
     const files = new Protocol.DeepSeekFileStore({ fetch: upload, index })
@@ -588,10 +587,18 @@ describe('DeepSeekAdapter against a mock server', () => {
     try {
       for (const [round, gate] of started.entries()) {
         const timedOut = request()
+        const priorMessages = messages.mock.calls.length
+        if (round > 0) {
+          await throttled[round - 1]!.promise
+          await vi.advanceTimersByTimeAsync(500)
+        }
         await gate.promise
-        await vi.advanceTimersByTimeAsync(20_000)
+        await vi.advanceTimersByTimeAsync(round === 0 ? 19_999 : 19_499)
+        expect(messages).toHaveBeenCalledTimes(priorMessages)
+        await vi.advanceTimersByTimeAsync(1)
         await timedOut
-        expect(upload).toHaveBeenCalledTimes(round + 1)
+        const expectedPosts = round === 0 ? 1 : 3
+        expect(upload).toHaveBeenCalledTimes(expectedPosts)
         expect(messages.mock.lastCall?.[1]?.body).toEqual(expect.stringContaining('base64'))
         await vi.advanceTimersByTimeAsync(3_600_000)
         await drain(adapter.stream({ provider: 'deepseek-official', model: 'deepseek-flash', messages: [] }))
@@ -599,14 +606,14 @@ describe('DeepSeekAdapter against a mock server', () => {
           await request(ten)
           const inline = messages.mock.lastCall?.[1]?.body
           expect(typeof inline === 'string' && inline.match(/"type":"base64"/gu)).toHaveLength(10)
-          expect(upload).toHaveBeenCalledTimes(round + 1)
+          expect(upload).toHaveBeenCalledTimes(expectedPosts)
         }
       }
       const recovered = request()
-      await throttled.promise
+      await throttled[1]!.promise
       await vi.advanceTimersByTimeAsync(500)
       await recovered
-      expect(upload).toHaveBeenCalledTimes(4)
+      expect(upload).toHaveBeenCalledTimes(5)
       expect(messages.mock.lastCall?.[1]?.body).toEqual(expect.stringContaining('file-probe'))
     } finally {
       messages.mockRestore()
