@@ -147,6 +147,9 @@ function scopedReplMode(outputInstructions: string): ExecutionMode {
 
 function resolveMode(config: ResolvedConfig): ExecutionMode {
   const outputInstructions = 'Use inspect(...values) to display output. Do not use console.'
+    + ' Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression;'
+    + ' write other text, in particular file contents and commands, as ordinary strings.'
+    + ' Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal.'
   switch (config.executionMode) {
     case 'per-call': return {
       format: 'function-body',
