@@ -398,6 +398,7 @@
       "@deepseek-ai/dsh-experimental-forge": ["./packages/experimental/forge/src"],
       "@deepseek-ai/dsh-experimental-forge/types": ["./packages/experimental/forge/src/types.ts"],
       "@deepseek-ai/dsh-experimental-forge-github": ["./packages/experimental/forge-github/src"],
+      "@deepseek-ai/dsh-forge-gitlab": ["./packages/experimental/forge-gitlab/src"],
       "@deepseek-ai/dsh-experimental-forge-session": ["./packages/experimental/forge-session/src"],
       "@deepseek-ai/dsh-experimental-forge-bundle": ["./packages/experimental/forge-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-forge-session/types": ["./packages/experimental/forge-session/src/types.ts"],

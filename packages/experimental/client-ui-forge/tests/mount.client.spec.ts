@@ -209,7 +209,7 @@ async function base() {
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
     changeRequestReview: vi.fn(async (
       _sessionId: SessionId, _url: string, headSha: string, _fresh: boolean, _signal?: AbortSignal,
-    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })),
+    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment', 'approve', 'request-changes'] } })),
     changeRequestReviewWrite: vi.fn(async (_sessionId: SessionId, _url: string, _write: ForgeReviewWrite): Read<ForgeReviewWriteResult> =>
       ({ ok: true, value: { ok: true } })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
@@ -984,7 +984,7 @@ describe('mountForgePanel changes view', () => {
     expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
     expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal))
-      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })
+      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment', 'approve', 'request-changes'] } })
     expect(f.forgePanel.changeRequestReview).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal)
     const write = { kind: 'resolve', headSha: 'a'.repeat(40), thread: 'thread-1' as ForgeThreadId, resolved: true } as const
     expect(await view.changeRequestReviewWrite('https://github.com/octo/demo/pull/7', write)).toEqual({ ok: true, value: { ok: true } })
