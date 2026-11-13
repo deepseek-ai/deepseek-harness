@@ -533,7 +533,7 @@ interface LlmNativeAuth {
 }
 ```
 
-路由的适配器还可以发布该路由当前发送的凭据，使在模型请求路径之外调用同一部署的消费方（如 DeepSeek Web 提供方）通过 `ctx.llm.routeCredential(provider)` 复用它，而不读取提供方配置或自行选择请求头名称。授权仅限 Host，且只在一次操作内持有；`kind` 通过 `LlmCredentialKindMap` 可合并扩展，已声明的成员为 `api-key` 和 `account`。
+路由的适配器还可以发布该路由当前发送的凭据，使在模型请求路径之外调用同一部署的消费方（如 DeepSeek Web 提供方）通过 `ctx.llm.routeCredential(provider)` 复用它，而不读取提供方配置或自行选择请求头名称。授权仅限 Host，且只在一次操作内持有；`kind` 通过 `LlmCredentialKindMap` 可合并扩展，已声明的成员为 `api-key` 和 `account`。所有者可能在请求仍携带凭据时收回它（例如账号退登），这类授权带有 `revoked` 信号：消费方让它鉴权的每个请求都受该信号约束，并把被该信号结束的请求报告为自身的失败，而不是调用方的取消。
 
 ```ts type-equiv
 /**
@@ -560,6 +560,13 @@ interface RouteCredentialGrant {
    * @returns settlement after the invalidation attempt.
    */
   reject?(): Promise<void>
+  /**
+   * Aborts when the owner withdraws this credential while requests carrying it
+   * may be in flight, as an account sign-out does. A consumer ends each request
+   * it authenticated with this grant and reports that end as its own failure,
+   * not as the caller's cancellation. Absent for kinds that are never withdrawn.
+   */
+  readonly revoked?: AbortSignal
 }
 ```
 

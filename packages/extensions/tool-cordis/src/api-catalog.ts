@@ -1051,7 +1051,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined>',
-        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called. Host-only.',
+        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called, and the signal this service aborts when it signs out of that credential. Host-only.',
         parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
         returns: 'the request credential, or undefined for other origins or a signed-out account.',
       },
@@ -5321,7 +5321,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'emit',
     signature: '\'deepseek-account/signed-out\'(): void',
     summary: 'Local grant removal has completed.',
-    description: 'Local grant removal has completed.',
+    description: 'Local grant removal has completed. After the listeners return, the `revoked` signal of that grant\'s request credentials aborts.',
     parameters: [],
   },
   {
@@ -5846,7 +5846,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AccountRequestCredential',
-    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject(): Promise<void>;\n}',
+    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
   },
   {
     name: 'AccountUpdate',
@@ -8710,7 +8710,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RouteCredentialGrant',
-    declaration: 'export interface RouteCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n}',
+    declaration: 'export interface RouteCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
   },
   {
     name: 'RpcId',

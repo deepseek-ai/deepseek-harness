@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, model discovery, and the official model listing for `deepseek-official`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, catalog availability, and model admission.
 
-Authentication resolution returns the validated API key in `x-api-key` for Messages, Files, and listing requests, and publishes the same key through `ctx.llm.routeCredential('deepseek-official')` with the route's base URL and `apiKeyEnv` reference, so the DeepSeek web providers send it as a bearer token to the same deployment. The published credential releases the key only for destinations under the origin of that base URL: for another origin, or a URL that embeds credentials, `configured()` answers false and `resolve()` releases nothing, and neither reads the credential store.
+Authentication resolution returns the validated API key in `x-api-key` for Messages, Files, and listing requests, and publishes the same key through `ctx.llm.routeCredential('deepseek-official')` with the route's base URL and `apiKeyEnv` reference, so the DeepSeek web providers send it as a bearer token to the same deployment. The published credential releases the key only for destinations under the origin of that base URL.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Authentication resolution returns the validated API key in `x-api-key` for Messa
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
-The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential.
+The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential. For a destination at another origin, or a URL that embeds credentials, the published credential's `configured()` answers false and its `resolve()` releases nothing, and neither reads the credential store.
 
 `models` is an independently configurable catalog for this provider; defaults and protocol capabilities come from the shared transport. While `models` equals the built-in catalog and the Messages origin is the official API, `https://api.deepseek.com`, the route serves the official `GET https://api.deepseek.com/models` listing instead. Listing requests carry the API key in `x-api-key` and the harness `User-Agent`, and reject redirects; without an API key the route requests nothing. Any other endpoint, including one named by `baseURL` or `$DEEPSEEK_BASE_URL`, serves `models` and requests no listing. Discovery does not probe inference endpoints.
 

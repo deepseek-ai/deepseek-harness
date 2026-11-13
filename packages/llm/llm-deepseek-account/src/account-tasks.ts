@@ -10,10 +10,25 @@ function isRunningAccountTask(agent: Pick<Agent, 'status' | 'session'>, provider
 }
 
 /**
+ * End the running Agents whose latest request used the account route `provider`, keeping their inboxes.
+ * @param ctx - context whose optional Agent registry is read when this runs; without one nothing is cancelled.
+ * @param provider - the account route id.
+ */
+export function cancelAccountTasks(ctx: Context, provider: string): void {
+  for (const agent of ctx.get('agents')?.list() ?? []) {
+    if (isRunningAccountTask(agent, provider)) {
+      agent.cancel({ kind: 'hook', reason: 'deepseek-account/signed-out' }, { keepInbox: true })
+    }
+  }
+}
+
+/**
  * Cancel signed-out account tasks, publish sign-in guidance for rejected
  * requests, and report running account work to the account service's
  * sign-out confirmation. Each listener attaches once the service it needs is
- * mounted and detaches with this plugin.
+ * mounted and detaches with this plugin; a request that outlives the plugin
+ * ends its tasks through {@link cancelAccountTasks} when its credential is
+ * signed out.
  * @param ctx - account route plugin lifetime; Agents and the account service may attach later.
  * @param provider - the account route id this plugin registers.
  */
@@ -24,13 +39,7 @@ export function installAccountTaskCancellation(ctx: Context, provider: string): 
         scope.emit('deepseek-account/model-sign-in-required')
       }
     })
-    scope.on('deepseek-account/signed-out', () => {
-      for (const agent of scope.agents.list()) {
-        if (isRunningAccountTask(agent, provider)) {
-          agent.cancel({ kind: 'hook', reason: 'deepseek-account/signed-out' }, { keepInbox: true })
-        }
-      }
-    })
+    scope.on('deepseek-account/signed-out', () => { cancelAccountTasks(scope, provider) })
     scope.inject(['deepseekAccount'], (reporting) => {
       reporting.effect(() => reporting.deepseekAccount.registerRunningTaskReport(
         () => reporting.agents.list().some(agent => isRunningAccountTask(agent, provider)),

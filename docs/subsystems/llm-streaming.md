@@ -527,7 +527,7 @@ interface LlmNativeAuth {
 }
 ```
 
-A route's adapter can also publish the credential the route currently sends, so consumers that call the same deployment outside the model request path, such as the DeepSeek web providers, reuse it through `ctx.llm.routeCredential(provider)` instead of reading provider configuration or choosing header names. A grant is Host-only and is held for one operation; `kind` is merge-extensible through `LlmCredentialKindMap`, whose declared members are `api-key` and `account`.
+A route's adapter can also publish the credential the route currently sends, so consumers that call the same deployment outside the model request path, such as the DeepSeek web providers, reuse it through `ctx.llm.routeCredential(provider)` instead of reading provider configuration or choosing header names. A grant is Host-only and is held for one operation; `kind` is merge-extensible through `LlmCredentialKindMap`, whose declared members are `api-key` and `account`. A grant whose owner can withdraw the credential while requests carry it, as an account sign-out does, has a `revoked` signal: the consumer runs each request it authenticates under that signal and reports a request the signal ended as its own failure, not as the caller's cancellation.
 
 ```ts type-equiv
 /**
@@ -554,6 +554,13 @@ interface RouteCredentialGrant {
    * @returns settlement after the invalidation attempt.
    */
   reject?(): Promise<void>
+  /**
+   * Aborts when the owner withdraws this credential while requests carrying it
+   * may be in flight, as an account sign-out does. A consumer ends each request
+   * it authenticated with this grant and reports that end as its own failure,
+   * not as the caller's cancellation. Absent for kinds that are never withdrawn.
+   */
+  readonly revoked?: AbortSignal
 }
 ```
 

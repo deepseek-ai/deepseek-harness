@@ -64,7 +64,11 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
         if (auth === undefined) return undefined
         // The adapter's failure classification stays behind the seam.
         const reject = auth.reject?.bind(auth)
-        return { headers: auth.headers, value: auth.value, ...reject === undefined ? {} : { reject } }
+        return {
+          headers: auth.headers, value: auth.value,
+          ...reject === undefined ? {} : { reject },
+          ...auth.revoked === undefined ? {} : { revoked: auth.revoked },
+        }
       },
     }
   }
@@ -123,14 +127,16 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     )
     const auth = await this.dependencies.resolveAuth(connection, connection.baseURL)
     if (auth === undefined) throw this.missingCredential(connection, options.provider)
+    // The request ends with its credential: a withdrawal closes the upstream response as the caller's cancellation does.
+    const live = auth.revoked === undefined ? signal : AbortSignal.any([signal, auth.revoked])
     try {
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,
       },
-      connection.filePolicy, connection.filesApiTimeoutMs, signal, activity)
+      connection.filePolicy, connection.filesApiTimeoutMs, live, activity)
       let inline = false
       while (true) {
-        signal.throwIfAborted()
+        live.throwIfAborted()
         files.beginAttempt()
         let fileIds: Awaited<ReturnType<typeof prepareFileIds>> | undefined
         if (!inline) {
@@ -147,7 +153,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
           this.dependencies.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
         }, fileIds)
         const requestIdentity: Omit<DeepSeekLlmApiExtensionRequest, 'body'> = {
-          signal,
+          signal: live,
           ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
           ...options.purpose === undefined ? {} : { purpose: options.purpose },
         }
@@ -159,7 +165,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
             this.dependencies.onExtensionsUnaccepted?.({ provider: options.provider, model: options.model, error })
           },
         )
-        signal.throwIfAborted()
+        live.throwIfAborted()
         const betas = [
           ...fileIds !== undefined && fileIds.size > 0 ? [MESSAGES_FILES_BETA] : [],
           ...body.messages.some(message => message.content.some(block => block.type === 'tool_addition' || block.type === 'tool_removal'))
@@ -167,7 +173,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
             : [],
         ]
         const response = await fetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
-          method: 'POST', signal, body: extensions.payload, redirect: 'error',
+          method: 'POST', signal: live, body: extensions.payload, redirect: 'error',
           headers: {
             ...attributionHeaders(),
             'content-type': 'application/json', 'accept': 'text/event-stream',

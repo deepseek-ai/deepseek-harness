@@ -8,15 +8,18 @@ export interface AccountStubOptions {
   readonly token: (url: string) => string | undefined | Promise<string | undefined>
   /** Observes each rejected token; a throw is contained, as the service contains storage failures. */
   readonly reject?: (token: string) => void | Promise<void>
+  /** The sign-out signal released credentials carry; without one they carry a signal that never aborts. */
+  readonly signedOut?: AbortSignal
 }
 
 /**
- * An account service releasing request credentials as the real one does: the token header, the bare token, and an
- * invalidation that reports no failure.
- * @param options - token policy and rejection observer.
+ * An account service releasing request credentials as the real one does: the token header, the bare token, the
+ * sign-out signal, and an invalidation that reports no failure.
+ * @param options - token policy, rejection observer, and sign-out signal.
  * @returns the stand-in, typed as the service for `ctx.provide`.
  */
 export function accountStub(options: AccountStubOptions): DeepSeekAccount {
+  const signedOut = options.signedOut ?? new AbortController().signal
   const stub: Pick<DeepSeekAccount, 'resolveRequestCredential'> = {
     async resolveRequestCredential(url) {
       const token = await options.token(url)
@@ -24,6 +27,7 @@ export function accountStub(options: AccountStubOptions): DeepSeekAccount {
       return {
         headers: { [ACCOUNT_TOKEN_HEADER]: token },
         value: token,
+        revoked: signedOut,
         reject: async () => {
           try { await options.reject?.(token) }
           catch (_storageFailure) { /* The destination's rejection is the failure to report, as in the service. */ }

@@ -330,6 +330,13 @@ export interface RouteCredentialGrant {
    * @returns settlement after the invalidation attempt.
    */
   reject?(): Promise<void>
+  /**
+   * Aborts when the owner withdraws this credential while requests carrying it
+   * may be in flight, as an account sign-out does. A consumer ends each request
+   * it authenticated with this grant and reports that end as its own failure,
+   * not as the caller's cancellation. Absent for kinds that are never withdrawn.
+   */
+  readonly revoked?: AbortSignal
 }
 
 /**

@@ -503,6 +503,67 @@ it('publishes sign-out only after local grant removal and refuses token resoluti
   expect((await f.account.getState()).status).toBe('signed-out')
 })
 
+it.each(['user sign-out', 'rejected token'] as const)('withdraws released request credentials at a %s, after its listeners ran', async (cause) => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  const observed: boolean[] = []
+  f.ctx.on('deepseek-account/signed-out', () => { observed.push(credential.revoked.aborted) })
+  expect(credential.revoked.aborted).toBe(false)
+  if (cause === 'user sign-out') await f.account.signOut(clientMetadata())
+  else await (await storedCredential(f)).reject()
+  expect(observed).toEqual([false])
+  expect(credential.revoked.aborted).toBe(true)
+  // The next sign-in releases its credentials on a signal of its own.
+  await storeAccount(f)
+  const next = await storedCredential(f)
+  expect(next.revoked).not.toBe(credential.revoked)
+  expect(next.revoked.aborted).toBe(false)
+})
+
+it('withdraws released request credentials when a sign-out listener throws', async () => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  f.ctx.on('deepseek-account/signed-out', () => { throw new Error('listener failed') })
+  await expect(f.account.signOut(clientMetadata())).rejects.toThrow('listener failed')
+  expect(credential.revoked.aborted).toBe(true)
+})
+
+it('releases a withdrawn credential when sign-out completes while its token is being read', async () => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const original = f.ctx.credentials.readRecord.bind(f.ctx.credentials)
+  const reading = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const read = vi.spyOn(f.ctx.credentials, 'readRecord').mockImplementationOnce(async (requested) => {
+    const record = await original(requested)
+    reading.resolve(undefined)
+    await release.promise
+    return record
+  })
+  try {
+    const pending = f.account.resolveRequestCredential(`${PRIVATE_INFERENCE}/v1/messages`)
+    await reading.promise
+    await f.account.signOut(clientMetadata())
+    release.resolve(undefined)
+    // The token was read before the sign-out removed it, so the credential must not authenticate a request.
+    expect(await pending).toMatchObject({ value: 'test-platform-grant', revoked: { aborted: true } })
+  } finally { read.mockRestore() }
+})
+
+it('keeps released request credentials when the account service is replaced', async () => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  const replacement = await f.remount()
+  expect(credential.revoked.aborted).toBe(false)
+  // The replacement withdraws only the credentials it released itself.
+  const current = await replacement.resolveRequestCredential(`${PRIVATE_INFERENCE}/v1/messages`)
+  await replacement.signOut(clientMetadata())
+  expect({ replaced: credential.revoked.aborted, current: current?.revoked.aborted }).toEqual({ replaced: false, current: true })
+})
+
 it('discards account details when sign-out races the Platform response', async () => {
   const f = await fixture()
   await storeAccount(f)

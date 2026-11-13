@@ -74,7 +74,7 @@ Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据
 
 Search API 接收 `query`、`count`（配置的结果数，或请求中更小的 `maxResults`）、`need_content: false`，以及在 `sendOriginalQuestion` 未关闭时的 `ori_question`：发起会话中最近一条用户提示的文本，空白折叠后截取至 128 个字符。在会话之外或没有此类提示的搜索不发送该字段。提供者将 `results[].snippet` 映射为展示用摘录，将 `results[].summary` 映射为面向模型的摘录，并将可为 null 的 `date` 映射为可选的 `publishedAt`；`dsh-tool-web` 限制每条摘要的长度。空结果数组表示成功。Fetch 发送 `url`，以文本正文返回原始 Markdown，并报告 HTTP 状态 200，因为目标没有可用内容时 API 会返回错误状态。返回 URL 为请求 URL：API 不报告重定向后的最终 URL。
 
-单独配置的基础地址无法解析时，该能力的提供者不可用；`count` 不在 1 至 50 之间时，Search 不可用。凭据缺失以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；所需模型路由的设置无法解析时以 `WEB_PROVIDER_MISCONFIGURED` 失败，并点名解析器的失败原因、模型页面以及该能力的 `*BaseURL` 与 `*ApiKeyEnv`；取消使用 `WEB_ABORTED`；传输、HTTP 和响应格式错误使用 `WEB_PROVIDER_ERROR`。重定向在联系目标前即被拒绝。Fetch API 的非成功状态表示抓取失败，不代表目标页面的状态。账号鉴权的 HTTP 401 响应只作废该请求实际发送的 token，并提供重新登录指引；更新的登录不受影响，凭据删除失败不会替换原 HTTP 错误。API 密钥失败与 HTTP 403 从不作废账号 token；其他请求失败指出端点及其来源：路由端点指导用户在模型页面检查该提供方的基础地址，或设置该能力的 `*BaseURL` 与 `*ApiKeyEnv`；单独配置指导用户修改或删除这两个字段。不会自动重试或回退至其他提供者。
+单独配置的基础地址无法解析时，该能力的提供者不可用；`count` 不在 1 至 50 之间时，Search 不可用。凭据缺失以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；所需模型路由的设置无法解析时以 `WEB_PROVIDER_MISCONFIGURED` 失败，并点名解析器的失败原因、模型页面以及该能力的 `*BaseURL` 与 `*ApiKeyEnv`；取消使用 `WEB_ABORTED`；传输、HTTP 和响应格式错误使用 `WEB_PROVIDER_ERROR`。请求携带的凭据被收回时（例如账号退登通过授权的 `revoked` 信号收回），请求随即结束：以 `WEB_PROVIDER_ERROR` 失败并提供重新登录的指引，其他种类的凭据则指引用户在模型页面检查该凭据；调用方同时取消时仍为 `WEB_ABORTED`。重定向在联系目标前即被拒绝。Fetch API 的非成功状态表示抓取失败，不代表目标页面的状态。账号鉴权的 HTTP 401 响应只作废该请求实际发送的 token，并提供重新登录指引；更新的登录不受影响，凭据删除失败不会替换原 HTTP 错误。API 密钥失败与 HTTP 403 从不作废账号 token；其他请求失败指出端点及其来源：路由端点指导用户在模型页面检查该提供方的基础地址，或设置该能力的 `*BaseURL` 与 `*ApiKeyEnv`；单独配置指导用户修改或删除这两个字段。不会自动重试或回退至其他提供者。
 
 -----
 
@@ -99,7 +99,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 
 #### 模型看到什么
 
-`web_search` 和 `web_fetch` 工具在外部内容提示下呈现搜索来源或 Markdown。Fetch 结果包含请求 URL 和 HTTP 200。错误保留可操作的凭据或端点指引。Search 将查询连同触发问题直接发送给 Search API。
+`web_search` 和 `web_fetch` 工具在外部内容提示下呈现搜索来源或 Markdown。Fetch 结果包含请求 URL 和 HTTP 200。错误保留可操作的凭据或端点指引；被账号退登结束的请求报告 `The DeepSeek account signed out before this web request finished. Guide the user to sign in to DeepSeek again; the endpoint does not need changing.`Search 将查询连同触发问题直接发送给 Search API。
 
 #### Token 影响
 

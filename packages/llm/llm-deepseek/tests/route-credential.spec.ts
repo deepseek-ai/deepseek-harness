@@ -53,8 +53,9 @@ it('publishes no credential for a provider that declares none', async () => {
 
 it('publishes the declared credential from one configuration generation and resolves it per endpoint', async () => {
   const reject = vi.fn(() => Promise.resolve())
+  const revoked = new AbortController().signal
   const resolveAuth = vi.fn(async (_connection: ResolvedDeepSeekOptions, endpoint: string): Promise<DeepSeekRequestAuth | undefined> =>
-    endpoint === ALLOWED ? { headers: { 'x-fixture': 'k' }, value: 'k', reject, onRequestError: error => Promise.resolve(error) } : undefined)
+    endpoint === ALLOWED ? { headers: { 'x-fixture': 'k' }, value: 'k', reject, revoked, onRequestError: error => Promise.resolve(error) } : undefined)
   const configured = vi.fn(async (_connection: ResolvedDeepSeekOptions, endpoint: string) => endpoint === ALLOWED)
   const ctx = await route({ resolveAuth, credential: { kind: 'api-key', reference: () => 'FIXTURE_KEY', configured } })
   const credential = ctx.llm.routeCredential('fixture-route')
@@ -63,8 +64,9 @@ it('publishes the declared credential from one configuration generation and reso
   await expect(credential!.configured(OTHER)).resolves.toBe(false)
   // The grant carries the seam's fields only; the adapter's failure classification stays behind it.
   const grant = await credential!.resolve(ALLOWED)
-  expect(Object.keys(grant!)).toEqual(['headers', 'value', 'reject'])
+  expect(Object.keys(grant!)).toEqual(['headers', 'value', 'reject', 'revoked'])
   expect(grant).toMatchObject({ headers: { 'x-fixture': 'k' }, value: 'k' })
+  expect(grant!.revoked).toBe(revoked)
   await grant!.reject!()
   expect(reject).toHaveBeenCalledTimes(1)
   await expect(credential!.resolve(OTHER)).resolves.toBeUndefined()
@@ -73,7 +75,7 @@ it('publishes the declared credential from one configuration generation and reso
   expect(configured.mock.calls.map(([{ baseURL }]) => baseURL)).toEqual([BASE_URL, BASE_URL])
 })
 
-it('omits the reference of a credential kind without one and the rejection of a grant without one', async () => {
+it('omits the reference of a credential kind without one and the rejection and withdrawal of a grant without them', async () => {
   const ctx = await route({
     resolveAuth: () => Promise.resolve({ headers: { 'x-fixture': 'k' }, value: 'k' }),
     credential: { kind: 'account', configured: () => Promise.resolve(false) },

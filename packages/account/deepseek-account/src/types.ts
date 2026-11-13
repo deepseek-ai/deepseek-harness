@@ -130,6 +130,12 @@ export interface AccountRequestCredential {
    * @returns settlement after the removal attempt.
    */
   reject(): Promise<void>
+  /**
+   * Aborts when the account signs out of the sign-in this token belongs to, by the user or after a rejection, once
+   * `deepseek-account/signed-out` listeners have run. A consumer ends the request that carries the token. It stays
+   * unaborted when the account service that released it has been unloaded, because no sign-out reaches it then.
+   */
+  readonly revoked: AbortSignal
 }
 
 /** Host-only credentials for an embedded Platform document; never expose through account RPC. */

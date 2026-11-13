@@ -35,14 +35,19 @@ const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchP
 /**
  * The account credential resolver a route publishes over `token`, with `reject` observing each invalidated token;
  * a throwing observer rejects the grant's invalidation, as an owner that does not contain its storage failures does.
+ * `revoked` is the sign-out signal the grant carries, when given.
  */
 function accountCredential(
-  token: (endpoint: string) => Promise<string | undefined>, reject?: (token: string) => Promise<void>,
+  token: (endpoint: string) => Promise<string | undefined>, reject?: (token: string) => Promise<void>, revoked?: AbortSignal,
 ): (endpoint: string) => Promise<RouteCredentialGrant | undefined> {
   return async (endpoint) => {
     const value = await token(endpoint)
     if (value === undefined || value.length === 0) return undefined
-    return { headers: { 'x-dsh-auth-token': value }, value, ...reject === undefined ? {} : { reject: () => reject(value) } }
+    return {
+      headers: { 'x-dsh-auth-token': value }, value,
+      ...reject === undefined ? {} : { reject: () => reject(value) },
+      ...revoked === undefined ? {} : { revoked },
+    }
   }
 }
 
@@ -365,6 +370,58 @@ describe('DeepSeekSearchProvider account authentication', () => {
     }).search({ query: 'q' }, controller.signal))
     expect(error.code).toBe('WEB_ABORTED')
     expect(rejectAccountToken).toHaveBeenCalledExactlyOnceWith('sent-token')
+  })
+
+  const ACCOUNT_SIGNED_OUT = 'The DeepSeek account signed out before this web search finished. Guide the user to sign in to DeepSeek'
+    + ' again; the search endpoint does not need changing.'
+  /** A provider authenticating with an account credential whose sign-out signal is `revoked`. */
+  const signedIn = (revoked: AbortSignal): DeepSeekSearchProvider =>
+    searchProvider({ ...options, resolveAccountCredential: accountCredential(async () => 'account-token', undefined, revoked) })
+
+  it('ends an open search when the account signs out and reports sign-in guidance instead of a cancellation', async () => {
+    for (const signal of [undefined, new AbortController().signal]) {
+      const signedOut = new AbortController()
+      const sent = Promise.withResolvers<AbortSignal>()
+      vi.stubGlobal('fetch', vi.fn((_input: string, init?: RequestInit) => {
+        const request = init!.signal!
+        sent.resolve(request)
+        return new Promise<Response>((_resolve, reject) => {
+          request.addEventListener('abort', () => { reject(request.reason as Error) }, { once: true })
+        })
+      }))
+      const pending = rejectedWebError(signedIn(signedOut.signal).search({ query: 'q' }, signal))
+      const request = await sent.promise
+      expect(request.aborted).toBe(false)
+      signedOut.abort()
+      const error = await pending
+      expect(error).toMatchObject({ code: 'WEB_PROVIDER_ERROR', message: ACCOUNT_SIGNED_OUT })
+      expect(error.cause).toBe(signedOut.signal.reason)
+      expect(request.aborted).toBe(true)
+    }
+  })
+
+  it.each([200, 500])('reports a sign-out that interrupts reading an HTTP %i body', async (status) => {
+    const signedOut = new AbortController()
+    const body = new Response('', { status })
+    vi.spyOn(body, 'json').mockImplementation(async (): Promise<unknown> => {
+      signedOut.abort()
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => body))
+    const error = await rejectedWebError(signedIn(signedOut.signal).search({ query: 'q' }))
+    expect(error).toMatchObject({ code: 'WEB_PROVIDER_ERROR', message: ACCOUNT_SIGNED_OUT })
+  })
+
+  it('reports the caller\'s cancellation when the caller and the sign-out both ended the search', async () => {
+    const signedOut = new AbortController()
+    const controller = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      signedOut.abort()
+      controller.abort(new Error('caller stopped'))
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }))
+    await expect(signedIn(signedOut.signal).search({ query: 'q' }, controller.signal))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_ABORTED' }))
   })
 
   it('keeps endpoint guidance for other account-authenticated HTTP failures', async () => {

@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-official` 注册鉴权、模型发现和官方模型列表。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包拥有凭据解析、目录可用性判断和模型准入。
 
-鉴权解析将验证后的 API key 放入 `x-api-key`，供 Messages、Files 和列表请求使用，并通过 `ctx.llm.routeCredential('deepseek-official')` 连同路由的基础地址和 `apiKeyEnv` 引用发布同一密钥，使 DeepSeek Web 提供方以 Bearer 令牌把它发往同一部署。发布的凭据只对该基础地址所在 origin 下的目的地释放密钥：对其他 origin 或内嵌凭据的 URL，`configured()` 回答 false，`resolve()` 不释放任何内容，二者都不读取凭据存储。
+鉴权解析将验证后的 API key 放入 `x-api-key`，供 Messages、Files 和列表请求使用，并通过 `ctx.llm.routeCredential('deepseek-official')` 连同路由的基础地址和 `apiKeyEnv` 引用发布同一密钥，使 DeepSeek Web 提供方以 Bearer 令牌把它发往同一部署。发布的凭据只对该基础地址所在 origin 下的目的地释放密钥。
 
 ## 目录
 
@@ -35,7 +35,7 @@ kind: "package-reference"
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
-端点和凭据引用来自同一次配置解析；进行中的请求保留该快照，后续配置更新仅影响后续请求。账号登录态不影响该路由使用的凭据。
+端点和凭据引用来自同一次配置解析；进行中的请求保留该快照，后续配置更新仅影响后续请求。账号登录态不影响该路由使用的凭据。对其他 origin 的目的地或内嵌凭据的 URL，发布的凭据的 `configured()` 回答 false，`resolve()` 不释放任何内容，二者都不读取凭据存储。
 
 `models` 是该 provider 独立的可配置目录；默认值和协议能力来自共享传输包。当 `models` 等于内置目录、且 Messages 的 origin 是官方 API `https://api.deepseek.com` 时，路由改为提供官方 `GET https://api.deepseek.com/models` 列表。列表请求用 `x-api-key` 携带 API key，带上 harness 的 `User-Agent`，并拒绝重定向；没有 API key 时不发任何请求。其他端点，包括由 `baseURL` 或 `$DEEPSEEK_BASE_URL` 指定的端点，提供 `models`，不请求列表。目录判断不探测推理端点。
 

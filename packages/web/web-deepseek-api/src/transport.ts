@@ -163,6 +163,8 @@ interface SearchAuth {
   readonly headers: Readonly<Record<string, string>>
   /** Request-bound invalidation of the sent credential, present when its grant offers one; the dispatch contains its failure. */
   readonly reject?: () => Promise<void>
+  /** Withdrawal of the sent credential, present when its grant offers one; it ends the request. */
+  readonly revoked?: AbortSignal
 }
 
 /** Dispatch one operation using a single settings and credential snapshot: one request, with the first present source.
@@ -183,6 +185,17 @@ export async function dispatchDeepSeekWeb<T>(
   throwIfSearchAborted(signal)
   let response: Response
   /* jscpd:ignore-start */
+  const live = requestSignal(signal, auth.revoked)
+  /**
+   * The failure of an interrupted request: the caller's cancellation first, then the withdrawal of the sent credential.
+   * @param error - what the interrupted fetch or body read threw.
+   * @returns the failure to report, or undefined when `error` is no interruption.
+   */
+  const interrupted = (error: unknown): WebError | undefined => {
+    if (signal?.aborted === true) return searchAborted(signal, error)
+    if (auth.revoked?.aborted === true) return credentialWithdrawnError(auth.kind, error)
+    return isAbortError(error) ? searchAborted(signal, error) : undefined
+  }
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -195,11 +208,10 @@ export async function dispatchDeepSeekWeb<T>(
         'user-agent': USER_AGENT,
       },
       body: JSON.stringify(body),
-      ...signal !== undefined ? { signal } : {},
+      ...live !== undefined ? { signal: live } : {},
     })
   } catch (error: unknown) {
-    if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
-    throw searchEndpointError(
+    throw interrupted(error) ?? searchEndpointError(
       guidance,
       endpoint,
       `DeepSeek web request failed: ${String(error)}`,
@@ -219,10 +231,10 @@ export async function dispatchDeepSeekWeb<T>(
         if (typeof detail === 'string' && detail.length > 0) message += `: ${detail}`
       }
     } catch (error: unknown) {
-      // An abort fired mid-body must surface as WEB_ABORTED, not be swallowed
+      // An interruption mid-body must surface as itself, not be swallowed
       // into a generic HTTP-error message — cancellation is not a provider
       // error (the seam's cancellation contract).
-      if (signal?.aborted === true || isAbortError(error)) aborted = searchAborted(signal, error)
+      aborted = interrupted(error)
       // Otherwise: the HTTP status is already captured in `message` above; a
       // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
       // cost a richer provider message, never the real error.
@@ -246,12 +258,43 @@ export async function dispatchDeepSeekWeb<T>(
     throwIfSearchAborted(signal)
     return decode(payload)
   } catch (error: unknown) {
-    if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+    const stopped = interrupted(error)
+    if (stopped !== undefined) throw stopped
     const message = error instanceof WebError
       ? error.message
       : `DeepSeek returned an unprocessable response body: ${String(error)}`
     throw searchEndpointError(guidance, endpoint, message, error)
   }
+}
+
+/**
+ * The signal one request runs under: the caller's cancellation and the withdrawal of the credential it carries.
+ * @param signal - caller cancellation, when the caller supplies one.
+ * @param revoked - withdrawal of the sent credential, when its grant offers one.
+ * @returns the composed signal, or undefined when neither exists.
+ */
+function requestSignal(signal: AbortSignal | undefined, revoked: AbortSignal | undefined): AbortSignal | undefined {
+  if (signal === undefined || revoked === undefined) return signal ?? revoked
+  return AbortSignal.any([signal, revoked])
+}
+
+/**
+ * Report a request that ended because the owner withdrew the credential it carried. The caller did not cancel, so the
+ * failure is the provider's.
+ * @param kind - kind of the withdrawn credential.
+ * @param cause - what the interrupted fetch or body read threw.
+ * @returns the provider failure, with sign-in guidance for an account credential.
+ */
+function credentialWithdrawnError(kind: LlmCredentialKind, cause: unknown): WebError {
+  return new WebError(
+    kind === 'account'
+      ? 'The DeepSeek account signed out before this web request finished. Guide the user to sign in to DeepSeek again;'
+        + ' the endpoint does not need changing.'
+      : 'The credential this web request carried was withdrawn before the request finished. Guide the user to check that'
+        + ' credential on the Models page.',
+    'WEB_PROVIDER_ERROR',
+    { cause },
+  )
 }
 
 /** Replace endpoint guidance with sign-in guidance when DeepSeek rejects the account token. */
@@ -318,6 +361,7 @@ async function authHeaders(
           kind, endpoint,
           headers: kind === 'api-key' ? { ...request.apiKeyHeaders?.(grant.value), authorization: `Bearer ${grant.value}` } : grant.headers,
           ...invalidate === undefined ? {} : { reject: invalidate },
+          ...grant.revoked === undefined ? {} : { revoked: grant.revoked },
         }
       }
       case 'api-key': {

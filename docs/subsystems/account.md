@@ -8,9 +8,9 @@ Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/accoun
 
 ## Request credentials
 
-`resolveRequestCredential(url)` is Host-only. It answers `undefined` while signed out, during credential removal, and for any destination outside the configured `inferenceOrigin`; otherwise it returns an `AccountRequestCredential` whose `headers` carry the token as `x-dsh-auth-token`, whose `value` is the bare token, and whose `reject()` removes the stored grant only while it still matches that token, containing storage failures so the caller reports the destination's rejection. The `deepseek-account` model route publishes this credential through `ctx.llm.routeCredential('deepseek-account')` ([LLM streaming](llm-streaming.md)); the DeepSeek web providers consume it there and, without that route, ask the account service directly. `reject()` runs on the account service mounted when it is called, so a reload between a request and the destination's answer still removes the grant; without a mounted service it leaves the grant for the next one to reject.
+`resolveRequestCredential(url)` is Host-only. It answers `undefined` while signed out, during credential removal, and for any destination outside the configured `inferenceOrigin`; otherwise it returns an `AccountRequestCredential` whose `headers` carry the token as `x-dsh-auth-token`, whose `value` is the bare token, and whose `reject()` removes the stored grant only while it still matches that token, containing storage failures so the caller reports the destination's rejection. Its `revoked` signal aborts when the account signs out of the sign-in that token belongs to, by the user or after a rejection, once the `deepseek-account/signed-out` listeners have returned; the account model route and the DeepSeek web providers run each model, Files, Search, and Fetch request that carries the token under it, so a sign-out ends those requests even after the plugin that sent them has unloaded. The `deepseek-account` model route publishes this credential through `ctx.llm.routeCredential('deepseek-account')` ([LLM streaming](llm-streaming.md)); the DeepSeek web providers consume it there and, without that route, ask the account service directly. `reject()` runs on the account service mounted when it is called, so a reload between a request and the destination's answer still removes the grant; without a mounted service it leaves the grant for the next one to reject. A credential released by an account service that has since been replaced keeps an unaborted signal, because the replacement withdraws only the credentials it released.
 
-Model routes that bill the account register a running-task report with `registerRunningTaskReport(report)` inside `ctx.effect()`; `hasRunningAccountTasks()` answers true while any report does, so the sign-out confirmation can warn about work the sign-out interrupts. The route plugin owns cancellation of that work after `deepseek-account/signed-out`.
+Model routes that bill the account register a running-task report with `registerRunningTaskReport(report)` inside `ctx.effect()`; `hasRunningAccountTasks()` answers true while any report does, so the sign-out confirmation can warn about work the sign-out interrupts. The route plugin owns cancellation of that work after `deepseek-account/signed-out`; a request that outlives the plugin ends through its credential's `revoked` signal, and the plugin's failure callback for that request cancels the work.
 
 ## Embedded Platform credentials
 
@@ -97,7 +97,8 @@ async getPlatformSession(): Promise<PlatformSession | null>
 /**
  * Release the account credential for one request to `url` as the request
  * carries it, together with its invalidation, which runs on the account
- * service mounted when it is called. Host-only.
+ * service mounted when it is called, and the signal this service aborts
+ * when it signs out of that credential. Host-only.
  * @param url - actual request destination or API base URL.
  * @returns the request credential, or undefined for other origins or a signed-out account.
  */
@@ -204,10 +205,10 @@ Source: [`packages/account/deepseek-account/src/types.ts`](../../packages/accoun
 
 #### `deepseek-account/signed-out` — emit
 
-Local grant removal has completed.
+Local grant removal has completed. After the listeners return, the `revoked` signal of that grant's request credentials aborts.
 
 ```ts cordis-catalog
-/** Local grant removal has completed.
+/** Local grant removal has completed. After the listeners return, the `revoked` signal of that grant's request credentials aborts.
  * @mode emit
  */
 'deepseek-account/signed-out'(): void

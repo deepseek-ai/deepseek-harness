@@ -19,7 +19,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import LlmRuntime, { createAssistantMessage, createDeveloperMessage, createSystemMessage, createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createAssistantMessage, createDeveloperMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentials from '@deepseek-ai/dsh-credentials-local'
@@ -238,6 +238,35 @@ describe('direct Messages HTTP', () => {
     expect((await stream.next()).value).toMatchObject({ type: 'block-start' })
     await stream.return!()
     await stopped
+  })
+
+  it('ends an open provider response when its credential is withdrawn and lets the provider name the failure', async () => {
+    const stopped = Promise.withResolvers<undefined>()
+    const http = await endpoint((response) => {
+      response.once('close', () => { stopped.resolve(undefined) })
+      response.write(sse(textEvents.slice(0, 3)))
+    })
+    const withdrawn = new AbortController()
+    const onRequestError = vi.fn(async (error: unknown) => new LlmError('credential withdrawn', 'ACCOUNT_SIGN_IN_REQUIRED', { cause: error }))
+    const stream = adapter({ baseURL: http.url }, {
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key', revoked: withdrawn.signal, onRequestError }),
+    }).stream(options())[Symbol.asyncIterator]()
+    expect((await stream.next()).value).toMatchObject({ type: 'block-start' })
+    expect((await stream.next()).value).toMatchObject({ type: 'text-delta' })
+    const failed = expect(stream.next()).rejects.toMatchObject({ code: 'ACCOUNT_SIGN_IN_REQUIRED', message: 'credential withdrawn' })
+    withdrawn.abort()
+    await failed
+    await stopped.promise
+    expect(onRequestError).toHaveBeenCalledExactlyOnceWith(withdrawn.signal.reason)
+  })
+
+  it('reports a withdrawal the provider does not name as a transport failure, without contacting the provider', async () => {
+    const http = await endpoint()
+    const llm = adapter({ baseURL: http.url }, {
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key', revoked: AbortSignal.abort() }),
+    })
+    await expect(chunks(llm.stream(options()))).rejects.toMatchObject({ code: 'TRANSPORT' })
+    expect(http.requests).toEqual([])
   })
 
   it('times out an idle HTTP response and closes the connection', async () => {

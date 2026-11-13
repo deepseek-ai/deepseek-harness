@@ -87,10 +87,14 @@ export interface DeepSeekConnectionOptions {
 /**
  * Authentication released for one request and its file operations: the route
  * credential grant the provider plugin builds, plus the request-failure
- * classification bound to that credential.
+ * classification bound to that credential. The grant's `revoked` signal ends
+ * the request and its file operations as the caller's cancellation does.
  */
 export interface DeepSeekRequestAuth extends RouteCredentialGrant {
-  /** Classify a failure using the captured credential; callback failure preserves the original error. */
+  /**
+   * Classify a failure using the captured credential; callback failure preserves the original error. The end a
+   * withdrawn credential causes arrives here too, for the provider plugin to name.
+   */
   onRequestError?: (error: unknown) => Promise<unknown>
 }
 
@@ -143,8 +147,8 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
    */
   missingCredential?: (connection: Connection, provider: string) => LlmError
   /**
-   * Publish the route's credential through `routeCredential()`, whose `resolve` forwards the headers, value, and
-   * rejection of {@link resolveAuth} without its failure classification; omission publishes none.
+   * Publish the route's credential through `routeCredential()`, whose `resolve` forwards the headers, value,
+   * rejection, and withdrawal signal of {@link resolveAuth} without its failure classification; omission publishes none.
    */
   credential?: DeepSeekRouteCredentialOptions<Connection>
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */
