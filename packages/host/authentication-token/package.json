@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-authentication-token",
   "description": "Default token authentication provider and HTTP cookie exchange",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": { "access": "public" },
   "repository": {
     "type": "git",

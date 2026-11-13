@@ -1,9 +1,14 @@
-/** Registers the GitHub provider of `ctx.forge`, which reads pull requests through the GitHub CLI on the host. */
+/**
+ * Registers the GitHub provider of `ctx.forge`, which reads pull requests through the GitHub CLI on the host, and, while
+ * forge-session runs, the `gh` commands that bind pull requests to a Session.
+ */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-experimental-forge'
+import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { GH_COMMANDS } from './commands.ts'
 import { ghRunner } from './gh.ts'
 import { GitHubProvider } from './provider.ts'
 
@@ -57,4 +62,7 @@ export function apply(ctx: Context, config: Config): void {
     if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-github: ${key} must be a positive safe integer`)
   }
   ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved))
+  ctx.inject(['forgeSession'], (scope) => {
+    scope.forgeSession.registerCommands(GH_COMMANDS)
+  })
 }

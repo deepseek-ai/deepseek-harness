@@ -76,6 +76,13 @@ describe('chat flow font-size axis', () => {
     ]))
   })
 
+  it('the inherited-history caption glyph scales with its label', () => {
+    expect(declarationsFrom(read('MessageItem.module.css'), '.inheritedHistoryIcon')).toEqual(expect.arrayContaining([
+      'width: calc(14px + var(--dsh-content-font-delta, 0px))',
+      'height: calc(14px + var(--dsh-content-font-delta, 0px))',
+    ]))
+  })
+
   it('expanded bodies indent by 22px + delta so content stays under the shifted title start', () => {
     // The DisclosureRow title starts at leading (16 + delta) + gap 6; a fixed
     // 22px indent would misalign at every non-default size.

@@ -1,5 +1,5 @@
 /** Default token authentication, HTTP exchanges, and entry URL contribution. */
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-credentials'
 import { CONNECT_PATH } from '@deepseek-ai/dsh-client-connection'
@@ -29,7 +29,7 @@ export const Config: z<Config> = z.object({
  * @param config - validated browser and API cookie lifetime.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const auth = await BrowserAuth.create(ctx.root, ctx.credentials, config.cookieMaxAgeDays)
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, config.cookieMaxAgeDays)
   const peer = ctx.connection.createPeer({ principal: { kind: 'owner' } })
   const apiPeers = new Map<PeerScope['id'], PeerScope>()
   ctx.connection.authentication.register({

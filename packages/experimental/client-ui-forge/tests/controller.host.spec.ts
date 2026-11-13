@@ -155,7 +155,7 @@ describe('forgePanel.follow', () => {
       directory: repo,
       checkout: { state: 'ready', checkout: { root: repo, branch: 'main', linked: false, commit: COMMIT } },
       repository: demo,
-      readiness: { state: 'ready', message: null },
+      readiness: { state: 'ready', message: null, signIn: null },
       changeRequests: [],
       worktree: UNAVAILABLE,
       // The remote was never fetched, so it names no default branch to fork from.
@@ -295,23 +295,23 @@ describe('forgePanel.follow', () => {
     const { repo } = await project()
     const opened = await open(repo)
     const held = Promise.withResolvers<ForgeReadiness>()
-    opened.provider.readinessImpl = host => host === 'fake.test' ? held.promise : Promise.resolve({ state: 'unauthenticated', message: 'sign in' })
+    opened.provider.readinessImpl = host => host === 'fake.test' ? held.promise : Promise.resolve({ state: 'unauthenticated', message: 'sign in', signIn: null })
     const follower = reader(opened)
     await follower.until(state => state.repository?.host === 'fake.test')
 
     await git(repo, 'remote', 'set-url', 'origin', 'https://other.test/octo/demo.git')
     shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
     const moved = await follower.until(state => state.repository?.host === 'other.test' && state.readiness !== null)
-    held.resolve({ state: 'ready', message: null })
+    held.resolve({ state: 'ready', message: null, signIn: null })
     await Promise.resolve()
 
-    expect(moved.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
+    expect(moved.readiness).toEqual({ state: 'unauthenticated', message: 'sign in', signIn: null })
     expect(opened.provider.probes).toEqual(['fake.test', 'other.test'])
     // A new commit gives the next inspection a state of its own to publish.
     await git(repo, 'commit', '--allow-empty', '-m', 'again')
     shellTurn(opened.session, 2, [{ callId: 'again', command: 'ls', output: '' }])
     await follower.next(state => state.checkout.state === 'ready')
-    expect(follower.states.at(-1)?.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
+    expect(follower.states.at(-1)?.readiness).toEqual({ state: 'unauthenticated', message: 'sign in', signIn: null })
     expect(opened.provider.probes).toEqual(['fake.test', 'other.test'])
   })
 
@@ -327,7 +327,7 @@ describe('forgePanel.follow', () => {
 
     await opened.ctx.workingDirectory.set(opened.agent, outside)
     await follower.until(state => state.directory === outside && state.checkout.state === 'none')
-    held.resolve({ state: 'ready', message: null })
+    held.resolve({ state: 'ready', message: null, signIn: null })
     await new Promise(resolve => setTimeout(resolve, 20))
 
     expect(follower.states.at(-1)).toMatchObject({ directory: outside, repository: null, readiness: null })
@@ -404,7 +404,7 @@ describe('forgePanel.follow', () => {
     const stopping = opened.panel.dispose().then(() => { stopped = true })
     await settle()
     expect(stopped).toBe(false)
-    held.resolve({ state: 'ready', message: null })
+    held.resolve({ state: 'ready', message: null, signIn: null })
     await stopping
 
     await ending
@@ -1078,7 +1078,7 @@ describe('forgePanel worktree requests', () => {
       directory: created?.path,
       checkout: { state: 'ready', checkout: { root: created?.path, branch: created?.branch, linked: true, commit: COMMIT } },
       repository: demo,
-      readiness: { state: 'ready', message: null },
+      readiness: { state: 'ready', message: null, signIn: null },
       changeRequests: [],
       worktree: { ...UNAVAILABLE, request: { from: null }, created },
       local: { base: created?.baseCommit.slice(0, 7), files: [] },
@@ -1788,7 +1788,7 @@ describe('forgePanel actions', () => {
     await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
-    probe.resolve({ state: 'ready', message: null })
+    probe.resolve({ state: 'ready', message: null, signIn: null })
     await probed
     expect(opened.provider.probes).toHaveLength(3)
   })
@@ -1811,6 +1811,19 @@ describe('forgePanel actions', () => {
     expect(follower.states).toHaveLength(published)
   })
 
+  it('names the code host of each bound change request, and none once its provider no longer describes it', async () => {
+    const opened = await open(await plain())
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    const named = await follower.until(state => state.changeRequests.length === 1)
+    expect(named.changeRequests[0]?.forge).toEqual({ forge: 'fake', label: 'Fake', changeRequestNoun: 'pull-request' })
+
+    vi.spyOn(opened.ctx.forge, 'describe').mockReturnValue(undefined)
+    shellTurn(opened.session, 2, [{ callId: 'view', command: 'gh pr view', output: `${pullUrl(8)}\n` }])
+    const unnamed = await follower.until(state => state.changeRequests.length === 2)
+    expect(unnamed.changeRequests.map(entry => entry.forge)).toEqual([null, null])
+  })
+
   it('refreshes a Session outside a checkout without polling change requests that no provider serves', async () => {
     const opened = await open(await plain())
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: 'https://unserved.test/a/b/pull/3\n' }])
@@ -1823,7 +1836,7 @@ describe('forgePanel actions', () => {
     // The refresh found the same state, which the panel already published.
     const refreshed = follower.states.at(-1)
     expect(refreshed?.checkout.state).toBe('none')
-    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null, reviewRevision: 0 }])
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, forge: null, update: null, snapshot: null, reviewRevision: 0 }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])

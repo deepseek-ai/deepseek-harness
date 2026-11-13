@@ -8,10 +8,32 @@ import { createAssistantMessage, createToolResultMessage, type ToolCallId } from
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { GH_COMMANDS } from '@deepseek-ai/dsh-experimental-forge-github/src/commands.ts'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import ForgeSessionService from '../src/index.ts'
-import type { Config } from '../src/index.ts'
+import type { Config, ForgeCommandRule } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
+
+/**
+ * A rule with reference commands only, no JSON URL members, and no options: `tea pulls checkout <url>` names the pull
+ * request at `https://<host>/<owner>/<name>/pulls/<n>`.
+ */
+export const TEA_COMMANDS: ForgeCommandRule = {
+  id: 'tea',
+  version: 1,
+  executable: 'tea',
+  creates: [],
+  references: { subcommands: [['pulls', 'checkout']], valueOptions: [], flagOptions: [] },
+  apiRequests: { subcommands: [], valueOptions: [], flagOptions: [] },
+  changeRequestPath: String.raw`\/pulls\/\d+`,
+  urlMembers: [],
+  select: ({ operands }) => operands.length === 1 && operands[0]?.startsWith('https://') === true ? { url: operands[0] } : undefined,
+}
+
+/** Resolve after the microtasks queued so far, such as a projection rebuild after a rule registration, have run. */
+export function settled(): Promise<void> {
+  return new Promise((resolve) => { setImmediate(resolve) })
+}
 
 /** Repository served by {@link FakeProvider}. */
 export const demo: ForgeRepository = { forge: 'fake', host: 'fake.test', owner: 'octo', name: 'demo' }
@@ -65,6 +87,9 @@ export function snapshot(ref: ChangeRequestRef, overrides: Partial<ChangeRequest
 /** Provider for `fake.test` remotes (`fake.test:owner/name.git`) and `https://fake.test/owner/name/pull/N` URLs. */
 export class FakeProvider implements ForgeProvider {
   readonly forge = 'fake'
+  readonly hosts = ['fake.test']
+  readonly label = 'Fake'
+  readonly changeRequestNoun = 'pull-request'
   /** Change requests returned by head lookups, keyed by branch. */
   readonly heads = new Map<string, readonly ChangeRequestRef[]>()
   /** Every head lookup in call order. */
@@ -100,7 +125,7 @@ export class FakeProvider implements ForgeProvider {
   }
 
   readiness(): Promise<ForgeReadiness> {
-    return Promise.resolve({ state: 'ready', message: null })
+    return Promise.resolve({ state: 'ready', message: null, signIn: null })
   }
 
   markReady(): Promise<ForgeActionFailure | undefined> {
@@ -131,14 +156,17 @@ export interface Bench {
   readonly session: Session
   /** Fiber of the `forgeSession` plugin. */
   readonly service: ReturnType<Context['plugin']>
+  /** Fiber that registered the command rules, whose disposal ends the registrations. */
+  readonly rules: ReturnType<Context['plugin']>
 }
 
 /**
- * Mount the Session store, projections, `forge` with a {@link FakeProvider}, and `forgeSession`.
+ * Mount the Session store, projections, `forge` with a {@link FakeProvider}, and `forgeSession` with command rules.
  * @param config - `forgeSession` configuration.
+ * @param rules - command rules registered once the service is ready.
  * @returns the context, the provider, one live Session, and the service fiber.
  */
-export async function bench(config: Config = {}): Promise<Bench> {
+export async function bench(config: Config = {}, rules: readonly ForgeCommandRule[] = [GH_COMMANDS]): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
@@ -147,7 +175,15 @@ export async function bench(config: Config = {}): Promise<Bench> {
   await ctx.plugin({ inject: ['forge'], apply(child: Context) { child.forge.register(provider) } })
   const service = ctx.plugin(ForgeSessionService, config)
   await service
-  return { ctx, provider, session: ctx.sessions.create(), service }
+  const registered = ctx.plugin({
+    inject: ['forgeSession'],
+    apply(child: Context) {
+      for (const rule of rules) child.forgeSession.registerCommands(rule)
+    },
+  })
+  await registered
+  await settled()
+  return { ctx, provider, session: ctx.sessions.create(), service, rules: registered }
 }
 
 /** One shell call and the text its result carries. */

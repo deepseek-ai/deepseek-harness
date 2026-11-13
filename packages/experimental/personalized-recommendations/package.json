@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-personalized-recommendations",
   "description": "Personalized pages and built-in plugin recommendations offered as cards below answers",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -50,7 +50,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "js-yaml": "^4.3.2",
     "@deepseek-ai/cordis-plugin-timer": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-api-remote-access": "workspace:*",

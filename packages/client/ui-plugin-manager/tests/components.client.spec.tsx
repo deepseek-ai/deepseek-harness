@@ -7,8 +7,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ChangeResult, PluginEntryId, PluginInstallRequestId, PluginUpdateResult, PluginVersion, RegistryAttempt } from '@deepseek-ai/dsh-api-remotes/client'
 import { allowAllAccess, bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot, SettingsSectionOwnerProps, SettingsSectionViewProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StrictMode, type ReactNode } from 'react'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
@@ -99,7 +100,7 @@ function subjectOf(owner: unknown): PluginsSubject | undefined {
   return typeof owner === 'object' && owner !== null && 'subject' in owner ? (owner as PluginDetailProps).subject : undefined
 }
 
-const NO_CONFIG: ConfigLedger = { items: [], bundles: new Set(), rows: new Set() }
+const NO_CONFIG: ConfigLedger = { items: [], bundles: new Set(), rows: new Set(), sections: [] }
 
 function renderTab(
   state: Partial<PluginManagerState> = {}, config: Partial<ConfigLedger> = {},
@@ -114,6 +115,8 @@ function renderTab(
   const ledger = createSnapshotStore<ConfigLedger>({ ...NO_CONFIG, ...config })
   const tabLedger = createSnapshotStore<readonly PluginTab[]>(tabs)
   const bundleDetails = createSnapshotStore<BundleDetailsState>({})
+  const clientSync = createSnapshotStore<ClientEntryState>({ syncing: false, failures: [] })
+  const retryClient = vi.fn()
   const actions = {
     ensure: vi.fn(),
     refresh: vi.fn(),
@@ -170,6 +173,8 @@ function renderTab(
     t,
     resolveText,
     ...actions,
+    useClientSync: bindSnapshotSelector(clientSync),
+    retryClient,
     usePluginManager: bindSnapshotSelector(store),
     useConfigLedger: bindSnapshotSelector(ledger),
     usePluginTabs: bindSnapshotSelector(tabLedger),
@@ -186,6 +191,10 @@ function renderTab(
       stub.publish(forms[id]!.state as ConfigFormSnapshot<T>)
       return { ...stub.scope, mutate: forms[id]!.mutate }
     },
+    renderFactorySlot: ((name: string, factoryProps: SettingsSectionViewProps) => {
+      if (name !== 'settings.section.view') throw new Error(`Plugin manager fixture renders no Factory ${name}`)
+      return bodies[`settings.section:${factoryProps.id}`]?.('page', { close: factoryProps.close }) ?? null
+    }) as PluginManagerPageProps['renderFactorySlot'],
     renderSlot: (name, owner, opts) => {
       const body = bodies[`${name}:${opts?.only ?? opts?.entryKey ?? ''}`]
       if (body === undefined) return null
@@ -219,6 +228,8 @@ function renderTab(
     actions,
     set: (next: Partial<PluginManagerState>) => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) },
     setDetails: (next: BundleDetailsState) => { act(() => { bundleDetails.set(next) }) },
+    setClientSync: (next: ClientEntryState) => { act(() => { clientSync.set(next) }) },
+    retryClient,
     setLanguage: (dict: typeof en) => {
       locale.setLocale(dict === zh ? 'zh' : 'en')
       currentT = translate(dict)
@@ -228,6 +239,23 @@ function renderTab(
 }
 
 describe('PluginManagerPage', () => {
+  it('reports this page\'s client plugin synchronization on every view and retries it', () => {
+    const { setClientSync, retryClient } = renderTab({ status: 'unavailable', packages: [] })
+    expect(document.querySelector('[data-client-sync-failure]')).toBeNull()
+    expect(screen.queryByText(en.clientSyncing)).toBeNull()
+    setClientSync({ syncing: true, failures: [{ id: '@fixture/live', message: 'download failed' }] })
+    expect(screen.getByText(en.clientSyncing).getAttribute('role')).toBe('status')
+    const notice = document.querySelector('[data-client-sync-failure]') as HTMLElement
+    expect(within(notice).getByRole('alert').textContent).toBe(en.clientSyncFailed)
+    expect(within(notice).getByText('@fixture/live: download failed')).toBeTruthy()
+    const retry = within(notice).getByRole('button', { name: en.clientSyncRetry })
+    expect((retry as HTMLButtonElement).disabled).toBe(true)
+    setClientSync({ syncing: false, failures: [{ id: '@fixture/live', message: 'download failed' }] })
+    fireEvent.click(retry)
+    expect(retryClient).toHaveBeenCalledOnce()
+    expect(screen.queryByText(en.clientSyncing)).toBeNull()
+  })
+
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
     const { actions, navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {
@@ -1219,8 +1247,12 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle)
     expect(actions.setRowEnabled).toHaveBeenCalledExactlyOnceWith('include:sidebar', false)
 
+    // The Chinese page still finds the row by its English title.
     fireEvent.change(search, { target: { value: 'Sidebar component' } })
+    expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+    fireEvent.change(search, { target: { value: 'no such row' } })
     expect(screen.getByText(zh.partsFilterEmpty)).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'Sidebar component' } })
     setLanguage(en)
     expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') }))
@@ -1237,6 +1269,77 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(zh.metadataError.replace('{error}', error))).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: zh.backToPackage.replace('{name}', '个人工具') }))
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('个人工具')
+  })
+
+  describe('plugin settings pages', () => {
+    it('shows a settings page on the row whose module registered it, and its close returns to the bundle', () => {
+      renderTab(
+        { packages: [pkg({ rows: [row(), row({ rowId: 'other', entryId: 'include:other' as PluginEntryId, moduleName: 'dsh-other' })] })] },
+        { sections: [{ id: 'sidebar-settings', label: 'Sidebar settings', module: 'dsh-better-sidebar' }] },
+        { 'settings.section:sidebar-settings': (_view, owner) => (
+          <button type="button" onClick={(owner as SettingsSectionOwnerProps).close}>Leave settings</button>
+        ) },
+      )
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
+      expect(screen.queryByRole('button', { name: en.configureRow.replace('{name}', 'dsh-other') })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') }))
+      const detail = document.querySelector('[data-plugin-row-detail="dsh-better-sidebar#sidebar"]') as HTMLElement
+      fireEvent.click(within(detail).getByRole('button', { name: 'Leave settings' }))
+      expect(document.querySelector('[data-plugin-row-detail]')).toBeNull()
+      expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') })).toBeTruthy()
+    })
+
+    it('keeps a row\'s own configuration instead of its settings page, and lists no unclaimed page', () => {
+      renderTab(
+        { packages: [pkg({ rows: [row()] })] },
+        {
+          rows: new Set(['dsh-better-sidebar#sidebar']),
+          sections: [
+            { id: 'sidebar-settings', label: 'Sidebar settings', module: 'dsh-better-sidebar' },
+            { id: 'loose', label: 'Loose settings', module: '@acme/loose' },
+          ],
+        },
+        {
+          'plugins.row.config:dsh-better-sidebar#sidebar': view => view === 'page' ? <form aria-label="own form" /> : null,
+          'settings.section:sidebar-settings': () => <form aria-label="mirrored form" />,
+          'settings.section:loose': () => <form aria-label="loose form" />,
+        },
+      )
+      expect(screen.queryByText('Loose settings')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
+      fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') }))
+      expect(screen.getByRole('form', { name: 'own form' })).toBeTruthy()
+      expect(screen.queryByRole('form', { name: 'mirrored form' })).toBeNull()
+      expect(screen.queryByRole('form', { name: 'loose form' })).toBeNull()
+    })
+
+    it('shows a settings page the bundle package registered on the bundle page when no row is that package', () => {
+      renderTab(
+        { packages: [pkg({ rows: [row({ moduleName: 'dsh-other' })] })] },
+        { sections: [{ id: 'bundle-settings', label: 'Bundle settings', module: 'dsh-better-sidebar' }] },
+        { 'settings.section:bundle-settings': (_view, owner) => (
+          <button type="button" onClick={(owner as SettingsSectionOwnerProps).close}>Leave bundle settings</button>
+        ) },
+      )
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
+      expect(screen.queryByRole('button', { name: en.configureRow.replace('{name}', 'dsh-other') })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Leave bundle settings' }))
+      expect(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') })).toBeTruthy()
+    })
+
+    it('keeps a bundle\'s own configuration instead of the settings page its package registered', () => {
+      renderTab(
+        { packages: [pkg({ rows: [row({ moduleName: 'dsh-other' })] })] },
+        { bundles: new Set(['dsh-better-sidebar']), sections: [{ id: 'bundle-settings', label: 'Bundle settings', module: 'dsh-better-sidebar' }] },
+        {
+          'plugins.bundle.config:dsh-better-sidebar': () => <form aria-label="bundle form" />,
+          'settings.section:bundle-settings': () => <form aria-label="mirrored bundle form" />,
+        },
+      )
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
+      expect(screen.getByRole('form', { name: 'bundle form' })).toBeTruthy()
+      expect(screen.queryByRole('form', { name: 'mirrored bundle form' })).toBeNull()
+    })
   })
 
   describe('configuration pages', () => {

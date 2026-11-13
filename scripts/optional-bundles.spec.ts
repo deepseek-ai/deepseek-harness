@@ -180,6 +180,7 @@ describe('optional bundles', () => {
     for (const moduleName of [
       '@deepseek-ai/dsh-experimental-forge',
       '@deepseek-ai/dsh-experimental-forge-github',
+      '@deepseek-ai/dsh-forge-gitlab',
       '@deepseek-ai/dsh-experimental-forge-session',
       '@deepseek-ai/dsh-experimental-client-ui-forge',
       '@deepseek-ai/dsh-experimental-tool-worktree',

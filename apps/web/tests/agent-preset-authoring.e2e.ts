@@ -43,6 +43,16 @@ describe('web e2e: preset roster guidance', () => {
   it('reads mode details and examples without changing the new-task default', async () => {
     onTestFailed(() => saveFailureShot(page, 'preset-roster-guide'))
     const settings = page.getByRole('dialog', { name: '设置' })
+    for (const name of ['标准模式', '创造模式']) {
+      const sharedTrigger = settings.getByRole('button', { name: `模式说明: ${name}`, exact: true })
+      await sharedTrigger.click()
+      const sharedGuide = page.getByRole('dialog', { name, exact: true })
+      await sharedGuide.getByText(/只读运行时检查/).waitFor()
+      expect(await sharedGuide.innerText()).not.toContain('增加了运行时检查')
+      if (name === '创造模式') expect(await sharedGuide.innerText()).toContain('创造模式专注于定制 DSH')
+      await page.keyboard.press('Escape')
+      await sharedGuide.waitFor({ state: 'detached' })
+    }
     const trigger = settings.getByRole('button', { name: '模式说明: PTC 模式', exact: true })
     await trigger.click()
     const guide = page.getByRole('dialog', { name: 'PTC 模式', exact: true })

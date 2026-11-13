@@ -4,7 +4,7 @@ import { useId, useState, useSyncExternalStore, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ForgePendingReview } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ForgePendingReview, ForgeReviewEvent } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ReviewQueue } from './review-queue.ts'
 import type { NS } from './locales.ts'
 import css from './SubmitReview.module.css'
@@ -17,15 +17,15 @@ import reviewCss from './ReviewComposer.module.css'
  * @returns a portalled modal with keyboard focus ownership.
  */
 export function SubmitReview({
-  queue, url, headSha, pending, own, busy, error, submit, discard, close, check, reconcile, t,
+  queue, url, headSha, pending, events, busy, error, submit, discard, close, check, reconcile, t,
 }: PropsLocale<typeof NS> & {
   readonly queue: ReviewQueue
   readonly url: string
   readonly headSha: string
   /** The signed-in user's pending review on the code host, or null without one. */
   readonly pending: ForgePendingReview | null
-  /** Whether the signed-in user authored the change request, which the code host lets them only comment on. */
-  readonly own: boolean
+  /** Decisions the code host lets the signed-in user record, or null before the review threads are read, which offers all. */
+  readonly events: readonly ForgeReviewEvent[] | null
   readonly busy: boolean
   readonly error: string | null
   readonly submit: () => void
@@ -41,8 +41,11 @@ export function SubmitReview({
   const summaryHint = `${name}-summary-hint`
   const requiresSummary = state.event === 'request-changes'
   const locked = busy || state.uncertain !== null
-  // A decision kept from another change request stays chosen until the reader picks Comment.
-  const refused = own && state.event !== 'comment'
+  const allowed = (event: ForgeReviewEvent): boolean => events === null || events.includes(event)
+  // A decision kept from another change request stays chosen until the reader picks an allowed one.
+  const refused = !allowed(state.event)
+  // The host allows only comments, as GitHub does for the author of a pull request.
+  const commentOnly = events !== null && events.length === 1 && events[0] === 'comment'
   const count = pending?.comments ?? state.comments.length
   // Drafts kept in the browser join only a review published without a pending one on the code host.
   const blocked = pending !== null && state.comments.length > 0
@@ -79,12 +82,12 @@ export function SubmitReview({
       </div>
       <div className={css.decisions}>
         {(['comment', 'approve', 'request-changes'] as const).map(value => <label key={value}>
-          <input type="radio" name={name} value={value} checked={state.event === value} disabled={locked || (own && value !== 'comment')}
+          <input type="radio" name={name} value={value} checked={state.event === value} disabled={locked || !allowed(value)}
             onChange={() => { queue.summarize(state.body, value) }} />
           {t(value === 'comment' ? 'review.commentOnly' : value === 'approve' ? 'review.approve' : 'review.requestChanges')}
         </label>)}
       </div>
-      {own && <div className={css.hint}>{t('review.ownChangeRequest')}</div>}
+      {commentOnly && <div className={css.hint}>{t('review.decisionsLimited')}</div>}
       {notice !== null && <div className={css.error} role="alert">{notice}</div>}
       {state.uncertain !== null && !busy && <div className={css.reconcile}>
         <Button size="sm" variant="outline" onClick={check}>{t('review.recheck')}</Button>
