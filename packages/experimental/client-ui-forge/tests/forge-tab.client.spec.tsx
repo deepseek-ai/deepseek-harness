@@ -300,8 +300,8 @@ describe('ForgeTab local changes', () => {
 })
 
 describe('ForgeTab sign-in banner', () => {
-  it('offers the GitHub CLI sign-in command for an unauthenticated GitHub host', () => {
-    const b = tab(ready({ readiness: { state: 'unauthenticated', message: 'not logged in' } }))
+  it('offers the sign-in command the provider names for an unauthenticated host', () => {
+    const b = tab(ready({ readiness: { state: 'unauthenticated', message: 'not logged in', signIn: { command: 'gh auth login --hostname github.com' } } }))
     const banner = b.view.getByRole('status')
     expect(within(banner).getByText('Sign in to github.com to show change request status')).toBeTruthy()
     expect(within(banner).getByText('gh auth login --hostname github.com').tagName).toBe('CODE')
@@ -313,10 +313,10 @@ describe('ForgeTab sign-in banner', () => {
   it.each([
     ['with its message', 'token expired', ['Sign in to gitlab.example.test to show change request status', 'token expired']],
     ['without a message', null, ['Sign in to gitlab.example.test to show change request status']],
-  ])('asks to sign in to another code host %s', (_label, message, texts) => {
+  ])('asks to sign in %s when the provider names no sign-in command', (_label, message, texts) => {
     const b = tab(ready({
       repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
-      readiness: { state: 'unauthenticated', message },
+      readiness: { state: 'unauthenticated', message, signIn: null },
     }))
     const banner = b.view.getByRole('status')
     expect([...banner.children].map(child => child.textContent)).toEqual(texts)
@@ -327,14 +327,14 @@ describe('ForgeTab sign-in banner', () => {
     ['with its message', 'spawn gh ENOENT', 'Change requests on github.com could not be read: spawn gh ENOENT'],
     ['without a message', null, 'Change requests on github.com could not be read: '],
   ])('explains an unreachable host %s', (_label, message, text) => {
-    const b = tab(ready({ readiness: { state: 'unavailable', message } }))
+    const b = tab(ready({ readiness: { state: 'unavailable', message, signIn: null } }))
     expect(b.view.getByRole('status').textContent).toBe(text)
   })
 
   it.each([
     ['sign-in is unknown', ready({ readiness: null })],
     ['the host is signed in', ready()],
-    ['no provider serves the repository', ready({ repository: null, readiness: { state: 'unauthenticated', message: 'not logged in' } })],
+    ['no provider serves the repository', ready({ repository: null, readiness: { state: 'unauthenticated', message: 'not logged in', signIn: null } })],
   ])('shows no banner while %s', (_label, state) => {
     const b = tab(state)
     expect(b.view.queryByRole('status')).toBeNull()

@@ -77,11 +77,11 @@ Typert 生成由 `./typert` 与 `./remote` 导出的 Host 和 Client Remote 产�
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当清单约定不够用时阅读以下内容：先看 Remote 如何到达客户端，再看它所投影的 Loader 与渲染它的界面。
+当清单约定不够用时阅读以下内容：先看 Remote 如何到达客户端，再看它所投影的 Loader 与读取它的页面。
 
 - [Remote 组合](../../api/remotes/README.zh.md)——客户端如何在不导入 Host 实现的情况下消费 `pluginInventory/list`。
 - [Cordis 插件 loader](../../../vendor/loader/README.md)——本包所投影条目的那个 Loader。
-- [插件清单设置界面](../../client/ui-settings-plugin-inventory/README.zh.md)——渲染该清单的浏览器侧投影。
+- [插件管理页](../../client/ui-plugin-manager/README.zh.md)——Web 插件页面，读取该清单以获取受管 profile 状态与启动诊断。
 
 -----
 

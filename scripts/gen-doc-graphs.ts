@@ -174,7 +174,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'plugin-manager',
     title: 'Current-profile plugin and bundle management',
     mode: 'core',
-    consumers: ['plugin-manager', 'ui-settings-plugin-inventory'],
+    consumers: ['plugin-manager'],
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
@@ -215,7 +215,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'experimental-forge',
     title: 'Code host change requests',
     mode: 'seam',
-    implementations: ['experimental-forge-github'],
+    implementations: ['experimental-forge-github', 'forge-gitlab'],
     consumers: ['experimental-forge-session', 'experimental-client-ui-forge'],
     note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
   },

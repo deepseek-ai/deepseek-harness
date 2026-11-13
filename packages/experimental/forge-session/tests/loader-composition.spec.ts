@@ -1,4 +1,4 @@
-/** Real Loader and AgentLoop composition; only the model and the GitHub CLI are fixtures. */
+/** Real Loader and AgentLoop composition; only the model and the GitHub and GitLab CLIs are fixtures. */
 
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,6 +13,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import * as ForgeGitHub from '@deepseek-ai/dsh-experimental-forge-github'
+import * as ForgeGitLab from '@deepseek-ai/dsh-forge-gitlab'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LlmRuntime, { createUserMessage, LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk, ToolCallBlock } from '@deepseek-ai/dsh-llm'
@@ -30,6 +31,9 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
+import { GH_COMMANDS } from '@deepseek-ai/dsh-experimental-forge-github/src/commands.ts'
+import { GLAB_COMMANDS } from '@deepseek-ai/dsh-forge-gitlab/src/commands.ts'
+import { compileRules } from '../src/commands.ts'
 import ForgeSessionService from '../src/index.ts'
 import type { SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
 import type { ShellExecution } from '@deepseek-ai/dsh-shell'
@@ -56,9 +60,10 @@ if (args[0] === 'pr' && args[1] === 'view') {
     if (fields === 'url' && process.env.FORGE_TEST_MODE === 'fail') process.exit(1)
     if (fields === 'url' && process.env.FORGE_TEST_MODE === 'invalid') { process.stdout.write('{}'); process.exit(0) }
     if (fields === 'url' && process.env.FORGE_TEST_MODE === 'wait') { setInterval(() => {}, 1000); }
-    else process.stdout.write(JSON.stringify(fields === 'url'
-      ? { url: 'https://' + (process.env.FORGE_TEST_HOST || 'github.com') + '/octo/demo/pull/9' }
-      : { number: 9, title: 'Change 9', body: 'Stacked on https://github.com/octo/demo/pull/6' }))
+    else if (fields === 'url') {
+      const url = 'https://' + (process.env.FORGE_TEST_HOST || 'github.com') + '/octo/demo/pull/9'
+      process.stdout.write(args.includes('--jq') ? url + '\n' : JSON.stringify({ url }))
+    } else process.stdout.write(JSON.stringify({ number: 9, title: 'Change 9', body: 'Stacked on https://github.com/octo/demo/pull/6' }))
     if (process.env.FORGE_TEST_MODE !== 'wait') process.exit(0)
     else await new Promise(() => {})
   }
@@ -114,6 +119,47 @@ for (const match of fields.query.matchAll(/(r\d+): repository\(|(p\d+): pullRequ
   else data[repository][match[2]] = node(Number(match[3]))
 }
 reply(data)
+`
+
+/**
+ * GitLab CLI fixture: \`mr create\` prints merge request 5 on gitlab.example.test; \`mr view N\` prints its title,
+ * or its web URL for \`--jq .web_url\`; \`api graphql\` answers status queries with an open merge request whose head
+ * pipeline passed, and other \`api\` paths with an empty list.
+ */
+const FAKE_GLAB = String.raw`
+import { appendFileSync, readFileSync } from 'node:fs'
+const args = process.argv.slice(2)
+appendFileSync(new URL('./glab.log', import.meta.url), JSON.stringify(args) + '\n')
+if (args[0] === 'mr' && args[1] === 'create') {
+  process.stdout.write('Creating merge request for feat into main in group/app\n\n!5 Change 5 (feat)\n https://gitlab.example.test/group/app/-/merge_requests/5\n')
+  process.exit(0)
+}
+if (args[0] === 'mr' && args[1] === 'view') {
+  const web = args[args.indexOf('--jq') + 1] === '.web_url'
+  process.stdout.write((web ? 'https://gitlab.example.test/group/app/-/merge_requests/' : 'Change ') + args[2] + '\n')
+  process.exit(0)
+}
+const path = args.filter((arg, index) => !arg.startsWith('-') && !['--hostname', '--input', '-H'].includes(args[index - 1])).at(-1)
+if (path !== 'graphql') { process.stdout.write('[]'); process.exit(0) }
+const { variables } = JSON.parse(readFileSync(0, 'utf8'))
+const data = {}
+for (const [name, iid] of Object.entries(variables)) {
+  if (!/^i\d+$/.test(name)) continue
+  data['m' + name.slice(1)] = { mergeRequestsFfOnlyEnabled: false, mergeRequest: {
+    iid, title: 'Change ' + iid, webUrl: 'https://gitlab.example.test/group/app/-/merge_requests/' + iid, state: 'opened', draft: false,
+    updatedAt: '2026-11-10T00:00:00Z', closedAt: null, mergedAt: null, author: { username: 'octo' }, sourceBranch: 'feat', targetBranch: 'main',
+    diffRefs: { baseSha: 'e'.repeat(40), headSha: 'a'.repeat(40) }, diffStatsSummary: { additions: 1, deletions: 0 },
+    detailedMergeStatus: 'MERGEABLE', mergeStatusEnum: 'CAN_BE_MERGED', conflicts: false, divergedFromTargetBranch: false, rebaseInProgress: false,
+    squash: false, squashOnMerge: false, squashReadOnly: false, approved: false, resolvableDiscussionsCount: 0, resolvedDiscussionsCount: 0,
+    userPermissions: { canMerge: true, pushToSourceBranch: true, updateMergeRequest: true },
+    approvedBy: { pageInfo: { hasNextPage: false }, nodes: [] }, reviewers: { pageInfo: { hasNextPage: false }, nodes: [] },
+    headPipeline: { id: 'gid://gitlab/Ci::Pipeline/1', status: 'SUCCESS', userPermissions: { updatePipeline: true },
+      jobs: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [
+      { name: 'test', status: 'SUCCESS', allowFailure: false, stage: { name: 'test' }, webPath: '/group/app/-/jobs/1', startedAt: null, finishedAt: null },
+    ] } },
+  } }
+}
+process.stdout.write(JSON.stringify({ data }))
 `
 
 /** `git push` fixture printing the refs a new branch push reports. */
@@ -193,6 +239,9 @@ async function load(mode: 'native' | 'ptc' = 'native') {
   await writeFile(join(root, 'fake-gh.mjs'), FAKE_GH)
   await writeFile(join(bin, 'gh'), `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'fake-gh.mjs'))} "$@"\n`)
   await writeFile(join(bin, 'git'), FAKE_GIT)
+  await writeFile(join(root, 'fake-glab.mjs'), FAKE_GLAB)
+  await writeFile(join(bin, 'glab'), `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'fake-glab.mjs'))} "$@"\n`)
+  await chmod(join(bin, 'glab'), 0o755)
   await chmod(join(bin, 'gh'), 0o755)
   await chmod(join(bin, 'git'), 0o755)
 
@@ -213,6 +262,7 @@ async function load(mode: 'native' | 'ptc' = 'native') {
     ['@deepseek-ai/dsh-tool-bash', ToolBash],
     ['@deepseek-ai/dsh-experimental-forge', ForgeService],
     ['@deepseek-ai/dsh-experimental-forge-github', ForgeGitHub],
+    ['@deepseek-ai/dsh-forge-gitlab', ForgeGitLab],
     ['@deepseek-ai/dsh-experimental-forge-session', ForgeSessionService],
   ])
   const configs: Record<string, readonly string[]> = {
@@ -222,6 +272,7 @@ async function load(mode: 'native' | 'ptc' = 'native') {
     '@deepseek-ai/dsh-bash-local': ['timeoutMs: 20000'],
     '@deepseek-ai/dsh-experimental-forge': ['activeIntervalMs: 600000', 'idleIntervalMs: 600000'],
     '@deepseek-ai/dsh-experimental-forge-github': [`ghCommand: ${JSON.stringify(join(bin, 'gh'))}`],
+    '@deepseek-ai/dsh-forge-gitlab': [`glabCommand: ${JSON.stringify(join(bin, 'glab'))}`, 'hosts: [gitlab.example.test]'],
     '@deepseek-ai/dsh-experimental-forge-session': ['discoveryTimeoutMs: 20000'],
   }
   const configPath = join(root, 'cordis.yml')
@@ -325,7 +376,7 @@ async function expectScriptedBindings(ctx: Context, session: Session, root: stri
     { url: 'https://github.com/octo/demo/pull/8', origin: 'created', ref: github(8), update: null },
     { url: 'https://github.com/octo/demo/pull/9', origin: 'referenced', ref: github(9), update: null },
   ])
-  expect(await ghCalls(root)).toContainEqual(['pr', 'view', '9', '--repo', 'octo/demo', '--json', 'url'])
+  expect(await ghCalls(root)).toContainEqual(['pr', 'view', '9', '--repo', 'octo/demo', '--json', 'url', '--jq', '.url'])
 }
 
 suite('forge-session through a real cordis.yml Loader composition', () => {
@@ -354,11 +405,11 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     const f = await observerFixture()
     const reported = Promise.withResolvers<undefined>()
     const warn = vi.spyOn(f.ctx.logger, 'warn').mockImplementation((message) => {
-      if (String(message).includes('PR reference lookup failed')) reported.resolve(undefined)
+      if (String(message).includes('change request reference lookup failed')) reported.resolve(undefined)
     })
     f.ctx.emit('tools/result', { ...f.exec, arguments: { command: `${f.path} FORGE_TEST_MODE=${mode} gh pr view 9 -R octo/demo --json number` } }, f.result)
     await reported.promise
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('change request reference lookup failed'))
     expect(f.records()).toEqual([])
   })
 
@@ -372,7 +423,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     expect(query.status).not.toBe('running')
     expect((await query.result()).aborted).toBe(true)
     expect(f.records()).toEqual([])
-    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed'))
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('change request reference lookup failed'))
   })
 
   it('skips calls without a completed foreground result, explicit repository, or live caller', async () => {
@@ -414,7 +465,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     f.controller.abort()
     pending.reject(new Error('cancelled during preparation'))
     await f.entry.fiber?.dispose()
-    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed'))
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('change request reference lookup failed'))
     expect(f.records()).toEqual([])
   })
 
@@ -452,5 +503,76 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       ['bash', false], ['bash', false], ['bash', false],
     ])
     await expectScriptedBindings(ctx, agent.session, root)
+  }, 60_000)
+
+  it('folds with every provider rule once the composition starts, and keeps that state version through a shutdown and a restart', async () => {
+    const version = compileRules([GH_COMMANDS, GLAB_COMMANDS]).version
+    const started = async () => {
+      const loaded = await load()
+      // The providers register their rules after forge-session starts, which re-registers the projection once.
+      await new Promise((resolve) => { setImmediate(resolve) })
+      return loaded
+    }
+    const { ctx } = await started()
+    const session = ctx.sessions.create()
+    expect(ctx.sessionProjections.checkpoint(session).forgeChangeRequests?.ver).toBe(version)
+    // Providers unload before forge-session at shutdown; the folded rules, and so the checkpointed version, stay.
+    for (const entry of ctx.loader.entries()) {
+      if (/forge-git(?:hub|lab)'?$/.test(entry.options.name)) await entry.fiber?.dispose()
+    }
+    await new Promise((resolve) => { setImmediate(resolve) })
+    expect(ctx.forge.changeRequestFromUrl('https://github.com/octo/demo/pull/1')).toBeUndefined()
+    expect(ctx.sessionProjections.checkpoint(session).forgeChangeRequests?.ver).toBe(version)
+    await ctx.fiber.dispose()
+    context = undefined
+    if (root !== undefined) await rm(root, { recursive: true, force: true })
+    const restarted = await started()
+    expect(restarted.ctx.sessionProjections.checkpoint(restarted.ctx.sessions.create()).forgeChangeRequests?.ver).toBe(version)
+  }, 60_000)
+
+  it.each(['native', 'ptc'] as const)('binds the merge requests glab creates and views through the %s executor, and polls them through the GitLab provider', async (mode) => {
+    const { ctx, path, root } = await load(mode)
+    const commands = [
+      `${path} glab mr create --fill --yes`,
+      `${path} glab mr view 6 -R https://gitlab.example.test/group/app -F json --jq .title`,
+      `${path} glab mr view 7 -R group/app -F json --jq .title`,
+      `${path} glab api --hostname gitlab.example.test projects/group%2Fapp/merge_requests/8/changes`,
+      `${path} glab api projects/group%2Fapp/merge_requests/9`,
+    ]
+    const { agent } = await runTurn(ctx, root, `forge-session-gitlab-${mode}`, mode === 'native' ? commands.map(bashCall) : [programCall(commands)])
+    if (mode === 'ptc') {
+      const events = agent.session.snapshotEvents()
+      expect(events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])).toEqual(['run_code'])
+      expect(events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [[event.data.name, event.data.isError]] : [])).toEqual([
+        ['bash', false], ['bash', false], ['bash', false], ['bash', false], ['bash', false],
+      ])
+    }
+
+    const merge = (number: number) => ({
+      url: `https://gitlab.example.test/group/app/-/merge_requests/${number}`,
+      ref: { repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' }, number },
+    })
+    await vi.waitFor(() => { expect(ctx.forgeSession.changeRequests(agent.session)).toHaveLength(5) })
+    expect(byUrl(ctx.forgeSession.changeRequests(agent.session))).toEqual([5, 6, 7, 8, 9].map(number => ({
+      ...merge(number), origin: number === 5 ? 'created' : 'referenced', update: null,
+    })))
+    const lookups = (await readFile(join(root, 'glab.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+    expect(lookups).toContainEqual(['mr', 'view', '7', '--repo', 'group/app', '--output', 'json', '--jq', '.web_url'])
+    expect(lookups).toContainEqual(['mr', 'view', '9', '--repo', 'group/app', '--output', 'json', '--jq', '.web_url'])
+    expect(lookups).not.toContainEqual(expect.arrayContaining(['6', '--repo']))
+    await rm(join(root, 'glab.log'))
+    for (const number of [6, 7, 8, 9]) ctx.forgeSession.dismiss(agent.session, merge(number).url)
+
+    const url = 'https://gitlab.example.test/group/app/-/merge_requests/5'
+    expect(ctx.forgeSession.changeRequests(agent.session)).toEqual([{
+      url, origin: 'created', ref: { repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' }, number: 5 }, update: null,
+    }])
+    const listener = vi.fn<SessionChangeRequestsListener>()
+    ctx.forgeSession.watch(agent.session, listener)
+    await vi.waitFor(() => { expect(listener.mock.lastCall?.[0].map(entry => entry.update !== null && 'snapshot' in entry.update
+      ? [entry.update.snapshot.title, entry.update.snapshot.checksRollup, entry.update.snapshot.mergeMethods]
+      : null)).toEqual([['Change 5', 'success', ['merge', 'squash']]]) })
+    const calls = (await readFile(join(root, 'glab.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+    expect(calls).toContainEqual(['api', 'graphql', '--hostname', 'gitlab.example.test', '--input', '-', '-H', 'Content-Type: application/json'])
   }, 60_000)
 })

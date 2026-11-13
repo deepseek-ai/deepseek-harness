@@ -10,7 +10,7 @@ A fixed Session creation directory cannot represent a task that changes checkout
 
 ## Decision
 
-`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `working-directory/change`; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
+`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `workspace-root/change` and stored `working-directory/change` events; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
 
 Only Host operations change the directory: worktree creation and exit, the forge panel, SDK requests, and child startup call the service. The [workspace-root note](2026-11-03-session-workspace-root.md) removed the model-facing `working_directory` tool, records each change as `workspace-root/change`, and adds the workspace root on top of this owner.
 

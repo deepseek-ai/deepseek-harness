@@ -2,16 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createAssistantMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { GH_COMMANDS } from '@deepseek-ai/dsh-experimental-forge-github/src/commands.ts'
+import { compileRules } from '../src/commands.ts'
 import { forgeChangeRequestsProjection } from '../src/projection.ts'
 import type { ForgeChangeRequestsState } from '../src/index.ts'
 import { programTurn, pullUrl, pushOutput, shellTurn } from './fixtures.ts'
 
-const { apply, init, stateSchema } = forgeChangeRequestsProjection
+const rules = compileRules([GH_COMMANDS])
+const projection = forgeChangeRequestsProjection(rules)
+const { stateSchema } = projection
+const apply = (state: ForgeChangeRequestsState, event: SessionEvent): ForgeChangeRequestsState => projection.apply(state, event)
+const init = (session: Session): ForgeChangeRequestsState => projection.init(session.header, session.inheritedEventCount)
 
 function fold(session: Session): ForgeChangeRequestsState {
   return session.snapshotEvents().reduce<ForgeChangeRequestsState>(
     (state, event) => apply(state, event),
-    init(),
+    init(session),
   )
 }
 
@@ -22,7 +29,8 @@ function created(number: number): string {
 describe('forgeChangeRequests projection', () => {
   it('shows clients every binding, hidden ones included, and keeps that view while only pending calls and pushes change', () => {
     const session = Session.create(brandString<SessionId>('client-view'))
-    const { view, viewSchema } = forgeChangeRequestsProjection.wire
+    const { viewSchema } = projection.wire
+    const view = (state: ForgeChangeRequestsState) => projection.wire.view(state)
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'track', url: pullUrl(2) })
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(2) })
@@ -97,7 +105,7 @@ describe('forgeChangeRequests projection', () => {
     const result = events[index]
     const call = events.find(event => event.type === 'tool/call')
     if (result?.type !== 'tool/result' || call?.type !== 'tool/call') throw new Error('missing shell call')
-    const empty = init()
+    const empty = init(session)
     const before = events.slice(0, index).reduce<ForgeChangeRequestsState>((state, event) => apply(state, event), empty)
     const mixed = {
       ...result,
@@ -211,7 +219,7 @@ describe('forgeChangeRequests projection', () => {
     }, { surfaceOp: 'append' })
     session.append('tool/call', { turn: 2, step: 1, callId: brandString<ToolCallId>('orphan'), name: 'bash', arguments: '{"command":"git push"}' })
     const open = fold(session)
-    expect(open.pending).toEqual([{ callId: 'orphan', urls: null, pushes: true, named: [] }])
+    expect(open.pending).toEqual([{ callId: 'orphan', urls: null, pushes: true, named: [], rules: [] }])
 
     session.append('step/end', { turn: 2, step: 1 })
     session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })

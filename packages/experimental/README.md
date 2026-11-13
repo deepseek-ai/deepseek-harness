@@ -98,6 +98,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`worktree`](worktree/README.md) | Creates a named Git worktree and changes the calling Session directory | `ctx.worktrees` |
 | [`forge`](forge/README.md) | Code host provider registry with shared change request polling | `ctx.forge` |
 | [`forge-github`](forge-github/README.md) | GitHub provider that reads pull requests through the host GitHub CLI | registers a provider on `ctx.forge` |
+| [`forge-gitlab`](forge-gitlab/README.md) | GitLab provider that reads and writes merge requests through the host GitLab CLI | registers a provider on `ctx.forge` |
 | [`forge-session`](forge-session/README.md) | Binds change requests to the Sessions that created, pushed, or tracked them | `ctx.forgeSession` |
 | [`client-ui-forge`](client-ui-forge/README.md) | GUI panel for a Session's Git checkout, worktrees, and bound pull requests | `ctx.forgePanel` |
 | [`forge-bundle`](forge-bundle/README.md) | Default-disabled pull request and worktree panel composition | — |
