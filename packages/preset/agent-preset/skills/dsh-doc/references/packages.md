@@ -65,6 +65,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-modules` | no | Client module system, dual-face: node half composes the __DSH_BOOT__ entry graph (incremental dsh.client scan, bundle route, index tap, webPlugins service); browser half is the lazy-CJS module table the vendored cordis Loader consumes as its internal seam |
 | `@deepseek-ai/dsh-client-product-analytics` | yes | Desktop product event collection and authenticated Host reporting |
 | `@deepseek-ai/dsh-client-resources` | no | Unified client resource model: protocol-registered providers turn URL addresses into live values, consumed through the useResource global standard hook |
+| `@deepseek-ai/dsh-client-script-realm` | no | Direct-reference script environments and Cordis-owned provider registration |
+| `@deepseek-ai/dsh-client-script-realm-iframe` | no | Optional iframe ScriptRealm provider |
 | `@deepseek-ai/dsh-client-shortcuts` | yes | Application keyboard command registry and physical-key routing |
 | `@deepseek-ai/dsh-client-ui-account-notifications` | yes | Display account notifications and refresh localized content |
 | `@deepseek-ai/dsh-client-ui-agent-preset` | no | Agent-preset surfaces: the default for later sessions, this session's seat, and the composition editor |
@@ -98,7 +100,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-ui-schedule` | no | Host task management page and Session reminder catalog |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | no | Web display masking for recognized credentials in sent user text |
 | `@deepseek-ai/dsh-client-ui-session` | no | Session Controller adapter for React and session-scoped slots |
-| `@deepseek-ai/dsh-client-ui-session-status` | no | Client Session status table: running state, the effective pending interaction, and completion reminders |
+| `@deepseek-ai/dsh-client-ui-session-status` | no | Client Session status table over Host reading records: running state, the effective pending interaction, and read or unread reminders shared by clients of one Host |
 | `@deepseek-ai/dsh-client-ui-settings` | no | Settings domain base plugin: shared configuration forms and the canonical settings slot-type contract |
 | `@deepseek-ai/dsh-client-ui-settings-account` | yes | Manage DeepSeek login and open Platform billing pages |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | no | Settings page of the agent loop on the dsh web client's Plugins page: the parallel tool-call cap of the agent-loop namespace |
@@ -286,6 +288,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
+| `@deepseek-ai/dsh-host-authentication-desktop` | yes | Desktop private-channel authentication provider |
+| `@deepseek-ai/dsh-host-authentication-token` | yes | Default token authentication provider and HTTP cookie exchange |
 | `@deepseek-ai/dsh-host-directory-picker-auto` | no | Adaptive chooser of the directory-picker seam: resolves the host situation at boot and mounts the native or browse backend for the DeepSeek Harness web GUI host |
 | `@deepseek-ai/dsh-host-directory-picker-browse` | yes | In-app browsing backend of the directory-picker seam (listing/creation primitives over the host filesystem) |
 | `@deepseek-ai/dsh-host-directory-picker-native` | no | Native-OS-chooser backend of the directory-picker seam for the DeepSeek Harness web GUI host |

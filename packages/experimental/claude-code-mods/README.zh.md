@@ -184,7 +184,7 @@ Message from the "<plugin>" mod:
 
 #### 模型看到什么
 
-`{ deny: reason }` 答案把 `Error: <reason>` 渲染为工具结果。`{ result }` 答案在工具为模组注册或值满足工具输出 schema 时经工具自身的呈现器渲染，否则作为携带该文本的错误形态结果。`next` 之后改写的结果替换工具的内容文本。被丢弃的提示词以 `blocked` 结束该轮，没有模型可见的消息。持有 `tool.call` 的模组（Blast Radius）把结果推迟到按钮决定为止；模型只看到结局。
+`{ deny: reason }` 答案把 `Error: <reason>` 渲染为工具结果。`{ result }` 答案在工具为模组注册或值满足工具输出 schema 时经工具自身的呈现器渲染，否则作为携带该文本的错误形态结果。拒绝记录 `ModDenied` 与 `MOD_DENIED`，错误形态的答案记录 `ModAnswered` 与 `MOD_ANSWERED`，没有 `tool.call` 钩子作答的模组注册工具调用以 `ModUnansweredError` 与 `MOD_UNANSWERED` 失败。`next` 之后改写的结果替换工具的内容文本。被丢弃的提示词以 `blocked` 结束该轮，没有模型可见的消息。持有 `tool.call` 的模组（Blast Radius）把结果推迟到按钮决定为止；模型只看到结局。
 
 #### Token 影响
 

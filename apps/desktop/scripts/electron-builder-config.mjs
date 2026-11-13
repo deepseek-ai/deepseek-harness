@@ -20,7 +20,7 @@ import {
   resolveWindowsUpdatePublisher,
   scrubWindowsSigningEnvironment,
 } from './windows-sign.mjs'
-import { resolveDesktopAutoUpdateConfig } from './desktop-auto-update-environment.mjs'
+import { resolveDesktopAutoUpdateConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { resolveDesktopBuildCommit } from './desktop-build-commit.mjs'
 import { resolveDesktopBuildVersion } from './desktop-build-version.mjs'
 import { resolveDesktopPolicyEnvironment } from './desktop-policy-environment.mjs'

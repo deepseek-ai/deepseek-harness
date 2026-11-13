@@ -50,6 +50,8 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/client/script-realm': { kind: 'none', reason: 'Optional browser execution-provider registration contributes no model input.' },
+  'packages/client/script-realm-iframe': { kind: 'none', reason: 'Same-origin browser script environments contribute no model input.' },
   'packages/client/ui-context-menu': { kind: 'none', reason: 'Client menu presentation and contributed callbacks add no model input.' },
   'packages/client/ui-file-actions': { kind: 'none', reason: 'Explicit user file saves and clipboard operations add no model input.' },
   'packages/client/ui-entry-customization': { kind: 'none', reason: 'Controls browser launchers and prepares a reviewable Creator draft without submitting model input.' },
@@ -69,6 +71,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },
+  'packages/host/authentication-token': { kind: 'none', reason: 'Launch-token exchange and Cookie verification authenticate HTTP callers without contributing model input.' },
+  'packages/host/authentication-desktop': { kind: 'none', reason: 'Private Desktop credential verification authenticates HTTP callers without contributing model input.' },
   'packages/api/terminal-controller': { kind: 'indirect', reason: 'Working-directory recovery owns directory context; user terminal screens never enter model requests.' },
   'packages/client/ui-sidebar-terminal': { kind: 'none', reason: 'The browser renders user terminal screens without exposing them to the model.' },
   'packages/ssh/ssh-helper-runtime': { kind: 'none', reason: 'The private executable carrier registers no model-facing content; its providers and consumers own operation results.' },
@@ -135,7 +139,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/store': { kind: 'none', reason: 'Browser-side state primitives; register nothing model-facing.' },
   'packages/client/ui-renderer': { kind: 'none', reason: 'Browser-side render assembly; registers nothing model-facing.' },
   'packages/client/ui-session': { kind: 'none', reason: 'Browser-side Session adapter; registers nothing model-facing.' },
-  'packages/client/ui-session-status': { kind: 'none', reason: 'Browser-side Session status table; registers nothing model-facing.' },
+  'packages/client/ui-session-status': { kind: 'none', reason: 'Owner reading records and the Client Session status table add no tools, prompts, or Session events.' },
   'packages/client/connection': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/file-upload': { kind: 'none', reason: 'Browser-side request-body transport; registers nothing model-facing.' },
   'packages/api/remotes': { kind: 'none', reason: 'The Remote BFF selects business methods and forwarded events; selected services own any model-visible effect.' },

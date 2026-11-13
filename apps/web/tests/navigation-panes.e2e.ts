@@ -565,7 +565,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // The card's own controls are outside the summary row and must not expand
     // the right column either — the expanded terminal card is read in place.
-    await page.locator('[data-sample="bash"] ~ div [data-terminal] [class*="_copyButton_"]').first().click()
+    await page.locator('[data-sample="bash"] ~ div [data-terminal]').first().getByRole('button', { name: 'Copy', exact: true }).click()
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // Opening a file into the empty column creates only its preview tab.
     const fileLink = page.locator('[data-variant="read"] button').first()
@@ -598,9 +598,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // squeeze the output pane below its content width and the line must keep
     // its single row and overflow sideways instead of folding. Soft-wrapping
     // here shreds the column alignment this card exists to hold.
-    const layout = await card.locator('[class*="_output_"]').first().evaluate((node) => {
+    const layout = await card.locator('[data-terminal-output]').evaluate((node) => {
       const pane = node as HTMLElement
-      const row = pane.querySelector<HTMLElement>('[class*="_line_"]')
+      const row = pane.querySelector<HTMLElement>(':scope > div')
       if (row === null) throw new Error('output pane has no line')
       const before = row.offsetHeight
       const restore = pane.style.width
@@ -614,7 +614,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // jsdom cannot report: --dsw-* tokens resolve only against the real theme
     // stylesheet. This command settled cleanly, so the dot must be the green
     // success token — a red one here would read as a failed command.
-    const dot = await card.locator('[class*="_runState_"][data-state]').first().evaluate((node) => {
+    const dot = await card.locator('[data-terminal-banner] [data-state]').evaluate((node) => {
+      const banner = node.closest('[data-terminal-banner]')
+      const prompt = banner?.querySelector('[data-terminal-prompt]') ?? null
+      if (banner === null || prompt === null) throw new Error('terminal status dot has no prompt banner')
       // The token lives on body, so the probe must sit in the same cascade.
       const probe = document.createElement('span')
       probe.style.color = 'var(--dsw-alias-state-success-primary)'
@@ -627,10 +630,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         success,
         // One label per card (the state is the call's), so it hangs off the
         // prompt column rather than the row the dot sits in.
-        label: node.closest('[class*="_prompt_"]')?.querySelector('[class*="_runStateLabel_"]')?.textContent ?? null,
+        label: banner.querySelector('[data-terminal-state-label]')?.textContent ?? null,
         // The dot precedes the prompt label in document order, which is what
         // puts it to the left of the `$`.
-        beforePrompt: node.compareDocumentPosition(node.parentElement!.querySelector('[class*="_cwd_"]')!)
+        beforePrompt: node.compareDocumentPosition(prompt)
           === Node.DOCUMENT_POSITION_FOLLOWING,
         // The dot lives in the card's OWN left padding, so it sits inside the
         // card box yet left of the prompt text. Owning the reservation as padding
@@ -640,9 +643,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         insideCard: (node as HTMLElement).getBoundingClientRect().left
           >= (node.closest('[data-terminal]')?.getBoundingClientRect().left ?? Infinity),
         leftOfPrompt: (node as HTMLElement).getBoundingClientRect().right
-          <= (node.closest('[class*="_promptLine_"]')
-            ?.querySelector('[class*="_cwd_"]')
-            ?.getBoundingClientRect().left ?? -Infinity),
+          <= prompt.getBoundingClientRect().left,
       }
     })
     expect(dot.state).toBe('done')
@@ -661,9 +662,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // Copy writes the raw output through the browser's own clipboard, which in
     // a real page is the async Clipboard API rather than the jsdom fallback.
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-    await card.locator('[class*="_copyButton_"]').first().click()
-    await expect.poll(() => card.locator('[class*="_copyButton_"]').first().textContent(), { timeout: 5_000 })
-      .toBe('Copied')
+    await card.getByRole('button', { name: 'Copy', exact: true }).click()
+    await expect.poll(() => card.getByRole('button', { name: 'Copied', exact: true }).count(), { timeout: 5_000 })
+      .toBe(1)
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('NAVIGATION_OK')
   }, 60_000)
 

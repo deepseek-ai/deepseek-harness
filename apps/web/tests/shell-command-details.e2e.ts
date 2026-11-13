@@ -91,7 +91,7 @@ it.each([
       await input.waitFor()
       const background = args.run_in_background
       const selectableText = args.command.split('\n')[0]!
-      const inputSection = card.locator('[data-terminal] [class*="_header_"]')
+      const inputSection = card.locator('[data-terminal-banner]')
       expect(await input.textContent()).toBe(selectableText)
       if (background) {
         expect(await commands.allTextContents()).toEqual([args.command])
@@ -188,7 +188,7 @@ it.each([
       await card.waitFor()
       await card.evaluate((element) => { element.style.width = '380px' })
       await card.scrollIntoViewIfNeeded()
-      const header = card.locator('[class*="_header_"]')
+      const header = card.locator('[data-terminal-banner]')
       const mountedCard = await card.elementHandle()
       if (mountedCard === null) throw new Error('Running command card is not mounted')
       expect(await header.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)

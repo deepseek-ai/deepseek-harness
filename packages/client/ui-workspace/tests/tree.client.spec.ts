@@ -86,7 +86,7 @@ const noAttention: SessionStatusSnapshot = new Map()
 const status = (
   pendingInteraction: SessionPendingInteraction | undefined,
   overrides: Partial<SessionStatus> = {},
-): SessionStatus => ({ running: undefined, pendingInteraction, completionUnread: false, ...overrides })
+): SessionStatus => ({ running: undefined, pendingInteraction, completionUnread: false, completionFailed: false, ...overrides })
 const archived = (...ids: string[]): readonly SessionId[] => ids.map(sid)
 const rowState = (options: {
   pinned?: readonly string[]
@@ -354,6 +354,18 @@ describe('deriveGroups', () => {
       statuses, { items: [], hasMore: false }, 10,
     )
     expect(search.items[0]?.completed).toBe(true)
+  })
+
+  it.each([true, false])('shows failed completion only while unread=%s in session and search rows', (unread) => {
+    const failed = summary('failed', 3)
+    const sessions = list(failed)
+    const statuses: SessionStatusSnapshot = new Map([[failed.id, status(undefined, {
+      completionUnread: unread, completionFailed: unread,
+    })]])
+    const rows = deriveFlat(sessions, visibleSessionIds(sessions, noArchive, 'default'), noRows, statuses)
+    expect(rows[0]).toMatchObject({ completed: unread, failed: unread })
+    const search = deriveSearchResults(sessions, [], 'failed', noArchive, 'default', statuses, { items: [], hasMore: false }, 10)
+    expect(search.items[0]).toMatchObject({ completed: unread, failed: unread })
   })
 
   it('hides subagent-origin sessions and reads direct running counts from catalogs', () => {
@@ -730,7 +742,7 @@ describe('deriveSearchResults', () => {
           running: false,
           runningSubagentCount: 0,
           pendingInteraction: 'plan-review',
-          completed: false,
+          completed: false, failed: false,
           archived: false,
           snippet: 'title session body excerpt',
         },
@@ -740,7 +752,7 @@ describe('deriveSearchResults', () => {
           workspace: 'Needle Workspace',
           running: false,
           runningSubagentCount: 0,
-          completed: false,
+          completed: false, failed: false,
           archived: false,
         },
         {
@@ -749,7 +761,7 @@ describe('deriveSearchResults', () => {
           workspace: 'c',
           running: false,
           runningSubagentCount: 0,
-          completed: false,
+          completed: false, failed: false,
           archived: false,
           snippet: 'body needle excerpt',
         },

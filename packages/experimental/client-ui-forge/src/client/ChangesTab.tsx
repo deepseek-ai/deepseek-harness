@@ -195,9 +195,9 @@ interface WriteRefusal {
   readonly unknown: boolean
 }
 
-/** Unchanged lines read for one loaded diff: each file's new side and its expanded gaps. */
+/** Unchanged lines and expanded gaps belong to one comparison. A local checkout can change between reads. */
 interface Expansion {
-  readonly data: ChangesData | null
+  readonly source: string | Extract<ChangesData, { kind: 'local' }> | null
   readonly texts: Readonly<Record<string, readonly string[] | 'loading'>>
   readonly open: Readonly<Record<string, ReadonlySet<number>>>
 }
@@ -795,10 +795,14 @@ export function ChangesTab({
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
-  const [expansion, setExpansion] = useState<Expansion>({ data: null, texts: {}, open: {} })
-  const current = expansion.data === data ? expansion : { data, texts: {}, open: {} }
-  const latest = useRef(data)
-  useEffect(() => { latest.current = data }, [data])
+  // Review marks can refresh while a file read is in flight. The commit supplies its text and the patch digests identify its gaps.
+  const expansionSource = useMemo(() => data?.kind === 'change'
+    ? JSON.stringify([data.url, data.headSha, data.commits?.from, data.commits?.to, data.files.map(file => file.digest)])
+    : data, [data])
+  const [expansion, setExpansion] = useState<Expansion>({ source: null, texts: {}, open: {} })
+  const current = expansion.source === expansionSource ? expansion : { source: expansionSource, texts: {}, open: {} }
+  const latest = useRef(expansionSource)
+  useLayoutEffect(() => { latest.current = expansionSource }, [expansionSource])
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
   // The line budget counts the files not marked viewed when the diff loads, so later marks leave it unchanged. A file stays
   // collapsed while it is marked viewed unless the reader expands it; a file whose change differs from its mark expands
@@ -863,28 +867,27 @@ export function ChangesTab({
     <Button size="sm" variant="outline" onClick={() => { actions.committed(tab.id, null) }}>{t('commits.showAll')}</Button>
   )
 
-  /** Apply a change to the unchanged lines of `owner`, unless newer changes replaced it. */
-  const update = (owner: ChangesData, change: (value: Expansion) => Expansion): void => {
+  const update = (change: (value: Expansion) => Expansion): void => {
     setExpansion((previous) => {
-      if (latest.current !== owner) return previous
-      return change(previous.data === owner ? previous : { data: owner, texts: {}, open: {} })
+      if (latest.current !== expansionSource) return previous
+      return change(previous.source === expansionSource ? previous : { source: expansionSource, texts: {}, open: {} })
     })
   }
   const expand = (owner: ChangesData, file: ForgeDiffFile, index: number): void => {
     const path = file.path
-    update(owner, value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
+    update(value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
     if (current.texts[path] !== undefined) return
-    update(owner, value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
+    update(value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
     const reading = owner.kind === 'local' ? localText(owner.scope, path) : changeRequestText(owner.url, owner.headSha, path)
     void reading.then((result) => {
       const lines = result.ok ? textLines(result.value) : undefined
       if (lines !== undefined && matchesHunks(lines, file.hunks)) {
-        update(owner, value => ({ ...value, texts: { ...value.texts, [path]: lines } }))
+        update(value => ({ ...value, texts: { ...value.texts, [path]: lines } }))
         return
       }
       if (result.ok) report('toast.expandStale')
       else report('toast.expandFailed', { message: result.error.message })
-      update(owner, (value) => {
+      update((value) => {
         const { [path]: _text, ...texts } = value.texts
         const { [path]: _open, ...open } = value.open
         return { ...value, texts, open }

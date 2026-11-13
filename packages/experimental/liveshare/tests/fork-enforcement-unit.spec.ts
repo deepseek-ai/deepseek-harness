@@ -13,6 +13,8 @@ import {
   preflightForkChild,
 } from '../src/host/fork-enforcement.ts'
 import type { ForkEnforcementFailure } from '../src/host/fork-enforcement.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
+import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 interface RegisteredTool {
   readonly name: string
@@ -33,7 +35,7 @@ function harness(options: { readonly read?: RegisteredTool; readonly write?: Reg
   const registered = new Map<string, RegisteredTool>()
   if (options.read !== undefined) registered.set(options.read.name, options.read)
   if (options.write !== undefined) registered.set(options.write.name, options.write)
-  let guardFunction: ((execution: Record<string, unknown>) => string | undefined) | undefined
+  let guardFunction: ((execution: Record<string, unknown>) => ForkToolDenial | undefined) | undefined
   const tools = {
     get: vi.fn((name: string) => registered.get(name)),
     register: vi.fn((definition: RegisteredTool) => {
@@ -41,7 +43,7 @@ function harness(options: { readonly read?: RegisteredTool; readonly write?: Reg
       registered.set(definition.name, definition)
       return () => { registered.delete(definition.name) }
     }),
-    guard: vi.fn((guard: (execution: Record<string, unknown>) => string | undefined) => {
+    guard: vi.fn((guard: (execution: Record<string, unknown>) => ForkToolDenial | undefined) => {
       guardFunction = guard
       return () => {}
     }),
@@ -112,10 +114,10 @@ describe('confined fork tools', () => {
     const h = harness({ read })
     installForkEnforcement(h.target as never, h.failure)
     const confined = h.registered.get('read')!
-    await expect(confined.execute({}, { signal: undefined })).rejects.toThrow('may only use read with the paths')
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toThrow('may only use read with the paths')
+    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') as string })
     await expect(confined.execute({ file_path: 'outside.txt' }, { signal: undefined }))
-      .rejects.toThrow('inside the workspace')
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     // The grant itself decides, so a path the fake reports inside succeeds and runs the deployment body.
     const inside = await confined.execute({ file_path: 'inside.ts' }, { signal: undefined })
     expect(inside).toBe('ran')
@@ -123,7 +125,7 @@ describe('confined fork tools', () => {
 
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined }))
-      .rejects.toThrow('no longer holds permission')
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
   })
 
   it('refuses a read it could not register and keeps the registration error', () => {
@@ -154,15 +156,15 @@ describe('confined fork tools', () => {
 
     // The body runs the deployment's own argument checks itself, because it replaces its execution.
     await expect(edit.execute('not a record', { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
-    await expect(edit.execute({}, { signal: undefined })).rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
+    await expect(edit.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: '', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'a' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     // The containment check runs inside the body too, so a target the guard did not see is still refused.
     await expect(edit.execute({ file_path: '../outside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('inside the workspace')
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     expect(h.fs.editText).not.toHaveBeenCalled()
 
     const result = await edit.execute({
@@ -182,7 +184,7 @@ describe('confined fork tools', () => {
 
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('no longer holds permission')
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
   })
 
   it('refuses a write-capable child when the deployment ships no write to replace', () => {
@@ -209,14 +211,14 @@ describe('confined fork tools', () => {
     const confined = h.registered.get('write')!
 
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined }))
-      .rejects.toThrow('named file with text content')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute('not a record', { signal: undefined }))
-      .rejects.toThrow('named file with text content')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute({ file_path: '../outside', content: 'x' }, { signal: undefined }))
-      .rejects.toThrow('inside the workspace')
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(confined.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toThrow('no longer holds permission')
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
 
     h.forks.enforcementInstalled.mockReturnValue(true)
     const result = await confined.execute({ file_path: 'inside.ts', content: 'hello' }, { signal: undefined })
@@ -230,18 +232,18 @@ describe('confined fork tools', () => {
     const h = harness({ read })
     installForkEnforcement(h.target as never, h.failure)
     h.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
-    const guard = h.guard() as (execution: Record<string, unknown>) => string | undefined
+    const guard = h.guard() as (execution: Record<string, unknown>) => ForkToolDenial | undefined
     expect(guard).toBeDefined()
     expect(guard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'other' } }))
-      .toContain('without a child session')
+      .toEqual(denial('without a child session', 'FORK_CHILD_UNKNOWN'))
 
     h.target.authorized = () => false
     expect(guard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' }, token: Symbol('t') }))
-      .toContain('which this host did not install')
+      .toEqual(denial('which this host did not install', 'FORK_TOOL_NOT_PERMITTED'))
 
     h.target.authorized = () => true
     expect(guard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }))
-      .toContain('may only read inside the workspace')
+      .toEqual(outsideDenial('may only read inside the workspace'))
 
     // A definition visible from both registries is trusted even though this host did not install it.
     const visible = harness({ read })
@@ -249,9 +251,9 @@ describe('confined fork tools', () => {
     visible.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
     const visibleGuard = visible.guard()
     expect(visibleGuard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }))
-      .toContain('may only read inside the workspace')
+      .toEqual(outsideDenial('may only read inside the workspace'))
     expect(visibleGuard?.({ name: 'write', arguments: {}, agent: { id: 'child-1' } }))
-      .toContain('may not use write')
+      .toEqual(denial('may not use write', 'FORK_TOOL_NOT_PERMITTED'))
 
     // A tool the ceiling allows but this host did not install is trusted only when both registries
     // hand back the same definition.
@@ -263,9 +265,9 @@ describe('confined fork tools', () => {
     // The ceiling names grep, but this installation never registered a confined grep for the child:
     // the name alone does not make the deployment's definition executable.
     expect(visibleToolGuard?.({ name: 'grep', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }))
-      .toContain('which this host did not install')
+      .toEqual(denial('which this host did not install', 'FORK_TOOL_NOT_PERMITTED'))
     expect(visibleToolGuard?.({ name: 'ghost', arguments: {}, agent: { id: 'child-1' } }))
-      .toContain('which this host did not install')
+      .toEqual(denial('which this host did not install', 'FORK_TOOL_NOT_PERMITTED'))
 
     // A verdict produced for this execution authorizes its path.
     const token = Symbol('verified')
@@ -273,7 +275,7 @@ describe('confined fork tools', () => {
       ((value: Record<string, unknown>, next: () => unknown) => Promise<unknown>) | undefined
     await preExecute?.({ token, arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }, () => 'next')
     expect(h.guard()?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' }, token }))
-      .toContain('may only read inside the workspace')
+      .toEqual(outsideDenial('may only read inside the workspace'))
   })
 
   it('admits the PTC transport for a fork child while nested calls stay separately judged', () => {
@@ -281,13 +283,13 @@ describe('confined fork tools', () => {
     expect(installForkEnforcement(h.target as never, h.failure)).toBeDefined()
     h.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
     h.describe.mockReturnValue({ paths: [], noFileEffect: true })
-    const guard = h.guard() as (execution: Record<string, unknown>) => string | undefined
+    const guard = h.guard() as (execution: Record<string, unknown>) => ForkToolDenial | undefined
     // The transport's program runs under the owner's standing policy; the name alone widens no tool.
     expect(guard({ name: 'run_code', arguments: { code: 'return 1', description: 'run' }, agent: { id: 'child-1' } }))
       .toBeUndefined()
     // A nested shell call is a separate execution this same guard refuses.
     expect(guard({ name: 'bash', arguments: { command: 'ls' }, agent: { id: 'child-1' } }))
-      .toContain('may not use bash')
+      .toEqual(denial('may not use bash', 'FORK_TOOL_NOT_PERMITTED'))
   })
 
   it('refuses a no-effect tool whose visible definition changed after the limit was installed', () => {
@@ -297,14 +299,14 @@ describe('confined fork tools', () => {
     expect(installForkEnforcement(h.target as never, h.failure)).toBeDefined()
     h.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
     h.describe.mockReturnValue({ paths: [], noFileEffect: true })
-    const guard = h.guard() as (execution: Record<string, unknown>) => string | undefined
+    const guard = h.guard() as (execution: Record<string, unknown>) => ForkToolDenial | undefined
     const call = () => guard({ name: 'todo_write', arguments: {}, agent: { id: 'child-1' } })
     // The deployment's own definition is the one the limit vouched for, so the no-effect tool runs.
     expect(call()).toBeUndefined()
     // A different definition answering to the same name is not the one this host installed or vouched
     // for; the name alone is not permission.
     h.registered.set('todo_write', deploymentTool('todo_write'))
-    expect(call()).toContain('which this host did not install')
+    expect(call()).toEqual(denial('which this host did not install', 'FORK_TOOL_NOT_PERMITTED'))
   })
 
   it('records no verdicts for an execution that names no path', async () => {
@@ -461,8 +463,8 @@ describe('source-session sandbox', () => {
     for (const name of options.tools ?? ['read']) deployments.set(name, deploymentTool(name))
     const registered = new Map<string, RegisteredTool>(deployments)
     const installed = new Map<string, RegisteredTool>()
-    let guardFunction: ((execution: Record<string, unknown>) => string | undefined) | undefined
-    const guard = vi.fn((fn: (execution: Record<string, unknown>) => string | undefined) => {
+    let guardFunction: ((execution: Record<string, unknown>) => ForkToolDenial | undefined) | undefined
+    const guard = vi.fn((fn: (execution: Record<string, unknown>) => ForkToolDenial | undefined) => {
       guardFunction = fn
       return () => {}
     })
@@ -538,10 +540,10 @@ describe('source-session sandbox', () => {
         .map(profile => profile.name).sort(),
     )
 
-    const guard = h.guardFunction() as (execution: { readonly name: string }) => string | undefined
+    const guard = h.guardFunction() as (execution: { readonly name: string }) => ForkToolDenial | undefined
     for (const name of sharedToolNames('view')) expect(guard({ name })).toBeUndefined()
     for (const name of ['write', 'edit', 'bash', 'pwsh', 'cua', 'plugin_manager', 'schedule_create', 'ghost']) {
-      expect(guard({ name })).toContain('may not use')
+      expect(guard({ name })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
       expect(h.installed.has(name)).toBe(false)
     }
   })
@@ -550,11 +552,11 @@ describe('source-session sandbox', () => {
     const h = sourceHarness({ tools: sharedToolNames('view'), writeGate: { mayWrite: () => true } })
     const installed = installSourceSessionAccess(h.target as never)
     expect(installed.readConfined).toBe(true)
-    const guard = h.guardFunction() as (execution: { readonly name: string; readonly arguments?: unknown }) => string | undefined
+    const guard = h.guardFunction() as (execution: { readonly name: string; readonly arguments?: unknown }) => ForkToolDenial | undefined
     // The program itself declares no path; each nested call re-enters this pipeline as its own execution.
     expect(guard({ name: 'run_code', arguments: { code: 'return 1', description: 'run' } })).toBeUndefined()
-    expect(guard({ name: 'bash', arguments: { command: 'ls' } })).toContain('may not use bash')
-    expect(guard({ name: 'ghost', arguments: {} })).toContain('may not use ghost')
+    expect(guard({ name: 'bash', arguments: { command: 'ls' } })).toEqual(denial('may not use bash', 'FORK_TOOL_NOT_PERMITTED'))
+    expect(guard({ name: 'ghost', arguments: {} })).toEqual(denial('may not use ghost', 'FORK_TOOL_NOT_PERMITTED'))
   })
 
   it('resolves each tool’s declared paths and delegates with their canonical form', async () => {
@@ -609,7 +611,7 @@ describe('source-session sandbox', () => {
       ['present', { files: [{ path: 'inside.ts' }, { path: 'outside/secret.txt' }] }],
     ]
     for (const [name, args] of outsideCalls) {
-      await expect(h.call(name, args)).rejects.toThrow('inside the workspace')
+      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     }
 
     const malformed: [string, unknown][] = [
@@ -621,7 +623,7 @@ describe('source-session sandbox', () => {
       ['present', { files: 'not a list' }],
     ]
     for (const [name, args] of malformed) {
-      await expect(h.call(name, args)).rejects.toThrow('with the paths it declares')
+      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('with the paths it declares') as string })
     }
 
     // A resolution the filesystem refuses is the refusal: no verdict is guessed from the spelling.
@@ -640,9 +642,9 @@ describe('source-session sandbox', () => {
     // There is no owner bypass: the sandbox belongs to the Session, so every turn reads through it.
     await expect(confined.execute({ file_path: 'x' }, { signal: undefined })).resolves.toBe('ran')
     expect(refresh).toHaveBeenCalledTimes(1)
-    await expect(confined.execute({}, { signal: undefined })).rejects.toThrow('only use read with the paths')
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toThrow('only use read with the paths')
-    await expect(confined.execute({ file_path: 'outside' }, { signal: undefined })).rejects.toThrow('inside the workspace')
+    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') as string })
+    await expect(confined.execute({ file_path: 'outside' }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).resolves.toBe('ran')
     // Every call re-reads the grants before it consumes them, including one it then refuses.
     expect(refresh).toHaveBeenCalledTimes(5)
@@ -663,8 +665,8 @@ describe('source-session sandbox', () => {
     const installed = installSourceSessionAccess(h.target as never)
     expect(installed).toMatchObject({ readConfined: true, registrationFailure: { tool: 'glob' } })
     expect(h.installed.has('glob')).toBe(false)
-    const guard = h.guardFunction() as (execution: { readonly name: string }) => string | undefined
-    expect(guard({ name: 'glob' })).toContain('may not use')
+    const guard = h.guardFunction() as (execution: { readonly name: string }) => ForkToolDenial | undefined
+    expect(guard({ name: 'glob' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
     expect(guard({ name: 'grep' })).toBeUndefined()
   })
 
@@ -673,8 +675,8 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(h.target as never)
     // Nothing casts the deployment's missing present tool into a permit: the guard only knows registered
     // names.
-    const guard = h.guardFunction() as (execution: { readonly name: string }) => string | undefined
-    expect(guard({ name: 'present' })).toContain('may not use')
+    const guard = h.guardFunction() as (execution: { readonly name: string }) => ForkToolDenial | undefined
+    expect(guard({ name: 'present' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
     expect(h.installed.has('present')).toBe(false)
   })
 
@@ -683,19 +685,19 @@ describe('source-session sandbox', () => {
     expect(installSourceSessionAccess(h.target as never)).toMatchObject({ readConfined: true, writeConfined: true })
     const confined = h.installed.get('write')!
 
-    await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).rejects.toThrow('named file with text content')
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toThrow('named file with text content')
+    await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute({ file_path: '../outside', content: 'x' }, { signal: undefined }))
-      .rejects.toThrow('inside the workspace')
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     const narrowing = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: vi.fn().mockReturnValueOnce(true).mockReturnValue(false) } })
     expect(installSourceSessionAccess(narrowing.target as never).writeConfined).toBe(true)
     await expect(narrowing.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toThrow('does not allow writing')
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
 
     const blocked = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: () => false } })
     installSourceSessionAccess(blocked.target as never)
     await expect(blocked.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toThrow('does not allow writing')
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
 
     h.target.write = { mayWrite: () => true }
     const result = await confined.execute({ file_path: 'inside.ts', content: 'hello' }, { signal: undefined })
@@ -712,15 +714,15 @@ describe('source-session sandbox', () => {
     const edit = h.installed.get('edit')!
 
     await expect(edit.execute({ file_path: 'inside.ts', old_string: '', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: '', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'a' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a' }, { signal: undefined }))
-      .rejects.toThrow('replacing non-empty text')
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'outside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toThrow('inside the workspace')
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     // The intent comes from the shipped waterfall, and the edit is written under the Session policy.
     const result = await edit.execute({ file_path: 'inside.ts', old_string: 'old', new_string: 'new', replace_all: true }, { signal: undefined })
     expect(result).toEqual({ path: '/granted/inside.ts', before: 'old', after: 'new' })
@@ -741,9 +743,9 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(closedEdit.target as never)
     await expect(closedEdit.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toThrow('does not allow writing')
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
     // The replacement's own argument check refuses arguments it cannot read.
-    await expect(edit.execute('not a record', { signal: undefined })).rejects.toThrow('replacing non-empty text')
+    await expect(edit.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
 
     // A share that narrows while the edit intent awaits stops the edit before it reaches the backend.
     const narrowing = sourceHarness({
@@ -753,7 +755,7 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(narrowing.target as never)
     await expect(narrowing.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toThrow('does not allow writing')
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
     expect(narrowing.fs.editText).not.toHaveBeenCalled()
   })
 
@@ -772,20 +774,20 @@ describe('source-session sandbox', () => {
     })
     const installed = installSourceSessionAccess(h.target as never)
     expect(installed).toMatchObject({ readConfined: true, writeConfined: true, registrationFailure: { tool: 'edit' } })
-    const guard = h.guardFunction() as (execution: { readonly name: string }) => string | undefined
-    expect(guard({ name: 'edit' })).toContain('may not use')
+    const guard = h.guardFunction() as (execution: { readonly name: string }) => ForkToolDenial | undefined
+    expect(guard({ name: 'edit' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
     expect(guard({ name: 'write' })).toBeUndefined()
   })
 
   it('refuses a no-effect tool once another definition answers to its name', () => {
     const h = sourceHarness({ tools: [...sharedToolNames('view')] })
     installSourceSessionAccess(h.target as never)
-    const guard = h.guardFunction() as (execution: { readonly name: string }) => string | undefined
+    const guard = h.guardFunction() as (execution: { readonly name: string }) => ForkToolDenial | undefined
     // The definition the installation found at install time is the one it vouches for.
     expect(guard({ name: 'todo_write' })).toBeUndefined()
     // A scope registration that replaces it later is a different tool under a permitted name.
     h.registered.set('todo_write', deploymentTool('todo_write'))
-    expect(guard({ name: 'todo_write' })).toContain('may not use')
+    expect(guard({ name: 'todo_write' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
   })
 
   it('guards every tool but this installation’s replacements', () => {
@@ -793,20 +795,20 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(h.target as never)
     const provider = h.guardFunction() as ((execution: unknown) => unknown) | undefined
     expect(provider).toBeDefined()
-    expect(provider?.({ arguments: {} })).toContain('may not use')
-    expect(provider?.({ arguments: {}, name: 'other' })).toContain('may not use')
+    expect(provider?.({ arguments: {} })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
+    expect(provider?.({ arguments: {}, name: 'other' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
     expect(provider?.({ arguments: {}, name: 'read' })).toBeUndefined()
     // A view Session installs no write or edit name, so the guard refuses the deployment's own.
-    expect(provider?.({ arguments: {}, name: 'write' })).toContain('may not use')
-    expect(provider?.({ arguments: {}, name: 'edit' })).toContain('may not use')
+    expect(provider?.({ arguments: {}, name: 'write' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
+    expect(provider?.({ arguments: {}, name: 'edit' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
     // A name the deployment has but this installation did not register is refused: the name is not
     // evidence that a constrained definition would run.
-    expect(provider?.({ arguments: {}, name: 'glob' })).toContain('may not use')
+    expect(provider?.({ arguments: {}, name: 'glob' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
 
     const writable = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: () => true } })
     installSourceSessionAccess(writable.target as never)
     const writableGuard = writable.guardFunction() as ((execution: unknown) => unknown) | undefined
     expect(writableGuard?.({ arguments: {}, name: 'write' })).toBeUndefined()
-    expect(writableGuard?.({ arguments: {}, name: 'edit' })).toContain('may not use')
+    expect(writableGuard?.({ arguments: {}, name: 'edit' })).toEqual(denial('may not use', 'FORK_TOOL_NOT_PERMITTED'))
   })
 })

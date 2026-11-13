@@ -23,9 +23,9 @@
 /deepseek-ai-dsh-ptc-runtime/use-this-package/choose-a-backend:
   en: a7ffbb6dfe129164
   zh: 110a800394ef7d26
-/deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings-portably:
-  en: ff1970944a8d6874
-  zh: 14da7a9e54ca26e3
+/deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings:
+  en: b770e26d4e3906d3
+  zh: 97e6a4ecb7dc15f2
 /deepseek-ai-dsh-ptc-runtime/use-this-package/what-can-go-wrong:
   en: 35129568fa436d64
   zh: 0f4138ad427ef486
@@ -41,12 +41,12 @@
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/vocabulary:
   en: a499ed426b20e296
   zh: 53a2bdb062cf85ba
-/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/portable-identifiers:
-  en: f76c4f5d4877d746
-  zh: 21ec1e77e3861fcc
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/binding-exclusions:
+  en: d789477b517ac7a2
+  zh: abd7b26775494056
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/source-map:
-  en: 85b65ceb9be0c49f
-  zh: 52df7f06d4e49d6e
+  en: 9aac7516a53e3b41
+  zh: 56373e751fd97c37
 /deepseek-ai-dsh-ptc-runtime/further-exploration:
   en: 552a3fb04184d5f5
   zh: 440a9a7c61d20f76

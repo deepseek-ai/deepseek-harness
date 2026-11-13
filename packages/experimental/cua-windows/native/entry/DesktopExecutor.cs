@@ -20,9 +20,9 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     private readonly ClipboardPaste clipboard = new();
     private readonly SemaphoreSlim queue = new(1);
 
-    private static object ActionResult(nint before) => new
+    private static object ActionResult(nint before, bool dispatched = true) => new
     {
-        dispatched = true,
+        dispatched,
         foregroundChanged = before == 0 || Win32.GetForegroundWindow() == 0 ? (bool?)null : before != Win32.GetForegroundWindow(),
     };
     private static string String(JsonElement value, string key) => value.GetProperty(key).GetString()!;
@@ -139,7 +139,11 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     return ActionResult(foreground);
                 }
                 case "sendKeyEvent":
-                    throw new NativeFailure("UNSUPPORTED", "Held key events are not supported on current platform.");
+                {
+                    var target = Selected(app, parameters, context);
+                    var dispatched = Input.KeyEvent(app, target, String(parameters, "key"), String(parameters, "direction"), context);
+                    return ActionResult(foreground, dispatched);
+                }
                 case "paste":
                 {
                     var target = Selected(app, parameters, context);
