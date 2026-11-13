@@ -5,6 +5,7 @@ import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { MarketListingVersion } from './index.ts'
 import { PluginMarketError, pluginMarketToolError } from './error.ts'
+import { normalizeIndexUrl } from './index-url.ts'
 
 /** Required services for the listing tool; `pluginMarket` is awaited inside `apply`. */
 export const inject = ['tools']
@@ -72,6 +73,17 @@ function paged<T>(items: readonly T[], page: Page): { readonly slice: T[]; reado
   return { slice, nextOffset: next < items.length ? next : null }
 }
 
+/** An invalid Git address from a profile may contain credentials. Only Settings needs it for removal. */
+function canListIndex(url: string): boolean {
+  if (!url.startsWith('git+')) return true
+  try {
+    normalizeIndexUrl(url)
+    return true
+  } catch (_invalidAddress) {
+    return false
+  }
+}
+
 /**
  * Register the read-only `plugin_market` tool while the `pluginMarket` service is mounted. The service comes from the
  * optional custom plugin indexes bundle, so a preset can keep this row without the tool appearing or the row waiting.
@@ -103,7 +115,7 @@ function registerTool(ctx: Context): void {
       switch (args.action) {
         case 'list_indexes':
           return JSON.stringify({
-            indexes: market.listIndexes().map(({ url, title, error }) => ({
+            indexes: market.listIndexes().filter(({ url }) => canListIndex(url)).map(({ url, title, error }) => ({
               url, title: english(title) ?? null, ...error === undefined ? {} : { error },
             })),
           })

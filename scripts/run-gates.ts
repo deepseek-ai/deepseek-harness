@@ -357,6 +357,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('test', 'test'),
         pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
         pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+        pnpmScript('stale-pull-requests', 'test:stale-pull-requests', { label: 'Stale pull-request reminders' }),
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         expectedOutputGate(),
@@ -401,6 +402,7 @@ function ciSharedStaticGates(): Gate[] {
     ...sharedHygieneGates(),
     pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
     pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+    pnpmScript('stale-pull-requests', 'test:stale-pull-requests', { label: 'Stale pull-request reminders' }),
   ]
 }
 
