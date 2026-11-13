@@ -32,7 +32,7 @@ Status: implemented
 
 `ABORTED_BEFORE_DISPATCH` 携带 `{ name: 'AbortError' }` 和模型可见文本 `Error: tool call aborted before dispatch`。凡取消阻止工具主体调用时都使用该结果，包括进入时已中止、前置策略或审批期间取消、包装层信号已中止、包装层在委托前返回的成功结果被调用方取消抢先，以及轮次取消后 agent loop（智能体循环）跳过的同批调用。
 
-`ABORTED` 携带模型可见文本 `Error: tool call aborted`，并且只在工具主体已经调用后使用，包括工具主体完成后环绕包装层或后置策略监听器等待期间发生的取消。已开始的工具主体抛出 signal 的 reason，或不具备 `HarnessError` 身份、name 为 `AbortError` 的 `Error` 时，结果保留该 message，并携带 `{ name: 'AbortError', code: 'ABORTED' }`。拒绝、包装层失败、其他工具失败或后置策略失败比通用取消更具体。timeout-policy 自身拥有的超时仍为 `TOOL_TIMEOUT`，成功结果被取消替换前延后附加的上下文仍会保留。
+`ABORTED` 携带模型可见文本 `Error: tool call aborted`，并且只在工具主体已经调用后使用，包括工具主体完成后环绕包装层或后置策略监听器等待期间发生的取消。已开始的工具主体抛出 signal 的 reason，或不具备 `HarnessError` 身份、name 为 `AbortError` 的 `Error` 时，结果保留该 message，并携带 `{ name: 'AbortError', code: 'ABORTED' }`。`tools/execute` 包装层在调用方取消后抛出这类值时按同样方式归类，工具主体尚未开始时为 `ABORTED_BEFORE_DISPATCH`。拒绝、其他包装层失败、其他工具失败或后置策略失败比通用取消更具体。timeout-policy 自身拥有的超时仍为 `TOOL_TIMEOUT`，成功结果被取消替换前延后附加的上下文仍会保留。
 
 ### 进入时已中止会在物化后短路
 

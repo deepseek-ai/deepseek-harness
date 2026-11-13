@@ -81,7 +81,7 @@ UI 层可以同时读取多个 Controller 做一次导航决定，但不得把�
 | `api/session-controller/client` | 会话对象、目录、引用、来源计数、命令、投影、事件窗口与 Agent Context | 导航、完成提醒、Conversation target、React、Slot、Workspace |
 | `api/workspace-controller/client` | Workspace 对象、顺序、归档、命令和 snapshot | React、Session 导航策略、目录 UI |
 | `client/ui-session` | 显式会话作用域、标准数据源、`SessionProvider` 与有效待处理交互 | 会话传输、引用所有权、Conversation 组装、Approval/Question 结果、统一 UI 状态 |
-| `client/ui-session-status` | 统一 UI 状态：运行状态、有效待处理请求与完成提醒 | 待处理交互登记、会话传输、React |
+| `client/ui-session-status` | 统一 UI 状态：运行状态、有效待处理请求与完成提醒；宿主阅读记录及其前端副本；主视图阅读确认 | 待处理交互登记、会话传输、React |
 | `client/ui-workspace` | Workspace 钩子、浏览器 UI、主区域引用与跨控制器导航策略 | Workspace 传输、会话数据副本 |
 | `client/ui-conversation` | Conversation core、registry、binding、shell、input、composer、queue 和 View 导航 | Session transport、Chat/Trajectory snapshot |
 | `client/ui-chat` | Chat target、Node definitions、renderer、selection、details 和 locale | Session 生命周期、通用 View 导航、Trajectory、历史图片 cache |

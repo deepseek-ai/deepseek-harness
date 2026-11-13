@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import { TaskMenu } from './TaskMenu.tsx'
 import type { TaskMenuEntry } from './TaskMenu.tsx'
 import { zoneChoices, zoneName } from './schedule-format.ts'
@@ -56,10 +57,21 @@ export function RuleZoneRow({ value, disabled, onChange, t }: PropsLocale<'sched
     }
     return [...byLabel.values()]
   }, [value, systemZone, t])
-  const normalized = query.trim().toLocaleLowerCase(t('time.locale'))
-  const matches = catalog.filter(item => `${item.zones.join(' ')} ${item.label}`.toLocaleLowerCase(t('time.locale')).includes(normalized))
-    .map(item => ({ ...item, id: item.zones.find(zone => zone.toLocaleLowerCase(t('time.locale')) === normalized) ?? item.id }))
-  const recentItems = normalized === '' ? recent.flatMap((zone) => {
+  // A row groups zones that share one label. The zone saved is the one the query
+  // names, by the same matching that kept the row; the row's own id wins only
+  // while the query names it or names no zone at all. The label answers query
+  // terms that name no zone, such as a localized city name.
+  const rowIndex = useMemo(() => new TextSearchIndex(
+    catalog.map(item => ({ item, zones: new TextSearchIndex(item.zones, zone => ({ fuzzy: [zone, item.label] })) })),
+    ({ item }) => ({ fuzzy: [...item.zones, item.label] }),
+  ), [catalog])
+  const searching = query.trim() !== ''
+  const matches = rowIndex.search(query).map(({ item, zones }) => {
+    if (!searching) return item
+    const named = zones.search(query)
+    return { ...item, id: named.includes(item.id) ? item.id : named[0] ?? item.id }
+  })
+  const recentItems = !searching ? recent.flatMap((zone) => {
     const item = catalog.find(item => item.zones.includes(zone))
     return item === undefined ? [] : [{ ...item, id: zone }]
   }).filter((item, index, items) => items.findIndex(candidate => candidate.label === item.label) === index) : []

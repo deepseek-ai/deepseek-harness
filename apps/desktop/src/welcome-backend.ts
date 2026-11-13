@@ -39,7 +39,7 @@ function record(value: unknown): value is Record<string, unknown> {
 /**
  * Connect the native HTTP client to the Desktop Host; every request sends `cookie` explicitly and uses no cookie jar.
  * @param hostUrl - URL of the running Desktop Host; only its origin is used.
- * @param cookie - Cookie header returned by `authenticateWebHost` for this Host.
+ * @param cookie - Desktop-private authentication header for this owned Host.
  * @param send - HTTP client for Host requests.
  * @returns metadata reads and write-only credential operations over standard RPC.
  */

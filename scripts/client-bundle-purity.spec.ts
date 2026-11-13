@@ -2,13 +2,16 @@
  * Pins shared client-bundle preset rules: build modes, module-edge purity,
  * source-map chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runInNewContext } from 'node:vm'
 import { build, type Rolldown, type TsdownBundle, type UserConfig } from 'tsdown'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { clientBundle, requestedExternals, staticLinked } from '../packages/client/tsdown.client.ts'
+import { STATIC_MODULE_MANIFEST_EXPORT } from '../packages/client/web/src/platform.ts'
+import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 
 type ResolveId = (source: string) => null | { id: string; external: boolean }
 
@@ -125,6 +128,24 @@ async function clientChunkOutput(root: string, config: UserConfig, fileName: str
   }
 }
 
+/** A built `staticLinked` index module. */
+type StaticArtifact = { readonly [STATIC_MODULE_MANIFEST_EXPORT]: DshClientModuleManifest }
+
+/** Exports of the counter fixture library. */
+interface CounterExports {
+  count: number
+  increment: () => void
+  renamed: number
+}
+
+/** A static library's manifest factory resolves nothing through the module table. */
+const unusedRequire = Object.assign((specifier: string): never => {
+  throw new Error(`unexpected static fixture dependency: ${specifier}`)
+}, {
+  async: async (specifier: string): Promise<never> => { throw new Error(`unexpected static fixture chunk: ${specifier}`) },
+  asset: (reference: string): string => reference,
+})
+
 describe('statically linked client build modes', () => {
   it.each([
     { label: 'defaults to production', mode: undefined, expectedMode: 'production', frozen: false },
@@ -156,13 +177,145 @@ describe('statically linked client build modes', () => {
     if (config === undefined) throw new Error('static client config missing')
 
     const output = await clientChunkOutput(root, config, 'index.js')
-    const emitted = await import(`data:text/javascript,${encodeURIComponent(output)}`) as {
-      mode: string
-      snapshot: { value: number }
-    }
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact & { mode: string }
+    const manifest = artifact[STATIC_MODULE_MANIFEST_EXPORT]
+    const emitted = manifest.factory(unusedRequire) as { mode: string; snapshot: { value: number } }
+    expect(manifest.id).toBe(REQUESTING_PACKAGE)
+    expect(Object.hasOwn(manifest, 'meta')).toBe(false)
+    expect(artifact.mode).toBe(expectedMode)
     expect(emitted.mode).toBe(expectedMode)
     expect(emitted.snapshot).toEqual({ value: 1 })
     expect(Object.isFrozen(emitted.snapshot)).toBe(frozen)
+  })
+})
+
+describe('static Client dependency delivery', () => {
+  function fixture(source: string): string {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-static-delivery-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    mkdirSync(join(root, 'lib/types'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    writeFileSync(join(root, 'lib/types/index.js'), source)
+    return root
+  }
+
+  function config(root: string): UserConfig {
+    const result = staticLinked(root, ['lib/types/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })[0]
+    if (result === undefined) throw new Error('static client config missing')
+    return result
+  }
+
+  it('leaves third-party imports and lazy imports external for the final shell build', async () => {
+    const root = fixture([
+      'import { marker } from "ordinary-library"',
+      'export { marker }',
+      'export const load = () => import("ordinary-library/lazy")',
+    ].join('\n'))
+    const builds = await build({
+      ...config(root), cwd: root, config: false, tsconfig: false,
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+    })
+    try {
+      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
+      expect(chunks.map(chunk => chunk.fileName)).toEqual(['index.js'])
+      const output = chunks[0]!.code
+      expect(output).toMatch(/import\s[^;]*from\s*["']ordinary-library["']/)
+      expect(output).toMatch(/import\(["']ordinary-library\/lazy["']\)/)
+      expect(output).not.toMatch(/require(?:\.async)?\(["']ordinary-library/)
+    } finally {
+      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    }
+  })
+
+  it('keeps shared Client library imports as ordinary imports and requires them from the manifest factory', async () => {
+    const dependencies = [
+      '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots',
+      '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-dockkit',
+    ]
+    const root = fixture([
+      ...dependencies.map((id, index) => `import * as dependency${index} from ${JSON.stringify(id)}`),
+      `export const dependencies = [${dependencies.map((_id, index) => `dependency${index}`).join(', ')}]`,
+    ].join('\n'))
+    const output = await clientChunkOutput(root, config(root), 'index.js')
+    for (const id of dependencies) expect(output).toMatch(new RegExp(`import\\s[^;]*from\\s*["']${id}["']`))
+    // The manifest factory requires each module-table import once, in import order, so Modules records the dependencies.
+    const factory = output.slice(output.indexOf(`${STATIC_MODULE_MANIFEST_EXPORT} =`))
+    expect([...factory.matchAll(/require\("([^"]+)"\)/gu)].map(match => match[1])).toEqual(dependencies)
+  })
+
+  it('exports the library as ordinary ESM and returns live views of the same exports from the manifest factory', async () => {
+    const root = fixture([
+      'export let count = 0',
+      'export function increment() { count++ }',
+      'const hidden = 1',
+      'export { hidden as renamed }',
+    ].join('\n'))
+    const output = await clientChunkOutput(root, config(root), 'index.js')
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact & CounterExports
+    expect(Object.keys(artifact).sort()).toEqual([STATIC_MODULE_MANIFEST_EXPORT, 'count', 'increment', 'renamed'].sort())
+    const exports = artifact[STATIC_MODULE_MANIFEST_EXPORT].factory(unusedRequire)
+    expect(Object.keys(exports).sort()).toEqual(['count', 'increment', 'renamed'])
+    expect(exports.increment).toBe(artifact.increment)
+    expect(exports.renamed).toBe(1)
+    artifact.increment()
+    expect(artifact.count).toBe(1)
+    expect(exports.count).toBe(1)
+    expect(typeof Object.getOwnPropertyDescriptor(exports, 'count')?.get).toBe('function')
+  })
+
+  it('rejects a library export that takes the manifest name', async () => {
+    const root = fixture(`export const ${STATIC_MODULE_MANIFEST_EXPORT} = 1\n`)
+    await expect(clientChunkOutput(root, config(root), 'index.js')).rejects.toThrow(`${STATIC_MODULE_MANIFEST_EXPORT} is reserved`)
+  })
+
+  it('leaves a third-party stylesheet import to the shell build', async () => {
+    const root = fixture('import "ordinary-library/dist/theme.css"\nexport const ready = true\n')
+    const output = await clientChunkOutput(root, config(root), 'index.js')
+    expect(output).toMatch(/import\s*["']ordinary-library\/dist\/theme\.css["']/)
+    expect(output).not.toMatch(/\?url["']/)
+    expect(output).not.toMatch(/\bmeta:/)
+  })
+
+  it('describes local styles in metadata without installing DOM styles', async () => {
+    const root = fixture('import classes from "./Panel.module.css"\nimport "./global.css"\nexport { classes }\n')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/Panel.module.css'), '.panel { display: flex; }\n')
+    writeFileSync(join(root, 'src/global.css'), '.overlay { position: fixed; }\n')
+    const output = await clientChunkOutput(root, config(root), 'index.js')
+    expect(output).not.toMatch(/document\.(?:head|createElement|querySelector)/)
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact
+    const require = unusedRequire
+    const exports = artifact[STATIC_MODULE_MANIFEST_EXPORT].factory(require) as { classes: { panel: string } }
+    const meta = artifact[STATIC_MODULE_MANIFEST_EXPORT].meta
+    if (meta === undefined) throw new Error('static CSS metadata missing')
+    const stylesheets = meta().stylesheets
+    expect(stylesheets).toBeDefined()
+    expect(Object.keys(stylesheets!).sort()).toEqual([
+      'src/Panel.module.css', 'src/global.css',
+    ])
+    expect(stylesheets!['src/Panel.module.css']!.text(require))
+      .toContain(`.${exports.classes.panel}{display:flex}`)
+    expect(stylesheets!['src/global.css']!.text(require))
+      .toContain('.overlay{position:fixed}')
+  })
+
+  it('names local styles below the package when the package directory is a symbolic link', async () => {
+    const root = fixture('import classes from "./Panel.module.css"\nexport { classes }\n')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/Panel.module.css'), '.panel { display: flex; }\n')
+    const linked = join(root, 'linked')
+    symlinkSync(root, linked, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const output = await clientChunkOutput(linked, config(linked), 'index.js')
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact
+    const manifest = artifact[STATIC_MODULE_MANIFEST_EXPORT]
+    const meta = manifest.meta
+    if (meta === undefined) throw new Error('static CSS metadata missing')
+    const stylesheets = meta().stylesheets
+    expect(Object.keys(stylesheets ?? {})).toEqual(['src/Panel.module.css'])
+    const exports = manifest.factory(unusedRequire) as { classes: { panel: string } }
+    expect(stylesheets?.['src/Panel.module.css']?.text(unusedRequire))
+      .toContain(`.${exports.classes.panel}{display:flex}`)
   })
 })
 
@@ -178,6 +331,45 @@ function dynamicImportFixture(prefix: string): string {
 }
 
 describe('client bundle dynamic imports', () => {
+  it.each([false, true])('emits metadata only for chunks containing styles (styles=%s)', async (withStyles) => {
+    const root = dynamicImportFixture('dsh-client-optional-meta-')
+    if (withStyles) {
+      mkdirSync(join(root, 'src/client'), { recursive: true })
+      writeFileSync(join(root, 'src/client/global.css'), '.fixture { display: flex; }\n')
+      writeFileSync(join(root, 'lib/types/client/index.js'), 'import "./global.css"\nexport const load = () => import("./terminal.js")\n')
+    }
+    const config = clientConfigs(root)[0]
+    if (config === undefined) throw new Error('client config missing')
+    const builds = await build({
+      ...config, cwd: root, config: false, tsconfig: false,
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+    })
+    try {
+      const registrations: DshClientModuleManifest[] = []
+      const target = { __ModuleLoader__: { load: (manifest: DshClientModuleManifest) => { registrations.push(manifest) } } }
+      for (const bundle of builds) for (const chunk of bundle.chunks) {
+        if (chunk.type !== 'chunk') continue
+        expect(chunk.code).not.toContain('__dshChunkStyles_')
+        runInNewContext(chunk.code, { window: target })
+      }
+      expect(registrations).toHaveLength(2)
+      const entry = registrations.find(registration => registration.chunk === undefined)
+      const lazy = registrations.find(registration => registration.chunk === 'client.terminal.js')
+      if (entry === undefined || lazy === undefined) throw new Error('dynamic fixture registrations missing')
+      expect(Object.hasOwn(lazy, 'meta')).toBe(false)
+      expect(Object.hasOwn(entry, 'meta')).toBe(withStyles)
+      if (withStyles) {
+        if (entry.meta === undefined) throw new Error('dynamic CSS metadata missing')
+        const stylesheets = entry.meta().stylesheets
+        expect(Object.keys(stylesheets ?? {})).toEqual(['src/client/global.css'])
+        expect(stylesheets?.['src/client/global.css']?.text({ asset: reference => reference }))
+          .toContain('.fixture{display:flex}')
+      }
+    } finally {
+      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    }
+  })
+
   it('keeps a dual Client browser chunk disjoint from its Node output', async () => {
     const root = dynamicImportFixture('dsh-dual-client-chunk-')
     const configs = clientBundle(root, ['lib/types/index.js'], { dualClient: true })(
@@ -333,6 +525,7 @@ describe('client bundle purity gate', () => {
   it('throws on any other @deepseek-ai leak', () => {
     expect(() => resolveId('@deepseek-ai/dsh-agent')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-client-web')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-util-code-language')).toThrow(/purity/)
   })
 
   it('throws on cross-plugin value imports — bare plugin names and /client subpaths alike', () => {
@@ -455,10 +648,13 @@ describe('client bundle experimental input isolation', () => {
     writeFileSync(entry, `export { marker } from ${JSON.stringify(importPath(entry, prototype))}\n`)
     const guarded = config('static')
     const plugins = guarded.plugins as Array<{ name: string }>
+    if (typeof guarded.outputOptions === 'function') throw new Error('expected static output options')
+    const outputOptions = { ...guarded.outputOptions, sourcemapExcludeSources: false }
+    delete outputOptions.sourcemapPathTransform
     const unguarded: UserConfig = {
       ...guarded,
       plugins: plugins.filter(plugin => plugin.name !== 'dsh-client-input-isolation'),
-      outputOptions: { sourcemapExcludeSources: false },
+      outputOptions,
     }
 
     await expect(bundle(owner, unguarded)).resolves.toContain('experimental sentinel')
@@ -495,7 +691,7 @@ describe('client bundle experimental input isolation', () => {
     const { owner, entry } = fixture()
     writeFileSync(entry, `export * from ${JSON.stringify(experimental)}\n`)
 
-    await expect(bundle(owner, config('static'))).rejects.toThrow(/client bundle isolation.*experimental/)
+    await expect(bundle(owner, config('static', owner))).rejects.toThrow(/client bundle isolation.*experimental/)
   })
 
   it.each([false, true])('checks omitted source-map files against their package owner (experimental: %s)', async (experimentalSource) => {

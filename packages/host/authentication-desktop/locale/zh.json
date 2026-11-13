@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop 认证",
+    "description": "使用父进程与 Host 进程共享的私有凭据认证 Desktop 请求。"
+  }
+}

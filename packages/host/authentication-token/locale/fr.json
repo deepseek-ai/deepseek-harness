@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Authentification par jeton",
+    "description": "Échange un jeton de lancement contre un accès depuis le navigateur et authentifie les requêtes avec des cookies signés."
+  }
+}

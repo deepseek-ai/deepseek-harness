@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Token 认证",
+    "description": "通过启动 Token 换取浏览器访问凭据，并使用签名 Cookie 认证请求。"
+  }
+}

@@ -15,7 +15,7 @@ import { Agent, request as httpsRequest } from 'node:https'
 import { connect, createServer as createTcpServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { Duplex } from 'node:stream'
+import { Duplex } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
@@ -24,6 +24,7 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import HttpServer, {
   bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
+  type WebAuthRequest,
 } from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
@@ -247,6 +248,279 @@ function tlsUpgrade(port: number | undefined, path: string, ca: string): Promise
 }
 
 describe('real Loader composition', () => {
+  it.each([401, 403, 503] as const)('marks HTTP and upgrade admission refusals %s as non-cacheable', async (status) => {
+    const ctx = await loadComposition()
+    const handler = vi.fn()
+    ctx.webServer.register({ kind: 'exact', path: '/private', handler })
+    ctx.webServer.registerUpgrade({ path: '/private', handler })
+    ctx.on('webserver/authorize', () => ({ kind: 'deny', status }))
+
+    const response = await request(ctx.webServer.port, '/private')
+    expect(response.status).toBe(status)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const upgraded = await rawExchange(ctx.webServer.port,
+      'GET /private HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+    expect(upgraded).toMatch(new RegExp(`^HTTP/1.1 ${String(status)} `, 'u'))
+    expect(upgraded).toContain('\r\nCache-Control: no-store\r\n')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('authenticates matched HTTP routes once and forwards the admitted Peer', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const abort = new AbortController()
+    const peer: PeerScope = {
+      id: 'route-auth' as PeerScope['id'], ctx, principal: { kind: 'owner' }, signal: abort.signal,
+      interactions: 'none', async dispose() { abort.abort() },
+    }
+    const reached: (PeerScope | undefined)[] = []
+    const handler: WebRoute['handler'] = (_req, res, admitted) => { reached.push(admitted); res.end('allowed') }
+    server.register({ kind: 'exact', path: '/private', handler })
+    server.register({ kind: 'prefix', path: '/public', auth: 'anonymous', handler })
+    server.register({ kind: 'exact', path: '/public/secret', auth: 'deny', handler })
+    expect(await request(server.port, '/private')).toMatchObject({ status: 503, body: 'authentication unavailable' })
+    expect((await request(server.port, '/public')).status).toBe(200)
+    expect(reached).toEqual([undefined])
+    const seen: WebAuthRequest[] = []
+    const listener = ctx.plugin({ apply(scope: Context) {
+      scope.on('webserver/authorize', (incoming, policy) => {
+        seen.push(incoming)
+        if (policy === 'anonymous') return { kind: 'allow' }
+        if (incoming.headers instanceof Headers || incoming.headers.authorization !== 'Bearer valid') return { kind: 'deny', status: 401 }
+        return { kind: 'allow', peer }
+      })
+    } })
+    await listener.await()
+    const later = vi.fn(() => ({ kind: 'deny' as const, status: 403 as const }))
+    const removeLater = ctx.on('webserver/authorize', later)
+    expect((await request(server.port, '/missing')).status).toBe(404)
+    expect(await request(server.port, '/public/secret')).toMatchObject({ status: 403, body: 'forbidden' })
+    expect(seen).toHaveLength(0)
+    expect((await request(server.port, '/private')).status).toBe(401)
+    expect((await request(server.port, '/private', { headers: { authorization: 'Bearer valid' } })).status).toBe(200)
+    expect(reached.at(-1)).toBe(peer)
+    expect(seen.at(-1)).toMatchObject({ method: 'GET', transport: 'http' })
+    expect(seen.at(-1)?.url.pathname).toBe('/private')
+    expect(seen.at(-1)?.socket?.destroyed).toBe(false)
+    expect(later).not.toHaveBeenCalled()
+    await peer.dispose()
+    expect((await request(server.port, '/private', { headers: { authorization: 'Bearer valid' } })).status).toBe(401)
+    await listener.dispose()
+    removeLater()
+    expect(await request(server.port, '/private')).toMatchObject({ status: 503, body: 'authentication unavailable' })
+  })
+
+  it('resolves selectors for resources and fallback while trusting explicit in-process Peers', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const peer: PeerScope = {
+      id: 'resource-auth' as PeerScope['id'], ctx, principal: { kind: 'owner' }, signal: new AbortController().signal,
+      interactions: 'none', async dispose() {},
+    }
+    const resource = vi.fn(async (_request: Request, admitted?: PeerScope) => {
+      expect(admitted).toBe(peer)
+      return new Response('resource')
+    })
+    server.register({ kind: 'exact', path: '/resource', resource, auth: incoming => incoming.url.searchParams.has('deny') ? 'deny' : 'required' })
+    const authorize = vi.fn(() => ({ kind: 'allow' as const, peer }))
+    ctx.on('webserver/authorize', authorize)
+    expect(await request(server.port, '/resource', { method: 'HEAD' })).toMatchObject({ status: 200, body: '' })
+    expect(authorize).toHaveBeenCalledTimes(1)
+    expect(resource).toHaveBeenCalledTimes(1)
+    const direct = await server.readResource(new Request('http://reader.invalid/resource', { headers: { authorization: 'invalid' } }), peer)
+    expect(await direct.text()).toBe('resource')
+    expect(authorize).toHaveBeenCalledTimes(1)
+    expect((await server.readResource(new Request('http://reader.invalid/resource?deny'), peer)).status).toBe(403)
+    expect((await request(server.port, '/resource?deny', { method: 'HEAD' })).status).toBe(403)
+    expect(resource).toHaveBeenCalledTimes(2)
+    expect(authorize).toHaveBeenCalledTimes(1)
+    const release = server.registerFallback({ auth: incoming => incoming.url.pathname === '/blocked' ? 'deny' : 'required', resource })
+    expect((await request(server.port, '/fallback')).body).toBe('resource')
+    expect((await request(server.port, '/blocked')).status).toBe(403)
+    release()
+  })
+
+  it('requires admission for bare fallback handlers and rejects an allow without a required Peer', async () => {
+    const ctx = await loadComposition()
+    const reached = vi.fn<WebRoute['handler']>((_req, res) => { res.end('unexpected') })
+    ctx.webServer.registerFallback(reached)
+    expect((await request(ctx.webServer.port, '/fallback')).status).toBe(503)
+    const stop = ctx.on('webserver/authorize', () => ({ kind: 'allow' }))
+    expect((await request(ctx.webServer.port, '/fallback')).status).toBe(503)
+    stop()
+    ctx.on('webserver/authorize', () => { throw new Error('authorization failed') })
+    expect((await request(ctx.webServer.port, '/fallback')).status).toBe(400)
+    expect(reached).not.toHaveBeenCalled()
+  })
+
+  it('authorizes upgrade routes before dispatch and forwards their Peer', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const peer: PeerScope = {
+      id: 'upgrade-auth' as PeerScope['id'], ctx, principal: { kind: 'owner' }, signal: new AbortController().signal,
+      interactions: 'none', async dispose() {},
+    }
+    const stages: string[] = []
+    const removeMiddleware = ctx.on('webserver/upgrade', async (_request, _socket, _head, incomingPeer, next) => {
+      expect(incomingPeer).toBe(peer)
+      stages.push('before')
+      await next()
+      stages.push('after')
+    })
+    let admitted: PeerScope | undefined
+    server.registerUpgrade({ path: '/private', handler(_req, socket, _head, incoming) {
+      admitted = incoming
+      stages.push('handler')
+      socket.end('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+    } })
+    server.registerUpgrade({ path: '/denied', auth: 'deny', handler() { throw new Error('must not dispatch') } })
+    const exchange = (path: string) => rawExchange(server.port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n`)
+    expect(await exchange('/private')).toContain('503 Service Unavailable')
+    expect(await exchange('/denied')).toContain('403 Forbidden')
+    expect(await exchange('/missing')).toBe('')
+    const reject = ctx.on('webserver/authorize', () => ({ kind: 'deny', status: 401 }))
+    expect(await exchange('/private')).toContain('401 Unauthorized')
+    expect(stages).toEqual([])
+    reject()
+    let incoming: WebAuthRequest | undefined
+    const allow = ctx.on('webserver/authorize', (request) => { incoming = request; return { kind: 'allow', peer } })
+    expect(await exchange('/private?x=1')).toContain('101 Switching Protocols')
+    expect(admitted).toBe(peer)
+    expect(stages).toEqual(['before', 'handler', 'after'])
+    removeMiddleware()
+    const veto = ctx.on('webserver/upgrade', async (_req, socket) => { socket.end('HTTP/1.1 409 Conflict\r\n\r\n') })
+    expect(await exchange('/private?x=1')).toContain('409 Conflict')
+    expect(stages).toEqual(['before', 'handler', 'after'])
+    veto()
+    expect(incoming?.url.search).toBe('?x=1')
+    expect(incoming?.transport).toBe('upgrade')
+    await vi.waitFor(() => { expect(incoming?.signal?.aborted).toBe(true) })
+    allow()
+    ctx.on('webserver/authorize', () => { throw new Error('upgrade authorization failed') })
+    expect(await exchange('/private')).toBe('')
+  })
+
+  it('propagates HTTP cancellation to authorization and the resource without reauthenticating', async () => {
+    const ctx = await loadComposition()
+    const cancelled = Promise.withResolvers<undefined>()
+    let admissionSignal: AbortSignal | undefined
+    let resourceSignal: AbortSignal | undefined
+    ctx.on('webserver/authorize', (incoming) => { admissionSignal = incoming.signal; return { kind: 'allow' } })
+    ctx.webServer.register({ kind: 'exact', path: '/stream', auth: 'anonymous', resource: async (incoming) => {
+      resourceSignal = incoming.signal
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('ready')) },
+        cancel() { cancelled.resolve(undefined) },
+      }))
+    } })
+    const abort = new AbortController()
+    const response = await fetch(`${ctx.webServer.getOrigin()}/stream`, { signal: abort.signal })
+    await response.body!.getReader().read()
+    expect(admissionSignal?.aborted).toBe(false)
+    abort.abort()
+    await cancelled.promise
+    expect(admissionSignal?.aborted).toBe(true)
+    expect(resourceSignal?.aborted).toBe(true)
+  })
+
+  it('contains selector failures and never dispatches a synchronously closed request', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const handler = vi.fn<WebRoute['handler']>((_req, res) => { res.end('unexpected') })
+    server.register({ kind: 'exact', path: '/throws', auth() { throw new Error('selector failed') }, handler })
+    expect((await request(server.port, '/throws')).status).toBe(400)
+    server.register({ kind: 'exact', path: '/closed', auth: 'anonymous', handler })
+    let closeRequest = (): void => {}
+    ctx.on('webserver/request', async (req, _res, next) => { closeRequest = () => { req.socket.destroy() }; await next() })
+    ctx.on('webserver/authorize', () => { closeRequest(); return { kind: 'allow' } })
+    expect(await rawExchange(server.port, 'GET /closed HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')).toBe('')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('dispatches anonymous upgrades without a provider and contains selector and handler failures', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const exchange = (path: string) => rawExchange(server.port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n`)
+    server.registerUpgrade({ path: '/public', auth: 'anonymous', handler(_req, socket, _head, peer) {
+      expect(peer).toBeUndefined()
+      socket.end('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+    } })
+    expect(await exchange('/public')).toContain('101 Switching Protocols')
+    server.registerUpgrade({ path: '/selector', auth() { throw new Error('upgrade selector failed') }, handler() {} })
+    server.registerUpgrade({ path: '/sync', auth: 'anonymous', handler() { throw new Error('sync upgrade failed') } })
+    server.registerUpgrade({ path: '/async', auth: 'anonymous', async handler() { throw new Error('async upgrade failed') } })
+    for (const path of ['/selector', '/sync', '/async']) expect(await exchange(path)).toBe('')
+    expect(await exchange('http://[')).toBe('')
+  })
+
+  it('does not dispatch upgrades destroyed during synchronous admission', async () => {
+    const ctx = await loadComposition()
+    const handler = vi.fn()
+    ctx.webServer.registerUpgrade({ path: '/closed', auth: 'anonymous', handler })
+    const socket = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback() } })
+    const closed = once(socket, 'close')
+    ctx.on('webserver/authorize', (incoming) => {
+      expect(incoming.socket).toBe(socket)
+      socket.destroy()
+      return { kind: 'allow' }
+    })
+    const server = Reflect.get(ctx.webServer, 'server') as { emit(event: 'upgrade', req: object, socket: Duplex, head: Buffer): boolean }
+    server.emit('upgrade', { url: '/closed', method: 'GET', headers: {} }, socket, Buffer.alloc(0))
+    await closed
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('runs HTTP middleware before dispatch and delegates only through next', async () => {
+    const ctx = await loadComposition()
+    const server = ctx.webServer
+    const calls: string[] = []
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/resource', resource: async () => {
+      calls.push('resource')
+      return new Response('resource')
+    } })
+    const middleware = ctx.plugin({ apply(scope: Context) {
+      scope.on('webserver/request', async (req, res, next) => {
+        calls.push('before')
+        if (req.url === '/exchange') {
+          res.writeHead(303, { location: './', 'set-cookie': 'fixture=valid' })
+          res.end()
+          return
+        }
+        await next()
+        calls.push('after')
+      })
+    } })
+    await middleware.await()
+    expect((await request(server.port, '/resource')).body).toBe('resource')
+    expect(calls).toEqual(['before', 'resource', 'after'])
+    calls.length = 0
+    const response = await fetch(`http://127.0.0.1:${String(server.port)}/exchange`, { redirect: 'manual' })
+    expect(response.status).toBe(303)
+    expect(response.headers.get('set-cookie')).toBe('fixture=valid')
+    await response.text()
+    expect(calls).toEqual(['before'])
+    calls.length = 0
+    const peer = { principal: { kind: 'owner' } } as PeerScope
+    expect(await (await server.readResource(new Request('http://reader.invalid/resource'), peer)).text()).toBe('resource')
+    expect(calls).toEqual(['resource'])
+    await middleware.dispose()
+    calls.length = 0
+    expect((await request(server.port, '/resource')).body).toBe('resource')
+    expect(calls).toEqual(['resource'])
+  })
+
+  it('contains synchronous middleware failures before reaching the route', async () => {
+    const ctx = await loadComposition()
+    let reached = false
+    ctx.webServer.register({ auth: 'anonymous', kind: 'exact', path: '/guarded', handler(_req, res) {
+      reached = true
+      res.end('unexpected')
+    } })
+    ctx.on('webserver/request', () => { throw new Error('middleware failed') })
+    expect((await request(ctx.webServer.port, '/guarded')).status).toBe(400)
+    expect(reached).toBe(false)
+  })
+
   it('accepts one concrete IP literal, keeping an IPv6 zone for listen', () => {
     for (const host of ['127.0.0.1', '10.1.2.3', '0.1.2.3', '::1', 'fd00::1', '::ffff:10.1.2.3', '::ffff:0.1.2.3', '0:0:0:0:0:0:0:1', 'fe80::1%lo', '::0.0.0.1', '::0.0.0.1%lo', '::127.0.0.1']) {
       expect(HttpServer.Config({ host, port: 0 }).host).toBe(host)
@@ -346,7 +620,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, true)
     const server = loaded.webServer
     const body = 'compressible response '.repeat(8)
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/text',
       handler: (_req, res) => {
@@ -357,7 +631,7 @@ describe('real Loader composition', () => {
         res.end(body)
       },
     })
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/stream',
       handler: (_req, res) => {
@@ -366,7 +640,7 @@ describe('real Loader composition', () => {
         res.end(body.slice(40))
       },
     })
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/small',
       handler: (_req, res) => {
@@ -374,7 +648,7 @@ describe('real Loader composition', () => {
         res.end('small')
       },
     })
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/events',
       handler: (_req, res) => {
@@ -382,7 +656,7 @@ describe('real Loader composition', () => {
         res.end(body)
       },
     })
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/archive',
       handler: (_req, res) => {
@@ -390,7 +664,7 @@ describe('real Loader composition', () => {
         res.end(body)
       },
     })
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/range',
       handler: (_req, res) => {
@@ -423,7 +697,7 @@ describe('real Loader composition', () => {
       .headers.get('content-encoding')).toBeNull()
 
     // A resource response passes through the same gzip decision as a handler's.
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/resource-text',
       resource: () => Promise.resolve(new Response(body, { headers: { 'content-type': 'text/plain; charset=utf-8' } })),
@@ -442,7 +716,7 @@ describe('real Loader composition', () => {
     process.on('warning', onWarning)
     try {
       const chunk = new TextEncoder().encode('compressible chunk '.repeat(64 * 1024 / 16))
-      server.register({
+      server.register({ auth: 'anonymous',
         kind: 'exact',
         path: '/resource-large',
         resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
@@ -480,9 +754,9 @@ describe('real Loader composition', () => {
     // Routing precedence: exact beats prefix, longest prefix wins, a prefix
     // route answers its own path, and routes own their method handling
     // (POST reaches a registered prefix; 405 is fallback-only semantics).
-    server.register({ kind: 'exact', path: '/probe', handler: (_req, res) => { res.writeHead(200); res.end('EXACT') } })
-    server.register({ kind: 'prefix', path: '/api', handler: (_req, res) => { res.writeHead(200); res.end('API') } })
-    server.register({ kind: 'prefix', path: '/api/deep', handler: (_req, res) => { res.writeHead(200); res.end('DEEP') } })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/probe', handler: (_req, res) => { res.writeHead(200); res.end('EXACT') } })
+    server.register({ auth: 'anonymous', kind: 'prefix', path: '/api', handler: (_req, res) => { res.writeHead(200); res.end('API') } })
+    server.register({ auth: 'anonymous', kind: 'prefix', path: '/api/deep', handler: (_req, res) => { res.writeHead(200); res.end('DEEP') } })
     expect(await request(port, '/probe')).toMatchObject({ status: 200, body: 'EXACT' })
     expect(await request(port, '/api/anything')).toMatchObject({ status: 200, body: 'API' })
     expect(await request(port, '/api/deep/leaf')).toMatchObject({ status: 200, body: 'DEEP' })
@@ -495,13 +769,13 @@ describe('real Loader composition', () => {
     expect((await request(port, '/no/such/route')).status).toBe(404)
     const untap = server.tapIndex(html => html.replace('<head>', '<head><script>window.__T__=1</script>'))
     expect(server.applyIndexTaps('<head></head>')).toContain('__T__')
-    const releaseFallback = server.registerFallback((req, res) => {
+    const releaseFallback = server.registerFallback({ auth: 'anonymous', handler: (req, res) => {
       // Decode like a real static server would — a malformed %-escape throws
       // here, probing the webserver's per-request error containment.
       decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
       res.writeHead(200, { 'content-type': 'text/html' })
       res.end(server.applyIndexTaps('<head></head><body>shell</body>'))
-    })
+    } })
     expect(() => server.registerFallback(() => {})).toThrow(/fallback already registered/)
     expect((await request(port, '/no/such/route')).body).toContain('__T__')
     untap()
@@ -515,13 +789,13 @@ describe('real Loader composition', () => {
 
     // Duplicate (kind, path) is a misconfiguration and throws; the disposer
     // restores registrability (register/disposer symmetry).
-    expect(() => server.register({ kind: 'exact', path: '/probe', handler: () => {} }))
+    expect(() => server.register({ auth: 'anonymous', kind: 'exact', path: '/probe', handler: () => {} }))
       .toThrow(/duplicate exact route/)
-    const disposeOnce = server.register({ kind: 'exact', path: '/once', handler: (_req, res) => { res.writeHead(200); res.end('ONCE') } })
+    const disposeOnce = server.register({ auth: 'anonymous', kind: 'exact', path: '/once', handler: (_req, res) => { res.writeHead(200); res.end('ONCE') } })
     expect(await request(port, '/once')).toMatchObject({ status: 200, body: 'ONCE' })
     disposeOnce()
     expect((await request(port, '/once')).body).toContain('shell') // back to the fallback owner
-    expect(() => server.register({ kind: 'exact', path: '/once', handler: () => {} })).not.toThrow()
+    expect(() => server.register({ auth: 'anonymous', kind: 'exact', path: '/once', handler: () => {} })).not.toThrow()
 
     // Releasing the seat restores the unclaimed 404 and registrability.
     releaseFallback()
@@ -532,22 +806,22 @@ describe('real Loader composition', () => {
     // become registrable again after disposal. The accepted socket stays open
     // so the teardown assertion also covers upgraded-connection ownership.
     let upgradedServerClosed = false
-    const disposeUpgrade = server.registerUpgrade({
+    const disposeUpgrade = server.registerUpgrade({ auth: 'anonymous',
       path: '/events',
       handler: (_req, socket) => {
         socket.once('close', () => { upgradedServerClosed = true })
         socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
       },
     })
-    expect(() => server.registerUpgrade({ path: '/events', handler: () => {} }))
+    expect(() => server.registerUpgrade({ auth: 'anonymous', path: '/events', handler: () => {} }))
       .toThrow(/duplicate upgrade route/)
     const upgraded = await upgrade(port, '/events?stream=mux')
     disposeUpgrade()
-    expect(() => server.registerUpgrade({ path: '/events', handler: () => {} })).not.toThrow()
+    expect(() => server.registerUpgrade({ auth: 'anonymous', path: '/events', handler: () => {} })).not.toThrow()
 
     // The webserver contains raw-socket errors even before an upgrade handler
     // has installed its protocol implementation.
-    server.registerUpgrade({
+    server.registerUpgrade({ auth: 'anonymous',
       path: '/upgrade-error',
       handler: async (_req, socket) => {
         await Promise.resolve()
@@ -592,7 +866,7 @@ describe('real Loader composition', () => {
       cookie: string | null
       peer: PeerScope | undefined
     } | undefined
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/resource',
       resource: (request, peer) => {
@@ -627,7 +901,7 @@ describe('real Loader composition', () => {
 
     // The status and headers arrive before the first body chunk exists.
     const firstChunk = Promise.withResolvers<undefined>()
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/held',
       resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
@@ -646,7 +920,7 @@ describe('real Loader composition', () => {
     // A streamed body reaches the client chunk by chunk: the first chunk is
     // readable while the second is still withheld.
     const second = Promise.withResolvers<undefined>()
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/stream',
       resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
@@ -668,7 +942,7 @@ describe('real Loader composition', () => {
 
     // HEAD writes the status and headers, sends no body, and cancels the body.
     const headCancelled = Promise.withResolvers<undefined>()
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/head',
       resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
@@ -681,7 +955,7 @@ describe('real Loader composition', () => {
     // A client leaving mid-body aborts the request signal and cancels the body.
     const cancelled = Promise.withResolvers<undefined>()
     let endlessSignal: AbortSignal | undefined
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/endless',
       resource: (request) => {
@@ -701,7 +975,7 @@ describe('real Loader composition', () => {
 
     // Only GET and HEAD reach a resource; another method is 405 and its body is never read.
     let posted = false
-    server.register({ kind: 'exact', path: '/posted', resource: () => { posted = true; return Promise.resolve(new Response('POSTED')) } })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/posted', resource: () => { posted = true; return Promise.resolve(new Response('POSTED')) } })
     const refused = await request(port, '/posted', { method: 'POST', body: 'payload' })
     expect(refused).toMatchObject({ status: 405, body: '' })
     expect(refused.headers.get('allow')).toBe('GET, HEAD')
@@ -714,7 +988,7 @@ describe('real Loader composition', () => {
     expect(seen?.url).toBe('http://x/resource?q=2')
     expect(await rawExchange(port, 'GET /resource?q=3 HTTP/1.1\r\nHost: bad host\r\nConnection: close\r\n\r\n')).toMatch(/^HTTP\/1\.1 201/)
     expect([seen?.url, seen?.host]).toEqual(['http://x/resource?q=3', 'bad host'])
-    server.register({ kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
     expect((await request(port, '/throws')).status).toBe(400)
     expect((await request(port, '/resource')).status).toBe(201)
   })
@@ -727,7 +1001,7 @@ describe('real Loader composition', () => {
     const server = loaded.webServer
     const cancelled = Promise.withResolvers<undefined>()
     const firstChunk = Promise.withResolvers<undefined>()
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/tunnel',
       resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
@@ -775,10 +1049,10 @@ describe('real Loader composition', () => {
       res.writeHead(200)
       res.end(label)
     }
-    server.register({ kind: 'prefix', path: '/assets', resource: resource('assets') })
-    server.register({ kind: 'prefix', path: '/assets/deep', resource: resource('deep') })
-    server.register({ kind: 'exact', path: '/assets/special', handler: handler('SPECIAL') })
-    server.register({ kind: 'prefix', path: '/api', handler: handler('API') })
+    server.register({ auth: 'anonymous', kind: 'prefix', path: '/assets', resource: resource('assets') })
+    server.register({ auth: 'anonymous', kind: 'prefix', path: '/assets/deep', resource: resource('deep') })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/assets/special', handler: handler('SPECIAL') })
+    server.register({ auth: 'anonymous', kind: 'prefix', path: '/api', handler: handler('API') })
 
     // Exact, then longest prefix: the same responder HTTP picks answers the
     // read, and the read passes its Peer to the resource.
@@ -802,11 +1076,11 @@ describe('real Loader composition', () => {
 
     // The fallback seat answers a read only while it holds a resource.
     expect((await read('/elsewhere')).status).toBe(404)
-    const releaseHandler = server.registerFallback(handler('FALLBACK'))
+    const releaseHandler = server.registerFallback({ auth: 'anonymous', handler: handler('FALLBACK') })
     expect((await read('/elsewhere')).status).toBe(404)
     expect((await request(port, '/elsewhere')).body).toBe('FALLBACK')
     releaseHandler()
-    server.registerFallback({ resource: resource('fallback') })
+    server.registerFallback({ auth: 'anonymous', resource: resource('fallback') })
     const fallback = await read('/elsewhere')
     expect(await fallback.text()).toBe('fallback:/elsewhere')
     expect(readersOf.at(-1)).toBe(peer)
@@ -819,7 +1093,7 @@ describe('real Loader composition', () => {
     expect(readersOf).toHaveLength(calls)
 
     // A throwing resource rejects the read; over HTTP the same failure is 400.
-    server.register({ kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
     await expect(read('/throws')).rejects.toThrow('resource failure')
     expect((await request(port, '/throws')).status).toBe(400)
   })
@@ -897,7 +1171,7 @@ describe('real Loader composition', () => {
     const server = loaded.webServer
     expect(server.protocol).toBe('https:')
     expect(server.getOrigin()).toBe(`https://127.0.0.1:${String(server.port)}`)
-    server.register({
+    server.register({ auth: 'anonymous',
       kind: 'exact',
       path: '/tls',
       handler: (_req, res) => {
@@ -923,7 +1197,7 @@ describe('real Loader composition', () => {
     const server = loaded.webServer
     expect(server.protocol).toBe('http:')
     expect(server.getOrigin()).toBe(`http://127.0.0.1:${String(server.port)}`)
-    server.register({ kind: 'exact', path: '/plain', handler: (_req, res) => { res.writeHead(200); res.end('PLAIN') } })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/plain', handler: (_req, res) => { res.writeHead(200); res.end('PLAIN') } })
     expect(await request(server.port, '/plain')).toMatchObject({ status: 200, body: 'PLAIN' })
     await expect(tlsRequest(server.port, '/plain')).rejects.toThrow()
   })
@@ -994,14 +1268,14 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', { certFile: fixture.certFile, keyFile: fixture.keyFile })
     const server = loaded.webServer
     let upgradeClosed = false
-    server.registerUpgrade({
+    server.registerUpgrade({ auth: 'anonymous',
       path: '/events',
       handler: (_req, socket) => {
         socket.once('close', () => { upgradeClosed = true })
         socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
       },
     })
-    server.register({ kind: 'exact', path: '/probe', handler: (_req, res) => { res.writeHead(200); res.end('EXACT') } })
+    server.register({ auth: 'anonymous', kind: 'exact', path: '/probe', handler: (_req, res) => { res.writeHead(200); res.end('EXACT') } })
 
     const clients = new Map<Duplex, Promise<void>>()
     const clientErrors: Error[] = []

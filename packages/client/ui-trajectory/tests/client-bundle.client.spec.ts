@@ -17,7 +17,15 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 
 const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-trajectory'
 
-interface Handoff { id: string; factory: (require: (spec: string) => unknown) => Record<string, unknown> }
+interface Handoff {
+  id: string
+  factory: (require: (spec: string) => unknown) => Record<string, unknown>
+  meta?(): {
+    stylesheets?: Readonly<Record<string, {
+      text(context: { asset(reference: string): string }): string
+    }>>
+  }
+}
 type Win = { __ModuleLoader__?: { load(h: Handoff): void } }
 
 function readBundle(): string | undefined {
@@ -107,9 +115,23 @@ describe('tsdown client artifact', () => {
     expect(views.entries()).toEqual([])
   })
 
-  it.skipIf(code === undefined)('injects plugin-tagged module CSS during factory execution', async () => {
-    await loadArtifact()
-    const tags = document.querySelectorAll(`style[data-plugin=${JSON.stringify(PLUGIN_ID)}]`)
-    expect(tags.length).toBeGreaterThan(0)
+  it.skipIf(code === undefined)('provides stylesheet text through metadata without injecting it during factory execution', async () => {
+    const before = [...document.querySelectorAll('style')]
+    const { handoff } = await loadArtifact()
+    expect([...document.querySelectorAll('style')]).toEqual(before)
+    expect(typeof handoff.meta).toBe('function')
+    const stylesheets = handoff.meta!().stylesheets
+    expect(stylesheets).toBeDefined()
+    const resources = Object.entries(stylesheets!)
+    expect(resources.length).toBeGreaterThan(0)
+    for (const [path, stylesheet] of resources) {
+      expect(path).toMatch(/^src\/client\/.+\.css$/u)
+      expect(typeof stylesheet.text).toBe('function')
+      const text = stylesheet.text({ asset: reference => reference })
+      expect(text).toBeTypeOf('string')
+      expect(text.trim().length).toBeGreaterThan(0)
+      expect(text).toMatch(/\{[^}]+\}/)
+    }
+    expect([...document.querySelectorAll('style')]).toEqual(before)
   })
 })

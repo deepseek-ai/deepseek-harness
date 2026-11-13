@@ -2,7 +2,7 @@
 
 [English](web-server.md) | 中文
 
-[dsh-host-webserver](../../packages/host/webserver) 是 GUI Host 的浏览器 HTTP 载体：一个 `node:http` 服务器——配置 `tls` 时改用 `node:https`——提供 `ctx.webServer`、具名路由注册表、可选的 gzip 响应压缩、index.html 转换回调，以及一个可由插件认领的回退（handler 或 resource）。它不属于 agent loop（智能体循环），也不是能力 seam；它唯一涉及的 harness 概念是 index 渲染所代表的 Peer。其他插件负责注册所有功能路由，包括 `/api` 桥接、插件 bundle 和 HMR（热模块替换）事件流（[分层说明](../../packages/boot/app-boot/README.zh.md)）。该服务器只服务浏览器：Electron 通过 `file://` 加载已构建文件，并经 IPC 桥接发送 fetch 请求，不使用本服务器。
+[dsh-host-webserver](../../packages/host/webserver) 提供 GUI Host 的 HTTP 或 TLS 监听、路由匹配与准入、可选 gzip、index 渲染及唯一回退。功能插件注册各自路由；Connection 通过 `webserver/authorize` 提供来源与凭据决策。载体直接向 handler 或 resource 传递准入 Peer，不构造请求上下文容器（[分层说明](../../packages/boot/app-boot/README.zh.md)）。
 
 源码：[`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
 
@@ -20,14 +20,16 @@ interface WebRoute {
   /** Absolute pathname, no trailing slash. */
   path: string
   /** Owns the full response lifecycle (may hold the response open, e.g. SSE). */
-  handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+  handler: (req: IncomingMessage, res: ServerResponse, peer?: PeerScope) => void | Promise<void>
+  /** Defaults to required. Anonymous handlers may receive no Peer. */
+  auth?: WebAuthenticationRule
 }
 ```
 
 ```ts type-equiv
 /**
- * Answers one GET or HEAD request with a Fetch response. An HTTP request
- * arrives without a Peer and carries the client's headers; an in-process
+ * Answers one GET or HEAD request with a Fetch response and its admitted Peer.
+ * Anonymous HTTP admission may omit the Peer; an in-process
  * {@link WebServer.readResource} read passes the Peer its caller admitted.
  */
 type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>
@@ -41,12 +43,22 @@ interface WebResourceRoute {
   path: string
   /** Answers HTTP GET and HEAD requests and in-process reads. */
   resource: WebResource
+  /** Defaults to required; in-process reads still enforce deny. */
+  auth?: WebAuthenticationRule
 }
 ```
 
-匹配顺序固定：先查 exact 表，再取最长匹配前缀，最后落到已注册的回退。注册顺序不携带任何面向请求的语义：具名路由在组合上互不相交，任何未被具名路由认领的请求都由回退席位应答；席位只有一个所有者，第二次注册会抛出异常。发布的 Web 组合用 [`dsh-host-frontend-static`](../../packages/host/frontend-static/src/index.ts) 认领席位，即遵循固定语义的 SPA dist 服务器：Connection 在读取 dist 根目录和配置 index 的 HTML 前完成认证；非 index 资产保持公开；非 GET/HEAD 返回 405，越出 dist 根目录的遍历返回 403，现有文件直接提供，缺失或不是文件的目标返回空的 404，未知扩展名按 octet-stream 发送。
+所有 `webserver/*` 事件均以对应的 WebServer 为分发 subject，包括 `index-inject` 与 `entry-url`。普通监听器匹配发起者的 `webServer` isolation；显式 `{ global: true }` 监听器跳过该过滤。作为事件数据传入的 Peer 不决定监听器选择。自定义载体和应用发起者必须提供 WebServer subject。
 
-路由或回退可以用 resource——一个把 Fetch `Request` 映射为 `Response` 的函数——代替 handler。HTTP 的 `GET`、`HEAD` 请求不带 Peer 到达它，`readResource(request, peer)` 则在进程内按调用方准入的 Peer 读取它；读取遵循同样的匹配顺序但只到达 resource，因此返回 owner 私有数据或会执行操作的路由即使应答 `GET` 也保持为 handler。
+匹配顺序为精确、最长前缀、唯一 owner 的回退；upgrade 精确匹配。匹配后，`auth` 直接或通过同步请求选择器解析为 `anonymous`、`required`（默认）或 `deny`。`deny` 不触发准入事件，直接返回403。其余策略触发同步 `webserver/authorize` 并采用首个决策；无人决策时匿名放行，认证返回503。Connection 对两者均检查来源，仅对认证路由调用 ConnectionAuthentication。因此匿名资源免凭据，但不能免除活动 Connection 的来源策略。
+
+handler 通过末尾参数取得准入 Peer，resource 使用已有 `resource(request, peer?)` 参数。认证路由必须取得存活 Peer，匿名路由可省略。准入后 resource 只接受 GET/HEAD。可信 `readResource(request, peer)` 遵循同样的匹配顺序且仅访问 resource，跳过来源与凭据检查，但解析出的 `deny` 仍返回403。[前端回退](../../packages/host/frontend-static/README.zh.md)选择 index 认证访问与静态资源匿名访问，再为传入 Peer 渲染 index 启动数据。
+
+`webserver/request(request, response, next)` 保持为路由选择与准入前的 HTTP waterfall；监听器拥有响应或等待 `next()`。[Token 插件](../../packages/host/authentication-token/README.zh.md)通过它处理根 Token 交换，并以匿名 auth 注册 `/connect`，在 Connection 来源检查后验证启动 Token。页面 resource 使用准入 Peer，不重复认证。
+
+upgrade 准入成功后，`webserver/upgrade(req, socket, head, peer, next)` 在已注册协议 handler 前执行。它携带准入 Peer，匿名访问可为 `undefined`；被拒绝的请求不会进入。监听器自行处理 Socket 或等待 `next()`；waterfall 的末端等待路由 handler，包括其异步完成。中间件或 handler 失败时记录日志并销毁 Socket。在 `/api/remote.mux` 上，Token 仅对自己映射表内的 API Peer 执行单 Socket 所有权与凭据撤销；其他 Provider 委派后续处理，不应用 Token 策略。
+
+`webserver/entry-url(baseUrl, entries)` 根据传入的服务器基地址同步收集完整入口 URL，以 `WebEntryUrl` 记录表示，字段为 `label`、完整 `url` 与布尔值 `open`。WebApp 在 Loader 装配结束并完成启动检查后触发，按配置逐行打印，并仅在非 SSH 下打开首个允许自动打开的入口。空列表不产生输出或打开动作。Token 无需读取 WebApp 服务即可贡献签名 URL；公开地址配置仍归 WebApp。
 
 <a id="config"></a>
 
@@ -99,13 +111,15 @@ interface TlsConfig {
 }
 ```
 
-没有组合能一次性绑定所有网络接口：未指定地址在加载时即被拒绝。导出的 `isWildcardHost` 与 `isLoopbackHost` 按解析后的地址值分类，IPv6 的 `%zone` 会保留给 `listen`，而分类只读取地址本身。载体不拥有认证或 Origin 策略，并且除非 `tls` 提供证书与密钥，否则以明文 HTTP 提供服务。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令默认选择 loopback 并接受一个具体的 `--host` 地址，非 loopback 绑定以明文 HTTP 提供服务时会在启动时警告；其 Connection 插件为每个 Host API route 与 stream 提供 Host/Origin 校验和浏览器会话认证，绑定地址加 `--trusted-host` 决定接受哪个浏览器 Host；`--public-url` 只改变公告的 URL。其他组合自行拥有绑定与路由认证策略。dist 位置是认领席位的前端插件的组装事实。
+没有组合能一次性绑定所有网络接口：未指定地址在加载时即被拒绝。导出的 `isWildcardHost` 与 `isLoopbackHost` 按解析后的地址值分类，IPv6 的 `%zone` 会保留给 `listen`，而分类只读取地址本身。载体执行路由 auth 声明；Connection 拥有来源检查，ConnectionAuthentication 拥有凭据验证；除非 `tls` 提供证书与密钥，否则以明文 HTTP 提供服务。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令默认选择 loopback 并接受一个具体的 `--host` 地址，非 loopback 绑定以明文 HTTP 提供服务时会在启动时警告；其 Connection 插件对匹配的匿名与认证路由检查 Host/Origin，并在要求认证时验证凭据，绑定地址加 `--trusted-host` 决定接受哪个浏览器 Host；`--public-url` 只改变公告的 URL。其他组合自行拥有绑定与路由认证策略。dist 位置是认领席位的前端插件的组装事实。
 
 ## 服务
 
+嵌套服务 `connection.authentication` 通过注册的 Provider 选择 Peer；Connection 执行来源策略，WebServer 将选定 Peer 传给各次调用。[Token 插件](../../packages/host/authentication-token/README.zh.md)贡献签名登录 URL；WebApp 拥有启动打印和浏览器打开行为。[Desktop](../../apps/desktop/README.zh.md#application-overview)使用父进程与 Host 之间私有 IPC 通道交付的凭据，注册独立 Provider；其 ready 消息携带普通 Host 地址和启动注入。
+
 `WebServer`（`ctx.webServer`）在激活时立即监听；监听失败（EADDRINUSE 等）会使初始化被拒绝，启动进程会报告失败的 fiber。`tls` 证书对在监听器绑定前读取一次；文件不可读、为空或二者不匹配时同样会使初始化被拒绝，而不是回退到 HTTP。`register(route)` 添加一条具名路由并返回其 disposer；重复的 `(kind, path)` 抛出异常，因为路由模式是组合层约定，冲突即配置错误。Gzip 在服务器内部包装符合条件且基于 socket 的响应，因此 handler 继续直接持有 `ServerResponse`，resource 则把 `Response` 交给服务写回。已有内容编码、`Cache-Control: no-transform`、范围响应、SSE、ZIP 与打包后的 `.gz` Worker 镜像均保持 identity 响应。`collectIndexInjections(peer)` 经一次传入页面所代表 Peer 的 `webserver/index-inject` emit 收集结构化 `IndexInjection` 行，`renderIndex(html, peer)` 把它们渲染进成功的根路径和配置 index 响应，随后再按注册顺序应用原始的 `tapIndex(transform)` 逃生口转换；[dsh-client-modules](../../packages/client/modules) 以启动 manifest（元数据清单）行回应该事件。`port` 读取监听端口，包括 `config.port` 为 0 时操作系统分配的端口，`protocol` 则报告监听器提供的协议（`http:` 或 `https:`）。
 
-处理过程中抛出异常的请求（畸形的 % 转义撞上 `decodeURIComponent`、客户端在请求体中途断开）会记录为警告并应答 400（响应头已发出时则销毁 socket），绝不导致进程退出。dispose（资源释放）把 `close()` 与 `closeAllConnections()` 配对使用，因为处理器可能像 SSE（Server-Sent Events）那样保持响应打开，而这类连接永远不会自行结束；没有强制关闭，拆卸就会挂起。TLS socket 只有完成握手后才计入连接，因此服务器会把原始 TLS socket 与升级后的 socket 一并跟踪，并在 dispose 时销毁两者。该包从不打印输出：URL 行归 shell 所有。逐包运维细节（含开发模式的 bundle 监视流水线）留在 [README](../../packages/host/webserver/README.zh.md) 中。
+处理过程中抛出异常的请求（畸形的 % 转义撞上 `decodeURIComponent`、客户端在请求体中途断开）会记录为警告并应答 400（响应头已发出时则销毁 socket），绝不导致进程退出。dispose（资源释放）把 `close()` 与 `closeAllConnections()` 配对使用，因为处理器可能像 SSE（Server-Sent Events）那样保持响应打开，而这类连接永远不会自行结束；没有强制关闭，拆卸就会挂起。TLS socket 只有完成握手后才计入连接，因此服务器会把原始 TLS socket 与升级后的 socket 一并跟踪，并在 dispose 时销毁两者。WebApp 拥有入口 URL 的打印和浏览器打开行为，本服务器负责 HTTP 交付。逐包运维细节（含开发模式的 bundle 监视流水线）留在 [README](../../packages/host/webserver/README.zh.md) 中。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -130,15 +144,7 @@ Host `ctx.connection` members consumed by transport-independent adapters.
 createSharedFetchHandler(channel: '/api'): ConnectionFetchHandler
 
 /**
- * Apply Connection's Host/Origin checks and browser authentication to
- * another Web route.
- * @param request - request headers from the HTTP or upgrade request.
- * @returns rejection status, or undefined when the route may accept the request.
- */
-requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
-
-/**
- * Admit an HTTP request against its signed browser or API credential and live Peer.
+ * Apply Host/Origin checks and admit the first live Peer returned by a registered credential verifier.
  * @param request - request headers from the HTTP or upgrade request.
  * @returns the credential's Peer, or the rejection status.
  */
@@ -146,41 +152,41 @@ admit(request: ConnectionTrustRequest): PeerAdmission
 
 /**
  * Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.
- * @param options - fixed principal and optional interaction participation (default `answer`).
+ * @param options - fixed principal and interaction participation (default answer).
  * @returns a new Peer distinct from every other Peer.
  */
 createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
-
-/**
- * Claim a physical socket for an API Peer; browser sockets share their owner Peer.
- * @param request - authenticated upgrade request headers.
- * @returns the Peer and idempotent release, or 409 for duplicate API ownership.
- * The carrier releases on socket termination or failed upgrade; release removes
- * API admission synchronously without cancelling independent HTTP calls.
- */
-admitConnection(request: ConnectionTrustRequest): ConnectionAdmission
-
-/**
- * Authenticate one frontend index request, owning a token redirect or 401.
- * The cookie this mints is `Secure` when the mounted Web carrier serves TLS,
- * which only that listener's protocol decides.
- * @param request - root or configured-index HTTP request.
- * @param response - response owned when the result is false.
- * @returns true only when the frontend may serve index.html.
- */
-authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean
-
-/**
- * Add the fresh process token to an ordinary Web application URL.
- * @param baseUrl - clean application URL whose authority and mount are preserved.
- * @returns tokenized URL for initial login; a mount proxy strips its prefix before {@link authorizeIndex}.
- */
-authenticatedUrl(baseUrl: string): string
 ```
 
 Types: [Principal](typert.zh.md)
 
 Source: [`packages/client/connection/src/rpc.ts`](../../packages/client/connection/src/rpc.ts)
+
+<a id="ctxconnectionauthentication--connectionauthentication"></a>
+
+### `ctx.connection.authentication` — `ConnectionAuthentication`
+
+Credential verifier registry whose registrations belong to the calling plugin.
+
+```ts cordis-catalog
+/**
+ * Add a credential verifier after the existing registrations.
+ * @param provider - verifier owning its credential and Peer selection.
+ * @returns disposer withdrawing this registration; the calling scope also withdraws it on unload.
+ */
+register(provider: AuthenticationProvider): () => Promise<void>
+
+/**
+ * Verify credentials without applying an HTTP response or source policy.
+ * @param request - current carrier headers and cancellation facts.
+ * @returns the first live Peer, 401 if no provider accepts, or 503 when verification failed without success.
+ */
+authenticate(request: ConnectionTrustRequest): PeerAdmission
+```
+
+Types: [AuthenticationProvider](../../packages/client/connection/README.zh.md#browser-authentication-and-request-trust)
+
+Source: [`packages/client/connection/src/authentication.ts`](../../packages/client/connection/src/authentication.ts)
 
 <a id="ctxwebapp--webapp"></a>
 
@@ -202,7 +208,7 @@ Source: [`packages/bundle/web-app/src/index.ts`](../../packages/bundle/web-app/s
 
 ### `ctx.webServer` — `WebServer`
 
-The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers.
+The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers. HTTP and upgrade admission refusals carry `Cache-Control: no-store`.
 
 ```ts cordis-catalog
 /**
@@ -235,10 +241,10 @@ registerUpgrade(route: WebUpgradeRoute): () => void
  * composition). One owner only — a second registration throws, because two
  * fallbacks cannot compose.
  * @param fallback - a handler owning the full response lifecycle of
- * unmatched requests, or `{ resource }` answering them.
+ * unmatched requests, or an object declaring `handler` or `resource` and auth.
  * @returns the disposer releasing the seat.
  */
-registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void
+registerFallback(fallback: WebRoute['handler'] | WebFallback): () => void
 
 /**
  * Read the response an HTTP request for the same URL would receive, as the
@@ -246,6 +252,7 @@ registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resourc
  * path picks the responder by the HTTP match order — exact, longest prefix,
  * then the fallback — and only a resource answers. This method checks no
  * cookie, Host, or Origin: the caller admits the reader before reading.
+ * A resolved deny policy returns 403 even for an explicitly admitted Peer.
  * @param request - the read; its URL path selects the responder.
  * @param peer - the Peer the read speaks for, passed to the resource.
  * @returns the resource's response, without a body for HEAD as over HTTP;
@@ -324,6 +331,42 @@ Source: [`packages/client/connection/src/index.ts`](../../packages/client/connec
 
 ### `webserver/*` events
 
+<a id="webserverauthorize--bail"></a>
+
+#### `webserver/authorize` — bail
+
+Admit a matched request synchronously; the first decision wins.
+
+```ts cordis-catalog
+/**
+ * Admit a matched request synchronously; the first decision wins.
+ * @param request - headers, target, transport, and available cancellation state.
+ * @param policy - resolved route policy; deny never emits this event.
+ * @mode bail
+ */
+'webserver/authorize'(request: WebAuthRequest, policy: WebAuthPolicy): WebAdmission | undefined
+```
+
+Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
+
+<a id="webserverentry-url--emit"></a>
+
+#### `webserver/entry-url` — emit
+
+Collect complete entry URLs for an advertised server address.
+
+```ts cordis-catalog
+/**
+ * Collect complete entry URLs for an advertised server address.
+ * @param baseUrl - advertised server base URL without provider credentials.
+ * @param entries - entries appended synchronously in listener order.
+ * @mode emit
+ */
+'webserver/entry-url'(baseUrl: string, entries: WebEntryUrl[]): void
+```
+
+Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
+
 <a id="webserverindex-inject--emit"></a>
 
 #### `webserver/index-inject` — emit
@@ -341,6 +384,46 @@ Collect the structured index injection table for the page `peer` speaks for. Emi
  * @mode emit
  */
 'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
+```
+
+Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
+
+<a id="webserverrequest--waterfall"></a>
+
+#### `webserver/request` — waterfall
+
+Handle an HTTP request before named-route and fallback dispatch.
+
+```ts cordis-catalog
+/**
+ * Handle an HTTP request before named-route and fallback dispatch.
+ * @param request - original incoming HTTP request.
+ * @param response - response owned by the listener or its delegated handler.
+ * @param next - dispatch to the next listener or the matching route.
+ * @mode waterfall
+ */
+'webserver/request'(request: IncomingMessage, response: ServerResponse, next: () => Promise<void>): Promise<void>
+```
+
+Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
+
+<a id="webserverupgrade--waterfall"></a>
+
+#### `webserver/upgrade` — waterfall
+
+Handle an admitted upgrade before its registered protocol handler.
+
+```ts cordis-catalog
+/**
+ * Handle an admitted upgrade before its registered protocol handler.
+ * @param request - original upgrade request.
+ * @param socket - transport owned by the upgrade.
+ * @param head - bytes received after the HTTP headers.
+ * @param peer - authenticated identity, absent for anonymous admission.
+ * @param next - delegate to the next listener or protocol handler.
+ * @mode waterfall
+ */
+'webserver/upgrade'( request: IncomingMessage, socket: Duplex, head: Buffer, peer: PeerScope | undefined, next: () => Promise<void>, ): Promise<void>
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)

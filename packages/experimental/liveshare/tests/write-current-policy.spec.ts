@@ -256,6 +256,7 @@ describe('LiveShare current write policy', () => {
       const result = await pending
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('does not allow writing this Session')
+      expect(result.error?.info).toEqual({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED' })
       // The final gate asked again after the refresh; trusting the first verdict would have let this write
       // reach fs.writeText.
       expect(mayWriteChecks).toBe(2)

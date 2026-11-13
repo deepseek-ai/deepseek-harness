@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/experimental-tool-error-codes/guide.md
+/:
+  en: 4d6f7a78d1415f20
+  zh: a5a906f4f1266243
+/experimental-plugin-failures-carry-error-codes:
+  en: 13f43192e549438f
+  zh: ce8c5bf26aefbd4f
+/experimental-plugin-failures-carry-error-codes/change:
+  en: d5878c5ce6fbfb76
+  zh: 2f2d29a1f3a9d6f3
+/experimental-plugin-failures-carry-error-codes/migration:
+  en: 6365d4f60118cf64
+  zh: c2f1378dee8ea4b4

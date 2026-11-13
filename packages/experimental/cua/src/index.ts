@@ -24,7 +24,7 @@ import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunC
 import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { observeNativeWindows } from './native-observation.ts'
-import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
@@ -37,9 +37,12 @@ export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
-  /** Ask once per live Session before an explicitly requested system-pointer move. */
+  /** Ask once per live Session before explicitly requested system-pointer moves or drags. */
   requireSystemPointerApproval: boolean
-  /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
+  /**
+   * Preset receiving raw cua; every other Agent, with or without a preset, receives cua_run_code while its
+   * program services are available. False registers raw cua globally.
+   */
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
   standaloneRunCode: CuaStandaloneRunCodeConfig
@@ -96,8 +99,37 @@ export const CuaConfig = Schema.object(CuaConfigFields) satisfies Schema<Record<
 
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
-  if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
+  if (!execution.agent) throw new ToolContextUnavailableError('dsh-cua requires an agent-owned execution')
   return execution.agent
+}
+
+/**
+ * Describe one request issue for the model. A union that no accepted form matches lists each form's own
+ * issues, so the model learns which field to add or remove, such as a missing `params.y`.
+ * @param issue - one issue from parsing the request.
+ * @param base - path of the value the issue belongs to.
+ * @returns a single-line violation naming the field and the reason.
+ */
+function requestViolation(issue: z.core.$ZodIssue, base: readonly PropertyKey[] = []): string {
+  const path = [...base, ...issue.path]
+  const field = path.length > 0 ? path.map(String).join('.') : 'arguments'
+  if (issue.code !== 'invalid_union' || issue.errors.length === 0) return `${field}: ${issue.message}`
+  const forms = issue.errors.map(form => `(${form.map(nested => requestViolation(nested, path)).join('; ')})`)
+  return `${field}: matches none of the accepted forms: ${forms.join(' or ')}`
+}
+
+/** Parse the tool request; refinements the parameter schema cannot express fail as argument errors. */
+function parseRequest<T>(schema: z.ZodType<T>, args: unknown): T {
+  const parsed = schema.safeParse(args)
+  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => requestViolation(issue)))
+  return parsed.data
+}
+
+/** Native cancellation after the caller cancelled keeps its diagnostic; the tool registry records it as `ABORTED`. */
+function callerCancelled(error: NativeError): Error {
+  const cancelled = new Error(error.message, { cause: error })
+  cancelled.name = 'AbortError'
+  return cancelled
 }
 
 interface CuaExecution extends ToolExecution {
@@ -121,7 +153,7 @@ function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
 /** Resolve the attachment store and the request-image target before requesting a screenshot. */
 async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, configured: CuaScreenshotTargetConfig | undefined) {
   const attachments = ctx.get('attachments')
-  if (!attachments) throw new Error('CUA screenshots require an attachment store')
+  if (!attachments) throw new ToolContextUnavailableError('CUA screenshots require an attachment store')
   if (configured !== undefined) {
     return { attachments, target: (image: ImageAttachmentRef): ImageRequestTarget => fixedScreenshotTarget(configured, image) }
   }
@@ -130,10 +162,14 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
   const provider = routed?.provider ?? agent.options.provider
   const model = routed?.model ?? agent.options.model
   const llm = ctx.get('llm')
-  if (provider === undefined || model === undefined || llm === undefined) throw new Error('CUA screenshot model route could not be resolved')
+  if (provider === undefined || model === undefined || llm === undefined) {
+    throw new ToolContextUnavailableError('CUA screenshot model route could not be resolved')
+  }
   const info = await llm.resolveModelInfo(provider, model, execution.signal)
   execution.signal.throwIfAborted()
-  if (!info.inputModalities?.includes('image')) throw new Error(`CUA screenshots require model "${model}" to declare image input`)
+  if (!info.inputModalities?.includes('image')) {
+    throw new NativeError('MODEL_DOES_NOT_SUPPORT_IMAGES', `CUA screenshots require model "${model}" to declare image input`)
+  }
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
@@ -202,7 +238,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }>()
   const closedOwners = new WeakSet<Agent>()
   function ownerFor(agent: Agent) {
-    if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
+    if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new ToolContextUnavailableError('dsh-cua agent has been disposed')
     const existing = ownerCleanups.get(agent)
     if (existing) return existing
     const controller = new AbortController()
@@ -246,7 +282,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
-      if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
+      // Released macOS helpers accept an explicit false for mouseMove but reject the new drag field.
+      if (method === 'drag' && !useSystemPointer) delete params.useSystemPointer
+      else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -336,7 +374,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(requestSchema)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
-        const request = requestSchema.parse(args)
+        const request = parseRequest(requestSchema, args)
         const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
@@ -369,7 +407,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          const route = request.method === 'mouseMove'
+          const route = request.method === 'mouseMove' || request.method === 'drag'
             ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
             : undefined
           if (route?.prepare) owner.coordinates.parameters(request)
@@ -386,6 +424,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         pending.set(operation, agent)
         try {
           return await operation
+        } catch (error) {
+          if (execution.signal.aborted && error instanceof NativeError && error.code === 'NATIVE_CANCELLED') throw callerCancelled(error)
+          throw error
         } finally {
           pending.delete(operation)
         }

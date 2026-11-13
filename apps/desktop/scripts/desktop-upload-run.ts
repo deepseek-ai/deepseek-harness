@@ -6,14 +6,19 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import type COS from 'cos-nodejs-sdk-v5'
 import type { DesktopUploadArtifact, DesktopUploadPlan } from './desktop-upload-plan.ts'
-import { DESKTOP_COS_REGION } from './desktop-cos.ts'
+import { DESKTOP_COS_REGION } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { recordPackagingEvent } from './packaging-run.mjs'
 
 const FAILURE_CODES = new Set(['AccessDenied', 'InternalError', 'NoSuchBucket', 'BadDigest', 'SignatureDoesNotMatch',
   'RequestTimeout', 'TimeoutError', 'AbortError', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ENOSPC', 'EACCES', 'EPERM', 'ENOENT'])
 
 /** Object keys fingerprinted into every upload record to bind evidence to this uploader. */
-const UPLOADER_SOURCES = ['desktop-upload-run.ts', 'upload-target.ts', 'desktop-upload-plan.ts', 'desktop-cos.ts']
+const UPLOADER_SOURCES = {
+  'desktop-upload-run.ts': new URL('./desktop-upload-run.ts', import.meta.url),
+  'upload-target.ts': new URL('./upload-target.ts', import.meta.url),
+  'desktop-upload-plan.ts': new URL('./desktop-upload-plan.ts', import.meta.url),
+  'desktop-cos.ts': new URL(import.meta.resolve('@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts')),
+}
 
 async function fingerprint(artifact: DesktopUploadArtifact) {
   const sha512 = createHash('sha512')
@@ -83,8 +88,8 @@ export async function uploadDesktopRelease(plan: DesktopUploadPlan, cos: COS, re
       artifacts.push({ ...artifact, ...await fingerprint(artifact) })
     }
     const sourceSha256: Record<string, string> = {}
-    for (const filename of UPLOADER_SOURCES) {
-      sourceSha256[filename] = createHash('sha256').update(await readFile(join(import.meta.dirname, filename))).digest('hex')
+    for (const [filename, source] of Object.entries(UPLOADER_SOURCES)) {
+      sourceSha256[filename] = createHash('sha256').update(await readFile(source)).digest('hex')
     }
     await writeFile(join(directory, 'plan.json'), `${JSON.stringify({ schemaVersion: 1,
       environment: plan.environment, target: plan.target, version: plan.version, bucket: plan.bucket,

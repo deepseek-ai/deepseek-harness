@@ -34,7 +34,7 @@ export type {
  * Build the live module system from the HTML facade's materialized modules bundle.
  * @param target - Stable registration facade whose pending queue becomes the live sink.
  * @param bootstrapModule - This bundle's id and already-materialized exports.
- * @param options - Raw boot graph, platform seed, and optional bundle transport.
+ * @param options - Raw boot graph, delivered manifests, and optional bundle transport.
  * @returns The created module system.
  */
 export function createClientModuleSystem(

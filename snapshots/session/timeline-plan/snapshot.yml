@@ -1,0 +1,9 @@
+version: 1
+scenario: timeline-plan
+profile: headless
+composition: default
+recording: live
+permission: danger-full-access
+header:
+  class: timeline
+  pin: true

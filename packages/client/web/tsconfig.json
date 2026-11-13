@@ -20,6 +20,7 @@
     {
       "path": "../modules"
     },
+    { "path": "../../util/package-manifest" },
     {
       "path": "../ui-slots"
     },

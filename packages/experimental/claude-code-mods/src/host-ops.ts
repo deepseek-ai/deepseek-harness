@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
@@ -76,6 +77,14 @@ const storeDomainSpec = defineDomain({
   version: 1,
   tables: { store: domainTable<string, Record<string, JsonValue>>(zod.record(zod.string(), zod.json())) },
 })
+
+/** A call to a mod-registered tool that no `tool.call` hook answered; code `MOD_UNANSWERED`. */
+export class ModUnansweredError extends HarnessError {
+  constructor(message: string) {
+    super(message, 'MOD_UNANSWERED')
+    this.name = 'ModUnansweredError'
+  }
+}
 
 /** Options the host op table is built from. */
 export interface HostOpsOptions {
@@ -340,7 +349,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
           render: (_args, value) => [{ type: 'text', text: value as string }],
         },
         execute() {
-          return Promise.reject(new Error(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
+          return Promise.reject(new ModUnansweredError(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
         },
       }
       track(registry.register(definition), binding.agent)

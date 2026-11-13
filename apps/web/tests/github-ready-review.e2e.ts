@@ -195,8 +195,11 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
 
     const workspaceRow = page.locator('[role="treeitem"]').first()
     if (await workspaceRow.getAttribute('aria-expanded') !== 'true') await workspaceRow.click()
+    await page.bringToFront()
     await page.getByText(TITLE, { exact: true }).click()
     await page.getByText(REPLY, { exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
+    const reviewRow = page.locator('[role="treeitem"]').filter({ has: page.getByText(TITLE, { exact: true }) })
+    await expect.poll(() => reviewRow.getByText('Unread', { exact: true }).count()).toBe(0)
     const tree = await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd)
     const conversation = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(EXPECTED, `${tree}\n\n---\n\n${conversation}`, MODE)

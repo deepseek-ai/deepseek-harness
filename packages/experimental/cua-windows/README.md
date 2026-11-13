@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Discover Windows applications, obtain consent, then inspect and operate their windows through the shared [Computer Use API](../cua/README.md). Application selection, window selection, accessibility observation, and foreground activation are separate actions. Use this page for Windows-specific semantics and safe interaction rules.
+Discover Windows applications, obtain consent, then inspect and operate their windows through the shared [Computer Use API](../cua/README.md). Simulated keyboard and mouse input are available, including typing, pasting, key presses, individual key events, pointer movement, clicking, scrolling, and dragging. Application selection, window selection, accessibility observation, and foreground activation are separate actions. Use this page for Windows-specific semantics and safe interaction rules.
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 1. Check `cua.getCapabilities()` before choosing an operation. Accessibility and keyboard input are window-scoped on Windows; screenshots and pointer actions also require a Window object.
 2. Read an accessibility tree before using element IDs. Absolute pointer coordinates use pixels in the latest returned screenshot, relative to that window. `relative: true` uses integer thousandths from 0 to 999 after an appropriate AX observation or screenshot. Capture again after a resize.
-3. In shortcuts, `option` selects Alt and `control` selects Ctrl. The provider rejects Windows-key shortcuts using `command`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
+3. `pressKey`, `click`, and `drag` accept `ctrl` (or `control`), `alt`, and `shift`. Only `click` and `drag` accept `win`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
 5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
 
@@ -82,7 +82,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - The helper does not check each key or button release during cleanup. If an input remains held after a failure, release it manually before continuing.
 - Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.
 - The Windows handshake requires a positive `maxClickHoldMs`. With zero, it fails with `INVALID_CONFIG` before ordinary clicks or status queries can run.
-- `findApps`, application launch, app-level accessibility, and held-key `sendKeyEvent` are unavailable. Ask the user to open the required application or window.
+- `findApps`, application launch, and app-level accessibility are unavailable. Ask the user to open the required application or window.
 - Applications with `isRunning: false` can be discovered, but the current `getApp` flow attempts an unsupported launch and fails with `UNSUPPORTED`. Open a window before selecting such an application.
 - Observation and input require an accessible, unlocked interactive Windows session. Screenshots require Windows Graphics Capture support; a listed window can still be unavailable for capture or input.
 - Application consent does not offer an **Always allow** grant. Another conversation needs its own consent.

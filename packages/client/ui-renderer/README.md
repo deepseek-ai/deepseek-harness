@@ -29,7 +29,7 @@ This package is infrastructure: the web shell and the boot kernel are its only d
 
 ### What mounting does
 
-`mount(container)` installs the slot renderer, hydrates the existing boot DOM when present, renders the assembled application into the container before the next paint, and returns a disposer that unmounts the React root. The renderer performs the sole context-level `renderSlot('root')` call; the registered root occupant owns product layout and document metadata.
+`mount(container)` synchronously installs styles for already materialized modules, hydrates existing boot DOM when present, and renders the application. Its disposer unmounts React before releasing styles. One renderer instance owns one active mount; a second simultaneous mount rejects, while an old disposer cannot remove a later mount. Plugin disposal also releases the active mount. The renderer performs the sole context-level `renderSlot('root')` call; the root occupant owns product layout.
 
 ### For business plugins
 
@@ -47,7 +47,9 @@ The package realizes one boundary: the object layer (runtime, React-free) owns b
 
 ### Activation and mount
 
-The plugin activates after `slots`, `sessions`, and `layout`; it installs `createSlotRenderer()` and reflects the `uiRenderer` service. `mountApp` looks for the boot kernel's `[data-dsh-boot]` element: when present it hydrates through `BootHandoff` (a one-frame pass-through that preserves the loading DOM), otherwise it creates a fresh root and flushes the render synchronously.
+The plugin injects `modules`, installs the Slot renderer, and publishes an instance of [`UiRenderer`](src/client/renderer.ts). Its [`DocumentStyles`](src/client/styles/document-styles.ts) constructor only retains dependencies; explicit `mount()` subscribes to module-record changes and installs CSS before React mounts. Later materialization, dependency changes, and invalidation update the installed resources synchronously. Metadata and per-file text caches belong to this renderer and are keyed by module records, so replacement records do not reuse old text.
+
+For modules with `meta`, stylesheets are collected from its optional `stylesheets` record, keyed by each stylesheet's path within the owning package, with descriptors that expose `text(context)`. Each installed style element carries `data-plugin` with the owning package and `data-path` with that path. Loaded dependency resources precede consumers; within one package, identical paths share one style node. Component mount/unmount does not register styles. A failure affects only its own stylesheet: when a module's `meta()` or a descriptor's `text()` throws, or a path already carries different CSS from another module of the same package, the renderer leaves that stylesheet out, reports it once through `console.error`, and installs every other stylesheet. A path conflict keeps the text already installed. A failed producer runs again only for a replacement module record. During live replacement, the previous styles stay installed until the replaced plugin has been torn down.
 
 ### Slot bindings
 
@@ -92,6 +94,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define when the application frame appears and how far per-region readiness goes; they are current package constraints.
 
 - **The first application frame waits for the whole client roster** — the boot kernel hands over the mount point only after the loader roster settles and the boot audit accepts it; per-region readiness remains deferred.
+- **Only the main document is supported** — there is no Document Scope or Shadow DOM placement, and styles are retained at module rather than component granularity.
 - **Slot rendering has no Suspense integration or per-entry lazy loading** — the complete plugin roster settles before the renderer mounts the root.
 
 <a id="dev-note"></a>

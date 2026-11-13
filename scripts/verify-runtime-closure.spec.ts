@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { loadCordisYaml } from './cordis-yaml.ts'
 import { verifyRuntimeClosure } from './verify-runtime-closure.ts'
@@ -39,6 +39,11 @@ afterEach(() => {
 })
 
 describe('verifyRuntimeClosure', () => {
+  it('supplies required workspace peers of the Electron production dependency tree', async () => {
+    const root = resolve(import.meta.dirname, '..')
+    expect((await verifyRuntimeClosure(root, 'apps/desktop/package.json', false)).failures).toEqual([])
+  })
+
   it('checks a private worker closure without requiring application presets', async () => {
     const manifestPath = 'packages/ssh/ssh-helper-runtime/package.json'
     const root = fixture({ [manifestPath]: { name: 'helper', dependencies: { '@scope/worker': 'workspace:^' } } })

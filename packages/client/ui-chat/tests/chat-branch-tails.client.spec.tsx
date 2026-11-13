@@ -227,11 +227,32 @@ describe('MessageItem arms', () => {
     expect(exec).toHaveBeenCalledWith('copy')
   })
 
+  it('user copy succeeds through execCommand when the host refuses the async write', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    const exec = vi.fn().mockReturnValue(true)
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec })
+    render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [{ type: 'text', text: 'refused body' }] as never,
+        source: null,
+      }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    expect(await screen.findByRole('button', { name: '复制成功' })).toBeTruthy()
+    expect(exec).toHaveBeenCalledWith('copy')
+  })
+
   it('user copy never claims success when the host rejects the write', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
     render(
       <MessageItem t={t} node={{
         kind: 'user', seq: 1, time: 1_000,

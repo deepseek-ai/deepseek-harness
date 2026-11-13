@@ -1,4 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import * as Token from '@deepseek-ai/dsh-host-authentication-token'
+import { BrowserAuth } from '@deepseek-ai/dsh-host-authentication-token/src/browser-auth.ts'
 
 const browserCookies = new WeakMap<Context, string>()
 
@@ -23,22 +26,27 @@ export function provideBrowserCredentials(ctx: Context): void {
  * @param ctx - Host root with the Web server and Connection mounted.
  * @returns the `cookie` header value, cached per root.
  */
-export function browserCookie(ctx: Context): string {
+export async function browserCookie(ctx: Context): Promise<string> {
   const existing = browserCookies.get(ctx)
   if (existing !== undefined) return existing
-  const origin = `http://127.0.0.1:${String(ctx.webServer.port)}`
-  const target = new URL(ctx.connection.authenticatedUrl(origin))
+  await ctx.plugin(Token, { cookieMaxAgeDays: 30 }).await()
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
+  const target = new URL(auth.authenticatedUrl(`http://127.0.0.1:${String(ctx.webServer.port)}`))
   let setCookie: string | undefined
-  ctx.connection.authorizeIndex({
+  const request = {
     method: 'GET',
     url: `${target.pathname}${target.search}`,
     headers: { host: target.host },
-  }, {
-    writeHead(_status, headers) { setCookie = headers?.['set-cookie'] },
+    socket: { destroyed: false },
+  } as IncomingMessage
+  const response = {
+    writeHead(_status: number, headers?: Readonly<Record<string, string>>) { setCookie = headers?.['set-cookie'] },
     end() {},
-  })
+  } as ServerResponse
+  await ctx.waterfall('webserver/request', request, response, async () => {})
   if (setCookie === undefined) throw new Error('gateway fixture did not receive a browser cookie')
   const cookie = setCookie.split(';', 1)[0]!
   browserCookies.set(ctx, cookie)
+  ctx.effect(() => () => { browserCookies.delete(ctx) })
   return cookie
 }

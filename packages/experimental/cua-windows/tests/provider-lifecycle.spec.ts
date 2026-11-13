@@ -48,6 +48,8 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.getGuidance('standalone')).toBe(GUIDANCE)
   expect(backend.permissionParameters('requestPermission', 'accessibility', 'en')).toEqual({ permission: 'accessibility' })
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
+  expect(backend.capabilities.methods).toContain('sendKeyEvent')
+  expect(backend.sendKeyEvent).toBeUndefined()
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
   const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }

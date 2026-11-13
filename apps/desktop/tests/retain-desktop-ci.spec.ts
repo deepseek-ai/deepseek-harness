@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import { afterEach, expect, it } from 'vitest'
 import { desktopReleasesRoot, retainDesktopCi, resolveDesktopRetentionRunner } from '../scripts/retain-desktop-ci.ts'
-import { verifyRetainedDesktopRelease } from '../scripts/desktop-release-store.ts'
+import { verifyRetainedDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 import { verifyDesktopArchive } from '../scripts/archive-desktop-ci.ts'
 import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 
@@ -27,7 +27,7 @@ async function retainedFixture(target: 'win-x64' | 'mac-x64' | 'mac-arm64', qual
     : [`deepseek-harness-1.0.0-${target}-${qualification}.dmg`, `deepseek-harness-1.0.0-${target}-${qualification}.zip`]) : target === 'win-x64'
     ? ['deepseek-harness-1.0.0-win-x64.exe', 'deepseek-harness-1.0.0-win-x64.exe.blockmap', 'win-x64-release.json', 'nightly.yml']
     : [`deepseek-harness-1.0.0-${target}.dmg`, `deepseek-harness-1.0.0-${target}.zip`, `deepseek-harness-1.0.0-${target}.zip.blockmap`, `${target}-release.json`, 'nightly-mac.yml']
-  await Promise.all(names.map(name => writeFile(join(artifacts, name), 'fixture')))
+  await Promise.all(names.map(name => writeFile(join(artifacts, name), `fixture ${name}`)))
   const env = {
     DSH_DESKTOP_RELEASES_DIR: '', DSH_PACKAGING_CONFIG_DIR: config, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin',
     DSH_DESKTOP_TARGET_ARCH: target === 'mac-arm64' ? 'arm64' : 'x64', PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0',
@@ -123,4 +123,61 @@ it('rejects missing or ambiguous archival routing before packaging starts', () =
   expect(() => resolveDesktopRetentionRunner({ ...env, DESKTOP_PUBLISH_RUNNERS: JSON.stringify({
     dedicated: { label: 'dsh-shared', target: 'mac-arm64' }, other: { label: 'dsh-shared', target: 'mac-arm64' },
   }) })).toThrow('unique artifact routing label')
+})
+
+it.runIf(process.platform === 'darwin' || process.platform === 'win32').each([
+  ['mac-arm64', 'notarized'], ['mac-x64', 'notarized'], ['mac-arm64', 'unnotarized'], ['mac-x64', 'unnotarized'],
+] as const)('splits %s %s installers without changing retained publication inputs', async (target, qualification) => {
+  const { root, directory, archiveEnv, names, env } = await retainedFixture(target, qualification)
+  const original = await verifyRetainedDesktopRelease(desktopReleasesRoot(env), '123', '2')
+  const base = `macos-${target.slice(4)}-${qualification === 'notarized' ? 'signed' : 'unnotarized-debug'}-1.0.0-123-2`
+  for (const attempt of ['3', '4']) {
+    const output = join(root, `archive-output-${attempt}`)
+    execFileSync(process.execPath, ['--import', 'tsx', archiveScript, '--split-macos'], {
+      env: { ...process.env, ...archiveEnv, GITHUB_RUN_ATTEMPT: attempt,
+        DESKTOP_ARCHIVE_NAME: `${base}.zip`, GITHUB_OUTPUT: output, RUNNER_TEMP: root },
+    })
+    const outputs = Object.fromEntries((await readFile(output, 'utf8')).trim().split('\n').map((line) => {
+      const separator = line.indexOf('=')
+      return [line.slice(0, separator), line.slice(separator + 1)]
+    }))
+    expect(outputs['dmg-name']).toBe(`${base}.dmg`)
+    expect(outputs['update-name']).toBe(`${base}-update.zip`)
+    expect(outputs['metadata-name']).toBe(`${base}-metadata.zip`)
+    for (const [kind, extension] of [['dmg', '.dmg'], ['update', '.zip']]) {
+      const name = names.find(file => file.endsWith(extension!))!
+      expect(await readFile(outputs[`${kind}-path`]!)).toEqual(await readFile(join(directory, name)))
+    }
+    const metadata = unzipSync(await readFile(outputs['metadata-path']!))
+    expect(Object.keys(metadata)).toEqual(['manifest.json', ...names.filter(name => !/\.(?:dmg|zip)$/u.test(name))])
+    for (const [name, bytes] of Object.entries(metadata)) expect(Buffer.from(bytes)).toEqual(await readFile(join(directory, name)))
+    expect(await verifyRetainedDesktopRelease(desktopReleasesRoot(env), '123', '2')).toEqual(original)
+  }
+})
+
+it.each(['wrong-runner', 'corrupted-installer', 'windows'] as const)('emits no split upload paths for %s', async (failure) => {
+  const { root, directory, names, archiveEnv } = await retainedFixture(failure === 'windows' ? 'win-x64' : 'mac-arm64', failure === 'windows' ? 'signed' : 'notarized')
+  if (failure === 'corrupted-installer') await writeFile(join(directory, names[0]!), 'corrupted')
+  const output = join(root, 'archive-output')
+  const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript, '--split-macos'], { encoding: 'utf8',
+    env: { ...process.env, ...archiveEnv, RUNNER_NAME: failure === 'wrong-runner' ? 'other' : archiveEnv.RUNNER_NAME,
+      DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root } })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain(failure === 'wrong-runner' ? 'wrong original machine'
+    : failure === 'windows' ? 'one DMG and one update ZIP' : 'changed file')
+  await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('rejects unsupported archive arguments without emitting upload paths', async () => {
+  const { root, archiveEnv } = await retainedFixture('mac-arm64', 'notarized')
+  const output = join(root, 'archive-output')
+  const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript, '--unknown'], { encoding: 'utf8',
+    env: { ...process.env, ...archiveEnv, DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root } })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('desktop archival: usage: archive-desktop-ci.ts [--split-macos]')
+  await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
 })

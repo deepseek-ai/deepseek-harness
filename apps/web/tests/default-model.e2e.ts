@@ -142,7 +142,13 @@ describe('web e2e: the composer model switch is the default for later sessions',
         badge.textContent = ' — Provider identification badge with a long channel name'
         node.appendChild(badge)
       })
-      await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      if (pane === 'root') {
+        expect(original!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.x).toBeCloseTo(original!.x)
+      } else {
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      }
       await expect.poll(async () => {
         const box = (await surface.boundingBox())!
         return box.x >= 12 && box.x + box.width <= 378

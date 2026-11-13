@@ -65,7 +65,7 @@ kind: "package-reference"
 
 ### 可观察结果与失败
 
-前台发送返回终端的新输出以及 `wait: <原因>` 与会话状态；`session_exit` 表示顶层 shell 已退出，而 `inferred_idle` 或 `timeout` 绝不证明前台命令已退出。用未注册的后端类型打开会话会失败。大于 `maxResultBytes` 的结果会在 UTF-8 边界处截断并附标记。
+前台发送返回终端的新输出以及 `wait: <原因>` 与会话状态；`session_exit` 表示顶层 shell 已退出，而 `inferred_idle` 或 `timeout` 绝不证明前台命令已退出。用未注册的后端类型打开会话会失败。失败的调用带有结构化错误标识：`type` 或 `sessionId` 为空时为 `ToolArgsError`（`INVALID_ARGS`），没有调用方 Agent 或后台发送缺少 jobs 服务时为 `ToolContextUnavailableError`，`enableRunInBackground: false` 时的后台发送为 `ToolArgsError`（`INVALID_ARGS`），因为 schema 不提供 `run_in_background`，被取消的前台发送为 `AbortError`，终端服务失败保留其 `TerminalError` code。大于 `maxResultBytes` 的结果会在 UTF-8 边界处截断并附标记。
 
 -----
 

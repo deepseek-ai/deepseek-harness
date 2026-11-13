@@ -131,6 +131,7 @@ describe('Typert-backed Cordis catalog', () => {
     // plugin that provides it" for a key where no such plugin exists.
     expect(byKey.has('headlessIo')).toBe(false)
     expect(byKey.has('dshHomePath')).toBe(false)
+    expect(byKey.has('dshPath')).toBe(false)
     expect(byKey.has('launcherEnvironment')).toBe(false)
   })
 })

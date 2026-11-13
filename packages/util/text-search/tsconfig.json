@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "types": []
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../package-manifest" }
+  ]
+}

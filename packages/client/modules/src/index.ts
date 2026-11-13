@@ -702,7 +702,7 @@ export class ClientModuleRegistry extends Service {
 
     const registerWebCarrier = (webCtx: Context): void => {
       webCtx.effect(
-        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, resource: request => this.fetchBundle(request) }),
+        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, auth: 'anonymous', resource: request => this.fetchBundle(request) }),
         'client-modules: bundle route',
       )
     }

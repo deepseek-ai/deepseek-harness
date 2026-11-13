@@ -3,11 +3,11 @@ import { gunzipSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import { describe, expect, it } from 'vitest'
-import type { BrowserAuth } from '../src/browser-auth.ts'
 import { createWebConnectionRpc } from '../src/client/rpc.ts'
 import { bridge } from '../src/http-bridge.ts'
 import type { ConnectionRpcHandlerResult, ConnectionRpcResult } from '../src/rpc.ts'
 import { HostConnectionService } from '../src/rpc-host.ts'
+import { ConnectionAuthentication } from '../src/authentication.ts'
 
 function binaryResponse(rpcId: string, mutate: (parts: FormData) => void = () => {}): Response {
   const parts = new FormData()
@@ -25,7 +25,7 @@ describe('Connection binary RPC', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0, compression })
-      await ctx.plugin((owner) => { new HostConnectionService(owner, [], {} as BrowserAuth) })
+      await ctx.plugin((owner) => { new ConnectionAuthentication(owner); new HostConnectionService(owner, []) })
       const connection = ctx.get('connection') as HostConnectionService
       const data = new Uint8Array(1024 * 1024).fill(65)
       data.set([0, 128, 255])
@@ -35,7 +35,7 @@ describe('Connection binary RPC', () => {
         attachments: [{ path: ['data'], bytes: data }],
       }))
       const handler = connection.createSharedFetchHandler('/api')
-      ctx.webServer.register({ kind: 'prefix', path: '/api', handler: (req, res) => bridge(req, res, handler, connection.browserPeer) })
+      ctx.webServer.register({ kind: 'prefix', path: '/api', auth: 'anonymous', handler: (req, res) => bridge(req, res, handler, connection.browserPeer) })
       let transferred = 0
       let encoding: string | undefined
       const rpc = createWebConnectionRpc((path, init) => new Promise((resolve, reject) => {
@@ -58,7 +58,14 @@ describe('Connection binary RPC', () => {
         req.once('error', reject)
         req.end(init.body as string)
       }))
-      expect(await rpc.call('/api', 'fixture/read', {})).toEqual({ ok: true, value: { data, bytes: data.length } })
+      const result = await rpc.call('/api', 'fixture/read', {})
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('binary RPC failed')
+      const value = result.value as { data: Uint8Array; bytes: number }
+      expect(Object.keys(value).sort()).toEqual(['bytes', 'data'])
+      expect(value.bytes).toBe(data.length)
+      expect(value.data).toBeInstanceOf(Uint8Array)
+      expect(Buffer.from(value.data).equals(Buffer.from(data))).toBe(true)
       if (compression === 'gzip') {
         expect(encoding).toBe('gzip')
         expect(transferred).toBeLessThan(data.length / 10)
@@ -73,7 +80,7 @@ describe('Connection binary RPC', () => {
 
   it('roundtrips raw bytes and metadata on the existing channel while JSON results and errors stay JSON', async () => {
     const ctx = new Context()
-    const fiber = ctx.plugin((owner) => { new HostConnectionService(owner, [], {} as BrowserAuth) })
+    const fiber = ctx.plugin((owner) => { new ConnectionAuthentication(owner); new HostConnectionService(owner, []) })
     await fiber.await()
     try {
       const connection = ctx.get('connection') as HostConnectionService
@@ -133,7 +140,7 @@ describe('Connection binary RPC', () => {
 
   it('frames attachments already projected by the result owner', async () => {
     const ctx = new Context()
-    const fiber = ctx.plugin((owner) => { new HostConnectionService(owner, [], {} as BrowserAuth) })
+    const fiber = ctx.plugin((owner) => { new ConnectionAuthentication(owner); new HostConnectionService(owner, []) })
     await fiber.await()
     try {
       const connection = ctx.get('connection') as HostConnectionService
@@ -186,7 +193,7 @@ describe('Connection binary RPC', () => {
 
   it('roundtrips nested, optional and root attachment paths without reserving field names', async () => {
     const ctx = new Context()
-    const fiber = ctx.plugin((owner) => { new HostConnectionService(owner, [], {} as BrowserAuth) })
+    const fiber = ctx.plugin((owner) => { new ConnectionAuthentication(owner); new HostConnectionService(owner, []) })
     await fiber.await()
     try {
       const data = new Uint8Array([0, 128, 255])
