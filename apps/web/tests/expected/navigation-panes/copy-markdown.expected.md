@@ -1,11 +1,5 @@
 # NavScenario: first run bash to
 
-Session file:
-
-```text
-{{sessionFile}}
-```
-
 > NavScenario: first run bash to print exactly NAVIGATION_OK, then read nav-a.md and nav-b.md using two read calls in ONE assistant message, then reply with the single word FIRST_DONE and stop.
 
 <details><summary>3 previous messages</summary>

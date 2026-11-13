@@ -6,7 +6,7 @@
 // under the standard discipline: turn 1 produces a bash call plus two
 // parallel reads in one assistant message (tool-call density for the
 // trajectory ledger/timing lanes), turn 2 a markdown-rich reply.
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, Response } from 'playwright'
@@ -501,18 +501,14 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
     expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
 
-    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID)))?.location?.path
-    if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
-    expect((await stat(sourcePath)).isFile()).toBe(true)
-    expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
+    const snapshot = await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID))
+    expect(snapshot?.header.id).toBe(SEED_ID)
+    expect(snapshot?.location).toBeUndefined()
     const markdown = await page.evaluate(() => navigator.clipboard.readText())
-    expect(markdown).toContain(`Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\``)
-    const normalized = markdown
-      .split(sourcePath).join('{{sessionFile}}')
-      .split(scaffold.workspaceCwd).join('{{cwd}}')
+    const normalized = markdown.split(scaffold.workspaceCwd).join('{{cwd}}')
     // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
     await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
-    expect(normalized).toContain('Session file:\n\n```text\n{{sessionFile}}\n```')
+    expect(normalized).not.toContain('Session file:')
     expect(normalized).toContain('# NavScenario: first run bash to')
     expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')
     expect(normalized).toContain('<details><summary>3 previous messages</summary>')

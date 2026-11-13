@@ -17,6 +17,7 @@ import {
 } from './scaffold.ts'
 import { openSettings, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { sessionDir } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -464,9 +465,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     const [header, ...events] = realizeSeedFixture(scaffold, await readFile(SEED, 'utf8'), id).trimEnd().split('\n')
       .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
     expect(header?.version).toBe(3)
-    const projects = (await readdir(scaffold.persistenceRoot, { withFileTypes: true })).filter(entry => entry.isDirectory())
-    expect(projects).toHaveLength(1)
-    const directory = join(scaffold.persistenceRoot, projects[0]!.name, id)
+    const directory = sessionDir(scaffold.persistenceRoot, scaffold.workspaceCwd, id)
     const predecessor = join(directory, 'session.v3.jsonl.zstd')
     const createdAt = WEB_FIXTURE_TIME - 90_000
     const rows = [{ ...header, id, cwd: scaffold.workspaceCwd, createdAt },
@@ -506,7 +505,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
       await expect.poll(() => row.getAttribute('aria-selected')).toBe('true')
       await expect.poll(() => scaffold.ctx.agents.get(id)).toBeDefined()
       await expect(scaffold.ctx.sessionPersistence.stat(id)).resolves.toMatchObject({ formatStatus: 'current' })
-      expect(await readdir(directory)).toContain(`session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`)
+      expect(await readdir(directory)).not.toContain(`session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`)
       expect(await readFile(predecessor)).toEqual(source)
       expect(forkRequests).toEqual(['/api/session/fork'])
       expect(scaffold.ctx.agents.list().filter(agent => !existing.has(agent.id) && agent.id !== id)).toEqual([])
