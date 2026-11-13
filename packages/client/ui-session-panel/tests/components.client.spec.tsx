@@ -123,7 +123,9 @@ describe('SessionPanel', () => {
     { id: 'change-requests', label: '变更请求' },
   ]
 
-  function panelProps(gutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), track = vi.fn(() => () => {})) {
+  function panelProps(
+    gutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), track: SessionPanelProps['track'] = vi.fn(() => () => {}),
+  ) {
     const endGutter = createSnapshotStore(gutter)
     const owners: SessionPanelSectionOwnerProps[] = []
     const renderSlot = ((key: string, owner: object, opts?: { only?: string; entryKey?: string }): ReactNode => {
