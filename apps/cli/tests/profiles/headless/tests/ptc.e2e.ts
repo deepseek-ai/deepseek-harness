@@ -1,5 +1,5 @@
-import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -152,6 +152,29 @@ async function backgroundPtcModeHarness(cwd: string): Promise<Context> {
 }
 
 describe('PTC mode typed values: keyless real-process contracts', () => {
+  it('returns formatted read content from inspect through the real outer run_code result', async () => {
+    workdir = await realpath(await mkdtemp(join(tmpdir(), 'dsh-ptc-inspect-read-')))
+    const path = join(workdir, 'a.txt')
+    await writeFile(path, 'alpha\nbeta\n')
+    ctx = await typedPtcModeHarness()
+    await ctx.plugin(ToolFs)
+
+    const formatted = `<path>${path}</path>\n<type>file</type>\n<content>\n1: alpha\n2: beta\n\n(End of file - total 2 lines)\n</content>`
+    const native = await executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('inspect-read-reference'), name: 'read',
+      arguments: { file_path: path }, signal: testToolSignal,
+    })
+    expect(native.isError).toBe(false)
+    expect(native.content).toEqual([{ type: 'text', text: formatted }])
+
+    const result = await runCode(ctx, `inspect(await tools.read({ file_path: ${JSON.stringify(path)} }));`)
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: formatted + '\n' }])
+    expect(result.value).toEqual({
+      logs: [formatted + '\n'], sandbox: { mode: 'danger-full-access', denied: false },
+    })
+  })
+
   it('crosses a large intermediate value intact and exposes only typed tool failure fields', async () => {
     ctx = await typedPtcModeHarness()
     ctx.tools.register(defineTool({
