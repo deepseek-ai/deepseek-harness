@@ -73,7 +73,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-scope": "workspace:*"
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -148,7 +151,8 @@
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@types/ws": "^8.18.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dsh": {
     "bundle": {

@@ -112,7 +112,7 @@ describe('OAR provider composition', () => {
       const provider = ctx.subagents.getProvider('oar')
       const run = await provider!.start!(await request())
       await expect(run.result).resolves.toMatchObject({ output: [{ type: 'text', text: 'registered answer' }] })
-      await expect(run.dispose()).rejects.toThrow('stage: dispose')
+      await expect(run.dispose()).rejects.toMatchObject({ name: 'OarFailure', code: 'OAR_DISPOSE_FAILED' })
       expect(options[0]).toMatchObject({ model: 'native-model', effort: 'high' })
     } finally {
       await ctx.fiber.dispose()
@@ -142,9 +142,10 @@ describe('OAR provider composition', () => {
 describe('OAR task input', () => {
   it('preserves consecutive text and rejects non-text or blank input', () => {
     expect(textTask([{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }])).toBe('onetwo')
-    expect(() => textTask([])).toThrow()
-    expect(() => textTask([{ type: 'text', text: ' \n ' }])).toThrow()
-    expect(() => textTask([{ type: 'reasoning', text: 'private' }])).toThrow()
+    const invalid = { name: 'OarFailure', code: 'OAR_INVALID_TASK' }
+    expect(() => textTask([])).toThrow(expect.objectContaining(invalid))
+    expect(() => textTask([{ type: 'text', text: ' \n ' }])).toThrow(expect.objectContaining(invalid))
+    expect(() => textTask([{ type: 'reasoning', text: 'private' }])).toThrow(expect.objectContaining(invalid))
   })
 
   it('removes inherited credentials and retains explicit environment deletion', () => {
@@ -234,7 +235,7 @@ describe('OAR one-shot execution', () => {
     const install = vi.fn<NonNullable<Runtime['install']>>()
     const session = vi.fn(base.session)
     const runtime: Runtime = { ...base, install, session, installation: async () => ({ kind: 'not_found' }) }
-    await expect(startOarRun(await request(), spec(runtime))).rejects.toThrow()
+    await expect(startOarRun(await request(), spec(runtime))).rejects.toMatchObject({ name: 'OarFailure', code: 'OAR_RUNTIME_UNAVAILABLE' })
     expect(install).not.toHaveBeenCalled()
     expect(session).not.toHaveBeenCalled()
   })
@@ -242,7 +243,7 @@ describe('OAR one-shot execution', () => {
   it('rejects a runtime with no installation probe', async () => {
     const base = scriptedRuntime({ turn: () => {} })
     const { installation: _installation, ...runtime } = base
-    await expect(startOarRun(await request(), spec(runtime))).rejects.toThrow()
+    await expect(startOarRun(await request(), spec(runtime))).rejects.toMatchObject({ name: 'OarFailure', code: 'OAR_RUNTIME_UNAVAILABLE' })
   })
 
   it('does not open after cancellation wins installation probing', async () => {
@@ -260,7 +261,7 @@ describe('OAR one-shot execution', () => {
     }
     const controller = new AbortController()
     const opening = startOarRun(await request(controller.signal), spec(runtime))
-    const rejected = expect(opening).rejects.toThrow()
+    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' })
     await probed.promise
     controller.abort()
     release.resolve(undefined)
@@ -282,7 +283,7 @@ describe('OAR one-shot execution', () => {
     }
     const controller = new AbortController()
     const opening = startOarRun(await request(controller.signal), spec(runtime))
-    const rejected = expect(opening).rejects.toThrow()
+    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' })
     await entered.promise
     controller.abort()
     release.resolve(undefined)
@@ -295,7 +296,9 @@ describe('OAR one-shot execution', () => {
     const probe = vi.fn(observed.runtime.installation)
     const controller = new AbortController()
     controller.abort()
-    await expect(startOarRun(await request(controller.signal), spec({ ...observed.runtime, installation: probe }))).rejects.toThrow()
+    await expect(startOarRun(await request(controller.signal), spec({ ...observed.runtime, installation: probe }))).rejects.toMatchObject({
+      name: 'AbortError',
+    })
     expect(probe).not.toHaveBeenCalled()
   })
 
@@ -384,7 +387,7 @@ describe('OAR one-shot execution', () => {
     const run = await startOarRun(await request(), spec(runtime, { onError }))
     const result = await run.result
     expect(result.output).toEqual([{ type: 'text', text: 'completed answer' }])
-    await expect(run.dispose()).rejects.toThrow('stage: dispose')
+    await expect(run.dispose()).rejects.toMatchObject({ name: 'OarFailure', code: 'OAR_DISPOSE_FAILED' })
     expect(onError).toHaveBeenCalled()
   })
   it('selects the last non-empty identified root message', async () => {
@@ -426,7 +429,9 @@ describe('OAR one-shot execution', () => {
       ...scriptedRuntime({ turn: () => {} }),
       installation: async () => { throw cause },
     }
-    await expect(startOarRun(await request(), spec(runtime, { onError }))).rejects.toMatchObject({ cause })
+    await expect(startOarRun(await request(), spec(runtime, { onError }))).rejects.toMatchObject({
+      name: 'OarFailure', code: 'OAR_RUNTIME_UNAVAILABLE', cause,
+    })
     expect(onError).toHaveBeenCalledOnce()
     expect(onError.mock.calls[0]?.[0].message).toContain('stage: installation; category: unknown')
     expect(onError.mock.calls[0]?.[0].cause).toBe(cause)
@@ -437,12 +442,16 @@ describe('OAR one-shot execution', () => {
     const controller = new AbortController()
     const base = scriptedRuntime({ turn: () => {} })
     const runtime: Runtime = { ...base, session: async () => { throw new Error('PRIVATE_START_DETAIL') } }
-    await expect(startOarRun(await request(), spec(runtime, { effort: 'high' }))).rejects.toThrow('stage: startup; category: unknown')
+    await expect(startOarRun(await request(), spec(runtime, { effort: 'high' }))).rejects.toMatchObject({
+      name: 'OarFailure', code: 'OAR_START_FAILED', message: expect.stringContaining('stage: startup; category: unknown') as string,
+    })
     const canceled: Runtime = { ...base, session: async () => {
       controller.abort()
       throw new Error('PRIVATE_START_DETAIL')
     } }
-    await expect(startOarRun(await request(controller.signal), spec(canceled))).rejects.toThrow('category: cancelled')
+    await expect(startOarRun(await request(controller.signal), spec(canceled))).rejects.toMatchObject({
+      name: 'AbortError',
+    })
   })
 
   it('cleans an opened session when event subscription fails', async () => {
@@ -516,7 +525,9 @@ describe('OAR one-shot execution', () => {
         return unsubscribe
       } }
     } }
-    await expect(startOarRun(await request(controller.signal), spec(runtime))).rejects.toThrow('category: cancelled')
+    await expect(startOarRun(await request(controller.signal), spec(runtime))).rejects.toMatchObject({
+      name: 'AbortError',
+    })
     expect(observed.dispose).toHaveBeenCalledOnce()
   })
 
@@ -538,7 +549,7 @@ describe('OAR one-shot execution', () => {
     await active.promise
     controller.abort()
     await expect(run.result).resolves.toMatchObject({ stopReason: 'aborted' })
-    await expect(run.dispose()).rejects.toThrow('stage: dispose')
+    await expect(run.dispose()).rejects.toMatchObject({ name: 'OarFailure', code: 'OAR_DISPOSE_FAILED' })
   })
 
 })

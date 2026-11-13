@@ -10,6 +10,7 @@ import { loadOverlayPatches } from '../packages/boot/app-boot/src/index.ts'
 import { readPluginMeta } from '../packages/boot/app-boot/src/package-meta.ts'
 import { bundlePatchPaths, composeEntries, initProfile, readProfileManifest } from '../packages/boot/app-boot/src/profile.ts'
 import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '../packages/util/official-bundles/src/bundles.ts'
+import { HIDDEN_BUNDLES } from '../packages/util/official-bundles/src/plugin-manager.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { createPluginProfile } from '../apps/desktop/src/project-manager.ts'
 
@@ -30,6 +31,9 @@ function bundle(name: string): { dir: string; patches: ReturnType<typeof loadOve
   if (entry?.manifest.dsh?.bundle === undefined) throw new Error(`${name} is not a workspace bundle`)
   return { dir: entry.dir, patches: bundlePatchPaths(entry.dir, entry.manifest.dsh.bundle).flatMap(path => loadOverlayPatches('test', path)) }
 }
+
+/** Optional bundles that compose a profile of their own; the plugin page hides them, the Host inventory still reports them. */
+const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
 
 const lightweight = [
   '@deepseek-ai/dsh-experimental-session-search',
@@ -105,7 +109,31 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
-  it.each(OPTIONAL_BUNDLES)('%s composes over the Web profile without a skipped patch', (name) => {
+  it.each(['web', 'desktop'] as const)('requires explicit selection of Timeline on %s', (surface) => {
+    const name = '@deepseek-ai/dsh-timeline'
+    const layers = profileLayers(surface)
+    expect(OPTIONAL_BUNDLES).toContain(name)
+    expect(flattenRows(composeEntries(layers)).some(row => row.name === name)).toBe(false)
+    expect(flattenRows(composeEntries([...layers, bundle(name).patches])))
+      .toContainEqual(expect.objectContaining({ id: 'timeline-experimental', name }))
+  })
+
+  // A bundle that composes a profile of its own is never layered over a GUI profile; HIDDEN_BUNDLES keeps it off the plugin page.
+  const standalone = OPTIONAL_BUNDLES.filter(name => STANDALONE_PROFILE_BUNDLES.includes(name))
+  const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))
+
+  it.each(standalone)('%s composes its own profile alone over the empty root and stays off the plugin page', (name) => {
+    const { patches } = bundle(name)
+    const warnings: string[] = []
+    const composed = composeEntries([patches], message => warnings.push(message))
+    expect(warnings).toEqual([])
+    const topLevelIds = composed.flatMap(entry => typeof entry.id === 'string' ? [entry.id] : [])
+    expect(topLevelIds.length).toBeGreaterThan(0)
+    expect(topLevelIds).toHaveLength(new Set(topLevelIds).size)
+    expect(HIDDEN_BUNDLES).toContain(name)
+  })
+
+  it.each(layered)('%s composes over the Web profile without a skipped patch', (name) => {
     const { patches } = bundle(name)
     const warnings: string[] = []
     const composed = composeEntries([...shipped, patches], message => warnings.push(message))

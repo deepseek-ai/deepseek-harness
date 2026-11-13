@@ -2,8 +2,8 @@
 // The built-bundle boot smoke: the assembled-jsdom test that owns the boot
 // graph itself. Other files share the same scaffolding (assembled-boot.ts) to
 // reach a surface only the built bundles expose; this one asserts that the
-// graph assembles at all — staged activation across the immediately tier and
-// the inject layers, per-plugin CSS injection, and a rendered journey reaching
+// graph assembles at all — activation across the immediately tier and
+// the inject layers, renderer-owned module styles, and a rendered journey reaching
 // chat content from the keyless RemoteMock scenario.
 //
 // Component behavior remains owned by per-package suites (SlotTestRuntime

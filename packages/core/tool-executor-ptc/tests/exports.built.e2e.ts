@@ -17,6 +17,8 @@ import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 
 assert.equal(Object.hasOwn(ptc, 'createRunCodeTool'), false)
+assert.equal(Object.hasOwn(ptc, 'jsonSchemaToPy'), false)
+assert.equal(Object.hasOwn(ptc, 'renderToolsSdkPy'), false)
 assert.equal(RunCodeConfig, ptc.Config)
 const ctx = new Context()
 try {
