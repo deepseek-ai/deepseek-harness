@@ -169,6 +169,12 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     var pointed = Coordinate(app, parameters, context);
                     return Input.MouseMove(app, pointed.Window, pointed.X, pointed.Y, context);
                 }
+                case "toggleMouse":
+                {
+                    var target = Selected(app, parameters, context);
+                    Input.ToggleMouse(app, target, String(parameters, "mouseButton"), String(parameters, "direction"), context);
+                    return ActionResult(foreground);
+                }
                 case "scroll":
                 {
                     var target = Coordinate(app, parameters, context);
