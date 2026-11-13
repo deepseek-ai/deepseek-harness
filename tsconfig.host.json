@@ -435,6 +435,7 @@
     { "path": "./packages/experimental/tool-worktree" },
     { "path": "./packages/experimental/forge" },
     { "path": "./packages/experimental/forge-github" },
+    { "path": "./packages/experimental/forge-gitlab" },
     { "path": "./packages/experimental/forge-session" },
     { "path": "./packages/experimental/forge-bundle" },
     { "path": "./packages/experimental/client-ui-forge/tsconfig.host.json" },
