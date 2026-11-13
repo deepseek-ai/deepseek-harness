@@ -2,7 +2,7 @@
  * Pins shared client-bundle preset rules: build modes, module-edge purity,
  * source-map chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -297,6 +297,25 @@ describe('static Client dependency delivery', () => {
       .toContain(`.${exports.classes.panel}{display:flex}`)
     expect(stylesheets!['src/global.css']!.text(require))
       .toContain('.overlay{position:fixed}')
+  })
+
+  it('names local styles below the package when the package directory is a symbolic link', async () => {
+    const root = fixture('import classes from "./Panel.module.css"\nexport { classes }\n')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/Panel.module.css'), '.panel { display: flex; }\n')
+    const linked = join(root, 'linked')
+    symlinkSync(root, linked, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const output = await clientChunkOutput(linked, config(linked), 'index.js')
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact
+    const manifest = artifact[STATIC_MODULE_MANIFEST_EXPORT]
+    const meta = manifest.meta
+    if (meta === undefined) throw new Error('static CSS metadata missing')
+    const stylesheets = meta().stylesheets
+    expect(Object.keys(stylesheets ?? {})).toEqual(['src/Panel.module.css'])
+    const exports = manifest.factory(unusedRequire) as { classes: { panel: string } }
+    expect(stylesheets?.['src/Panel.module.css']?.text(unusedRequire))
+      .toContain(`.${exports.classes.panel}{display:flex}`)
   })
 })
 
