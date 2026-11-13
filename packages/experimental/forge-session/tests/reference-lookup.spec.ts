@@ -13,7 +13,7 @@ import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
-import { bench, pullUrl } from './fixtures.ts'
+import { bench, pullUrl, settled } from './fixtures.ts'
 
 const contexts: Context[] = []
 const releases: (() => void)[] = []
@@ -26,7 +26,7 @@ afterEach(async () => {
 function output(overrides: Partial<ShellRunResult> = {}): ShellRunResult {
   return {
     exitCode: 0, signal: null, timedOut: false, aborted: false, timeoutMs: 1_234,
-    stdout: { text: JSON.stringify({ url: pullUrl(9) }), truncated: false },
+    stdout: { text: `${pullUrl(9)}\n`, truncated: false },
     stderr: { text: '', truncated: false },
     ...overrides,
   }
@@ -94,7 +94,7 @@ describe('PR reference lookup', () => {
     f.emit()
     await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
     expect(resolve).toHaveBeenCalledWith(expect.objectContaining({
-      command: 'env gh pr view 9 --repo octo/demo --json url', workdir: process.cwd(), timeoutMs: 1_234,
+      command: 'env gh pr view 9 --repo octo/demo --json url --jq .url', workdir: process.cwd(), timeoutMs: 1_234,
       dshEnv: f.ctx.shellEnv.collect(f.exec),
     }))
     f.ctx.forgeSession.dismiss(f.agent.session, pullUrl(9))
@@ -114,16 +114,26 @@ describe('PR reference lookup', () => {
     ['timeout', { timedOut: true }],
     ['abort result', { aborted: true }],
     ['truncated output', { stdout: { text: '{', truncated: true } }],
-    ['invalid JSON', { stdout: { text: '{', truncated: false } }],
-    ['missing URL', { stdout: { text: '{}', truncated: false } }],
-    ['non-PR URL', { stdout: { text: '{"url":"https://fake.test/octo/demo/issues/9"}', truncated: false } }],
+    ['JSON output', { stdout: { text: JSON.stringify({ url: pullUrl(9) }), truncated: false } }],
+    ['empty output', { stdout: { text: '', truncated: false } }],
+    ['two URLs', { stdout: { text: `${pullUrl(9)}\n${pullUrl(10)}`, truncated: false } }],
+    ['non-PR URL', { stdout: { text: 'https://fake.test/octo/demo/issues/9', truncated: false } }],
   ] satisfies [string, Partial<ShellRunResult>][])('reports %s without changing bindings or the completed tool result', async (_label, overrides) => {
     const f = await fixture()
     f.execute.mockResolvedValue(execution(async () => output(overrides)))
     f.emit()
-    await vi.waitFor(() => { expect(f.warn).toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed')) })
+    await vi.waitFor(() => { expect(f.warn).toHaveBeenCalledWith(expect.stringContaining('change request reference lookup failed')) })
     expect(f.records()).toEqual([])
     expect(f.result.isError).toBe(false)
+  })
+
+  it('runs no lookup for the commands of a rule whose registration ended', async () => {
+    const f = await fixture()
+    await f.rules.dispose()
+    f.emit()
+    await settled()
+    expect(f.execute).not.toHaveBeenCalled()
+    expect(f.records()).toEqual([])
   })
 
   it('reports a shell preparation rejection that is not an Error', async () => {
@@ -224,8 +234,8 @@ describe('PR reference lookup', () => {
       p.settle({ isError: true, error: { message: 'code run failed' }, content: [] })
       await vi.waitFor(() => { expect(f.execute).toHaveBeenCalledTimes(2) })
       expect(resolve.mock.calls.map(([request]) => [request.command, request.workdir, request.dshEnv])).toEqual([
-        ['env gh pr view 9 --repo octo/demo --json url', '/tmp/first', f.ctx.shellEnv.collect(first)],
-        ['env gh pr view 7 --repo octo/other --json url', '/tmp/second', f.ctx.shellEnv.collect(second)],
+        ['env gh pr view 9 --repo octo/demo --json url --jq .url', '/tmp/first', f.ctx.shellEnv.collect(first)],
+        ['env gh pr view 7 --repo octo/other --json url --jq .url', '/tmp/second', f.ctx.shellEnv.collect(second)],
       ])
       expect(resolve.mock.calls.every(([request]) => request.signal?.aborted === false)).toBe(true)
       await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
@@ -254,7 +264,7 @@ describe('PR reference lookup', () => {
 
       await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
       expect(f.warn).toHaveBeenCalledTimes(1)
-      expect(f.warn).toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed'))
+      expect(f.warn).toHaveBeenCalledWith(expect.stringContaining('change request reference lookup failed'))
     })
 
     it('drops queued lookups when the root call is cancelled, and skips calls whose output names their own URL', async () => {

@@ -77,9 +77,9 @@ const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')
 const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
 if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
   const fields = args[args.indexOf('--json') + 1]
-  process.stdout.write(JSON.stringify(fields === 'url'
-    ? { url: 'https://github.com/octo/demo/pull/7' }
-    : { number: 7, title: 'Add the pull request panel' }))
+  const url = 'https://github.com/octo/demo/pull/7'
+  process.stdout.write(fields !== 'url' ? JSON.stringify({ number: 7, title: 'Add the pull request panel' })
+    : args.includes('--jq') ? url + '\\n' : JSON.stringify({ url }))
   process.exit(0)
 }
 if (args[0] === 'pr' && args[1] === 'ready' && args[2] === '9') {
@@ -319,7 +319,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     }).filter(thread => thread.comments.nodes.length > 0)
     const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
     process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
-      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
+      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false, viewerDidAuthor: false,
         reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
         reviewThreads: page(threads) } } } }))
     process.exit(0)
@@ -733,7 +733,7 @@ async function expectNumberedReference({ scaffold, page, project, tripwire }: Pa
     })
   }).toEqual([{ action: 'reference', url: PULL }])
   const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
-  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
+  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url', '--jq', '.url'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 }

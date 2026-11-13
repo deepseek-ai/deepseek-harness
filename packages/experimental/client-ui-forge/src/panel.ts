@@ -219,7 +219,8 @@ export class SessionPanel {
     return changeRequests.map((entry) => {
       if (entry.update !== null && 'snapshot' in entry.update) this.snapshots.set(entry.url, entry.update.snapshot)
       const reviewRevision = entry.ref === null ? 0 : this.reviewRevision(entry.ref)
-      return { ...entry, snapshot: this.snapshots.get(entry.url) ?? null, reviewRevision }
+      const forge = entry.ref === null ? null : this.ctx.forge.describe(entry.ref.repository.forge) ?? null
+      return { ...entry, forge, snapshot: this.snapshots.get(entry.url) ?? null, reviewRevision }
     })
   }
 
@@ -362,7 +363,7 @@ export class SessionPanel {
         using timeout = deadline(this.lifetime.signal, this.config.readinessTimeoutMs, 'FORGE_PANEL_READINESS_TIMEOUT')
         readiness = await this.ctx.forge.readiness(repository, timeout.signal)
       } catch (error) {
-        readiness = { state: 'unavailable', message: error instanceof Error ? error.message : String(error) }
+        readiness = { state: 'unavailable', message: error instanceof Error ? error.message : String(error), signIn: null }
       }
       if (this.lifetime.signal.aborted || this.current.repository === null || hostOf(this.current.repository) !== host) return
       this.publish({ ...this.current, readiness })

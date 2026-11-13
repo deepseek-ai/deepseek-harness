@@ -98,6 +98,7 @@ kind: "package-group"
 | [`worktree`](worktree/README.zh.md) | 创建具名 Git 工作树并改变调用 Session 的当前目录 | `ctx.worktrees` |
 | [`forge`](forge/README.zh.md) | 代码托管提供方注册表，共享变更请求轮询 | `ctx.forge` |
 | [`forge-github`](forge-github/README.zh.md) | 通过宿主 GitHub CLI 读取 pull request 的 GitHub 提供方 | 在 `ctx.forge` 上注册提供方 |
+| [`forge-gitlab`](forge-gitlab/README.zh.md) | 通过宿主 GitLab CLI 读写合并请求的 GitLab 提供方 | 在 `ctx.forge` 上注册提供方 |
 | [`forge-session`](forge-session/README.zh.md) | 把变更请求绑定到创建、推送或跟踪它们的 Session | `ctx.forgeSession` |
 | [`client-ui-forge`](client-ui-forge/README.zh.md) | 展示 Session 的 Git 检出、worktree 与已绑定 pull request 的 GUI 面板 | `ctx.forgePanel` |
 | [`forge-bundle`](forge-bundle/README.zh.md) | 默认禁用的 pull request 与 worktree 面板组合 | — |

@@ -112,6 +112,8 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // scripts and skips on Windows: the Linux and macOS lanes hold its
       // per-file 100%, while the provider suite pins its callers everywhere.
       'packages/experimental/forge-github/src/gh.ts',
+      // The GitLab CLI runner's suite does the same with a POSIX `glab` stand-in.
+      'packages/experimental/forge-gitlab/src/glab.ts',
       // The panel's Git failure and environment cases stand in for `git` with
       // POSIX shell scripts and skip on Windows: the Linux and macOS lanes hold
       // its per-file 100%, while its real-Git cases run everywhere.
