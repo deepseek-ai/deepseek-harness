@@ -58,14 +58,14 @@ describe('filterOptions', () => {
 
   it('keeps provider order while ranking fuzzy label matches within each group', () => {
     expect(filterOptions(grouped, '')).toEqual([grouped[0], grouped[2], grouped[1]])
-    expect(filterOptions(grouped, ' FLASH ', 'fuzzy-label')).toEqual([grouped[2], grouped[0], grouped[1]])
-    expect(filterOptions(grouped, 'fslt', 'fuzzy-label')).toEqual([grouped[2]])
-    expect(filterOptions(grouped, 'Alpha provider', 'fuzzy-label')).toEqual([])
+    expect(filterOptions(grouped, ' FLASH ')).toEqual([grouped[2], grouped[0], grouped[1]])
+    expect(filterOptions(grouped, 'fslt')).toEqual([grouped[2]])
+    expect(filterOptions(grouped, 'Alpha provider')).toEqual([])
   })
 
-  it('uses that same displayed order for highlighting and selection, then resets the mode on reopen', async () => {
+  it('uses that same displayed order for highlighting and selection', async () => {
     const onSelect = vi.fn()
-    const { popup } = await readyPopup({ searchMode: 'fuzzy-label', options: () => Promise.resolve(grouped), onSelect })
+    const { popup } = await readyPopup({ options: () => Promise.resolve(grouped), onSelect })
     expect(popup.state.getSnapshot().active).toBe(1)
     popup.setSearch('flash')
     expect(popup.state.getSnapshot().active).toBe(0)
@@ -73,16 +73,15 @@ describe('filterOptions', () => {
     expect(popup.state.getSnapshot().active).toBe(2)
     await popup.select(2)
     expect(onSelect).toHaveBeenCalledWith(grouped[1], CTX_A)
-    popup.open('theme', spec(), CTX_A, SEGMENT)
-    await Promise.resolve()
-    expect(popup.state.getSnapshot().searchMode).toBe('substring')
   })
 
-  it('matches case-insensitively over label and detail; blank keeps all', () => {
-    expect(filterOptions(OPTIONS, '')).toBe(OPTIONS)
-    expect(filterOptions(OPTIONS, '  ')).toBe(OPTIONS)
+  it('matches labels fuzzily and details as substrings; blank keeps all', () => {
+    expect(filterOptions(OPTIONS, '')).toEqual(OPTIONS)
+    expect(filterOptions(OPTIONS, '  ')).toEqual(OPTIONS)
     expect(filterOptions(OPTIONS, 'DARK')).toEqual([OPTIONS[0]])
+    expect(filterOptions(OPTIONS, 'lgt')).toEqual([OPTIONS[1]])
     expect(filterOptions(OPTIONS, 'warm')).toEqual([OPTIONS[2]])
+    expect(filterOptions(OPTIONS, 'wrm')).toEqual([])
     expect(filterOptions(OPTIONS, 'nope')).toEqual([])
   })
 })
