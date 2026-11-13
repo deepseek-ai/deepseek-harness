@@ -58,6 +58,7 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-host-authentication-token": "workspace:*",
     "@deepseek-ai/dsh-agent-instructions": "workspace:*",
     "@deepseek-ai/dsh-agent-preset": "workspace:*",
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",

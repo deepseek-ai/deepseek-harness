@@ -49,7 +49,7 @@ Assembler 为同一输入和生命周期角色共享一个不可变 Match 及其
 
 ### 参数声明顺序
 
-`tool-bash`、`tool-pwsh` 在 `command` 前声明 `description`，并包含顺序指令。`run_code` 两处 `parameters` 将 `description` 放在 `code` 前，共用的参数描述要求 TypeScript 和 Python 都按此顺序生成。write/edit 首先声明 `file_path`，并在路径参数描述中要求先生成它，再生成 `content` 或 `old_string`/`new_string`。read 保留首位的 `file_path`；其他工具保留原有参数顺序。
+`tool-bash`、`tool-pwsh` 在 `command` 前声明 `description`，并包含顺序指令。`run_code` 的静态参数与按程序格式投影的 schema 都将 `code` 放在 `description` 前，不要求 JSON 成员顺序。write/edit 首先声明 `file_path`，并在路径参数描述中要求先生成它，再生成 `content` 或 `old_string`/`new_string`。read 保留首位的 `file_path`；其他工具保留原有参数顺序。
 
 ## 考虑过的替代方案
 

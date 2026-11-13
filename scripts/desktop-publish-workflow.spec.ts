@@ -83,7 +83,7 @@ it('rejects non-master dispatch before scheduling a self-hosted job', () => {
 it('defaults to production website upload and separates cache-only recovery', () => {
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { upload_website: { type: 'boolean', default: true } } })
   expect(workflow.jobs.prepare!.env?.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
-  expect(workflow.jobs.prepare!.env?.DOWNLOAD_PROD_EO_ZONE_ID).toBe('${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}')
+  expect(JSON.stringify(workflow)).not.toContain('DOWNLOAD_PROD_EO_ZONE_ID')
   const upload = workflow.jobs['upload-website-installer']!
   const purge = workflow.jobs['purge-website-installer']!
   expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])

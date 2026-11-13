@@ -25,6 +25,8 @@ The Host writes the composed `WebBootGraph` to `window.__DSH_BOOT__` and install
 
 The Web boot kernel creates the module system, prefetches `immediately` entries, mounts the vendored Cordis Loader, and creates every graph entry. Cordis service injection determines activation; module graph order determines only whether synchronous imports can be materialized. After the complete roster reaches a settled state and the boot audit accepts it (an inactive entry on the browser required list rejects startup; other inactive entries produce one console warning), `ui-renderer` hydrates the framework-free boot DOM and calls the sole context-level `renderSlot('root')` operation. [Client Modules](client-modules.md) owns the graph, bundle route, cache revision, and loader details.
 
+Module construction binds the startup carrier's existing script loader as its Main environment; optional Realm providers do not add a startup phase. Modules retains optional metadata producers and emits module-record changes; [UI Renderer](../../packages/client/ui-renderer/README.md) evaluates stylesheet descriptors and owns their main-document installation. This resource lifecycle is module-level, not a Slot or component mount protocol.
+
 ## Remote communication
 
 Host business services annotate callable methods with Typert Remote decorators. Host generation emits strict descriptors, runtime codecs, declaration merges, and source maps. The Client-side `api-remotes` assembly selects those generated contributions and mounts concrete methods under `ctx.remote.<namespace>` and Session-scoped `agentCtx.remote.<namespace>`. Feature packages depend on the generated service face, not the Gateway implementation or a Host package's runtime entry.

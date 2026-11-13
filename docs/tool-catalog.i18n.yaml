@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: ab3147d00cceb3f2
-  zh: e92dc9ecd1bc6a0e
+  en: a5a30a561b4daa5b
+  zh: c477c1dc7351c5a4
 /tool-schema-catalog/deepseek-ai-dsh-tool-session-control:
   en: 79ab575ea6da86e2
   zh: 79ab575ea6da86e2
@@ -78,8 +78,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: 2c7a3166dfd9751c
-  zh: 1b52ae2d0f33b9a4
+  en: cff92e5a2476af7e
+  zh: 8d56bc41053f0a85
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9

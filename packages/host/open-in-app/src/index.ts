@@ -4,12 +4,8 @@
  * launch endpoint the browser split button
  * (`@deepseek-ai/dsh-client-ui-open-in-app`) posts to.
  *
- * Security has one home, here. Every route asks the composition's
- * `connection` service for a rejection first (`requestRejection`): its
- * Host/Origin fence defeats DNS rebinding and cross-site calls, and its
- * browser authentication (the login-token cookie) gates every caller before
- * any resolution result, icon, or launch is reachable. On top of that fence
- * the open route validates its body at the wire: an `application/json` media
+ * WebServer admits requests before dispatch; these routes require an owner Peer.
+ * The open route validates its body at the wire: an `application/json` media
  * type, a 64 KiB ceiling, string `app`/`path` fields, a resolved-available
  * catalog id, and an absolute path naming an existing directory.
  *
@@ -43,8 +39,8 @@ export type * from './shared.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'open-in-app'
-/** The route carrier, the trust fence guarding every route, and the PATH resolver. */
-export const inject = ['webServer', 'connection', 'subprocess']
+/** The route carrier and the PATH resolver. */
+export const inject = ['webServer', 'subprocess']
 
 /** Open-in-app host configuration. */
 export interface Config {
@@ -74,16 +70,6 @@ export const Config: z<Config> = z.object({
   iconTimeoutMs: boundedMs(),
   launchWatchMs: boundedMs(),
 })
-
-/** Trust surface consumed here; the browser-side connection package owns the full type. */
-interface OpenInAppConnection {
-  requestRejection(request: { readonly headers: IncomingMessage['headers'] }): 401 | 403 | undefined
-}
-
-/** The composition's connection service (typed locally: its package is browser-side). */
-function connectionOf(ctx: Context): OpenInAppConnection {
-  return Reflect.get(ctx, 'connection') as OpenInAppConnection
-}
 
 /** Open-route request bodies are tiny JSON objects; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024
@@ -134,7 +120,7 @@ function parseOpenBody(text: string): { app: string; path: string } | null {
   return typeof app === 'string' && typeof path === 'string' ? { app, path } : null
 }
 
-/** Register the apps, icon, and open routes behind the connection trust fence. */
+/** Register owner-only apps, icon, and open routes. */
 export function apply(ctx: Context, config: Config): void {
   const ssh = launchedThroughSsh(launchEnvironmentOf(ctx))
   /** Test-seam facts completed with the composition's PATH resolver. */
@@ -181,20 +167,15 @@ export function apply(ctx: Context, config: Config): void {
     map.set(app.id, fresh)
     return fresh
   }
-  /** Answer an untrusted/unauthenticated request; true when it was rejected. */
-  const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
-    const rejection = connectionOf(ctx).requestRejection(req)
-    if (rejection === undefined) return false
-    res.statusCode = rejection
-    res.end()
-    return true
-  }
-
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
+    auth: 'required',
     path: OPEN_IN_APP_APPS_PATH,
-    handler: async (req, res) => {
-      if (rejected(req, res)) return
+    handler: async (req, res, peer) => {
+      if (peer?.principal.kind !== 'owner') {
+        sendJson(res, 403, { code: 'forbidden', message: 'owner access required' })
+        return
+      }
       if (req.method !== 'GET') {
         sendMethodNotAllowed(res, 'GET')
         return
@@ -205,9 +186,13 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
+    auth: 'required',
     path: OPEN_IN_APP_ICON_PREFIX_PATH,
-    handler: async (req, res) => {
-      if (rejected(req, res)) return
+    handler: async (req, res, peer) => {
+      if (peer?.principal.kind !== 'owner') {
+        sendJson(res, 403, { code: 'forbidden', message: 'owner access required' })
+        return
+      }
       if (req.method !== 'GET') {
         sendMethodNotAllowed(res, 'GET')
         return
@@ -240,9 +225,13 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
+    auth: 'required',
     path: OPEN_IN_APP_OPEN_PATH,
-    handler: async (req, res) => {
-      if (rejected(req, res)) return
+    handler: async (req, res, peer) => {
+      if (peer?.principal.kind !== 'owner') {
+        sendJson(res, 403, { code: 'forbidden', message: 'owner access required' })
+        return
+      }
       if (req.method !== 'POST') {
         sendMethodNotAllowed(res, 'POST')
         return

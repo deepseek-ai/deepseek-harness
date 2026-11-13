@@ -30,10 +30,18 @@ it.skipIf(process.platform !== 'win32')('loads the Windows provider and rejects 
   expect(ctx.tools.get('cua', agent)).toBeDefined()
   const prompt = await ctx.systemPrompt.assemble({ scope: agent })
   expect(prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Windows:')
+  expect(prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text).not.toContain('useSystemPointer')
+  expect(JSON.stringify(ctx.tools.get('cua', agent)!.parameters)).not.toContain('useSystemPointer')
   const batch = await ctx.tools.execute({ agent, signal: new AbortController().signal, calls: [{
     type: 'tool-call', id: brandString<ToolCallId>('invalid-window'), name: 'cua',
     arguments: JSON.stringify({ method: 'screenshot', params: { appHandle: 'app', windowId: 7 } }),
+  }, {
+    type: 'tool-call', id: brandString<ToolCallId>('unsupported-pointer'), name: 'cua',
+    arguments: JSON.stringify({ method: 'drag', params: { appHandle: 'app', windowId: '7', fromX: 1, fromY: 1,
+      toX: 2, toY: 2, useSystemPointer: true } }),
   }] })
+  expect(batch.results[1]?.result.isError).toBe(true)
+  expect(JSON.stringify(batch.results[1]?.result.content)).toContain('useSystemPointer')
   expect(batch.results[0]?.result.isError).toBe(true)
   expect(JSON.stringify(batch.results[0]?.result.content)).toContain('string')
   await entry.fiber.dispose()

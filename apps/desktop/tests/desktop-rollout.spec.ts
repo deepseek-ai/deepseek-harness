@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'
+import { readDesktopPublishConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 import { createDesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
 import { desktopBuildRecordFilename, desktopWebsiteInstallerUrl } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { dump, load } from 'js-yaml'
@@ -155,14 +156,21 @@ it('requires initial publication evidence and prepares approval without installe
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: '' })).rejects.toThrow(/select a percentage/u)
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: 'NaN' })).rejects.toThrow(/integer/u)
     await expect(prepareDesktopRolloutCi({ ...env, RUNNER_NAME: 'other' })).rejects.toThrow(/original machine/u)
-    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_UPLOAD_WEBSITE: 'true' })).rejects.toThrow(/production and/u)
-    expect((await prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: '',
-      DESKTOP_UPLOAD_WEBSITE: 'true', DOWNLOAD_PROD_EO_ZONE_ID: 'zone-example' })).website).toBe(true)
+    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_UPLOAD_WEBSITE: 'true' })).rejects.toThrow(/edgeOneZoneId/u)
+    const configPath = join(config, 'publishing/production.json')
+    const settings = await readDesktopPublishConfig(config, 'production')
+    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-example' }))
+    const websiteEnv = { ...env, DESKTOP_ROLLOUT_PERCENTAGE: '', DESKTOP_UPLOAD_WEBSITE: 'true' }
+    const websiteContext = await prepareDesktopRolloutCi(websiteEnv)
+    expect(websiteContext.website).toBe(true)
+    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-changed' }))
+    expect((await prepareDesktopRolloutCi(websiteEnv)).approval).not.toBe(websiteContext.approval)
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
 
 it('keeps rollout approval and website recovery separate without tag creation or full package verification', async () => {
   const text = await readFile('.github/workflows/desktop-rollout.yml', 'utf8')
+  expect(text).not.toContain('DOWNLOAD_PROD_EO_ZONE_ID')
   const workflow = load(text) as {
     name: string
     on: { workflow_dispatch: { inputs: Record<string, { required?: boolean; default?: unknown }> } }
@@ -189,7 +197,7 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     await mkdir(join(config, 'publishing'), { recursive: true })
     await writeFile(credentialsFile, JSON.stringify({ secretId: 'fixture', secretKey: 'fixture' }))
     await writeFile(join(config, 'publishing/production.json'), JSON.stringify({
-      bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
+      edgeOneZoneId: 'zone-fixture', bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
       githubApp: { clientId: 'app', privateKeyFile: join(f.root, 'absent-key') },
     }))
     const record = await createDesktopPublicationRecord(join(f.root, 'upload-records'), {
@@ -200,7 +208,7 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     const env = { RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
       DESKTOP_PUBLISH_ROUTE: JSON.stringify({ ...f.manifest.source, runnerLabel: 'dsh-runner' }),
       DESKTOP_ROLLOUT_PERCENTAGE: scenario === 'website' ? '' : '30', DESKTOP_UPLOAD_WEBSITE: scenario === 'website' ? 'true' : 'false',
-      DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(f.root, 'output'), GITHUB_STEP_SUMMARY: join(f.root, 'summary') }
+      GITHUB_OUTPUT: join(f.root, 'output'), GITHUB_STEP_SUMMARY: join(f.root, 'summary') }
     const context = await prepareDesktopRolloutCi(env)
     await publishDesktopRolloutCi('check', env)
     expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`approval=${context.approval}`)
@@ -342,9 +350,14 @@ it.each(['missing-yaml', 'wrong-approval', 'not-uploaded', 'wrong-zone', 'not-se
       await mkdir(join(config, 'publishing'), { recursive: true })
       await writeFile(credentialsFile, JSON.stringify({ secretId: 'fixture-id', secretKey: 'fixture-key' }))
       await writeFile(join(config, 'publishing/production.json'), JSON.stringify({
-        bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
+        edgeOneZoneId: 'zone-fixture', bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
         githubApp: { clientId: 'app', privateKeyFile: join(f.root, 'absent-key') },
       }))
+      if (scenario === 'wrong-zone') {
+        const configPath = join(config, 'publishing/production.json')
+        const settings = await readDesktopPublishConfig(config, 'production')
+        await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-changed' }))
+      }
       await rm(join(f.directory, f.filename))
       const directory = join(f.root, 'upload-records', 'website-99-mac-arm64')
       await mkdir(directory, { recursive: true })
@@ -365,7 +378,6 @@ it.each(['missing-yaml', 'wrong-approval', 'not-uploaded', 'wrong-zone', 'not-se
         DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify({ ...f.manifest.source, runnerLabel: 'dsh-runner' }),
         DESKTOP_UPLOAD_WEBSITE: scenario === 'not-selected' ? 'false' : 'true',
         DESKTOP_WEBSITE_APPROVAL: scenario === 'wrong-approval' ? 'changed' : approval,
-        DOWNLOAD_PROD_EO_ZONE_ID: scenario === 'wrong-zone' ? 'zone-changed' : 'zone-fixture',
       })
       if (scenario === 'missing-yaml') {
         await execution

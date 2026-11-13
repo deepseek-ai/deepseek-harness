@@ -938,6 +938,7 @@ def main() -> None:
             smoke_sdk_scheduler_recovery(model.url, args.exe.resolve(), args.update_snapshots)
         if args.scenario in {"all", "sdk-restart"}:
             assert args.exe is not None
+            smoke_sdk_v3_resume(model.url, args.exe.resolve())
             smoke_sdk_restart_snapshot(model.url, args.exe.resolve(), args.update_snapshots)
         if args.installed_wheel and args.scenario in {"all", "sdk-profile-plugin"}:
             smoke_sdk_profile_plugin(model.url)
@@ -1886,6 +1887,63 @@ def smoke_sdk_snapshot_mode(
             ADVANCED_SNAPSHOT_FILENAMES if mode == "native" else ("result.json", "session.v4.jsonl"),
             native_writer_output=True,
         )
+
+
+def smoke_sdk_v3_resume(base_url: str, executable: Path) -> None:
+    """Migrate persisted V3 history and reopen the published log in a fresh runtime."""
+    from deepseek_harness import DeepSeekHarness
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-v3-resume-") as temporary:
+        root = Path(temporary).resolve()
+        sessions = root / "sessions"
+        session_id = "v3-resume"
+        directory = sessions / "_no-cwd" / session_id
+        directory.mkdir(parents=True)
+        source = directory / "session.v3.jsonl"
+        header = {
+            "type": "session", "version": 3, "id": session_id, "createdAt": 1,
+            "isSeeded": False, "delegationDepth": 0,
+        }
+        message = {
+            "id": "saved-message", "role": "user", "source": {"kind": "user"},
+            "content": [{"type": "text", "text": "Saved V3 history"}],
+        }
+        events = [
+            {"type": "turn/start", "data": {"turn": 1}},
+            {"type": "user/message", "data": message, "surfaceOp": "append"},
+            {"type": "turn/end", "data": {"turn": 1, "reason": {"kind": "completed"}}},
+        ]
+        records = [header, *({**event, "seq": seq, "time": seq + 10} for seq, event in enumerate(events))]
+        original = "".join(json.dumps(record) + "\n" for record in records).encode("utf-8")
+        source.write_bytes(original)
+        patch = write_profile_patch(root, "v3-resume.patch.yml", sessions, [])
+        request_count = len(MockModelHandler.requests)
+
+        def connect() -> DeepSeekHarness:
+            return DeepSeekHarness(
+                provider="deepseek-official", model="smoke-model", cwd=str(root),
+                dsh_bin=str(executable), dsh_home=str(root / "home"), patches=(str(patch),),
+                env={"DSH_TELEMETRY_DISABLED": "1"}, api_key="sk-keyless-smoke", base_url=base_url,
+                request_timeout_seconds=60,
+            )
+
+        with connect() as harness:
+            session = harness.resume_session(session_id)
+            assert session.id == session_id, f"migration resumed {session.id!r}"
+        logs = read_session_logs(sessions)
+        assert set(logs) == {session_id}, f"unexpected persisted sessions: {list(logs)}"
+        assert any(row.get("type") == "user/message" and row.get("data") == message for row in logs[session_id]), (
+            "the migrated log lost the saved V3 user message"
+        )
+        (published,) = latest_persisted_session_paths(sessions)
+        migrated = published.read_bytes()
+
+        with connect() as harness:
+            session = harness.resume_session(session_id)
+            assert session.id == session_id, f"restart resumed {session.id!r}"
+        assert published.read_bytes().startswith(migrated), "restart rewrote the published session history"
+        assert source.read_bytes() == original, "resuming changed the original V3 log"
+        assert len(MockModelHandler.requests) == request_count, "resuming sent a model request"
 
 
 def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:

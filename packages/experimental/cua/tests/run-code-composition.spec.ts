@@ -63,7 +63,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -111,7 +111,9 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
       },
     },
   }
-  const entries = Object.keys(modules).filter(name => name !== 'native').map(name => ({
+  // The standard preset mounts the native executor in its own scope; a composition without presets mounts it on the Host.
+  const hosted = (name: string): boolean => presetFree ? name !== 'agentPresets' && name !== 'standard' : name !== 'native'
+  const entries = Object.keys(modules).filter(hosted).map(name => ({
     id: name, name: `cordis:${name}`,
     ...name === 'agentPresets' ? { config: { default: 'standard' } } : {},
     ...name === 'sandboxPolicy' ? { config: { mode: 'danger-full-access', workspaceRoot: directory } } : {},
@@ -131,7 +133,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
   ctx.llm.registerAdapter(['cua-fixture'], model)
   const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-standard-composition'), meta: { cwd: directory },
     agentOptions: { provider: 'cua-fixture', model: 'vision' },
-    setup: async (owner) => { await ctx.agentPresets.mount(owner, 'standard') },
+    ...presetFree ? {} : { setup: async (owner: Context) => { await ctx.agentPresets.mount(owner, 'standard') } },
   })
   const agent = handle.agent
   const idle: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -187,6 +189,21 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(native.state).toEqual({ count: 2, openedChannels: 1, closedChannels: 1 })
   expect(() => process.kill(first.pid, 0)).toThrow()
   expect(ctx.ptcRuntime.retainsState).toBe(false)
+})
+
+it('runs cua_run_code programs for an Agent in a composition without presets', async () => {
+  const { ctx, native, model, agent, run } = await setup(programs.slice(0, 2), 'macos', undefined, true)
+  expect(ctx.get('agentPresets')).toBeUndefined()
+  expect(ctx.tools.get('cua', agent)).toBeUndefined()
+  await run()
+  expect(model.requests).toHaveLength(3)
+  expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false])
+  expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
+    .toMatchObject({ visits: 2, sameCua: true, app: 'fixture-app', window: '7' })
+  expect(native.state.count).toBe(2)
+  expect(agent.session.snapshotEvents().some(event => event.type === 'agent-preset/selected')).toBe(false)
 })
 
 it('releases one Agent program environment through ctx.cuaPrograms while keeping its application access', async () => {

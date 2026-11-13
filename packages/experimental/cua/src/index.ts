@@ -37,9 +37,12 @@ export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
-  /** Ask once per live Session before an explicitly requested system-pointer move. */
+  /** Ask once per live Session before explicitly requested system-pointer moves or drags. */
   requireSystemPointerApproval: boolean
-  /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
+  /**
+   * Preset receiving raw cua; every other Agent, with or without a preset, receives cua_run_code while its
+   * program services are available. False registers raw cua globally.
+   */
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
   standaloneRunCode: CuaStandaloneRunCodeConfig
@@ -279,7 +282,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
-      if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
+      // Released macOS helpers accept an explicit false for mouseMove but reject the new drag field.
+      if (method === 'drag' && !useSystemPointer) delete params.useSystemPointer
+      else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -402,7 +407,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          const route = request.method === 'mouseMove'
+          const route = request.method === 'mouseMove' || request.method === 'drag'
             ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
             : undefined
           if (route?.prepare) owner.coordinates.parameters(request)

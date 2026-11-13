@@ -37,7 +37,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他已组合的 preset 获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。其他 preset 的 CUA 程序状态独立于此设置。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他 Agent 无论是否组合 preset 都获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。其他 preset 的 CUA 程序状态独立于此设置。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
@@ -75,7 +75,7 @@ pnpm dsh web
 
 #### What the model sees
 
-已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。其他已组合的 preset 获得 `cua_run_code` 和相同的操作指引。关闭会撤回这些贡献，并释放专用 CUA 运行时。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
+已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。其他 Agent 获得 `cua_run_code` 和相同的操作指引。关闭会撤回这些贡献，并释放专用 CUA 运行时。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
 
 #### Token effect
 
