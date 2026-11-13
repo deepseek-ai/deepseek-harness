@@ -253,15 +253,16 @@ export class LarkApi {
   }
 
   /**
-   * One request whose answer is raw bytes (resource routes).
+   * One request whose answer is a raw byte stream (resource routes), validated against HTTP error statuses without
+   * buffering the body in memory first.
    *
    * @param method - HTTP method.
    * @param path - path below the OpenAPI root.
    * @param options - body, query, cancellation.
-   * @returns the bytes and the answered media type.
+   * @returns the upstream response with its body stream and headers intact.
    * @throws LarkApiError for a platform-level failure or a transport failure.
    */
-  async download(method: string, path: string, options: LarkRequestOptions = {}): Promise<LarkResourceAnswer> {
+  async downloadStream(method: string, path: string, options: LarkRequestOptions = {}): Promise<Response> {
     const url = this.resolve(path)
     const response = await this.send(method, url, options)
     if (response.status >= 400) {
@@ -273,6 +274,20 @@ export class LarkApi {
         retryAfterMs: retryAfterMsOf(response),
       })
     }
+    return response
+  }
+
+  /**
+   * One request whose answer is raw bytes (resource routes).
+   *
+   * @param method - HTTP method.
+   * @param path - path below the OpenAPI root.
+   * @param options - body, query, cancellation.
+   * @returns the bytes and the answered media type.
+   * @throws LarkApiError for a platform-level failure or a transport failure.
+   */
+  async download(method: string, path: string, options: LarkRequestOptions = {}): Promise<LarkResourceAnswer> {
+    const response = await this.downloadStream(method, path, options)
     const mime = response.headers.get('content-type')
     return { data: await response.arrayBuffer(), ...(mime ? { mime } : {}) }
   }
@@ -501,6 +516,29 @@ export class LarkApi {
   }
 
   /**
+   * Stream one resource of a message (`GET /im/v1/messages/{message_id}/resources/{file_key}`) without buffering its
+   * body ahead of the caller's byte-limit reader.
+   *
+   * @param messageId - message holding the resource (the platform authorizes by it, not by the key alone).
+   * @param fileKey - `image_key` / `file_key` of the resource.
+   * @param type - `image` for a picture, `file` for a file, audio or video.
+   * @param signal - cancellation.
+   * @returns the upstream response.
+   */
+  async getResourceStream(
+    messageId: string,
+    fileKey: string,
+    type: 'image' | 'file',
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    return await this.downloadStream(
+      'GET',
+      `/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}`,
+      { params: { type }, signal },
+    )
+  }
+
+  /**
    * Download one resource of a message (`GET /im/v1/messages/{message_id}/resources/{file_key}`).
    *
    * @param messageId - message holding the resource (the platform authorizes by it, not by the key alone).
@@ -514,6 +552,18 @@ export class LarkApi {
       `/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}`,
       { params: { type }, signal },
     )
+  }
+
+  /**
+   * Stream one image by its `image_key` (`GET /im/v1/images/{image_key}`) without buffering its body ahead of the
+   * caller's byte-limit reader.
+   *
+   * @param imageKey - platform `image_key` of the picture.
+   * @param signal - cancellation.
+   * @returns the upstream response.
+   */
+  async getImageStream(imageKey: string, signal?: AbortSignal): Promise<Response> {
+    return await this.downloadStream('GET', `/im/v1/images/${encodeURIComponent(imageKey)}`, { signal })
   }
 
   /**

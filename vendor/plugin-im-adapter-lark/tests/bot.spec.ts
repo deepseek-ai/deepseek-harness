@@ -9,7 +9,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
-import { Satori, normalize, Status, type InboundMessage, type Target } from '@deepseek-ai/cordis-plugin-im-core'
+import {
+  Satori,
+  Status,
+  createResourceFetcher,
+  normalize,
+  ResourceTooLargeError,
+  type InboundMessage,
+  type Target,
+} from '@deepseek-ai/cordis-plugin-im-core'
 import { h } from '@deepseek-ai/satori-element'
 import LarkBot, {
   Config,
@@ -335,6 +343,49 @@ describe('LarkBot reads', () => {
     })
     await vi.waitFor(() => { expect(bot.selfId).toBe('ou_bot') })
     await expect(bot.ctx.http(bot.getResourceUrl('om_1', 'file_v2_abc', 'file'))).rejects.toThrow()
+  })
+
+  it('streams internal resource and image routes so maxBytes aborts before buffering the body', async () => {
+    let headerPulled = 0
+    let headerCancelled = false
+    let chunkPulled = 0
+    let cancelled = false
+    const { bot } = await mount({}, {
+      '/open-apis/im/v1/messages/om_1/resources/file_big': () => new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          headerPulled += 1
+          controller.enqueue(new Uint8Array(8))
+        },
+        cancel() {
+          headerCancelled = true
+        },
+      }, { highWaterMark: 0 }), {
+        headers: { 'content-type': 'application/octet-stream', 'content-length': '100' },
+      }),
+      '/open-apis/im/v1/images/img_stream': () => new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          chunkPulled += 1
+          controller.enqueue(new Uint8Array([1, 2, 3]))
+        },
+        cancel() {
+          cancelled = true
+        },
+      }, { highWaterMark: 0 }), {
+        headers: { 'content-type': 'image/png' },
+      }),
+    })
+    await vi.waitFor(() => { expect(bot.selfId).toBe('ou_bot') })
+    const fetchResource = createResourceFetcher(bot.ctx, { maxBytes: 4 })
+
+    await expect(fetchResource(bot.getResourceUrl('om_1', 'file_big', 'file'), new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTooLargeError)
+    expect(headerPulled).toBe(0)
+    expect(headerCancelled).toBe(true)
+
+    await expect(fetchResource('satori:feishu/ou_bot/images/img_stream', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTooLargeError)
+    expect(chunkPulled).toBe(2)
+    expect(cancelled).toBe(true)
   })
 
   it('probes the chat kind once and caches it', async () => {

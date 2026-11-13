@@ -69,10 +69,11 @@ export interface MentionSpec {
 export function mentionMarkdown(mode: MentionMode, mention: MentionSpec): string {
   const label = (mention.name ?? '').replace(/[<>&"\r\n]/g, '')
   if (mention.type === 'role') return label ? `@${label}` : ''
+  const cleanId = (mention.id ?? '').replace(/[^\w-]/g, '')
   // A user whose id is the platform's word for everyone is not a user: rendering it would mention everyone without
   // the `all` variant a mode withholds under `allowAtAll: false`.
-  if (mention.type === 'user' && isEveryoneId(mention.id)) return label ? `@${label}` : ''
-  const id = mention.type === 'user' ? mention.id : 'all'
+  if (mention.type === 'user' && isEveryoneId(cleanId)) return label ? `@${label}` : ''
+  const id = mention.type === 'user' ? cleanId : 'all'
   if (!id) return label ? `@${label}` : ''
   return mode === 'card' ? `<at id=${id}>${label}</at>` : `<at user_id="${id}">${label}</at>`
 }

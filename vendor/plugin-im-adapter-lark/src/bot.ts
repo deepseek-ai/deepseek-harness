@@ -115,17 +115,16 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
     this.internal = new Internal(this)
 
     // Decode turns a resource of a message into a `satori:` URL; this route authorizes and streams it back, so a
-    // fetch of that URL never needs the bot's credentials at the call site.
+    // fetch of that URL never needs the bot's credentials at the call site and `readBounded` enforces `maxBytes` on
+    // the live stream without buffering the whole upstream body first.
     this.defineInternalRoute('/messages/:messageId/resources/:fileKey', async (request) => {
       const type = request.query.get('type') === 'file' ? 'file' : 'image'
-      const answer = await this.api.getResource(request.params.messageId, request.params.fileKey, type, request.signal)
-      return new Response(answer.data, answer.mime ? { headers: { 'content-type': answer.mime } } : {})
+      return await this.api.getResourceStream(request.params.messageId, request.params.fileKey, type, request.signal)
     })
 
     // A card shows its pictures by `image_key`, which is downloaded by key rather than as a resource of the message.
     this.defineInternalRoute('/images/:imageKey', async (request) => {
-      const answer = await this.api.getImage(request.params.imageKey, request.signal)
-      return new Response(answer.data, answer.mime ? { headers: { 'content-type': answer.mime } } : {})
+      return await this.api.getImageStream(request.params.imageKey, request.signal)
     })
 
     ctx.plugin(WsClient, this)

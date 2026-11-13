@@ -152,6 +152,13 @@ describe('shared markdown builders', () => {
 
   it('strips the characters that would break the mention tag', () => {
     expect(mentionMarkdown('post', { type: 'user', id: 'ou_1', name: '<A&B>' })).toBe('<at user_id="ou_1">AB</at>')
+    expect(mentionMarkdown('post', { type: 'user', id: 'ou_1" x="y', name: 'Alice' }))
+      .toBe('<at user_id="ou_1xy">Alice</at>')
+    expect(mentionMarkdown('card', { type: 'user', id: 'ou_1><b>', name: 'Alice' })).toBe('<at id=ou_1b>Alice</at>')
+    // Punctuation stripped down to `all` or `here` is recognized as @everyone and degrades to plain text.
+    expect(mentionMarkdown('post', { type: 'user', id: 'all"', name: '所有人' })).toBe('@所有人')
+    expect(mentionMarkdown('card', { type: 'user', id: 'here>', name: '在线' })).toBe('@在线')
+    expect(mentionMarkdown('post', { type: 'user', id: '"><' })).toBe('')
   })
 
   it('writes an idempotency uuid that is stable per part and hex-32', () => {
