@@ -2,6 +2,9 @@
 import { z } from 'zod'
 import type { AccountNotificationEvent, AccountNotificationId, SignInErrorCode } from './types.ts'
 
+/** Request header carrying the account token on every request the token authenticates. */
+export const ACCOUNT_TOKEN_HEADER = 'x-dsh-auth-token'
+
 /** Protocol errors expose a stable code, never a response body or authorization URL. */
 export class PlatformAuthError extends Error {
   /** @param code - safe error classification. */
@@ -160,9 +163,6 @@ export function requestNotificationEvent(origin: string, token: string, id: Acco
     body: JSON.stringify({ notification_id: id, type: event }),
   }, signal)
 }
-
-/** Request header carrying the account token on every request the token authenticates. */
-export const ACCOUNT_TOKEN_HEADER = 'x-dsh-auth-token'
 
 // The grant is provider-owned; deployment requestHeaders cannot override it or the client identity.
 function accountHeaders(headers: Record<string, string>, token: string): Record<string, string> {
