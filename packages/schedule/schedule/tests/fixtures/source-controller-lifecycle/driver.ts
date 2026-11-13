@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { glob, writeFile } from 'node:fs/promises'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
 import { LlmAdapter, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { scheduleDomain, type AutomationCandidate } from '@deepseek-ai/dsh-schedule'
+import ScheduleService, { scheduleDomain, type AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { installCreateGate } from './persistence.ts'
@@ -38,11 +38,15 @@ async function physicalLogs(): Promise<string[]> {
   return Array.fromAsync(glob('**/*.jsonl', { cwd: `${process.cwd()}/sessions` }))
 }
 
-const [configPath, kind, phase, disposition] = process.argv.slice(2)
+const [configPath, kind, phase, disposition, mode] = process.argv.slice(2)
 assert.ok(configPath)
 assert.ok(kind === 'new' || kind === 'new_once')
 assert.ok(phase === 'before' || phase === 'after')
 assert.ok(disposition === 'keep' || disposition === 'dispose')
+assert.ok(mode === 'src' || mode === 'lib')
+assert.equal(process.execArgv.includes('--import'), mode === 'src')
+const scheduleModule = import.meta.resolve('@deepseek-ai/dsh-schedule')
+assert.ok(new URL(scheduleModule).pathname.includes(mode === 'lib' ? '/lib/' : '/src/'))
 const ctx = await boot('source-controller-lifecycle', resolveConfigPath(configPath, undefined))
 const source = new CandidateSource()
 let work: Promise<object> | undefined
@@ -52,7 +56,7 @@ assert.ok(persistence)
 const gate = installCreateGate(ctx, phase)
 try {
   const schedule = ctx.get('schedule')
-  assert.ok(schedule, 'real Schedule service must be active')
+  assert.ok(schedule instanceof ScheduleService, 'real Schedule provider must use the selected package export')
   const controller = [...ctx.loader.entries()].find(entry => entry.options.id === 'controller')
   assert.ok(controller?.fiber, 'real SessionController Loader entry must be active')
   assert.ok(ctx.get('sessionController'), 'SessionController dependencies must be satisfied')
@@ -104,6 +108,7 @@ try {
   assert.ok(domain)
   const saved = domain.table('tasks').get(task.id)
   await writeFile('result.json', JSON.stringify({
+    launch: { mode, execArgv: process.execArgv, scheduleModule },
     outcome, visibleAtGate, logsAtGate, logsAfter: await physicalLogs(), ownerUidAtRelease, providerClosed,
     persisted,
     liveAgent: agent !== undefined, inboxInsertions, userMessages,
