@@ -42,7 +42,7 @@ function ref(number: number): ChangeRequestRef {
 
 function review(headSha: string): ForgeReviewData {
   return {
-    headSha, viewer: 'octo', truncated: false, pendingReview: null, viewerCanReview: true,
+    headSha, viewer: 'octo', truncated: false, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment'],
     threads: [{
       id: brandString<ForgeThreadId>('thread-1'), path: 'src/a.ts', side: 'R', subject: 'line', resolved: false,
       diffHunk: '@@ -1 +1 @@\n-old\n+new', current: { commit: headSha, startLine: 1, endLine: 1 },
