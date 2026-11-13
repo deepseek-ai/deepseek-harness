@@ -1915,15 +1915,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     yield segments.dispose
     service = ctx.plugin({
       name: 'session-persistence-jsonl-service',
-      async apply(serviceCtx: Context) {
+      apply(serviceCtx: Context) {
         const legacy = new JsonlSessionPersistence(serviceCtx, config, tracker)
         if (config.storage === 'jsonl') {
           tracker.install(segments.ctx)
           serviceCtx.provide('sessionPersistence', legacy)
           return
         }
-        const instance = new TracePersistence(serviceCtx, segments.ctx, config.root, legacy)
-        await instance.start()
+        new TracePersistence(serviceCtx, segments.ctx, config.root, legacy)
       },
     })
     yield service.dispose

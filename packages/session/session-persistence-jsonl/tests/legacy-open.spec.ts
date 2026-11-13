@@ -1,3 +1,4 @@
+import { TracePersistence } from '@deepseek-ai/dsh-session-persistence-sqlite'
 /** Legacy import ownership, preservation, and takeover failure recovery. @module */
 import { Context } from '@deepseek-ai/cordis'
 import { DatabaseSync } from 'node:sqlite'
@@ -50,13 +51,12 @@ it.each(['none', 'zstd'] as const)('migrates a %s legacy read once, preserving i
   const b = await fixture(compression, true)
   expect((await b.ctx.sessionPersistence.stat(b.header.id))?.location?.kind).toBe('jsonl')
   expect((await b.ctx.sessionPersistence.list()).map(entry => entry.header.id)).toEqual([b.header.id])
-  let db = b.inspect()
-  try { expect(db.prepare('SELECT * FROM traces').all()).toEqual([]) } finally { db.close() }
+  await expect(readFile(b.database)).rejects.toMatchObject({ code: 'ENOENT' })
   await using read = await b.ctx.sessionPersistence.open(b.header.id, 'read')
   expect(read.inheritedEventCount).toBe(b.inherited)
   expect((await read.read()).events).toEqual(b.events)
   expect(await readFile(b.path)).toEqual(b.bytes)
-  db = b.inspect()
+  const db = b.inspect()
   try {
     expect(db.prepare('SELECT parent_segment_uuid, base_seq FROM segments').all()).toEqual([{ parent_segment_uuid: null, base_seq: 0 }])
     const traces = db.prepare('SELECT trace_uuid, header, tail_segment_uuid, inherited_count FROM traces').all()
@@ -186,6 +186,9 @@ it.each(['read', 'write'] as const)('cancels a %s import before commit, releasin
 
 it('rolls back a failed event insert and permits a complete retry', async () => {
   const b = await fixture()
+  const provider = b.ctx.sessionPersistence
+  if (!(provider instanceof TracePersistence)) throw new Error('Expected SQLite persistence')
+  await provider.start()
   let db = b.inspect()
   try { db.exec("CREATE TRIGGER fail_import BEFORE INSERT ON events WHEN NEW.seq = 2 BEGIN SELECT RAISE(ABORT, 'fixture import failed'); END") } finally { db.close() }
   await expect(b.ctx.sessionPersistence.open(b.header.id, 'read')).rejects.toThrow('fixture import failed')
@@ -225,7 +228,10 @@ it.each(['missing database', 'missing row', 'corrupt database'] as const)('refus
     const fresh = await b.mount()
     await expect(fresh.sessionPersistence.open(b.header.id, 'read')).rejects.toThrow()
     await expect(fresh.sessionPersistence.list()).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
-  } else await expect(b.mount()).rejects.toThrow()
+  } else {
+    const fresh = await b.mount()
+    await expect(fresh.sessionPersistence.open(b.header.id, 'read')).rejects.toThrow()
+  }
   expect(await readFile(b.path)).toEqual(b.bytes)
 })
 

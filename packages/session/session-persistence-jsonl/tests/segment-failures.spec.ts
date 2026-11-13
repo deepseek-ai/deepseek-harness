@@ -119,7 +119,8 @@ it('refuses new JSONL creation when routing records outlive a missing Segment da
   }
   const other = new Context()
   onTestFinished(() => other.fiber.dispose())
-  await expect(other.plugin(plugin, { root })).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
+  await other.plugin(plugin, { root })
+  await expect(other.sessionPersistence.create(header())).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
   await expect(stat(join(root, '.segments', 'sessions.sqlite'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect((await readdir(root, { recursive: true })).some(name => name.endsWith('.jsonl'))).toBe(false)
 })

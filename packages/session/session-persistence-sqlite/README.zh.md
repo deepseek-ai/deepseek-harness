@@ -29,6 +29,8 @@ kind: "package-library"
 
 ### 存储与导入
 
+插件同步注册持久化服务。SQLite 在首次需要数据库的操作中初始化；初始化失败会拒绝该操作。
+
 插件将数据库保存到 `<root>/.segments/sessions.sqlite`。新 Session 将元数据和事件历史提交到 SQLite。尚未追加事件的 Session 在所有者 flush 之前不会物化。SQLite 使用 WAL 模式和 FULL 同步提交；flush 等待已接收的写入，失败会使持久化检查点拒绝。
 
 打开支持的 JSONL 历史时，获取 Session 的旧写租约，通过现有格式迁移链读取，并在一个事务内导入元数据和事件。原始代际保持不变。只读打开遇到其他导入者时，等待其提交，然后在写入者仍活跃时读取 SQLite。写打开仍拒绝所有权竞争。取消或 provider 卸载会停止读者等待。list 和 stat 不导入历史。

@@ -44,7 +44,7 @@ export class TracePersistence extends SessionPersistence {
   }
 
   /**
-   * Initialize the selected storage at mount so configuration failures precede consumers.
+   * Initialize SQLite before a Session is created or opened.
    * @returns resolves once SQLite is ready.
    */
   async start(): Promise<void> {

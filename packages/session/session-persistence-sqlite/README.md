@@ -29,6 +29,8 @@ Configure storage through the [Session persistence plugin](../session-persistenc
 
 ### Storage and import
 
+The plugin registers its persistence service synchronously. SQLite initializes on the first operation that needs the database; initialization failure rejects that operation.
+
 The plugin stores the database at `<root>/.segments/sessions.sqlite`. New Sessions commit their metadata and event history to SQLite. A Session without appended events remains unmaterialized until its owner flushes it. SQLite uses WAL mode and FULL synchronous commits; flush joins admitted writes, and failures reject the durability checkpoint.
 
 Opening supported JSONL history acquires the Session's legacy write lease, reads it through the existing format migration chain, and imports metadata and events in one transaction. Original generations remain unchanged. Read opens that encounter another importer wait for its commit and then read SQLite while a writer remains active. Write opens still reject ownership contention. Cancellation or provider disposal stops waiting readers. Listing and stat do not import history.

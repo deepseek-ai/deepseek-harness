@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
-import { SessionStore } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionStore } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,12 +50,16 @@ runLiveWritePathContract('segments', 200, {
   return { ctx: await mount(), remount: mount }
 })
 
-it('creates the SQLite schema when the provider mounts with new Sessions enabled', async () => {
+it('registers persistence before creating the SQLite schema on first Session creation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-eager-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(persistence, { root })
+  expect(ctx.sessionPersistence).toBeDefined()
+  await expect(stat(join(root, '.segments/sessions.sqlite'))).rejects.toMatchObject({ code: 'ENOENT' })
+  const writer = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('first-create'), createdAt: 0, isSeeded: false })
+  await writer.close()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
     expect(db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: SCHEMA_VERSION })
