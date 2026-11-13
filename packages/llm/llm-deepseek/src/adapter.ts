@@ -133,7 +133,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,
       },
-      connection.filePolicy, connection.filesApiTimeoutMs, live, activity)
+      connection.filePolicy, live, activity)
       let inline = false
       while (true) {
         live.throwIfAborted()
