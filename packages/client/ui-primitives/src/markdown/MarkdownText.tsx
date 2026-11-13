@@ -21,13 +21,11 @@ import {
   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
   wrapBlockChildren,
 } from './render.tsx'
-import type {
-  MarkdownFileMentions, MarkdownLabels, MarkdownPathImages, MarkdownPathResolver, MarkdownRenderContext, ReferenceTargets,
-} from './render.tsx'
+import type { MarkdownFileMentions, MarkdownLabels, MarkdownPathImages, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
 import 'katex/dist/katex.min.css'
 import css from './MarkdownText.module.css'
 
-export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages, MarkdownPathResolver } from './render.tsx'
+export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages } from './render.tsx'
 
 /** One settled full render: parse with math, resolve references, append the footnote section. */
 function renderSettled(
@@ -35,7 +33,6 @@ function renderSettled(
   labels: MarkdownLabels,
   fileMentions: MarkdownFileMentions | undefined,
   pathImages: MarkdownPathImages | undefined,
-  resolvePath: MarkdownPathResolver | undefined,
   omitHtml: boolean,
 ): ReactNode[] {
   const root = parseGfmWithMath(text)
@@ -46,7 +43,6 @@ function renderSettled(
     labels,
     fileMentions,
     pathImages,
-    resolvePath,
     omitHtml,
     targets,
     footnoteOrder: [],
@@ -120,7 +116,6 @@ class StreamingRenderer {
         labels: this.labels,
         fileMentions: undefined,
         pathImages: undefined,
-        resolvePath: undefined,
         omitHtml: this.omitHtml,
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
@@ -141,7 +136,6 @@ class StreamingRenderer {
       labels: this.labels,
       fileMentions: undefined,
       pathImages: undefined,
-      resolvePath: undefined,
       omitHtml: this.omitHtml,
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
@@ -171,8 +165,7 @@ class StreamingRenderer {
  * identity discards the streaming render cache mid-message. `fileMentions`
  * links inline-code tokens its resolver recognizes as real files, and
  * `pathImages` rewrites image destinations that are local file paths into
- * displayable URLs its resolver vouches for. `resolvePath` maps decoded local
- * link and image destinations before they reach the delegate. Those vocabularies are the
+ * displayable URLs its resolver vouches for. Those two vocabularies are the
  * single streaming gate — they apply to settled renders only, because a
  * streaming message's vocabulary is not final and frozen cached elements
  * must not bake in handlers that could go stale. A surrounding
@@ -194,15 +187,13 @@ class StreamingRenderer {
  * absolute HTTP(S) images render directly.
  */
 export const MarkdownText = memo(function MarkdownText({
-  text, streaming = false, labels, fileMentions, pathImages, resolvePath, variant = 'body', omitHtml = false,
-  textInteractionSource = false,
+  text, streaming = false, labels, fileMentions, pathImages, variant = 'body', omitHtml = false, textInteractionSource = false,
 }: {
   text: string
   streaming?: boolean
   labels: MarkdownLabels
   fileMentions?: MarkdownFileMentions | undefined
   pathImages?: MarkdownPathImages | undefined
-  resolvePath?: MarkdownPathResolver | undefined
   variant?: 'body' | 'compact'
   omitHtml?: boolean
   textInteractionSource?: boolean
@@ -212,14 +203,14 @@ export const MarkdownText = memo(function MarkdownText({
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, labels, fileMentions, pathImages, resolvePath, omitHtml)
+      return renderSettled(text, labels, fileMentions, pathImages, omitHtml)
     }
     if (streamRef.current === null || streamLabelsRef.current !== labels || streamRef.current.omitHtml !== omitHtml) {
       streamRef.current = new StreamingRenderer(labels, omitHtml)
       streamLabelsRef.current = labels
     }
     return streamRef.current.render(text)
-  }, [text, streaming, labels, fileMentions, pathImages, resolvePath, omitHtml])
+  }, [text, streaming, labels, fileMentions, pathImages, omitHtml])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-text-interaction-source={textInteractionSource ? '' : undefined}
     data-markdown-variant={variant === 'compact' ? variant : undefined}
