@@ -79,7 +79,7 @@ Chat adapts Markdown targets at `MarkdownDelegateProvider.getTriggerProps`. The 
 <a id="inherited-history-divider"></a>
 ## Inherited history divider
 
-A forked Session, such as a fork subagent or a branched conversation, shows a divider labelled “Inherited history above” at its latest inherited `session/end-seed` marker, between the copied history and the Session's own messages. A cut inside a Turn keeps the divider outside that Turn's process folding. The divider appears once the history page that holds the marker is loaded, so a long inherited history may show it only after scrolling up. Sessions without inherited history show no divider.
+A forked Session, such as a fork subagent or a branched conversation, shows a divider labelled “Inherited history above” at its latest inherited `session/end-seed` marker, between the copied history and the Session's own messages. The caption starts with the branch glyph that the branch action uses. A cut inside a Turn keeps the divider outside that Turn's process folding. The divider appears once the history page that holds the marker is loaded, so a long inherited history may show it only after scrolling up. Sessions without inherited history show no divider.
 
 -----
 

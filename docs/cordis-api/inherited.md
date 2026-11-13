@@ -15,7 +15,7 @@ This file is GENERATED from source (`scripts/gen-cordis-catalog.ts`) and verifie
 - `ctx.effect` — Register a disposable side effect tied to the fiber. ([`vendor/cordis/src/fiber.ts:9`](../../vendor/cordis/src/fiber.ts))
 - `ctx.get / ctx.set / ctx.provide / ctx.accessor / ctx.mixin` — Low-level service-store access and binding. ([`vendor/cordis/src/reflect.ts:7`](../../vendor/cordis/src/reflect.ts))
 - `ctx.extend / ctx.isolate / ctx.intercept` — Derive a child context (scoped services / isolation / interception). ([`vendor/cordis/src/context.ts:42`](../../vendor/cordis/src/context.ts))
-- `ctx.root / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger` — Ambient handles onto the running context graph. ([`vendor/cordis/src/context.ts:16`](../../vendor/cordis/src/context.ts))
+- `ctx[Context.root] / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger` — Ambient handles onto the running context graph. ([`vendor/cordis/src/context.ts:16`](../../vendor/cordis/src/context.ts))
 - `ctx.timer (+ interval / timeout / throttle / debounce)` — Disposable timer helpers. The `timer` key is provided at runtime; the four supported helpers are mixed onto ctx directly (declared via Pick). ([`vendor/timer/src/index.ts:4`](../../vendor/timer/src/index.ts))
 - `ctx.loader` — The config Loader that booted the app (present under the loader). ([`vendor/loader/src/index.ts:30`](../../vendor/loader/src/index.ts))
 

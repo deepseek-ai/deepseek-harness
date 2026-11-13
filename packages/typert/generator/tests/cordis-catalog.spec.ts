@@ -34,7 +34,7 @@ const SOURCE_LINK_POLICY: CordisCatalogPolicy = {
   foundationTypeNames: new Set(),
   typeLinkExemptions: {},
   inheritedEvents: [{ name: 'ready', summary: 'Ready.', source: 'vendor/cordis/src/events.ts:9' }],
-  inheritedServices: [{ name: 'ctx.root', summary: 'Root.', source: 'vendor/cordis/src/context.ts:12' }],
+  inheritedServices: [{ name: 'ctx.events', summary: 'Events.', source: 'vendor/cordis/src/context.ts:12' }],
 }
 
 describe('Typert-backed Cordis catalog', () => {

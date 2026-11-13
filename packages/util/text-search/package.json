@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-util-text-search",
   "description": "Multilingual fuzzy filtering for in-memory search lists",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
