@@ -1,10 +1,18 @@
 /**
  * Reject new reads of the Cordis root context, retiring the recorded existing reads.
  *
- * A read is `Context.root`, `Context['root']`, or a destructured `root` on a value binding of
- * `Context` imported from `@deepseek-ai/cordis`, including a renamed or namespace import, and any
- * string literal whose value is exactly `cordis.root`, the global symbol key behind
- * `Symbol.for('cordis.root')`. Type positions such as `typeof Context.root` are not reads.
+ * A read names the root symbol through a Cordis value binding: `Context.root` or `symbols.root`,
+ * their `['root']` forms, or `root` destructured from either in a declaration, a parameter default,
+ * or an assignment. A binding comes from `@deepseek-ai/cordis` or one of its subpaths through a
+ * static import, including renamed and namespace imports, or through a destructured or namespace
+ * `import()` or `require()` result. References resolve through the file's own scopes, so a local
+ * that shadows the import is not a binding. Any string literal whose value is exactly `cordis.root`,
+ * the global symbol key behind `Symbol.for('cordis.root')`, is also a read. Type positions,
+ * interfaces, type aliases, and ambient declarations are erased and contain no reads.
+ *
+ * The check is syntactic: a root context reached through another value, such as a stored
+ * reference, an alias of `Context`, a service that returns it, or source text assembled at run
+ * time, is outside it.
  *
  * A finding's identity covers the syntax tokens of the access to the root: the element access whose
  * key is the root symbol when one encloses it, otherwise the read itself. Existing reads are
@@ -27,11 +35,14 @@ import {
 
 const root = resolve(import.meta.dirname, '..')
 
-/** Module that exports the Cordis `Context` class. */
+/** Package that exports the Cordis `Context` class and the `symbols` table. */
 const CORDIS_MODULE = '@deepseek-ai/cordis'
 
 /** Global symbol key of `Context.root`. */
 const ROOT_SYMBOL_KEY = 'cordis.root'
+
+/** Cordis exports that hold the root symbol as their `root` member. */
+const ROOT_HOLDERS = new Set(['Context', 'symbols'])
 
 /**
  * Files that exercise the root context itself, keyed by repository path, with the reason each needs
@@ -55,37 +66,111 @@ export interface CordisRootRead {
   fingerprint: string
 }
 
-/** Local names that refer to the Cordis `Context` value or to the Cordis module namespace. */
+/** Declared symbols that refer to a Cordis root holder or to the Cordis module namespace. */
 interface CordisBindings {
-  context: Set<string>
-  namespace: Set<string>
+  checker: ts.TypeChecker
+  holders: Set<ts.Symbol>
+  namespaces: Set<ts.Symbol>
 }
 
-function cordisBindings(source: ts.SourceFile): CordisBindings {
-  const bindings: CordisBindings = { context: new Set(), namespace: new Set() }
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) || statement.importClause === undefined) continue
-    if (!ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== CORDIS_MODULE) continue
-    const clause = statement.importClause
-    if (clause.phaseModifier === ts.SyntaxKind.TypeKeyword || clause.namedBindings === undefined) continue
-    if (ts.isNamespaceImport(clause.namedBindings)) {
-      bindings.namespace.add(clause.namedBindings.name.text)
-      continue
+function isCordisSpecifier(node: ts.Node | undefined): boolean {
+  return node !== undefined && ts.isStringLiteralLike(node)
+    && (node.text === CORDIS_MODULE || node.text.startsWith(`${CORDIS_MODULE}/`))
+}
+
+/** Whether an initializer evaluates to the Cordis module: `import()`, `await import()`, or `require()`. */
+function loadsCordis(node: ts.Expression): boolean {
+  if (ts.isParenthesizedExpression(node) || ts.isAwaitExpression(node)) return loadsCordis(node.expression)
+  if (!ts.isCallExpression(node) || node.arguments.length === 0) return false
+  const callee = node.expression
+  const loader = callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === 'require')
+  return loader && isCordisSpecifier(node.arguments[0])
+}
+
+function propertyText(name: ts.PropertyName | ts.BindingName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) return name.expression.text
+  return undefined
+}
+
+/** Type-check one file in isolation, so references resolve through its own scopes only. */
+function isolatedChecker(source: ts.SourceFile): ts.TypeChecker {
+  const options: ts.CompilerOptions = { allowJs: true, noLib: true, noResolve: true, types: [] }
+  const host: ts.CompilerHost = {
+    getSourceFile: fileName => (fileName === source.fileName ? source : undefined),
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => undefined,
+    getCurrentDirectory: () => '/',
+    getCanonicalFileName: fileName => fileName,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: fileName => fileName === source.fileName,
+    readFile: () => undefined,
+  }
+  return ts.createProgram({ rootNames: [source.fileName], options, host }).getTypeChecker()
+}
+
+function cordisBindings(source: ts.SourceFile): CordisBindings | undefined {
+  if (!source.text.includes(CORDIS_MODULE)) return undefined
+  const checker = isolatedChecker(source)
+  const bindings: CordisBindings = { checker, holders: new Set(), namespaces: new Set() }
+  const add = (set: Set<ts.Symbol>, name: ts.Identifier): void => {
+    const symbol = checker.getSymbolAtLocation(name)
+    if (symbol !== undefined) set.add(symbol)
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && isCordisSpecifier(node.moduleSpecifier)) {
+      const clause = node.importClause
+      if (clause === undefined || clause.phaseModifier === ts.SyntaxKind.TypeKeyword) return
+      if (clause.name !== undefined) add(bindings.namespaces, clause.name)
+      if (clause.namedBindings !== undefined && ts.isNamespaceImport(clause.namedBindings)) {
+        add(bindings.namespaces, clause.namedBindings.name)
+      } else {
+        for (const element of clause.namedBindings?.elements ?? []) {
+          if (!element.isTypeOnly && ROOT_HOLDERS.has((element.propertyName ?? element.name).text)) {
+            add(bindings.holders, element.name)
+          }
+        }
+      }
+      return
     }
-    for (const element of clause.namedBindings.elements) {
-      if (!element.isTypeOnly && (element.propertyName ?? element.name).text === 'Context') {
-        bindings.context.add(element.name.text)
+    if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference)
+      && isCordisSpecifier(node.moduleReference.expression)) {
+      add(bindings.namespaces, node.name)
+      return
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined && loadsCordis(node.initializer)) {
+      if (ts.isIdentifier(node.name)) add(bindings.namespaces, node.name)
+      else if (ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          const exported = propertyText(element.propertyName ?? element.name)
+          if (exported !== undefined && ROOT_HOLDERS.has(exported) && ts.isIdentifier(element.name)) {
+            add(bindings.holders, element.name)
+          }
+        }
       }
     }
+    ts.forEachChild(node, visit)
   }
-  return bindings
+  visit(source)
+  return bindings.holders.size + bindings.namespaces.size === 0 ? undefined : bindings
 }
 
-function isContextValue(node: ts.Expression, bindings: CordisBindings): boolean {
-  if (ts.isParenthesizedExpression(node)) return isContextValue(node.expression, bindings)
-  if (ts.isIdentifier(node)) return bindings.context.has(node.text)
-  return ts.isPropertyAccessExpression(node) && node.name.text === 'Context'
-    && ts.isIdentifier(node.expression) && bindings.namespace.has(node.expression.text)
+function refersTo(node: ts.Identifier, set: Set<ts.Symbol>, bindings: CordisBindings): boolean {
+  const symbol = bindings.checker.getSymbolAtLocation(node)
+  return symbol !== undefined && set.has(symbol)
+}
+
+/** Whether an expression evaluates to `Context` or `symbols` from Cordis. */
+function isRootHolder(node: ts.Expression, bindings: CordisBindings): boolean {
+  if (ts.isParenthesizedExpression(node)) return isRootHolder(node.expression, bindings)
+  if (ts.isIdentifier(node)) return refersTo(node, bindings.holders, bindings)
+  const member = ts.isPropertyAccessExpression(node) ? node.name.text
+    : ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text
+      : undefined
+  if (member === undefined || !ROOT_HOLDERS.has(member)) return false
+  const namespace = (node as ts.PropertyAccessExpression | ts.ElementAccessExpression).expression
+  return ts.isIdentifier(namespace) && refersTo(namespace, bindings.namespaces, bindings)
 }
 
 function isRootKey(node: ts.Expression): boolean {
@@ -93,21 +178,42 @@ function isRootKey(node: ts.Expression): boolean {
 }
 
 function bindsRoot(pattern: ts.ObjectBindingPattern): boolean {
-  return pattern.elements.some((element) => {
-    const name = element.propertyName ?? element.name
-    if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text === 'root'
-    return ts.isComputedPropertyName(name) && isRootKey(name.expression)
+  return pattern.elements.some(element => propertyText(element.propertyName ?? element.name) === 'root')
+}
+
+function assignsRoot(pattern: ts.ObjectLiteralExpression): boolean {
+  return pattern.properties.some((property) => {
+    if (ts.isShorthandPropertyAssignment(property)) return property.name.text === 'root'
+    return ts.isPropertyAssignment(property) && propertyText(property.name) === 'root'
   })
 }
 
-function readsRoot(node: ts.Node, bindings: CordisBindings): boolean {
-  if (ts.isPropertyAccessExpression(node)) return node.name.text === 'root' && isContextValue(node.expression, bindings)
-  if (ts.isElementAccessExpression(node)) return isRootKey(node.argumentExpression) && isContextValue(node.expression, bindings)
-  if (ts.isVariableDeclaration(node)) {
+function readsRoot(node: ts.Node, bindings: CordisBindings | undefined): boolean {
+  if (ts.isStringLiteralLike(node)) return node.text === ROOT_SYMBOL_KEY
+  if (bindings === undefined) return false
+  if (ts.isPropertyAccessExpression(node)) return node.name.text === 'root' && isRootHolder(node.expression, bindings)
+  if (ts.isElementAccessExpression(node)) return isRootKey(node.argumentExpression) && isRootHolder(node.expression, bindings)
+  if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) {
     return node.initializer !== undefined && ts.isObjectBindingPattern(node.name) && bindsRoot(node.name)
-      && isContextValue(node.initializer, bindings)
+      && isRootHolder(node.initializer, bindings)
   }
-  return ts.isStringLiteralLike(node) && node.text === ROOT_SYMBOL_KEY && !ts.isLiteralTypeNode(node.parent)
+  return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    && ts.isObjectLiteralExpression(node.left) && assignsRoot(node.left) && isRootHolder(node.right, bindings)
+}
+
+/** Whether a subtree is erased from the emitted program, so it contains no reads. */
+function isErased(node: ts.Node): boolean {
+  if (ts.isSourceFile(node)) return node.isDeclarationFile
+  if (ts.canHaveModifiers(node) && ts.getModifiers(node)?.some(modifier => modifier.kind === ts.SyntaxKind.DeclareKeyword)) {
+    return true
+  }
+  if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return true
+  // A class `extends` clause evaluates its expression; every other type node is erased.
+  if (ts.isExpressionWithTypeArguments(node)) {
+    return !(ts.isHeritageClause(node.parent) && node.parent.token === ts.SyntaxKind.ExtendsKeyword
+      && ts.isClassLike(node.parent.parent))
+  }
+  return ts.isTypeNode(node)
 }
 
 /** The expression whose tokens identify a read: an element access keyed by the root, or the read. */
@@ -125,26 +231,24 @@ function accessOf(node: ts.Node): ts.Node {
  * Find reads of the Cordis root context.
  * @param file - repository-relative source path; its extension selects TS or TSX parsing.
  * @param text - source contents.
- * @returns reads in AST traversal order; comments, type positions, and strings other than the
- * exact root symbol key do not match.
+ * @returns reads in AST traversal order; comments, erased type syntax, shadowed names, and strings
+ * other than the exact root symbol key do not match.
  */
 export function findCordisRootReads(file: string, text: string): CordisRootRead[] {
   const normalized = file.replaceAll('\\', '/')
-  const source = ts.createSourceFile(normalized, text, ts.ScriptTarget.Latest, true)
+  const source = ts.createSourceFile(`/${normalized}`, text, ts.ScriptTarget.Latest, true)
   const bindings = cordisBindings(source)
   const reads: CordisRootRead[] = []
   const record = (node: ts.Node): void => {
-    const access = accessOf(node)
     reads.push({
       file: normalized,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-      fingerprint: syntaxFingerprint(access, source),
+      fingerprint: syntaxFingerprint(accessOf(node), source),
     })
   }
   const visit = (node: ts.Node): void => {
+    if (isErased(node)) return
     if (readsRoot(node, bindings)) record(node)
-    // A type query names `Context.root` without reading it.
-    if (ts.isTypeQueryNode(node)) return
     ts.forEachChild(node, visit)
   }
   visit(source)
