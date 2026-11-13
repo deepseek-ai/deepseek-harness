@@ -75,8 +75,8 @@ function compiledClientStyle(
 ): CompiledClientStyle {
   // Rolldown canonicalizes module ids through symbolic links; the package directory arrives as the caller wrote it.
   const file = realpathSync(fileId)
-  const path = relative(realpathSync(packageDir), file).split(sep).join('/').replace(/^lib\/types\//, 'src/')
-  if (!path.startsWith('../')) return { path, expression }
+  const local = pathBelow(realpathSync(packageDir), file)
+  if (local !== undefined) return { path: local.split(sep).join('/').replace(/^lib\/types\//, 'src/'), expression }
   let directory = dirname(file)
   while (dirname(directory) !== directory) {
     const manifestPath = join(directory, 'package.json')

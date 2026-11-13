@@ -300,22 +300,22 @@ describe('static Client dependency delivery', () => {
   })
 
   it('names local styles below the package when the package directory is a symbolic link', async () => {
-    const outer = mkdtempSync(join(tmpdir(), 'dsh-static-symlink-'))
-    onTestFinished(() => { rmSync(outer, { recursive: true, force: true }) })
-    const real = join(outer, 'package')
-    mkdirSync(join(real, 'lib/types'), { recursive: true })
-    mkdirSync(join(real, 'src'), { recursive: true })
-    writeFileSync(join(real, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
-    writeFileSync(join(real, 'lib/types/index.js'), 'import classes from "./Panel.module.css"\nexport { classes }\n')
-    writeFileSync(join(real, 'src/Panel.module.css'), '.panel { display: flex; }\n')
-    const linked = join(outer, 'linked')
-    symlinkSync(real, linked, 'dir')
+    const root = fixture('import classes from "./Panel.module.css"\nexport { classes }\n')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/Panel.module.css'), '.panel { display: flex; }\n')
+    const linked = join(root, 'linked')
+    symlinkSync(root, linked, process.platform === 'win32' ? 'junction' : 'dir')
 
     const output = await clientChunkOutput(linked, config(linked), 'index.js')
     const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact
-    const meta = artifact[STATIC_MODULE_MANIFEST_EXPORT].meta
+    const manifest = artifact[STATIC_MODULE_MANIFEST_EXPORT]
+    const meta = manifest.meta
     if (meta === undefined) throw new Error('static CSS metadata missing')
-    expect(Object.keys(meta().stylesheets ?? {})).toEqual(['src/Panel.module.css'])
+    const stylesheets = meta().stylesheets
+    expect(Object.keys(stylesheets ?? {})).toEqual(['src/Panel.module.css'])
+    const exports = manifest.factory(unusedRequire) as { classes: { panel: string } }
+    expect(stylesheets?.['src/Panel.module.css']?.text(unusedRequire))
+      .toContain(`.${exports.classes.panel}{display:flex}`)
   })
 })
 
