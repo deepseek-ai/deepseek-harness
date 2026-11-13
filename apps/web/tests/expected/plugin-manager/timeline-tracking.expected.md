@@ -1,0 +1,12 @@
+- region "Task tracking":
+  - heading "Task tracking" [level=2]
+  - text: Replace Todo tools (recommended)
+  - button "Uses Timeline task trees in place of Todo tools in this profile."
+  - switch "Replace Todo tools (recommended)" [checked]
+  - text: Auto-open sidebar
+  - button "Opens the sidebar when the first task tree appears in a session and the window is wider than 768 px. You can still open it from the progress bar."
+  - switch "Auto-open sidebar"
+  - text: Task update reminder
+  - button "Reminds the agent after this many consecutive steps in a turn without a successful task update."
+  - spinbutton "Task update reminder": "24"
+  - text: iterations

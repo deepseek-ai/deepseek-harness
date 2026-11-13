@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Timeline",
+    "description": "Replace Todo in long-running sessions. The agent keeps a task tree up to date. Follow progress with a live progress bar and timed reports.",
+    "detail": "docs/DETAIL.md"
+  }
+}

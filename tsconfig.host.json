@@ -331,6 +331,7 @@
     { "path": "./packages/experimental/computer-use-cua-driver-mcp" },
     { "path": "./packages/experimental/computer-use-cua-driver-native" },
     { "path": "./packages/experimental/cua/tsconfig.host.json" },
+    { "path": "./packages/experimental/timeline/tsconfig.host.json" },
     { "path": "./packages/experimental/cua-bundle" },
     { "path": "./packages/experimental/cua-macos" },
     { "path": "./packages/experimental/cua-mcp" },

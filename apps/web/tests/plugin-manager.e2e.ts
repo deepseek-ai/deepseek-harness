@@ -14,10 +14,11 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished
 import { join } from 'node:path'
 import {
   SCAFFOLD_DEFAULTS_BUNDLE, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, experimentalBundleDescription, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
+  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, experimentalBundleDescription, newEnglishPage, openSettings,
+  PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
@@ -879,6 +880,7 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
+      ['@deepseek-ai/dsh-timeline', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
@@ -900,6 +902,130 @@ describe('web e2e: plugin manager', () => {
     await compareOrRefreshGolden(MANAGER_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('authenticates Timeline edits and withdraws the channel when the plugin unloads', async () => {
+    const timeline = await launchWebScaffold({
+      profile: { packages: [], bundles: ['@deepseek-ai/dsh-timeline'] },
+    })
+    try {
+      const request = (method: string, payload: object | string): RequestInit => ({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'timeline-test', method, payload }),
+      })
+      const anonymous = await fetch(new URL('/timeline/edit', timeline.baseUrl), request('edit', {}))
+      expect(anonymous.status).toBe(401)
+      expect(anonymous.headers.get('cache-control')).toBe('no-store')
+      const locale = await timeline.hostFetch('/timeline/locale', request('locale', 'en'))
+      expect(locale.status).toBe(200)
+      expect(await locale.json()).toMatchObject({ result: { ok: true, value: null } })
+      const edit = () => timeline.hostFetch('/timeline/edit', request('edit', {}))
+      const response = await edit()
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        type: 'server-response',
+        rpcId: 'timeline-test',
+        result: { ok: false, error: { code: 'timeline/request-failed' } },
+      })
+      const sessionId = await seedSession(timeline, await readFile(
+        new URL('../../../snapshots/session/timeline-plan/session.v4.jsonl', import.meta.url), 'utf8',
+      ), 'timeline-edit-target')
+      const content = await readFile(
+        new URL('../../../packages/experimental/timeline/tests/checkpoint.timeline.json', import.meta.url), 'utf8',
+      )
+      const imported = await timeline.hostFetch('/timeline/edit', request('edit', {
+        action: 'import', sessionId, id: 'import-via-web', content,
+      }))
+      expect(imported.status).toBe(200)
+      expect(await imported.json()).toMatchObject({
+        result: { ok: true, value: { action: 'import', reused: false, notified: false } },
+      })
+      const fiber = [...timeline.ctx.loader.entries()]
+        .find(entry => entry.options.id === 'timeline-experimental')?.fiber
+      expect(fiber?.state).toBe(FiberState.ACTIVE)
+      await fiber?.dispose()
+      const unavailable = await edit()
+      // The Web Host's fallback rejects POST when no route owns the path.
+      expect(unavailable.status).toBe(405)
+    } finally {
+      await timeline.close()
+    }
+  })
+
+  it('shows the automatic Timeline sidebar setting and saves an opt-out', async () => {
+    const timeline = await launchWebScaffold({
+      profile: { packages: [], bundles: ['@deepseek-ai/dsh-timeline'] },
+    })
+    try {
+      const probe = await newEnglishPage(browser)
+      try {
+        await probe.goto(timeline.authenticatedUrl)
+        await probe.getByRole('button', { name: 'Plugins', exact: true }).click()
+        const panel = probe.locator('[data-plugin-panel]')
+        await panel.getByRole('button', { name: 'More', exact: true }).click()
+        await panel.getByRole('button', { name: 'View Timeline', exact: true }).click()
+        const tracking = panel.getByRole('region', { name: 'Task tracking' })
+        const toggle = tracking.getByRole('switch', { name: 'Auto-open sidebar' })
+        const config = () => timeline.ctx.settings.describe().find(row => row.ns === 'timeline-experimental')?.value
+        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+        await toggle.click()
+        await panel.getByRole('button', { name: 'Save changes', exact: true }).click()
+        await expect.poll(config).toMatchObject({ autoOpenSidebar: false })
+        await panel.getByText('Saved', { exact: true }).waitFor()
+        expect(await toggle.getAttribute('aria-checked')).toBe('false')
+        await probe.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+        await probe.setViewportSize({ width: 520, height: 850 })
+        expect(await tracking.evaluate(section => section.scrollWidth <= section.clientWidth)).toBe(true)
+        await toggle.click({ trial: true })
+        const snapshot = await captureStableAria(probe, '.timeline-settings [aria-label="Task tracking"]', timeline.workspaceCwd)
+        await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'timeline-tracking.expected.md'), snapshot, MODE)
+      } finally {
+        await probe.close()
+      }
+    } finally {
+      await timeline.close()
+    }
+  })
+
+  it('opens the saved Timeline tree after forking a cold session from its sidebar row', async () => {
+    const fixture = await readFile(
+      new URL('../../../snapshots/session/timeline-plan/session.v4.jsonl', import.meta.url),
+      'utf8',
+    )
+    const timeline = await launchWebScaffold({
+      profile: { packages: [], bundles: ['@deepseek-ai/dsh-timeline'] },
+    })
+    try {
+      const source = await seedSession(timeline, fixture, 'timeline-fork-source')
+      const forkPage = await newEnglishPage(browser)
+      try {
+        await forkPage.goto(timeline.authenticatedUrl)
+        const row = forkPage.locator(`[data-row-key="session:${source}"]`)
+        const workspace = forkPage.getByRole('treeitem').first()
+        await workspace.waitFor()
+        if (await workspace.getAttribute('aria-expanded') === 'false') await workspace.click()
+        await row.hover()
+        await row.locator('button[aria-label^="Session actions for "]').click()
+        await forkPage.getByRole('menuitem', { name: 'Fork session', exact: true }).click()
+        await expect.poll(() => timeline.ctx.agents.list().some(agent => agent.session.header.isSeeded)).toBe(true)
+        const fork = timeline.ctx.agents.list().find(agent => agent.session.header.isSeeded)
+        if (fork === undefined) throw new Error('No fork was created')
+        expect(timeline.ctx.agents.get(source)).toBeUndefined()
+        await forkPage.locator(`[data-row-key="session:${fork.session.id}"]`).click()
+        const dock = forkPage.locator('.timeline-dock')
+        await dock.getByText('Release review', { exact: true }).waitFor()
+        expect(await dock.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50')
+        await dock.getByRole('button', { name: 'Open task tree' }).click()
+        const tree = forkPage.getByRole('tabpanel', { name: 'Task Tree' })
+        await tree.getByRole('button', { name: /Verify examples/ }).waitFor()
+        await tree.getByRole('button', { name: /Confirm release approval/ }).waitFor()
+      } finally {
+        await forkPage.close()
+      }
+    } finally {
+      await timeline.close()
+    }
+  })
 
   it('enables both default-hidden shipped bundles by name without adding a profile dependency', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-bundled-enable'))
@@ -1540,7 +1666,7 @@ describe('web e2e: plugin manager', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
       'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
-      'touch-tooltips.expected.md', 'forge-preview.expected.md',
+      'touch-tooltips.expected.md', 'forge-preview.expected.md', 'timeline-tracking.expected.md',
     ])
   })
 })
