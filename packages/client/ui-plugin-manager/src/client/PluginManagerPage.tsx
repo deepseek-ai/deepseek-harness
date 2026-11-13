@@ -8,7 +8,7 @@
  * the page declares.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -22,6 +22,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { localizedValues, TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { createNavigationStore } from './navigation-store.ts'
 import type { PluginHeaderLayoutFace } from './header-scroll.ts'
 import { rowConfigKey, type OfficialItem } from './config-ledger.ts'
@@ -282,10 +283,12 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
   readonly configure?: RowConfigure | undefined
 }): ReactNode {
   const [filter, setFilter] = useState('')
-  const query = filter.trim().toLowerCase()
-  const localized = rows.map(row => ({ row, ...rowText(row, resolveText) }))
-  const shown = query === '' ? localized : localized.filter(({ row, title, description }) =>
-    [title, description, row.rowId, row.moduleName].some(value => value?.toLowerCase().includes(query)))
+  // Rows display one language; matching covers every language a value carries.
+  const rowIndex = useMemo(() => new TextSearchIndex(rows, row => ({
+    fuzzy: [row.rowId, row.moduleName, ...localizedValues(row.meta?.title)],
+    substring: localizedValues(row.meta?.description),
+  })), [rows])
+  const shown = rowIndex.search(filter).map(row => ({ row, ...rowText(row, resolveText) }))
   return (
     <section className={css.detailSection} data-plugin-rows>
       <div className={css.sectionHead}>

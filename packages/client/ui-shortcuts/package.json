@@ -58,7 +58,8 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "clsx": "^2.1.1",
     "react": "^18.2.0",
-    "@deepseek-ai/dsh-client-test-runtime": "workspace:*"
+    "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
+    "@deepseek-ai/dsh-util-text-search": "workspace:*"
   },
   "files": [
     "locale/*.json",

@@ -7,6 +7,9 @@
   },
   "references": [
     {
+      "path": "../../util/text-search"
+    },
+    {
       "path": "../../util/package-manifest"
     },
     {
