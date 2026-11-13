@@ -15,7 +15,7 @@ from typing import Callable, TypeAlias, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
-from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, UserQuestionAnswer, UserQuestionRequest
+from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, ResumeSessionOptions, UserQuestionAnswer, UserQuestionRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 NotificationFilter: TypeAlias = Callable[[Notification], bool]
@@ -217,11 +217,11 @@ class HarnessClient:
         )
         return response.messageId
 
-    def resume_session(self, session_id: str, *, permission_mode: str | None = None) -> None:
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> None:
         """Restore history; an explicit permission preset replaces saved permissions before execution."""
         params: JsonObject = {"sessionId": session_id}
-        if permission_mode is not None:
-            params["permissionMode"] = permission_mode
+        if options is not None and "permission_mode" in options:
+            params["permissionMode"] = options["permission_mode"]
         self.request(
             "session/resume",
             params,

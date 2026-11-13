@@ -6,13 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from deepseek_harness import DeepSeekHarness
+from deepseek_harness import DeepSeekHarness, ResumeSessionOptions
 from deepseek_harness.errors import JsonRpcError
 
 
-@pytest.mark.parametrize("outcome,permission_mode", [("restored", None), ("restored", "danger-full-access"), ("missing", None)])
+@pytest.mark.parametrize(("outcome", "options", "expected_params"), [
+    ("restored", None, {"sessionId": "saved"}),
+    ("restored", {}, {"sessionId": "saved"}),
+    ("restored", {"permission_mode": "danger-full-access"}, {"sessionId": "saved", "permissionMode": "danger-full-access"}),
+    ("missing", None, {"sessionId": "saved"}),
+])
 def test_resume_preserves_identity_and_propagates_failure(
-    tmp_path: Path, outcome: str, permission_mode: str | None,
+    tmp_path: Path, outcome: str, options: ResumeSessionOptions | None, expected_params: dict[str, str],
 ) -> None:
     script = tmp_path / "runtime.py"
     requests = tmp_path / "requests.jsonl"
@@ -49,8 +54,7 @@ for line in sys.stdin:
         env={"OUTCOME": outcome, "REQUESTS": str(requests)},
     ) as harness:
         if outcome == "restored":
-            session = (harness.resume_session("saved") if permission_mode is None
-                       else harness.resume_session("saved", permission_mode=permission_mode))
+            session = harness.resume_session("saved") if options is None else harness.resume_session("saved", options)
             assert session.id == "saved"
             assert session.harness is harness
         else:
@@ -58,7 +62,4 @@ for line in sys.stdin:
                 harness.resume_session("saved")
     frames = [json.loads(line) for line in requests.read_text(encoding="utf-8").splitlines()]
     assert [frame["method"] for frame in frames] == ["initialize", "session/resume", "shutdown"]
-    expected = {"sessionId": "saved"}
-    if permission_mode is not None:
-        expected["permissionMode"] = permission_mode
-    assert frames[1]["params"] == expected
+    assert frames[1]["params"] == expected_params

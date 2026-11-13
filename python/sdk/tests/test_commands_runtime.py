@@ -683,7 +683,7 @@ def test_resume_permission_override_applies_before_tools_and_survives_restart(tm
     ]
     with _runtime(tmp_path, completions, initial_permission="workspace-write") as resumed:
         session = resumed.call(
-            resumed.harness.resume_session, _SESSION_ID, permission_mode="danger-full-access",
+            resumed.harness.resume_session, _SESSION_ID, {"permission_mode": "danger-full-access"},
         )
         assert resumed.model.captured() == [], "resume must not send new model input"
         result = resumed.call(session.run, "Write the marker, then finish.")

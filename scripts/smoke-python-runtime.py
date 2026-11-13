@@ -2010,7 +2010,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         )
         before_resume = logs[RESTART_FIRST_SESSION_ID]
         with connect("resumed-smoke-model") as harness:
-            session = harness.resume_session(RESTART_FIRST_SESSION_ID, permission_mode="read-only")
+            session = harness.resume_session(RESTART_FIRST_SESSION_ID, {"permission_mode": "read-only"})
             if session.id != RESTART_FIRST_SESSION_ID:
                 raise AssertionError(f"resume changed the saved identity: {session.id}")
             if len(MockModelHandler.requests) != first_request + 2:

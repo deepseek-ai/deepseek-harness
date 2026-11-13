@@ -7,7 +7,7 @@ from typing import Callable, Literal
 
 from .client import HarnessClient, HarnessConfig, UserQuestionHandler
 from .errors import SdkProtocolError
-from .models import CommandExecution, JsonObject, Notification
+from .models import CommandExecution, JsonObject, Notification, ResumeSessionOptions
 
 
 @dataclass(slots=True)
@@ -176,15 +176,15 @@ class DeepSeekHarness:
         self.start()
         return Session(self, session_id or f"session-{uuid.uuid4().hex}")
 
-    def resume_session(self, session_id: str, *, permission_mode: str | None = None) -> "Session":
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> "Session":
         """Restore persisted history without sending input.
 
-        Omit permission_mode to retain saved permissions, or name a configured permission preset
+        Omit options to retain saved permissions, or set options["permission_mode"] to a configured preset
         to persist before resumed execution. Unsupported presets or profiles raise.
         Missing, unreadable, incompatible, or occupied sessions raise instead of creating a new session.
         """
         self.start()
-        self._client.resume_session(session_id, permission_mode=permission_mode)
+        self._client.resume_session(session_id, options)
         return Session(self, session_id)
 
     def run(
