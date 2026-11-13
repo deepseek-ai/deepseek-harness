@@ -230,6 +230,7 @@
     "apps/web/tests/jobs-menu-layering.e2e.ts",
     "apps/web/tests/live-job-stream.e2e.ts",
     "apps/web/tests/bash-abort-row.e2e.ts",
+    "apps/web/tests/web-fetch-failure-row.e2e.ts",
     "apps/web/tests/skill-tool-row.e2e.ts",
     "apps/web/tests/tool-details.e2e.ts",
     "apps/web/tests/turn-tail-actions.e2e.ts",
