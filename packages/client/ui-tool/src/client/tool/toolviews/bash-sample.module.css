@@ -125,10 +125,11 @@
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
    the svg attributes so the 14px business glyph follows the font-size delta.
-   TODO: this bash header duplicates the DisclosureRow structure (and this is
-   the fourth copy of the glyph rule, with DisclosureRow, MessageItem
-   .compactionLeading, and MessageIconActions); migrating the bash row onto
-   the shared DisclosureRow would collapse them to one. */
+   TODO: this bash header duplicates the DisclosureRow structure, and the glyph
+   rule is also copied in DisclosureRow, MessageItem .compactionLeading and
+   .inheritedHistoryIcon, ChatGroupSeat, SkillRow, and MessageIconActions (at
+   15px); migrating the bash row onto the shared DisclosureRow removes this
+   copy. */
 .leading svg:not([data-state]) {
   width: calc(14px + var(--dsh-content-font-delta, 0px));
   height: calc(14px + var(--dsh-content-font-delta, 0px));
