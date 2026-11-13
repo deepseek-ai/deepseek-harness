@@ -1257,7 +1257,7 @@ it('requires an explicit system-pointer request on every move and asks only once
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
-it.each([true, false])('shares the mouse control decision for a system button with drag and move (allow=%s)', async (allow) => {
+it.each([true, false])('shares the mouse control decision for a system button with pointer movement (allow=%s)', async (allow) => {
   const f = await hoverFixture()
   const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
   for (const params of [target, { ...target, useSystemPointer: false }]) {

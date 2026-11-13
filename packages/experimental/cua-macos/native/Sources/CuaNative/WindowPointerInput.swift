@@ -62,7 +62,7 @@ final class WindowPointerInput {
         }
         let event = try mouseEvent(source: Self.source(), route: route, screen: screen, local: point,
                                    type: isDown ? Self.down(selected) : Self.up(selected),
-                                   button: selected, clickState: 1, subtype: 3, group: Self.clickGroup())
+                                   button: selected, clickState: 1, subtype: 3, group: nil)
         try checkCancellation()
         poster.post(event, to: route.owner.pid)
     }
@@ -280,7 +280,7 @@ final class WindowPointerInput {
     private func mouseEvent(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         type: CGEventType, button: CGMouseButton, clickState: Int64, subtype: Int64,
-        group: Int64, number: Int64? = nil, flags: CGEventFlags = []
+        group: Int64?, number: Int64? = nil, flags: CGEventFlags = []
     ) throws -> CGEvent {
         guard let event = CGEvent(
             mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: button
@@ -289,8 +289,9 @@ final class WindowPointerInput {
         }
         event.flags = flags
         try poster.stampWindow(event, pid: route.owner.pid, windowID: route.windowID, point: local)
-        let fields: [(UInt32, Int64)] = [(1, clickState), (3, Int64(button.rawValue)), (7, subtype), (58, group)]
+        let fields: [(UInt32, Int64)] = [(1, clickState), (3, Int64(button.rawValue)), (7, subtype)]
         for (field, value) in fields { try poster.stamp(event, field: field, value: value) }
+        if let group { try poster.stamp(event, field: 58, value: group) }
         if let number { try poster.stamp(event, field: 0, value: number) }
         return event
     }

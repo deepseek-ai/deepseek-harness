@@ -172,11 +172,11 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
           throw new Error('Window-scoped keyboard input is not supported on current platform.')
         }
       })
-    function systemPointerOptions(method: 'toggleMouse' | 'drag', options?: { useSystemPointer?: boolean }) {
-      if (options?.useSystemPointer !== undefined && !capabilities.systemPointer) {
+    function systemPointerOptions(method: 'toggleMouse' | 'drag', useSystemPointer: boolean | undefined) {
+      if (useSystemPointer !== undefined && !capabilities.systemPointer) {
         throw new Error(`${method} useSystemPointer: not accepted for these arguments`)
       }
-      return { useSystemPointer: options?.useSystemPointer }
+      return { useSystemPointer }
     }
     return {
       ...base.surface, windowId,
@@ -198,7 +198,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
       },
       async toggleMouse(mouseButton, direction, options) {
-        return ActionResult.parse(await base.call('toggleMouse', { mouseButton, direction }, systemPointerOptions('toggleMouse', options)))
+        return ActionResult.parse(await base.call('toggleMouse', { mouseButton, direction }, systemPointerOptions('toggleMouse', options?.useSystemPointer)))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
@@ -229,7 +229,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
           ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
-        }, systemPointerOptions('drag', options)))
+        }, systemPointerOptions('drag', options?.useSystemPointer)))
       },
     }
   }

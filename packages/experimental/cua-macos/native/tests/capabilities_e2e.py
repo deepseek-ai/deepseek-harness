@@ -338,7 +338,7 @@ def main():
             pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
             if args.toggle_only:
                 check_toggle_mouse(helper, owner, state_file, executable)
-                print("PASS: single window-directed transitions, outside release and stationary cursor for all three buttons")
+                print("PASS: window-directed and HID events for three buttons, held moves, explicit release, cleanup and disconnect")
                 return
             if args.drag_only:
                 state = json.loads(state_file.read_text())
