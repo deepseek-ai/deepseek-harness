@@ -13,6 +13,12 @@
     },
     {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../modules"
+    },
+    {
+      "path": "../../util/package-manifest"
     }
   ]
 }

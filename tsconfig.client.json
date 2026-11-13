@@ -89,6 +89,8 @@
     { "path": "./packages/client/ui-attachment" },
     { "path": "./packages/client/ui-primitives" },
     { "path": "./packages/client/modules" },
+    { "path": "./packages/client/script-realm" },
+    { "path": "./packages/client/script-realm-iframe" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare-protocol/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare/tsconfig.client.json" },

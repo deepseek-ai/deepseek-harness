@@ -29,6 +29,10 @@
     // under its own tsconfig boundary.
     "paths": {
       "@deepseek-ai/dsh-desktop-publisher/*": ["./apps/desktop-publisher/src/*"],
+      "@deepseek-ai/dsh-client-script-realm": ["./packages/client/script-realm/src/index.ts"],
+      "@deepseek-ai/dsh-client-script-realm/client": ["./packages/client/script-realm/src/client/index.ts"],
+      "@deepseek-ai/dsh-client-script-realm-iframe": ["./packages/client/script-realm-iframe/src/index.ts"],
+      "@deepseek-ai/dsh-client-script-realm-iframe/client": ["./packages/client/script-realm-iframe/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions": ["./packages/client/ui-file-actions/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/client": ["./packages/client/ui-file-actions/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/types": ["./packages/client/ui-file-actions/src/types.ts"],

@@ -14,6 +14,13 @@ export const PLATFORM_MODULES = [
   '@deepseek-ai/dsh-client-ui-dockkit',
 ] as const
 
+/**
+ * Named export carrying the module manifest of a `staticLinked` library. The library keeps its ordinary
+ * exports; the manifest's factory returns those exports, without this one, and its `meta` describes the
+ * library's compiled stylesheets.
+ */
+export const STATIC_MODULE_MANIFEST_EXPORT = '__$dsh_client_module_manifest'
+
 /** Client-bundle specifiers whose factories the parser preloads before the shell starts. */
 export const PRELOADED_CLIENT_EXTERNALS = [
 ] as const
