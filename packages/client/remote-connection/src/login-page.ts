@@ -5,8 +5,6 @@ import { loginLocales } from './login-locales.ts'
 export interface AuthenticationPageOptions {
   /** Whether the default Token provider has published its login entry. */
   readonly tokenLoginEnabled: boolean
-  /** Whether the root entry exchanges a QR invitation instead of showing sign-in choices; defaults to false. */
-  readonly qrLogin?: boolean
   /** Whether this document follows a rejected Token submission. */
   readonly tokenRejected?: boolean
 }
@@ -27,6 +25,10 @@ input[aria-invalid='true']{border:1px solid light-dark(#ec1313,#f25a5a)}
 .hint,.error{grid-area:feedback;font-size:13px;line-height:1.5}
 .error{color:light-dark(#ec1313,#f25a5a)}
 .error:empty{display:none}
+.notice{display:flex;flex-direction:column;gap:8px;padding:12px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:8px;background:light-dark(#f5f5f5,#2a2a2b)}
+.notice[hidden]{display:none}
+.notice[data-state="error"]{color:light-dark(#a10c0c,#ffb3b3);border-color:light-dark(#f5b5b5,#8c3030);background:light-dark(#fff3f3,#381e1e)}
+.notice a{padding:0;font-size:13px}
 form:has(.error:not(:empty)) .hint{visibility:hidden}
 button{grid-area:submit;cursor:pointer;font-weight:500;color:light-dark(#fff,#222);background:light-dark(#222,#eee);border:0}
 button:disabled{cursor:wait;opacity:.6}
@@ -50,8 +52,13 @@ function documentHtml(title: string, content: string, script: string): string {
  * Failed submissions remain on this page; page departure cancels an in-flight request.
  * @param locales - public copy embedded beside the entry.
  * @param tokenRejected - whether the Host already rejected a Token submission.
+ * @param exchangeQr - QR exchange initializer embedded with this function; defaults to the root-entry handler.
  */
-export function enterAuthenticationPage(locales: typeof loginLocales, tokenRejected = false): void {
+export function enterAuthenticationPage(
+  locales: typeof loginLocales,
+  tokenRejected = false,
+  exchangeQr: (locales: typeof loginLocales) => void = enterBrowser,
+): void {
   const language = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const t = locales[language]
   document.documentElement.lang = language
@@ -64,113 +71,113 @@ export function enterAuthenticationPage(locales: typeof loginLocales, tokenRejec
   const clean = new URL(location.href)
   clean.searchParams.delete('token')
   history.replaceState(null, '', clean)
-  if (form === null) return
-  const input = document.getElementById('token') as HTMLInputElement
-  const error = document.getElementById('token-error') as HTMLElement
-  const submit = document.getElementById('token-submit') as HTMLButtonElement
-  const label = document.getElementById('token-label') as HTMLElement
-  const hint = document.getElementById('token-hint') as HTMLElement
-  label.textContent = t.tokenLabel
-  hint.textContent = t.tokenHint
-  submit.textContent = t.tokenSubmit
-  if (tokenRejected) {
-    error.textContent = t.tokenInvalid
-    input.setAttribute('aria-invalid', 'true')
-  }
-  input.addEventListener('input', () => {
-    input.removeAttribute('aria-invalid')
-    error.textContent = ''
-  })
-  let pending: AbortController | undefined
-  form.addEventListener('submit', (event) => {
-    event.preventDefault()
-    if (pending !== undefined) return
-    let token = input.value.trim()
-    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
-      try {
-        const values = new URL(token).searchParams.getAll('token')
-        token = values.length === 1 ? values.join('') : ''
-      } catch (_invalidUrl) {
-        // A pasted value that is neither a Token nor a URL cannot start an exchange.
-        token = ''
-      }
-    }
-    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+  if (form !== null) {
+    const input = document.getElementById('token') as HTMLInputElement
+    const error = document.getElementById('token-error') as HTMLElement
+    const submit = document.getElementById('token-submit') as HTMLButtonElement
+    const label = document.getElementById('token-label') as HTMLElement
+    const hint = document.getElementById('token-hint') as HTMLElement
+    label.textContent = t.tokenLabel
+    hint.textContent = t.tokenHint
+    submit.textContent = t.tokenSubmit
+    if (tokenRejected) {
       error.textContent = t.tokenInvalid
       input.setAttribute('aria-invalid', 'true')
-      return
     }
-    const target = new URL(form.action)
-    target.searchParams.set('token', token)
-    const lifetime = new AbortController()
-    const abort = lifetime.abort.bind(lifetime, undefined)
-    window.addEventListener('pagehide', abort, { once: true })
-    pending = lifetime
-    submit.disabled = true
-    submit.textContent = t.tokenPending
-    form.setAttribute('aria-busy', 'true')
-    error.textContent = ''
-    input.removeAttribute('aria-invalid')
-    void fetch(target.href, {
-      method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'follow', signal: lifetime.signal,
-    }).then((response) => {
-      if (lifetime.signal.aborted) return
-      if (response.status === 200) location.replace('./')
-      else {
-        error.textContent = response.status === 401 ? t.tokenInvalid : t.tokenFailed
-        if (response.status === 401) input.setAttribute('aria-invalid', 'true')
-      }
-    }).catch(() => {
-      if (!lifetime.signal.aborted) error.textContent = t.tokenFailed
-    }).finally(() => {
-      window.removeEventListener('pagehide', abort)
-      pending = undefined
-      submit.disabled = false
-      submit.textContent = t.tokenSubmit
-      form.removeAttribute('aria-busy')
+    input.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid')
+      error.textContent = ''
     })
-  })
+    let pending: AbortController | undefined
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      if (pending !== undefined) return
+      let token = input.value.trim()
+      if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+        try {
+          const values = new URL(token).searchParams.getAll('token')
+          token = values.length === 1 ? values.join('') : ''
+        } catch (_invalidUrl) {
+          // A pasted value that is neither a Token nor a URL cannot start an exchange.
+          token = ''
+        }
+      }
+      if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+        error.textContent = t.tokenInvalid
+        input.setAttribute('aria-invalid', 'true')
+        return
+      }
+      const target = new URL(form.action)
+      target.searchParams.set('token', token)
+      const lifetime = new AbortController()
+      const abort = lifetime.abort.bind(lifetime, undefined)
+      window.addEventListener('pagehide', abort, { once: true })
+      pending = lifetime
+      submit.disabled = true
+      submit.textContent = t.tokenPending
+      form.setAttribute('aria-busy', 'true')
+      error.textContent = ''
+      input.removeAttribute('aria-invalid')
+      void fetch(target.href, {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'follow', signal: lifetime.signal,
+      }).then((response) => {
+        if (lifetime.signal.aborted) return
+        if (response.status === 200) location.replace('./')
+        else {
+          error.textContent = response.status === 401 ? t.tokenInvalid : t.tokenFailed
+          if (response.status === 401) input.setAttribute('aria-invalid', 'true')
+        }
+      }).catch(() => {
+        if (!lifetime.signal.aborted) error.textContent = t.tokenFailed
+      }).finally(() => {
+        window.removeEventListener('pagehide', abort)
+        pending = undefined
+        submit.disabled = false
+        submit.textContent = t.tokenSubmit
+        form.removeAttribute('aria-busy')
+      })
+    })
+  }
+  exchangeQr(locales)
 }
 
 /**
  * Render Remote's root login page, without a Token value or private boot data.
- * @param options - public Token availability, QR exchange mode, and optional rejection feedback.
- * @returns self-contained HTML for sign-in choices or the selected QR exchange at the same root entry.
+ * @param options - public Token availability and optional rejection feedback.
+ * @returns self-contained sign-in choices with independent QR exchange feedback.
  */
 export function renderAuthenticationPage(options: AuthenticationPageOptions): string {
   const t = loginLocales.en
-  const qrLogin = options.qrLogin === true
-  const title = qrLogin ? t.title : t.authenticationTitle
-  const content = qrLogin
-    ? `<p id="status" role="status">${t.pending}</p><a id="open" href="./">${t.open}</a><noscript><p>${t.scriptRequired}</p></noscript>`
-    : `<p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
-  const script = qrLogin
-    ? `(${enterBrowser.toString()})(${scriptJson(loginLocales)})`
-    : `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},${options.tokenRejected === true})`
-  return documentHtml(title, `<h1 id="title">${title}</h1>${content}`, script)
+  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p><div id="qr-notice" class="notice" hidden><p id="status" role="status"></p><a id="open" href="./" hidden>${t.open}</a></div>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
+  return documentHtml(t.authenticationTitle, content, `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},${options.tokenRejected === true},(${enterBrowser.toString()}))`)
 }
 
 /**
- * Exchange the current page's QR fragment; all runtime dependencies must survive function serialization.
- * @param locales - Copy embedded beside the entry, before Client plugins load.
+ * Exchange an invitation fragment while retaining the ordinary sign-in choices.
+ * @param locales - copy embedded with the root-page initializer.
  */
 export function enterBrowser(locales: typeof loginLocales): void {
   const current = new URL(location.href)
   const token = current.hash.slice(1)
-  const target = new URL(current.pathname, current)
+  if (current.searchParams.get('login') !== 'qr' && token.length === 0) return
+  const clean = new URL(current.pathname, current)
+  history.replaceState(null, '', clean)
+  const target = new URL(clean)
   target.searchParams.set('login', 'qr')
-  history.replaceState(null, '', target)
-  const language = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-  const t = locales[language]
-  document.documentElement.lang = language
-  document.title = t.title
-  const title = document.getElementById('title') as HTMLElement
+  const t = locales[document.documentElement.lang === 'zh' ? 'zh' : 'en']
+  const notice = document.getElementById('qr-notice') as HTMLElement
   const status = document.getElementById('status') as HTMLElement
-  const open = document.getElementById('open') as HTMLElement
-  title.textContent = t.title
+  const open = document.getElementById('open') as HTMLAnchorElement
+  notice.hidden = false
   open.textContent = t.open
+  const showError = (message: string, checkApp = false): void => {
+    status.textContent = message
+    status.setAttribute('role', 'alert')
+    notice.dataset.state = 'error'
+    open.hidden = !checkApp
+  }
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
-    status.textContent = t.invalid
+    showError(t.invalid)
     return
   }
   status.textContent = t.pending
@@ -187,10 +194,15 @@ export function enterBrowser(locales: typeof loginLocales): void {
     signal: lifetime.signal,
   }).then((response) => {
     if (lifetime.signal.aborted) return
-    if (response.status === 204) location.replace('./')
-    else status.textContent = response.status === 410 ? t.invalid : t.failed
+    switch (response.status) {
+      case 204: location.replace('./'); break
+      case 410: showError(t.invalid); break
+      case 403: showError(t.forbidden); break
+      case 503: showError(t.unavailable); break
+      default: showError(t.failed)
+    }
   }).catch(() => {
-    // A lost response may follow a successful single-use exchange; checking the app is safe.
-    if (!lifetime.signal.aborted) status.textContent = t.failed
+    // A lost response may follow a successful single-use exchange; the app link checks that outcome.
+    if (!lifetime.signal.aborted) showError(t.networkFailed, true)
   }).finally(() => { window.removeEventListener('pagehide', abort) })
 }

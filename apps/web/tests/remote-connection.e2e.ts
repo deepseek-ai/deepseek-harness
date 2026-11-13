@@ -434,6 +434,83 @@ describe('web e2e: one-use QR browser login', () => {
     }
   })
 
+  it('keeps ordinary login choices after rejected QR exchanges and signs in through the Token form', async () => {
+    const invalidMessage = '此二维码无效、已过期或已使用，请在已登录的设备上生成新的二维码，或使用其他登录方式'
+    const phone = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE })
+    try {
+      const page = await phone.newPage()
+      const invalid = new URL(secure.url)
+      invalid.searchParams.set('login', 'qr')
+      invalid.hash = 'x'.repeat(43)
+      const refused = page.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
+        && response.request().method() === 'POST')
+      expect((await page.goto(invalid.href))?.status()).toBe(200)
+      expect((await refused).status()).toBe(410)
+      await page.locator('#qr-notice[data-state="error"]').waitFor()
+      await page.getByRole('alert').filter({ hasText: invalidMessage }).waitFor()
+      await page.getByRole('heading', { name: '连接到此 Host', exact: true }).waitFor()
+      const input = page.getByLabel('登录令牌或链接', { exact: true })
+      const submit = page.getByRole('button', { name: '继续', exact: true })
+      expect(await input.isEnabled()).toBe(true)
+      expect(await submit.isEnabled()).toBe(true)
+      expect(new URL(page.url()).hash).toBe('')
+      expect((await phone.cookies()).some(cookie => cookie.name.startsWith('dsh-remote-'))).toBe(false)
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) await mkdir(screenshots, { recursive: true })
+      for (const viewport of [{ width: 1200, height: 900 }, MOBILE]) {
+        await page.setViewportSize(viewport)
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme })
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+          expect(await input.isVisible()).toBe(true)
+          expect(await submit.isVisible()).toBe(true)
+          if (screenshots !== undefined) await page.screenshot({
+            path: join(screenshots, `invalid-qr-${viewport.width === MOBILE.width ? 'mobile' : 'desktop'}-${colorScheme}.png`),
+          })
+        }
+      }
+      await input.fill(new URL(secure.authenticatedUrl).searchParams.get('token')!)
+      await submit.click()
+      await page.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
+      expect(page.url()).toBe(secure.url)
+      expect((await phone.cookies()).some(cookie => cookie.name.startsWith('dsh-auth-'))).toBe(true)
+    } finally {
+      await phone.close()
+    }
+
+    const expired = await launchRemoteConnectionFixture(false, 5000)
+    onTestFinished(() => expired.close())
+    const desktop = await browser.newContext({ locale: ZH_BROWSER_LOCALE })
+    const applicant = await browser.newContext({ locale: ZH_BROWSER_LOCALE, viewport: MOBILE })
+    try {
+      const owner = await desktop.newPage()
+      await owner.goto(expired.authenticatedUrl)
+      const settings = await remoteSettings(owner)
+      const invitation = await createCode(owner, settings)
+      await settings.getByText('二维码已过期，请生成新二维码登录', { exact: true }).waitFor()
+      const page = await applicant.newPage()
+      const refused = page.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
+        && response.request().method() === 'POST')
+      await page.goto(invitation)
+      expect((await refused).status()).toBe(410)
+      await page.getByRole('alert').filter({ hasText: invalidMessage }).waitFor()
+      await page.getByRole('heading', { name: '连接到此 Host', exact: true }).waitFor()
+      const input = page.getByLabel('登录令牌或链接', { exact: true })
+      const submit = page.getByRole('button', { name: '继续', exact: true })
+      expect(await input.isEnabled()).toBe(true)
+      expect(await submit.isEnabled()).toBe(true)
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'expired-qr-mobile-light.png') })
+      await input.fill(new URL(expired.authenticatedUrl).searchParams.get('token')!)
+      await submit.click()
+      await page.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
+      expect(page.url()).toBe(expired.url)
+      expect((await applicant.cookies()).some(cookie => cookie.name.startsWith('dsh-auth-'))).toBe(true)
+    } finally {
+      await Promise.all([desktop.close(), applicant.close()])
+    }
+  })
+
   it('redeems a QR invitation at the root when the phone already has a Token login', async () => {
     const desktop = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE })
     const phone = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE, viewport: MOBILE })

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Anonymous login-page effects before the authenticated application loads. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { enterAuthenticationPage, enterBrowser, renderAuthenticationPage } from '../src/login-page.ts'
+import { enterAuthenticationPage, renderAuthenticationPage } from '../src/login-page.ts'
 import { loginLocales } from '../src/login-locales.ts'
 
 const TOKEN = 'a'.repeat(43)
@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 function page(path = `/?login=qr#${TOKEN}`, language = 'en-US') {
-  const html = new DOMParser().parseFromString(renderAuthenticationPage({ tokenLoginEnabled: true, qrLogin: true }), 'text/html')
+  const html = new DOMParser().parseFromString(renderAuthenticationPage({ tokenLoginEnabled: true }), 'text/html')
   document.documentElement.innerHTML = html.documentElement.innerHTML
   history.replaceState(null, '', path)
   const actualLocation = window.location
@@ -31,6 +31,11 @@ function page(path = `/?login=qr#${TOKEN}`, language = 'en-US') {
   return {
     exchange, replace, actualLocation,
     status: document.getElementById('status') as HTMLElement,
+    notice: document.getElementById('qr-notice') as HTMLElement,
+    form: document.getElementById('token-form') as HTMLFormElement,
+    input: document.getElementById('token') as HTMLInputElement,
+    error: document.getElementById('token-error') as HTMLElement,
+    submit: document.getElementById('token-submit') as HTMLButtonElement,
   }
 }
 
@@ -72,8 +77,9 @@ it.each(['en-US', 'zh-CN'])('shows the anonymous Token form without Client boot 
   expect(fixture.submit.textContent).toBe(t.tokenSubmit)
   expect(document.documentElement.innerHTML).not.toContain('__DSH_BOOT__')
   expect(document.documentElement.innerHTML).not.toContain('authPages')
-  expect(document.getElementById('status')).toBeNull()
-  expect(document.getElementById('open')).toBeNull()
+  expect((document.getElementById('qr-notice') as HTMLElement).hidden).toBe(true)
+  expect(document.getElementById('status')?.textContent).toBe('')
+  expect((document.getElementById('open') as HTMLAnchorElement).hidden).toBe(true)
   expect(fixture.exchange).not.toHaveBeenCalled()
 })
 
@@ -199,9 +205,9 @@ it('does not navigate when a completed Token request settles after the page leav
 
 it.each(['', '#short', `#${'a'.repeat(42)}!`])('removes an invalid fragment without sending a login request: %s', (fragment) => {
   const fixture = page(`/?login=qr${fragment}`)
-  enterBrowser(loginLocales)
+  enterAuthenticationPage(loginLocales)
   expect(fixture.actualLocation.hash).toBe('')
-  expect(fixture.actualLocation.search).toBe('?login=qr')
+  expect(fixture.actualLocation.search).toBe('')
   expect(fixture.status.textContent).toBe(loginLocales.en.invalid)
   expect(fixture.exchange).not.toHaveBeenCalled()
   expect(fixture.replace).not.toHaveBeenCalled()
@@ -213,7 +219,7 @@ it('clears the credential before POST and keeps the mount prefix when opening th
   fixture.exchange.mockImplementation((input, init) => {
     expect(fixture.actualLocation.href).not.toContain(TOKEN)
     expect(input).toBe('/mount/?login=qr')
-    expect(fixture.actualLocation.search).toBe('?login=qr')
+    expect(fixture.actualLocation.search).toBe('')
     expect(init).toMatchObject({
       method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       headers: { 'content-type': 'text/plain' }, body: TOKEN,
@@ -221,10 +227,10 @@ it('clears the credential before POST and keeps the mount prefix when opening th
     expect(init?.signal).toBeInstanceOf(AbortSignal)
     return pending.promise
   })
-  enterBrowser(loginLocales)
+  enterAuthenticationPage(loginLocales)
   expect(document.documentElement.lang).toBe('zh')
-  expect(document.title).toBe(loginLocales.zh.title)
-  expect(document.getElementById('title')?.textContent).toBe(loginLocales.zh.title)
+  expect(document.title).toBe(loginLocales.zh.authenticationTitle)
+  expect(document.getElementById('title')?.textContent).toBe(loginLocales.zh.authenticationTitle)
   expect(document.getElementById('open')?.textContent).toBe(loginLocales.zh.open)
   expect(fixture.status.textContent).toBe(loginLocales.zh.pending)
   expect(fixture.replace).not.toHaveBeenCalled()
@@ -233,11 +239,19 @@ it('clears the credential before POST and keeps the mount prefix when opening th
   expect(new URL(fixture.replace.mock.calls[0]![0], fixture.actualLocation.href).pathname).toBe('/mount/')
 })
 
-it.each([410, 403, 500])('reports HTTP %i without claiming login or redirecting', async (status) => {
+it.each([410, 403, 503, 500])('reports HTTP %i without claiming login or redirecting', async (status) => {
   const fixture = page(undefined, 'fr-FR')
   fixture.exchange.mockResolvedValue(new Response(null, { status }))
-  enterBrowser(loginLocales)
-  await expect.poll(() => fixture.status.textContent).toBe(status === 410 ? loginLocales.en.invalid : loginLocales.en.failed)
+  enterAuthenticationPage(loginLocales)
+  const message = status === 410 ? loginLocales.en.invalid
+    : status === 403 ? loginLocales.en.forbidden
+      : status === 503 ? loginLocales.en.unavailable : loginLocales.en.failed
+  await expect.poll(() => fixture.status.textContent).toBe(message)
+  expect(fixture.status.getAttribute('role')).toBe('alert')
+  expect(fixture.notice.hidden).toBe(false)
+  expect(fixture.form).not.toBeNull()
+  expect(fixture.submit.disabled).toBe(false)
+  expect(document.title).toBe(loginLocales.en.authenticationTitle)
   expect(document.documentElement.lang).toBe('en')
   expect(fixture.replace).not.toHaveBeenCalled()
   expect(fixture.actualLocation.hash).toBe('')
@@ -247,8 +261,8 @@ it.each([410, 403, 500])('reports HTTP %i without claiming login or redirecting'
 it('reports a lost response as an unknown outcome and keeps the app recovery link', async () => {
   const fixture = page()
   fixture.exchange.mockRejectedValue(new TypeError('connection closed'))
-  enterBrowser(loginLocales)
-  await expect.poll(() => fixture.status.textContent).toBe(loginLocales.en.failed)
+  enterAuthenticationPage(loginLocales)
+  await expect.poll(() => fixture.status.textContent).toBe(loginLocales.en.networkFailed)
   expect(fixture.replace).not.toHaveBeenCalled()
   expect(document.getElementById('open')?.getAttribute('href')).toBe('./')
   expect(fixture.actualLocation.href).not.toContain(TOKEN)
@@ -261,7 +275,7 @@ it('aborts the owned exchange when the browser leaves the page', async () => {
     signal = init?.signal ?? undefined
     signal?.addEventListener('abort', () => { reject(new DOMException('page hidden', 'AbortError')) }, { once: true })
   }))
-  enterBrowser(loginLocales)
+  enterAuthenticationPage(loginLocales)
   expect(signal?.aborted).toBe(false)
   window.dispatchEvent(new Event('pagehide'))
   expect(signal?.aborted).toBe(true)
@@ -274,7 +288,7 @@ it('does not navigate when a completed QR request settles after the page leaves'
   const fixture = page()
   const pending = Promise.withResolvers<Response>()
   fixture.exchange.mockReturnValue(pending.promise)
-  enterBrowser(loginLocales)
+  enterAuthenticationPage(loginLocales)
   const signal = fixture.exchange.mock.calls[0]![1]?.signal
   expect(signal?.aborted).toBe(false)
   pending.resolve(new Response(null, { status: 204 }))
@@ -285,21 +299,59 @@ it('does not navigate when a completed QR request settles after the page leaves'
   expect(fixture.replace).not.toHaveBeenCalled()
 })
 
-it('renders QR exchange at the root even when Token sign-in is unavailable', () => {
-  const html = new DOMParser().parseFromString(renderAuthenticationPage({ tokenLoginEnabled: false, qrLogin: true }), 'text/html')
-  expect(html.getElementById('title')?.textContent).toBe(loginLocales.en.title)
-  expect(html.getElementById('status')?.textContent).toBe(loginLocales.en.pending)
-  expect(html.getElementById('open')?.getAttribute('href')).toBe('./')
-  expect(html.getElementById('token-form')).toBeNull()
-  expect(html.querySelector('main')?.textContent).not.toContain(loginLocales.en.authenticationUnavailable)
+it('exchanges QR credentials while retaining the ordinary page when Token sign-in is unavailable', async () => {
+  const fixture = authenticationPage({ tokenLoginEnabled: false, tokenRejected: false })
+  history.replaceState(null, '', `/mount/?login=qr#${TOKEN}`)
+  fixture.exchange.mockResolvedValue(new Response(null, { status: 204 }))
+  enterAuthenticationPage(loginLocales)
+  expect(document.getElementById('title')?.textContent).toBe(loginLocales.en.authenticationTitle)
+  expect(document.getElementById('description')?.textContent).toBe(loginLocales.en.authenticationUnavailable)
+  expect(document.getElementById('token-form')).toBeNull()
+  expect(document.getElementById('status')?.textContent).toBe(loginLocales.en.pending)
+  await expect.poll(() => fixture.replace.mock.calls).toEqual([['./']])
+})
+
+it('keeps QR errors visible while Token sign-in remains available and handles its own failure', async () => {
+  const fixture = page(undefined, 'zh-CN')
+  fixture.exchange.mockResolvedValueOnce(new Response(null, { status: 410 }))
+  enterAuthenticationPage(loginLocales)
+  await expect.poll(() => fixture.status.textContent).toBe(loginLocales.zh.invalid)
+  expect(fixture.form.hidden).toBe(false)
+  expect(fixture.submit.disabled).toBe(false)
+  fixture.exchange.mockResolvedValueOnce(new Response(null, { status: 401 }))
+  fixture.input.value = TOKEN
+  fixture.form.dispatchEvent(new Event('submit', { cancelable: true }))
+  await expect.poll(() => fixture.error.textContent).toBe(loginLocales.zh.tokenInvalid)
+  await expect.poll(() => fixture.submit.disabled).toBe(false)
+  expect(fixture.status.textContent).toBe(loginLocales.zh.invalid)
+  expect(fixture.status.getAttribute('role')).toBe('alert')
+  fixture.exchange.mockResolvedValueOnce(new Response(null, { status: 200 }))
+  fixture.input.dispatchEvent(new Event('input'))
+  expect(fixture.error.textContent).toBe('')
+  expect(fixture.status.textContent).toBe(loginLocales.zh.invalid)
+  fixture.form.dispatchEvent(new Event('submit', { cancelable: true }))
+  await expect.poll(() => fixture.replace.mock.calls).toEqual([['./']])
+  expect(fixture.exchange.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'GET', 'GET'])
+  expect(fixture.status.textContent).toBe(loginLocales.zh.invalid)
+})
+
+it('automatically exchanges a fragment at the ordinary root without a QR query parameter', async () => {
+  const fixture = page(`/mount/#${TOKEN}`)
+  enterAuthenticationPage(loginLocales)
+  expect(fixture.actualLocation.pathname).toBe('/mount/')
+  expect(fixture.actualLocation.hash).toBe('')
+  expect(fixture.exchange.mock.calls[0]?.[0]).toBe('/mount/?login=qr')
+  expect(document.title).toBe(loginLocales.en.authenticationTitle)
+  await expect.poll(() => fixture.replace.mock.calls).toEqual([['./']])
 })
 
 it('escapes embedded localized text before serializing the anonymous script', () => {
   const copy = { ...loginLocales, en: { ...loginLocales.en, failed: '</script><img src=x>' } }
   vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => JSON.stringify(copy))
-  const html = renderAuthenticationPage({ tokenLoginEnabled: true, qrLogin: true })
+  const html = renderAuthenticationPage({ tokenLoginEnabled: true })
   expect(html).not.toContain('</script><img src=x>')
   expect(html).toContain('\\u003c/script>\\u003cimg src=x>')
   expect(html).toContain('name="referrer" content="no-referrer"')
-  expect(html).toContain(`<noscript><p>${loginLocales.en.scriptRequired}</p></noscript>`)
+  expect(html).toContain('id="qr-notice" class="notice" hidden')
+  expect(html).toContain('id="token-form"')
 })
