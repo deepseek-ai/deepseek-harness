@@ -1280,14 +1280,17 @@ describe('continuable human steering delivery', () => {
       expect(adapter.requests).toHaveLength(4)
       expect(adapter.requests[0]!.messages.find(item => item.source?.kind === 'user')?.content)
         .toEqual(message('root question'))
-      expect(adapter.requests[1]!.messages.find(item => item.source?.kind === 'agent-message')).toMatchObject({
-        source: { kind: 'agent-message', form: 'relay', senderSessionId: parent.id },
-        content: [
-          { type: 'text', text: 'Agent lead sent a message: ' },
-          { type: 'text', text: 'child task' },
-          expect.objectContaining({ type: 'text', text: expect.stringContaining('Your final answer is delivered automatically ') }),
-        ],
+      const task = adapter.requests[1]!.messages.find(item => item.source?.kind === 'agent-message')!
+      expect(task.source).toEqual({
+        kind: 'agent-message', form: 'relay', senderSessionId: parent.id,
       })
+      expect(task.content).toHaveLength(3)
+      expect(task.content.slice(0, 2)).toEqual([
+        { type: 'text', text: 'Agent lead sent a message: ' },
+        { type: 'text', text: 'child task' },
+      ])
+      const guidance = task.content[2]!
+      expect(guidance.type === 'text' && guidance.text).toMatch(/^Your final answer is delivered automatically /)
       const received = adapter.requests[2]!.messages.find(item => item.id === id)
       expect(received).toMatchObject({
         role: 'user', source: { kind: 'user' },
