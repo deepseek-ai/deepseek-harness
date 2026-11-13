@@ -285,6 +285,11 @@ export class ConversationController extends Service implements IConversation {
     )
     // The composer owns the attachments until the Host accepts the prompt.
     const ownership = { accepted: false, retiredUnobserved: false }
+    // An accepted message's attachments leave the draft: a later composer must not re-adopt them, while
+    // the registry keeps them until the echo settles their previews or an unobserved retirement releases them.
+    const disownAccepted = (): void => {
+      for (const attachment of attachments) this.forgetDraftAttachment(attachment.id)
+    }
     const acceptance = Promise.withResolvers<undefined>()
     const submission = session.beginSubmission({
       mode,
@@ -292,6 +297,7 @@ export class ConversationController extends Service implements IConversation {
       attachments: pendingAttachments,
       onAccept: () => {
         ownership.accepted = true
+        disownAccepted()
         accept?.()
         acceptance.resolve(undefined)
       },
@@ -315,6 +321,7 @@ export class ConversationController extends Service implements IConversation {
     const result = await Promise.race([session.prompt(content, mode, signal, submission.requestId), acceptance.promise])
     if (result !== undefined && !result.ok) return { kind: 'error' }
     ownership.accepted = true
+    disownAccepted()
     // An accepted prompt whose echo already retired unobserved, as when its queue entry was removed.
     if (ownership.retiredUnobserved) this.releaseDraftAttachments(attachments)
     return { kind: 'success' }

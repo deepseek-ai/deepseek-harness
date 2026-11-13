@@ -258,3 +258,55 @@ describe('page unload report', () => {
     }
   })
 })
+
+describe('submitted attachments', () => {
+  it('does not re-adopt or report attachments of an accepted message whose echo has not retired', async () => {
+    const b = await bench()
+    try {
+      b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
+      const [draft] = b.root.createDrafts(sessionId(), [draftFile()], true)
+      if (draft === undefined) throw new Error('draft missing')
+      b.shell.addAttachments([draft.id])
+      await vi.waitFor(() => { expect(b.root.fileUploads.getSnapshot()[draft.id]?.status).toBe('ready') })
+      b.shell.setDraft('send with file')
+      b.shell.submit('queue', 'click')
+      await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
+      await b.runtime.flush()
+      // The registry still holds the attachment for the echo; the draft no longer owns it.
+      expect(b.root.resolveDraftAttachments([draft.id])).toHaveLength(1)
+      expect(b.root.draftAttachmentIds(sessionId())).toEqual([])
+      expect(b.root.draftAttachmentSessions()).toEqual([])
+      window.dispatchEvent(new Event('pagehide'))
+      expect(localStorage.getItem(UNLOAD_MARK)).toBeNull()
+      await b.switchAway()
+      const back = await b.switchBack()
+      expect(back.snapshot.attachmentIds).toEqual([])
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
+  it('keeps the attachments of a slash line whose adjudication a switch aborted', async () => {
+    const adjudicate = vi.fn(() => new Promise<never>(() => undefined))
+    const b = await bench()
+    try {
+      const lexicon = { getSnapshot: () => new Map<'/' | '@', readonly string[]>(), subscribe: () => () => undefined }
+      const triggers = { adjudicate, lexicon, track: vi.fn() }
+      b.runtime.ctx.provide('inputTriggers', { sessionOf: () => triggers } as never)
+      b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
+      const [draft] = b.root.createDrafts(sessionId(), [draftFile()], true)
+      if (draft === undefined) throw new Error('draft missing')
+      b.shell.addAttachments([draft.id])
+      b.shell.setDraft('/review this file')
+      b.shell.submit('queue', 'enter')
+      expect(b.shell.snapshot.phase).toBe('adjudicating')
+      expect(adjudicate).toHaveBeenCalledOnce()
+      await b.switchAway()
+      expect(b.root.draftAttachmentIds(sessionId())).toEqual([draft.id])
+      const back = await b.switchBack()
+      expect(back.snapshot.attachmentIds).toEqual([draft.id])
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+})

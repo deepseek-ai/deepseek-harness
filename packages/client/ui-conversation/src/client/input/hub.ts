@@ -208,10 +208,12 @@ export class InputHub implements SessionInputResolver {
           conversation.releaseDraftSession(binding.sessionId)
           return
         }
-        // A send caught before its echo retires cannot settle through the retirement path,
-        // so its attachments release here; every other draft attachment stays registered
-        // for the Session's next composer.
-        if (phaseAtTeardown !== 'plain' && phaseAtTeardown !== 'claimed') {
+        // Teardown aborts adjudication before any message leaves, so those attachments stay with the draft.
+        // A message or command already submitted cannot settle through its retirement path after teardown,
+        // and the Client cannot tell whether a submitted command consumed its attachments, so both release
+        // here rather than risk a duplicate submission; every other draft attachment stays registered for
+        // the Session's next composer.
+        if (phaseAtTeardown === 'sending' || phaseAtTeardown === 'submitting') {
           for (const attachmentId of drafts) conversation.releaseDraftAttachment(attachmentId)
         }
       }
