@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Solicitudes de cambio de GitLab",
+    "description": "Lee y escribe las merge requests de GitLab para el registro forge mediante la CLI de GitLab del host."
+  }
+}

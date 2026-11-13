@@ -95,6 +95,7 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",

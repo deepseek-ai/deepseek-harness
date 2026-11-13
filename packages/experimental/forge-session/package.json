@@ -62,6 +62,7 @@
     "@deepseek-ai/dsh-bash-local": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
+    "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
