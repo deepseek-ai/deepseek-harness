@@ -5,10 +5,12 @@
  * uploads once), plus the deep walk and the `ctx.http` backed fetcher. No network: adapters and `ctx.http` are fakes.
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import Http from '@deepseek-ai/cordis-plugin-http'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  Bot,
   collectResources,
   createResourceFetcher,
   MemoryResourceCache,
@@ -22,6 +24,7 @@ import {
   ResourceTooLargeError,
   resourceCacheKey,
   type ResolvedResource,
+  Satori,
   type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 
@@ -635,6 +638,45 @@ describe('createResourceFetcher', () => {
     const pending = fetch('https://example.com/slow.png', caller.signal)
     setTimeout(() => caller.abort(reason), 10)
     await expect(pending).rejects.toBe(reason)
+  })
+
+  it('propagates deadline and caller aborts into satori: internal routes and 3xx redirects before headers arrive', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(Http)
+      await ctx.plugin(Satori)
+      class TestBot extends Bot {}
+      const bot = new TestBot(ctx, {}, { id: 'lark:1', platform: 'lark' })
+      bot.selfId = 'ou_bot'
+
+      const seenSignals: AbortSignal[] = []
+      ctx.satori.defineInternalRoute('/slow/:id', async (request) => {
+        seenSignals.push(request.signal)
+        return await new Promise<Response>((_resolve, reject) => {
+          request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })
+        })
+      })
+      ctx.satori.defineInternalRoute('/ignore-signal/:id', async () => {
+        return await new Promise<Response>(() => {})
+      })
+      ctx.satori.defineInternalRoute('/bounce/:id', async () => {
+        return new Response(null, { status: 302, headers: { location: bot.getInternalUrl('/slow/redirected') } })
+      })
+
+      const fetchWithDeadline = createResourceFetcher(ctx, { timeout: 25 })
+      await expect(fetchWithDeadline(bot.getInternalUrl('/slow/1'), new AbortController().signal))
+        .rejects.toBeInstanceOf(ResourceTimeoutError)
+      expect(seenSignals[0]?.aborted).toBe(true)
+
+      await expect(fetchWithDeadline(bot.getInternalUrl('/ignore-signal/1'), new AbortController().signal))
+        .rejects.toBeInstanceOf(ResourceTimeoutError)
+
+      await expect(fetchWithDeadline(bot.getInternalUrl('/bounce/1'), new AbortController().signal))
+        .rejects.toBeInstanceOf(ResourceTimeoutError)
+      expect(seenSignals[1]?.aborted).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })
 

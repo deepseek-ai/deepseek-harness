@@ -10,16 +10,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import {
+  PlatformError,
   Satori,
   Status,
   createResourceFetcher,
   normalize,
+  ResourceTimeoutError,
   ResourceTooLargeError,
   type InboundMessage,
   type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import { h } from '@deepseek-ai/satori-element'
 import LarkBot, {
+  AccessToken,
   Config,
   DEFAULT_BASE_URLS,
   LarkApiError,
@@ -43,6 +46,7 @@ interface Call {
   search: string
   headers: Record<string, string>
   body: unknown
+  signal?: AbortSignal
 }
 
 /** What the platform answers for one path. */
@@ -104,6 +108,7 @@ async function mount(input: Record<string, unknown> = {}, overrides: Record<stri
       search: url.search,
       headers,
       body: init.body,
+      signal: init.signal,
     }
     routes.calls.push(call)
     return await routes.handler(call)
@@ -388,6 +393,21 @@ describe('LarkBot reads', () => {
     expect(cancelled).toBe(true)
   })
 
+  it('aborts an internal resource fetch whose upstream response stalls before headers arrive', async () => {
+    const { bot, calls } = await mount({}, {
+      '/open-apis/im/v1/messages/om_1/resources/file_slow': call =>
+        new Promise<Response>((_resolve, reject) => {
+          call.signal?.addEventListener('abort', () => reject(call.signal?.reason), { once: true })
+        }),
+    })
+    await vi.waitFor(() => { expect(bot.selfId).toBe('ou_bot') })
+    const fetchResource = createResourceFetcher(bot.ctx, { timeout: 25 })
+    await expect(fetchResource(bot.getResourceUrl('om_1', 'file_slow', 'file'), new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTimeoutError)
+    const upstream = calls.find(entry => entry.path.endsWith('/resources/file_slow'))
+    expect(upstream?.signal?.aborted).toBe(true)
+  })
+
   it('probes the chat kind once and caches it', async () => {
     const { bot, calls } = await mount({}, {
       '/open-apis/im/v1/chats/oc_chat': () => Response.json({ code: 0, data: { chat_mode: 'topic' } }),
@@ -494,5 +514,34 @@ describe('LarkBot client surface', () => {
     const { bot } = await mount()
     expect(bot.adapter).toBeInstanceOf(WsClient)
     await bot.disconnect()
+  })
+
+  it('rejects a token caller aborted mid-refresh with published: no without breaking concurrent callers', async () => {
+    let releaseToken!: (result: { code: number; tenant_access_token: string; expire: number }) => void
+    const tokenGate = new Promise<{ code: number; tenant_access_token: string; expire: number }>((resolve) => {
+      releaseToken = resolve
+    })
+    const post = vi.fn(() => tokenGate)
+    const tokens = new AccessToken({
+      appId: 'cli_lark',
+      appSecret: 'secret',
+      baseUrl: 'https://open.feishu.cn/open-apis/',
+      post,
+    })
+
+    const callerA = new AbortController()
+    const callerB = new AbortController()
+    const pendingA = tokens.get(callerA.signal)
+    const pendingB = tokens.get(callerB.signal)
+    expect(post).toHaveBeenCalledOnce()
+
+    callerA.abort()
+    const errorA = await pendingA.catch(err => err)
+    expect(errorA).toBeInstanceOf(PlatformError)
+    expect(errorA).toMatchObject({ kind: 'fatal', published: 'no' })
+
+    releaseToken({ code: 0, tenant_access_token: 'shared-token', expire: 7200 })
+    await expect(pendingB).resolves.toBe('shared-token')
+    expect(post).toHaveBeenCalledOnce()
   })
 })

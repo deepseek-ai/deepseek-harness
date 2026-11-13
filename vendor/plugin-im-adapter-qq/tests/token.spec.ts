@@ -156,7 +156,30 @@ describe('AccessToken', () => {
     const { token, post } = createToken()
     const controller = new AbortController()
     controller.abort(new Error('cancelled'))
-    await expect(token.get(controller.signal)).rejects.toThrow('cancelled')
+    const error = await token.get(controller.signal).catch(err => err)
+    expect(error).toBeInstanceOf(PlatformError)
+    expect(error).toMatchObject({ kind: 'fatal', published: 'no', message: 'cancelled' })
     expect(post).not.toHaveBeenCalled()
+  })
+
+  it('rejects a caller aborted mid-refresh without cancelling a concurrent caller sharing the refresh', async () => {
+    let releaseRefresh!: (result: GetAppAccessTokenResult) => void
+    const refreshGate = new Promise<GetAppAccessTokenResult>((resolve) => { releaseRefresh = resolve })
+    const { token, post } = createToken(() => refreshGate)
+
+    const callerA = new AbortController()
+    const callerB = new AbortController()
+    const pendingA = token.get(callerA.signal)
+    const pendingB = token.get(callerB.signal)
+    expect(post).toHaveBeenCalledOnce()
+
+    callerA.abort()
+    const errorA = await pendingA.catch(err => err)
+    expect(errorA).toBeInstanceOf(PlatformError)
+    expect(errorA).toMatchObject({ kind: 'fatal', published: 'no' })
+
+    releaseRefresh({ access_token: 'token-shared', expires_in: 100 })
+    await expect(pendingB).resolves.toBe('token-shared')
+    expect(post).toHaveBeenCalledOnce()
   })
 })

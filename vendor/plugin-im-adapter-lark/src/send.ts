@@ -8,9 +8,11 @@
  * ## `sendPayload`: create vs reply vs reply in a thread
  *
  * - Reply (`POST /im/v1/messages/{message_id}/reply`) when the message answers another one: `SendContext.quote` (the
- *   `<quote id>` of the tree, part 0 only) or — when the caller asked for a thread (`Target.thread`) or the referrer
- *   itself is threaded — the referrer's message. A topic-mode group puts every message in a thread, so a message that
- *   was created instead of replied would land outside the topic.
+ *   `<quote id>` of the tree, part 0 only), an explicit thread id (`Target.thread: string`, answered against a matching
+ *   referrer, the previous part's thread root, or the platform's first message in that thread), or — when the caller
+ *   asked for the referrer's thread (`Target.thread === true`) or the referrer itself is threaded — the referrer's
+ *   message. A topic-mode group puts every message in a thread, so a message that was created instead of replied would
+ *   land outside the topic.
  * - `reply_in_thread` is set in that case: an explicit `Target.thread` requests it and a threaded referrer requires
  *   it, or the reply would leave the thread it answers.
  * - Otherwise create (`POST /im/v1/messages?receive_id_type=…`). `receive_id_type` is read from the chat id
@@ -37,7 +39,7 @@
 import {
   PlatformError, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import { isDict } from './api/events.ts'
+import { isDict, type LarkReferrer } from './api/events.ts'
 import type { LarkReceiveIdType } from './api/client.ts'
 import type { LarkBot } from './bot.ts'
 import { idempotencyUuid } from './modes/shared.ts'
@@ -56,8 +58,10 @@ export type LarkPartKind =
 
 /** Whether a message is answered with the reply route, and whether that reply must join a thread. */
 export interface LarkReplyPlan {
-  /** Message the reply answers; absent ⇒ the message is created in the chat. */
+  /** Message the reply answers; absent when no anchor is known yet (create, or resolve `threadId` first). */
   messageId?: string
+  /** Explicit thread id that still needs platform anchor lookup or quote-thread verification before sending. */
+  threadId?: string
   /** Set `reply_in_thread`: an explicit thread was requested or the answered message lives in one. */
   inThread: boolean
 }
@@ -77,6 +81,12 @@ export function receiveIdTypeOf(target: Target): LarkReceiveIdType {
   return 'chat_id'
 }
 
+/** Whether a decoded referrer already proves membership in the requested thread. */
+function referrerMatchesThread(referrer: LarkReferrer | undefined, threadId: string): referrer is LarkReferrer {
+  return referrer !== undefined
+    && (referrer.threadId === threadId || referrer.rootId === threadId || referrer.messageId === threadId)
+}
+
 /**
  * Decide between creating a message and replying to one, and whether the reply joins a thread.
  *
@@ -84,10 +94,43 @@ export function receiveIdTypeOf(target: Target): LarkReceiveIdType {
  * @param target - target chat, its `thread` request and its referrer.
  * @param ctx - send context of this part (`quote` is the `<quote id>`, present on part 0 only).
  * @returns the reply target and the thread verdict.
+ * @throws PlatformError `invalid` (`published: 'no'`) when an explicit thread id cannot address a thread of `target.chat`.
  */
 export function replyPlan(bot: LarkBot, target: Target, ctx: SendContext): LarkReplyPlan {
-  const referrer = bot.referrerOf(target)
-  const wantsThread = target.thread === true || typeof target.thread === 'string'
+  const rawReferrer = bot.referrerOf(target)
+  const referrer = rawReferrer?.chatId === target.chat.id ? rawReferrer : undefined
+  if (typeof target.thread === 'string') {
+    const threadId = target.thread.trim()
+    if (!threadId) {
+      throw new PlatformError('invalid', `${bot.id}: thread id must not be empty`, { published: 'no' })
+    }
+    if (receiveIdTypeOf(target) !== 'chat_id') {
+      throw new PlatformError('invalid', `${bot.id}: cannot publish to thread ${threadId} outside a chat`, { published: 'no' })
+    }
+    if (ctx.quote !== undefined) {
+      if (referrer?.messageId === ctx.quote) {
+        if (referrerMatchesThread(referrer, threadId)) return { messageId: ctx.quote, inThread: true }
+        throw new PlatformError(
+          'invalid',
+          `${bot.id}: quoted message ${ctx.quote} does not belong to thread ${threadId}`,
+          { published: 'no' },
+        )
+      }
+      return { messageId: ctx.quote, threadId, inThread: true }
+    }
+    if (referrerMatchesThread(referrer, threadId)) {
+      const anchor = referrer.rootId ?? referrer.messageId
+      if (anchor !== undefined) return { messageId: anchor, inThread: true }
+    }
+    const first = ctx.previous[0]
+    if (first !== undefined) {
+      const raw = isDict(first.raw) ? first.raw : undefined
+      const rootId = typeof raw?.root_id === 'string' && raw.root_id.length > 0 ? raw.root_id : undefined
+      return { messageId: rootId ?? first.id, inThread: true }
+    }
+    return { threadId, inThread: true }
+  }
+  const wantsThread = target.thread === true
   const threaded = referrer?.threadId !== undefined
   // Without a quote the message still answers its referrer when it has to stay in that message's thread.
   const messageId = ctx.quote ?? (wantsThread || threaded ? referrer?.messageId : undefined)
@@ -152,6 +195,86 @@ function partUuid(ctx: SendContext): string | undefined {
   return key === undefined ? undefined : idempotencyUuid(key, ctx.index)
 }
 
+/** Classify a pre-send read failure as unpublished so anchor resolution never reports an uncertain publication. */
+async function unpublishedRead<T>(bot: LarkBot, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    const classified = PlatformError.is(error) ? error : bot.classify(error)
+    if (classified.published === 'no') throw classified
+    throw new PlatformError(classified.kind, classified.message, {
+      ...classified.code === undefined ? {} : { code: classified.code },
+      ...classified.retryAfterMs === undefined ? {} : { retryAfterMs: classified.retryAfterMs },
+      published: 'no',
+      cause: classified.cause ?? error,
+    })
+  }
+}
+
+/**
+ * Resolve the platform message id a reply answers, looking up or verifying an explicit `Target.thread` when the target
+ * carried no matching referrer.
+ */
+async function resolveReplyMessageId(
+  bot: LarkBot,
+  target: Target,
+  plan: LarkReplyPlan,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  const { threadId } = plan
+  if (threadId === undefined) return plan.messageId
+  if (plan.messageId !== undefined) {
+    const quotedId = plan.messageId
+    const items = await unpublishedRead(bot, () => bot.api.getMessage(quotedId, {}, signal))
+    const item = items.find(entry => entry.message_id === quotedId)
+    if (!item || item.chat_id !== target.chat.id) {
+      throw new PlatformError(
+        'invalid',
+        `${bot.id}: quoted message ${quotedId} is absent from chat ${target.chat.id}`,
+        { published: 'no' },
+      )
+    }
+    if (item.thread_id !== threadId && item.root_id !== threadId && item.message_id !== threadId) {
+      throw new PlatformError(
+        'invalid',
+        `${bot.id}: quoted message ${quotedId} does not belong to thread ${threadId}`,
+        { published: 'no' },
+      )
+    }
+    return quotedId
+  }
+  if (threadId.startsWith('om_')) {
+    const items = await unpublishedRead(bot, () => bot.api.getMessage(threadId, {}, signal))
+    const root = items.find(entry => entry.message_id === threadId)
+    if (!root || root.chat_id !== target.chat.id) {
+      throw new PlatformError(
+        'invalid',
+        `${bot.id}: thread root ${threadId} is absent from chat ${target.chat.id}`,
+        { published: 'no' },
+      )
+    }
+    return threadId
+  }
+  const page = await unpublishedRead(
+    bot,
+    () => bot.api.listMessages({
+      container_id_type: 'thread',
+      container_id: threadId,
+      sort_type: 'ByCreateTimeAsc',
+      page_size: 1,
+    }, signal),
+  )
+  const anchor = page.items?.find(entry => typeof entry.message_id === 'string' && entry.message_id.length > 0)
+  if (!anchor?.message_id || anchor.chat_id !== target.chat.id) {
+    throw new PlatformError(
+      'invalid',
+      `${bot.id}: thread ${threadId} has no anchor message in chat ${target.chat.id}`,
+      { published: 'no' },
+    )
+  }
+  return anchor.message_id
+}
+
 /**
  * Publish one serialized payload: create, reply, or reply inside a thread.
  *
@@ -174,13 +297,14 @@ export async function sendMessagePayload(
   const uuid = partUuid(ctx)
   const plan = replyPlan(bot, target, ctx)
   const signal = ctx.options.signal
-  const answer = plan.messageId === undefined
+  const replyMessageId = await resolveReplyMessageId(bot, target, plan, signal)
+  const answer = replyMessageId === undefined
     ? await bot.api.createMessage(receiveIdTypeOf(target), {
       ...body,
       receive_id: target.chat.id,
       ...uuid === undefined ? {} : { uuid },
     }, signal)
-    : await bot.api.replyMessage(plan.messageId, {
+    : await bot.api.replyMessage(replyMessageId, {
       ...body,
       ...uuid === undefined ? {} : { uuid },
       ...plan.inThread ? { reply_in_thread: true } : {},

@@ -97,12 +97,19 @@ export class AccessToken {
  * @throws PlatformError `retryable` when no usable token is left after a failed refresh.
  */
   async get(signal?: AbortSignal): Promise<string> {
-    if (signal?.aborted) throw signal.reason ?? new PlatformError('fatal', 'the request was cancelled', { published: 'no' })
+    if (signal?.aborted) throw cancelledTokenError(signal)
     if (this.usable) return this.value!
-    this.pending ??= this.refresh().finally(() => {
+    const pending = (this.pending ??= this.refresh().finally(() => {
       this.pending = undefined
+    }))
+    if (!signal) return await pending
+    return await new Promise<string>((resolve, reject) => {
+      const onAbort = () => reject(cancelledTokenError(signal))
+      signal.addEventListener('abort', onAbort, { once: true })
+      pending.then(resolve, reject).finally(() => {
+        signal.removeEventListener('abort', onAbort)
+      })
     })
-    return await this.pending
   }
 
   /** Forget the cached token, e.g. after the platform rejected it. The next `get()` refetches. */
@@ -136,4 +143,17 @@ export class AccessToken {
     this.expiry = this.now + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 7200_000)
     return accessToken
   }
+}
+
+/** Pre-request cancellation during token acquisition: no publication request has been sent yet (`published: 'no'`). */
+function cancelledTokenError(signal: AbortSignal): PlatformError {
+  const { reason } = signal
+  if (PlatformError.is(reason)) return reason
+  const message = reason instanceof Error && reason.name !== 'AbortError' && reason.message
+    ? reason.message
+    : 'the request was cancelled'
+  return new PlatformError('fatal', message, {
+    published: 'no',
+    ...reason === undefined ? {} : { cause: reason },
+  })
 }

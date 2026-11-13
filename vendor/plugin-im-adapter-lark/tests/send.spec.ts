@@ -134,12 +134,20 @@ describe('replyPlan', () => {
     expect(replyPlan(threaded, group, send(0, {}, 'om_parent'))).toEqual({ messageId: 'om_parent', inThread: true })
   })
 
-  it('answers the referrer when a thread was requested', () => {
+  it('answers the referrer when a boolean thread was requested and defers an unmatched thread id to anchor lookup', () => {
     const botWithReferrer = {
+      id: 'lark:cli_lark',
       referrerOf: () => ({ receivedAt: 1, chatType: 'group', chatId: 'oc_chat', messageId: 'om_trigger' }),
     } as unknown as LarkBot
     expect(replyPlan(botWithReferrer, { ...group, thread: true }, send())).toEqual({ messageId: 'om_trigger', inThread: true })
-    expect(replyPlan(botWithReferrer, { ...group, thread: 'omt_9' }, send())).toEqual({ messageId: 'om_trigger', inThread: true })
+    expect(replyPlan(botWithReferrer, { ...group, thread: 'omt_9' }, send())).toEqual({ threadId: 'omt_9', inThread: true })
+    const matchingReferrer = {
+      id: 'lark:cli_lark',
+      referrerOf: () => ({
+        receivedAt: 1, chatType: 'topic', chatId: 'oc_chat', messageId: 'om_reply_2', threadId: 'omt_9', rootId: 'om_root_9',
+      }),
+    } as unknown as LarkBot
+    expect(replyPlan(matchingReferrer, { ...group, thread: 'omt_9' }, send())).toEqual({ messageId: 'om_root_9', inThread: true })
   })
 
   it('never invents a reply target', () => {
@@ -257,6 +265,101 @@ describe('sendPayload: reply and thread', () => {
     await bot.sendPayload(post, group, ctx)
     await bot.sendPayload(post, group, ctx)
     expect(bodyOf(calls[0]).uuid).toBe(bodyOf(calls[1]).uuid)
+  })
+
+  it('resolves an explicit thread id via listMessages and replies in thread instead of creating in the main chat', async () => {
+    const { bot, calls } = await mount({
+      '/open-apis/im/v1/messages': (call) => {
+        if (call.method === 'GET') {
+          return Response.json({
+            code: 0,
+            data: { items: [{ message_id: 'om_thread_root', chat_id: 'oc_chat', thread_id: 'omt_existing' }] },
+          })
+        }
+        throw new Error('must not call POST /im/v1/messages for an explicit thread')
+      },
+      '/open-apis/im/v1/messages/om_thread_root/reply': () =>
+        Response.json({ code: 0, data: { message_id: 'om_in_thread', root_id: 'om_thread_root', thread_id: 'omt_existing' } }),
+    })
+
+    // Even when an unrelated referrer from another thread or unthreaded message is present on the target,
+    // `target.thread` resolves the requested thread rather than answering `om_other`.
+    const target: Target = {
+      ...group,
+      thread: 'omt_existing',
+      referrer: { receivedAt: 5, chatType: 'topic', chatId: 'oc_chat', messageId: 'om_other', threadId: 'omt_other' },
+    }
+    const firstPart = await bot.sendPayload(post, target, send(0))
+    expect(firstPart.id).toBe('om_in_thread')
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ method: 'GET', path: '/open-apis/im/v1/messages' })
+    expect(calls[0]!.search).toContain('container_id_type=thread')
+    expect(calls[0]!.search).toContain('container_id=omt_existing')
+    expect(calls[0]!.search).toContain('sort_type=ByCreateTimeAsc')
+    expect(calls[0]!.search).toContain('page_size=1')
+    expect(calls[1]!.path).toBe('/open-apis/im/v1/messages/om_thread_root/reply')
+    expect(bodyOf(calls[1])).toMatchObject({ reply_in_thread: true })
+
+    // Subsequent parts of the same multi-part send reuse part 0's thread root without repeating `listMessages`.
+    await bot.sendPayload(post, target, { index: 1, options: {}, previous: [firstPart] })
+    expect(calls).toHaveLength(3)
+    expect(calls[2]!.path).toBe('/open-apis/im/v1/messages/om_thread_root/reply')
+    expect(bodyOf(calls[2])).toMatchObject({ reply_in_thread: true })
+  })
+
+  it('verifies a root message id passed as target.thread and replies inside that thread', async () => {
+    const { bot, calls } = await mount({
+      '/open-apis/im/v1/messages/om_root': () =>
+        Response.json({ code: 0, data: { items: [{ message_id: 'om_root', chat_id: 'oc_chat' }] } }),
+      '/open-apis/im/v1/messages/om_root/reply': () =>
+        Response.json({ code: 0, data: { message_id: 'om_child', root_id: 'om_root', thread_id: 'omt_root' } }),
+    })
+
+    const part = await bot.sendPayload(post, { ...group, thread: 'om_root' }, send())
+    expect(part.id).toBe('om_child')
+    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
+      'GET /open-apis/im/v1/messages/om_root',
+      'POST /open-apis/im/v1/messages/om_root/reply',
+    ])
+    expect(bodyOf(calls[1])).toMatchObject({ reply_in_thread: true })
+  })
+
+  it('refuses invalid, empty, non-chat, foreign-chat, or mismatched-quote thread targets with published: no', async () => {
+    const { bot, calls } = await mount({
+      '/open-apis/im/v1/messages': (call) => {
+        if (call.method === 'GET' && call.search.includes('container_id=omt_empty')) {
+          return Response.json({ code: 0, data: { items: [] } })
+        }
+        if (call.method === 'GET' && call.search.includes('container_id=omt_foreign')) {
+          return Response.json({ code: 0, data: { items: [{ message_id: 'om_foreign', chat_id: 'oc_other' }] } })
+        }
+        throw new Error(`unexpected ${call.method} ${call.path}${call.search}`)
+      },
+      '/open-apis/im/v1/messages/om_wrong_thread': () =>
+        Response.json({ code: 0, data: { items: [{ message_id: 'om_wrong_thread', chat_id: 'oc_chat', thread_id: 'omt_2' }] } }),
+    })
+
+    await expect(bot.sendPayload(post, { ...group, thread: '   ' }, send())).rejects.toMatchObject({
+      kind: 'invalid',
+      published: 'no',
+    })
+    await expect(bot.sendPayload(post, { chat: { id: 'ou_user', type: 'direct' }, thread: 'omt_1' }, send())).rejects.toMatchObject({
+      kind: 'invalid',
+      published: 'no',
+    })
+    await expect(bot.sendPayload(post, { ...group, thread: 'omt_empty' }, send())).rejects.toMatchObject({
+      kind: 'invalid',
+      published: 'no',
+    })
+    await expect(bot.sendPayload(post, { ...group, thread: 'omt_foreign' }, send())).rejects.toMatchObject({
+      kind: 'invalid',
+      published: 'no',
+    })
+    await expect(bot.sendPayload(post, { ...group, thread: 'omt_1' }, send(0, {}, 'om_wrong_thread'))).rejects.toMatchObject({
+      kind: 'invalid',
+      published: 'no',
+    })
+    expect(calls.every(call => call.method === 'GET')).toBe(true)
   })
 })
 

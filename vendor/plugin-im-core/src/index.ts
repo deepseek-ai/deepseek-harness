@@ -145,18 +145,52 @@ export class Satori extends Service {
     const self = this
     ;(ctx as Context).on('http/fetch', async function (url, init, config, next) {
       if (url.protocol !== 'satori:') return next()
-      const res = await self.handleInternalRoute(new Request(url, {
+      const signal = init.signal as AbortSignal | undefined
+      if (signal?.aborted) {
+        throw signal.reason ?? new DOMException('The operation was aborted', 'AbortError')
+      }
+      const request = new Request(url, {
         method: init.method,
         headers: init.headers,
         body: init.method === 'GET' || init.method === 'HEAD'
           ? undefined
           : init.body as BodyInit,
-      } as RequestInit))
+        ...signal ? { signal } : {},
+      } as RequestInit)
+      const res = signal
+        ? await new Promise<Response>((resolve, reject) => {
+          let settled = false
+          const onAbort = () => {
+            settled = true
+            reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'))
+          }
+          signal.addEventListener('abort', onAbort, { once: true })
+          self.handleInternalRoute(request).then(
+            (response) => {
+              signal.removeEventListener('abort', onAbort)
+              if (settled) {
+                void response.body?.cancel(signal.reason).catch(() => {})
+                return
+              }
+              settled = true
+              resolve(response)
+            },
+            (error) => {
+              signal.removeEventListener('abort', onAbort)
+              if (!settled) {
+                settled = true
+                reject(error)
+              }
+            },
+          )
+        })
+        : await self.handleInternalRoute(request)
       if (res.status >= 400) throw new Error(`Failed to fetch ${url}, status code: ${res.status}`)
       if (res.status >= 300) {
         const location = res.headers.get('location')!
         return this(new URL(location, url), {
           ...config,
+          ...signal ? { signal } : {},
           responseType: response => response,
         })
       }
