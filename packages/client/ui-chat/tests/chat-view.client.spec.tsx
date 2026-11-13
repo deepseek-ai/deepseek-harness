@@ -3723,8 +3723,6 @@ describe('ChatView', () => {
     const own = view.getByText('own question')
     expect(inherited.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(separator.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The caption carries the fork glyph, so the divider names the relationship
-    // it marks rather than reading as an unlabelled hairline.
     expect(separator.querySelector('[data-icon="dsw-icon-branch-outline-regular"]')).not.toBeNull()
   })
 
