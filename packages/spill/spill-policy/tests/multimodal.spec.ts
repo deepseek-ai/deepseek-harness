@@ -24,7 +24,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import LocalSpillStore from '@deepseek-ai/dsh-spill-local'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import * as SpillPolicy from '../src/index.ts'
@@ -207,7 +207,10 @@ describe('multimodal spill', () => {
         const binding = spec.bindings.find(item => item.global === 'tools')?.functions.inspect
         if (binding === undefined) throw new Error('missing inspect binding')
         if (failure) await expect(binding({})).rejects.toThrow('capture failed')
-        else expect(await binding({})).toEqual({ content: original })
+        else {
+          const resolved = await binding({})
+          expect(resolved instanceof PtcInspectableValue ? resolved.value : resolved).toEqual({ content: original })
+        }
         return { output: [], value: 'complete' }
       }
     }

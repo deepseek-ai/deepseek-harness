@@ -13,7 +13,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -608,6 +608,10 @@ export function createRunCodeTransport(
                 + outcome.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
             }
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
+          }
+          if (outcome.value !== null && typeof outcome.value === 'object'
+            && outcome.content.every(block => block.type === 'text')) {
+            return new PtcInspectableValue(outcome.value, outcome.content.map(block => block.text).join('\n'))
           }
           return outcome.value
         }
