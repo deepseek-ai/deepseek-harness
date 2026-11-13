@@ -2727,8 +2727,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly overlays: readonly PatchOptions[]',
-        description: 'Parsed command-line overlays, applied above profile and home patches.',
+        signature: 'readonly overlayPaths: readonly string[]',
+        description: 'Absolute command-line overlay files in argv order, read on every composition and applied above profile and home patches.',
         parameters: [],
       },
       {
