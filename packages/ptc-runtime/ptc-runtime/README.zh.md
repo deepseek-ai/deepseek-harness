@@ -35,6 +35,8 @@ kind: "package-reference"
 
 宿主绑定可以返回 `new PtcImage(path, attachment)`，向 Node 程序提供已存储的图片。显式展示会将 `{ type: 'image', attachment }` 条目追加到 `result.output`，与 `{ type: 'text', text }` 条目按发出顺序排列。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。
 
+宿主绑定可以返回 `new PtcInspectableValue(value, text)`，为 JSON 对象或数组附加展示文本。Node 提供方向程序提供原有数据，仅在把未修改的原结果直接传给 `inspect` 时使用附带文本。该描述符只供宿主使用；拷贝、选定字段、修改后的结果和嵌套值使用普通格式。[运行时参考](../../../docs/subsystems/ptc-runtime.zh.md)定义提供方的义务。
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',

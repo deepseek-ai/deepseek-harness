@@ -40,6 +40,8 @@ Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` 
 
 `PtcRuntime` providers must report `language: 'typescript'`. The selected executor rejects other languages during prompt assembly and execution, without falling back to native tools; the `/run-code` factory rejects them when creating a program tool. Schema reads and execution also validate the current provider. The executor generates a TypeScript SDK and tool schema; the provider supplies execution.
 
+Tool calls retain their declared JSON return values. Passing an unchanged object or array result directly to `inspect` displays the tool's final text-only output. Fields, copies, modified results, and results nested inside another value use ordinary Node formatting. Use `inspect({ ...result })` for an object's raw structure or `inspect(result.lines)` for selected fields. Scalar results use ordinary formatting; Images and mixed text/image outputs follow the image rules below.
+
 This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 
 Shared dispatch events and the `ptc-mode` message-source declaration live in `@deepseek-ai/dsh-tool-executor-ptc/types`; Client code imports the same declarations through `@deepseek-ai/dsh-tool-executor-ptc/client`. Both entries exclude Host service declarations. Host policy extensions use `import type` from the package entry for `PtcDispatchLog` and `tools/ptc-dispatch-log` without mounting the executor.
@@ -63,6 +65,8 @@ The executor receives the entire raw call batch and owns parsing, scheduling, ca
 ### PTC mode
 
 The PTC executor exposes the reserved `run_code` transport and a deterministic TypeScript SDK. Each SDK binding captures a frozen ToolSchema and passes it through the scheduler to its execution context. Before policy, a started call records only pairing ids, name, and normalized arguments; its settle event preserves the rendered result, optional presentation metadata, and structured error. Metadata is projected from that call’s canonical value and frozen; it changes neither the program value nor model content. Description and parameters remain transient and never enter Session events or SDK output. Calls are scheduled through a per-run pool that reuses the native concurrency contract. Under `ptc` alone, a model-direct call naming a program-only SDK tool resolves to `UNKNOWN_TOOL` before policy — the announced surface and the callable surface stay the same. Intermediate binding values are execution-local; only the outer `run_code` result has a hard size cap.
+
+Text inspection reuses the completed pipeline's `output.render` result after content policies. It neither executes the tool nor renders it again. Replacements made only for the dispatch log do not change the program's inspection text.
 
 New sub-calls use `<parent>:ptc:<n>` ids. Consumers treat these ids as opaque and correlate events by exact equality; restored historical ids retain their original bytes. The [PTC mode decision](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) owns durable naming and restoration rules.
 

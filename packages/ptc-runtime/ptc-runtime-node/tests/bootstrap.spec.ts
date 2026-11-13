@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClass, makeInspect, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
 import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
-import { encodePtcJsonWire } from '../src/json-wire.ts'
+import { encodePtcJsonWire, snapshotPtcJsonValue } from '../src/json-wire.ts'
+import type { BindingInspection } from '../src/bootstrap.ts'
 
 function host(): Pick<HostMethods, 'invoke'> {
-  return { invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)) }
+  return { invoke: vi.fn<HostMethods['invoke']>(async () => ({ value: encodePtcJsonWire(42) })) }
 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
@@ -33,6 +34,7 @@ describe('LogBuffer', () => {
     buffer.push('dropped')
     expect(seen).toEqual(['12345', '123'])
     expect(limits).toBe(1)
+    expect(buffer.overflowed).toBe(true)
     expect(buffer.remainingOutputBytes()).toBe(0)
 
     const exactlyFull: string[] = []
@@ -262,6 +264,74 @@ describe('makeInspect', () => {
   })
 })
 
+describe('binding inspection metadata', () => {
+  it('emits unchanged object and array renderings in order with normalized newlines', () => {
+    const object = { value: 1 }
+    const array = [1, 2]
+    const empty = {}
+    const inspections = new WeakMap<object, BindingInspection>([
+      [object, { snapshot: { value: 1 }, text: 'object rendering' }],
+      [array, { snapshot: [1, 2], text: 'array rendering\n' }],
+      [empty, { snapshot: {}, text: '' }],
+    ])
+    const seen: string[] = []
+    const { inspect } = makeInspect({ push: text => seen.push(text) }, new WeakMap(), () => {}, inspections)
+    inspect('before', object, array, empty, 'after')
+    expect(seen).toEqual(['before\n', 'object rendering\n', 'array rendering\n', 'after\n'])
+    expect(Reflect.ownKeys(object)).toEqual(['value'])
+  })
+
+  it.each([
+    ['null field', (value: Record<string, unknown>) => { value.value = null }],
+    ['scalar field', (value: Record<string, unknown>) => { value.value = 'one' }],
+    ['object replacing a scalar', (value: Record<string, unknown>) => { value.value = {} }],
+    ['object replacing null', (value: Record<string, unknown>) => { value.nullable = {} }],
+    ['proxy', (value: Record<string, unknown>) => { value.nested = new Proxy({}, {}) }],
+    ['prototype', (value: Record<string, unknown>) => { Object.setPrototypeOf(value.nested, null) }],
+    ['renamed field', (value: Record<string, unknown>) => { delete value.value; value.changed = 1 }],
+    ['removed field', (value: Record<string, unknown>) => { delete value.value }],
+    ['hidden field', (value: Record<string, unknown>) => { Object.defineProperty(value, 'value', { enumerable: false }) }],
+  ] as const)('formats current data after changing a %s', (_name, change) => {
+    const value: Record<string, unknown> = { value: 1, nested: { answer: 42 }, nullable: null }
+    const snapshot = snapshotPtcJsonValue(value)!
+    const inspections = new WeakMap<object, BindingInspection>([[value, { snapshot, text: 'original rendering' }]])
+    const seen: string[] = []
+    const { inspect } = makeInspect({ push: text => seen.push(text) }, new WeakMap(), () => {}, inspections)
+    change(value)
+    inspect(value)
+    expect(seen.join('')).not.toContain('original rendering')
+    expect(seen).toHaveLength(1)
+  })
+
+  it.each([null, 42, [], {}, { value: [undefined] }, { value: encodePtcJsonWire({}), inspection: 42 }])('rejects malformed binding result %j', async (resolution) => {
+    const remote = host()
+    remote.invoke = async () => resolution as never
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding resolution must be lossless JSON')
+  })
+
+  it.each([null, 42])('rejects inspection metadata for scalar %j', async (value) => {
+    const remote = host()
+    remote.invoke = async () => ({ value: encodePtcJsonWire(value), inspection: 'text' })
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding inspection requires an object or array')
+  })
+
+  it('rejects inspection metadata for non-JSON image identities', async () => {
+    const remote = host()
+    remote.invoke = async () => ({ value: [{ kind: 'image', id: 'one', attachmentId: 'one', path: '/one.png', width: 1, height: 1 }], inspection: 'text' })
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), () => Object.create({ image: true }) as Record<string, never>) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding inspection requires lossless JSON data')
+  })
+
+  it('returns unchanged JSON when no inspection registry is requested', async () => {
+    const remote = host()
+    remote.invoke = async () => ({ value: encodePtcJsonWire({ answer: 42 }), inspection: 'answer' })
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).resolves.toEqual({ answer: 42 })
+  })
+})
+
 describe('captureStreamWrites', () => {
   it('redirects writes into the buffer and restores on request', () => {
     const seen: string[] = []
@@ -377,7 +447,7 @@ describe('prepareException', () => {
 describe('makeNamespaces', () => {
   it('rejects malformed remote results and keeps prototype-colliding function names callable', async () => {
     const remote = host()
-    remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? [undefined] as never : encodePtcJsonWire(`${name}-ok`))
+    remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? { value: [undefined] as never } : { value: encodePtcJsonWire(`${name}-ok`) })
     const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
     expect(Object.getPrototypeOf(tools)).toBeNull()
     for (const name of ['__proto__', 'constructor', 'toString']) await expect(tools[name]?.({})).resolves.toBe(`${name}-ok`)
