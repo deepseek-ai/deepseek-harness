@@ -398,18 +398,11 @@ describe('DeepSeekFileStore', () => {
   it('starts a fresh upload while the cancelled transport is settling', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
+    const firstResponse = Promise.withResolvers<Response>()
     let requests = 0
-    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+    const fetchImpl = vi.fn(() => {
       requests += 1
-      if (requests === 1) {
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
-            queueMicrotask(() => {
-              reject(new Error('upload aborted', { cause: init.signal?.reason }))
-            })
-          }, { once: true })
-        })
-      }
+      if (requests === 1) return firstResponse.promise
       return Promise.resolve(new Response(JSON.stringify({
         id: 'file-api-retry', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
         filename: 'dsh-retry.png', mime_type: 'image/png',
@@ -429,7 +422,12 @@ describe('DeepSeekFileStore', () => {
     const retried = store.ensureUploaded(VERSION, CONNECTION, POLICY)
 
     await expect(cancelled).rejects.toThrow('cancel first')
-    await expect(retried).resolves.toMatchObject({ record: { fileId: 'file-api-retry' } })
+    try {
+      await expect(retried).resolves.toMatchObject({ record: { fileId: 'file-api-retry' } })
+      expect(requests).toBe(2)
+    } finally {
+      firstResponse.reject(new Error('cancelled transport closed'))
+    }
   })
 
   it('rejects a request version above the per-image limit before transport', async () => {

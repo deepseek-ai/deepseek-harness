@@ -568,7 +568,8 @@ describe('DeepSeekAdapter against a mock server', () => {
       expect(upload).toHaveBeenCalledTimes(1)
       expect(messages).toHaveBeenCalledTimes(3)
       expect(messages.mock.calls[0]?.[1]?.body).toEqual(expect.stringContaining('base64'))
-      expect(String(messages.mock.calls[2]?.[1]?.body).match(/"type":"base64"/gu)).toHaveLength(2)
+      const inline = messages.mock.calls[2]?.[1]?.body
+      expect(typeof inline === 'string' && inline.match(/"type":"base64"/gu)).toHaveLength(2)
       await request()
       expect(upload).toHaveBeenCalledTimes(2)
       expect(messages.mock.calls[3]?.[1]?.body).toEqual(expect.stringContaining('file-probe'))
