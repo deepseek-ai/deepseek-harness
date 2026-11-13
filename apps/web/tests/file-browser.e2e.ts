@@ -12,8 +12,9 @@ import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from 
 import { launchWebScaffold, seedSession, watchConsole } from './scaffold.ts'
 import { connectFreshWorkspace, saveFailureShot } from './support.ts'
 
-/** Press at the centre of `from`, travel in steps, and release at `to`. */
+/** Wait for a stable, hit-tested source, then drag its centre to `to`. */
 async function drag(page: Page, from: Locator, to: { x: number; y: number }): Promise<void> {
+  await from.hover()
   const box = await from.boundingBox()
   if (box === null) throw new Error('drag source is not rendered')
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
