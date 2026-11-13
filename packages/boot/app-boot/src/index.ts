@@ -480,7 +480,7 @@ function rowIds(patches: readonly PatchOptions[]): Set<string> {
     }
   }
   // Patch warnings are logged when the generation itself is prepared.
-  visit(applyEntryPatches([], patches as PatchOptions[], () => {}))
+  visit(applyEntryPatches([], patches as PatchOptions[], () => {}).data)
   return ids
 }
 
@@ -614,9 +614,9 @@ export interface ConfigDumpLayer {
  * Compose the configured entry list: parse the base config file with the
  * include's entry-list dialect, apply every layer's patches as ONE flattened
  * list through the include's own patch algorithm (`applyEntryPatches`) — the
- * same call `boot()` makes, so even patch-visibility corner cases (a later
- * layer targeting a group child a plain config replacement introduced, which
- * the single-pass id index never sees) compose identically — then render the
+ * same call `boot()` makes, so patch-visibility cases (a later layer
+ * targeting a group child that a group config replacement introduced or
+ * removed) compose identically — then render the
  * result as YAML in the same dialect (`!!js` expressions print verbatim,
  * unevaluated). Row admission is a later stage: a plugin row the compatibility
  * policy denies still appears here, while a denied bundle contributes no layer.
@@ -673,14 +673,14 @@ export function renderConfigDump(
   // The patches are cloned per call: applyEntryPatches clones entries and
   // inserted rows but assigns override values such as `config` by reference,
   // so each snapshot keeps its own copies of those values.
-  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
+  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches>['data'] => {
     const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
     return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
       // The include logs through cordis's printf-style logger (`%C` = code); a
       // dump has no logger, so substitute inline for a plain line.
       let index = 0
       warnings.push(message.replace(/%C/g, () => JSON.stringify(args[index++])))
-    })
+    }).data
   }
   let previous = base
   let previousWarnings: string[] = []

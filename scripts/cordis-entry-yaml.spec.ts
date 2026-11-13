@@ -10,9 +10,13 @@ describe('Include YAML dialect', () => {
     expect(stringifyEntryYaml(parsed)).toBe(source)
   })
 
-  it('reads binary integers as numbers and dates as strings', () => {
-    expect(parseEntryYaml('- 0b101\n- 2001-01-01\n- ~\n')).toEqual([5, '2001-01-01', null])
+  it('reads scalars under the YAML 1.2 core schema', () => {
+    expect(parseEntryYaml('- 0b101\n- 0o17\n- 0x1F\n- yes\n- 2001-01-01\n- ~\n')).toEqual(['0b101', 15, 31, 'yes', '2001-01-01', null])
     expect(parseEntryYaml('')).toBeUndefined()
+  })
+
+  it('rejects unknown tags', () => {
+    expect(() => parseEntryYaml('- !!binary aGVsbG8=\n- !custom value\n')).toThrow()
   })
 
   it('writes repeated references in full', () => {

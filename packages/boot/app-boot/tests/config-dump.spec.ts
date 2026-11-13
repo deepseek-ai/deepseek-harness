@@ -115,12 +115,9 @@ describe('renderConfigDump', () => {
   })
 
   it('composes all layers as one flattened patch list, exactly like boot()', () => {
-    // boot() flattens every layer into ONE applyEntryPatches call, whose id
-    // index sees inserted rows but NOT children introduced by a plain group
-    // `config` replacement. A per-layer composition would rebuild the index
-    // between layers and let the second layer patch that child — a tree the
-    // real boot never mounts. Pin the single-call semantics: the child patch
-    // is skipped (with the layer-labeled warning), matching boot.
+    // boot() flattens every layer into ONE applyEntryPatches call. Children
+    // supplied by a group `config` replacement join the id index, so a later
+    // layer can patch them, and the dump lists that layer on the group row.
     const dir = tmp()
     const base = join(dir, 'base.yml')
     writeFileSync(base, [
@@ -138,14 +135,23 @@ describe('renderConfigDump', () => {
       },
       { label: 'b.yml', patches: [{ id: 'child', config: { v: 2 } }] },
     ], line => void warnings.push(line))
-    expect(warnings).toEqual([`${NAME}: [b.yml] patch: entry "child" not found`])
+    expect(warnings).toEqual([])
     const parsed = parseEntryYaml(dump) as {
       config?: { config?: { v?: number } }[]
     }[]
-    expect(parsed[0]?.config?.[0]?.config?.v).toBe(1)
-    // The skipped layer did not change the row, so the comment does not list it.
-    expect(dump).toContain('# == base.yml, patched by a.yml\n- id: g')
-    expect(dump).not.toContain('b.yml\n- id: g')
+    expect(parsed[0]?.config?.[0]?.config?.v).toBe(2)
+    expect(dump).toContain('# == base.yml, patched by a.yml, b.yml\n- id: g')
+  })
+
+  it('drops the children of a replaced group config from the patch index', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: g\n  name: ./group.mjs\n  group: true\n  config:\n    - id: child\n      name: ./noop.mjs\n')
+    const warnings: string[] = []
+    renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches: [{ id: 'g', config: [] }, { id: 'child', disabled: true }] },
+    ], line => void warnings.push(line))
+    expect(warnings).toEqual([`${NAME}: [a.yml] patch: entry "child" not found`])
   })
 
   it('reports a patch whose target row is absent through warn with its layer label and keeps composing', () => {

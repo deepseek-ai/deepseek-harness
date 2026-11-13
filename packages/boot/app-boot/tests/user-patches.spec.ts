@@ -132,12 +132,12 @@ describe('loadOptionalPatches', () => {
       .toThrow(new RegExp(`^${NAME}: failed to read patches `))
   })
 
-  it('fails loud on unparsable YAML and on a !!js tag with no expression body', () => {
+  it('fails loud on unparsable YAML and on an unknown tag', () => {
     const dir = tmp()
     writeFileSync(join(dir, PROFILE_PATCH_FILENAME), 'invalid: [unclosed\n')
     expect(() => loadOptionalPatches(NAME, join(dir, PROFILE_PATCH_FILENAME)))
       .toThrow(new RegExp(`^${NAME}: failed to parse patches `))
-    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config:\n    a: !!js\n')
+    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config:\n    a: !js process.env.A\n')
     expect(() => loadOptionalPatches(NAME, join(dir, PROFILE_PATCH_FILENAME)))
       .toThrow(new RegExp(`^${NAME}: failed to parse patches `))
   })
@@ -343,8 +343,8 @@ describe('profile reconciliation settlement', () => {
     const ctx = await boot(NAME, join(dir, 'cordis.yml'), patches)
     onTestFinished(() => ctx.fiber.dispose())
     // Reload diagnostics carry the import error's message without stack frames.
-    const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: Error \\[ERR_MODULE_NOT_FOUND\\]'
-    const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs' imported from [^\\n]*$`, 'u')
+    const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: ModuleNotFoundError'
+    const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs'$`, 'u')
     expect(await reconcileProfilePatches(ctx, patches, NAME)).toEqual([expect.stringMatching(diagnostic)])
   })
 

@@ -156,7 +156,7 @@ function preflight(
         data = config.initial
       }
       if (!Array.isArray(data)) return undefined
-      const children = applyEntryPatches(data as EntryOptions[], config.patches, patchWarning(ctx))
+      const children = applyEntryPatches(data as EntryOptions[], structuredClone(config.patches), patchWarning(ctx)).data
       return check(children, pathToFileURL(filename).href)
         ? `its included file ${filename} reaches an incompatible plugin, and that file is never rewritten`
         : undefined
@@ -180,7 +180,7 @@ export function prepareProfilePatches(
   ctx: Context, patches: PatchOptions[], parentURL: string, binName = 'dsh',
 ): PatchOptions[] {
   if (ctx.get('profileContext') === undefined) return patches
-  const entries = applyEntryPatches([], patches, patchWarning(ctx))
+  const entries = applyEntryPatches([], structuredClone(patches), patchWarning(ctx)).data
   const rows = prepareProfileEntries(ctx, entries, parentURL, binName)
   return rows.length === 0 ? [] : [{ insert: rows }]
 }

@@ -86,7 +86,7 @@ it('updates the last matching named override and leaves mismatched names untouch
     { id: 'tool', name: 'package', config: { value: { __jsExpr: 'process.platform' } }, disabled: false },
     { id: 'tool', name: 'another-package', disabled: true },
   ])
-  expect(applyEntryPatches([{ id: 'tool', name: 'package' }], patches, () => {}))
+  expect(applyEntryPatches([{ id: 'tool', name: 'package' }], patches, () => {}).data)
     .toMatchObject([{ id: 'tool', name: 'package', disabled: false }])
   expect(await writePluginEnabled(profile, 'tool', 'package', true)).toBe(false)
   expect(await readFile(profile.patchPath, 'utf8')).toBe(text)

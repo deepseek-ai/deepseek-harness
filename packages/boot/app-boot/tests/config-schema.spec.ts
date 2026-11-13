@@ -418,15 +418,18 @@ describe('collectConfigSchemas', () => {
     expect(validates(result, [{ name: 'good', config: 3 }])).toBe(true)
   })
 
-  it('keeps healthy group and include siblings after malformed child rows', async () => {
+  it('keeps healthy group siblings after a malformed child row and rejects an include with a non-mapping entry', async () => {
     modules.set('good', { Config: Schema.string() })
     const result = await collectConfigSchemas(profile, [
       row('cordis:group', [{ name: false }, row('good')]),
-      row('cordis:include', { path: './missing.yml', initial: [null, row('good')] }),
+      row('cordis:include', { path: './missing.yml', initial: [row('good'), { ...row('cordis:group', [null]), group: true }] }),
     ], resolution)
-    expect(result['x-cordis'].diagnostics.map(item => item.path)).toEqual(['/0/config/0', '/1/include/0'])
+    expect(result['x-cordis'].diagnostics.map(item => [item.path, item.message])).toEqual([
+      ['/0/config/0', expect.any(String)],
+      ['/1', expect.stringContaining('has an entry that is not a mapping')],
+    ])
     expect(result['x-cordis'].entries.filter(entry => entry.status === 'schema').map(entry => entry.path))
-      .toEqual(['/0/config/1', '/1/include/1'])
+      .toEqual(['/0/config/1'])
   })
 
   it.each([

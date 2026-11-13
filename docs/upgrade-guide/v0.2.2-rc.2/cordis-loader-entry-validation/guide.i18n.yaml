@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/cordis-loader-entry-validation/guide.md
+/:
+  en: b414093b29c38765
+  zh: 2a69f37a40e35a99
+/loader-validates-entry-options-and-include-parses-yaml-1-2:
+  en: 0ba0b666924ce1f0
+  zh: 0c5668ee67163d00
+/loader-validates-entry-options-and-include-parses-yaml-1-2/change:
+  en: b0d2ae6a748cab50
+  zh: a2521c4dc48e4d3d
+/loader-validates-entry-options-and-include-parses-yaml-1-2/migration:
+  en: 2c167e1042c952a5
+  zh: aec49a7754befae0

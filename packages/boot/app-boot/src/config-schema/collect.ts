@@ -52,6 +52,10 @@ function entryList(value: unknown): unknown[] {
   return value as unknown[]
 }
 
+function hasNonRecordEntry(rows: readonly unknown[]): boolean {
+  return rows.some(row => !record(row) || (row.group === true && Array.isArray(row.config) && hasNonRecordEntry(row.config)))
+}
+
 function includePatches(value: unknown): PatchOptions[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) throw new Error('include patches must be a literal patch list; config expressions are not evaluated')
@@ -157,9 +161,11 @@ export async function collectConfigSchemas(
       }
       const patches = includePatches(config.patches)
       const rows = entryList(source)
+      // Include rejects the whole file when any entry, including a group child, is not a mapping.
+      if (hasNonRecordEntry(rows)) throw new Error(`include ${filename} has an entry that is not a mapping; child declarations are unavailable`)
       let children: EntryOptions[]
       try {
-        children = applyEntryPatches(rows as EntryOptions[], patches, warn(path))
+        children = applyEntryPatches(rows as EntryOptions[], patches, warn(path)).data
       } catch (error) {
         throw new Error(`include patches could not be composed for ${filename}; child declarations are unavailable`, { cause: error })
       }
