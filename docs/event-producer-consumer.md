@@ -109,7 +109,7 @@ Application listeners are outside this package matrix. Desktop Host subscribes t
 | `workspace/session-archived` | `parallel` | [`packages/workspace/workspace/src/index.ts:157`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | `worktree` |
 | `workspace/session-stop` | `parallel` | [`packages/workspace/workspace/src/index.ts:148`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`schedule`](../packages/schedule/schedule), [`subagent`](../packages/subagent/subagent) |
 | `workspace/session-unarchiving` | `parallel` | [`packages/workspace/workspace/src/index.ts:164`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | `worktree` |
-| `worktree/cleanup` | `emit` | [`packages/experimental/worktree/src/archive.ts:25`](../packages/experimental/worktree/src/archive.ts) | `worktree` (`emit`) | - |
+| `worktree/cleanup` | `emit` | [`packages/experimental/worktree/src/archive.ts:26`](../packages/experimental/worktree/src/archive.ts) | `worktree` (`emit`) | - |
 <!-- END GENERATED event-producer-consumer:events -->
 
 ## Non-harness or undeclared event strings seen in package source
