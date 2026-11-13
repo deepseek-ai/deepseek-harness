@@ -1496,6 +1496,28 @@ function processAlive(pid: number): boolean {
 }
 
 /**
+ * Read the parsed `/proc/<pid>/stat` fields of every process listed in `/proc`.
+ * @returns one row per process still present when its stat file is read.
+ * @throws when `/proc` cannot be listed.
+ */
+function procStatRows(): { pid: number; fields: { state: string; ppid: number; pgrp: number } }[] {
+  const rows: { pid: number; fields: { state: string; ppid: number; pgrp: number } }[] = []
+  for (const entry of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) continue
+    let stat: string
+    try {
+      stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
+    } catch (_exitedMidScan) {
+      // The process exited mid-scan; it is neither a live member nor a descendant.
+      continue
+    }
+    const fields = procStatFields(stat)
+    if (fields !== undefined) rows.push({ pid: Number(entry), fields })
+  }
+  return rows
+}
+
+/**
  * Whether any member of the child's POSIX process group is still executing.
  * Zombie entries (state `Z`) do not count: they are dead records awaiting
  * reaping, and the kill(-pid, 0) group probe would report them as alive.
@@ -1514,19 +1536,7 @@ function groupAlive(pid: number | undefined): boolean {
       return false
     }
     try {
-      for (const entry of readdirSync('/proc')) {
-        if (!/^\d+$/.test(entry)) continue
-        let stat: string
-        try {
-          stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
-        } catch (_exitedMidScan) {
-          // The process exited mid-scan; it is not a live member.
-          continue
-        }
-        const parsed = procStatFields(stat)
-        if (parsed !== undefined && parsed.pgrp === pid && parsed.state !== 'Z') return true
-      }
-      return false
+      return procStatRows().some(({ fields }) => fields.pgrp === pid && fields.state !== 'Z')
     } catch {
       return false
     }
@@ -1554,20 +1564,9 @@ function groupAlive(pid: number | undefined): boolean {
 function descendantPids(root: number): number[] {
   if (root <= 0) return []
   if (process.platform === 'linux') {
-    const rows: Array<[number, number]> = []
+    let rows: Array<[number, number]>
     try {
-      for (const entry of readdirSync('/proc')) {
-        if (!/^\d+$/.test(entry)) continue
-        let stat: string
-        try {
-          stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
-        } catch (_exitedMidScan) {
-          // The process exited mid-scan; skip it.
-          continue
-        }
-        const parsed = procStatFields(stat)
-        if (parsed !== undefined) rows.push([Number(entry), parsed.ppid])
-      }
+      rows = procStatRows().map(({ pid, fields }) => [pid, fields.ppid])
     } catch {
       return []
     }
