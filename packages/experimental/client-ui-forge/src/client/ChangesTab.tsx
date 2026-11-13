@@ -53,7 +53,7 @@ import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
-import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
+import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { useForgeCopy } from './forge-copy.ts'
@@ -200,7 +200,7 @@ interface WriteRefusal {
 interface Expansion {
   readonly source: string | Extract<ChangesData, { kind: 'local' }> | null
   readonly texts: Readonly<Record<string, readonly string[] | 'loading'>>
-  readonly open: Readonly<Record<string, ReadonlySet<number>>>
+  readonly open: Readonly<Record<string, ReadonlyMap<number, GapReveal>>>
 }
 
 /** Files whose hunks draw more lines show the large-file notice until revealed. */
@@ -209,7 +209,7 @@ const LARGE_FILE_LINES = 1000
 /** Lines the files above may change before a file starts collapsed. */
 const OPEN_LINES = 5000
 
-const NO_GAPS: ReadonlySet<number> = new Set()
+const NO_GAPS: ReadonlyMap<number, GapReveal> = new Map()
 
 const NO_FOLDS: ReadonlyMap<string, { readonly hunks: ReadonlySet<number>; readonly lens: string }> = new Map()
 
@@ -876,9 +876,9 @@ export function ChangesTab({
       return change(previous.source === expansionSource ? previous : { source: expansionSource, texts: {}, open: {} })
     })
   }
-  const expand = (owner: ChangesData, file: ForgeDiffFile, index: number): void => {
+  const expand = (owner: ChangesData, file: ForgeDiffFile, index: number, expansion: GapExpansion): void => {
     const path = file.path
-    update(value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
+    update(value => ({ ...value, open: { ...value.open, [path]: revealGap(value.open[path], index, expansion) } }))
     if (current.texts[path] !== undefined) return
     update(value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
     const reading = owner.kind === 'local' ? localText(owner.scope, path) : changeRequestText(owner.url, owner.headSha, path)
@@ -1123,10 +1123,10 @@ export function ChangesTab({
       setChosen(value => ({ ...value, [file.path]: !(value[file.path] ?? byDefault) }))
     },
     reveal: (path) => { setRevealed(value => new Set([...value, path])) },
-    expand: (file, index) => {
+    expand: (file, index, expansion) => {
       const { data: owner, expand: open } = live.current
       /* v8 ignore next -- sections render only while changes are loaded */
-      if (owner !== null) open(owner, file, index)
+      if (owner !== null) open(owner, file, index, expansion)
     },
     view: (file, viewed) => {
       const { data: owner, markViewed: mark } = live.current

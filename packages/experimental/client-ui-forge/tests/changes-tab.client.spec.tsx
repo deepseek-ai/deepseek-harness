@@ -1087,6 +1087,61 @@ describe('ChangesTab unchanged lines', () => {
     expect(rowTexts(app).slice(-2)).toEqual(['const t13 = 13', 'const t13 = 13'])
   })
 
+  it('shows a gap over one step a step at a time from the hunk on either side, and a gap of one step at once', async () => {
+    const lines = Array.from({ length: 100 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 49, oldLines: 3, newStart: 49, newLines: 3, lines: [' line 49', '-old 50', '+line 50', ' line 51'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        faces.localText.mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    const leading = within(section).getByRole('group', { name: '48 unchanged lines' })
+    expect(within(leading).queryByRole('button', { name: 'Expand 20 lines down' })).toBeNull()
+
+    fireEvent.click(within(leading).getByRole('button', { name: 'Expand 20 lines up' }))
+    expect(within(leading).getByRole('button', { name: 'Expand 20 lines up' }).hasAttribute('disabled')).toBe(true)
+    await settle()
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 29', 'line 29'])
+    const trailing = within(section).getByRole('group', { name: '49 unchanged lines' })
+    expect(within(trailing).queryByRole('button', { name: 'Expand 20 lines up' })).toBeNull()
+
+    fireEvent.click(within(trailing).getByRole('button', { name: 'Expand 20 lines down' }))
+    expect(rowTexts(section).slice(-2)).toEqual(['line 71', 'line 71'])
+    expect(within(section).getByRole('group', { name: '29 unchanged lines' })).toBeTruthy()
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Expand 20 lines up' }))
+    fireEvent.click(within(section).getByRole('button', { name: '8 unchanged lines' }))
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 1', 'line 1'])
+    expect([...section.querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent)).toEqual(['29 unchanged lines'])
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('shows the first step of the unknown lines after the last hunk once they are read', async () => {
+    const lines = Array.from({ length: 60 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 2, lines: [' line 1', '-old 2', '+line 2'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        faces.localText.mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    fireEvent.click(within(section).getByRole('button', { name: en['diff.unchangedRest'] }))
+    await settle()
+    expect(rowTexts(section).slice(-2)).toEqual(['line 22', 'line 22'])
+    expect(within(section).getByRole('group', { name: '38 unchanged lines' })).toBeTruthy()
+  })
+
   it('reports a read that failed or no longer matches and keeps the lines collapsed', async () => {
     const m = mount({
       setup: (faces) => {

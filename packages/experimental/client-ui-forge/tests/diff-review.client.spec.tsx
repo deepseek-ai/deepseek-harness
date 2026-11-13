@@ -31,7 +31,7 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
     reach: new SectionReach(), annotation: vi.fn(() => null), fileMenu: vi.fn(() => null), unfold: vi.fn(),
   }
   const props: DiffFileProps = { file, visible: true, expanded: true, large: false, revealed: false,
-    text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
+    text: undefined, open: new Map(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
     viewed: 'unviewed', viewedNote: '', viewedDisabled: false, handlers, review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
   const line = (name: string) => view.getByRole('button', { name: `Select line ${name}` })
