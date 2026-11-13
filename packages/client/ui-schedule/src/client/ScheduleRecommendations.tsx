@@ -1,6 +1,6 @@
 /** Built-in task recommendations under the empty task catalog; choosing one prefills a new Session. */
 import { useId, type ReactNode } from 'react'
-import { Button, IconClockOutlineRegular, IconPlusOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconClockOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import {
   BranchGlyph, CloudSunGlyph, DumbbellGlyph, IssueGlyph, NewspaperGlyph, PluginCheckGlyph,
@@ -51,7 +51,7 @@ export function ScheduleRecommendations({ t, onUse }: ScheduleRecommendationsPro
             >
               <span className={css.tile}>
                 <Glyph className={css.tileGlyph} />
-                <IconPlusOutlineMedium className={css.tilePlus} size={18} />
+                <IconPlusOutlineRegular className={css.tilePlus} size={18} />
               </span>
               <span className={css.recommendationContent}>
                 <span className={css.recommendationTitle}>{t(`recommend.${id}.title`)}</span>

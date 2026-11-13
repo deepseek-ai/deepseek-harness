@@ -1,7 +1,8 @@
 /**
- * Tile glyphs for recommended tasks: a 20px grid drawn 1:1 at 20px with 1.5px
- * `currentColor` strokes, round caps, and round joins. Each glyph marks its
- * main shape with `data-fill`; the page stylesheet supplies that fill color.
+ * Tile glyphs for recommended tasks: a 20px grid drawn 1:1 at 20px with 1.25px
+ * `currentColor` strokes, the shared icons' Regular weight (one unit on their
+ * 16-unit grid) at this size, with round caps and round joins. Each glyph marks
+ * its main shape with `data-fill`; the page stylesheet supplies that fill color.
  */
 import type { ReactNode } from 'react'
 
@@ -13,7 +14,7 @@ export interface TileGlyphProps {
 function Glyph({ className, children }: TileGlyphProps & { readonly children: ReactNode }): ReactNode {
   return (
     <svg className={className} width={20} height={20} viewBox="0 0 20 20" fill="none" stroke="currentColor"
-      strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      strokeWidth={1.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
       {children}
     </svg>
   )

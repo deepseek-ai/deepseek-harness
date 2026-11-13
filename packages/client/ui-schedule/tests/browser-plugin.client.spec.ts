@@ -483,7 +483,9 @@ describe('ui-schedule browser half', () => {
       for (const [key, schedule] of schedules) {
         const times = schedule.match(/\d{1,2}:\d{2}/g)
         expect(times).toHaveLength(1)
-        expect(dictionary[key.replace(/schedule$/, 'prompt') as keyof typeof dictionary]).toContain(times![0])
+        // A digit boundary keeps 0:00 from matching inside 20:00.
+        expect(dictionary[key.replace(/schedule$/, 'prompt') as keyof typeof dictionary])
+          .toMatch(new RegExp(`(?<!\\d)${times![0]}(?!\\d)`))
       }
     }
   })

@@ -1548,22 +1548,15 @@
 }
 
 .recommendationTitle {
-  overflow: hidden;
   font-weight: 500;
   line-height: 22px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .recommendationDescription {
-  display: -webkit-box;
   margin-top: 2px;
-  overflow: hidden;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
   line-height: 20px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .recommendationWhen {

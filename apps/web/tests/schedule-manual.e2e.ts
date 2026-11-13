@@ -100,21 +100,40 @@ async function recommendationColumns(recommendations: Locator): Promise<number> 
   return recommendations.getByRole('list').evaluate(list => getComputedStyle(list).gridTemplateColumns.split(' ').length)
 }
 
-it('lists the recommendations in one column on a phone-width page', async () => {
+it.each([
+  { locale: 'en', panel: 'Automation tasks', title: 'Daily brief' },
+  { locale: 'de', panel: 'Automatisierungsaufgaben', title: 'Tagesüberblick' },
+] as const)('shows every recommendation title and description in full on phone and desktop widths in $locale', async (copy) => {
   const scaffold = await launchWebScaffold({ firstUse: true })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     browser = await chromium.launch()
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'zh' })
-    await page.addInitScript(() => { localStorage.setItem('dsh.locale', 'zh') })
-    const tripwire = watchConsole(page)
-    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await revealNavigationDrawer(page, 'zh')
-    await page.getByRole('button', { name: '自动化任务', exact: true }).click()
-    const recommendations = page.getByTestId('schedule-recommendations')
-    await recommendations.getByRole('button', { name: '每日简报', exact: true }).waitFor()
-    expect(await recommendationColumns(recommendations)).toBe(1)
-    expect(tripwire.pageErrors).toEqual([])
+    // 680px puts the list just above the 600px column breakpoint, where each column is narrowest.
+    for (const { width, columns } of [{ width: 390, columns: 1 }, { width: 680, columns: 2 }, { width: 1440, columns: 2 }]) {
+      const phone = width < 600
+      const page = await browser.newPage({ viewport: { width, height: 900 }, isMobile: phone, hasTouch: phone, locale: copy.locale })
+      await page.addInitScript((locale) => { localStorage.setItem('dsh.locale', locale) }, copy.locale)
+      const tripwire = watchConsole(page)
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await revealNavigationDrawer(page, copy.locale)
+      await page.getByRole('button', { name: copy.panel, exact: true }).click()
+      const recommendations = page.getByTestId('schedule-recommendations')
+      await recommendations.getByRole('button', { name: copy.title, exact: true }).waitFor()
+      await page.evaluate(() => document.fonts.ready)
+      expect(await recommendationColumns(recommendations)).toBe(columns)
+      // The title carries the button's name and the first description reference is the description; neither clips.
+      expect(await recommendations.getByRole('button').evaluateAll(buttons => buttons.flatMap((button) => {
+        const name = button.getAttribute('aria-label')!
+        const title = [...button.querySelectorAll('span')].find(span => span.textContent === name)!
+        const description = document.getElementById(button.getAttribute('aria-describedby')!.split(' ')[0]!)!
+        return [
+          ...title.scrollWidth > title.clientWidth ? [`title: ${name}`] : [],
+          ...description.scrollHeight > description.clientHeight ? [`description: ${name}`] : [],
+        ]
+      }))).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+      await page.close()
+    }
   } finally {
     try { await browser?.close() } finally { await scaffold.close() }
   }
