@@ -2103,9 +2103,6 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
       node-addon-require-builtin:
         specifier: ^0.1.9
         version: 0.1.9
@@ -2143,9 +2140,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
@@ -2170,9 +2164,6 @@ importers:
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:*
         version: link:../../util/atomic-write
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
       yaml:
         specifier: ^2.8.1
         version: 2.9.0
@@ -2192,9 +2183,6 @@ importers:
       '@deepseek-ai/dsh-hmr':
         specifier: workspace:*
         version: link:../hmr
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
 
   packages/boot/hmr:
     dependencies:
@@ -10422,9 +10410,6 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:~
         version: link:../../../vendor/loader
-      js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.2
     optionalDependencies:
       '@deepseek-ai/dsh-cua-macos':
         specifier: workspace:*
@@ -10674,9 +10659,6 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 2.2.0
         version: 2.2.0
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
     optionalDependencies:
       '@deepseek-ai/dsh-cua-macos':
         specifier: workspace:*
@@ -11333,9 +11315,6 @@ importers:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:~
         version: link:../../../vendor/include
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
 
   packages/experimental/liveshare:
     dependencies:
@@ -11669,9 +11648,6 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
 
   packages/experimental/plugin-market-bundle:
     dependencies:
@@ -12716,9 +12692,6 @@ importers:
       '@deepseek-ai/dsh-session-format-v3-to-v4':
         specifier: workspace:*
         version: link:../../session/session-format-v3-to-v4
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
       picomatch:
         specifier: ^4.0.7
         version: 4.0.7
@@ -12726,9 +12699,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3
@@ -15108,12 +15078,6 @@ importers:
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../skill/skill-filesystem
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
 
   packages/preset/agent-preset-registry:
     dependencies:
@@ -15123,9 +15087,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
       zod:
         specifier: 4.6.6
         version: 4.6.6
@@ -15211,9 +15172,6 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:../../session/working-directory
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
 
   packages/preset/persona:
     dependencies:
@@ -17854,6 +17812,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../core/agent
@@ -17924,6 +17885,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:~
         version: link:../../../vendor/loader
@@ -18606,9 +18570,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.11.6)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
@@ -18712,9 +18673,6 @@ importers:
       '@deepseek-ai/dsh-web-app':
         specifier: workspace:*
         version: link:../../bundle/web-app
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       react:
         specifier: ^18.2.0
         version: 18.3.1

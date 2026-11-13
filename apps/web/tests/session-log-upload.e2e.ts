@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import yaml from 'js-yaml'
 import { expect, it, onTestFinished } from 'vitest'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
 import { launchWebScaffold, webSnapshotMode } from './scaffold.ts'
@@ -44,7 +44,7 @@ it.skipIf(webSnapshotMode() === 'record')('persists the upload switch and omits 
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
     await expect.poll(async () => {
-      const patches = yaml.load(await readFile(join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml'), 'utf8')) as { id: string; config?: { enabled?: boolean } }[]
+      const patches = parseEntryYaml(await readFile(join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml'), 'utf8')) as { id: string; config?: { enabled?: boolean } }[]
       return patches.find(patch => patch.id === 'session-log-deepseek')?.config?.enabled ?? true
     }).toBe(enabled)
     await page.keyboard.press('Escape')

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
+import { stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { assertInstalledTree, createPackedInstallation } from './packed-installation.ts'
 
 const root = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -64,7 +65,7 @@ export function apply(ctx) {
 }
 `)
   const patch = join(temporary, 'test.patch.yml')
-  await writeFile(patch, yaml.dump([
+  await writeFile(patch, stringifyEntryYaml([
     { id: 'session-telemetry-otel', disabled: true },
     { id: 'github-webhook-ingress', insert: [{ id: 'observe-packed-ingress', name: observer }] },
   ]))

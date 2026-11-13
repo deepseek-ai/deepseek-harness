@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
-import yaml from 'js-yaml'
 import { expect, it, onTestFinished } from 'vitest'
+import { stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { getDshRuntimeVersion } from '../../../../packages/boot/app-boot/src/plugin-compatibility.ts'
 import { generateOfficialBundleCatalog } from '../../../../scripts/gen-official-bundle-catalog.ts'
@@ -118,7 +118,7 @@ it.skipIf(!built)('installs the exported registry\'s local closure and switches 
   const observer = join(temporary, 'official-installer-observer.mjs')
   await writeFile(observer, await readFile(new URL('./fixtures/official-installer-observer.mjs', import.meta.url), 'utf8'))
   const patch = join(temporary, 'official-installer.patch.yml')
-  await writeFile(patch, yaml.dump([{ insert: [{ id: 'official-installer-observer', name: observer,
+  await writeFile(patch, stringifyEntryYaml([{ insert: [{ id: 'official-installer-observer', name: observer,
     config: {
       registry: registry.url,
       profile,

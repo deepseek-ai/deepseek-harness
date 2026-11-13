@@ -5,8 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
-import yaml from 'js-yaml'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { WELCOME_NOTICE_VERSION, launchWebScaffold, watchConsole } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
 
@@ -24,7 +23,7 @@ it('imports settings.yaml into the profile once and applies the imported values'
     const patchPath = join(harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
     type Row = { id?: string; config?: Record<string, unknown> }
     const config = (id: string): Record<string, unknown> | undefined =>
-      (yaml.load(readFileSync(patchPath, 'utf8'), { schema: entryListSchema }) as Row[]).find(row => row.id === id)?.config
+      (parseEntryYaml(readFileSync(patchPath, 'utf8')) as Row[]).find(row => row.id === id)?.config
     await expect.poll(() => config('ui-theme')?.['fontSize'], { timeout: 10_000 }).toBe(16)
     expect(config('ui-settings')?.['enabled']).toBe(false)
     expect(config('ui-settings-general')?.['welcomeNoticeVersion']).toBe(WELCOME_NOTICE_VERSION)
