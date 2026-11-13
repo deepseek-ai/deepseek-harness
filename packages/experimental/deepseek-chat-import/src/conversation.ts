@@ -13,11 +13,12 @@
 
 import { createHash } from 'node:crypto'
 import type { AttachmentId, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { AssistantMessage, ContentBlock, LlmFailure, SystemMessage, ToolCallBlock, ToolResultMessage, UserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
+import type {
+  AssistantMessage, ContentBlock, LlmFailure, MessageId, SystemMessage, ToolCallBlock, ToolCallId, ToolResultMessage,
+  UserMessage,
+} from '@deepseek-ai/dsh-llm'
+import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import { normalizeSessionTitle } from '@deepseek-ai/dsh-session-title'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { formatFetchOutput, formatSearchOutput, fetchMetaFromValue, searchMetaFromValue } from '@deepseek-ai/dsh-tool-web'
@@ -178,7 +179,7 @@ class LogBuilder {
   constructor(private readonly options: ConvertConversationOptions) {}
 
   add(event: EventInput): SessionSeq {
-    const seq = SessionSeq(this.events.length)
+    const seq = brandNumber<SessionSeq>(this.events.length)
     this.events.push({ ...event, seq, time: this.time })
     return seq
   }
@@ -191,7 +192,7 @@ class LogBuilder {
     if (turn === 1) {
       // An empty system head holds surface node 0, so a resumed Agent replaces it with the real prompt
       // instead of appending a system message after the imported history, which the stored format rejects.
-      const head: SystemMessage = { id: MessageId(this.id()), role: 'system', content: [], source: { kind: 'system-prompt' } }
+      const head: SystemMessage = { id: brandString<MessageId>(this.id()), role: 'system', content: [], source: { kind: 'system-prompt' } }
       this.add({ type: 'system/message', data: { turn, step, message: head }, surfaceOp: 'append' })
     }
     this.add({ type: 'user/message', data: this.userMessage(user), surfaceOp: 'append' })
@@ -262,7 +263,7 @@ class LogBuilder {
     const content: ContentBlock[] = text.trim().length > 0
       ? [...attachments, { type: 'text', text }]
       : attachments.length > 0 ? attachments : [{ type: 'text', text: '' }]
-    return { id: MessageId(this.id()), role: 'user', content, source: { kind: 'user' } }
+    return { id: brandString<MessageId>(this.id()), role: 'user', content, source: { kind: 'user' } }
   }
 
   /**
@@ -424,19 +425,19 @@ function linkLines(results: Extract<KnownFragment, { type: 'READ_LINK' }>['resul
 }
 
 function assistantMessage(id: string, content: ContentBlock[]): AssistantMessage {
-  return { id: MessageId(id), role: 'assistant', content, source: { kind: 'model', ...IMPORTED_MODEL_SOURCE } }
+  return { id: brandString<MessageId>(id), role: 'assistant', content, source: { kind: 'model', ...IMPORTED_MODEL_SOURCE } }
 }
 
 function toolResult(id: string, call: PendingCall): ToolResultMessage {
   return {
-    id: MessageId(id), role: 'tool', content: call.result, isError: call.isError,
+    id: brandString<MessageId>(id), role: 'tool', content: call.result, isError: call.isError,
     source: { kind: 'tool', callId: call.block.id }, toolCallId: call.block.id,
   }
 }
 
 function searchCall(id: string, fragment: Extract<KnownFragment, { type: 'TOOL_SEARCH' }>): PendingCall | undefined {
   const queries = fragment.queries.filter(query => query.trim().length > 0)
-  const block: ToolCallBlock = { type: 'tool-call', id: ToolCallId(id), name: 'web_search', arguments: JSON.stringify({ queries }) }
+  const block: ToolCallBlock = { type: 'tool-call', id: brandString<ToolCallId>(id), name: 'web_search', arguments: JSON.stringify({ queries }) }
   // The export separates a failed search from a search that found nothing.
   if (fragment.status === 'FAILED') {
     return { block, result: [{ type: 'text', text: 'Error: the export records this search as failed.' }], isError: true }
@@ -465,7 +466,7 @@ function searchCall(id: string, fragment: Extract<KnownFragment, { type: 'TOOL_S
 }
 
 function openCall(id: string, fragment: Extract<KnownFragment, { type: 'TOOL_OPEN' }>, url: string): PendingCall {
-  const block: ToolCallBlock = { type: 'tool-call', id: ToolCallId(id), name: 'web_fetch', arguments: JSON.stringify({ url }) }
+  const block: ToolCallBlock = { type: 'tool-call', id: brandString<ToolCallId>(id), name: 'web_fetch', arguments: JSON.stringify({ url }) }
   if (fragment.status !== 'FINISHED') {
     return { block, result: [{ type: 'text', text: 'Error: the page could not be opened.' }], isError: true }
   }

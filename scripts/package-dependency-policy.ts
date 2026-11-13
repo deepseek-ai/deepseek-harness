@@ -93,12 +93,10 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
-  // Imported message and tool-call ids use the installed runtime's brands.
-  '@deepseek-ai/dsh-llm': ['MessageId', 'ToolCallId'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeParentOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   // The DeepSeek chat importer validates its seed with the installed Session class before storing it.
-  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'Session', 'SessionLogOffset', 'SessionSeq', 'appendPluginRecord', 'pluginRecordOf'],
+  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'Session', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
   // Imported titles follow the installed title service's normalization.
   '@deepseek-ai/dsh-session-title': ['normalizeSessionTitle'],
