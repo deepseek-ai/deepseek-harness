@@ -67,7 +67,7 @@ final class WindowPointerInput {
 
     /// Send one window-directed transition at the current cursor. A release can be outside the window.
     func toggleMouse(in route: WindowRoute, button: String, isDown: Bool,
-                     isolation: isolated (any Actor)? = #isolation) async throws {
+                     isolation: isolated (any Actor)? = #isolation, validatePressGeometry: () throws -> Void) async throws {
         let selected = try Self.button(button)
         guard let screen = CGEvent(source: nil)?.location else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not read the current pointer position")
@@ -75,6 +75,7 @@ final class WindowPointerInput {
         let point = WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y)
         if isDown {
             try await Self.checkSystemHit(route, at: screen)
+            try validatePressGeometry()
             try Self.validate(point, in: route)
         }
         try Self.validateSystemWindow(route)

@@ -373,11 +373,14 @@ actor AXWorker {
         case "toggleMouse":
             let id = try params.windowID()
             let isDown = try params.string("direction") == "down"
-            let window = isDown
-                ? try ax().coordinateWindow(identity, id, budget: &recovery).window
-                : try NativePlatform.ownedWindow(identity.pid, id)
+            let window = try NativePlatform.ownedWindow(identity.pid, id)
             try await inputs().1.toggleMouse(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds),
-                                             button: params.string("mouseButton"), isDown: isDown)
+                                             button: params.string("mouseButton"), isDown: isDown) {
+                let current = try ax().coordinateWindow(identity, id, budget: &recovery).window
+                guard current.bounds == window.bounds else {
+                    throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before the press; read fresh state")
+                }
+            }
         case "click", "mouseMove":
             let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
