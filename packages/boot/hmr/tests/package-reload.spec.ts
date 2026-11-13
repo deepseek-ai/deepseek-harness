@@ -348,7 +348,7 @@ it('reports a stopped entry that no recomposition started again by its fiber sta
   f.ctx.registry.delete(plugin)
   await Promise.all(fibers.map(fiber => fiber.await()))
   // Applying the same patches leaves the unchanged Include's rows alone.
-  const warnings = await f.ctx.hmr.runExclusive(() => reconcileProfilePatches(f.ctx.root, readProfilePatches('test', f.profile), 'test'))
+  const warnings = await f.ctx.hmr.runExclusive(() => reconcileProfilePatches(f.ctx[Context.root], readProfilePatches('test', f.profile), 'test'))
   expect(warnings).toEqual([expect.stringMatching(/^addon \(addon\): fiber state 4/u)])
 })
 

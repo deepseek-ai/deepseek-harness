@@ -1,13 +1,14 @@
 /** Panel state builders shared by the browser-side tests. */
 
 import type {
-  ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure,
+  ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeDescription, ForgeFailure,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { BindingOrigin } from '@deepseek-ai/dsh-experimental-forge-session/types'
 import type {
   ForgeChangeRequestListState, ForgeCheckout, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree, ForgeSessionWorktree,
   ForgeWorktreeCreation, ForgeWorktreeFailure,
 } from '../src/types.ts'
+import { en, type ForgePanelKey } from '../src/client/locales.ts'
 
 /** Pull request reference in `octo/demo` on github.com. */
 export function ref(number: number): ChangeRequestRef {
@@ -92,6 +93,18 @@ export interface EntryOptions {
   readonly reviewRevision?: number
 }
 
+/**
+ * English copy of `key` as a view of a GitHub pull request shows it, with the code host and noun filled in.
+ * @param key - forge panel copy key.
+ * @returns the copy.
+ */
+export function hostCopy(key: ForgePanelKey): string {
+  return en[key].replaceAll('{forge}', 'GitHub').replaceAll('{noun}', 'PR')
+}
+
+/** How the GitHub provider names itself and its pull requests. */
+export const GITHUB: ForgeDescription = { forge: 'github', label: 'GitHub', changeRequestNoun: 'pull-request' }
+
 /** Binding of pull request `number` whose latest poll returned `status`, or that has not been polled yet. */
 export function entry(
   number: number,
@@ -99,7 +112,10 @@ export function entry(
   options: EntryOptions = {},
 ): ForgePanelChangeRequest {
   const key = `github:github.com/octo/demo#${number}` as ChangeRequestKey
-  const binding = { url: `https://github.com/octo/demo/pull/${number}`, origin: options.origin ?? 'created', ref: ref(number), reviewRevision: options.reviewRevision ?? 0 }
+  const binding = {
+    url: `https://github.com/octo/demo/pull/${number}`, origin: options.origin ?? 'created', ref: ref(number), forge: GITHUB,
+    reviewRevision: options.reviewRevision ?? 0,
+  }
   if (status === null) return { ...binding, update: null, snapshot: null }
   if ('code' in status) return { ...binding, update: { key, fetchedAt: 1, failure: status }, snapshot: options.kept ?? null }
   return { ...binding, update: { key, fetchedAt: 1, snapshot: status }, snapshot: status }
@@ -107,7 +123,7 @@ export function entry(
 
 /** Binding of a URL that no provider serves. */
 export function unserved(url: string): ForgePanelChangeRequest {
-  return { url, origin: 'created', ref: null, update: null, snapshot: null, reviewRevision: 0 }
+  return { url, origin: 'created', ref: null, forge: null, update: null, snapshot: null, reviewRevision: 0 }
 }
 
 /** Checkout of `/work/repo` on `main`. */
@@ -147,7 +163,7 @@ export function ready(overrides: Partial<ForgePanelState> = {}, checkoutOverride
     directory: '/work/repo',
     checkout: { state: 'ready', checkout: checkout(checkoutOverrides) },
     repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' },
-    readiness: { state: 'ready', message: null },
+    readiness: { state: 'ready', message: null, signIn: null },
     changeRequests: [],
     worktree: worktree(),
     local: null,

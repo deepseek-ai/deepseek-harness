@@ -514,7 +514,8 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
       await commands.first().scrollIntoViewIfNeeded()
       const geometry = await commands.first().evaluate((element) => {
         const prompt = element.parentElement!
-        const header = element.closest('[class*="_header_"]')!
+        const header = element.closest('[data-terminal-banner]')
+        if (header === null) throw new Error('wrapped preview command has no terminal banner')
         header.scrollTop = 0
         const dot = prompt.querySelector('[data-state="done"]')
         if (dot === null) throw new Error('wrapped preview command has no successful status dot')

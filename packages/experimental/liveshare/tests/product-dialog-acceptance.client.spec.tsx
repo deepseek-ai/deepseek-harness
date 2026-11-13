@@ -1204,6 +1204,15 @@ describe('Liveshare dialog stored-record branches', () => {
     }
   })
 
+  it('states a create the holder of the share state refused, not an unreachable Host', async () => {
+    await showControlled({ overrides: { create: async () => refused('liveshareShares/owner-state-held', {}) } })
+    const button = screen.getByRole('button', { name: 'Create share' })
+    await vi.waitFor(() => { expect(button).toHaveProperty('disabled', false) })
+    await act(async () => { fireEvent.click(button) })
+
+    expect(screen.getByRole('alert').textContent).toBe(en['dialog.ownerStateHeld'])
+  })
+
   it('adopts a created share whose Host reported no session permission', async () => {
     await showControlled({
       overrides: {

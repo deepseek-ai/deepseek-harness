@@ -52,6 +52,9 @@
     },
     {
       "path": "../../goal/goal"
+    },
+    {
+      "path": "../../interaction/permission-presets"
     }
   ]
 }

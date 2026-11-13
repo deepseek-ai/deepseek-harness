@@ -14,6 +14,8 @@ flowchart LR
   pkg_plugin_recommendations["plugin-recommendations"]
   svc_pluginRecommendations["ctx.pluginRecommendations<br/>Explicit-need plugin recommendations"]
   pkg_client_ui_plugin_recommendations["client-ui-plugin-recommendations"]
+  pkg_deepseek_chat_import["deepseek-chat-import"]
+  svc_deepseekChatImport["ctx.deepseekChatImport<br/>DeepSeek chat export import"]
   pkg_headless["headless"]
   svc_headlessStartup["ctx.headlessStartup<br/>Headless invocation options"]
   pkg_experimental_client_ui_cot_translation["experimental-client-ui-cot-translation"]
@@ -27,7 +29,6 @@ flowchart LR
   svc_pluginRegistryProbe["ctx.pluginRegistryProbe<br/>Host registry response comparison"]
   pkg_plugin_manager["plugin-manager"]
   svc_pluginManager["ctx.pluginManager<br/>Current-profile plugin and bundle management"]
-  pkg_ui_settings_plugin_inventory["ui-settings-plugin-inventory"]
   pkg_plugin_market["plugin-market"]
   svc_pluginMarket["ctx.pluginMarket<br/>Plugin market index reader"]
   pkg_client_ui_plugin_market["client-ui-plugin-market"]
@@ -36,9 +37,13 @@ flowchart LR
   svc_connection["ctx.connection<br/>Authenticated browser transport"]
   pkg_api_gateway["api-gateway"]
   pkg_host_frontend_static["host-frontend-static"]
+  svc_connection_authentication["ctx.connection.authentication<br/>Connection authentication provider registry"]
+  pkg_host_authentication_token["host-authentication-token"]
+  pkg_host_authentication_desktop["host-authentication-desktop"]
   pkg_experimental_forge["experimental-forge"]
   svc_forge["ctx.forge<br/>Code host change requests"]
   pkg_experimental_forge_github["experimental-forge-github"]
+  pkg_forge_gitlab["forge-gitlab"]
   pkg_experimental_forge_session["experimental-forge-session"]
   pkg_experimental_client_ui_forge["experimental-client-ui-forge"]
   svc_forgeSession["ctx.forgeSession<br/>Session change request bindings"]
@@ -105,6 +110,8 @@ flowchart LR
   pkg_message_feedback["message-feedback"]
   pkg_experimental_api_speech_to_text["experimental-api-speech-to-text"]
   svc_speechController["ctx.speechController<br/>Experimental transcription Remote"]
+  pkg_client_ui_session_status["client-ui-session-status"]
+  svc_sessionStatus["ctx.sessionStatus<br/>Host Session reading records"]
   svc_sessionController["ctx.sessionController<br/>Host Session Remote controller"]
   svc_sessionFileReferences["ctx.sessionFileReferences<br/>Session-addressed file-reference Remote adapter"]
   svc_sessionSkillCatalog["ctx.sessionSkillCatalog<br/>Session-addressed skill Remote adapter"]
@@ -342,10 +349,12 @@ flowchart LR
   pkg_bash_sandbox --> svc_shell
   pkg_browser_use --> svc_browserUse
   pkg_client_connection --> svc_connection
+  pkg_client_connection --> svc_connection_authentication
   pkg_client_file_upload --> svc_fileUploads
   pkg_client_modules --> svc_clientModules
   pkg_client_product_analytics --> svc_productAnalytics
   pkg_client_ui_plugin_manager --> svc_pluginRegistryProbe
+  pkg_client_ui_session_status --> svc_sessionStatus
   pkg_command_feedback --> svc_sessionFeedback
   pkg_commands --> svc_commands
   pkg_compaction --> svc_compaction
@@ -360,6 +369,7 @@ flowchart LR
   pkg_cua --> svc_cuaAccess
   pkg_cua --> svc_cuaPrograms
   pkg_deepseek_account --> svc_deepseekAccount
+  pkg_deepseek_chat_import --> svc_deepseekChatImport
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
   pkg_experimental_api_speech_to_text --> svc_speechController
   pkg_experimental_browser_use_chrome_devtools_mcp --> svc_browserUse
@@ -380,6 +390,7 @@ flowchart LR
   pkg_experimental_worktree --> svc_worktrees
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
+  pkg_forge_gitlab --> svc_forge
   pkg_fs --> svc_fs
   pkg_fs_local --> svc_fs
   pkg_fs_sandbox --> svc_fs
@@ -387,6 +398,8 @@ flowchart LR
   pkg_goal --> svc_goals
   pkg_headless --> svc_headlessStartup
   pkg_hmr --> svc_hmr
+  pkg_host_authentication_desktop --> svc_connection_authentication
+  pkg_host_authentication_token --> svc_connection_authentication
   pkg_host_directory_picker --> svc_directoryPicker
   pkg_host_directory_picker_browse --> svc_directoryPicker
   pkg_host_directory_picker_native --> svc_directoryPicker
@@ -511,6 +524,7 @@ flowchart LR
   svc_configEditor --> pkg_settings
   svc_connection --> pkg_api_gateway
   svc_connection --> pkg_host_frontend_static
+  svc_connection_authentication --> pkg_client_connection
   svc_cordisInspect --> pkg_tool_cordis
   svc_credentials --> pkg_api_settings_controller
   svc_credentials --> pkg_llm_deepseek
@@ -543,7 +557,6 @@ flowchart LR
   svc_otel --> pkg_host_product_telemetry_otel
   svc_otel --> pkg_session_telemetry_otel
   svc_pluginManager --> pkg_plugin_manager
-  svc_pluginManager --> pkg_ui_settings_plugin_inventory
   svc_pluginMarket --> pkg_client_ui_plugin_market
   svc_pluginMarket --> pkg_plugin_market
   svc_pluginRecommendations --> pkg_client_ui_plugin_recommendations
@@ -576,6 +589,7 @@ flowchart LR
   svc_sessionProjections --> pkg_tool_todo
   svc_sessionQuery --> pkg_session_reference
   svc_sessionQuery --> pkg_tool_session_query
+  svc_sessionStatus --> pkg_client_ui_session_status
   svc_sessions --> pkg_agent
   svc_sessions --> pkg_agent_loop
   svc_sessions --> pkg_message_feedback
@@ -655,16 +669,18 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.actionCards` | `service` | [`action-cards`](../packages/experimental/action-cards) | - | [`creation-recommendations`](../packages/experimental/creation-recommendations), [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | - | Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers. |
 | `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click. |
+| `ctx.deepseekChatImport` | `service` | [`deepseek-chat-import`](../packages/experimental/deepseek-chat-import) | - | - | - | Serves the owner-only upload route that imports each conversation of a DeepSeek chat export as a Session, and the upload limits the browser checks first. |
 | `ctx.headlessStartup` | `core` | [`headless`](../packages/bundle/headless) | - | [`headless`](../packages/bundle/headless) | - | Supplies parsed task and run options to the headless runner and its sandbox-policy configuration. |
 | `ctx.cotTranslation` | `service` | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | - | - | Serves reasoning translations, reuses saved results, and joins ordinary Session activation for uncached inactive Sessions. |
 | `ctx.translator` | `service` | [`experimental-translator`](../packages/experimental/translator) | - | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | Resolves Google or Bing requests and retains shared experimental records through the active Session writer. |
 | `ctx.hmr` | `core` | [`hmr`](../packages/boot/hmr) | - | [`app-boot`](../packages/boot/app-boot) | - | Owns module and exact configuration watchers; application mutations share its queue and automatic reloads await the application file lock. |
 | `ctx.pluginRegistryProbe` | `core` | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | Races public registry responses on the Host; the Client owns the initial registry recommendation. |
-| `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager), `ui-settings-plugin-inventory` | - | Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers. |
+| `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers. |
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | Fetches and validates the index sources the user configures; installation goes through the plugin manager. |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | The dsh launcher supplies data-only profile locations and composition inputs; reload scheduling belongs to dsh-hmr. |
-| `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams. |
-| `ctx.forge` | `seam` | [`experimental-forge`](../packages/experimental/forge) | [`experimental-forge-github`](../packages/experimental/forge-github) | [`experimental-forge-session`](../packages/experimental/forge-session), [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop. |
+| `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | Applies source policy and shared HTTP request dispatch; credential verification belongs to ConnectionAuthentication, and API adapters register endpoints and streams. |
+| `ctx.connection.authentication` | `seam` | [`client-connection`](../packages/client/connection) | [`host-authentication-token`](../packages/host/authentication-token), [`host-authentication-desktop`](../packages/host/authentication-desktop) | [`client-connection`](../packages/client/connection) | - | Tries scope-owned credential verifiers in registration order and returns the first live Peer; transport source policy and business authorization stay with their consumers. |
+| `ctx.forge` | `seam` | [`experimental-forge`](../packages/experimental/forge) | [`experimental-forge-github`](../packages/experimental/forge-github), [`forge-gitlab`](../packages/experimental/forge-gitlab) | [`experimental-forge-session`](../packages/experimental/forge-session), [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop. |
 | `ctx.forgeSession` | `service` | [`experimental-forge-session`](../packages/experimental/forge-session) | - | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | A Session projection derives bindings from shell results and binding records and publishes their URLs without status to clients; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry. |
 | `ctx.forgePanel` | `service` | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | - | - | Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status. |
 | `ctx.worktrees` | `seam` | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-tool-worktree`](../packages/experimental/tool-worktree) | - | Explicit experimental creation from a pinned local commit. Existing write permissions govern checkout and shared Git metadata; the working-directory service owns the resulting Session directory. |
@@ -684,6 +700,7 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`subagent`](../packages/subagent/subagent), [`message-feedback`](../packages/feedback/message-feedback) | - | Owns append-only Session instances and emits the durable session event feed. |
 | `ctx.speechController` | `core` | [`experimental-api-speech-to-text`](../packages/experimental/api-speech-to-text) | - | - | - | Validates bounded browser audio before provider dispatch. |
+| `ctx.sessionStatus` | `core` | [`client-ui-session-status`](../packages/client/ui-session-status) | - | [`client-ui-session-status`](../packages/client/ui-session-status) | - | Stores owner reading acknowledgements and manual unread marks outside Session history; its Client half follows committed changes over Remote, acknowledges loaded completions, and serves the Session status table. |
 | `ctx.sessionController` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | Owns Session commands, cold reads, durable-event following, live control state, model catalogs, workspace opening, and Agent activation policy. |
 | `ctx.sessionFileReferences` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | Delegates file-reference discovery through the Session Controller's established Agent lookup policy. |
 | `ctx.sessionSkillCatalog` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | Lists the Session composition's user-invocable skills without activating a cold Agent. |

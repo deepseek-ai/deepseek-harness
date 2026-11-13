@@ -1450,4 +1450,25 @@ Awaited parallel durability checkpoint: every listener runs and the caller await
 Types: [Scoped](scope.md)
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
+
+<a id="timeline-events"></a>
+
+### `timeline/*` events
+
+<a id="timelinepriority--emit"></a>
+
+#### `timeline/priority` — emit
+
+A saved user edit entered or left P0. Model task patches do not emit it.
+
+```ts cordis-catalog
+/**
+ * A saved user edit entered or left P0. Model task patches do not emit it.
+ * @mode emit
+ * @param session - the session that owns the task.
+ */
+'timeline/priority'(session: Session): void
+```
+
+Source: [`packages/experimental/timeline/src/storage.ts`](../../packages/experimental/timeline/src/storage.ts)
 <!-- END GENERATED cordis-surface -->

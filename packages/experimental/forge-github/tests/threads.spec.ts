@@ -55,7 +55,7 @@ function firstPage(
   repository: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return { data: { viewer, repository: { isArchived: false, viewerPermission: 'READ', ...repository, pullRequest: {
-    id: 'pull-7', headRefOid, locked: false, reviews: { nodes: [] }, reviewThreads: threads, ...pull,
+    id: 'pull-7', headRefOid, locked: false, viewerDidAuthor: false, reviews: { nodes: [] }, reviewThreads: threads, ...pull,
   } } } }
 }
 
@@ -93,6 +93,7 @@ describe('GitHub provider review threads', () => {
       truncated: false,
       pendingReview: null,
       viewerCanReview: true,
+      reviewEvents: ['comment', 'approve', 'request-changes'],
       threads: [{
         id: 't1', path: 'src/a.ts', side: 'R', subject: 'line',
         current: { commit: head, startLine: 12, endLine: 12 },
@@ -222,7 +223,15 @@ describe('GitHub provider review threads', () => {
   ] as const)('reports whether the viewer can review in %s', async (_label, pullFields, repository, expected) => {
     const gh = review(firstPage(page([]), head, { login: 'octo' }, pullFields, repository))
 
-    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ viewerCanReview: expected })
+    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({
+      viewerCanReview: expected, reviewEvents: expected ? ['comment', 'approve', 'request-changes'] : [],
+    })
+  })
+
+  it('lets the author of the pull request only comment, as GitHub allows', async () => {
+    const gh = review(firstPage(page([]), head, { login: 'octo' }, { viewerDidAuthor: true }))
+
+    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ viewerCanReview: true, reviewEvents: ['comment'] })
   })
 
   it('reads the following thread and comment pages, asking only for the threads left under maxReviewThreads', async () => {
@@ -262,7 +271,7 @@ describe('GitHub provider review threads', () => {
 
     const byComments = review(first, threads, comments)
     await expect(provider(byComments.run, { maxOutputBytes: size + 10 }).readReview(pull(7), head, signal))
-      .resolves.toEqual({ headSha: head, viewer: 'octo', threads: [], truncated: true, pendingReview: null, viewerCanReview: true })
+      .resolves.toEqual({ headSha: head, viewer: 'octo', threads: [], truncated: true, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment', 'approve', 'request-changes'] })
 
     const commentBytes = JSON.stringify(comments['comments-1']).length
     const byThreads = review(first, threads, comments)

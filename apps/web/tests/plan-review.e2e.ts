@@ -149,7 +149,7 @@ describe('web e2e: plan review takeover round trip', () => {
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
     // Card gone; regular input restored.
     expect(await page.locator('[data-plan-review-key]').count()).toBe(0)
-    expect(await selectedRow.locator('[data-state="warning"]').count()).toBe(0)
+    await expect.poll(() => selectedRow.getByText('Plan awaiting review', { exact: true }).count()).toBe(0)
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
     // Completed plans join the final artifacts after the Turn's closing reply.
     await planCard.waitFor({ state: 'visible' })
@@ -245,7 +245,7 @@ describe('web e2e: plan review takeover round trip', () => {
     })
     const outcome = asked.then(value => value, (error: unknown) => ({ error }))
     try {
-      const row = page.locator('[role="treeitem"]').filter({ has: page.locator('[data-state="warning"]') }).first()
+      const row = page.locator(`[data-row-key="session:${reviewedSession}"]`)
       await row.waitFor({ timeout: 10_000 })
       await row.click()
       const card = page.locator('[data-plan-review-key]')
@@ -325,7 +325,7 @@ describe.skipIf(MODE === 'record')('web e2e: pending plan review across Sidebar 
     })
     const outcome = asked.then(value => value, (error: unknown) => ({ error }))
     try {
-      await row(session).locator('[data-state="warning"]').waitFor({ timeout: 10_000 })
+      await row(session).getByText('Plan awaiting review', { exact: true }).waitFor({ timeout: 10_000 })
       await scenario()
     } finally {
       controller.abort()

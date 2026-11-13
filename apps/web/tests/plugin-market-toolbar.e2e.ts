@@ -1,9 +1,9 @@
-/** Keyless browser geometry for the Discover toolbar against a local plugin index. */
+/** Keyless browser checks for Discover against a local plugin index. */
 import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Locator } from 'playwright'
+import { chromium, type Locator, type Page } from 'playwright'
 import { expect, it } from 'vitest'
 import type {} from '@deepseek-ai/dsh-plugin-market'
 import { compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
@@ -51,6 +51,49 @@ async function measure(toolbar: Locator) {
 function validLayout(layout: Awaited<ReturnType<typeof measure>>): boolean {
   return layout.controls === 5 && layout.contained && layout.reachable && layout.separated
     && !layout.overflow && !layout.pageOverflow && layout.focused
+}
+
+async function checkSourceForm(page: Page, toolbar: Locator): Promise<void> {
+  await toolbar.getByRole('button', { name: /^切换插件索引/u }).click()
+  await page.getByRole('menuitem', { name: '管理索引源…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '索引源', exact: true })
+  const address = dialog.getByRole('textbox', { name: '源地址', exact: true })
+  const path = dialog.getByRole('textbox', { name: '索引文件路径', exact: true })
+  const ref = dialog.getByRole('textbox', { name: 'Git 引用', exact: true })
+  const add = dialog.getByRole('button', { name: '添加', exact: true })
+  await expect.poll(() => address.evaluate(element => element === document.activeElement)).toBe(true)
+  expect(await dialog.getByRole('combobox').count()).toBe(0)
+
+  await address.fill('https://git.example/acme/plugins')
+  expect(await add.isEnabled()).toBe(true)
+  expect(await path.count()).toBe(0)
+  await address.fill('https://raw.githubusercontent.com/acme/plugins/main/index.json')
+  expect(await add.isEnabled()).toBe(true)
+  expect(await path.count()).toBe(0)
+  await address.fill('git@github.com:acme/plugins.git')
+  expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
+  await path.fill('distribution/market/catalogs/team-index.json')
+  await ref.fill('release/plugins')
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect.poll(() => dialog.locator('form').evaluate((form) => {
+      const bounds = form.getBoundingClientRect()
+      return Array.from(form.querySelectorAll('input, button')).every((control) => {
+        const rect = control.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return rect.left >= bounds.left && rect.right <= bounds.right && rect.left >= 0 && rect.right <= innerWidth
+          && hit !== null && control.contains(hit)
+      })
+    })).toBe(true)
+    expect(await ref.evaluate(element => element === document.activeElement)).toBe(true)
+  }
+  await address.fill('https://git.example/acme/plugins')
+  expect(await path.count()).toBe(0)
+  await address.fill('git+https://git.example/acme/plugins')
+  expect(await path.inputValue()).toBe('distribution/market/catalogs/team-index.json')
+  expect(await ref.inputValue()).toBe('release/plugins')
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
 }
 
 it('keeps Discover controls reachable when the toolbar wraps and retains search focus across widths', async () => {
@@ -113,7 +156,9 @@ it('keeps Discover controls reachable when the toolbar wraps and retains search 
           }, previous)
         }
         await expect.poll(async () => validLayout(await measure(toolbar))).toBe(true)
+        await checkSourceForm(page, toolbar)
         expect(consoleWatch.pageErrors).toEqual([])
+        facts.push('', 'The source dialog treats a Raw URL and an unmarked custom URL as JSON. It shows Git fields for an SSH clone address or a git+https URL. The fields fit and stay reachable at 390px and 1280px. Editing the address preserves the Git draft, and Escape closes the dialog.')
         await compareOrRefreshGolden(EXPECTED,
           `# Discover toolbar responsive layout\n\n${facts.join('\n')}\n\nAt 390px, restoring the previous no-wrap layout causes horizontal overflow and fails the same layout check. Removing that override restores the controls and preserves search focus.`,
           webSnapshotMode())

@@ -37,7 +37,7 @@ kind: "package-bundle"
 <details>
 <summary>维护者细节——点击展开</summary>
 
-组合包以六个顶层行挂载 Forge 注册表、GitHub 提供方、Session 绑定、工作树模型工具和面板。工具与面板共用同一个 `worktree` 服务，因此一条 `worktree` 行覆盖同时配置两者，归档一个 Session 只回收一次其检出目录；该行在插件页上的“归档时不删除工作树”开关同时为两者关闭清理。面板记录 Session 开始前请求的工作树；模型创建的工作树不会获得面板的恢复记录，但两种工作树都参与归档清理。这些行使用基于 base 的 profile 提供的 Session 投影、工作目录、文件系统、子进程和沙箱服务；归档清理还需要这些 profile 的 Workspace 注册表与 Session 查询。
+组合包以七个顶层行挂载 Forge 注册表、GitHub 与 GitLab 提供方、Session 绑定、工作树模型工具和面板。工具与面板共用同一个 `worktree` 服务，因此一条 `worktree` 行覆盖同时配置两者，归档一个 Session 只回收一次其检出目录；该行在插件页上的“归档时不删除工作树”开关同时为两者关闭清理。面板记录 Session 开始前请求的工作树；模型创建的工作树不会获得面板的恢复记录，但两种工作树都参与归档清理。这些行使用基于 base 的 profile 提供的 Session 投影、工作目录、文件系统、子进程和沙箱服务；归档清理还需要这些 profile 的 Workspace 注册表与 Session 查询。
 
 </details>
 
@@ -63,7 +63,7 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只有 GitHub 一个代码托管提供方，且本 Bundle 只服务 github.com；GitHub Enterprise 主机需要用 profile patch 把它列入 `forge-github` 行的 [`hosts`](../forge-github/README.zh.md#use-this-package)。没有提供方识别 GitLab 等其他平台。
+- 本 Bundle 只服务 github.com 和 gitlab.com；GitHub Enterprise 或自建 GitLab 主机需要用 profile patch 把它列入 `forge-github` 行的 [`hosts`](../forge-github/README.zh.md#use-this-package) 或 `forge-gitlab` 行的 [`hosts`](../forge-gitlab/README.zh.md#use-this-package)。没有提供方识别其他代码托管平台。
 - 模型目前还没有读取已绑定变更请求的工具。
 
 -----

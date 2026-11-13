@@ -1,10 +1,12 @@
 import { expect, it } from 'vitest'
-import { preflightDesktopPublish } from '../scripts/preflight-desktop-publish.mjs'
+import { preflightDesktopPublish } from '@deepseek-ai/dsh-desktop-publisher/preflight-desktop-publish.mjs'
 
 it.each([
   ['macos-x64-unnotarized-debug-1.0.0-42-2', '跳过了公证'],
   ['macos-arm64-unnotarized-debug-1.0.0-42-2', '跳过了公证'],
   ['macos-arm64-unnotarized-debug-1.0.0-42-2.zip', '跳过了公证'],
+  ...['arm64', 'x64'].flatMap(arch => ['.dmg', '-update.zip', '-metadata.zip'].map(suffix =>
+    [`macos-${arch}-unnotarized-debug-1.0.0-42-2${suffix}`, '跳过了公证'])),
   ['windows-x64-unsigned-1.0.0-42-2.zip', '未签名'],
   ['windows-x64-unsigned-1.0.0-42-2', '未签名'],
 ])('rejects %s from paginated artifact metadata with rebuilding instructions', (name, reason) => {
@@ -36,4 +38,13 @@ it('rejects malformed input before contacting GitHub', () => {
 it.each([{ response: {} }, { response: [{ artifacts: [{}] }] }])('rejects invalid artifact responses: %j', ({ response }) => {
   expect(() => preflightDesktopPublish('owner/repo', { package_run_id: '42', package_run_attempt: '2' }, () => response))
     .toThrow(/invalid artifact metadata/u)
+})
+
+it.each(['arm64', 'x64'])('accepts notarized split %s artifacts and ignores debugging artifacts from other attempts', (arch) => {
+  const artifacts = ['.dmg', '-update.zip', '-metadata.zip'].flatMap(suffix => [
+    { name: `macos-${arch}-signed-1.0.0-42-2${suffix}` },
+    { name: `macos-${arch}-unnotarized-debug-1.0.0-42-1${suffix}` },
+    { name: `macos-${arch}-unnotarized-debug-1.0.0-142-2${suffix}` },
+  ])
+  expect(preflightDesktopPublish('owner/repo', { package_run_id: '42', package_run_attempt: '2' }, () => [{ artifacts }])).toBe('2')
 })
