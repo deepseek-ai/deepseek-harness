@@ -6,18 +6,16 @@
 import { isAbsolute } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { z as zod, type ZodType } from 'zod'
+import { z as zod } from 'zod'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionSeq, type Session } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { WorkingDirectoryError } from './error.ts'
-import type { WorkingDirectoryHistoryEntry } from './types.ts'
 
 export { WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
-export type * from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -61,6 +59,13 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    /** Recorded current directory for Session observations, or null when none is recorded. */
+    workingDirectory: string | null
+  }
+}
+
 /** Deployment default for Sessions without an original project directory. */
 export interface Config {
   /** Absolute execution-world fallback directory; omitted values use the launch directory. */
@@ -100,20 +105,6 @@ export class WorkingDirectoryService extends Service {
       init: header => header.cwd ?? null,
       apply: (state, event) => event.type === 'working-directory/change' ? event.data.cwd : state,
       wire: { viewSchema: directorySchema, view: state => state },
-    })
-    const historySchema: ZodType<readonly WorkingDirectoryHistoryEntry[]> = zod.array(zod.object({
-      seq: zod.number().int().nonnegative().transform(SessionSeq),
-      cwd: zod.string().min(1).refine(isAbsolute),
-    }).strict())
-    await ctx.sessionProjections.register({
-      key: 'workingDirectoryHistory',
-      stateVersion: 1,
-      stateSchema: historySchema,
-      init: header => header.cwd === undefined ? [] : [{ seq: SessionSeq(0), cwd: header.cwd }],
-      apply: (state, event) => event.type === 'working-directory/change'
-        ? [...state, { seq: event.seq, cwd: event.data.cwd }]
-        : state,
-      wire: { viewSchema: historySchema, view: state => state, summary: false },
     })
     ctx.systemPrompt.context({
       name: 'working-directory:current',
