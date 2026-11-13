@@ -283,7 +283,8 @@ function createGate(exemptions: Readonly<Record<string, string>>): InventoryGate
     baselinePath: 'scripts/cordis-root.baseline.json',
     scan: repoRoot => scanCordisRootReads(repoRoot, exemptions),
     rejection: 'new reads of the Cordis root context are forbidden. Declare the service in `inject`,'
-      + ' register through the plugin context, or use `{ global: true }` for an unscoped listener.',
+      + ' register through the plugin context, or use `{ global: true }` for an unscoped listener'
+      + ' (see docs/defensive-patterns/general.md#plugins-do-not-read-the-cordis-root-context).',
     describe: read => `${read.file}:${String(read.line)} (${read.fingerprint})`,
     success: count => `verify-cordis-root: no new root reads; ${String(count)} recorded reads remain.`,
   }

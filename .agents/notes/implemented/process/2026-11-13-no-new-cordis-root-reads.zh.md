@@ -16,7 +16,7 @@ Status: implemented
 
 现有读取使用 `scripts/cordis-root.baseline.json` 中的精确基线记录，由[共享清单模块](../../../../scripts/baseline-inventory.ts)按 [unknown 类型断言清单](2026-09-19-no-unknown-casts.zh.md)的规则维护：基线修改只能删除条目或减少次数，`--prune` 删除已失效的条目并在存在新读取时拒绝写入，且没有任何命令可以添加放行。读取的指纹覆盖以根符号为键的元素访问的 token，因此把已记录的读取换到另一个接收者上会产生新的检查发现。
 
-测试根上下文约定本身的文件在检查器内的 `CORDIS_ROOT_EXEMPTIONS` 中逐个列出并注明原因，不参与扫描：Cordis rc.12 规范测试和检查器本身。若豁免文件不再读取根上下文，门禁失败。vendored 源码和已冻结的归档 Agent Notes 保留清单的排除规则。检查器参与[门禁运行器](../../../../scripts/run-gates.ts)中的 CI static 和 primary 模式以及本地 `hygiene` 和 `check-all` 配置。
+测试根上下文约定本身的文件在检查器内的 `CORDIS_ROOT_EXEMPTIONS` 中逐个列出并注明原因，不参与扫描：Cordis rc.12 规范测试和检查器本身。若豁免文件不再读取根上下文，门禁失败。vendored 源码和已冻结的归档 Agent Notes 保留清单的排除规则。检查器参与[门禁运行器](../../../../scripts/run-gates.ts)中的 CI static 和 primary 模式以及本地 `hygiene` 和 `check-all` 配置。[防御性模式](../../../../docs/defensive-patterns/general.zh.md#plugins-do-not-read-the-cordis-root-context)为作者写明该规则及替代方式，门禁的拒绝信息链接到这一节。
 
 ## 考虑过的替代方案
 
