@@ -52,7 +52,6 @@ export interface LocalChangesRowInjected {
 /** Full props of the local changes row. */
 export type LocalChangesRowProps =
   PropsRuntime<'conversation.session.panel.environment.row'>
-  & PropsRenderFactories
   & InjectFace<LocalChangesRowInjected>
   & PropsLocale<typeof NS>
 
@@ -91,32 +90,40 @@ export function CheckoutRow({
   const label = checkoutLabel(state, home, t)
   if (label === undefined) {
     if (state.checkout.state !== 'failed') return null
-    return renderFactorySlot('conversation.session.panel.row', {
-      className: css.envRow,
-      icon: <IconWarningTriangleOutlineRegular size={16} />,
-      attributes: { 'data-forge-checkout': '', 'data-failed': '' },
-      trailing: <ReasonButton reason={state.checkout.message} label={t('reason.show')} />,
-      children: <span className={css.envName}>{t('checkout.failed')}</span>,
-    })
+    return (
+      <div className={css.envRow} data-session-panel-row="" data-forge-checkout="" data-failed="">
+        <span data-row-part="body">
+          <span data-row-part="icon" aria-hidden="true"><IconWarningTriangleOutlineRegular size={16} /></span>
+          <span data-row-part="content"><span className={css.envName}>{t('checkout.failed')}</span></span>
+        </span>
+        <span data-row-part="trailing"><ReasonButton reason={state.checkout.message} label={t('reason.show')} /></span>
+      </div>
+    )
   }
   const target = { kind: 'directory', value: { sessionId, path: label.path } } as const
-  const icon = label.missing
-    ? <IconWarningTriangleOutlineRegular size={16} />
-    : <IconBranchOutlineRegular size={16} />
   const name = [label.detached ? t('checkout.detached') : undefined, label.name ?? undefined]
     .filter(part => part !== undefined).join(' · ')
-  return renderFactorySlot('conversation.session.panel.row', {
-    className: css.envRow,
-    icon,
-    attributes: {
-      ...getTriggerProps(target),
-      'data-forge-checkout': '',
-      'data-missing': label.missing ? '' : undefined,
-      onPointerEnter: marquee.enter,
-      onPointerLeave: marquee.leave,
-    },
-    trailing: (
-      <>
+  return (
+    <div
+      {...getTriggerProps(target)}
+      className={css.envRow}
+      data-session-panel-row=""
+      data-forge-checkout=""
+      data-missing={label.missing ? '' : undefined}
+      onPointerEnter={marquee.enter}
+      onPointerLeave={marquee.leave}
+    >
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true">
+          {label.missing ? <IconWarningTriangleOutlineRegular size={16} /> : <IconBranchOutlineRegular size={16} />}
+        </span>
+        <span data-row-part="content">
+          <Tooltip label={label.tooltip} side="left" delayMs={500}>
+            <MarqueeText ref={nameRef} className={css.envName} tabIndex={0}>{name}</MarqueeText>
+          </Tooltip>
+        </span>
+      </span>
+      <span data-row-part="trailing">
         <span className={css.envNote}>{label.kind}</span>
         {label.missing && (
           <Button
@@ -129,18 +136,17 @@ export function CheckoutRow({
             {t('checkout.restore')}
           </Button>
         )}
-      </>
-    ),
-    menu: label.missing ? undefined : renderFactorySlot('contextMenu.button', {
-      target,
-      label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
-    }),
-    children: (
-      <Tooltip label={label.tooltip} side="left" delayMs={500}>
-        <MarqueeText ref={nameRef} className={css.envName} tabIndex={0}>{name}</MarqueeText>
-      </Tooltip>
-    ),
-  })
+      </span>
+      {!label.missing && (
+        <span data-row-part="menu">
+          {renderFactorySlot('contextMenu.button', {
+            target,
+            label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
+          })}
+        </span>
+      )}
+    </div>
+  )
 }
 
 /** Business face of the connection row. */
@@ -154,7 +160,6 @@ export interface ConnectionRowInjected {
 /** Full props of the connection row. */
 export type ConnectionRowProps =
   PropsRuntime<'conversation.session.panel.environment.row'>
-  & PropsRenderFactories
   & InjectFace<ConnectionRowInjected>
   & PropsLocale<typeof NS>
 
@@ -165,17 +170,21 @@ export type ConnectionRowProps =
  * @param props - panel snapshot hook, reconnect action, and copy.
  * @returns the row, or null while the stream is open.
  */
-export function ConnectionRow({ usePanel, reconnect, renderFactorySlot, t }: ConnectionRowProps): ReactNode {
+export function ConnectionRow({ usePanel, reconnect, t }: ConnectionRowProps): ReactNode {
   const disconnected = usePanel(snapshot => snapshot.disconnected)
   if (!disconnected) return null
-  return renderFactorySlot('conversation.session.panel.row', {
-    className: css.envRow,
-    icon: <IconWarningTriangleOutlineRegular size={16} />,
-    attributes: { role: 'status', 'data-forge-connection': '' },
-    detail: t('connection.detail'),
-    trailing: <Button size="sm" variant="outline" onClick={reconnect}>{t('retry')}</Button>,
-    children: <span className={css.statusTitle}>{t('connection.title')}</span>,
-  })
+  return (
+    <div className={css.envRow} role="status" data-session-panel-row="" data-forge-connection="">
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true"><IconWarningTriangleOutlineRegular size={16} /></span>
+        <span data-row-part="lines">
+          <span data-row-part="content"><span className={css.statusTitle}>{t('connection.title')}</span></span>
+          <span data-row-part="detail">{t('connection.detail')}</span>
+        </span>
+      </span>
+      <span data-row-part="trailing"><Button size="sm" variant="outline" onClick={reconnect}>{t('retry')}</Button></span>
+    </div>
+  )
 }
 
 /**
@@ -187,7 +196,7 @@ export function ConnectionRow({ usePanel, reconnect, renderFactorySlot, t }: Con
  * @returns the row, or null while the branch changes no files.
  */
 export function LocalChangesRow({
-  usePanel, dismissOverlay, viewLocalChanges, createChangeRequest, renderFactorySlot, t,
+  usePanel, dismissOverlay, viewLocalChanges, createChangeRequest, t,
 }: LocalChangesRowProps): ReactNode {
   const local = usePanel(snapshot => snapshot.state?.local ?? null)
   const creatable = usePanel(snapshot => snapshot.state !== null && snapshot.state.repository !== null
@@ -205,46 +214,51 @@ export function LocalChangesRow({
     viewLocalChanges()
     dismissOverlay()
   }
-  return renderFactorySlot('conversation.session.panel.row', {
-    className: css.envRow,
-    icon: <IconFilesDiffOutlineRegular size={16} />,
-    onActivate: view,
-    actionLabel: t('changes.local.viewAria', { count, added: additions, deleted: deletions }),
-    attributes: { 'data-forge-local': '' },
-    trailing: (
-      <span className={css.diff}>
-        <span className={css.added}>{`+${String(additions)}`}</span>
-        <span className={css.deleted}>{`−${String(deletions)}`}</span>
+  return (
+    <div className={css.envRow} data-session-panel-row="" data-forge-local="">
+      <button
+        type="button"
+        data-row-part="body"
+        aria-label={t('changes.local.viewAria', { count, added: additions, deleted: deletions })}
+        onClick={view}
+      >
+        <span data-row-part="icon" aria-hidden="true"><IconFilesDiffOutlineRegular size={16} /></span>
+        <span data-row-part="content">{t('changes.local.summary', { count })}</span>
+      </button>
+      <span data-row-part="trailing">
+        <span className={css.diff}>
+          <span className={css.added}>{`+${String(additions)}`}</span>
+          <span className={css.deleted}>{`−${String(deletions)}`}</span>
+        </span>
       </span>
-    ),
-    menu: (
-      <Menu
-        open={open}
-        onClose={() => { setOpen(false) }}
-        portal
-        align="end"
-        anchor={(
-          <button
-            type="button"
-            aria-label={t('changes.local.actions')}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            onClick={() => { setOpen(!open) }}
-          >
-            <IconEllipsisOutlineRegular />
-          </button>
-        )}
-        items={[
-          { id: 'view', label: t('change.viewChanges') },
-          ...creatable ? [{ id: 'create', label: t('changes.local.create') }] : [],
-        ]}
-        onSelect={(id) => {
-          setOpen(false)
-          if (id === 'create') createChangeRequest()
-          else view()
-        }}
-      />
-    ),
-    children: t('changes.local.summary', { count }),
-  })
+      <span data-row-part="menu">
+        <Menu
+          open={open}
+          onClose={() => { setOpen(false) }}
+          portal
+          align="end"
+          anchor={(
+            <button
+              type="button"
+              aria-label={t('changes.local.actions')}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              onClick={() => { setOpen(!open) }}
+            >
+              <IconEllipsisOutlineRegular />
+            </button>
+          )}
+          items={[
+            { id: 'view', label: t('change.viewChanges') },
+            ...creatable ? [{ id: 'create', label: t('changes.local.create') }] : [],
+          ]}
+          onSelect={(id) => {
+            setOpen(false)
+            if (id === 'create') createChangeRequest()
+            else view()
+          }}
+        />
+      </span>
+    </div>
+  )
 }

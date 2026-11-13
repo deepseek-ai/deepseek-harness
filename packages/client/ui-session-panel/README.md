@@ -44,7 +44,20 @@ Plugins share a title by registering rows in a section owner's row slot. The bui
 
 Marks that must stay visible while the panel is hidden, such as an attention dot, go in the `conversation.session.panel.indicator` list. Each occupant is one element: the toggle sizes it to a 6px dot at the glyph's corner, and the occupant sets its `background` and includes text that names it, which becomes part of the toggle's accessible name. Occupants overlap, and a higher `order` paints above a lower one. The `panelShown` owner prop lets a mark that only repeats the panel's content render nothing while the panel shows. Subagents and Background jobs show a blue dot while work runs and the panel does not show (orders 10 and 20); the forge bundle's red attention dot (order 100) paints above them and stays while the panel shows.
 
-The plugin offers its row as the `conversation.session.panel.row` Component Factory. Sections and Environment rows from every package render their rows with `renderFactorySlot('conversation.session.panel.row', props)`, so icon, text, and trailing areas line up across sections. A row has a 16px decorative icon that inherits the row ink, single-line content that clips with an ellipsis, and an optional trailing value or control. `menu` holds row actions, such as a More button, after the trailing area in a 16px column whose center sits 14px from the row's end; a plain `button` there gets a 24px target and a tertiary glyph that darkens on hover without a fill, so it needs no tooltip of its own. They show on row hover, on focus inside the row, and while one has its menu open, and always without hover. `onActivate` makes the whole row one button while the trailing area and the menu stay separate controls, and `actionLabel` names that button when its content does not describe the action, starting with the visible text; a row with an action or row actions fills as a whole on hover and while one of its menus is open. `detail` adds a second line in smaller tertiary type that clips with an ellipsis, such as the consequence of a status or a command to run; the icon stays beside the first line and the trailing area and menu center on the row. `className` adds to the row's class, and `attributes`, such as `role`, `data-*` markers, and context-menu trigger props, reach the row element; other props are ignored.
+Rows share one look without sharing a component. A section's component, or an Environment row entry, writes its row's markup and marks the parts, and the panel's stylesheet lays them out, so icon, text, and trailing areas line up across packages while each package owns what its row contains.
+
+| Mark | Part |
+|---|---|
+| `data-session-panel-row` | The row: one 28px line. A row with an action or a menu highlights as a whole on hover and while one of its menus is open. |
+| `data-row-part="body"` | The icon and the text. A `<button>` body is the row's action, and its press area covers the whole row; the trailing part and the menu stay separate controls above it. Give the button an `aria-label` that starts with its visible text when that text does not describe the action. |
+| `data-row-part="icon"` | A 16px decorative glyph inside the body, in the row ink; mark it `aria-hidden`. |
+| `data-row-part="content"` | One line of text inside the body, clipped with an ellipsis. |
+| `data-row-part="lines"` | Inside the body of a two-line row, the wrapper of the content and the detail. |
+| `data-row-part="detail"` | A second line under the content, in smaller tertiary type clipped with an ellipsis, such as the consequence of a status or a command to run. The row grows to two lines: the icon stays beside the first, and the trailing part and the menu center on the row. |
+| `data-row-part="trailing"` | A value or control after the body. |
+| `data-row-part="menu"` | Row actions, such as a More button, in a 16px column whose center sits 14px from the row's end. A plain `button` there gets a 24px target and a tertiary glyph that darkens on hover without a fill, so it needs no tooltip of its own. They show on row hover, on focus inside the row, and while one has its menu open, and always without hover. |
+
+Leave out a part the row does not have: a `<button>` body or a menu part is what makes the row highlight. A menu part that renders nothing, such as a shared menu button whose target has no menu entries, counts as absent: it takes no room and the row does not highlight for it. Each rule for a part has the specificity of one class, so a row's own class adjusts it.
 
 -----
 
@@ -60,13 +73,13 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 
 | File | Role |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the row Factory, the toggle, the panel, the Environment section, and the project row |
+| [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | Presentation, the shared visibility state, the dock probes, and each Session's room to dock |
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its dock probe, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
-| [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | The panel row behind the `conversation.session.panel.row` Factory |
+| [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | The panel's geometry, the dock probe, and the rules for marked rows |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
 
 </details>

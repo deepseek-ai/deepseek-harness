@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { IconFolderCloseRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-working-directory/types'
-import { PanelRow } from './PanelRow.tsx'
 import type { ProjectRowProps } from './slots.ts'
 import css from './ProjectRow.module.css'
 
@@ -34,17 +33,19 @@ export function ProjectRow({
   const parent = ROOT.test(directory) ? directory : directory.replace(/[/\\]+$/, '')
   const target = { kind: 'directory', value: { sessionId, path } } as const
   return (
-    <PanelRow
-      icon={<IconFolderCloseRegular size={16} />}
-      menu={renderFactorySlot('contextMenu.button', { target, label: t('project.actions') })}
-      attributes={{ ...getTriggerProps(target), 'data-session-panel-project': '' }}
-    >
-      <Tooltip label={`${t('project.label')}\n${shown}`} side="left" delayMs={500}>
-        <span className={css.folder} tabIndex={0}>
-          <span className={css.name}>{name}</span>
-          {parent !== '' && <span className={css.parent}>{parent}</span>}
+    <div {...getTriggerProps(target)} data-session-panel-row="" data-session-panel-project="">
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true"><IconFolderCloseRegular size={16} /></span>
+        <span data-row-part="content">
+          <Tooltip label={`${t('project.label')}\n${shown}`} side="left" delayMs={500}>
+            <span className={css.folder} tabIndex={0}>
+              <span className={css.name}>{name}</span>
+              {parent !== '' && <span className={css.parent}>{parent}</span>}
+            </span>
+          </Tooltip>
         </span>
-      </Tooltip>
-    </PanelRow>
+      </span>
+      <span data-row-part="menu">{renderFactorySlot('contextMenu.button', { target, label: t('project.actions') })}</span>
+    </div>
   )
 }

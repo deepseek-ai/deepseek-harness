@@ -137,3 +137,207 @@
     animation: none;
   }
 }
+
+/* Rows. The rows of every section share one look without sharing a
+   component: each contributor writes its row's markup and marks the parts,
+   and these rules lay them out.
+
+   [data-session-panel-row]        the row: one 28px line
+     [data-row-part='body']        the icon and the text; a <button> body is
+                                   the row's action, and its press area
+                                   covers the whole row
+       [data-row-part='icon']      a 16px glyph in the row ink
+       [data-row-part='content']   one line of text, clipped with an ellipsis
+       [data-row-part='lines']     in a two-line row, wraps the content and
+                                   the detail
+         [data-row-part='detail']  a second line in smaller tertiary type
+     [data-row-part='trailing']    a value or control after the text
+     [data-row-part='menu']        row actions, such as a More button
+
+   The icon's center sits 14px from the row's start and the menu's 14px from
+   its end, the columns the other panel rows align to. A row with an action
+   or a menu highlights as a whole; the trailing part and the menu sit above
+   the action's press area. A menu part that renders nothing counts as
+   absent: it takes no room and does not make the row highlight. A rule for
+   a part has the specificity of one class, so a row's own class adjusts it. */
+.panel :where([data-session-panel-row]) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='body']) {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body']) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body'])::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body']:focus-visible) {
+  outline: none;
+}
+
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:focus-visible)) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='icon']) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='icon']) svg {
+  width: 16px;
+  height: 16px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='content']) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A detail line under the content: the row grows by its 17px line and 4px
+   insets, and the icon keeps the first line's 20px box, so its center stays
+   level with that line. */
+.panel :where([data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail'])) {
+  align-items: flex-start;
+  height: auto;
+  padding: 4px 0;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail']) > [data-row-part='icon']) {
+  height: 20px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='lines']) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='detail']) {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='trailing'], [data-session-panel-row] > [data-row-part='menu']) {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='trailing']) {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* A 16px column, so the action's 24px target reaches past it without moving the glyph. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']) {
+  justify-content: center;
+  width: 16px;
+}
+
+/* A shared menu button renders nothing while its target has no menu entries. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']:empty) {
+  display: none;
+}
+
+/* Row actions share the row's highlight: the glyph darkens on hover, without a fill. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .panel :where([data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty)):hover) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .panel :where([data-session-panel-row] > [data-row-part='menu']) {
+    opacity: 0;
+  }
+
+  .panel :where([data-session-panel-row]:hover > [data-row-part='menu'], [data-session-panel-row]:focus-within > [data-row-part='menu']) {
+    opacity: 1;
+  }
+
+  .panel :where([data-session-panel-row] > [data-row-part='menu']) button:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* An open menu keeps its row highlighted and its trigger visible after the pointer leaves for the menu. */
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty)):has([aria-expanded='true'])) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])) {
+  opacity: 1;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button[aria-expanded='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:active)) {
+  background: var(--dsw-alias-interactive-bg-active);
+}

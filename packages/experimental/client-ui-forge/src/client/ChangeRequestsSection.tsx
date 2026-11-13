@@ -5,7 +5,7 @@ import {
   Button, IconWarningTriangleOutlineRegular, MarqueeText, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
@@ -59,7 +59,6 @@ export interface ChangeRequestsSectionInjected {
 export type ChangeRequestsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
   & Pick<PropsRenderSlots<'forge.change-request.card.actions'>, 'renderSlot'>
-  & PropsRenderFactories
   & InjectFace<ChangeRequestsSectionInjected>
   & PropsStore<ReturnType<typeof createChangeRequestsSectionStore>>
   & PropsLocale<typeof NS>
@@ -97,11 +96,11 @@ function signInNeedOf(state: ForgePanelState): SignInNeed | null {
  * sign-in check. A reason the host gave shows from the info button; a clipped
  * title or command crawls into view while the pointer rests on the row.
  */
-function SignInRow({ need, copyText, renderFactorySlot, t }: {
+function SignInRow({ need, copyText, t }: {
   readonly need: SignInNeed
   readonly copyText: (text: string) => void
   readonly t: Translate
-} & PropsRenderFactories): ReactNode {
+}): ReactNode {
   const titleRef = useRef<HTMLSpanElement>(null)
   const commandRef = useRef<HTMLSpanElement>(null)
   const titleMarquee = useHoverMarquee(titleRef)
@@ -109,21 +108,37 @@ function SignInRow({ need, copyText, renderFactorySlot, t }: {
   const { host, forge, readiness } = need
   const unavailable = readiness.state === 'unavailable'
   const command = !unavailable && forge === 'github' ? `gh auth login --hostname ${host}` : undefined
-  const reason = command === undefined && readiness.message !== null && readiness.message !== ''
-    ? <ReasonButton reason={readiness.message} label={t('reason.show')} />
-    : undefined
   const marquee = command === undefined ? titleMarquee : commandMarquee
-  return renderFactorySlot('conversation.session.panel.row', {
-    icon: <IconWarningTriangleOutlineRegular size={16} />,
-    attributes: { role: 'status', 'data-forge-signin': readiness.state, onPointerEnter: marquee.enter, onPointerLeave: marquee.leave },
-    detail: command === undefined ? undefined : <MarqueeText ref={commandRef} className={css.signinCommand}>{command}</MarqueeText>,
-    trailing: command === undefined ? reason : (
+  let trailing: ReactNode
+  if (command !== undefined) {
+    trailing = (
       <Button size="sm" variant="outline" aria-label={t('signin.copy')} onClick={() => { copyText(command) }}>
         {t('signin.copyShort')}
       </Button>
-    ),
-    children: <MarqueeText ref={titleRef} className={css.statusTitle}>{t(unavailable ? 'signin.unavailable' : 'signin.title', { host })}</MarqueeText>,
-  })
+    )
+  }
+  else if (readiness.message !== null && readiness.message !== '') {
+    trailing = <ReasonButton reason={readiness.message} label={t('reason.show')} />
+  }
+  const title = (
+    <span data-row-part="content">
+      <MarqueeText ref={titleRef} className={css.statusTitle}>{t(unavailable ? 'signin.unavailable' : 'signin.title', { host })}</MarqueeText>
+    </span>
+  )
+  return (
+    <div role="status" data-session-panel-row="" data-forge-signin={readiness.state} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true"><IconWarningTriangleOutlineRegular size={16} /></span>
+        {command === undefined ? title : (
+          <span data-row-part="lines">
+            {title}
+            <span data-row-part="detail"><MarqueeText ref={commandRef} className={css.signinCommand}>{command}</MarqueeText></span>
+          </span>
+        )}
+      </span>
+      {trailing !== undefined && <span data-row-part="trailing">{trailing}</span>}
+    </div>
+  )
 }
 
 /**
@@ -139,8 +154,7 @@ function SignInRow({ need, copyText, renderFactorySlot, t }: {
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, readChecks,
-  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot,
-  renderFactorySlot, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
@@ -164,7 +178,7 @@ export function ChangeRequestsSection({
   const now = Date.now()
   return (
     <div className={css.cards} data-forge-panel="">
-      {signIn !== null && <SignInRow need={signIn} copyText={copyText} renderFactorySlot={renderFactorySlot} t={t} />}
+      {signIn !== null && <SignInRow need={signIn} copyText={copyText} t={t} />}
       {state.changeRequests.length > 0 && (
         <ul className={css.list}>
           {state.changeRequests.map(entry => (

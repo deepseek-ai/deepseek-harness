@@ -24,7 +24,6 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
 import { createChangeRequestsSectionStore } from '../src/client/change-requests-store.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
-import { renderPanelRows } from './panel-row-factory.client.tsx'
 
 afterEach(cleanup)
 
@@ -33,6 +32,24 @@ const SESSION = brandString<SessionId>('s1')
 
 function panelStore(state: ForgePanelState | null, disconnected = false) {
   return createSnapshotStore<PanelSnapshot>({ state, disconnected })
+}
+
+/**
+ * The parts a row marks for the Session panel's row rules, nested as in its
+ * markup, with `button:` before a part that is a button.
+ * @param row - the row element.
+ * @returns the parts, or null when the element is not marked as a panel row.
+ */
+function rowParts(row: Element): string | null {
+  const partsOf = (element: Element): string => [...element.children]
+    .filter(child => child.hasAttribute('data-row-part'))
+    .map((child) => {
+      const name = `${child.tagName === 'BUTTON' ? 'button:' : ''}${child.getAttribute('data-row-part') ?? ''}`
+      const inner = partsOf(child)
+      return inner === '' ? name : `${name}(${inner})`
+    })
+    .join(' ')
+  return row.hasAttribute('data-session-panel-row') ? partsOf(row) : null
 }
 
 /** One Session's section store, as the registration mints it. */
@@ -53,7 +70,6 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     dismissOverlay: vi.fn<() => void>(),
     // Plugins' card actions: a marker naming the change request it was drawn for.
     renderSlot: vi.fn((_name: string, owner: { url: string }) => <span data-plugin-action={owner.url} />),
-    renderFactorySlot: renderPanelRows(),
   }
   const props = {
     sessionId: SESSION,
@@ -66,7 +82,7 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     t,
   } as Pick<ChangeRequestsSectionProps,
     'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
-    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 'renderFactorySlot'
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot'
     | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
@@ -202,6 +218,9 @@ describe('ChangeRequestsSection', () => {
     const row = b.view.getByRole('status')
     expect(root.firstElementChild).toBe(row)
     expect(row.getAttribute('data-forge-signin')).toBe('unauthenticated')
+    // The command is the row's detail line, and Copy its trailing control.
+    expect(rowParts(row)).toBe('body(icon lines(content detail)) trailing')
+    expect(row.querySelector('[data-row-part="detail"]')?.textContent).toBe('gh auth login --hostname github.com')
     expect(within(row).getByText('Sign in to github.com')).toBeTruthy()
     expect(within(row).getByText('gh auth login --hostname github.com')).toBeTruthy()
     const copy = within(row).getByRole('button', { name: en['signin.copy'] })
@@ -227,6 +246,7 @@ describe('ChangeRequestsSection', () => {
     }))
     const row = b.view.getByRole('status')
     expect([row.textContent, row.querySelector('code, [data-forge-signin] button:not([data-forge-reason])')]).toEqual([title, null])
+    expect(rowParts(row)).toBe('body(icon content) trailing')
     const reason = within(row).getByRole('button', { name: en['reason.show'] })
     fireEvent.click(reason)
     expect(screen.getByRole('tooltip').textContent).toBe('token expired')
@@ -242,6 +262,7 @@ describe('ChangeRequestsSection', () => {
       readiness: { state, message: null },
     }))
     expect(within(b.view.getByRole('status')).queryByRole('button')).toBeNull()
+    expect(rowParts(b.view.getByRole('status'))).toBe('body(icon content)')
   })
 
   it.each([
@@ -285,7 +306,7 @@ describe('CheckoutRow', () => {
     const restore = vi.fn<() => void>()
     const refreshIfStale = vi.fn<() => void>()
     const opened: ContextMenuTarget[] = []
-    const renderFactorySlot = renderPanelRows((_name, input: { label: string }) => <button type="button">{input.label}</button>)
+    const renderFactorySlot = vi.fn((_name: string, input: { label: string }) => <button type="button">{input.label}</button>)
     const props = {
       sessionId: SESSION,
       usePanel: bindSnapshotSelector(panel),
@@ -337,6 +358,7 @@ describe('CheckoutRow', () => {
     const b = row(ready({ checkout: { state: 'failed', message: 'sandbox runner unavailable' } }))
     const element = b.element() as HTMLElement
     expect(element.hasAttribute('data-failed')).toBe(true)
+    expect(rowParts(element)).toBe('body(icon content) trailing')
     expect(element.textContent).toBe(en['checkout.failed'])
     expect(within(element).getByText(en['checkout.failed']).hasAttribute('tabindex')).toBe(false)
     const reason = within(element).getByRole('button', { name: en['reason.show'] })
@@ -361,6 +383,11 @@ describe('CheckoutRow', () => {
     const b = row(ready(), '/work')
     const element = b.element() as HTMLElement
     expect(element.textContent).toBe(`main${en['checkout.project']}${en['checkout.projectActions']}`)
+    // The kind trails the branch name, and the More button is the row menu.
+    expect(rowParts(element)).toBe('body(icon content) trailing menu')
+    expect(element.querySelector('[data-row-part="icon"]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(element.querySelector('[data-row-part="trailing"]')?.textContent).toBe(en['checkout.project'])
+    expect(element.querySelector('[data-row-part="menu"]')?.textContent).toBe(en['checkout.projectActions'])
     vi.useFakeTimers()
     fireEvent.pointerEnter(within(element).getByText('main'))
     act(() => { vi.advanceTimersByTime(499) })
@@ -419,6 +446,8 @@ describe('CheckoutRow', () => {
     const b = row(removed())
     const element = b.element() as HTMLElement
     expect(element.hasAttribute('data-missing')).toBe(true)
+    // A removed worktree has no directory to act on, so the row has no menu part.
+    expect(rowParts(element)).toBe('body(icon content) trailing')
     expect(within(element).getByText('dsh/0a1b2c3d')).toBeTruthy()
     expect(within(element).getByText(en['missing.title'])).toBeTruthy()
     expect(b.renderFactorySlot).not.toHaveBeenCalledWith('contextMenu.button', expect.anything())
@@ -438,8 +467,8 @@ describe('ConnectionRow', () => {
   function row(state: ForgePanelState | null, disconnected: boolean) {
     const panel = panelStore(state, disconnected)
     const reconnect = vi.fn<() => void>()
-    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), reconnect, renderFactorySlot: renderPanelRows(), t } as
-      Pick<ConnectionRowProps, 'sessionId' | 'usePanel' | 'reconnect' | 'renderFactorySlot' | 't'> as ConnectionRowProps
+    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), reconnect, t } as
+      Pick<ConnectionRowProps, 'sessionId' | 'usePanel' | 'reconnect' | 't'> as ConnectionRowProps
     return { view: render(<ConnectionRow {...props} />), panel, reconnect }
   }
 
@@ -454,6 +483,8 @@ describe('ConnectionRow', () => {
     const b = row(state, true)
     const status = b.view.getByRole('status')
     expect(status.hasAttribute('data-forge-connection')).toBe(true)
+    expect(rowParts(status)).toBe('body(icon lines(content detail)) trailing')
+    expect(status.querySelector('[data-row-part="detail"]')?.textContent).toBe(en['connection.detail'])
     expect(within(status).getByText(en['connection.title'])).toBeTruthy()
     expect(within(status).getByText(en['connection.detail'])).toBeTruthy()
     fireEvent.click(within(status).getByRole('button', { name: en.retry }))
@@ -475,10 +506,9 @@ describe('LocalChangesRow', () => {
     const createChangeRequest = vi.fn<() => void>()
     const dismissOverlay = vi.fn<() => void>()
     const props = {
-      sessionId: SESSION, usePanel: bindSnapshotSelector(panel), dismissOverlay, viewLocalChanges, createChangeRequest,
-      renderFactorySlot: renderPanelRows(), t,
+      sessionId: SESSION, usePanel: bindSnapshotSelector(panel), dismissOverlay, viewLocalChanges, createChangeRequest, t,
     } as Pick<LocalChangesRowProps,
-      'sessionId' | 'usePanel' | 'dismissOverlay' | 'viewLocalChanges' | 'createChangeRequest' | 'renderFactorySlot' | 't'> as LocalChangesRowProps
+      'sessionId' | 'usePanel' | 'dismissOverlay' | 'viewLocalChanges' | 'createChangeRequest' | 't'> as LocalChangesRowProps
     const view = render(<LocalChangesRow {...props} />)
     return { view, viewLocalChanges, createChangeRequest, dismissOverlay }
   }
@@ -499,6 +529,8 @@ describe('LocalChangesRow', () => {
   it('sums the branch changes, opens them, and asks the Agent for a change request', () => {
     const b = row(ready({ local }))
     const element = b.view.container.querySelector('[data-forge-local]') as HTMLElement
+    // The body is the row's button; the diff size and the menu stay separate parts after it.
+    expect(rowParts(element)).toBe('button:body(icon content) trailing menu')
     expect(within(element).getByText('Local changes · 2 files')).toBeTruthy()
     expect(within(element).getByText('+5')).toBeTruthy()
     fireEvent.click(within(element).getByRole('button', { name: 'Local changes · 2 files, 5 lines added, 1 lines deleted' }))

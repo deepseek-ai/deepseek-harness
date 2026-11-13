@@ -1,8 +1,9 @@
 /**
- * The Session panel's docking geometry as CSS text. jsdom has no layout, so
- * the component suite cannot show that the dock probe is 1px wide exactly
- * from the gutter that holds the docked panel; this reads the declarations
- * and evaluates them for gutters around that boundary.
+ * The Session panel's stylesheet as CSS text. jsdom has no layout, so the
+ * component suite cannot show that the dock probe is 1px wide exactly from
+ * the gutter that holds the docked panel, or that marked rows get one
+ * geometry; this reads the declarations and evaluates the docking ones for
+ * gutters around that boundary.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -68,5 +69,66 @@ describe('SessionPanel.module.css docking geometry', () => {
 
   it('floats the overlay narrower than the docked panel, at the same edge inset', () => {
     expect(declarationsOf(".panel[data-session-panel='overlay']")['width']).toBe('min(280px, calc(100% - 2 * var(--panel-edge)))')
+  })
+})
+
+describe('SessionPanel.module.css row rules', () => {
+  /** A rule for marked row markup: `.panel :where(<row selector>)<tail>`. */
+  const row = (inner: string, tail = ''): Record<string, string> => declarationsOf(`.panel :where(${inner})${tail}`)
+
+  it('lays a marked row out as one 28px line with the icon and the menu on fixed columns', () => {
+    expect(row('[data-session-panel-row]')).toMatchObject({
+      'display': 'flex', 'align-items': 'center', 'gap': '8px', 'min-height': '28px', 'padding': '0 6px',
+    })
+    expect(row("[data-session-panel-row] > [data-row-part='body']")).toMatchObject({ flex: '1 1 auto', height: '28px', gap: '8px' })
+    // 6px of padding and half of the 16px box put the icon's center 14px from the row's start, and the menu's from its end.
+    expect(row("[data-session-panel-row] [data-row-part='icon']")).toMatchObject({ width: '16px', height: '16px', flex: 'none' })
+    expect(row("[data-session-panel-row] > [data-row-part='menu']")).toMatchObject({ 'width': '16px', 'justify-content': 'center' })
+    expect(row("[data-session-panel-row] [data-row-part='content']")).toMatchObject({
+      'overflow': 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap',
+    })
+  })
+
+  it('grows a row with a detail line and keeps the icon level with the first line', () => {
+    const tall = "[data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail'])"
+    expect(row(tall)).toEqual({ 'align-items': 'flex-start', 'height': 'auto', 'padding': '4px 0' })
+    expect(row(`${tall} > [data-row-part='icon']`)).toEqual({ height: '20px' })
+    expect(row("[data-session-panel-row] [data-row-part='lines']")).toMatchObject({ 'display': 'flex', 'flex-direction': 'column', 'min-width': '0' })
+    expect(row("[data-session-panel-row] [data-row-part='detail']")).toMatchObject({
+      'color': 'var(--dsw-alias-label-tertiary)', 'font-size': '12px', 'line-height': '17px', 'text-overflow': 'ellipsis', 'white-space': 'nowrap',
+    })
+    // The two-line rules follow the one-line ones they adjust, since every rule for a part has the same specificity.
+    const order = (selector: string): number => {
+      const at = css.indexOf(`.panel :where(${selector}) {`)
+      expect(at).toBeGreaterThan(-1)
+      return at
+    }
+    expect(order(tall)).toBeGreaterThan(order("[data-session-panel-row] > button[data-row-part='body']"))
+    expect(order(`${tall} > [data-row-part='icon']`)).toBeGreaterThan(order("[data-session-panel-row] [data-row-part='icon']"))
+  })
+
+  it('makes a button body the action of the whole row and rings the row when it has keyboard focus', () => {
+    expect(row("[data-session-panel-row] > button[data-row-part='body']", '::after')).toMatchObject({ position: 'absolute', inset: '0' })
+    expect(row("[data-session-panel-row] > [data-row-part='trailing'], [data-session-panel-row] > [data-row-part='menu']"))
+      .toMatchObject({ 'position': 'relative', 'z-index': '1' })
+    expect(row("[data-session-panel-row]:has(> button[data-row-part='body']:focus-visible)")['outline-offset']).toBe('-2px')
+  })
+
+  it('gives a plain button in the menu a 24px target and a tertiary glyph without a fill', () => {
+    expect(row("[data-session-panel-row] > [data-row-part='menu']", ' button')).toMatchObject({
+      width: '24px', height: '24px', margin: '-4px', background: 'transparent', color: 'var(--dsw-alias-label-tertiary)',
+    })
+  })
+
+  it('highlights only a row with an action or a menu that renders something, and keeps an open menu and its row shown', () => {
+    const interactive = "[data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty))"
+    expect(row("[data-session-panel-row] > [data-row-part='menu']:empty")).toEqual({ display: 'none' })
+    expect(row(`${interactive}:has([aria-expanded='true'])`)['background']).toBe('var(--dsw-alias-interactive-bg-hover)')
+    expect(row("[data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])")['opacity']).toBe('1')
+    // Hover rules stay inside the hover media query, where the menu hides until the row is hovered or focused.
+    const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    expect(hover).toContain(`.panel :where(${interactive}:hover)`)
+    expect(hover).toMatch(/\[data-row-part='menu'\]\) \{\s*opacity: 0;/)
+    expect(css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, '')).not.toContain(':hover')
   })
 })

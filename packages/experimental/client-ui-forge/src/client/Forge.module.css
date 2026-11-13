@@ -463,7 +463,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Environment rows: the kind or size trails the name; PanelRow reveals the More button. */
+/* Environment rows: the kind or size trails the name; the Session panel's row rules reveal the More button. */
 .envName {
   display: block;
   overflow: hidden;

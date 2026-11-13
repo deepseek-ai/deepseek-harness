@@ -647,6 +647,33 @@ async function chooseCardAction(page: Page, change: Locator, name: string, item:
 /** Accessible name of the panel toggle while a change request needs attention. */
 const TOGGLE_ATTENTION = '会话面板 本会话的变更请求需要处理'
 
+/**
+ * A Session panel row as the panel's row rules lay it out: its height, how far
+ * the centers of its icon and menu columns sit from its start and end edges
+ * (null for a part that takes no room), and the part a press reaches at its
+ * start edge and on its trailing part.
+ */
+function panelRowLayout(row: Locator) {
+  return row.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const rectOf = (part: string): DOMRect | null => {
+      const rect = element.querySelector(`[data-row-part="${part}"]`)?.getBoundingClientRect()
+      return rect === undefined || rect.width === 0 ? null : rect
+    }
+    const partAt = (x: number, y: number): string | null =>
+      document.elementFromPoint(x, y)?.closest('[data-row-part]')?.getAttribute('data-row-part') ?? null
+    const [icon, trailing, menu] = [rectOf('icon'), rectOf('trailing'), rectOf('menu')]
+    return {
+      marked: element.hasAttribute('data-session-panel-row'),
+      height: box.height,
+      iconCenter: icon === null ? null : icon.left + icon.width / 2 - box.left,
+      menuCenter: menu === null ? null : box.right - (menu.left + menu.width / 2),
+      startPress: partAt(box.left + 2, box.top + 2),
+      trailingPress: trailing === null ? null : partAt(trailing.left + trailing.width / 2, trailing.top + trailing.height / 2),
+    }
+  })
+}
+
 function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   return events.flatMap((event) => {
     const record = pluginRecordOf(event)
@@ -684,6 +711,12 @@ it.skipIf(MODE === 'record')('reads local Git with full access when the sandbox 
   const local = page.locator('[data-forge-local]')
   await local.getByRole('button', { name: '本地变更 · 1 个文件，新增 1 行，删除 0 行', exact: true }).waitFor({ timeout: 20_000 })
   await compareOrRefreshGolden(join(EXPECTED, 'full-access.expected.md'), await captureStableAria(page, '[data-forge-local]', scaffold.workspaceCwd), MODE)
+  // The panel lays the row out by its marks: one 28px line with the icon and the More button on the panel columns.
+  // The body is the row's button, so a press at the row's edge reaches it, while the diff size stays above it.
+  expect(await panelRowLayout(local)).toEqual({ marked: true, height: 28, iconCenter: 14, menuCenter: 14, startPress: 'body', trailingPress: 'trailing' })
+  // This composition registers no directory menu entries: the checkout row's menu takes no room, and its body is not a button.
+  expect(await panelRowLayout(panel.locator('[data-forge-checkout]')))
+    .toEqual({ marked: true, height: 28, iconCenter: 14, menuCenter: null, startPress: null, trailingPress: 'trailing' })
   await local.getByRole('button', { name: '本地变更 · 1 个文件，新增 1 行，删除 0 行', exact: true }).click()
   await page.locator('[data-forge-diff-file="README.md"]').getByText('changed', { exact: true }).waitFor()
 

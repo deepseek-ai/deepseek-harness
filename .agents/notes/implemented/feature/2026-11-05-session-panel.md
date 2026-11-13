@@ -24,7 +24,7 @@ Docking follows one persisted preference shared by every Session and defaults to
 
 Each section is one list registration with `id`, `order`, and a required `label`. The panel projects the live registrations into titles, draws each title, and renders the section body with `renderSlot(..., { only: id })`; a CSS `:has()` rule hides a section whose body rendered nothing, so a section opts out by rendering nothing and no effect reports visibility to the owner. Trailing title controls are a keyed slot addressed by the section `id`, and a section that several plugins share declares its own row slot, as the built-in Environment section does with `conversation.session.panel.environment.row`. Marks that must stay visible while the panel is hidden go in an indicator list over the toggle.
 
-Rows from every contributor render through the plugin's `conversation.session.panel.row` Component Factory so icon, text, and trailing areas align across packages; a feature package cannot share its own row component with another feature package.
+Rows from every contributor share one look through the panel's stylesheet instead of a shared component: each contributor writes its row's markup and marks the parts, and the panel lays them out, so icon, text, and trailing areas align across packages. A shared row component would receive each contributor's icon, text, and controls as React nodes in props, which the client rules forbid, and a feature package cannot share its own row component with another feature package.
 
 ### The turn rail sits at the start edge
 

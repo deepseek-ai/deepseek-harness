@@ -429,6 +429,19 @@ describe('ProjectRow', () => {
     expect(screen.getByRole('button', { name: '工作目录操作' })).toBeTruthy()
   })
 
+  it('marks its parts for the panel\'s row rules: icon and folder in the body, then the More button as the row menu', () => {
+    const view = render(<ProjectRow {...rowProps({ cwd: '/srv/app' }).props} />)
+    const row = view.container.querySelector('[data-session-panel-row]') as HTMLElement
+    expect(row.hasAttribute('data-session-panel-project')).toBe(true)
+    expect([...row.children].map(part => part.getAttribute('data-row-part'))).toEqual(['body', 'menu'])
+    const [body, menu] = [...row.children] as [HTMLElement, HTMLElement]
+    expect(body.tagName).toBe('SPAN')
+    expect([...body.children].map(part => part.getAttribute('data-row-part'))).toEqual(['icon', 'content'])
+    expect(body.children[0]?.getAttribute('aria-hidden')).toBe('true')
+    expect(body.children[1]?.textContent).toBe('app/srv')
+    expect(menu.querySelector('button')?.textContent).toBe('工作目录操作')
+  })
+
   it('falls back to the directory the Session was created in and opens the directory menu on right-click', () => {
     const { props, open } = rowProps({ cwd: '/srv/app', workspacePath: '/srv' })
     const view = render(<ProjectRow {...props} />)
