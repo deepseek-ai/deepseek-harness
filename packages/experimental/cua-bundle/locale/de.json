@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computernutzung",
-    "description": "Erlaubt dem Agenten, Anwendungen auf deinem Computer direkt zu bedienen.",
+    "description": "Erlaubt dem Agenten, Anwendungen auf Ihrem Computer direkt zu bedienen.",
     "detail": "docs/DETAIL.md"
   }
 }

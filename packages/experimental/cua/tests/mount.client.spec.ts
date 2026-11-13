@@ -38,7 +38,7 @@ async function fixture(fail = false) {
   }
   new Remote()
   const list = vi.fn<Context['remote']['pluginInventory']['list']>()
-  ctx.provide('remote.pluginInventory', { list })
+  await ctx.plugin((scope) => { scope.provide('remote.pluginInventory', { list }) })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
@@ -90,9 +90,9 @@ it('reads the Windows provider from the Host inventory when the helper cannot re
     const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     actionsOf(actions)
     actions.refresh()
-    await vi.waitFor(() => expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.error).toBe('inventory unavailable'))
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.error).toBe('inventory unavailable') })
     actions.refresh()
-    await vi.waitFor(() => expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.value).toBe(true))
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.value).toBe(true) })
   } finally { await f.ctx.fiber.dispose() }
 })
 

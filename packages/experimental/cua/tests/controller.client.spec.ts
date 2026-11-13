@@ -32,13 +32,17 @@ function fixture() {
 
 it('identifies the enabled provider if the native helper cannot report its platform', async () => {
   const f = fixture()
+  const statuses: boolean[] = []
+  onTestFinished(f.controller.state.subscribe(() => { statuses.push(f.controller.state.getSnapshot().windowsProvider.busy) }))
   f.actions.systemStatus.mockRejectedValueOnce(new Error('helper missing'))
   f.face.refresh()
-  await vi.waitFor(() => expect(f.controller.state.getSnapshot().windowsProvider.value).toBe(true))
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().windowsProvider.value).toBe(true) })
   expect(f.controller.state.getSnapshot().system.error).toBe('helper missing')
   f.face.refresh()
-  await vi.waitFor(() => expect(f.controller.state.getSnapshot().system.value).toEqual(value))
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.value).toEqual(value) })
   expect(f.windowsProvider).toHaveBeenCalledOnce()
+  expect(statuses).toContain(true)
+  expect(statuses.at(-1)).toBe(false)
 })
 
 it('refreshes after a request and then waits for an explicit refresh', async () => {

@@ -191,7 +191,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
         <p>{t('previewNotice')}</p>
         {windows && <>
           <p>{t('windowsHelperBuild', {
-            archive: 'cua-helper-win-x64.zip', directory: 'packages/experimental/cua-windows',
+            directory: 'packages/experimental/cua-windows',
             x64: 'pnpm run build:native:x64', arm64: 'pnpm run build:native:arm64',
           })}</p>
           <p>{t('windowsHelperPath', {
@@ -203,6 +203,9 @@ export function PermissionPanel(props: PermissionPanelProps) {
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
         <PersistentPtcSetting {...props} />
+        {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
+          {t('providerLookupFailed', { message: state.windowsProvider.error })}
+        </p>}
         {state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>

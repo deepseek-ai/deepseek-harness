@@ -122,7 +122,10 @@ export class PermissionController {
         this.read('runtime', this.remote.ptcConfiguration, latest),
         this.read('system', this.remote.systemStatus, latest).then(async () => {
           // The Windows helper can be missing before its first permission response.
-          if (latest() && this.state.getSnapshot().system.value === null) await this.read('windowsProvider', this.windowsProvider, latest)
+          if (latest() && this.state.getSnapshot().system.value === null) {
+            this.state.update((state) => { state.windowsProvider.busy = true })
+            await this.read('windowsProvider', this.windowsProvider, latest)
+          }
         }),
         this.read('applications', this.remote.applications, latest),
         this.read('icons', this.remote.applicationIcons, latest),
