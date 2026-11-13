@@ -42,8 +42,13 @@
   white-space: nowrap;
 }
 
+/* The indicators' wrapper only gives the accessible name a reference; it lays out nothing. */
+.indicators {
+  display: contents;
+}
+
 /* One 6px dot at the glyph's corner; the ring separates it from the glyph, and the occupant colors it. */
-.trigger > :global([data-slot='conversation.session.panel.indicator']) > * {
+.indicators > :global([data-slot='conversation.session.panel.indicator']) > * {
   position: absolute;
   top: 5px;
   right: 5px;

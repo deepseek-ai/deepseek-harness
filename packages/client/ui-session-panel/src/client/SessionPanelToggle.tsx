@@ -1,5 +1,5 @@
 /** Session header entry that shows or hides the Session panel. */
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { Button, IconFlatListOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelToggleProps } from './slots.ts'
@@ -22,6 +22,8 @@ export function SessionPanelToggle({
   const available = dockable !== undefined
   const open = available && shown
   const label = available ? t(open ? 'toggle.hide' : 'toggle.show') : t('toggle.unavailable')
+  const nameId = useId()
+  const indicatorsId = useId()
   return (
     <Tooltip label={label} side="bottom" delayMs={500}>
       <Button
@@ -31,14 +33,16 @@ export function SessionPanelToggle({
         aria-expanded={open}
         aria-controls={open ? panelElementId(sessionId) : undefined}
         aria-disabled={available ? undefined : true}
+        // The name and the indicators' text join with a space, as the referenced elements of a label do.
+        aria-labelledby={`${nameId} ${indicatorsId}`}
         data-session-panel-toggle=""
         onClick={() => { toggle(sessionId) }}
       >
         <IconFlatListOutlineRegular size={16} />
-        <span className={css.name}>{t('panel.name')}</span>
-        {/* Separates the name from indicator text in the accessible name. */}
-        {' '}
-        {renderSlot('conversation.session.panel.indicator', { panelShown: open })}
+        <span id={nameId} className={css.name}>{t('panel.name')}</span>
+        <span id={indicatorsId} className={css.indicators}>
+          {renderSlot('conversation.session.panel.indicator', { panelShown: open })}
+        </span>
       </Button>
     </Tooltip>
   )
