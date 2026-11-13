@@ -48,7 +48,7 @@ function adapterWithout(missingCredential?: DeepSeekAdapterOptions['missingCrede
 
 it('publishes no credential for a provider that declares none', async () => {
   const ctx = await route({})
-  expect(ctx.llm.routeCredential('fixture-route')).toBeUndefined()
+  expect(ctx.llm.providerCredential('fixture-route')).toBeUndefined()
 })
 
 it('publishes the declared credential from one configuration generation and resolves it per endpoint', async () => {
@@ -58,7 +58,7 @@ it('publishes the declared credential from one configuration generation and reso
     endpoint === ALLOWED ? { headers: { 'x-fixture': 'k' }, value: 'k', reject, revoked, onRequestError: error => Promise.resolve(error) } : undefined)
   const configured = vi.fn(async (_connection: ResolvedDeepSeekOptions, endpoint: string) => endpoint === ALLOWED)
   const ctx = await route({ resolveAuth, credential: { kind: 'api-key', reference: () => 'FIXTURE_KEY', configured } })
-  const credential = ctx.llm.routeCredential('fixture-route')
+  const credential = ctx.llm.providerCredential('fixture-route')
   expect(credential).toMatchObject({ kind: 'api-key', baseURL: BASE_URL, reference: 'FIXTURE_KEY' })
   await expect(credential!.configured(ALLOWED)).resolves.toBe(true)
   await expect(credential!.configured(OTHER)).resolves.toBe(false)
@@ -80,7 +80,7 @@ it('omits the reference of a credential kind without one and the rejection and w
     resolveAuth: () => Promise.resolve({ headers: { 'x-fixture': 'k' }, value: 'k' }),
     credential: { kind: 'account', configured: () => Promise.resolve(false) },
   })
-  const credential = ctx.llm.routeCredential('fixture-route')
+  const credential = ctx.llm.providerCredential('fixture-route')
   expect(credential).toMatchObject({ kind: 'account', baseURL: BASE_URL })
   expect(credential).not.toHaveProperty('reference')
   await expect(credential!.resolve(ALLOWED)).resolves.toEqual({ headers: { 'x-fixture': 'k' }, value: 'k' })

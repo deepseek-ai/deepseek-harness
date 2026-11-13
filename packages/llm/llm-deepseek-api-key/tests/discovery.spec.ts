@@ -78,7 +78,7 @@ it('publishes the route API key for its consumers from the credential planes it 
   try {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
-    const credential = ctx.llm.routeCredential('deepseek-official')
+    const credential = ctx.llm.providerCredential('deepseek-official')
     expect(credential).toMatchObject({ kind: 'api-key', baseURL: 'https://route.deepseek.test/anthropic', reference: 'DEEPSEEK_API_KEY' })
     const endpoint = 'https://route.deepseek.test/v1/tools/search'
     await expect(credential!.configured(endpoint)).resolves.toBe(true)
@@ -109,7 +109,7 @@ it.each([
     ctx.provide('credentials', { resolve, describe } as never)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
-    const credential = ctx.llm.routeCredential('deepseek-official')
+    const credential = ctx.llm.providerCredential('deepseek-official')
     await expect(credential!.configured(endpoint)).resolves.toBe(false)
     await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
     expect(resolve).not.toHaveBeenCalled()

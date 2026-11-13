@@ -36,8 +36,8 @@
   en: 58dec2259b0b1c6f
   zh: fc99fe965acaabf3
 /llm-streaming/the-model-request:
-  en: a345a763b420ff1a
-  zh: c3e0adef1b1036ef
+  en: 61d4131601adbc32
+  zh: b83156c875d29b89
 /llm-streaming/the-model-request/the-request-envelope-llmcallconfig-and-the-logged-header:
   en: b0eb4620c6953646
   zh: fabf51c7245a4855
@@ -48,5 +48,5 @@
   en: 8c140f9c5a799f01
   zh: f66b895594247e92
 /llm-streaming/service-and-provider-contracts:
-  en: 4d210152ca139cb0
-  zh: d131e11d95666342
+  en: 81b4ede66c5e906d
+  zh: 2ad0ddb1a32e3167

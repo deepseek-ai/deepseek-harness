@@ -1,7 +1,7 @@
 /**
  * Register a DeepSeek-backed provider in `ctx.web`. It calls the Anthropic-compatible Messages API
  * with native `web_search_20250305`. A search initiated by a Session whose latest model request used
- * a route that publishes an account credential through `ctx.llm.routeCredential()` authenticates with
+ * a route that publishes an account credential through `ctx.llm.providerCredential()` authenticates with
  * that credential when the search endpoint has the origin of that route's base URL and the
  * credential's owner allows the endpoint; every other search reuses `DEEPSEEK_API_KEY`. The provider
  * does not reuse `DEEPSEEK_BASE_URL`; auxiliary search has its own endpoint configuration. The
@@ -17,7 +17,7 @@ import { credentialRef, credentialRefConfigured, resolveCredentialRef } from '@d
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { assertUsableApiKey } from '@deepseek-ai/dsh-llm'
-import type { RouteCredential } from '@deepseek-ai/dsh-llm'
+import type { ProviderCredential } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import {
@@ -102,8 +102,8 @@ type SearchOptions = DeepSeekSearchProviderOptions & { readonly apiKeyEnv: Crede
  * @returns the route's account credential, or undefined for another kind, another origin, no credential, or no route.
  * @throws when the route's settings do not resolve, or its published base URL or `endpoint` does not parse.
  */
-function accountCredentialOf(ctx: Context, route: string | undefined, endpoint: string): RouteCredential | undefined {
-  const credential = route === undefined ? undefined : ctx.get('llm')?.routeCredential(route)
+function accountCredentialOf(ctx: Context, route: string | undefined, endpoint: string): ProviderCredential | undefined {
+  const credential = route === undefined ? undefined : ctx.get('llm')?.providerCredential(route)
   if (credential?.kind !== 'account') return undefined
   return new URL(credential.baseURL).origin === new URL(endpoint).origin ? credential : undefined
 }
@@ -170,7 +170,7 @@ async function searchConfigured(
   ctx: Context, options: SearchOptions, route: string | undefined,
 ): Promise<boolean> {
   const endpoint = `${options.baseURL}/messages`
-  let account: RouteCredential | undefined
+  let account: ProviderCredential | undefined
   try { account = accountCredentialOf(ctx, route, endpoint) }
   catch (_unresolvedRoute) { return false /* The search fails on this route before it reads any credential. */ }
   if (account !== undefined) {

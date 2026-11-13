@@ -1844,12 +1844,12 @@
     },
     {
       "doc": "docs/subsystems/llm-streaming.md",
-      "symbol": "RouteCredentialGrant",
+      "symbol": "ProviderCredentialGrant",
       "source": "packages/llm/llm/src/types.ts"
     },
     {
       "doc": "docs/subsystems/llm-streaming.md",
-      "symbol": "RouteCredential",
+      "symbol": "ProviderCredential",
       "source": "packages/llm/llm/src/types.ts"
     },
     {

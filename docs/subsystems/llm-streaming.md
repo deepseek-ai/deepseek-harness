@@ -527,14 +527,14 @@ interface LlmNativeAuth {
 }
 ```
 
-A route's adapter can also publish the credential the route currently sends, so consumers that call the same deployment outside the model request path, such as the DeepSeek web providers, reuse it through `ctx.llm.routeCredential(provider)` instead of reading provider configuration or choosing header names. A grant is Host-only and is held for one operation; `kind` is merge-extensible through `LlmCredentialKindMap`, whose declared members are `api-key` and `account`. A grant whose owner can withdraw the credential while requests carry it, as an account sign-out does, has a `revoked` signal: the consumer runs each request it authenticates under that signal and reports a request the signal ended as its own failure, not as the caller's cancellation.
+A route's adapter can also publish the credential the route currently sends, so consumers that call the same deployment outside the model request path, such as the DeepSeek web providers, reuse it through `ctx.llm.providerCredential(provider)` instead of reading provider configuration or choosing header names. A grant is Host-only and is held for one operation; `kind` is merge-extensible through `LlmCredentialKindMap`, whose declared members are `api-key` and `account`. A grant whose owner can withdraw the credential while requests carry it, as an account sign-out does, has a `revoked` signal: the consumer runs each request it authenticates under that signal and reports a request the signal ended as its own failure, not as the caller's cancellation.
 
 ```ts type-equiv
 /**
  * One credential released for one destination. Host-only: it carries the
  * secret, so it never crosses a Remote boundary and never enters a log.
  */
-interface RouteCredentialGrant {
+interface ProviderCredentialGrant {
   /**
    * Request headers carrying the credential as the route's own protocol
    * expects it, such as `x-api-key` for an API key. Consumers speaking that
@@ -568,11 +568,11 @@ interface RouteCredentialGrant {
 /**
  * The credential one registered provider route currently sends, answered by
  * the route's owning adapter so that consumers read no provider configuration
- * and choose no header names. `ctx.llm.routeCredential()` resolves a new value
+ * and choose no header names. `ctx.llm.providerCredential()` resolves a new value
  * per call from one configuration generation; a caller keeps it for one
  * operation only.
  */
-interface RouteCredential {
+interface ProviderCredential {
   /** Kind of credential the route sends. */
   readonly kind: LlmCredentialKind
   /**
@@ -603,7 +603,7 @@ interface RouteCredential {
    * @param signal - cancellation for the lookup.
    * @returns the released credential, or `undefined`.
    */
-  resolve(endpoint: string, signal?: AbortSignal): Promise<RouteCredentialGrant | undefined>
+  resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>
 }
 ```
 
@@ -950,7 +950,7 @@ The [wire reference](../deepseek-llm-api-wire-extensions.md) defines the exact r
 
 `LlmAdapter` is the provider contract: subclass, implement `stream()`, and register one adapter instance with `ctx.llm.registerAdapter(providers, adapter)`. `GenerateOptions.provider` selects the registered adapter; `GenerateOptions.model` is passed to that adapter and need not be registered at lifecycle start. Duplicate provider routes fail atomically. Optional `providerRetryPolicy()` is captured per route with normal defaults, while `providerInfo()` and asynchronous `listModels()` feed `LlmRuntime.listProviders()` / `listModels()` with detached selector metadata. That catalog is advisory rather than a request whitelist: the adapter remains authoritative and may accept unlisted model ids. One asynchronous `resolveModel()` query returns exact model identity plus optional correctness-sensitive context capacity, an adapter-configured `defaultMaxTokens`, and ordered model-owned reasoning ids with an optional deployment default; absent fields mean unavailable metadata or provider-owned behavior, not invalid catalog membership. The resolver receives optional cancellation and must settle promptly after abort. `LlmRuntime.resolveModelInfo()` validates and detaches the aggregate. At the final adapter boundary, `resolveCallConfig()` materializes the output default only when `maxTokens` is absent and validates and materializes reasoning, so direct calls cannot bypass either configured behavior; direct dispatch captures one registration before awaiting that resolution. The agent loop instead uses `prepareCall()` to keep the same registration across model resolution, durable header logging, and dispatch, retain detached context metadata from that exact lookup, and report which config fields the adapter defaulted. Adapter lookup happens at the terminal continuation of the `llm/stream` waterfall, so a listener may short-circuit the call or route a mutable one-shot request before lookup. AgentLoop observes a request attempt once the outer waterfall returns a stream handle; that limited boundary does not prove a lazy terminal adapter was constructed or began provider I/O. The `block-start` / `block-end` `index` correlation and the assembler together mean an adapter only has to emit well-formed chunks — block reassembly is not each adapter's problem. [architecture.md](../architecture.md#turn-flow) shows where `ctx.llm.stream()` and the `llm/stream` waterfall sit in one turn.
 
-Optional `routeCredential()` publishes the credential a route currently sends, with the route's base URL, its kind, and an optional credential reference. `LlmRuntime.routeCredential(provider)` forwards to the owning adapter: an unregistered route answers `undefined`, because callers ask about routes a conversation named earlier, and a registered route whose configuration does not resolve propagates the adapter's failure. The DeepSeek web providers read it to call the deployment of the conversation's route with that route's credential, so no consumer reads another plugin's configuration or chooses its header names.
+Optional `providerCredential()` publishes the credential a route currently sends, with the route's base URL, its kind, and an optional credential reference. `LlmRuntime.providerCredential(provider)` forwards to the owning adapter: an unregistered route answers `undefined`, because callers ask about routes a conversation named earlier, and a registered route whose configuration does not resolve propagates the adapter's failure. The DeepSeek web providers read it to call the deployment of the conversation's route with that route's credential, so no consumer reads another plugin's configuration or chooses its header names.
 
 ```ts type-equiv
 /** One model call whose config and adapter registration were resolved together. */
@@ -1028,7 +1028,7 @@ declare abstract class LlmAdapter {
    * @param _provider - a route passed to `registerAdapter()` for this instance.
    * @returns the route's current credential, or `undefined` when the route publishes none.
    */
-  routeCredential(_provider: string): RouteCredential | undefined;
+  providerCredential(_provider: string): ProviderCredential | undefined;
   /**
    * List models this adapter can currently advertise for one owned provider.
    * Core routing accepts unlisted model ids; catalog-driven entry points such
@@ -1216,9 +1216,9 @@ imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): 
  * which may no longer be mounted; a registered route whose configuration
  * does not resolve propagates the adapter's failure.
  * @param provider - provider route whose credential is wanted.
- * @returns the route credential, or `undefined` when the route is unregistered or publishes none.
+ * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
  */
-routeCredential(provider: string): RouteCredential | undefined
+providerCredential(provider: string): ProviderCredential | undefined
 
 /**
  * Resolve the exact text one durable file occurrence contributes to every

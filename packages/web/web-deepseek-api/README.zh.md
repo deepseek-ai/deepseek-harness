@@ -59,8 +59,8 @@ kind: "package-reference"
 Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据，因此保存的设置、模型提供方变更、登录或存入的密钥从下一次操作开始生效。会话的路由是发起会话最近一次请求上下文的 `provider`；`ready()` 使用正在准备的模型请求的路由。
 
 - **单独配置。** 设置了非空 `*BaseURL` 或 `*ApiKeyEnv` 的能力在任何路由上都只以 `Authorization: Bearer` 把其 `*ApiKeyEnv`（未设置时为 `DEEPSEEK_API_KEY`）下的密钥发往其 `*BaseURL`（未设置时为 `https://api.deepseek.com/v1/tools`），从不发送账号令牌。没有该密钥时，操作失败，诊断信息点名该引用和 `*ApiKeyEnv` 字段。
-- **账号凭据。** 操作通过 `x-dsh-auth-token` 发送 `ctx.deepseekAccount` 为请求端点释放的凭据；2026-10-16 公网 Search 与 Fetch 路由已接受该凭据。挂载了 `deepseek-account` 模型路由时，端点位于该路由通过 `ctx.llm.routeCredential` 发布的基础地址的 origin 下；没有该路由时，位于 `DEEPSEEK_BASE_URL` 所指 origin 下，默认 `https://api.deepseek.com`。没有登录或没有账号服务都算没有凭据。凭据读取失败时操作失败，不再尝试其他凭据。已挂载路由的设置无法解析，或 `DEEPSEEK_BASE_URL` 不是不含凭据的 HTTP(S) URL 时，操作在轮到该来源时于读取凭据前失败。
-- **API 密钥。** 挂载了 `deepseek-official` 模型路由时，操作以 `Authorization: Bearer` 把该路由通过 `ctx.llm.routeCredential` 发布的密钥（按路由的 `apiKeyEnv` 读取，默认 `DEEPSEEK_API_KEY`）发往该路由基础地址的 origin。没有该路由时，把 `DEEPSEEK_API_KEY` 发往 `https://api.deepseek.com/v1/tools`。已挂载路由的设置无法解析时，每个需要该密钥的操作都在读取密钥前失败，绝不改用官方端点或 `DEEPSEEK_API_KEY`。
+- **账号凭据。** 操作通过 `x-dsh-auth-token` 发送 `ctx.deepseekAccount` 为请求端点释放的凭据；2026-10-16 公网 Search 与 Fetch 路由已接受该凭据。挂载了 `deepseek-account` 模型路由时，端点位于该路由通过 `ctx.llm.providerCredential` 发布的基础地址的 origin 下；没有该路由时，位于 `DEEPSEEK_BASE_URL` 所指 origin 下，默认 `https://api.deepseek.com`。没有登录或没有账号服务都算没有凭据。凭据读取失败时操作失败，不再尝试其他凭据。已挂载路由的设置无法解析，或 `DEEPSEEK_BASE_URL` 不是不含凭据的 HTTP(S) URL 时，操作在轮到该来源时于读取凭据前失败。
+- **API 密钥。** 挂载了 `deepseek-official` 模型路由时，操作以 `Authorization: Bearer` 把该路由通过 `ctx.llm.providerCredential` 发布的密钥（按路由的 `apiKeyEnv` 读取，默认 `DEEPSEEK_API_KEY`）发往该路由基础地址的 origin。没有该路由时，把 `DEEPSEEK_API_KEY` 发往 `https://api.deepseek.com/v1/tools`。已挂载路由的设置无法解析时，每个需要该密钥的操作都在读取密钥前失败，绝不改用官方端点或 `DEEPSEEK_API_KEY`。
 - **`auto` 计费**跟随会话。在 `deepseek-account` 路由上先发送账号凭据，没有凭据时发送 API 密钥；没有账号路由时只发送 API 密钥。在 `deepseek-official` 路由上只发送 API 密钥。在其他路由上或会话之外先发送 API 密钥，没有密钥时发送账号凭据；没有密钥且已挂载的账号路由设置无法解析时，操作失败。
 - **`account` 计费**在任何路由上只发送账号凭据，**`api-key` 计费**只发送 API 密钥；两者都不回退到另一种凭据。
 
@@ -84,7 +84,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[插件](src/index.ts)在每次操作时读取一次设置，注册两个提供者，并把一个能力的设置快照、会话的路由，以及已挂载的 DeepSeek 模型路由通过 `ctx.llm.routeCredential` 发布的凭据转换为该操作的有序凭据，每个凭据都绑定其发往的 API 基础地址。[Search 提供者](src/search.ts)在返回服务结果前校验响应 JSON；[Fetch 提供者](src/fetch.ts)校验 Markdown 正文。[传输层](src/transport.ts)按顺序读取这些凭据，用第一个存在的凭据发送一次请求，并负责取消、重定向拒绝和失败指引；记录钩子在发送前运行，抛出异常即阻止发送。Search 与 Fetch API 调用不产生辅助请求事件。[Messages 搜索提供方](../web-search-deepseek/README.zh.md)负责声明和记录自身的 `web/deepseek-search-llm-request` 会话事件。工具调用和结果仍按常规记录到会话。
+[插件](src/index.ts)在每次操作时读取一次设置，注册两个提供者，并把一个能力的设置快照、会话的路由，以及已挂载的 DeepSeek 模型路由通过 `ctx.llm.providerCredential` 发布的凭据转换为该操作的有序凭据，每个凭据都绑定其发往的 API 基础地址。[Search 提供者](src/search.ts)在返回服务结果前校验响应 JSON；[Fetch 提供者](src/fetch.ts)校验 Markdown 正文。[传输层](src/transport.ts)按顺序读取这些凭据，用第一个存在的凭据发送一次请求，并负责取消、重定向拒绝和失败指引；记录钩子在发送前运行，抛出异常即阻止发送。Search 与 Fetch API 调用不产生辅助请求事件。[Messages 搜索提供方](../web-search-deepseek/README.zh.md)负责声明和记录自身的 `web/deepseek-search-llm-request` 会话事件。工具调用和结果仍按常规记录到会话。
 
 服务类型见 [Web 子系统](../../../docs/subsystems/web.zh.md)，受限的模型输出见 [tool-web](../tool-web/README.zh.md)。
 
@@ -132,7 +132,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 - 查询和 URL 约束由远端服务执行。2026-10-16 抓取无法解析的目标域名时返回 HTTP 500，而非文档所述的 404，其失败信息与端点失败附带相同的端点指引。Fetch 既不暴露目标状态，也不暴露最终重定向 URL，因此结果报告 HTTP 200 和请求 URL；提供者丢弃 API 返回的页面标题。
 - `available()` 无法查询异步凭据存储；`ready()` 可以，因此凭据存储缺少密钥时，模型步骤会撤下这两个工具。直接调用 `ctx.web.search()` 或 `ctx.web.fetch()` 仍可能因凭据缺失失败。
 - Search 限速只约束单个插件实例内的发送时间。同一账号下的其他进程和客户端共享账号级 5 QPS 限制，彼此不协调，网络抖动也可能使请求集中到达；HTTP 429 会使该次搜索失败，随后 `dsh-tool-web` 会使整个多查询调用失败。Fetch 不限速，因此并行的 `web_fetch` 调用可能超过 Fetch 限制。
-- 路由端点与凭据只认以 `deepseek-official` 或 `deepseek-account` 注册的适配器通过 `ctx.llm.routeCredential` 发布的内容。不发布凭据的适配器（例如测试回放适配器），或发布另一种凭据的适配器（以 `deepseek-official` 发布账号凭据，或以 `deepseek-account` 发布 API 密钥），都视为没有路由：其会话使用 `DEEPSEEK_API_KEY` 与官方基础地址，`account` 计费则像没有账号路由时一样询问账号服务。
+- 路由端点与凭据只认以 `deepseek-official` 或 `deepseek-account` 注册的适配器通过 `ctx.llm.providerCredential` 发布的内容。不发布凭据的适配器（例如测试回放适配器），或发布另一种凭据的适配器（以 `deepseek-official` 发布账号凭据，或以 `deepseek-account` 发布 API 密钥），都视为没有路由：其会话使用 `DEEPSEEK_API_KEY` 与官方基础地址，`account` 计费则像没有账号路由时一样询问账号服务。
 
 <a id="dev-note"></a>
 ### 开发备注

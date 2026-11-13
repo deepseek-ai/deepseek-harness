@@ -22,7 +22,7 @@ import type {
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
-  RouteCredential,
+  ProviderCredential,
   StreamChunk,
   SystemPromptUpdate,
   ToolSchema,
@@ -274,7 +274,7 @@ export abstract class LlmAdapter {
    * @param _provider - a route passed to `registerAdapter()` for this instance.
    * @returns the route's current credential, or `undefined` when the route publishes none.
    */
-  routeCredential(_provider: string): RouteCredential | undefined {
+  providerCredential(_provider: string): ProviderCredential | undefined {
     return undefined
   }
 
@@ -729,10 +729,10 @@ export class LlmRuntime extends TypertRemoteService {
    * which may no longer be mounted; a registered route whose configuration
    * does not resolve propagates the adapter's failure.
    * @param provider - provider route whose credential is wanted.
-   * @returns the route credential, or `undefined` when the route is unregistered or publishes none.
+   * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
    */
-  routeCredential(provider: string): RouteCredential | undefined {
-    return this.adapters.get(provider)?.adapter.routeCredential(provider)
+  providerCredential(provider: string): ProviderCredential | undefined {
+    return this.adapters.get(provider)?.adapter.providerCredential(provider)
   }
 
   /**

@@ -1,7 +1,7 @@
 /** Direct Messages transport with one cancellable lifecycle per model request. */
 
 import { attributionHeaders, LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, RouteCredential, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, ProviderCredential, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekLlmApiExtensionRequest, DeepSeekLlmApiJson } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { modelInfo } from './model-info.ts'
@@ -47,7 +47,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     if (entry === undefined) throw new LlmError(`DeepSeek model "${model}" has no declared image projection`, 'UNKNOWN_MODEL')
     return resolveRequestImageTarget(entry, image)
   }
-  override routeCredential(_provider: string): RouteCredential | undefined {
+  override providerCredential(_provider: string): ProviderCredential | undefined {
     const publication = this.dependencies.credential
     if (publication === undefined) return undefined
     // One configuration generation serves the whole published object, as it does one model request.

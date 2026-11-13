@@ -533,14 +533,14 @@ interface LlmNativeAuth {
 }
 ```
 
-路由的适配器还可以发布该路由当前发送的凭据，使在模型请求路径之外调用同一部署的消费方（如 DeepSeek Web 提供方）通过 `ctx.llm.routeCredential(provider)` 复用它，而不读取提供方配置或自行选择请求头名称。授权仅限 Host，且只在一次操作内持有；`kind` 通过 `LlmCredentialKindMap` 可合并扩展，已声明的成员为 `api-key` 和 `account`。所有者可能在请求仍携带凭据时撤回它（例如账号退登），这类授权带有 `revoked` 信号：消费方让它鉴权的每个请求都受该信号约束，并把被该信号结束的请求报告为自身的失败，而不是调用方的取消。
+路由的适配器还可以发布该路由当前发送的凭据，使在模型请求路径之外调用同一部署的消费方（如 DeepSeek Web 提供方）通过 `ctx.llm.providerCredential(provider)` 复用它，而不读取提供方配置或自行选择请求头名称。授权仅限 Host，且只在一次操作内持有；`kind` 通过 `LlmCredentialKindMap` 可合并扩展，已声明的成员为 `api-key` 和 `account`。所有者可能在请求仍携带凭据时撤回它（例如账号退登），这类授权带有 `revoked` 信号：消费方让它鉴权的每个请求都受该信号约束，并把被该信号结束的请求报告为自身的失败，而不是调用方的取消。
 
 ```ts type-equiv
 /**
  * One credential released for one destination. Host-only: it carries the
  * secret, so it never crosses a Remote boundary and never enters a log.
  */
-interface RouteCredentialGrant {
+interface ProviderCredentialGrant {
   /**
    * Request headers carrying the credential as the route's own protocol
    * expects it, such as `x-api-key` for an API key. Consumers speaking that
@@ -574,11 +574,11 @@ interface RouteCredentialGrant {
 /**
  * The credential one registered provider route currently sends, answered by
  * the route's owning adapter so that consumers read no provider configuration
- * and choose no header names. `ctx.llm.routeCredential()` resolves a new value
+ * and choose no header names. `ctx.llm.providerCredential()` resolves a new value
  * per call from one configuration generation; a caller keeps it for one
  * operation only.
  */
-interface RouteCredential {
+interface ProviderCredential {
   /** Kind of credential the route sends. */
   readonly kind: LlmCredentialKind
   /**
@@ -609,7 +609,7 @@ interface RouteCredential {
    * @param signal - cancellation for the lookup.
    * @returns the released credential, or `undefined`.
    */
-  resolve(endpoint: string, signal?: AbortSignal): Promise<RouteCredentialGrant | undefined>
+  resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>
 }
 ```
 
@@ -956,7 +956,7 @@ interface LlmCallConfigAdapterDefaults {
 
 `LlmAdapter` 是提供方约定：创建子类、实现 `stream()`，再用 `ctx.llm.registerAdapter(providers, adapter)` 注册一个适配器实例。`GenerateOptions.provider` 选择已注册适配器；`GenerateOptions.model` 会传给该适配器，无需在生命周期启动时注册。重复提供方路由会原子失败。可选的 `providerRetryPolicy()` 会按路由捕获并填入 normal 默认值，`providerInfo()` 与异步 `listModels()` 方法则为 `LlmRuntime.listProviders()` / `listModels()` 提供分离的 selector 元数据。该目录仅供参考，不是请求白名单：适配器仍是权威，并可接受未列出的模型 id。单次异步 `resolveModel()` 查询返回确切模型身份，以及可选的对正确性敏感的上下文容量、适配器配置的 `defaultMaxTokens`、由模型持有的有序推理强度 ID 和可选的部署默认值；字段缺失表示元数据不可用或保留提供方持有的行为，而不表示目录成员关系无效。解析器会接收可选的取消信号，并且必须在信号中止后迅速完成结算。`LlmRuntime.resolveModelInfo()` 会校验聚合结果并返回分离值。在最终适配器边界，`resolveCallConfig()` 仅在 `maxTokens` 缺失时填入输出默认值，并校验和填入推理强度，因此直接调用也无法绕过任何一项已配置行为；直接分派会在等待解析前捕获一项适配器注册。agent loop 则使用 `prepareCall()`，使模型解析、请求头持久记录和分派全程使用同一项注册，保留来自同一次查询的分离上下文元数据，并报告适配器填入的配置字段。适配器查找发生在 `llm/stream` waterfall 的终端 continuation，因此 listener 可以在查找前短路调用，或路由一个可变的一次性请求。AgentLoop 在外层 waterfall 返回流句柄时观察到一次请求尝试；这个有限边界不能证明惰性终端适配器已构造完成或开始提供方 I/O。`block-start` / `block-end` 的 `index` 关联与 assembler 共同意味着适配器只需 emit 格式正确的分片——块重组不是每个适配器各自的问题。`ctx.llm.stream()` 与 `llm/stream` waterfall 在一个轮次中的位置见 [architecture.md](../architecture.zh.md#turn-flow)。
 
-可选的 `routeCredential()` 发布路由当前发送的凭据，连同路由的基础地址、凭据种类和可选的凭据引用。`LlmRuntime.routeCredential(provider)` 转发给拥有该路由的适配器：未注册的路由回答 `undefined`，因为调用方询问的是会话早先命名的路由；已注册但配置无法解析的路由则传播适配器的失败。DeepSeek Web 提供方据此用会话路由的凭据调用同一部署，因此没有消费方需要读取其他插件的配置或自行选择请求头名称。
+可选的 `providerCredential()` 发布路由当前发送的凭据，连同路由的基础地址、凭据种类和可选的凭据引用。`LlmRuntime.providerCredential(provider)` 转发给拥有该路由的适配器：未注册的路由回答 `undefined`，因为调用方询问的是会话早先命名的路由；已注册但配置无法解析的路由则传播适配器的失败。DeepSeek Web 提供方据此用会话路由的凭据调用同一部署，因此没有消费方需要读取其他插件的配置或自行选择请求头名称。
 
 ```ts type-equiv
 /** One model call whose config and adapter registration were resolved together. */
@@ -1034,7 +1034,7 @@ declare abstract class LlmAdapter {
    * @param _provider - a route passed to `registerAdapter()` for this instance.
    * @returns the route's current credential, or `undefined` when the route publishes none.
    */
-  routeCredential(_provider: string): RouteCredential | undefined;
+  providerCredential(_provider: string): ProviderCredential | undefined;
   /**
    * List models this adapter can currently advertise for one owned provider.
    * Core routing accepts unlisted model ids; catalog-driven entry points such
@@ -1222,9 +1222,9 @@ imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): 
  * which may no longer be mounted; a registered route whose configuration
  * does not resolve propagates the adapter's failure.
  * @param provider - provider route whose credential is wanted.
- * @returns the route credential, or `undefined` when the route is unregistered or publishes none.
+ * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
  */
-routeCredential(provider: string): RouteCredential | undefined
+providerCredential(provider: string): ProviderCredential | undefined
 
 /**
  * Resolve the exact text one durable file occurrence contributes to every

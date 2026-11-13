@@ -310,7 +310,7 @@ export type LlmCredentialKind = LlmCredentialKindMap[keyof LlmCredentialKindMap]
  * One credential released for one destination. Host-only: it carries the
  * secret, so it never crosses a Remote boundary and never enters a log.
  */
-export interface RouteCredentialGrant {
+export interface ProviderCredentialGrant {
   /**
    * Request headers carrying the credential as the route's own protocol
    * expects it, such as `x-api-key` for an API key. Consumers speaking that
@@ -342,11 +342,11 @@ export interface RouteCredentialGrant {
 /**
  * The credential one registered provider route currently sends, answered by
  * the route's owning adapter so that consumers read no provider configuration
- * and choose no header names. `ctx.llm.routeCredential()` resolves a new value
+ * and choose no header names. `ctx.llm.providerCredential()` resolves a new value
  * per call from one configuration generation; a caller keeps it for one
  * operation only.
  */
-export interface RouteCredential {
+export interface ProviderCredential {
   /** Kind of credential the route sends. */
   readonly kind: LlmCredentialKind
   /**
@@ -377,7 +377,7 @@ export interface RouteCredential {
    * @param signal - cancellation for the lookup.
    * @returns the released credential, or `undefined`.
    */
-  resolve(endpoint: string, signal?: AbortSignal): Promise<RouteCredentialGrant | undefined>
+  resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>
 }
 
 /**

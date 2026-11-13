@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-web-deepseek-api/transport
  */
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
-import type { LlmCredentialKind, RouteCredential } from '@deepseek-ai/dsh-llm'
+import type { LlmCredentialKind, ProviderCredential } from '@deepseek-ai/dsh-llm'
 import { WebError } from '@deepseek-ai/dsh-web'
 
 const USER_AGENT = 'deepseek-harness/0.0.1'
@@ -34,7 +34,7 @@ export type DeepSeekWebAuthSource =
     /** API base the credential is sent to, including its path prefix. */
     baseURL: string
     /** The credential's owner: it answers presence and releases a grant for an endpoint, and read failures reject. */
-    credential: Omit<RouteCredential, 'baseURL'>
+    credential: Omit<ProviderCredential, 'baseURL'>
   }
   /** An API key, sent as `Authorization: Bearer`. */
   | {

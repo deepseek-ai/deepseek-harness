@@ -14,7 +14,7 @@ import type {
   WebSearchSource,
 } from '@deepseek-ai/dsh-web'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
-import type { RouteCredentialGrant } from '@deepseek-ai/dsh-llm'
+import type { ProviderCredentialGrant } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session'
 import type {
   AnthropicError,
@@ -100,7 +100,7 @@ export interface DeepSeekSearchProviderOptions {
    * search reports the HTTP rejection. The grant's `revoked` signal ends the search when the
    * account signs out. `undefined` selects API-key authentication.
    */
-  resolveAccountCredential?: (endpoint: string) => Promise<RouteCredentialGrant | undefined>
+  resolveAccountCredential?: (endpoint: string) => Promise<ProviderCredentialGrant | undefined>
   /** Literal DeepSeek API key; when present it wins over {@link resolveApiKey}. */
   apiKey?: string
   /** Resolve the current DeepSeek API key for one search operation. */

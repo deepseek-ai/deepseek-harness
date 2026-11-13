@@ -7,7 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import type { RouteCredential } from '@deepseek-ai/dsh-llm'
+import type { ProviderCredential } from '@deepseek-ai/dsh-llm'
 import { Config as AccountConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
 import { plainAccountOptions, resolveAccountOptions } from '@deepseek-ai/dsh-llm-deepseek-account/src/config.ts'
 import { Config as OfficialConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -21,7 +21,7 @@ export interface RouteRow {
   config?: Record<string, unknown>
   /** Publish no credential, as an adapter another package registers under this id does. Defaults to false. */
   withoutCredential?: boolean
-  /** Value `routeCredential()` throws instead of publishing. */
+  /** Value `providerCredential()` throws instead of publishing. */
   throws?: unknown
   /** Base URL published in place of the resolved one, as a route publishing an unparsable base would. */
   publishedBaseURL?: string
@@ -30,7 +30,7 @@ export interface RouteRow {
 }
 
 /** The credential `route` publishes, resolved from its config as the route plugin resolves it on each call. */
-function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
+function credentialOf(ctx: Context, route: RouteRow): ProviderCredential {
   const environment = launchEnvironmentOf(ctx)
   if ((route.publishes ?? (route.provider === 'deepseek-official' ? 'api-key' : 'account')) === 'api-key') {
     const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
@@ -53,13 +53,13 @@ function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
 }
 
 /**
- * Provide an `llm` stand-in whose `routeCredential()` answers for `routes`.
+ * Provide an `llm` stand-in whose `providerCredential()` answers for `routes`.
  * @param ctx - the root context.
  * @param routes - route rows, one per provider id.
  */
 export function provideRoutes(ctx: Context, routes: readonly RouteRow[]): void {
   ctx.provide('llm', {
-    routeCredential: (provider: string): RouteCredential | undefined => {
+    providerCredential: (provider: string): ProviderCredential | undefined => {
       const route = routes.find(row => row.provider === provider)
       if (route === undefined || route.withoutCredential === true) return undefined
       if (route.throws !== undefined) throw route.throws

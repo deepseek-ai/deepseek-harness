@@ -215,7 +215,7 @@ it('publishes the account credential for its consumers, asking the account for e
   await ctx.plugin(LlmRuntime)
   ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return token } }))
   await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
-  const credential = ctx.llm.routeCredential('deepseek-account')
+  const credential = ctx.llm.providerCredential('deepseek-account')
   expect(credential).toMatchObject({ kind: 'account', baseURL: 'https://account.deepseek.test/anthropic' })
   expect(credential).not.toHaveProperty('reference')
   const endpoint = 'https://account.deepseek.test/v1/tools/search'
@@ -225,7 +225,7 @@ it('publishes the account credential for its consumers, asking the account for e
   await expect(credential!.configured(endpoint)).resolves.toBe(false)
   await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
   expect(asked).toEqual([endpoint, endpoint, endpoint, endpoint])
-  expect(ctx.llm.routeCredential('deepseek-official')).toBeUndefined()
+  expect(ctx.llm.providerCredential('deepseek-official')).toBeUndefined()
 })
 
 it('publishes a credential nobody holds without the account service', async () => {
@@ -233,7 +233,7 @@ it('publishes a credential nobody holds without the account service', async () =
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
-  const credential = ctx.llm.routeCredential('deepseek-account')!
+  const credential = ctx.llm.providerCredential('deepseek-account')!
   await expect(credential.configured('https://account.deepseek.test/v1/tools/search')).resolves.toBe(false)
   await expect(credential.resolve('https://account.deepseek.test/v1/tools/search')).resolves.toBeUndefined()
 })

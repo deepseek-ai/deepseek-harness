@@ -2229,10 +2229,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'dimensions and byte target used by the adapter\'s request serializer.',
       },
       {
-        signature: 'routeCredential(provider: string): RouteCredential | undefined',
+        signature: 'providerCredential(provider: string): ProviderCredential | undefined',
         description: 'Resolve the credential one registered route currently sends, through its owning adapter. An unregistered route answers `undefined` rather than throwing because callers ask about routes a conversation named earlier, which may no longer be mounted; a registered route whose configuration does not resolve propagates the adapter\'s failure.',
         parameters: [{ name: 'provider', description: 'provider route whose credential is wanted.' }],
-        returns: 'the route credential, or `undefined` when the route is unregistered or publishes none.',
+        returns: 'the route\'s credential, or `undefined` when the route is unregistered or publishes none.',
       },
       {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
@@ -7599,7 +7599,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    routeCredential(_provider: string): RouteCredential | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(_provider: string): ProviderCredential | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -7695,7 +7695,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    routeCredential(provider: string): RouteCredential | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signa /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(provider: string): ProviderCredential | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -8502,6 +8502,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PromptSubmitResult = {\n    text: string;\n    context?: readonly string[];\n    drop?: undefined;\n} | {\n    drop: string;\n    text?: undefined;\n    context?: undefined;\n};',
   },
   {
+    name: 'ProviderCredential',
+    declaration: 'export interface ProviderCredential {\n    readonly kind: LlmCredentialKind;\n    readonly baseURL: string;\n    readonly reference?: string;\n    configured(endpoint: string): Promise<boolean>;\n    resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>;\n}',
+  },
+  {
+    name: 'ProviderCredentialGrant',
+    declaration: 'export interface ProviderCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
+  },
+  {
     name: 'ProviderRequestId',
     declaration: 'export type ProviderRequestId = Branded<\'ProviderRequestId\'>;',
   },
@@ -8788,14 +8796,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ReviewVerdict',
     declaration: 'export type ReviewVerdict = \'approved\' | \'changes-requested\' | \'commented\' | \'dismissed\';',
-  },
-  {
-    name: 'RouteCredential',
-    declaration: 'export interface RouteCredential {\n    readonly kind: LlmCredentialKind;\n    readonly baseURL: string;\n    readonly reference?: string;\n    configured(endpoint: string): Promise<boolean>;\n    resolve(endpoint: string, signal?: AbortSignal): Promise<RouteCredentialGrant | undefined>;\n}',
-  },
-  {
-    name: 'RouteCredentialGrant',
-    declaration: 'export interface RouteCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
   },
   {
     name: 'RpcId',

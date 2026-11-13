@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/llm-route-credential/guide.md
 /:
-  en: f0cf30e5430471e8
-  zh: 2e6e871797dfdd6b
+  en: 56fc7afd90f0fcde
+  zh: 0b441fc159f25bcf
 /deepseek-routes-publish-the-credential-web-consumers-reuse:
   en: b5392bcd81f69488
   zh: 68cd945f2dde46af
 /deepseek-routes-publish-the-credential-web-consumers-reuse/change:
-  en: 4e77c6f6c622beb2
-  zh: 2c119f567ff411ff
+  en: 7568433b72e2633b
+  zh: dcd4c6deb72da3a4
 /deepseek-routes-publish-the-credential-web-consumers-reuse/migration:
-  en: 6d117f2dfd7593d0
-  zh: 1c1579fc7d0ccad0
+  en: 0632d7c9ffce1675
+  zh: a8b4d67f469eaee7

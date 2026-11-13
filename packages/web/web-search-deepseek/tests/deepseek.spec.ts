@@ -12,7 +12,7 @@ import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import type { RouteCredential, RouteCredentialGrant } from '@deepseek-ai/dsh-llm'
+import type { ProviderCredential, ProviderCredentialGrant } from '@deepseek-ai/dsh-llm'
 import * as AccountRoute from '@deepseek-ai/dsh-llm-deepseek-account'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
@@ -39,7 +39,7 @@ const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchP
  */
 function accountCredential(
   token: (endpoint: string) => Promise<string | undefined>, reject?: (token: string) => Promise<void>, revoked?: AbortSignal,
-): (endpoint: string) => Promise<RouteCredentialGrant | undefined> {
+): (endpoint: string) => Promise<ProviderCredentialGrant | undefined> {
   return async (endpoint) => {
     const value = await token(endpoint)
     if (value === undefined || value.length === 0) return undefined
@@ -1070,19 +1070,19 @@ describe('web-search-deepseek search readiness', () => {
     }
   })
 
-  it.each<[string, () => RouteCredential, string]>([
+  it.each<[string, () => ProviderCredential, string]>([
     ['settings do not resolve', () => { throw new Error('route settings do not resolve') }, 'route settings do not resolve'],
     ['published base URL does not parse', () => ({
       kind: 'account', baseURL: 'not a url', configured: () => Promise.resolve(true),
       resolve: () => Promise.resolve({ headers: { 'x-dsh-auth-token': 'account-token' }, value: 'account-token' }),
     }), 'Invalid URL'],
-  ])('is not ready and fails the search when the initiating route\'s %s, despite a literal key', async (_fault, routeCredential, diagnostic) => {
+  ])('is not ready and fails the search when the initiating route\'s %s, despite a literal key', async (_fault, providerCredential, diagnostic) => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init: RequestInit = {}) => jsonResponse(searchResponse()))
     vi.stubGlobal('fetch', fetchMock)
     const ctx = new Context()
     mounted.push(ctx)
     await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
-    ctx.provide('llm', { routeCredential } as never)
+    ctx.provide('llm', { providerCredential } as never)
     await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
     expect(await ctx.web.searchReady(undefined)).toBe(true)

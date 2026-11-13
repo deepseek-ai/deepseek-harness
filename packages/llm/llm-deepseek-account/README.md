@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, the account model listing, and model gating for `deepseek-account`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, the account catalog, and model admission.
 
-Authentication resolution returns the request credential the account service releases for the destination, carrying `x-dsh-auth-token`, with a failure callback that invalidates that same credential. HTTP 401 classification stays in this provider; a rejected older request cannot clear a replacement login. The route publishes the account credential through `ctx.llm.routeCredential('deepseek-account')` with its base URL, so the DeepSeek web providers send it to the same deployment.
+Authentication resolution returns the request credential the account service releases for the destination, carrying `x-dsh-auth-token`, with a failure callback that invalidates that same credential. HTTP 401 classification stays in this provider; a rejected older request cannot clear a replacement login. The route publishes the account credential through `ctx.llm.providerCredential('deepseek-account')` with its base URL, so the DeepSeek web providers send it to the same deployment.
 
 ## Table of Contents
 

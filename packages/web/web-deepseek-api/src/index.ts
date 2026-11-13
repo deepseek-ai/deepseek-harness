@@ -6,7 +6,7 @@
  * otherwise the API key; one on the `deepseek-official` route sends the API key; any other operation sends the API key
  * and, without a key, the signed-in account's credential. `account` sends only the account credential and `api-key`
  * only the API key. Each mounted DeepSeek model route publishes its credential and base URL through
- * `ctx.llm.routeCredential()`: the API key is that of the `deepseek-official` route, sent to its origin, or
+ * `ctx.llm.providerCredential()`: the API key is that of the `deepseek-official` route, sent to its origin, or
  * `DEEPSEEK_API_KEY` sent to the official base without that route; the account credential is that of the
  * `deepseek-account` route, sent to its origin, or outside an account conversation without that route the signed-in
  * account's credential sent to the origin `DEEPSEEK_BASE_URL` names, by default the official one. An operation that
@@ -271,7 +271,7 @@ function ruleSources(ctx: Context, capability: Capability, rule: Rule): DeepSeek
  */
 function routeSource(ctx: Context, capability: Capability, provider: RouteName): DeepSeekWebAuthSource | undefined {
   try {
-    const credential = ctx.get('llm')?.routeCredential(provider)
+    const credential = ctx.get('llm')?.providerCredential(provider)
     if (credential === undefined || credential.kind !== ROUTE_CREDENTIAL_KIND[provider]) return undefined
     return { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
   } catch (error: unknown) {
