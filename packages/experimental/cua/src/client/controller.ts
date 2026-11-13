@@ -88,6 +88,7 @@ export class PermissionController {
     this.state.update((state) => {
       state.changing = changing
       state.busy = true
+      state.windowsProvider.busy = false
       for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
     })
     if (!changing) this.enqueue()
@@ -101,6 +102,7 @@ export class PermissionController {
     const sequence = ++this.sequence
     this.state.update((state) => {
       state.busy = true
+      state.windowsProvider.busy = false
       for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
     })
     this.tail = this.tail.then(async () => {

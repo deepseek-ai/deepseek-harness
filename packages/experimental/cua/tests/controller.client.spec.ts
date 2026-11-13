@@ -45,6 +45,23 @@ it('identifies the enabled provider if the native helper cannot report its platf
   expect(statuses.at(-1)).toBe(false)
 })
 
+it('clears a superseded inventory read when native permissions become available', async () => {
+  const f = fixture()
+  const inventory = Promise.withResolvers<{ ok: true; value: boolean }>()
+  onTestFinished(() => { inventory.resolve({ ok: true, value: true }) })
+  f.windowsProvider.mockImplementationOnce(() => inventory.promise)
+  f.actions.systemStatus.mockRejectedValueOnce(new Error('helper missing'))
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().windowsProvider.busy).toBe(true) })
+  f.controller.setChanging(true)
+  expect(f.controller.state.getSnapshot().windowsProvider.busy).toBe(false)
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.value).toEqual(value) })
+  inventory.resolve({ ok: true, value: true })
+  await setImmediate()
+  expect(f.controller.state.getSnapshot().windowsProvider).toEqual({ value: null, busy: false, error: null })
+})
+
 it('refreshes after a request and then waits for an explicit refresh', async () => {
   vi.useFakeTimers()
   const f = fixture()
