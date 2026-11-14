@@ -440,12 +440,12 @@ describe('automation-only ACP bridge', () => {
   })
 
   it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
-    [null],
-    [[]],
-    [['not-a-number', 'id']],
-    [[-1, 'id']],
-    [[1, '']],
-  ] as const).map(value => [storage, value] as const)))('%s: rejects malformed decoded list cursors %#', async (storage, decoded) => {
+    null,
+    [],
+    ['not-a-number', 'id'],
+    [-1, 'id'],
+    [1, ''],
+  ] as const).map(decoded => ({ storage, decoded }))))('$storage: rejects malformed decoded list cursors %#', async ({ storage, decoded }) => {
     harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const cursor = Buffer.from(JSON.stringify(decoded)).toString('base64url')

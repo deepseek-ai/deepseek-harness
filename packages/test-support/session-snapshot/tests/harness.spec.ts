@@ -194,6 +194,10 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     ])
     await Promise.all([
       writeFile(basePatch, [
+        '- id: session-persistence-jsonl',
+        '  config:',
+        '    root: ./sessions',
+        '    compression: none',
         '- id: asserted',
         '  name: ./plugin.mjs',
         '  disabled: true',
@@ -235,8 +239,9 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     expect(materialized).toContain(pathToFileURL(join(patchDir, 'plugin.mjs')).href)
     expect(materialized).toContain(pathToFileURL(join(dir, 'nested.mjs')).href)
     expect(materialized).toContain('example-package')
-    expect(await readFile(await materializedPatch(materializedRoot, 'session-storage.yml'), 'utf8'))
-      .toContain(`storage: ${storage}`)
+    expect(materialized).toContain('root: ./sessions')
+    expect(materialized).toContain('compression: none')
+    expect(materialized).toContain(`storage: ${storage}`)
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package')))
       .toBe(await realpath(packageDir))
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package')))
@@ -1003,15 +1008,28 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     const reading = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     let pendingRead: Promise<unknown> | undefined
+    let readSettled = false
     const originalReaddir = readdir
+    const originalRm = rm
     const spy = vi.spyOn(fsPromises, 'readdir').mockImplementation(async (...args) => {
       if (pendingRead === undefined && String(args[0]).includes('acp-snap-sessions-')) {
-        const read = release.promise.then(() => originalReaddir(...args))
+        const read = (async () => {
+          await release.promise
+          try { return await originalReaddir(...args) }
+          finally { readSettled = true }
+        })()
         pendingRead = read
         reading.resolve(undefined)
         return await read
       }
       return await originalReaddir(...args)
+    })
+    const remove = vi.spyOn(fsPromises, 'rm').mockImplementation(async (...args) => {
+      const path = String(args[0])
+      const readingStorage = path.includes('acp-snap-sessions-') && !readSettled
+      await originalRm(...args)
+      if (path.includes('acp-snap-cwd-')) release.resolve(undefined)
+      expect(readingStorage).toBe(false)
     })
     const run = runScenario(
       { steps: [...boot, step] },
@@ -1027,6 +1045,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
       release.resolve(undefined)
       await Promise.allSettled([pendingRead, run, rejected])
       spy.mockRestore()
+      remove.mockRestore()
     }
   })
 

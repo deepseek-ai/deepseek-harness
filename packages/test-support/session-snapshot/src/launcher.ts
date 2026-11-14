@@ -358,12 +358,18 @@ function profileArgs(
   const materializedRoot = join(cwd, '.dsh-profile-patches')
   mkdirSync(materializedRoot, { recursive: true })
   const materializedDir = mkdtempSync(join(materializedRoot, 'launch-'))
-  const materialized = patches.map((file, index) => materializeProfilePatch(file, cwd, profile, materializedDir, index))
-  if (storage !== undefined) {
-    const storagePatch = join(materializedDir, 'session-storage.yml')
-    writeFileSync(storagePatch, stringifyEntryYaml([{ id: 'session-persistence-jsonl', config: { storage } }]))
-    materialized.push(storagePatch)
-  }
+  const materialized = patches.map((file, index) => {
+    const target = materializeProfilePatch(file, cwd, profile, materializedDir, index)
+    if (storage === undefined) return target
+    const entries = parseEntryYaml(readFileSync(target, 'utf8')) as PatchOptions[]
+    for (const entry of entries) {
+      if (entry.id === 'session-persistence-jsonl' && entry.config !== undefined) {
+        entry.config = { ...(entry.config as object), storage }
+      }
+    }
+    writeFileSync(target, stringifyEntryYaml(entries, { lineWidth: -1 }))
+    return target
+  })
   return ['--profile', profile, ...materialized.flatMap(file => ['--patch', file])]
 }
 

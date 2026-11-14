@@ -238,8 +238,8 @@ export function snapshotSpillRoot(
 
 /**
  * Run a scenario end-to-end against a freshly-spawned subprocess. Owns the
- * child and its generated dirs; always tears them down. Returns the captured stdout
- * and (record mode) the harvested session-log path.
+ * child and its generated dirs; always tears them down after pending Session
+ * reads settle. Returns the captured stdout and harvested session logs.
  *
  * @param input The scenario's input script (steps + optional permission answers).
  * @param opts The agent to boot, the mode, and the fixture wiring.
@@ -250,7 +250,8 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
   const storage = (opts.env?.DSH_SNAPSHOT_STORAGE ?? process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') as 'jsonl' | 'sqlite'
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
-  const readLogs = (): Promise<HarvestedLog[]> => harvestSessionLogs(sessionsRoot, storage)
+  let logRead = Promise.resolve<HarvestedLog[]>([])
+  const readLogs = (): Promise<HarvestedLog[]> => (logRead = harvestSessionLogs(sessionsRoot, storage))
   let spillRoot: string | undefined
   // Everything past the temp-dir creation is followed by failure-safe cleanup,
   // so a failure in workspace seeding, spawn, or any step never leaks resources.
@@ -394,6 +395,8 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
   /* v8 ignore next 1 -- launch itself can only throw on a defensive synchronous spawn API failure */
   await cleanup(() => launched?.close('SIGKILL') ?? Promise.resolve())
   await cleanup(() => rm(cwd, { recursive: true, force: true }))
+  // A wait deadline can expire while its harvest still owns database or file handles.
+  await Promise.allSettled([logRead])
   await cleanup(() => rm(sessionsRoot, { recursive: true, force: true }))
   const allocatedSpillRoot = spillRoot
   if (allocatedSpillRoot !== undefined) await cleanup(() => rm(allocatedSpillRoot, { recursive: true, force: true }))
