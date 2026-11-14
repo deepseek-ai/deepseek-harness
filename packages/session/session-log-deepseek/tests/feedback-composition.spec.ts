@@ -35,6 +35,7 @@ afterEach(async () => {
 /** Boot the official upload route through the Loader with one session-log configuration. */
 async function boot(
   sessionLog: { enabled: boolean; maxBytes?: number }, mock: MockLlmServerOptions,
+  storage: 'jsonl' | 'sqlite' = 'jsonl',
 ): Promise<{ ctx: Context; server: MockLlmServer }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-feedback-upload-'))
   vi.stubEnv('DSH_HOME', root)
@@ -53,7 +54,7 @@ async function boot(
   await writeFile(config, JSON.stringify([...modules.keys()].map(name => ({
     name,
     ...name === '@deepseek-ai/dsh-session-persistence-jsonl'
-      ? { config: { root: join(root!, 'sessions'), compression: 'none' } }
+      ? { config: { root: join(root!, 'sessions'), storage, compression: 'none' } }
       : name === '@deepseek-ai/dsh-message-feedback'
         ? { config: { maxNoteBytes: 1024 } }
         : name === '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -79,8 +80,8 @@ async function boot(
   return { ctx, server }
 }
 
-it('uploads freeform feedback and message put/edit/delete through the unchanged provider route', async () => {
-  const { ctx, server } = await boot({ enabled: true }, { sequence: ['invalid_request', 'success', 'success'] })
+it.each(['jsonl', 'sqlite'] as const)('uploads freeform feedback and message put/edit/delete through the unchanged provider route (%s)', async (storage) => {
+  const { ctx, server } = await boot({ enabled: true }, { sequence: ['invalid_request', 'success', 'success'] }, storage)
   const session = ctx.sessions.create(brandString<SessionId>('feedback-upload'))
   const handle = await ctx.sessionPersistence.create(session.header)
   try {
@@ -150,9 +151,9 @@ it('uploads freeform feedback and message put/edit/delete through the unchanged 
   }
 })
 
-it('drains a Session log above the configured maxBytes across consecutive routed requests', async () => {
+it.each(['jsonl', 'sqlite'] as const)('drains a Session log above the configured maxBytes across consecutive routed requests (%s)', async (storage) => {
   const maxBytes = 4096
-  const { ctx, server } = await boot({ enabled: true, maxBytes }, { sequence: ['success'], repeatLast: true })
+  const { ctx, server } = await boot({ enabled: true, maxBytes }, { sequence: ['success'], repeatLast: true }, storage)
   const session = ctx.sessions.create(brandString<SessionId>('bounded-upload'))
   const handle = await ctx.sessionPersistence.create(session.header)
   try {
@@ -173,6 +174,8 @@ it('drains a Session log above the configured maxBytes across consecutive routed
     for (const upload of uploads) expect(Buffer.byteLength(JSON.stringify(upload))).toBeLessThanOrEqual(maxBytes)
     expect(uploads.flatMap(upload => upload.events).filter(event => event.type !== 'session-log-deepseek/delivery-accepted'))
       .toEqual(backlog)
+    await ctx.sessions.flush(session)
+    expect((await handle.read()).events).toEqual(session.snapshotEvents())
   } finally {
     await handle.close()
   }

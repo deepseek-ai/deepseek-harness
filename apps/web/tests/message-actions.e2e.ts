@@ -477,7 +477,13 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
 
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.getByRole('button', { name: /^Show \d+ more sessions$/ }).click()
+    const group = page.getByRole('treeitem', { name: /^Ungrouped/ })
+    await group.waitFor()
+    if (await group.getAttribute('aria-expanded') !== 'true') {
+      await page.getByText('Ungrouped', { exact: true }).click()
+    }
+    const showMore = page.getByRole('button', { name: /^Show \d+ more sessions$/ })
+    if (await showMore.count() > 0) await showMore.click()
     const row = page.locator(`[data-row-key="session:${id}"]`)
     await row.waitFor()
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
@@ -505,7 +511,9 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
       await expect.poll(() => row.getAttribute('aria-selected')).toBe('true')
       await expect.poll(() => scaffold.ctx.agents.get(id)).toBeDefined()
       await expect(scaffold.ctx.sessionPersistence.stat(id)).resolves.toMatchObject({ formatStatus: 'current' })
-      expect(await readdir(directory)).not.toContain(`session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`)
+      expect(await readdir(directory)).toEqual((process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') === 'sqlite'
+        ? ['session.lock', 'session.v3.jsonl.zstd']
+        : ['session.lock', 'session.v3.jsonl.zstd', `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`])
       expect(await readFile(predecessor)).toEqual(source)
       expect(forkRequests).toEqual(['/api/session/fork'])
       expect(scaffold.ctx.agents.list().filter(agent => !existing.has(agent.id) && agent.id !== id)).toEqual([])

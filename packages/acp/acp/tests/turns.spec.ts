@@ -69,17 +69,17 @@ describe('ACP prompt lifecycle', () => {
     harness = undefined
   })
 
-  it('reports a max-token turn without losing its committed text', async () => {
-    harness = await makeBridgeHarness({ script: [maxTokensResponse('cut off')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: reports a max-token turn without losing its committed text', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [maxTokensResponse('cut off')] })
     const sessionId = await newSession(harness)
     const result = await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
     expect(result.stopReason).toBe('max_tokens')
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('cut off') })
   })
 
-  it('delivers a committed assistant image as verified ACP base64', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: delivers a committed assistant image as verified ACP base64', async (storage) => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(1), mediaType: 'image/png' })
     script.push([
       { type: 'block-start', index: 0, blockType: 'image' },
@@ -103,9 +103,9 @@ describe('ACP prompt lifecycle', () => {
     expect(image !== undefined && 'messageId' in image && typeof image.messageId === 'string').toBe(true)
   })
 
-  it('preserves committed text/image/text order on the ACP wire', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: preserves committed text/image/text order on the ACP wire', async (storage) => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(2), mediaType: 'image/jpeg' })
     script.push([
       { type: 'block-start', index: 0, blockType: 'text' },
@@ -131,9 +131,9 @@ describe('ACP prompt lifecycle', () => {
     expect(new Set(harness.updates.map(update => 'messageId' in update ? update.messageId : undefined)).size).toBe(1)
   })
 
-  it('does not settle a prompt before ordered output delivery drains', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: does not settle a prompt before ordered output delivery drains', async (storage) => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(3), mediaType: 'image/png' })
     script.push([
       { type: 'block-start', index: 0, blockType: 'image' },
@@ -157,7 +157,7 @@ describe('ACP prompt lifecycle', () => {
     await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
   })
 
-  it('fails prompt delivery when a committed image attachment is missing', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: fails prompt delivery when a committed image attachment is missing', async (storage) => {
     const missing = {
       attachmentId: `sha256:${'a'.repeat(64)}` as never,
       mediaType: 'image/png' as const,
@@ -165,7 +165,7 @@ describe('ACP prompt lifecycle', () => {
       width: 1,
       height: 1,
     }
-    harness = await makeBridgeHarness({ script: [[
+    harness = await makeBridgeHarness(storage, { script: [[
       { type: 'block-start', index: 0, blockType: 'image' },
       { type: 'block-end', index: 0, block: { type: 'image', attachment: missing } },
       { type: 'finish', reason: { kind: 'stop' } },
@@ -177,24 +177,24 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.updates).toEqual([])
   })
 
-  it('rejects a failed turn and never publishes its partial chunks', async () => {
-    harness = await makeBridgeHarness({ script: [errorResponse('provider boom')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a failed turn and never publishes its partial chunks', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [errorResponse('provider boom')] })
     const sessionId = await newSession(harness)
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
       .rejects.toThrow(/turn failed: provider boom/)
     expect(messageText(harness)).toBe('')
   })
 
-  it('rejects an ordinary plugin failure through the same prompt boundary', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('must not run')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects an ordinary plugin failure through the same prompt boundary', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('must not run')] })
     harness.ctx.on('agent/pre-step', () => { throw new Error('plugin pre-step failed') })
     const sessionId = await newSession(harness)
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
       .rejects.toThrow(/turn failed: plugin pre-step failed/)
   })
 
-  it('rejects a turn-start failure before the prompt is claimed', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('must not run')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a turn-start failure before the prompt is claimed', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('must not run')] })
     const sessionId = await newSession(harness)
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const append = agent.session.append.bind(agent.session)
@@ -208,8 +208,8 @@ describe('ACP prompt lifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it.each(['turn/start', 'turn/end'] as const)('rejects a later %s append failure after an earlier completed turn', async (failedEvent) => {
-    harness = await makeBridgeHarness({ script: [textResponse('waiting'), textResponse('summary')] })
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['turn/start', 'turn/end'] as const).map(value => [storage, value] as const)))('%s: rejects a later %s append failure after an earlier completed turn', async (storage, failedEvent) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('waiting'), textResponse('summary')] })
     const sessionId = await newSession(harness)
     const parent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     const append = parent.session.append.bind(parent.session)
@@ -235,8 +235,8 @@ describe('ACP prompt lifecycle', () => {
     }
   })
 
-  it('settles even when an earlier turn observer throws', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: settles even when an earlier turn observer throws', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('answer')] })
     harness.ctx.on('session/event', (_session, event) => {
       if (event.type === 'turn/start' || event.type === 'turn/end') throw new Error('peer listener boom')
     }, { prepend: true })
@@ -245,8 +245,8 @@ describe('ACP prompt lifecycle', () => {
       .resolves.toEqual({ stopReason: 'end_turn' })
   })
 
-  it('correlates the owning prompt when a synchronous injection joins its first step', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('real answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: correlates the owning prompt when a synchronous injection joins its first step', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('real answer')] })
     const sessionId = await newSession(harness)
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     let injected = false
@@ -262,8 +262,8 @@ describe('ACP prompt lifecycle', () => {
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('real answer') })
   })
 
-  it('ignores an autonomous message turn while correlating the client turn', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: ignores an autonomous message turn while correlating the client turn', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     let autonomousStarted!: () => void
@@ -289,8 +289,8 @@ describe('ACP prompt lifecycle', () => {
     await expect(prompt).resolves.toEqual({ stopReason: 'cancelled' })
   })
 
-  it('correlates a prompt whose step history is replaced', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('rewritten answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: correlates a prompt whose step history is replaced', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('rewritten answer')] })
     harness.ctx.on('agent/pre-step', async () => ({
       kind: 'enter',
       messages: [createUserMessage({
@@ -304,8 +304,8 @@ describe('ACP prompt lifecycle', () => {
       .resolves.toEqual({ stopReason: 'end_turn' })
   })
 
-  it('frees the prompt slot when the agent rejects the send synchronously', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: frees the prompt slot when the agent rejects the send synchronously', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     const sessionId = await newSession(harness)
     // Reload the loop out from under the bridge: its agents dispose while the
     // bridge record survives, so the next send() throws synchronously.
@@ -317,8 +317,8 @@ describe('ACP prompt lifecycle', () => {
       .rejects.toThrow(/prompt was not queued/)
   })
 
-  it('permits only one in-flight prompt per session', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: permits only one in-flight prompt per session', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
     await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(sessionId))?.status).toBe('running') })
@@ -328,8 +328,8 @@ describe('ACP prompt lifecycle', () => {
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
   })
 
-  it('routes JSON-RPC request cancellation through the prompt cancellation path', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: routes JSON-RPC request cancellation through the prompt cancellation path', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const controller = new AbortController()
     const prompt = harness.client.prompt(
@@ -344,8 +344,8 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.adapter.requests[0]?.signal?.aborted).toBe(true)
   })
 
-  it('cancels a prompt request whose JSON-RPC signal is already aborted', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels a prompt request whose JSON-RPC signal is already aborted', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     const sessionId = await newSession(harness)
     const controller = new AbortController()
     controller.abort()
@@ -357,8 +357,8 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.adapter.requests).toEqual([])
   })
 
-  it('reserves the prompt slot during image admission and cancels without a late followup', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: reserves the prompt slot during image admission and cancels without a late followup', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
     harness.attachments!.beforeValidate = () => {
@@ -385,8 +385,8 @@ describe('ACP prompt lifecycle', () => {
     expect(events.some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
   })
 
-  it('does not cancel unrelated Agent work while its prompt is still in admission', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: does not cancel unrelated Agent work while its prompt is still in admission', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: ['hang'] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
     harness.attachments!.beforeValidate = () => {
@@ -416,8 +416,8 @@ describe('ACP prompt lifecycle', () => {
     await agent.whenIdle()
   })
 
-  it('does not attribute an unrelated Agent failure during prompt admission', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: does not attribute an unrelated Agent failure during prompt admission', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [textResponse('answer')] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
     harness.attachments!.beforeValidate = () => {
@@ -449,8 +449,8 @@ describe('ACP prompt lifecycle', () => {
     expect(messageText(harness)).toBe('answer')
   })
 
-  it('does not queue admitted content into an agent retired during storage', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: does not queue admitted content into an agent retired during storage', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
     harness.attachments!.beforeValidate = () => {
@@ -472,8 +472,8 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.adapter.requests).toEqual([])
   })
 
-  it('cancels after image storage completes before admission receives the result', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels after image storage completes before admission receives the result', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [] })
     const sessionId = await newSession(harness)
     const saveImages = harness.attachments!.saveImages.bind(harness.attachments!)
     const cancel = vi.spyOn(AcpSession.prototype, 'cancel')
@@ -492,8 +492,8 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.adapter.requests).toEqual([])
   })
 
-  it('wraps an unexpected same-process followup failure and frees the prompt slot', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: wraps an unexpected same-process followup failure and frees the prompt slot', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     const sessionId = await newSession(harness)
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     vi.spyOn(agent, 'followup').mockImplementationOnce(() => { throw new Error('synthetic followup failure') })
@@ -502,8 +502,8 @@ describe('ACP prompt lifecycle', () => {
       .rejects.toThrow(/prompt was not queued: synthetic followup failure/)
   })
 
-  it('cancels a running turn and records the aborted outcome', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels a running turn and records the aborted outcome', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
@@ -515,8 +515,8 @@ describe('ACP prompt lifecycle', () => {
       .toEqual({ kind: 'aborted', reason: { kind: 'user' } })
   })
 
-  it('settles a hook-cancelled turn as end_turn, not cancelled', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: settles a hook-cancelled turn as end_turn, not cancelled', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
@@ -527,8 +527,8 @@ describe('ACP prompt lifecycle', () => {
     await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
   })
 
-  it('cancels autonomous running work without an in-flight prompt', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels autonomous running work without an in-flight prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang'] })
     const sessionId = await newSession(harness)
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
     agent.followup(createUserMessage({
@@ -546,8 +546,8 @@ describe('ACP prompt lifecycle', () => {
       .toEqual({ kind: 'aborted', reason: { kind: 'user' } })
   })
 
-  it('an idle cancel does not affect the following prompt', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: an idle cancel does not affect the following prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('answer')] })
     const sessionId = await newSession(harness)
     await harness.client.cancel({ sessionId })
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
@@ -555,8 +555,8 @@ describe('ACP prompt lifecycle', () => {
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('answer') })
   })
 
-  it('a late end from a cancelled turn cannot settle the next prompt', async () => {
-    harness = await makeBridgeHarness({ script: ['hang', textResponse('next')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: a late end from a cancelled turn cannot settle the next prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang', textResponse('next')] })
     const sessionId = await newSession(harness)
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
     await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(sessionId))?.status).toBe('running') })
@@ -570,8 +570,8 @@ describe('ACP prompt lifecycle', () => {
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('partialnext') })
   })
 
-  it('a retry turn adopts the prompt instead of rejecting at the failed turn end', async () => {
-    harness = await makeBridgeHarness({ script: [errorResponse('transient boom'), textResponse('recovered')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: a retry turn adopts the prompt instead of rejecting at the failed turn end', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [errorResponse('transient boom'), textResponse('recovered')] })
     // A recovery policy: schedule one retry for the failed request.
     let retried = false
     harness.ctx.on('agent/request-error', async () => {
@@ -586,8 +586,8 @@ describe('ACP prompt lifecycle', () => {
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('recovered') })
   })
 
-  it.each(['completed', 'error'] as const)('waits for descendants and reports the later %s summary turn', async (outcome) => {
-    harness = await makeBridgeHarness({ script: [
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['completed', 'error'] as const).map(value => [storage, value] as const)))('%s: waits for descendants and reports the later %s summary turn', async (storage, outcome) => {
+    harness = await makeBridgeHarness(storage, { script: [
       textResponse('waiting'),
       outcome === 'completed' ? textResponse('summary') : errorResponse('summary failed'),
     ] })
@@ -615,8 +615,8 @@ describe('ACP prompt lifecycle', () => {
     await observed
   })
 
-  it('cancels the child wait without closing the session to its next prompt', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('waiting'), textResponse('next')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels the child wait without closing the session to its next prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('waiting'), textResponse('next')] })
     const sessionId = await newSession(harness)
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
@@ -636,8 +636,8 @@ describe('ACP prompt lifecycle', () => {
     expect(messageText(harness)).toBe('waitingnext')
   })
 
-  it('releases a cancelled prompt before a late child message finishes and permits another delegation', async () => {
-    harness = await makeBridgeHarness({ script: [
+  it.each(['jsonl', 'sqlite'] as const)('%s: releases a cancelled prompt before a late child message finishes and permits another delegation', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [
       textResponse('waiting'), textResponse('late autonomous answer'),
       toolCallResponse('delegate-again', 'delegate_again', {}),
       textResponse('later child answer'), textResponse('later parent answer'),
@@ -695,9 +695,9 @@ describe('ACP prompt lifecycle', () => {
     }
   })
 
-  it('settles an initially cancelled prompt after its output without waiting for a later summary', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: settles an initially cancelled prompt after its output without waiting for a later summary', async (storage) => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ctx = harness.ctx
     const delegated = await installDelegationTool(ctx)
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(6), mediaType: 'image/png' })
@@ -790,8 +790,8 @@ describe('ACP prompt lifecycle', () => {
     }
   })
 
-  it('waits for cancelled maintenance cleanup without following its later summary', async () => {
-    harness = await makeBridgeHarness({ script: [
+  it.each(['jsonl', 'sqlite'] as const)('%s: waits for cancelled maintenance cleanup without following its later summary', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [
       textResponse('late autonomous answer'),
       toolCallResponse('delegate-again', 'delegate_again', {}),
       textResponse('later child answer'), textResponse('later parent answer'),
@@ -856,9 +856,9 @@ describe('ACP prompt lifecycle', () => {
     }
   })
 
-  it.each([false, true])('waits for the later summary output and reports its delivery failure (%s)', async (fail) => {
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: waits for the later summary output and reports its delivery failure (%s)', async (storage, fail) => {
     const script: StreamChunk[][] = [textResponse('waiting')]
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(4), mediaType: 'image/png' })
     script.push([
       { type: 'block-start', index: 0, blockType: 'image' },
@@ -890,9 +890,9 @@ describe('ACP prompt lifecycle', () => {
     await observed
   })
 
-  it('includes root work started during output draining and permits the next prompt to delegate', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: includes root work started during output draining and permits the next prompt to delegate', async (storage) => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness({ script })
+    harness = await makeBridgeHarness(storage, { script })
     const ctx = harness.ctx
     const delegated = await installDelegationTool(ctx)
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(5), mediaType: 'image/png' })
@@ -950,8 +950,8 @@ describe('ACP prompt lifecycle', () => {
     }
   })
 
-  it('a failed turn with no retry still rejects', async () => {
-    harness = await makeBridgeHarness({ script: [errorResponse('terminal boom')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: a failed turn with no retry still rejects', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [errorResponse('terminal boom')] })
     let offered = 0
     harness.ctx.on('agent/request-error', async () => { offered += 1 })
     const sessionId = await newSession(harness)
@@ -960,8 +960,8 @@ describe('ACP prompt lifecycle', () => {
     expect(offered).toBe(1)
   })
 
-  it('a pre-step-rejected prompt settles instead of hanging', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: a pre-step-rejected prompt settles instead of hanging', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     harness.ctx.on('agent/pre-step', async () => ({
       kind: 'reject' as const,
     }))
@@ -972,8 +972,8 @@ describe('ACP prompt lifecycle', () => {
     expect(messageText(harness)).toBe('')
   })
 
-  it('cancels a prompt removed before its turn claims it', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels a prompt removed before its turn claims it', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     const sessionId = await newSession(harness)
     const dispose = harness.ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       if (message.source.kind === 'user') agent.inbox.remove(message.id)
@@ -984,8 +984,8 @@ describe('ACP prompt lifecycle', () => {
     dispose()
   })
 
-  it('rejects a prompt when pre-step fails inside its open turn', async () => {
-    harness = await makeBridgeHarness({ script: [] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a prompt when pre-step fails inside its open turn', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [] })
     harness.ctx.on('agent/pre-step', async () => { throw new Error('pre-step exploded') })
     const sessionId = await newSession(harness)
 

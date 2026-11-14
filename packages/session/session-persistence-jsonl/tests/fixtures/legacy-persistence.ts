@@ -15,5 +15,9 @@ export const name = 'session-persistence-jsonl-legacy-tests'
  * @returns resolves when the JSONL provider and its event routing are available.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  await persistence.apply(ctx, { ...config, storage: 'jsonl' })
+  await persistence.apply(ctx, {
+    root: config.root, storage: 'jsonl',
+    ...config.compression === undefined ? {} : { compression: config.compression },
+    ...config.listConcurrency === undefined ? {} : { listConcurrency: config.listConcurrency },
+  })
 }

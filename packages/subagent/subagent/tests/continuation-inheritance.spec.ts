@@ -40,13 +40,13 @@ afterEach(async () => {
 })
 
 /** Boot the continuable stack plus both policy services the manager consumes opportunistically. */
-async function setup(script: Script) {
+async function setup(storage: 'jsonl' | 'sqlite', script: Script) {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-continuation-inherit-'))
   roots.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { storage, root })
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: root })
   await ctx.plugin(ApprovalService)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -89,11 +89,11 @@ function foldedApprovalPolicy(ctx: Context, id: SessionId, events: readonly Sess
 }
 
 describe('continuable policy inheritance', () => {
-  it.each(['auto', 'danger-full-access'] as const)(
-    'persists the delegated %s identity across cold resume without reading the parent again',
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['auto', 'danger-full-access'] as const).map(value => [storage, value] as const)))(
+    '%s: persists the delegated %s identity across cold resume without reading the parent again',
     { timeout: 20_000 },
-    async (preset) => {
-      const { ctx, parent } = await setup([textResponse('child done'), textResponse('resumed child done')])
+    async (storage, preset) => {
+      const { ctx, parent } = await setup(storage, [textResponse('child done'), textResponse('resumed child done')])
       parent.session.append('permission/preset', { preset })
       setSandboxMode(parent.session, 'danger-full-access')
       const current = vi.fn((session: Session) => session === parent.session ? preset : 'custom')
@@ -127,11 +127,11 @@ describe('continuable policy inheritance', () => {
     },
   )
 
-  it.each([
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
     { seedPreset: 'auto', preset: 'danger-full-access' },
     { seedPreset: 'danger-full-access', preset: 'auto' },
-  ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
+  ] as const).map(value => [storage, value] as const)))('%s: captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async (storage, { seedPreset, preset }) => {
+    const { ctx, parent } = await setup(storage, [textResponse('parent turn'), textResponse('forked child')])
     parent.session.append('permission/preset', { preset: seedPreset })
     setSandboxMode(parent.session, 'danger-full-access')
     parent.followup(createUserMessage({
@@ -157,8 +157,8 @@ describe('continuable policy inheritance', () => {
     ])
   })
 
-  it('seeds the parent sandbox override and pins approval to never', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('child done')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: seeds the parent sandbox override and pins approval to never', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child done')])
     setSandboxMode(parent.session, 'danger-full-access')
     // No parent approval override: the child pin must not depend on one.
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
@@ -194,8 +194,8 @@ describe('continuable policy inheritance', () => {
     expect(contextText).toContain('You are a delegated subagent')
   })
 
-  it('captures policy at delegation before asynchronous child creation', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('child done')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: captures policy at delegation before asynchronous child creation', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child done')])
     setSandboxMode(parent.session, 'read-only')
 
     const starting = ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -210,8 +210,8 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')
   })
 
-  it('leaves an unswitched sandbox on the deployment default while still pinning approval', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('child done')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: leaves an unswitched sandbox on the deployment default while still pinning approval', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child done')])
 
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -223,8 +223,8 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBeNull()
   })
 
-  it('pins approval after the fork prefix of an unswitched fork child', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: pins approval after the fork prefix of an unswitched fork child', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('parent turn'), textResponse('forked child')])
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'parent work' }],
       source: { kind: 'user' },
@@ -242,8 +242,8 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBeNull()
   })
 
-  it('lets a later child-side switch win over the delegation snapshot', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('child done')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: lets a later child-side switch win over the delegation snapshot', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child done')])
     setSandboxMode(parent.session, 'danger-full-access')
     let child: Agent | undefined
     ctx.on('agent/created', ({ agent }) => {
@@ -262,8 +262,8 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')
   })
 
-  it('cold-resumes on the persisted snapshot without re-capturing the parent', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes on the persisted snapshot without re-capturing the parent', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('after resume')])
     setSandboxMode(parent.session, 'read-only')
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -287,8 +287,8 @@ describe('continuable policy inheritance', () => {
     ])
   })
 
-  it('places inherited events after a fork prefix so fresh policy wins stale seed state', { timeout: 20_000 }, async () => {
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: places inherited events after a fork prefix so fresh policy wins stale seed state', { timeout: 20_000 }, async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('parent turn'), textResponse('forked child')])
     // The stale mode lands inside the completed turn the fork seed replays.
     setSandboxMode(parent.session, 'workspace-write')
     parent.followup(createUserMessage({

@@ -12,9 +12,9 @@ function waitForCrash(): Promise<never> {
   return new Promise(() => { setInterval(() => {}, 60_000) })
 }
 
-const [mode, root, marker] = process.argv.slice(2)
-if ((mode !== 'request' && mode !== 'tool') || root === undefined || marker === undefined) {
-  throw new Error('usage: crash-child.ts <request|tool> <persistence-root> <marker>')
+const [mode, root, marker, storage] = process.argv.slice(2)
+if ((mode !== 'request' && mode !== 'tool') || root === undefined || marker === undefined || (storage !== 'jsonl' && storage !== 'sqlite')) {
+  throw new Error('usage: crash-child.ts <request|tool> <persistence-root> <marker> <jsonl|sqlite>')
 }
 const persistenceRoot = root
 const failpoint = marker
@@ -39,7 +39,7 @@ class CrashAdapter extends LlmAdapter {
 const ctx = new Context()
 await mountAgentLoopTestDependencies(ctx)
 await ctx.plugin(AgentLoop, { agents: [] })
-await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
+await ctx.plugin(JsonlSessionPersistence, { storage, root: persistenceRoot, compression: 'none' })
 await ctx.plugin(checkpointPolicy)
 ctx.llm.registerAdapter(['crash'], new CrashAdapter())
 ctx.tools.register({

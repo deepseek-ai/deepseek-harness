@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
+import { runScenario as runStoredScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
 
 const fsControl = vi.hoisted(() => ({
@@ -112,7 +112,10 @@ function environmentEcho(rawStdout: string): Record<string, unknown> {
   return JSON.parse(text.slice('env:'.length)) as Record<string, unknown>
 }
 
-describe('runScenario', () => {
+describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
+  const runScenario: typeof runStoredScenario = (input, options) => runStoredScenario(input, {
+    ...options, env: { ...options.env, DSH_SNAPSHOT_STORAGE: storage },
+  })
   it('surfaces an asynchronous child spawn failure through startup and close', async () => {
     const { dir } = await scenario({})
     const launched = launchAcpTestAgent({ agent: AGENT, cwd: join(dir, 'missing') })
@@ -223,7 +226,7 @@ describe('runScenario', () => {
       agent: profileAgent,
       cwd: dir,
       configPath: selectedPatch,
-      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
+      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile, DSH_SNAPSHOT_STORAGE: storage },
     })
     await live.spawned
     await live.close()
@@ -232,6 +235,8 @@ describe('runScenario', () => {
     expect(materialized).toContain(pathToFileURL(join(patchDir, 'plugin.mjs')).href)
     expect(materialized).toContain(pathToFileURL(join(dir, 'nested.mjs')).href)
     expect(materialized).toContain('example-package')
+    expect(await readFile(await materializedPatch(materializedRoot, 'session-storage.yml'), 'utf8'))
+      .toContain(`storage: ${storage}`)
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package')))
       .toBe(await realpath(packageDir))
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package')))

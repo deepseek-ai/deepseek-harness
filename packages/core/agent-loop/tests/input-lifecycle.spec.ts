@@ -31,7 +31,7 @@ afterEach(async () => {
 
 const input = (text: string) => createUserMessage({ content: [{ type: 'text' as const, text }], source: { kind: 'user' as const } })
 
-async function harness() {
+async function harness(storage: 'jsonl' | 'sqlite') {
   const ctx = new Context()
   const root = await mkdtemp(join(tmpdir(), 'dsh-input-atomicity-'))
   const fixture: { ctx: Context; agent?: Agent; root: string } = { ctx, root }
@@ -43,7 +43,7 @@ async function harness() {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, storage, compression: 'none' })
   await ctx.plugin(CheckpointPolicy)
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new MockAdapter(Array.from({ length: 5 }, () => textResponse('ok')))
@@ -53,8 +53,8 @@ async function harness() {
   return { ctx, root, adapter, handle, agent: handle.agent }
 }
 
-it('cancellation still aborts the running request when queue clearing fails', async () => {
-  const { ctx, agent } = await harness()
+it.each(['jsonl', 'sqlite'] as const)('%s: cancellation still aborts the running request when queue clearing fails', async (storage) => {
+  const { ctx, agent } = await harness(storage)
   const entered = Promise.withResolvers<AbortSignal>()
   const release = Promise.withResolvers<undefined>()
   const hold = ctx.on('agent/pre-step', async ({ signal }, next) => { entered.resolve(signal); await release.promise; return next() })
@@ -83,8 +83,8 @@ it('cancellation still aborts the running request when queue clearing fails', as
   }
 })
 
-it('waits for admitted maintenance after a queue-clear failure before releasing its Session', async () => {
-  const { ctx, agent, handle } = await harness()
+it.each(['jsonl', 'sqlite'] as const)('%s: waits for admitted maintenance after a queue-clear failure before releasing its Session', async (storage) => {
+  const { ctx, agent, handle } = await harness(storage)
   const release = Promise.withResolvers<undefined>()
   const waiting = Promise.withResolvers<'waiting'>()
   const disposed = Promise.withResolvers<'disposed'>()
@@ -123,8 +123,8 @@ it('waits for admitted maintenance after a queue-clear failure before releasing 
   }
 })
 
-it('reports a quiescence failure while releasing the Agent and Session', async () => {
-  const { ctx, agent, handle } = await harness()
+it.each(['jsonl', 'sqlite'] as const)('%s: reports a quiescence failure while releasing the Agent and Session', async (storage) => {
+  const { ctx, agent, handle } = await harness(storage)
   const failure = new Error('injected quiescence failure')
   const idle = vi.spyOn(agent, 'whenIdle').mockRejectedValueOnce(failure)
   try {
@@ -136,8 +136,8 @@ it('reports a quiescence failure while releasing the Agent and Session', async (
   }
 })
 
-it('keeps creation resources alive until an interrupted creation listener finishes', async () => {
-  const { ctx } = await harness()
+it.each(['jsonl', 'sqlite'] as const)('%s: keeps creation resources alive until an interrupted creation listener finishes', async (storage) => {
+  const { ctx } = await harness(storage)
   const entered = Promise.withResolvers<Agent>()
   const release = Promise.withResolvers<undefined>()
   const signal = new AbortController()

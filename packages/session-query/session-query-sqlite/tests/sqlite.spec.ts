@@ -1801,13 +1801,13 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     await persistence.dispose()
   })
 
-  it('combines the real JSONL persistence backend with the real search service keylessly', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: combines the real JSONL persistence backend with the real search service keylessly', async (storage) => {
     const persistenceRoot = await temporaryPath('sessions')
     const searchPath = await temporaryPath('derived.db')
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    const persistence = await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
+    const persistence = await ctx.plugin(JsonlSessionPersistence, { storage, root: persistenceRoot, compression: 'none' })
     const search = await ctx.plugin(SqliteSessionQueryEngine, { path: searchPath })
     const meta = header('real', 10, { cwd: '/work' })
     const writer = await ctx.sessionPersistence.create(meta)
@@ -1828,7 +1828,7 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     await persistence.dispose()
   })
 
-  it('reconciles a reopened derived index: unchanged revisions skip reads, another store reloads', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: reconciles a reopened derived index: unchanged revisions skip reads, another store reloads', async (storage) => {
     const persistenceRootA = await temporaryPath('sessions-a')
     const persistenceRootB = await temporaryPath('sessions-b')
     const searchPath = await temporaryPath('derived-collision.db')
@@ -1842,7 +1842,7 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     const first = new Context()
     await first.plugin(SessionStore)
     await first.plugin(SessionProjectionRegistry)
-    const persistenceA = await first.plugin(JsonlSessionPersistence, { root: persistenceRootA, compression: 'none' })
+    const persistenceA = await first.plugin(JsonlSessionPersistence, { storage, root: persistenceRootA, compression: 'none' })
     await storeSession(first, messageEvents('alpha source'))
     const openA = vi.spyOn(first.sessionPersistence, 'open')
     const searchA = await first.plugin(SqliteSessionQueryEngine, { path: searchPath })
@@ -1855,7 +1855,7 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     const reopened = new Context()
     await reopened.plugin(SessionStore)
     await reopened.plugin(SessionProjectionRegistry)
-    const persistenceAAgain = await reopened.plugin(JsonlSessionPersistence, { root: persistenceRootA, compression: 'none' })
+    const persistenceAAgain = await reopened.plugin(JsonlSessionPersistence, { storage, root: persistenceRootA, compression: 'none' })
     const reopenedOpen = vi.spyOn(reopened.sessionPersistence, 'open')
     const searchAAgain = await reopened.plugin(SqliteSessionQueryEngine, { path: searchPath })
     await expect(reopened.sessionQuery.searchSessions({ query: 'alpha' }))
@@ -1867,7 +1867,7 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     const second = new Context()
     await second.plugin(SessionStore)
     await second.plugin(SessionProjectionRegistry)
-    const persistenceB = await second.plugin(JsonlSessionPersistence, { root: persistenceRootB, compression: 'none' })
+    const persistenceB = await second.plugin(JsonlSessionPersistence, { storage, root: persistenceRootB, compression: 'none' })
     await storeSession(second, messageEvents('bravo source'))
     const openB = vi.spyOn(second.sessionPersistence, 'open')
     const searchB = await second.plugin(SqliteSessionQueryEngine, { path: searchPath })

@@ -22,23 +22,23 @@ import { mountWorkflowRuntime } from '../../../workflow/workflow-ptc/tests/setup
 type MockScript = ConstructorParameters<typeof MockAdapter>[0]
 const testToolSignal = new AbortController().signal
 
-async function mountExecution(ctx: Context): Promise<string> {
+async function mountExecution(backend: 'jsonl' | 'sqlite', ctx: Context): Promise<string> {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-ralph-'))
   onTestFinished(async () => {
     await ctx.fiber.dispose()
     await rm(cwd, { recursive: true, force: true })
   })
   await mountWorkflowRuntime(ctx, { cwd })
-  await ctx.plugin(JsonlSessionPersistence, { root: join(cwd, '.sessions') })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(cwd, '.sessions'), storage: backend })
   return cwd
 }
 
 /** Mount the shipped Ralph execution stack around one keyless model script. */
-async function mountRalph(script: MockScript, config: toolRalph.Config) {
+async function mountRalph(backend: 'jsonl' | 'sqlite', script: MockScript, config: toolRalph.Config) {
   const ctx = new Context()
   const adapter = new MockAdapter(script)
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  const cwd = await mountExecution(ctx)
+  const cwd = await mountExecution(backend, ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(spawn, { providerName: 'spawn' })
@@ -53,7 +53,7 @@ async function mountRalph(script: MockScript, config: toolRalph.Config) {
   return { ctx, adapter, parentHandle, parent: parentHandle.agent }
 }
 
-describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
+describe.each(['jsonl', 'sqlite'] as const)('dsh-tool-ralph over the real spawn and sandboxed PTC stack (%s)', (backend) => {
   it('uses distinct empty-seed children, shared cwd, and only the prior bounded handoff', { timeout: 90_000 }, async () => {
     const firstReport = {
       status: 'continue',
@@ -76,7 +76,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       toolCallResponse('round-2', STRUCTURED_OUTPUT_TOOL, finalReport),
     ])
     await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-    const cwd = await mountExecution(ctx)
+    const cwd = await mountExecution(backend, ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(spawn, { providerName: 'spawn' })
@@ -144,7 +144,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       nextSteps: ['Finish migration-b.ts.'],
       blocker: '',
     }
-    const { ctx, parent, parentHandle } = await mountRalph([
+    const { ctx, parent, parentHandle } = await mountRalph(backend, [
       toolCallResponse('round-1', STRUCTURED_OUTPUT_TOOL, firstReport),
       maxTokensResponse('unfinished child output'),
     ], { maxRounds: 2 })
@@ -236,7 +236,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       expectedText: 'Ralph round report exceeds maxHandoffChars',
     },
   ])('enforces the fixed script for $name', async ({ report, config, expectedError, expectedText }) => {
-    const { ctx, parent, parentHandle } = await mountRalph([
+    const { ctx, parent, parentHandle } = await mountRalph(backend, [
       toolCallResponse('round-report', STRUCTURED_OUTPUT_TOOL, report),
     ], config)
 
@@ -254,7 +254,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
   })
 
   it('cancels the sandboxed process and fresh child to quiescence', { timeout: 90_000 }, async () => {
-    const { ctx, parent, parentHandle } = await mountRalph(['hang'], { maxRounds: 2 })
+    const { ctx, parent, parentHandle } = await mountRalph(backend, ['hang'], { maxRounds: 2 })
     const children: Agent[] = []
     const outcomes: string[] = []
     let resolveChildStarted!: (child: Agent) => void

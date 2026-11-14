@@ -15,18 +15,18 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true })
 })
 
-async function backend(): Promise<Context> {
+async function backend(storage: 'jsonl' | 'sqlite'): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   const root = await mkdtemp(join(tmpdir(), 'dsh-llm-retry-jsonl-'))
   dirs.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { root, storage })
   return ctx
 }
 
-describe('JSONL retry-event persistence', () => {
+describe.each(['jsonl', 'sqlite'] as const)('retry-event persistence (%s)', (storage) => {
   it('round-trips the event losslessly without adding a model message', async () => {
-    const ctx = await backend()
+    const ctx = await backend(storage)
     try {
       const session = ctx.sessions.create(brandString<SessionId>('retry-jsonl'))
       const handle = await ctx.sessionPersistence.create(session.header)

@@ -80,7 +80,9 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   expect(ctx.sessions.get(agent.session.id)).toBeUndefined()
 })
 
-it.each(['loop', 'root'] as const)('unloads %s while a background child is stopping', async (owner) => {
+it.each((['jsonl', 'sqlite'] as const).flatMap(storage =>
+  (['loop', 'root'] as const).map(owner => ({ storage, owner })),
+))('unloads $owner while a background child is stopping ($storage)', async ({ storage, owner }) => {
   const ctx = new Context()
   const release = Promise.withResolvers<undefined>()
   const root = mkdtempSync(join(tmpdir(), 'dsh-resource-lifecycle-'))
@@ -90,7 +92,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
     rmSync(root, { recursive: true, force: true })
   })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { root, storage })
   const loop = await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(LocalJobRegistry)
@@ -143,7 +145,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
   if (owner === 'loop') {
     const verify = new Context()
     onTestFinished(async () => { await verify.fiber.dispose() })
-    await verify.plugin(JsonlSessionPersistence, { root })
+    await verify.plugin(JsonlSessionPersistence, { root, storage })
     const reader = await verify.sessionPersistence.open(child.id, 'read')
     expect((await reader.read()).events).toEqual(events)
     await reader.close()

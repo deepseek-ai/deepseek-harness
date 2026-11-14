@@ -33,7 +33,7 @@ afterEach(async () => {
 
 /** A host composition carrying no model-facing rows, plus the preset roster. */
 async function setupPresetHost(
-  script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('parent idle'), textResponse('child done')],
+  storage: 'jsonl' | 'sqlite',   script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('parent idle'), textResponse('child done')],
 ): Promise<{ ctx: Context; adapter: MockAdapter; parent: Agent; unregister: Map<string, () => Promise<void>> }> {
   const ctx = new Context()
   contexts.push(ctx)
@@ -41,7 +41,7 @@ async function setupPresetHost(
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await mountAgentLoopTestDependencies(ctx)
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(AgentPresets, { default: 'coding' })
@@ -70,8 +70,8 @@ function spawnRequest(parent: Agent) {
 }
 
 describe('a child agent composed in-process', () => {
-  it('reaches the model with its parent\'s preset tools', async () => {
-    const { adapter, parent } = await setupPresetHost()
+  it.each(['jsonl', 'sqlite'] as const)("%s: reaches the model with its parent's preset tools", async (storage) => {
+    const { adapter, parent } = await setupPresetHost(storage)
 
     const run = await startPreparedActivation(spawnRequest(parent), {})
     await run.result
@@ -81,8 +81,8 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('carries its parent\'s prompt sections', async () => {
-    const { parent } = await setupPresetHost()
+  it.each(['jsonl', 'sqlite'] as const)("%s: carries its parent's prompt sections", async (storage) => {
+    const { parent } = await setupPresetHost(storage)
 
     const run = await startPreparedActivation(spawnRequest(parent), {})
     await run.result
@@ -93,8 +93,8 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('records the composition it ran under on the child header', async () => {
-    const { parent } = await setupPresetHost()
+  it.each(['jsonl', 'sqlite'] as const)('%s: records the composition it ran under on the child header', async (storage) => {
+    const { parent } = await setupPresetHost(storage)
 
     const run = await startPreparedActivation(spawnRequest(parent), {})
     await run.result
@@ -105,8 +105,8 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('follows a parent that switched preset while blank', async () => {
-    const { ctx, adapter, parent } = await setupPresetHost()
+  it.each(['jsonl', 'sqlite'] as const)('%s: follows a parent that switched preset while blank', async (storage) => {
+    const { ctx, adapter, parent } = await setupPresetHost(storage)
     // A DIFFERENT preset, so the assertion below distinguishes reading the
     // parent's live scope chain from reading its creation header — re-linking
     // to the same id would pass either way.
@@ -120,8 +120,8 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('registers runtime result tools alongside an independently selected preset', async () => {
-    const { adapter, parent } = await setupPresetHost([
+  it.each(['jsonl', 'sqlite'] as const)('%s: registers runtime result tools alongside an independently selected preset', async (storage) => {
+    const { adapter, parent } = await setupPresetHost(storage, [
       toolCallResponse('submit-result', 'structured_output', { answer: 42 }),
     ])
     const run = await startPreparedActivation({
@@ -142,8 +142,8 @@ describe('a child agent composed in-process', () => {
     }
   })
 
-  it('uses the current generation for an explicit same-id selection while omission shares the parent', async () => {
-    const { ctx, adapter, parent, unregister } = await setupPresetHost()
+  it.each(['jsonl', 'sqlite'] as const)('%s: uses the current generation for an explicit same-id selection while omission shares the parent', async (storage) => {
+    const { ctx, adapter, parent, unregister } = await setupPresetHost(storage)
     await unregister.get('coding')!()
     await ctx.agentPresets.register({
       id: 'coding',

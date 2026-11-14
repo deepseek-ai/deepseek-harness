@@ -16,7 +16,7 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-describe('native Flash translation', () => {
+describe.each(['jsonl', 'sqlite'] as const)('native Flash translation (%s)', (backend) => {
   it('keeps anonymous choices available without any model, Loader or Session service', async () => {
     const ctx = new Context()
     cleanups.push(async () => { await ctx.fiber.dispose() })
@@ -30,7 +30,7 @@ describe('native Flash translation', () => {
   })
 
   it('offers both actual native owners with customized settings ids and arbitrary model version names', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     expect(await b.ctx.translator.availableProviders()).toEqual(['bing', 'google', 'deepseek-account', 'deepseek-official'])
     expect(b.requests).toHaveLength(0)
     expect(b.session?.snapshotEvents()).toEqual([])
@@ -62,7 +62,7 @@ describe('native Flash translation', () => {
   })
 
   it('uses only one independent fragment despite existing main user and assistant history', async () => {
-    const b = await paidFixture(cleanups), session = b.session!
+    const b = await paidFixture(cleanups, backend), session = b.session!
     session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Private main conversation input' }],
       source: { kind: 'user' } }), { surfaceOp: 'append' })
@@ -81,7 +81,7 @@ describe('native Flash translation', () => {
 
   it.each(['deepseek-account', 'deepseek-official'] as const)(
     'keeps the enabled shipped session-log extension out of paid %s requests', async (provider) => {
-      const b = await paidFixture(cleanups, { withSessionLog: true }), session = b.session!
+      const b = await paidFixture(cleanups, backend, { withSessionLog: true }), session = b.session!
       session.append('turn/start', { turn: 1 })
       session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Private main input and tool context' }],
         source: { kind: 'user' } }), { surfaceOp: 'append' })
@@ -104,7 +104,7 @@ describe('native Flash translation', () => {
     })
 
   it('respects an explicit source language in the exact independently audited prompt', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const spec = b.ctx.translator.resolve({ text: 'source', targetLanguage: 'ja', sourceLanguage: 'en',
       provider: 'deepseek-official', sessionId: b.session!.id })
     await b.ctx.translator.translate(spec)
@@ -116,7 +116,7 @@ describe('native Flash translation', () => {
   })
 
   it('excludes pi-ai ownership, non-native settings paths, unregistered routes and inactive native rows', async () => {
-    const b = await paidFixture(cleanups, { officialName: '@deepseek-ai/dsh-llm-pi-ai' })
+    const b = await paidFixture(cleanups, backend, { officialName: '@deepseek-ai/dsh-llm-pi-ai' })
     expect(await b.ctx.translator.availableProviders()).toEqual(['bing', 'google', 'deepseek-account'])
     await expect(b.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     expect(b.requests).toEqual([])
@@ -137,7 +137,7 @@ describe('native Flash translation', () => {
   })
 
   it('requires configured credentials and exact deepseek-flash catalog identity', async () => {
-    const b = await paidFixture(cleanups, { signedIn: false, credentialConfigured: false,
+    const b = await paidFixture(cleanups, backend, { signedIn: false, credentialConfigured: false,
       officialModels: [{ id: 'deepseek-v4-flash', name: 'deepseek-flash' }] })
     expect(await b.ctx.translator.availableProviders()).toEqual(['bing', 'google'])
     b.setConfigured(true)
@@ -146,17 +146,17 @@ describe('native Flash translation', () => {
     b.setSignedIn(true)
     expect(await b.ctx.translator.availableProviders()).toEqual(['bing', 'google', 'deepseek-account'])
     b.setConfigured(false)
-    const eligible = await paidFixture(cleanups, { withCredentials: false })
+    const eligible = await paidFixture(cleanups, backend, { withCredentials: false })
     expect(await eligible.ctx.translator.availableProviders()).toContain('deepseek-official')
     expect(await eligible.translate('deepseek-official')).toBe('翻译结果')
-    const missingAmbient = await paidFixture(cleanups, { withCredentials: false, ambientConfigured: false })
+    const missingAmbient = await paidFixture(cleanups, backend, { withCredentials: false, ambientConfigured: false })
     expect(await missingAmbient.ctx.translator.availableProviders()).toEqual(['bing', 'google', 'deepseek-account'])
     await expect(missingAmbient.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     expect(b.requests).toEqual([])
   })
 
   it('requires an existing durable Session and retains empty results without model admission or billing', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ provider: 'deepseek-account', sourceLanguage: 'auto',
       targetLanguage: 'zh', text: 'source', sessionId: brandString<SessionId>('missing') })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
@@ -172,7 +172,7 @@ describe('native Flash translation', () => {
   })
 
   it('revalidates model configuration after asynchronous discovery and before preparing a native call', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const before = Promise.withResolvers<undefined>(), continueLookup = Promise.withResolvers<undefined>()
     const original = b.ctx.llm.listModels.bind(b.ctx.llm)
     const lookup = vi.spyOn(b.ctx.llm, 'listModels').mockImplementationOnce(async (provider) => {
@@ -195,7 +195,7 @@ describe('native Flash translation', () => {
   })
 
   it('rechecks the owner across the eligibility return microtask before preparation', async () => {
-    const b = await paidFixture(cleanups), directory = b.ctx.llm.listConfigurableProviders()
+    const b = await paidFixture(cleanups, backend), directory = b.ctx.llm.listConfigurableProviders()
     const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'official-custom-id')!
     let reads = 0
     vi.spyOn(b.ctx.llm, 'listConfigurableProviders').mockImplementation(() => {
@@ -212,7 +212,7 @@ describe('native Flash translation', () => {
   })
 
   it('rejects a prepared call that cannot guarantee thinking off before auditing or network I/O', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: brandString<ReasoningEffortId>('off') })
     vi.spyOn(b.ctx.llm, 'prepareCall').mockResolvedValueOnce({ ...prepared,
       config: { ...prepared.config, reasoningEffort: brandString<ReasoningEffortId>('high') } })
@@ -222,7 +222,7 @@ describe('native Flash translation', () => {
   })
 
   it.each(['removed', 'replaced'])('rejects an audit Session %s during paid admission before dispatch', async (kind) => {
-    const b = await paidFixture(cleanups, { withSession: false })
+    const b = await paidFixture(cleanups, backend, { withSession: false })
     const sessionId = brandString<SessionId>('transient-audit-session')
     const scope = b.ctx.plugin({ inject: ['sessions'], apply: (ctx) => { ctx.sessions.create(sessionId) } })
     await scope
@@ -246,13 +246,13 @@ describe('native Flash translation', () => {
   })
 
   it.each(['max_tokens', 'tool_use'])('rejects non-stop native finish %s while preserving the audited request', async (stop) => {
-    const b = await paidFixture(cleanups, { reply: (response) => { response.end(sse(replyEvents('partial private output', stop))) } })
+    const b = await paidFixture(cleanups, backend, { reply: (response) => { response.end(sse(replyEvents('partial private output', stop))) } })
     await expect(b.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_INVALID_RESPONSE' })
     expect(b.session?.snapshotEvents()).toHaveLength(1)
   })
 
   it('classifies native HTTP errors as request failures without forwarding response contents', async () => {
-    const b = await paidFixture(cleanups, { responseStatus: 503,
+    const b = await paidFixture(cleanups, backend, { responseStatus: 503,
       reply: (response) => { response.end(JSON.stringify({ error: { type: 'api_error', message: 'private backend diagnostic' } })) } })
     await expect(b.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_REQUEST_FAILED',
       message: 'Native Flash translation request failed' })
@@ -261,7 +261,8 @@ describe('native Flash translation', () => {
   })
 
   it.each(['withdrawn', 'catalog', 'credential'])('rejects a native route %s during async preparation before audit or dispatch', async (change) => {
-    const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    const b = await paidFixture(cleanups, backend)
+    const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     cleanups.push(async () => { release.resolve(undefined) })
     const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
@@ -288,7 +289,8 @@ describe('native Flash translation', () => {
   })
 
   it('rejects an Account model-override change during async preparation before audit or dispatch', async () => {
-    const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    const b = await paidFixture(cleanups, backend)
+    const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
       const call = await original(config, signal)
@@ -306,7 +308,7 @@ describe('native Flash translation', () => {
   })
 
   it.each(['withdrawn', 'catalog', 'credential'])('rejects a native route %s by an audit observer before dispatch', async (change) => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'official-custom-id')!
     let withdrawal: Promise<void> | undefined
     b.ctx.on('session/event', (_session, event) => {
@@ -324,18 +326,18 @@ describe('native Flash translation', () => {
   })
 
   it('rejects empty text and enforces the complete multibyte output limit', async () => {
-    const empty = await paidFixture(cleanups, { reply: (response) => { response.end(sse(replyEvents('   '))) } })
+    const empty = await paidFixture(cleanups, backend, { reply: (response) => { response.end(sse(replyEvents('   '))) } })
     await expect(empty.translate('deepseek-account')).rejects.toMatchObject({ code: 'TRANSLATION_INVALID_RESPONSE' })
-    const exact = await paidFixture(cleanups, { translator: { maxResponseBytes: 3 },
+    const exact = await paidFixture(cleanups, backend, { translator: { maxResponseBytes: 3 },
       reply: (response) => { response.end(sse(replyEvents('中'))) } })
     expect(await exact.translate('deepseek-official')).toBe('中')
-    const short = await paidFixture(cleanups, { translator: { maxResponseBytes: 2 },
+    const short = await paidFixture(cleanups, backend, { translator: { maxResponseBytes: 2 },
       reply: (response) => { response.end(sse(replyEvents('中'))) } })
     await expect(short.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_RESPONSE_LIMIT' })
   })
 
   it.each(['block-start', 'block-end', 'reasoning-delta', 'tool-call-delta', 'missing-finish'])('rejects unwanted model output %s', async (kind) => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: brandString<ReasoningEffortId>('off') })
     const replacement: PreparedLlmCall = { ...prepared, async *stream() {
       if (kind === 'block-start') yield { type: 'block-start', index: 0, blockType: 'reasoning' }
@@ -351,7 +353,7 @@ describe('native Flash translation', () => {
   })
 
   it('sanitizes native model errors and does not select another route', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockRejectedValueOnce(new Error('private credentials or original prompt'))
     await expect(b.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_REQUEST_FAILED', message: 'Native Flash translation request failed' })
     expect(b.requests).toEqual([])
@@ -363,7 +365,7 @@ describe('native Flash translation', () => {
   it('preserves caller cancellation, including caller-owned timeouts, and aborts native sockets', async () => {
     for (const reason of [new Error('caller cancelled'), new TimeoutReason('TRANSLATION_TIMEOUT', 1)]) {
       const received = Promise.withResolvers<undefined>(), closed = Promise.withResolvers<undefined>()
-      const b = await paidFixture(cleanups, { reply(response) {
+      const b = await paidFixture(cleanups, backend, { reply(response) {
         response.on('close', () => { closed.resolve(undefined) })
         response.write(sse(replyEvents().slice(0, 2)))
         received.resolve(undefined)
@@ -380,11 +382,11 @@ describe('native Flash translation', () => {
   })
 
   it('normalizes paid deadlines and waits for accepted calls on translator disposal', async () => {
-    const expired = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 40 },
+    const expired = await paidFixture(cleanups, backend, { translator: { deepseekTimeoutMs: 40 },
       reply: (response) => { response.write(sse(replyEvents().slice(0, 2))) } })
     await expect(expired.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_TIMEOUT', name: 'TranslationError' })
     const received = Promise.withResolvers<undefined>()
-    const b = await paidFixture(cleanups, { reply(response) {
+    const b = await paidFixture(cleanups, backend, { reply(response) {
       response.write(sse(replyEvents().slice(0, 2))); received.resolve(undefined)
     } })
     const pending = b.translate('deepseek-account')
@@ -396,7 +398,7 @@ describe('native Flash translation', () => {
   })
 
   it('covers availability cancellation and quiescent disposal during a pending catalog lookup', async () => {
-    const b = await paidFixture(cleanups)
+    const b = await paidFixture(cleanups, backend)
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     const original = b.ctx.llm.listModels.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'listModels').mockImplementationOnce(async (provider) => {
@@ -415,7 +417,7 @@ describe('native Flash translation', () => {
   })
 
   it.each(['owned', 'caller'] as const)('classifies %s discovery deadlines without leaking native details', async (kind) => {
-    const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 40 } })
+    const b = await paidFixture(cleanups, backend, { translator: { deepseekTimeoutMs: 40 } })
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     vi.spyOn(b.ctx.llm, 'listModels').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return [] })
     const caller = new AbortController(), reason = new TimeoutReason('TRANSLATION_TIMEOUT', 1)
@@ -432,7 +434,7 @@ describe('native Flash translation', () => {
   })
 
   it('cancels during native-owner inspection before starting any metadata work', async () => {
-    const b = await paidFixture(cleanups), caller = new AbortController(), reason = new Error('metadata cancelled')
+    const b = await paidFixture(cleanups, backend), caller = new AbortController(), reason = new Error('metadata cancelled')
     const directory = b.ctx.llm.listConfigurableProviders()
     vi.spyOn(b.ctx.llm, 'listConfigurableProviders').mockImplementationOnce(() => { caller.abort(reason); return directory })
     const lookup = vi.spyOn(b.ctx.llm, 'listModels')
@@ -441,7 +443,7 @@ describe('native Flash translation', () => {
   })
 
   it('cancels a held credential lookup promptly while service disposal still joins it', async () => {
-    const b = await paidFixture(cleanups), caller = new AbortController(), reason = new Error('credentials observation cancelled')
+    const b = await paidFixture(cleanups, backend), caller = new AbortController(), reason = new Error('credentials observation cancelled')
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     vi.spyOn(b.ctx.get('credentials')!, 'describe').mockImplementationOnce(async () => {
       entered.resolve(undefined); await release.promise; return { configured: true, writable: true }

@@ -39,7 +39,7 @@ afterEach(async () => {
 })
 
 /** One host carrying the real Schedule service and a preset that mounts the real tools. */
-async function setupScheduleHost(): Promise<{ ctx: Context; parent: Agent; dispatched: ReturnType<typeof vi.fn> }> {
+async function setupScheduleHost(storage: 'jsonl' | 'sqlite' ): Promise<{ ctx: Context; parent: Agent; dispatched: ReturnType<typeof vi.fn> }> {
   const ctx = new Context()
   contexts.push(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-schedule-tools-'))
@@ -48,7 +48,7 @@ async function setupScheduleHost(): Promise<{ ctx: Context; parent: Agent; dispa
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { storage, root })
   await ctx.plugin(Storage)
   const pool = new MemoryMediaPool()
   const backend = new MemoryStorageBackend(pool)
@@ -93,8 +93,8 @@ function toolResultTexts(agent: Agent): string[] {
 }
 
 describe('a delegated child under a preset that mounts the Schedule tools', () => {
-  it('sees the four tools and is refused with subagent_session without storing a task', async () => {
-    const { ctx, parent, dispatched } = await setupScheduleHost()
+  it.each(['jsonl', 'sqlite'] as const)('%s: sees the four tools and is refused with subagent_session without storing a task', async (storage) => {
+    const { ctx, parent, dispatched } = await setupScheduleHost(storage)
     const run = await ctx.subagents.startActivation({
       provider: 'spawn',
       label: 'child task',

@@ -9,8 +9,8 @@ import type { ControlTarget } from '../src/records.ts'
 import type { UserEdit } from '../src/protocol.ts'
 import { setup } from './fixture.ts'
 
-async function fixture() {
-  const f = await setup({ intervalMs: 86400000 })
+async function fixture(backend: 'jsonl' | 'sqlite') {
+  const f = await setup(backend, { intervalMs: 86400000 })
   let count = 0
   const call = (name: string, args: object) =>
     executeTool(f.ctx, {
@@ -47,9 +47,9 @@ async function fixture() {
   return { ...f, view, tree, target, request, edit, call, update }
 }
 
-describe('durable asynchronous work requests', () => {
+describe.each(['jsonl', 'sqlite'] as const)('durable asynchronous work requests (%s)', (backend) => {
   it('keeps siblings independent and marks a request unavailable when its tree is removed', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       const left = { kind: 'task', tree: f.tree, task: taskId.parse('one') } as const
       const right = { ...left, task: taskId.parse('two') }
@@ -68,7 +68,7 @@ describe('durable asynchronous work requests', () => {
     }
   })
   it('suppresses dispatch if another client removes the tree before the reply', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     const append = f.ctx.timeline.append.bind(f.ctx.timeline)
     const request = f.request()
     const write = vi.spyOn(f.ctx.timeline, 'append').mockImplementationOnce(async (...args) => {
@@ -86,7 +86,7 @@ describe('durable asynchronous work requests', () => {
     }
   })
   it('serializes duplicate and overlapping requests, preserves progress, and survives plugin reload', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       const request = f.request()
       const results = await Promise.all([f.edit(request), f.edit(request), f.edit(f.request())])
@@ -125,7 +125,7 @@ describe('durable asynchronous work requests', () => {
   })
 
   it('confirms a pause only after every unfinished leaf in scope is paused or blocked', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       const request = f.request()
       await f.edit(request)
@@ -147,7 +147,7 @@ describe('durable asynchronous work requests', () => {
   })
 
   it('distinguishes an agent answer from a plan update and confirms continue only inside the selected scope', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       await f.update([
         { id: 'one', status: 'paused', note: 'Waiting for user.' },
@@ -198,7 +198,7 @@ describe('durable asynchronous work requests', () => {
   })
 
   it('keeps unknown delivery pending, permits only an explicit later retry, and cannot unsend an older request', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const first = f.request()
@@ -229,7 +229,7 @@ describe('durable asynchronous work requests', () => {
   })
 
   it('records completion and retirement without claiming the requested pause was applied', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       const request = f.request('pause', { kind: 'task', tree: f.tree, task: taskId.parse('one') })
       await f.edit(request)
@@ -251,7 +251,7 @@ describe('durable asynchronous work requests', () => {
   })
 
   it('rejects failed saves and model-written requests, and exposes whole-plan requests to the model', async () => {
-    const f = await fixture()
+    const f = await fixture(backend)
     try {
       const put = vi.spyOn(f.ctx.sessions, 'flush').mockRejectedValueOnce(new Error('Write failed'))
       const request = f.request('pause', { kind: 'tree', tree: f.tree })

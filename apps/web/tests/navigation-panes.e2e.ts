@@ -25,6 +25,7 @@ import {
 } from './scaffold.ts'
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 import { expectWrappedTerminalCommand } from './terminal-command-browser.ts'
+import { generationLogPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/navigation-panes', import.meta.url))
 const SEED = join(SNAPSHOT_DIR, 'session.v3.jsonl')
@@ -503,11 +504,24 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
 
     const snapshot = await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID))
     expect(snapshot?.header.id).toBe(SEED_ID)
-    expect(snapshot?.location).toBeUndefined()
+    const sourcePath = generationLogPath(scaffold.persistenceRoot, scaffold.workspaceCwd,
+      brandString<SessionId>(SEED_ID), SESSION_FORMAT_VERSION, 'zstd')
+    const sqlite = process.env.DSH_SNAPSHOT_STORAGE === 'sqlite'
+    expect(snapshot?.location).toEqual(sqlite ? undefined : { kind: 'jsonl', path: sourcePath })
     const markdown = await page.evaluate(() => navigator.clipboard.readText())
-    const normalized = markdown.split(scaffold.workspaceCwd).join('{{cwd}}')
-    // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
-    await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
+    const sourceBlock = `Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\`\n\n`
+    if (sqlite) expect(markdown).not.toContain('Session file:')
+    else expect(markdown).toContain(sourceBlock)
+    const normalized = markdown.replace(sourceBlock, '').split(scaffold.workspaceCwd).join('{{cwd}}')
+    // The artifact location is asserted separately; both backends share the transcript body.
+    const fixtureSourceBlock = 'Session file:\n\n```text\n{{sessionFile}}\n```\n\n'
+    if (MODE === 'refresh') {
+      const titleEnd = normalized.indexOf('\n\n') + 2
+      const fixture = normalized.slice(0, titleEnd) + fixtureSourceBlock + normalized.slice(titleEnd)
+      await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, fixture.replace(/\n$/u, ''), MODE)
+    }
+    const expected = await readFile(COPY_MARKDOWN_EXPECTED, 'utf8')
+    expect(normalized).toBe(expected.replace(fixtureSourceBlock, ''))
     expect(normalized).not.toContain('Session file:')
     expect(normalized).toContain('# NavScenario: first run bash to')
     expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')

@@ -27,11 +27,11 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
  * (tool/call + tool/result session events, the generic `ctx.jobs` runtime,
  * agent.inject completion notices).
  */
-async function harness(adapter: MockAdapter, sessionRoot?: string, dshHome?: string) {
+async function harness(adapter: MockAdapter, sessionRoot?: string, dshHome?: string, storage: 'jsonl' | 'sqlite' = 'jsonl') {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   if (sessionRoot !== undefined) {
-    await ctx.plugin(JsonlSessionPersistence, { root: sessionRoot, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { root: sessionRoot, storage, compression: 'none' })
   }
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalJobRegistry)
@@ -139,7 +139,7 @@ describe('bash tool through the agent loop', () => {
     }
   })
 
-  it('first-turn bash receives session identity in a scrubbed DSH_* namespace', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: first-turn bash receives session identity in a scrubbed DSH_* namespace', async (storage) => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-bash-session-env-'))
     dirs.push(root)
     const dshHome = join(root, 'dsh-home')
@@ -151,7 +151,7 @@ describe('bash tool through the agent loop', () => {
       }),
       textResponse('Session environment inspected.'),
     ])
-    const ctx = await harness(adapter, root, dshHome)
+    const ctx = await harness(adapter, root, dshHome, storage)
     const handle = await ctx.agents.create({
       sessionId: brandString<SessionId>('session-env-id'),
       agentOptions: { provider: 'mock', model: 'mock' },

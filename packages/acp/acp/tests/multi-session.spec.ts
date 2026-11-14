@@ -23,8 +23,8 @@ describe('ACP multi-session isolation', () => {
     harness = undefined
   })
 
-  it('demultiplexes concurrent answers by session id', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('answer-A'), textResponse('answer-B')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: demultiplexes concurrent answers by session id', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('answer-A'), textResponse('answer-B')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
@@ -41,8 +41,8 @@ describe('ACP multi-session isolation', () => {
     })
   })
 
-  it('cancels one session without affecting another', async () => {
-    harness = await makeBridgeHarness({ script: ['hang', textResponse('B done')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels one session without affecting another', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang', textResponse('B done')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
@@ -56,8 +56,8 @@ describe('ACP multi-session isolation', () => {
     await vi.waitFor(() => { expect(messageTextFor(harness!.sessionUpdates, b)).toBe('B done') })
   })
 
-  it('enforces one in-flight prompt independently for each session', async () => {
-    harness = await makeBridgeHarness({ script: ['hang', 'hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: enforces one in-flight prompt independently for each session', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang', 'hang'] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
@@ -75,8 +75,8 @@ describe('ACP multi-session isolation', () => {
     await expect(pendingB).resolves.toEqual({ stopReason: 'cancelled' })
   })
 
-  it('drains every live session on bridge disposal', async () => {
-    harness = await makeBridgeHarness({ script: ['hang', 'hang'] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: drains every live session on bridge disposal', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang', 'hang'] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId

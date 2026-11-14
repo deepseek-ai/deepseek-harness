@@ -190,10 +190,10 @@ describe('share-bound receiving Session admission', () => {
     },
   )
 
-  it('rejects a deleted share from recovered durable Inbox without process-local share history', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('rejects a deleted share from recovered durable Inbox without process-local share history (%s)', async (backend) => {
     const fixture = await harness(true)
     await mountAgentLoopTestDependencies(fixture.ctx)
-    await fixture.ctx.plugin(JsonlSessionPersistence, { root: join(dirname(fixture.file), 'sessions'), compression: 'none' })
+    await fixture.ctx.plugin(JsonlSessionPersistence, { root: join(dirname(fixture.file), 'sessions'), compression: 'none', storage: backend })
     await mountAgentLoopTestHarness(fixture.ctx)
     const reached = Promise.withResolvers<PreStepDecision>()
     fixture.ctx.on('agent/pre-step', async (_input, next) => {

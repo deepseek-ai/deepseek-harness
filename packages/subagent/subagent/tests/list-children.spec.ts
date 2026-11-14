@@ -37,7 +37,7 @@ afterEach(async () => {
 
 /** Boot the continuable stack with real JSONL session persistence. */
 async function setup(
-  script: Script,
+  storage: 'jsonl' | 'sqlite',   script: Script,
   options: { compression?: 'none' | 'zstd' } = {},
 ) {
   const ctx = new Context()
@@ -45,7 +45,7 @@ async function setup(
   const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-list-'))
   roots.push(root)
   const persistence = await ctx.plugin(JsonlSessionPersistence, {
-    root,
+    storage, root,
     ...options.compression === undefined ? {} : { compression: options.compression },
   })
   persistenceDisposers.push(() => persistence.dispose())
@@ -88,8 +88,8 @@ async function startChild(
 }
 
 describe('direct-child catalog reader', () => {
-  it('lists historical children through a migrated parent while preserving V3 files', async () => {
-    const { ctx, root } = await setup([], { compression: 'none' })
+  it.each(['jsonl', 'sqlite'] as const)('%s: lists historical children through a migrated parent while preserving V3 files', async (storage) => {
+    const { ctx, root } = await setup(storage, [], { compression: 'none' })
     const parent = brandString<SessionId>('historical-parent')
     const child = brandString<SessionId>('historical-child')
     const header = { type: 'session', version: 3, id: parent, createdAt: 1, isSeeded: false, delegationDepth: 0 }
@@ -117,8 +117,8 @@ describe('direct-child catalog reader', () => {
     }
   })
 
-  it('lists settled local children for both delivery modes without corpus or child reads', async () => {
-    const { ctx, parent } = await setup([textResponse('once'), textResponse('again')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: lists settled local children for both delivery modes without corpus or child reads', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('once'), textResponse('again')])
     const callerOwned = await startTestActivation(ctx, 'spawn', {
       prompt: [{ type: 'text', text: 'finish once' }],
       agentOptions: { model: 'child-model' },
@@ -144,8 +144,8 @@ describe('direct-child catalog reader', () => {
     expect(observeSession).toHaveBeenCalledOnce()
   })
 
-  it('releases its observation after reading the catalog view', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: releases its observation after reading the catalog view', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const childId = brandString<SessionId>('cold-state-child')
     parent.session.append('subagent/catalog', {
       version: 0,
@@ -166,8 +166,8 @@ describe('direct-child catalog reader', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it('releases the observation when its catalog projection is unavailable', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: releases the observation when its catalog projection is unavailable', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     using observed = await ctx.sessionQuery.observeSession(parent.id, { projectionMode: 'none' })
     const dispose = vi.fn()
     vi.spyOn(ctx.sessionQuery, 'observeSession').mockResolvedValue({ ...observed, [Symbol.dispose]: dispose })
@@ -177,8 +177,8 @@ describe('direct-child catalog reader', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it('forwards cancellation and preserves query failures', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: forwards cancellation and preserves query failures', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const controller = new AbortController()
     controller.abort(new Error('cancel catalog'))
     await expect(listChildren(ctx, parent.id, controller.signal)).rejects.toMatchObject({
@@ -285,8 +285,8 @@ function child(id: string, mode: SubagentCatalogEntry['mode'] = 'continuable'): 
 }
 
 describe('SubagentRuntime.listDescendants', () => {
-  it('lists external entries as leaves without observing a nonexistent child Session', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: lists external entries as leaves without observing a nonexistent child Session', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const local = ctx.sessions.create(brandString<SessionId>('local-child'))
     catalog(parent.session, [child('external-child', 'external'), child('local-child')])
     catalog(local, [child('nested-external', 'external')])
@@ -303,8 +303,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(observe.mock.calls.map(([id]) => id)).toEqual([parent.id, local.id])
   })
 
-  it('walks parent catalogs in event order without enumerating unrelated Sessions or reading descriptors', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: walks parent catalogs in event order without enumerating unrelated Sessions or reading descriptors', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const branch = ctx.sessions.create(brandString<SessionId>('branch'))
     const leaf = ctx.sessions.create(brandString<SessionId>('leaf'))
     const sibling = ctx.sessions.create(brandString<SessionId>('sibling'))
@@ -323,8 +323,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(observeSession.mock.calls.map(([id]) => id)).toEqual([parent.id, branch.id, leaf.id, sibling.id])
   })
 
-  it('reads a cold child catalog without loading an Agent or requiring a descriptor', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: reads a cold child catalog without loading an Agent or requiring a descriptor', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const id = brandString<SessionId>('cold-child')
     await seedStoredSession(ctx.sessionPersistence, {
       version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false,
@@ -338,8 +338,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(ctx.sessions.get(id)).toBeUndefined()
   })
 
-  it('traverses one-shot and unknown-mode catalog entries to reach continuable children', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: traverses one-shot and unknown-mode catalog entries to reach continuable children', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const once = ctx.sessions.create(brandString<SessionId>('once'))
     const unknown = ctx.sessions.create(brandString<SessionId>('unknown'))
     const leaf = ctx.sessions.create(brandString<SessionId>('leaf'))
@@ -353,8 +353,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(rows[2]).toMatchObject({ kind: 'child', id: leaf.id, parentId: unknown.id, depth: 3 })
   })
 
-  it('visits each catalog once when persisted membership repeats or cycles', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: visits each catalog once when persisted membership repeats or cycles', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const branch = ctx.sessions.create(brandString<SessionId>('branch'))
     const leaf = ctx.sessions.create(brandString<SessionId>('leaf'))
     catalog(parent.session, [child('branch'), child('leaf')])
@@ -366,13 +366,13 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(observe).toHaveBeenCalledTimes(3)
   })
 
-  it('returns no descendants from an empty root catalog', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: returns no descendants from an empty root catalog', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([])
   })
 
-  it('omits an ordinary Session fork and its cataloged children from the source listing', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: omits an ordinary Session fork and its cataloged children from the source listing', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const fork = ctx.sessions.fork(parent.session, undefined, brandString<SessionId>('ordinary-fork'))
     const leaf = ctx.sessions.create(brandString<SessionId>('fork-child'))
     catalog(fork, [child('fork-child')])
@@ -384,13 +384,13 @@ describe('SubagentRuntime.listDescendants', () => {
     ])
   })
 
-  it.each([
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
     ['corrupt', Object.assign(new Error('corrupt branch'), { code: 'SESSION_QUERY_CORRUPT_SESSION' })],
     ['corrupt', Object.assign(new Error('conflicting branch'), { code: 'SESSION_QUERY_SOURCE_CONFLICT' })],
     ['unavailable', new Error('unavailable branch')],
     ['unavailable', 'unavailable branch'],
-  ] as const)('contains a %s branch read failure and continues with siblings', async (reason, failure) => {
-    const { ctx, parent } = await setup([])
+  ] as const).map(value => [storage, ...value] as const)))('%s: contains a %s branch read failure and continues with siblings', async (storage, reason, failure) => {
+    const { ctx, parent } = await setup(storage, [])
     const branch = ctx.sessions.create(brandString<SessionId>('branch'))
     const hidden = ctx.sessions.create(brandString<SessionId>('hidden'))
     const sibling = ctx.sessions.create(brandString<SessionId>('sibling'))
@@ -410,8 +410,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(rows.some(row => row.id === hidden.id)).toBe(false)
   })
 
-  it('reports invalid live catalog data as corrupt and continues with siblings', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: reports invalid live catalog data as corrupt and continues with siblings', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const branch = ctx.sessions.create(brandString<SessionId>('branch'))
     const sibling = ctx.sessions.create(brandString<SessionId>('sibling'))
     catalog(parent.session, [child('branch'), child('sibling')])
@@ -424,16 +424,16 @@ describe('SubagentRuntime.listDescendants', () => {
     ])
   })
 
-  it('reports a missing child as unavailable', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: reports a missing child as unavailable', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     catalog(parent.session, [child('missing')])
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
       { kind: 'diagnostic', id: brandString<SessionId>('missing'), parentId: parent.id, depth: 1, reason: 'unavailable' },
     ])
   })
 
-  it('propagates root read failures and missing catalog projections', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: propagates root read failures and missing catalog projections', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     const failure = new Error('root unavailable')
     vi.spyOn(ctx.sessionQuery, 'observeSession').mockRejectedValueOnce(failure)
@@ -456,8 +456,8 @@ describe('SubagentRuntime.listDescendants', () => {
     await expect(ctx.subagents.listDescendants(brandString<SessionId>('root'))).rejects.toMatchObject({ code: 'SUBAGENT_CONTROL_QUERY_UNAVAILABLE' })
   })
 
-  it('cancels before observing the root', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels before observing the root', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     const controller = new AbortController()
     controller.abort()
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
@@ -465,8 +465,8 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(observe).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])('cancels the traversal when a branch read settles (failure: %s)', async (reject) => {
-    const { ctx, parent } = await setup([])
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: cancels the traversal when a branch read settles (failure: %s)', async (storage, reject) => {
+    const { ctx, parent } = await setup(storage, [])
     const branch = ctx.sessions.create(brandString<SessionId>('branch'))
     catalog(parent.session, [child('branch')])
     const controller = new AbortController()

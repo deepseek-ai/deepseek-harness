@@ -31,13 +31,13 @@ declare module '@deepseek-ai/dsh-llm' {
 const dirs: string[] = []
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }) })
 
-async function persistentHarness(adapter: MockAdapter): Promise<{ ctx: Context; root: string }> {
+async function persistentHarness(storage: 'jsonl' | 'sqlite', adapter: MockAdapter): Promise<{ ctx: Context; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-resume-'))
   dirs.push(root)
-  return { ctx: await mountPersistentHarness(root, adapter), root }
+  return { ctx: await mountPersistentHarness(storage, root, adapter), root }
 }
 
-async function mountPersistentHarness(root: string, adapter: MockAdapter, compression?: 'none', storage: 'jsonl' | 'sqlite' = 'jsonl'): Promise<Context> {
+async function mountPersistentHarness(storage: 'jsonl' | 'sqlite', root: string, adapter: MockAdapter, compression?: 'none'): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
@@ -81,8 +81,8 @@ async function readStoredEvents(ctx: Context, sessionId: SessionId): Promise<rea
   }
 }
 
-async function persistSession(sessionId: SessionId): Promise<string> {
-  const { ctx, root } = await persistentHarness(new MockAdapter([]))
+async function persistSession(storage: 'jsonl' | 'sqlite', sessionId: SessionId): Promise<string> {
+  const { ctx, root } = await persistentHarness(storage, new MockAdapter([]))
   // Persistence deliberately has no artifact for a truly empty session. A
   // balanced completed turn is the smallest resumable log and avoids running
   // the model merely to construct this lifecycle fixture.
@@ -126,10 +126,10 @@ function throwUnknown(value: unknown): never {
 }
 
 describe('the session-persistence Agent Note: AgentLoop factory create/resume', () => {
-  it('normalizes a non-Error resume publication failure for rollback and releases the write handle', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: normalizes a non-Error resume publication failure for rollback and releases the write handle', async (storage) => {
     const sessionId = brandString<SessionId>('unknown-resume-failure-s')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const failure = { source: 'resume' }
     ctx.on('session/created', () => throwUnknown(failure))
 
@@ -145,18 +145,18 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('createAgent uses the caller-supplied sessionId (not ${id}-session)', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: createAgent uses the caller-supplied sessionId (not ${id}-session)', async (storage) => {
     const adapter = new MockAdapter([textResponse('hi')])
-    const { ctx } = await persistentHarness(adapter)
+    const { ctx } = await persistentHarness(storage, adapter)
     const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('custom-session'), meta: { cwd: '/w' } })
     expect(agent.session.id).toBe('custom-session')
     expect(agent.session.header.cwd).toBe('/w')
     await ctx.fiber.dispose()
   })
 
-  it('createAgent rejects a duplicate identity without orphaning a session', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: createAgent rejects a duplicate identity without orphaning a session', async (storage) => {
     const adapter = new MockAdapter([textResponse('hi')])
-    const { ctx } = await persistentHarness(adapter)
+    const { ctx } = await persistentHarness(storage, adapter)
     const sessionId = brandString<SessionId>('sess-a')
     await ctx.agents.create({ sessionId })
     await expect(ctx.agents.create({ sessionId })).rejects.toThrow(/already exists/)
@@ -164,12 +164,12 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a created agent stores its seed and live turn durably through its handle', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a created agent stores its seed and live turn durably through its handle', async (storage) => {
     const seed: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       { type: 'turn/end', seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
-    const { ctx } = await persistentHarness(new MockAdapter([textResponse('stored')]))
+    const { ctx } = await persistentHarness(storage, new MockAdapter([textResponse('stored')]))
     const sessionId = brandString<SessionId>('durable-create')
     const handle = await ctx.agents.create({
       sessionId,
@@ -194,8 +194,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a rejecting final writer close releases the registries, then rejects disposal', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([textResponse('hi')]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a rejecting final writer close releases the registries, then rejects disposal', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([textResponse('hi')]))
     const sessionId = brandString<SessionId>('drain-close-fails')
     const create = vi.spyOn(ctx.sessionPersistence, 'create')
     const handle = await ctx.agents.create({ sessionId })
@@ -222,8 +222,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('combines a machine-teardown failure with a close failure into one rejection', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([textResponse('hi')]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: combines a machine-teardown failure with a close failure into one rejection', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([textResponse('hi')]))
     const sessionId = brandString<SessionId>('drain-both-fail')
     const create = vi.spyOn(ctx.sessionPersistence, 'create')
     const handle = await ctx.agents.create({ sessionId })
@@ -242,8 +242,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('agent dispose releases write ownership of its stored session', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([textResponse('hi')]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: agent dispose releases write ownership of its stored session', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([textResponse('hi')]))
     const sessionId = brandString<SessionId>('ownership-release')
     const handle = await ctx.agents.create({ sessionId })
 
@@ -260,8 +260,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a stored-session create failure rolls the fresh identity back', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a stored-session create failure rolls the fresh identity back', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('create-backend-fail')
     vi.spyOn(ctx.sessionPersistence, 'create').mockRejectedValueOnce(new Error('backend create failed'))
 
@@ -275,8 +275,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a seed append failure closes the fresh write handle and rethrows', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a seed append failure closes the fresh write handle and rethrows', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('seed-append-fail')
     const seed: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
@@ -302,8 +302,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
   })
 
 
-  it('stores setup events exactly once after Session creation completes', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: stores setup events exactly once after Session creation completes', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('setup-event-feed')
     const pending = createUserMessage({ content: [{ type: 'text', text: 'setup context' }], source: { kind: 'user' } })
     const seen: SessionEvent[] = []
@@ -331,8 +331,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a setup failure retains stored constructor history and releases the write handle', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a setup failure retains stored constructor history and releases the write handle', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('setup-fail-history')
     const seed: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
@@ -355,8 +355,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('rollback swallows a rejecting handle close after initialization validation fails (create and createAgent)', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: rollback swallows a rejecting handle close after initialization validation fails (create and createAgent)', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const originalCreate = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
     const closeSpies: Array<{ mockRestore: () => void }> = []
     ctx.sessionPersistence.create = async (header, options) => {
@@ -379,8 +379,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a reentrant abort during scope construction waits for a rejecting handle close', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a reentrant abort during scope construction waits for a rejecting handle close', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('scope-abort-close-reject')
     const originalCreate = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
     const spies: Array<{ mockRestore: () => void }> = []
@@ -417,8 +417,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     }
   })
 
-  it('config create rollback swallows a rejecting close after a publish failure', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: config create rollback swallows a rejecting close after a publish failure', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('config-publish-close-reject')
     const originalCreate = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
     const spies: Array<{ mockRestore: () => void }> = []
@@ -446,8 +446,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a seed append failure swallows a rejecting handle close', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a seed append failure swallows a rejecting handle close', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const sessionId = brandString<SessionId>('seed-append-close-reject')
     const seed: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
@@ -470,10 +470,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a resume read failure swallows a rejecting handle close during rollback', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a resume read failure swallows a rejecting handle close during rollback', async (storage) => {
     const sessionId = brandString<SessionId>('resume-read-close-reject')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const originalOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
     const spies: Array<{ mockRestore: () => void }> = []
     ctx.sessionPersistence.open = async (id, access, options) => {
@@ -492,8 +492,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('resume cannot crash-repair a turn owned by a live agent', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([textResponse('unused')]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume cannot crash-repair a turn owned by a live agent', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([textResponse('unused')]))
     const sessionId = brandString<SessionId>('live-resume-race')
     const first = (await ctx.agents.create({ sessionId })).agent
     first.session.append('turn/start', { turn: 1 })
@@ -513,10 +513,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('resume appends interrupted-turn closers durably through the handle', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume appends interrupted-turn closers durably through the handle', async (storage) => {
     // Lifecycle 1: store an interrupted log — an open turn with no turn/end.
     const sessionId = brandString<SessionId>('interrupted-resume')
-    const { ctx: ctx1, root } = await persistentHarness(new MockAdapter([]))
+    const { ctx: ctx1, root } = await persistentHarness(storage, new MockAdapter([]))
     await seedStoredSession(ctx1, sessionId, [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     ])
@@ -526,7 +526,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx1.fiber.dispose()
 
     // Lifecycle 2: resume repairs the tail and stores the repair durably.
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const handle = await ctx2.agents.resume({ resumeSessionId: sessionId })
     expect(handle.agent.session.snapshotEvents().map(event => event.type))
       .toEqual(['turn/start', 'turn/end', 'session/end-seed'])
@@ -538,9 +538,9 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  it('resume closes an interrupted tool call durably: tool/result, step/end, turn/end', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume closes an interrupted tool call durably: tool/result, step/end, turn/end', async (storage) => {
     const sessionId = brandString<SessionId>('interrupted-tool-resume')
-    const { ctx: ctx1, root } = await persistentHarness(new MockAdapter([]))
+    const { ctx: ctx1, root } = await persistentHarness(storage, new MockAdapter([]))
     await seedStoredSession(ctx1, sessionId, [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       { type: 'step/start', seq: SessionSeq(1), time: 1, data: { turn: 1, step: 1 } },
@@ -557,7 +557,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     ] as SessionEvent[])
     await ctx1.fiber.dispose()
 
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const handle = await ctx2.agents.resume({ resumeSessionId: sessionId })
     await handle.dispose()
 
@@ -581,7 +581,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     const sessionId = brandString<SessionId>('torn-tail-resume')
     const root = await mkdtemp(join(tmpdir(), 'dsh-resume-torn-'))
     dirs.push(root)
-    const ctx1 = await mountPersistentHarness(root, new MockAdapter([]), 'none', 'sqlite')
+    const ctx1 = await mountPersistentHarness('sqlite', root, new MockAdapter([]), 'none')
     const header = ctx1.sessions.prepare(sessionId).header
     await ctx1.fiber.dispose()
 
@@ -593,7 +593,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     ].join('\n')
     await writeFile(path, bytes)
 
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]), 'none', 'sqlite')
+    const ctx2 = await mountPersistentHarness('sqlite', root, new MockAdapter([]), 'none')
     const handle = await ctx2.agents.resume({ resumeSessionId: sessionId })
     expect(handle.agent.session.snapshotEvents().map(event => event.type))
       .toEqual(['turn/start', 'turn/end', 'session/end-seed'])
@@ -606,19 +606,19 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  it('createAgent works without meta (no cwd)', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: createAgent works without meta (no cwd)', async (storage) => {
     const adapter = new MockAdapter([textResponse('hi')])
-    const { ctx } = await persistentHarness(adapter)
+    const { ctx } = await persistentHarness(storage, adapter)
     const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('nometa-session') })
     expect(agent.session.id).toBe('nometa-session')
     expect(agent.session.header.cwd).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
-  it('resume of a session with no cwd carries an undefined cwd header', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume of a session with no cwd carries an undefined cwd header', async (storage) => {
     // Lifecycle 1: create a no-cwd session and run a turn.
     const adapter1 = new MockAdapter([textResponse('a')])
-    const { ctx: ctx1, root } = await persistentHarness(adapter1)
+    const { ctx: ctx1, root } = await persistentHarness(storage, adapter1)
     const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('nocwd-sess') })
     h1.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
     await waitForIdle(ctx1, h1.agent)
@@ -627,16 +627,16 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx1.fiber.dispose()
 
     // Lifecycle 2: resume it; the header cwd stays undefined (no-cwd branch).
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('b')]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('b')]))
     const a2 = (await ctx2.agents.resume({ resumeSessionId: brandString<SessionId>('nocwd-sess') })).agent
     expect(a2.session.header.cwd).toBeUndefined()
     await ctx2.fiber.dispose()
   })
 
-  it('agent/created fires "startup" for createAgent and "resume" for resume()', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: agent/created fires "startup" for createAgent and "resume" for resume()', async (storage) => {
     // Lifecycle 1: a fresh createAgent announces creation with source 'startup'.
     const adapter1 = new MockAdapter([textResponse('a')])
-    const { ctx: ctx1, root } = await persistentHarness(adapter1)
+    const { ctx: ctx1, root } = await persistentHarness(storage, adapter1)
     const sources1: string[] = []
     ctx1.on('agent/created', ({ source }) => void sources1.push(source))
     const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('start-sess') })
@@ -647,7 +647,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx1.fiber.dispose()
 
     // Lifecycle 2: resuming the persisted session announces creation 'resume'.
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('b')]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('b')]))
     const sources2: string[] = []
     ctx2.on('agent/created', ({ source }) => void sources2.push(source))
     await ctx2.agents.resume({ resumeSessionId: brandString<SessionId>('start-sess') })
@@ -655,10 +655,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  it('resume announces the Session before setup and the composed Agent afterward', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume announces the Session before setup and the composed Agent afterward', async (storage) => {
     const sessionId = brandString<SessionId>('resume-setup-success')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const gate = Promise.withResolvers<undefined>()
     const setupStarted = Promise.withResolvers<undefined>()
     const order: string[] = []
@@ -715,13 +715,13 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a resumed session stores its repair suffix durably before publication', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a resumed session stores its repair suffix durably before publication', async (storage) => {
     // The stored fixture (two events, no end-seed) gains the end-seed marker
     // through the resume handle: after one resume lifecycle the STORED log
     // carries it, so the next resume reads it back without re-marking.
     const sessionId = brandString<SessionId>('resume-suffix-durable')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const first = await ctx.agents.resume({ resumeSessionId: sessionId })
     await first.dispose()
 
@@ -737,10 +737,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('successful resume disposal retires its caller-owned transaction effects', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: successful resume disposal retires its caller-owned transaction effects', async (storage) => {
     const sessionId = brandString<SessionId>('resume-retired-effects-s')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const handle = await ctx.agents.resume({
       resumeSessionId: sessionId,
       agentOptions: { provider: 'mock', model: 'mock' },
@@ -753,9 +753,9 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it.each(['reject', 'abort'] as const)('preserves restored inbox messages when setup fails: %s', async (failure) => {
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['reject', 'abort'] as const).map(value => [storage, value] as const)))('%s: preserves restored inbox messages when setup fails: %s', async (storage, failure) => {
     const sessionId = brandString<SessionId>('resume-inbox-' + failure)
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const pending = createUserMessage({ content: [{ type: 'text', text: 'queued before restart' }], source: { kind: 'user' } })
     await seedStoredSession(ctx, sessionId, [{
       type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,
@@ -783,10 +783,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('resume setup rejection disposes the announced Session and releases the identity', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume setup rejection disposes the announced Session and releases the identity', async (storage) => {
     const sessionId = brandString<SessionId>('resume-setup-reject')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const published: string[] = []
     ctx.on('session/created', () => void published.push('session/created'))
     ctx.on('session/disposed', () => void published.push('session/disposed'))
@@ -812,10 +812,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('resume setup commit rejection disposes the announced Session and releases the identity', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume setup commit rejection disposes the announced Session and releases the identity', async (storage) => {
     const sessionId = brandString<SessionId>('resume-setup-commit-reject')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const published: string[] = []
     ctx.on('session/created', () => void published.push('session/created'))
     ctx.on('session/disposed', () => void published.push('session/disposed'))
@@ -840,10 +840,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('owner unload aborts resume setup and cannot publish the Agent after the callback settles', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: owner unload aborts resume setup and cannot publish the Agent after the callback settles', async (storage) => {
     const sessionId = brandString<SessionId>('resume-setup-owner-unload')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const gate = Promise.withResolvers<undefined>()
     const setupStarted = Promise.withResolvers<undefined>()
     const published: string[] = []
@@ -876,10 +876,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('owner unload aborts a never-settling persistence open, releases the identity, and blocks late publication', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: owner unload aborts a never-settling persistence open, releases the identity, and blocks late publication', async (storage) => {
     const sessionId = brandString<SessionId>('resume-load-owner-unload')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('next')]))
     const lateOpen = Promise.withResolvers<SessionHandle>()
     const openStarted = Promise.withResolvers<undefined>()
     const originalOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
@@ -931,9 +931,9 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('AgentLoop unload aborts a never-settling persistence open and awaits wrapper settlement', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: AgentLoop unload aborts a never-settling persistence open and awaits wrapper settlement', async (storage) => {
     const sessionId = brandString<SessionId>('resume-load-factory-unload')
-    const root = await persistSession(sessionId)
+    const root = await persistSession(storage, sessionId)
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
@@ -943,7 +943,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
-    await ctx.plugin(JsonlSessionPersistence, { root })
+    await ctx.plugin(JsonlSessionPersistence, { storage, root })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('next')]))
 
     const lateOpen = Promise.withResolvers<SessionHandle>()
@@ -974,7 +974,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('resume of a forked session preserves the lineage, seed boundary, and delegation depth in the header', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume of a forked session preserves the lineage, seed boundary, and delegation depth in the header', async (storage) => {
     // Lifecycle 1: persist a FORKED session (carries parentSession + seedLength
     // in its header) through createAgent with a complete-turn seed — the
     // factory stores the header and seed through its write handle.
@@ -982,7 +982,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       { type: 'turn/end', seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
-    const { ctx: ctx1, root } = await persistentHarness(new MockAdapter([]))
+    const { ctx: ctx1, root } = await persistentHarness(storage, new MockAdapter([]))
     const forked = await ctx1.agents.create({
       sessionId: brandString<SessionId>('forked-sess'),
       seed,
@@ -997,7 +997,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     // branches). seedLength must come from the PERSISTED header, not from the
     // resume seed length (which is the whole stored log, not the original
     // boundary).
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('b')]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('b')]))
     const a2 = (await ctx2.agents.resume({ resumeSessionId: brandString<SessionId>('forked-sess') })).agent
     expect(a2.session.header.parentSession).toBe('parent-sess')
     expect(a2.session.header.cwd).toBe('/w')
@@ -1015,7 +1015,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
   // two-process e2e.
   it.skipIf(process.platform === 'win32')('a pending idle inject() survives persist + resume without a synthetic turn', async () => {
     const adapter1 = new MockAdapter([textResponse('answer')])
-    const { ctx: ctx1, root } = await persistentHarness(adapter1)
+    const { ctx: ctx1, root } = await persistentHarness('jsonl', adapter1)
     const a1 = (await ctx1.agents.create({ sessionId: brandString<SessionId>('inject-sess'), meta: { cwd: '/w' }, agentOptions: { provider: 'mock', model: 'mock' } })).agent
     a1.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
     await waitForIdle(ctx1, a1)
@@ -1031,7 +1031,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
 
     // Lifecycle 2: resume; the injected context is still pending and becomes
     // model-visible when the next turn admits it.
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('next')]))
+    const ctx2 = await mountPersistentHarness('jsonl', root, new MockAdapter([textResponse('next')]))
     const stored = await readStoredEvents(ctx2, brandString<SessionId>('inject-sess'))
     expect(stored.some(event => event.type === 'agent/inbox/spliced')).toBe(true)
     expect(JSON.stringify(stored)).toContain('background job 42 finished')
@@ -1045,7 +1045,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx1.fiber.dispose()
   })
 
-  it.each(['resume', 'fork'] as const)('%s continues persisted history after a live scheduler failure', async (mode) => {
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['resume', 'fork'] as const).map(value => [storage, value] as const)))('%s: %s continues persisted history after a live scheduler failure', async (storage, mode) => {
     const firstAdapter = new MockAdapter([[
       { type: 'block-start', index: 0, blockType: 'tool-call' },
       { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('started'), name: 'probe', arguments: '{}' } },
@@ -1053,7 +1053,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       { type: 'block-end', index: 1, block: { type: 'tool-call', id: brandString<ToolCallId>('pending'), name: 'probe', arguments: '{}' } },
       { type: 'finish', reason: { kind: 'tool-calls' } },
     ]])
-    const { ctx: first, root } = await persistentHarness(firstAdapter)
+    const { ctx: first, root } = await persistentHarness(storage, firstAdapter)
     let next: Context | undefined
     try {
       first.tools.register(defineContentToolFixture({
@@ -1078,7 +1078,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       await first.fiber.dispose()
 
       const nextAdapter = new MockAdapter([textResponse('continued after failure')])
-      next = await mountPersistentHarness(root, nextAdapter)
+      next = await mountPersistentHarness(storage, root, nextAdapter)
       const stored = await readStoredEvents(next, sessionId)
       expect(stored.filter(event => event.type === 'tool/result').map(event => [
         event.data.message.toolCallId, event.data.error?.code,
@@ -1118,10 +1118,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     }
   })
 
-  it('resume reloads a persisted session: history + turn numbering continue, no duplicate seqs', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume reloads a persisted session: history + turn numbering continue, no duplicate seqs', async (storage) => {
     // Lifecycle 1: run one full turn, persisting it.
     const adapter1 = new MockAdapter([textResponse('first answer')])
-    const { ctx: ctx1, root } = await persistentHarness(adapter1)
+    const { ctx: ctx1, root } = await persistentHarness(storage, adapter1)
     const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('sess-resume'), meta: { cwd: '/w' } })
     const a1 = h1.agent
     a1.followup(createUserMessage({ content: [{ type: 'text', text: 'first question' }], source: { kind: 'user' } }))
@@ -1133,7 +1133,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx1.fiber.dispose()
 
     // Lifecycle 2: a brand-new context over the SAME root; resume the session.
-    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('second answer')]))
+    const ctx2 = await mountPersistentHarness(storage, root, new MockAdapter([textResponse('second answer')]))
 
     const a2 = (await ctx2.agents.resume({ resumeSessionId: brandString<SessionId>('sess-resume') })).agent
     // The resumed session carries the prior history…
@@ -1175,8 +1175,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
 })
 
 describe('creation and resume cancellation edges', () => {
-  it('rejects create() with a pre-aborted signal, including a non-Error reason', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects create() with a pre-aborted signal, including a non-Error reason', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
 
     const errorReason = new AbortController()
     errorReason.abort(new Error('caller gave up'))
@@ -1200,8 +1200,8 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('a non-Error abort reason arriving during setup is wrapped for the caller', async () => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each(['jsonl', 'sqlite'] as const)('%s: a non-Error abort reason arriving during setup is wrapped for the caller', async (storage) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const controller = new AbortController()
     const setupEntered = Promise.withResolvers<undefined>()
     const setupGate = Promise.withResolvers<undefined>()
@@ -1224,8 +1224,8 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it.each(['setup', 'commit'] as const)('rejects when %s synchronously aborts its caller signal', async (phase) => {
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['setup', 'commit'] as const).map(value => [storage, value] as const)))('%s: rejects when %s synchronously aborts its caller signal', async (storage, phase) => {
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const controller = new AbortController()
 
     const created = vi.fn()
@@ -1253,10 +1253,10 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('resume with a pre-aborted caller signal rejects out of the load race', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: resume with a pre-aborted caller signal rejects out of the load race', async (storage) => {
     const sessionId = brandString<SessionId>('resume-pre-aborted')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const controller = new AbortController()
     controller.abort(new Error('resume abandoned'))
 
@@ -1278,19 +1278,19 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('an abort landing between crash repair and publication refuses resume, normalized', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: an abort landing between crash repair and publication refuses resume, normalized', async (storage) => {
     // Cover the publication-time abort backstop: the signal fires AFTER the
     // raced open settled (during the closer append), so only the final
     // pre-publication check can refuse.
     const run = async (suffix: string, reason: unknown): Promise<unknown> => {
       const sessionId = brandString<SessionId>(`late-abort-${suffix}`)
-      const { ctx: seedCtx, root } = await persistentHarness(new MockAdapter([]))
+      const { ctx: seedCtx, root } = await persistentHarness(storage, new MockAdapter([]))
       await seedStoredSession(seedCtx, sessionId, [
         { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       ])
       await seedCtx.fiber.dispose()
 
-      const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+      const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
       const controller = new AbortController()
       const originalOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
       ctx.sessionPersistence.open = async (id, access, options) => {
@@ -1318,9 +1318,9 @@ describe('creation and resume cancellation edges', () => {
     expect(await run('string', 'late abort string')).toMatchObject({ message: expect.stringMatching(/creation aborted/) as unknown })
   })
 
-  it('an aborted create closes the write handle its abandoned backend create later resolves', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: an aborted create closes the write handle its abandoned backend create later resolves', async (storage) => {
     const sessionId = brandString<SessionId>('create-abandoned-handle')
-    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const { ctx } = await persistentHarness(storage, new MockAdapter([]))
     const lateCreate = Promise.withResolvers<SessionHandle>()
     const createStarted = Promise.withResolvers<undefined>()
     ctx.sessionPersistence.create = () => {
@@ -1344,10 +1344,10 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('closes the resume write handle when the loop becomes inactive before setup', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: closes the resume write handle when the loop becomes inactive before setup', async (storage) => {
     const sessionId = brandString<SessionId>('resume-loop-inactive-after-open')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const loop = ctx.agentLoop as unknown as {
       ownership: { isActive: () => boolean }
     }
@@ -1369,10 +1369,10 @@ describe('creation and resume cancellation edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('factory teardown during a hung resume open rejects promptly and closes the late handle', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: factory teardown during a hung resume open rejects promptly and closes the late handle', async (storage) => {
     const sessionId = brandString<SessionId>('resume-loop-teardown')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const gate = Promise.withResolvers<SessionHandle>()
     const openStarted = Promise.withResolvers<undefined>()
     ctx.sessionPersistence.open = () => {
@@ -1398,10 +1398,10 @@ describe('creation and resume cancellation edges', () => {
 })
 
 describe('configured-start failure edges', () => {
-  it('a non-Error mid-open abort reason is wrapped for the resume caller', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a non-Error mid-open abort reason is wrapped for the resume caller', async (storage) => {
     const sessionId = brandString<SessionId>('resume-string-mid-abort')
-    const root = await persistSession(sessionId)
-    const ctx = await mountPersistentHarness(root, new MockAdapter([]))
+    const root = await persistSession(storage, sessionId)
+    const ctx = await mountPersistentHarness(storage, root, new MockAdapter([]))
     const gate = Promise.withResolvers<never>()
     gate.promise.catch(() => undefined)
     const openStarted = Promise.withResolvers<undefined>()
@@ -1424,9 +1424,9 @@ describe('configured-start failure edges', () => {
     await ctx.fiber.dispose()
   })
 
-  it('a failing exact-id restore over an existing artifact stays loud', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a failing exact-id restore over an existing artifact stays loud', async (storage) => {
     const sessionId = brandString<SessionId>('config-existing-corrupt')
-    const root = await persistSession(sessionId)
+    const root = await persistSession(storage, sessionId)
     const configured = new Context()
     await configured.plugin(LlmRuntime)
     await configured.plugin(SessionStore)
@@ -1435,7 +1435,7 @@ describe('configured-start failure edges', () => {
     await configured.plugin(ToolRuntime)
     await configured.plugin(NativeToolExecutor)
     await configured.plugin(AgentRegistry)
-    await configured.plugin(JsonlSessionPersistence, { root })
+    await configured.plugin(JsonlSessionPersistence, { storage, root })
     configured.llm.registerAdapter(['mock'], new MockAdapter([]))
     // The artifact exists but its open fails with a NON-NotFound error: this is
     // corruption, not first creation — the failure must be reported, and no
@@ -1459,9 +1459,9 @@ describe('configured-start failure edges', () => {
     await configured.fiber.dispose()
   })
 
-  it('suppresses a configured-resume failure that lands after teardown', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: suppresses a configured-resume failure that lands after teardown', async (storage) => {
     const sessionId = brandString<SessionId>('config-late-resume-failure')
-    const root = await persistSession(sessionId)
+    const root = await persistSession(storage, sessionId)
     const configured = new Context()
     await configured.plugin(LlmRuntime)
     await configured.plugin(SessionStore)
@@ -1470,7 +1470,7 @@ describe('configured-start failure edges', () => {
     await configured.plugin(ToolRuntime)
     await configured.plugin(NativeToolExecutor)
     await configured.plugin(AgentRegistry)
-    await configured.plugin(JsonlSessionPersistence, { root })
+    await configured.plugin(JsonlSessionPersistence, { storage, root })
     configured.llm.registerAdapter(['mock'], new MockAdapter([]))
     const gate = Promise.withResolvers<never>()
     gate.promise.catch(() => undefined)

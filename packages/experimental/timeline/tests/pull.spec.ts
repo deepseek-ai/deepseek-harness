@@ -30,8 +30,8 @@ const resultSchema = z.object({
   hasMore: z.boolean(),
 })
 
-async function scenario() {
-  const f = await setup({ intervalMs: 86400000 })
+async function scenario(backend: 'jsonl' | 'sqlite') {
+  const f = await setup(backend, { intervalMs: 86400000 })
   let count = 0
   const call = (name: string, args: object = {}) =>
     executeTool(f.ctx, {
@@ -51,9 +51,9 @@ async function scenario() {
   return { ...f, call, pull }
 }
 
-describe('next-work checkpoints', () => {
+describe.each(['jsonl', 'sqlite'] as const)('next-work checkpoints (%s)', (backend) => {
   it('does not create a plan on an empty session and rejects unknown or invalid queries', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       expect(await f.pull()).toMatchObject({ tree: null, next: 'plan', tasks: [], total: 0, hasMore: false })
       for (const args of [{ tree: 'tree-missing' }, { limit: 0 }, { limit: 501 }, { limit: 1.5 }])
@@ -65,7 +65,7 @@ describe('next-work checkpoints', () => {
   })
 
   it('prefers inherited user priority, then active leaves, without editing or returning groups', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       await f.call('timeline_tree', { action: 'start', title: 'Deliver the requested work' })
       await f.call('timeline_tasks', {
@@ -101,7 +101,7 @@ describe('next-work checkpoints', () => {
   })
 
   it('rechecks blockers after runnable work ends and preserves deliberate pauses', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       await f.call('timeline_tree', { action: 'start', title: 'Check dependencies' })
       await f.call('timeline_tasks', {
@@ -147,7 +147,7 @@ describe('next-work checkpoints', () => {
   })
 
   it('keeps persistent blockers visible after their reasons are reconfirmed', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       await f.call('timeline_tree', { action: 'start', title: 'Publish the result' })
       await f.call('timeline_tasks', {
@@ -173,7 +173,7 @@ describe('next-work checkpoints', () => {
   })
 
   it('bounds suggestions and permits a complete blocker check when the default is truncated', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       await f.call('timeline_tree', { action: 'start', title: 'Check remaining work' })
       await f.call('timeline_tasks', {
@@ -196,7 +196,7 @@ describe('next-work checkpoints', () => {
   })
 
   it('checks only the addressed goal and never selects or resumes a different tree', async () => {
-    const f = await scenario()
+    const f = await scenario(backend)
     try {
       await f.call('timeline_tree', { action: 'start', title: 'Earlier goal' })
       await f.call('timeline_tasks', {

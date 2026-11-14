@@ -1,4 +1,4 @@
-/** Loader-owned anonymous provider, live Sessions, and restartable real SQLite storage. */
+/** Loader-owned anonymous provider, live Sessions, and restartable real persistence. */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
@@ -8,7 +8,7 @@ import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { DatabaseSync } from 'node:sqlite'
 import { once } from 'node:events'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,10 +49,11 @@ function mainEvents(): SessionEvent[] {
 /**
  * Create private, atomically allocated resources and register teardown before use.
  * @param cleanups - owning test's reverse-order quiescent cleanup list.
+ * @param backend - persistence implementation retained across Host restarts.
  * @param options - external reply control and optional storage omission.
  * @returns the real Host composition, restart operation, and Session/storage observations.
  */
-export async function storageFixture(cleanups: Array<() => Promise<void>>, options: StorageFixtureOptions = {}) {
+export async function storageFixture(cleanups: Array<() => Promise<void>>, backend: 'jsonl' | 'sqlite', options: StorageFixtureOptions = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-translator-storage-'))
   cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
   const requests: StorageWireCall[] = [], errors: unknown[] = [], handlers = new Set<Promise<void>>()
@@ -99,7 +100,7 @@ export async function storageFixture(cleanups: Array<() => Promise<void>>, optio
   await writeFile(path, JSON.stringify([
     ...options.withSessions === false ? [] : [{ id: 'sessions', name: '@deepseek-ai/dsh-session' }],
     ...options.withPersistence === false ? [] : [
-      { id: 'storage', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: storedRoot, compression: 'none' } },
+      { id: 'storage', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: storedRoot, storage: backend, compression: 'none' } },
     ],
     { id: 'translator', name: '@deepseek-ai/dsh-experimental-translator', config },
   ]))
@@ -158,7 +159,12 @@ export async function storageFixture(cleanups: Array<() => Promise<void>>, optio
     return { id, session, scope, writer, events: await readEvents(id) }
   }
   return { get ctx() { return ctx }, root, config, requests, errors, readEvents, createSession,
-    appendStored(id: SessionId, seq: number, payload: string) {
+    async appendStored(id: SessionId, seq: number, payload: string) {
+      if (backend === 'jsonl') {
+        const snapshot = await ctx.sessionPersistence.stat(id)
+        await appendFile(snapshot!.location!.path, `${payload}\n`)
+        return
+      }
       const db = new DatabaseSync(join(storedRoot, '.segments', 'sessions.sqlite'))
       try {
         db.prepare('INSERT INTO events (segment_uuid, seq, payload) SELECT tail_segment_uuid, ?, ? FROM traces WHERE trace_uuid = ?')

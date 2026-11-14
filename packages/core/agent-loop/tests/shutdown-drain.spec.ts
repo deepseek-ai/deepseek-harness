@@ -29,7 +29,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-async function mount(order: 'backend-first' | 'loop-first'): Promise<{ ctx: Context; root: string }> {
+async function mount(order: 'backend-first' | 'loop-first', storage: 'jsonl' | 'sqlite'): Promise<{ ctx: Context; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-shutdown-drain-'))
   dirs.push(root)
   const ctx = new Context()
@@ -41,19 +41,21 @@ async function mount(order: 'backend-first' | 'loop-first'): Promise<{ ctx: Cont
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   if (order === 'backend-first') {
-    await ctx.plugin(JsonlSessionPersistence, { root })
+    await ctx.plugin(JsonlSessionPersistence, { root, storage })
     await ctx.plugin(AgentLoop, { agents: [] })
   } else {
     await ctx.plugin(AgentLoop, { agents: [] })
-    await ctx.plugin(JsonlSessionPersistence, { root })
+    await ctx.plugin(JsonlSessionPersistence, { root, storage })
   }
   ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('done')]))
   return { ctx, root }
 }
 
-describe.each(['backend-first', 'loop-first'] as const)('root shutdown drain (%s)', (order) => {
+describe.each((['jsonl', 'sqlite'] as const).flatMap(storage =>
+  (['backend-first', 'loop-first'] as const).map(order => ({ storage, order })),
+))('root shutdown drain ($storage, $order)', ({ storage, order }) => {
   it('persists buffered turn events without an explicit flush before dispose', async () => {
-    const { ctx, root } = await mount(order)
+    const { ctx, root } = await mount(order, storage)
     const sessionId = brandString<SessionId>('shutdown-drain')
     const handle = await ctx.agents.create({ sessionId, agentOptions: { provider: 'mock', model: 'mock' } })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
@@ -62,7 +64,7 @@ describe.each(['backend-first', 'loop-first'] as const)('root shutdown drain (%s
     await ctx.fiber.dispose()
 
     const verify = new Context()
-    await verify.plugin(JsonlSessionPersistence, { root })
+    await verify.plugin(JsonlSessionPersistence, { root, storage })
     const reader = await verify.sessionPersistence.open(sessionId, 'read')
     const { events } = await reader.read()
     await reader.close()

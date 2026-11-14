@@ -248,7 +248,9 @@ export function snapshotSpillRoot(
 export async function runScenario(input: InputScript, opts: RunOptions): Promise<RunResult> {
   const cwd = await mkdtemp(join(opts.workspaceParent ?? tmpdir(), 'acp-snap-cwd-'))
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
+  const storage = (opts.env?.DSH_SNAPSHOT_STORAGE ?? process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') as 'jsonl' | 'sqlite'
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
+  const readLogs = (): Promise<HarvestedLog[]> => harvestSessionLogs(sessionsRoot, storage)
   let spillRoot: string | undefined
   // Everything past the temp-dir creation is followed by failure-safe cleanup,
   // so a failure in workspace seeding, spawn, or any step never leaks resources.
@@ -279,6 +281,7 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
       DSH_SNAPSHOT: opts.mode,
       DSH_SNAPSHOT_FILE: opts.fixtureFile,
       DSH_SNAPSHOT_SESSIONS_ROOT: sessionsRoot,
+      DSH_SNAPSHOT_STORAGE: storage,
       DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
       DSH_SNAPSHOT_SPILL_LOCATOR_ROOT: snapshotSpillRoot(opts.fixtureFile),
       DSH_HOME: join(cwd, '.dsh'),
@@ -334,13 +337,13 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
         match => active.waitForUpdate(match),
         () => sessionId,
         (id) => { sessionId = id },
-        (id, timeoutMs, minimumTurn) => waitForPersistedTurnStart(sessionsRoot, id, timeoutMs, minimumTurn),
-        (id, timeoutMs) => waitForPersistedTurnEnd(sessionsRoot, id, timeoutMs),
-        (child, timeoutMs, minimumTurn) => waitForPersistedChildTurnEnd(sessionsRoot, child, timeoutMs, minimumTurn),
-        (id, phase, timeoutMs) => waitForPersistedGoalPhase(sessionsRoot, id, phase, timeoutMs),
-        (id, text, timeoutMs) => waitForPersistedInboxMessage(sessionsRoot, id, text, timeoutMs),
-        (id, timeoutMs) => waitForPersistedTitleAfterTurnEnd(sessionsRoot, id, timeoutMs),
-        (id, type, timeoutMs) => waitForPersistedEventAfterTurnEnd(sessionsRoot, id, type, timeoutMs),
+        (id, timeoutMs, minimumTurn) => waitForPersistedTurnStart(readLogs, id, timeoutMs, minimumTurn),
+        (id, timeoutMs) => waitForPersistedTurnEnd(readLogs, id, timeoutMs),
+        (child, timeoutMs, minimumTurn) => waitForPersistedChildTurnEnd(readLogs, child, timeoutMs, minimumTurn),
+        (id, phase, timeoutMs) => waitForPersistedGoalPhase(readLogs, id, phase, timeoutMs),
+        (id, text, timeoutMs) => waitForPersistedInboxMessage(readLogs, id, text, timeoutMs),
+        (id, timeoutMs) => waitForPersistedTitleAfterTurnEnd(readLogs, id, timeoutMs),
+        (id, type, timeoutMs) => waitForPersistedEventAfterTurnEnd(readLogs, id, type, timeoutMs),
       )
       // A permission exchange happens while a step's request is in flight, so
       // by the time the step settles any script bug it exposed is captured —
@@ -353,7 +356,7 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
     await active.close()
     // Harvest EVERY persisted log (parent + any subagent children) while the
     // generated dirs still exist, ordered primary-first.
-    sessionLogs = await harvestSessionLogs(sessionsRoot)
+    sessionLogs = await readLogs()
     const finalWorkspace = await captureWorkspaceSnapshot(cwd, {
       ignoredRootEntries: ['.agents', '.dsh', '.dsh-profile-patches', '.dsh-snapshot-stream-ready'],
     })
@@ -560,7 +563,7 @@ async function runStep(
 
 /** Wait until persistence exposes an open turn for the selected session. */
 async function waitForPersistedTurnStart(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
   minimumTurn?: number,
@@ -569,7 +572,7 @@ async function waitForPersistedTurnStart(
   const message = `snapshot-harness: session "${sessionId}" did not persist ${detail} within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
       const openTurn = log === undefined ? undefined : latestOpenTurn(log.content)
       if (openTurn === undefined || (minimumTurn !== undefined && openTurn < minimumTurn)) {
         throw new Error(message)
@@ -587,14 +590,14 @@ async function waitForPersistedTurnStart(
  * keep subprocess disposal from changing an `aborted` turn into `disposed`.
  */
 async function waitForPersistedTurnEnd(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
 ): Promise<void> {
   const message = `snapshot-harness: session "${sessionId}" did not persist turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestTurnIsClosed(log.content)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -612,7 +615,7 @@ async function waitForPersistedTurnEnd(
  * own model work reached a closed turn.
  */
 async function waitForPersistedChildTurnEnd(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   child: number,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
   minimumTurn = 1,
@@ -620,7 +623,7 @@ async function waitForPersistedChildTurnEnd(
   const message = `snapshot-harness: subagent child #${child} did not persist closed turn ${minimumTurn} within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root))[child]
+      const log = (await readLogs())[child]
       if (log === undefined || !latestTurnIsClosed(log.content)
         || !hasRequestHeaderAfterDescriptor(log.content)
         || !hasClosedTurn(log.content, minimumTurn)) {
@@ -643,7 +646,7 @@ function hasClosedTurn(content: string, turn: number): boolean {
 
 /** Wait until the latest durable goal snapshot reaches one phase. */
 async function waitForPersistedGoalPhase(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   phase: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -651,7 +654,7 @@ async function waitForPersistedGoalPhase(
   const message = `snapshot-harness: session "${sessionId}" did not persist goal phase "${phase}" within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const content = (await harvestSessionLogs(root)).find(log => log.id === sessionId)?.content
+      const content = (await readLogs()).find(log => log.id === sessionId)?.content
       const matched = content?.split('\n').filter(Boolean).some((line) => {
         const event = JSON.parse(line) as { type?: unknown; data?: { goal?: { phase?: unknown } } }
         return event.type === 'goal/change' && event.data?.goal?.phase === phase
@@ -665,7 +668,7 @@ async function waitForPersistedGoalPhase(
 
 /** Wait until an inserted inbox message contains scenario-owned text. */
 async function waitForPersistedInboxMessage(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   text: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -673,7 +676,7 @@ async function waitForPersistedInboxMessage(
   const message = `snapshot-harness: session "${sessionId}" did not persist expected inbox message within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
       const matched = log?.content.split('\n').some((line) => {
         if (line.length === 0) return false
         const record = JSON.parse(line) as {
@@ -704,14 +707,14 @@ function hasRequestHeaderAfterDescriptor(content: string): boolean {
 
 /** Wait until a complete provider or fallback title record follows the latest closed turn. */
 async function waitForPersistedTitleAfterTurnEnd(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
 ): Promise<void> {
   const message = `snapshot-harness: session "${sessionId}" did not persist session/title after turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestTitleFollowsTurnEnd(log.content)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -721,7 +724,7 @@ async function waitForPersistedTitleAfterTurnEnd(
 
 /** Wait until a complete record of `type` follows the latest closed turn. */
 async function waitForPersistedEventAfterTurnEnd(
-  root: string,
+  readLogs: () => Promise<HarvestedLog[]>,
   sessionId: string,
   type: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -729,7 +732,7 @@ async function waitForPersistedEventAfterTurnEnd(
   const message = `snapshot-harness: session "${sessionId}" did not persist ${type} after turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestEventFollowsTurnEnd(log.content, type)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -783,10 +786,10 @@ function latestOpenTurn(content: string): number | undefined {
 }
 
 /** Read settled logical Session histories through the provider and order the parent before its children. */
-async function harvestSessionLogs(root: string): Promise<HarvestedLog[]> {
+async function harvestSessionLogs(root: string, storage: 'jsonl' | 'sqlite'): Promise<HarvestedLog[]> {
   const ctx = new Context()
   try {
-    await ctx.plugin(persistencePlugin, { root, compression: 'none' })
+    await ctx.plugin(persistencePlugin, { root, compression: 'none', storage })
     const logs: HarvestedLog[] = []
     for (const snapshot of await ctx.sessionPersistence.list()) {
       const handle = await ctx.sessionPersistence.open(snapshot.header.id, 'read')

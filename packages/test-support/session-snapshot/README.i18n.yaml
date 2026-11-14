@@ -21,8 +21,8 @@
   en: 57ff7c89e7696ee8
   zh: b885ac1b4edc8c56
 /deepseek-ai-dsh-session-snapshot/use-this-package/record-replay-and-refresh:
-  en: bd9dcb62ea4e77db
-  zh: be9615f0ae662c9e
+  en: d671025e0e040248
+  zh: 0b1ca30b1a6eb239
 /deepseek-ai-dsh-session-snapshot/use-this-package/pinning-request-headers-and-system-prompts:
   en: fe59b0197fa5e34c
   zh: dfa1844c2c965358
@@ -30,14 +30,14 @@
   en: 64666ea2894acc4a
   zh: 0e78df32bcfd3633
 /deepseek-ai-dsh-session-snapshot/use-this-package/what-can-go-wrong:
-  en: 0b03592947ca43d6
-  zh: b14a64238c4b5f80
+  en: badae14e4c6432fc
+  zh: 8c601a8386659e00
 /deepseek-ai-dsh-session-snapshot/understand-the-implementation:
   en: 18ff76b440fe40da
   zh: 4dbf2eb5f9ee98a2
 /deepseek-ai-dsh-session-snapshot/understand-the-implementation/design:
-  en: 8771607f15c4f4e1
-  zh: 7c2cf395f704717c
+  en: 30dc1a78497bee82
+  zh: 7904f391efdaed64
 /deepseek-ai-dsh-session-snapshot/understand-the-implementation/source-map:
   en: 1510b3b09c3bd553
   zh: 1931fba0891f7d65
@@ -54,8 +54,8 @@
   en: ca75c51c89c2c9b0
   zh: f57cc48a1b5cbfa9
 /deepseek-ai-dsh-session-snapshot/known-limitations-and-deferred-work:
-  en: 42e871839dddaf6d
-  zh: b7ab1d313527612b
+  en: 884c1b84c249a917
+  zh: 437f9046f5dfed57
 /deepseek-ai-dsh-session-snapshot/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

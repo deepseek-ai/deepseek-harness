@@ -14,9 +14,9 @@ afterEach(async () => {
 const identity: TranslationIdentity = { provider: 'bing', text: 'source', sourceLanguage: 'auto', targetLanguage: 'zh', recipe: 'fixture' }
 const stages = ['request', 'result'] as const
 
-describe('storage helper failures', () => {
+describe.each(['jsonl', 'sqlite'] as const)('storage helper failures (%s)', (backend) => {
   it.each(stages)('classifies %s I/O failures before returning them to the consumer', async (stage) => {
-    const b = await storageFixture(cleanups), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
     let observed: unknown
     const outcome = await storage.run(original.id, identity, new AbortController().signal, async (log) => {
       const seq = stage === 'result' ? await log.request(identity) : SessionSeq(0)
@@ -33,7 +33,7 @@ describe('storage helper failures', () => {
   })
 
   it.each(stages)('classifies %s writer failures after its writer is closed', async (stage) => {
-    const b = await storageFixture(cleanups), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
     let observed: unknown
     const outcome = await storage.run(original.id, identity, new AbortController().signal, async (log) => {
       const seq = stage === 'result' ? await log.request(identity) : SessionSeq(0)
@@ -50,7 +50,7 @@ describe('storage helper failures', () => {
   })
 
   it.each(stages)('preserves the exact caller abort reason inside %s', async (stage) => {
-    const b = await storageFixture(cleanups), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
     const caller = new AbortController(), reason = { canceled: true }
     let observed: unknown
     const outcome = await storage.run(original.id, identity, caller.signal, async (log) => {

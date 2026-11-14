@@ -40,8 +40,8 @@ describe('automation-only ACP bridge', () => {
     harness = undefined
   })
 
-  it('advertises the standard automation controls without private metadata', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: advertises the standard automation controls without private metadata', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     const response = await harness.client.initialize({
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: { _meta: { terminal_output: true } },
@@ -59,26 +59,26 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('advertises image prompts only with an exact capable route and attachment store', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true })
+  it.each(['jsonl', 'sqlite'] as const)('%s: advertises image prompts only with an exact capable route and attachment store', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true })
     const capable = await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     expect(capable.agentCapabilities?.promptCapabilities?.image).toBe(true)
     await harness.dispose()
 
-    harness = await makeBridgeHarness({ imageCapable: true, attachments: false })
+    harness = await makeBridgeHarness(storage, { imageCapable: true, attachments: false })
     const noStore = await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     expect(noStore.agentCapabilities?.promptCapabilities?.image).toBe(false)
   })
 
-  it('negotiates an unsupported version and accepts the required no-op authentication call', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: negotiates an unsupported version and accepts the required no-op authentication call', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     const response = await harness.client.initialize({ protocolVersion: 0, clientCapabilities: {} })
     expect(response.protocolVersion).toBe(PROTOCOL_VERSION)
     await expect(harness.client.authenticate({ methodId: 'unused' })).resolves.toEqual({})
   })
 
-  it('creates a session, emits one committed answer, and settles the prompt', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('hello there')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: creates a session, emits one committed answer, and settles the prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('hello there')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const result = await harness.client.prompt({
@@ -98,8 +98,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]?.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'say hello' }])
   })
 
-  it('closes one active session without affecting its neighbor', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: closes one active session without affecting its neighbor', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const first = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const second = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
@@ -114,8 +114,8 @@ describe('automation-only ACP bridge', () => {
     })).rejects.toThrow(/unknown session/)
   })
 
-  it('cancels a running prompt and makes its session resumable before close returns', async () => {
-    harness = await makeBridgeHarness({ script: ['hang', textResponse('resumed')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: cancels a running prompt and makes its session resumable before close returns', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: ['hang', textResponse('resumed')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const prompt = harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'hang' }] })
@@ -132,8 +132,8 @@ describe('automation-only ACP bridge', () => {
     await harness.client.resumeSession({ sessionId: created.sessionId, cwd: process.cwd(), mcpServers: [] })
   })
 
-  it('shares one close operation and rejects new work while close is draining', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: shares one close operation and rejects new work while close is draining', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const flushing: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -152,8 +152,8 @@ describe('automation-only ACP bridge', () => {
     await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
   })
 
-  it('disposes the Agent and reports an explicit close drain failure', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: disposes the Agent and reports an explicit close drain failure', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
@@ -164,8 +164,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(created.sessionId))).toBeUndefined()
   })
 
-  it('resumes a closed persisted session without replaying its history', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('first answer'), textResponse('second answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: resumes a closed persisted session without replaying its history', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('first answer'), textResponse('second answer')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'first prompt' }] })
@@ -191,8 +191,8 @@ describe('automation-only ACP bridge', () => {
     ])
   })
 
-  it('materializes an empty closed session for list and resume', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: materializes an empty closed session for list and resume', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
@@ -205,8 +205,8 @@ describe('automation-only ACP bridge', () => {
       .resolves.toHaveProperty('configOptions')
   })
 
-  it('rejects active or wrong-workspace resume before composing another Agent', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects active or wrong-workspace resume before composing another Agent', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await expect(harness.client.resumeSession({
@@ -232,8 +232,8 @@ describe('automation-only ACP bridge', () => {
     })).resolves.toHaveProperty('configOptions')
   })
 
-  it('reserves a persisted id across concurrent resume admission', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: reserves a persisted id across concurrent resume admission', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'persist' }] })
@@ -257,8 +257,8 @@ describe('automation-only ACP bridge', () => {
     await expect(first).resolves.toHaveProperty('configOptions')
   })
 
-  it('excludes a globally live session owned outside this ACP bridge', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: excludes a globally live session owned outside this ACP bridge', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const sessionId = brandString<SessionId>('other-frontend-live')
     harness.ctx.sessions.create(sessionId, { meta: { cwd: process.cwd() } })
@@ -280,8 +280,8 @@ describe('automation-only ACP bridge', () => {
     expect(resume).not.toHaveBeenCalled()
   })
 
-  it('rejects unknown resume ids and rolls back invalid resume MCP', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects unknown resume ids and rolls back invalid resume MCP', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await expect(harness.client.resumeSession({
       sessionId: 'missing',
@@ -300,8 +300,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.list()).toHaveLength(0)
   })
 
-  it('restores the deployment selection when persisted events have no request header', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: restores the deployment selection when persisted events have no request header', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
@@ -315,8 +315,8 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('restores a pending model selection without any request header', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: restores a pending model selection without any request header', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.setSessionConfigOption({
@@ -333,8 +333,8 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('restores an explicitly selected reasoning effort', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: restores an explicitly selected reasoning effort', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.setSessionConfigOption({
@@ -352,8 +352,8 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('lists closed persisted sessions without presentation metadata', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: lists closed persisted sessions without presentation metadata', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('answer')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'persist me' }] })
@@ -364,8 +364,8 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('paginates resumable sessions with an opaque deterministic cursor', async () => {
-    harness = await makeBridgeHarness({
+  it.each(['jsonl', 'sqlite'] as const)('%s: paginates resumable sessions with an opaque deterministic cursor', async (storage) => {
+    harness = await makeBridgeHarness(storage, {
       config: { sessionListPageSize: 1 },
       script: [textResponse('first'), textResponse('second')],
     })
@@ -389,8 +389,8 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.listSessions({ cursor: 'not-a-cursor' })).rejects.toThrow(/cursor is invalid/)
   })
 
-  it.each([false, true])('resumes an ordinary fork with legacy parent metadata=%s', async (legacy) => {
-    harness = await makeBridgeHarness()
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: resumes an ordinary fork with legacy parent metadata=%s', async (storage, legacy) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const id = brandString<SessionId>('ordinary-fork')
     const writer = await harness.ctx.sessionPersistence.create({
@@ -405,8 +405,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.get(id)?.session.header.parentSession).toBe(legacy ? 'source' : undefined)
   })
 
-  it('filters non-resumable headers and canonical missing workspaces', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: filters non-resumable headers and canonical missing workspaces', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const active = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const persistence = harness.ctx.get('sessionPersistence')!
@@ -439,21 +439,21 @@ describe('automation-only ACP bridge', () => {
     })).rejects.toThrow(/cwd does not match/)
   })
 
-  it.each([
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
     [null],
     [[]],
     [['not-a-number', 'id']],
     [[-1, 'id']],
     [[1, '']],
-  ] as const)('rejects malformed decoded list cursors %#', async (decoded) => {
-    harness = await makeBridgeHarness()
+  ] as const).map(value => [storage, value] as const)))('%s: rejects malformed decoded list cursors %#', async (storage, decoded) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const cursor = Buffer.from(JSON.stringify(decoded)).toString('base64url')
     await expect(harness.client.listSessions({ cursor })).rejects.toThrow(/cursor is invalid/)
   })
 
-  it('rejects invalid and non-canonical cursor encodings', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects invalid and non-canonical cursor encodings', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await expect(harness.client.listSessions({ cursor: '*' })).rejects.toThrow(/cursor is invalid/)
     const bytes = Buffer.from(JSON.stringify([1, 'id']))
@@ -467,8 +467,8 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.listSessions({ cursor: nonCanonical })).rejects.toThrow(/cursor is invalid/)
   })
 
-  it('rolls back new and resume when configuration discovery fails', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rolls back new and resume when configuration discovery fails', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const resolve = vi.spyOn(harness.ctx.llm, 'resolveCallConfig')
     resolve.mockRejectedValueOnce(new Error('catalog resolution failed'))
@@ -489,8 +489,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.list()).toHaveLength(0)
   })
 
-  it('propagates non-MCP Agent factory failures and non-config selection failures', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: propagates non-MCP Agent factory failures and non-config selection failures', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const create = vi.spyOn(harness.ctx.agents, 'create')
     create.mockRejectedValueOnce(new Error('factory create failed'))
@@ -518,17 +518,17 @@ describe('automation-only ACP bridge', () => {
       .rejects.toThrow(/Internal error/)
   })
 
-  it('lists and resumes persisted sessions after an equivalent process restart', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: lists and resumes persisted sessions after an equivalent process restart', async (storage) => {
     const persistenceRoot = await mkdtemp(join(tmpdir(), 'dsh-acp-restart-'))
     try {
-      harness = await makeBridgeHarness({ persistenceRoot, script: [textResponse('before restart')] })
+      harness = await makeBridgeHarness(storage, { persistenceRoot, script: [textResponse('before restart')] })
       await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
       const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
       await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'first' }] })
       await harness.client.closeSession({ sessionId: created.sessionId })
       await harness.dispose()
 
-      harness = await makeBridgeHarness({ persistenceRoot, script: [textResponse('after restart')] })
+      harness = await makeBridgeHarness(storage, { persistenceRoot, script: [textResponse('after restart')] })
       await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
       await expect(harness.client.listSessions({})).resolves.toEqual({
         sessions: [{ sessionId: created.sessionId, cwd: process.cwd() }],
@@ -545,8 +545,8 @@ describe('automation-only ACP bridge', () => {
     }
   })
 
-  it('discovers and selects a session model through standard config options', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('plain answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: discovers and selects a session model through standard config options', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('plain answer')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const model = created.configOptions?.find(option => option.id === 'model')
@@ -566,8 +566,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'plain' })
   })
 
-  it('publishes complete config options when adapter topology changes', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: publishes complete config options when adapter topology changes', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
@@ -584,8 +584,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.sessionUpdates.at(-1)?.sessionId).toBe(created.sessionId)
   })
 
-  it('does not let hung topology discovery block prompt completion or close', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('still responsive')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: does not let hung topology discovery block prompt completion or close', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('still responsive')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const original = harness.ctx.llm.listModels.bind(harness.ctx.llm)
@@ -608,8 +608,8 @@ describe('automation-only ACP bridge', () => {
     }
   })
 
-  it('publishes recoverable options when the selected adapter disappears', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: publishes recoverable options when the selected adapter disappears', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     harness.registerCatalogProvider('other')
@@ -634,8 +634,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.sessionUpdates.at(-1)?.sessionId).toBe(created.sessionId)
   })
 
-  it('selects an advertised reasoning effort for the next turn', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('reasoned')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: selects an advertised reasoning effort for the next turn', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('reasoned')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const reasoning = created.configOptions?.find(option => option.id === 'reasoning_effort')
@@ -653,8 +653,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]?.reasoningEffort).toBe('low')
   })
 
-  it('rejects unknown config choices without changing the selected route', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('unchanged')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects unknown config choices without changing the selected route', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('unchanged')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
@@ -673,8 +673,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'mock' })
   })
 
-  it('serializes concurrent standard config changes in receive order', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('plain')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: serializes concurrent standard config changes in receive order', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('plain')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const model = created.configOptions?.find(option => option.id === 'model')
@@ -703,8 +703,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]?.reasoningEffort).toBeUndefined()
   })
 
-  it('checks images against the admission route and uses the latest selection when the step starts', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('image accepted')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: checks images against the admission route and uses the latest selection when the step starts', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [textResponse('image accepted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const model = created.configOptions?.find(option => option.id === 'model')
@@ -740,8 +740,8 @@ describe('automation-only ACP bridge', () => {
     })).rejects.toThrow(/does not declare image input/)
   })
 
-  it('applies a mid-turn model change to the following step', async () => {
-    harness = await makeBridgeHarness({ script: [oneToolCall(), textResponse('first turn'), textResponse('second turn')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: applies a mid-turn model change to the following step', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [oneToolCall(), textResponse('first turn'), textResponse('second turn')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const model = created.configOptions?.find(option => option.id === 'model')
@@ -769,8 +769,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests.map(request => request.model)).toEqual(['mock', 'plain', 'plain'])
   })
 
-  it('mounts a standard stdio MCP server inside the created session', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('used MCP')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: mounts a standard stdio MCP server inside the created session', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('used MCP')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const fixtureServer = fileURLToPath(new URL('../../../mcp/mcp-client/tests/fixture-server.ts', import.meta.url))
     const created = await harness.client.newSession({
@@ -784,10 +784,10 @@ describe('automation-only ACP bridge', () => {
     await harness.client.closeSession({ sessionId: created.sessionId })
   }, 30_000)
 
-  it('mounts a standard Streamable HTTP MCP server with request headers', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: mounts a standard Streamable HTTP MCP server with request headers', async (storage) => {
     const fixture = await startHttpMcpFixture()
     try {
-      harness = await makeBridgeHarness({ script: [textResponse('used HTTP MCP')] })
+      harness = await makeBridgeHarness(storage, { script: [textResponse('used HTTP MCP')] })
       await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
       const created = await harness.client.newSession({
         cwd: process.cwd(),
@@ -809,8 +809,8 @@ describe('automation-only ACP bridge', () => {
     }
   }, 30_000)
 
-  it('allows the same MCP server namespace in independent sessions', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: allows the same MCP server namespace in independent sessions', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const fixtureServer = fileURLToPath(new URL('../../../mcp/mcp-client/tests/fixture-server.ts', import.meta.url))
     const mcpServers = [{ name: 'fixture', command: process.execPath, args: [fixtureServer], env: [] }]
@@ -824,8 +824,8 @@ describe('automation-only ACP bridge', () => {
     ])
   }, 30_000)
 
-  it('validates standard MCP declarations before publishing an Agent', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: validates standard MCP declarations before publishing an Agent', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const stdio = { name: 'fixture', command: process.execPath, args: [], env: [] }
     const invalidLists = [
@@ -847,8 +847,8 @@ describe('automation-only ACP bridge', () => {
     }
   })
 
-  it('reconnects requested MCP servers when resuming a closed session', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('first'), textResponse('second')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: reconnects requested MCP servers when resuming a closed session', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('first'), textResponse('second')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const fixtureServer = fileURLToPath(new URL('../../../mcp/mcp-client/tests/fixture-server.ts', import.meta.url))
     const mcpServers = [{ name: 'fixture', command: process.execPath, args: [fixtureServer], env: [] }]
@@ -862,16 +862,16 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[1]?.tools?.map(tool => tool.name)).toContain('mcp__fixture__add')
   }, 30_000)
 
-  it('leaves absent agent targets for request listeners to supply', async () => {
-    harness = await makeBridgeHarness({ config: { provider: undefined, model: undefined } })
+  it.each(['jsonl', 'sqlite'] as const)('%s: leaves absent agent targets for request listeners to supply', async (storage) => {
+    harness = await makeBridgeHarness(storage, { config: { provider: undefined, model: undefined } })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))?.options).toEqual({})
   })
 
-  it('uses a recorded selection when ACP has no initial route', async () => {
-    harness = await makeBridgeHarness({
+  it.each(['jsonl', 'sqlite'] as const)('%s: uses a recorded selection when ACP has no initial route', async (storage) => {
+    harness = await makeBridgeHarness(storage, {
       config: { provider: undefined, model: undefined },
       script: [textResponse('listener-routed')],
     })
@@ -888,8 +888,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'mock' })
   })
 
-  it('concatenates text blocks without exposing protocol framing to the model', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('done')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: concatenates text blocks without exposing protocol framing to the model', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('done')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({
@@ -903,8 +903,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]?.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'first second' }])
   })
 
-  it('admits mixed text/image prompts in wire order and logs references only', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('done')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: admits mixed text/image prompts in wire order and logs references only', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [textResponse('done')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const resolve = vi.spyOn(harness.ctx.llm, 'resolveModelInfo')
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
@@ -938,8 +938,8 @@ describe('automation-only ACP bridge', () => {
     expect(JSON.stringify(agent?.session.snapshotEvents())).not.toContain('AQ==')
   })
 
-  it('rejects a malformed image batch atomically and frees the prompt slot', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('recovered')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a malformed image batch atomically and frees the prompt slot', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true, script: [textResponse('recovered')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
@@ -956,8 +956,8 @@ describe('automation-only ACP bridge', () => {
       .resolves.toEqual({ stopReason: 'end_turn' })
   })
 
-  it('reports durable image write failures as internal prompt failures', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true })
+  it.each(['jsonl', 'sqlite'] as const)('%s: reports durable image write failures as internal prompt failures', async (storage) => {
+    harness = await makeBridgeHarness(storage, { imageCapable: true })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     vi.spyOn(harness.attachments!, 'saveImages').mockRejectedValueOnce(
@@ -970,8 +970,8 @@ describe('automation-only ACP bridge', () => {
     })).rejects.toThrow(/unable to persist the prompt image batch/)
   })
 
-  it('renders the deployment persona for an ACP-created agent', async () => {
-    harness = await makeBridgeHarness({ persona: 'Automation persona for {{model}}.', script: [textResponse('ok')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: renders the deployment persona for an ACP-created agent', async (storage) => {
+    harness = await makeBridgeHarness(storage, { persona: 'Automation persona for {{model}}.', script: [textResponse('ok')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
@@ -980,8 +980,8 @@ describe('automation-only ACP bridge', () => {
     expect(head?.content.some(part => part.type === 'text' && part.text.includes('Automation persona for mock.'))).toBe(true)
   })
 
-  it('requires one absolute primary workspace', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: requires one absolute primary workspace', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
 
     await expect(harness.client.newSession({ cwd: 'relative', mcpServers: [] })).rejects.toThrow(/absolute path/)
@@ -997,8 +997,8 @@ describe('automation-only ACP bridge', () => {
     })).resolves.toHaveProperty('sessionId')
   })
 
-  it('rejects empty and unadvertised image prompts before a turn starts', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects empty and unadvertised image prompts before a turn starts', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
@@ -1011,8 +1011,8 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))?.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
   })
 
-  it('renders baseline resource links as textual references in the user message', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('done')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: renders baseline resource links as textual references in the user message', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('done')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({
@@ -1028,8 +1028,8 @@ describe('automation-only ACP bridge', () => {
     }])
   })
 
-  it('rejects prompts for unknown sessions and ignores unknown cancellation', async () => {
-    harness = await makeBridgeHarness()
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects prompts for unknown sessions and ignores unknown cancellation', async (storage) => {
+    harness = await makeBridgeHarness(storage)
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await expect(harness.client.prompt({ sessionId: 'missing', prompt: [{ type: 'text', text: 'go' }] }))
       .rejects.toThrow(/unknown session/)

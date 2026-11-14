@@ -8,12 +8,12 @@ import { describe, expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { Adapter, setup } from './fixture.ts'
 
-describe('Timeline persistence across built Host processes', () => {
+describe.each(['jsonl', 'sqlite'] as const)('Timeline persistence across built Host processes (%s)', (backend) => {
   it('refuses a competing process and restores acknowledged saves after the writer is killed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-timeline-process-'))
     const sessionId = SessionId('timeline-process-recovery')
     const start = (mode: string) => {
-      const child = spawn(process.execPath, [fileURLToPath(new URL('./host-process.mjs', import.meta.url)), mode, root, sessionId], {
+      const child = spawn(process.execPath, [fileURLToPath(new URL('./host-process.mjs', import.meta.url)), mode, root, sessionId, backend], {
         cwd: process.cwd(),
         env: {},
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -54,7 +54,7 @@ describe('Timeline persistence across built Host processes', () => {
       }
       owner.child.kill('SIGKILL')
       expect((await owner.closed)[1]).toBe('SIGKILL')
-      const recovered = await setup({ intervalMs: 86400000 }, new Adapter(), { root, sessionId })
+      const recovered = await setup(backend, { intervalMs: 86400000 }, new Adapter(), { root, sessionId })
       try {
         const view = recovered.ctx.timeline.stateOf(recovered.agent.session).view
         expect(view.trees[0]?.tasks[0]?.done).toEqual([2, 3])

@@ -25,7 +25,7 @@ afterEach(async () => {
   workdir = undefined
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compacts mid-flight and keeps running', () => {
+describe.skipIf(!process.env.DEEPSEEK_API_KEY).each(['jsonl', 'sqlite'] as const)('compaction: a long session compacts mid-flight and keeps running (%s)', (storage) => {
   it('summarizes older history into a checkpoint without breaking the task', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-compaction-'))
     // An older file result must exceed the framed checkpoint's fixed sections.
@@ -49,6 +49,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
         compactionRetries: 1,
       },
       persistenceRoot: join(workdir, '.sessions'),
+      persistenceStorage: storage,
     })
     const agent = await ctx.agentLoop.create(brandString<SessionId>('e2e-compaction'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, { cwd: workdir })
 
@@ -102,5 +103,12 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
     expect(answer.length).toBeGreaterThan(0)
     expect(answer).toMatch(/\b(4|four)\b/)
     expect(answer).toMatch(/\b(1|one)\b/)
+    await ctx.sessions.flush(agent.session)
+    const handle = await ctx.sessionPersistence.open(agent.session.id, 'read')
+    try {
+      expect((await handle.read()).events).toEqual(events)
+    } finally {
+      await handle.close()
+    }
   }, 240_000)
 })

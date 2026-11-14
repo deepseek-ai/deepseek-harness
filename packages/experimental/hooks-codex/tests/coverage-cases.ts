@@ -40,13 +40,13 @@ function hooks(d: string, h: unknown): string {
   writeFileSync(join(d, 'hooks.json'), JSON.stringify({ hooks: h })); return join(d, 'hooks.json')
 }
 
-type HarnessOpts = { stderrSummaryMaxChars?: number; sessionRoot?: string }
+type HarnessOpts = { stderrSummaryMaxChars?: number; session?: { root: string; storage: 'jsonl' | 'sqlite' } }
 async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOpts = {}): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
   provideWorkingDirectoryFixture(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
+  if (opts.session !== undefined) await ctx.plugin(JsonlSessionPersistence, opts.session)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -74,12 +74,12 @@ export type CoverageGroup = 'prompt' | 'post-tool' | 'result-shape' | 'edge-path
 export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGroup[]): void {
   const selected = new Set(typeof groups === 'string' ? [groups] : groups)
   if (selected.has('prompt')) describe('hooks-codex coverage — prompt decision mapping', () => {
-    it('degrades transcript_path to null even with persistence mounted', async () => {
+    it.each(['jsonl', 'sqlite'] as const)('degrades transcript_path to null even with persistence mounted (%s)', async (backend) => {
       const d = dir()
       const cap = join(d, 'payload')
       const path = hooks(d, { PreToolUse: [{ hooks: [{ type: 'command', command: sh(d, 'capture.sh', `#!/usr/bin/env bash\ncat > "${cap}"\n`) }] }] })
       const adapter = new MockAdapter([toolCallResponse('c1', 'echo', {}), textResponse('done')])
-      const ctx = await harness(path, adapter, { sessionRoot: dir() })
+      const ctx = await harness(path, adapter, { session: { root: dir(), storage: backend } })
       ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { return [{ type: 'text', text: 'ok' }] } }))
       const agent = await ctx.agentLoop.create(brandString<SessionId>('transcript'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))

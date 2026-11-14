@@ -70,8 +70,14 @@ export interface RestartOptions {
   translator?: Partial<Config>
 }
 
-/** Boot actual native provider rows; cleanup is registered as soon as resources exist. */
-export async function paidFixture(cleanups: Array<() => Promise<void>>, options: FixtureOptions = {}) {
+/**
+ * Boot actual native provider rows with restartable persistence.
+ * @param cleanups - owning test's reverse-order cleanup list.
+ * @param backend - persistence implementation retained across Host restarts.
+ * @param options - provider, Session, and response choices.
+ * @returns the real composition and fixture-owned observations.
+ */
+export async function paidFixture(cleanups: Array<() => Promise<void>>, backend: 'jsonl' | 'sqlite', options: FixtureOptions = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-paid-translator-'))
   cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
   const previousHome = process.env.DSH_HOME
@@ -129,7 +135,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
   const rows = () => [
     { id: 'llm', name: '@deepseek-ai/dsh-llm' },
     { id: 'session', name: '@deepseek-ai/dsh-session' },
-    { id: 'storage', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: storedRoot, compression: 'none' } },
+    { id: 'storage', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: storedRoot, storage: backend, compression: 'none' } },
     { id: 'official-custom-id', name: options.officialName ?? '@deepseek-ai/dsh-llm-deepseek-api-key', disabled: !withNativeOwners, config: {
       baseURL, apiKeyEnv: 'PAID_TRANSLATION_FIXTURE_KEY', models: options.officialModels ?? [{ id: 'deepseek-flash', name: 'Flash version-independent name' }],
     } },

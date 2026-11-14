@@ -23,11 +23,11 @@ type Script = ConstructorParameters<typeof MockAdapter>[0]
  * The parent is a real config agent; the spawn provider creates a real child
  * agent on the same context and we assert its output.
  */
-async function setup(script: Script) {
+async function setup(storage: 'jsonl' | 'sqlite', script: Script) {
   const ctx = new Context()
   const adapter = new MockAdapter(script)
   await mountAgentLoopTestDependencies(ctx)
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -53,9 +53,9 @@ function disposeChildLifecycle(parent: Agent): void {
 }
 
 describe('dsh-subagent-spawn-in-process', () => {
-  it('runs a fresh child to completion and returns its final assistant output', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: runs a fresh child to completion and returns its final assistant output', async (storage) => {
     // One model call for the child: a plain text answer.
-    const { ctx, parent } = await setup([textResponse('child answer')])
+    const { ctx, parent } = await setup(storage, [textResponse('child answer')])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'do X' }], parent })
     const result = await run.result
     expect(result.stopReason).toBe('completed')
@@ -63,8 +63,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('emits subagent/start only after the fresh child is published', async () => {
-    const { ctx, parent } = await setup([textResponse('child answer')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: emits subagent/start only after the fresh child is published', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child answer')])
     let childAtStart: ReturnType<typeof ctx.agents.get>
     ctx.on('subagent/start', (info) => {
       if (info.provider === 'spawn') childAtStart = ctx.agents.get(info.id)
@@ -82,8 +82,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('gives the child its OWN session (not the parent\'s), with parentSession lineage', async () => {
-    const { ctx, parent } = await setup([textResponse('hi')])
+  it.each(['jsonl', 'sqlite'] as const)("%s: gives the child its OWN session (not the parent's), with parentSession lineage", async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('hi')])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     await run.result
     const child = run.localAgent
@@ -92,9 +92,9 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('a fresh child does NOT inherit the parent conversation (its log starts empty before the prompt)', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a fresh child does NOT inherit the parent conversation (its log starts empty before the prompt)', async (storage) => {
     // Drive the parent through one real turn so it has history, THEN spawn.
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('child sees nothing')])
+    const { ctx, parent } = await setup(storage, [textResponse('parent turn'), textResponse('child sees nothing')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent prompt' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     const parentEventCount = parent.session.snapshotEvents().length
@@ -109,8 +109,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('releases the child before delivering its result', async () => {
-    const { ctx, parent } = await setup([textResponse('x')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: releases the child before delivering its result', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('x')])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     expect(ctx.agents.get(run.id)).toBeDefined()
     await run.result
@@ -118,8 +118,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('stamps child depth = parent depth + 1 (via the merged AgentOptions field)', async () => {
-    const { ctx, parent } = await setup([textResponse('x')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: stamps child depth = parent depth + 1 (via the merged AgentOptions field)', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('x')])
     expect(parent.options.subagentDepth).toBeUndefined()
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     await run.result
@@ -128,8 +128,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('refuses to spawn past maxDepth (depthLimit capability)', async () => {
-    const { ctx, parent } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: refuses to spawn past maxDepth (depthLimit capability)', async (storage) => {
+    const { ctx, parent } = await setup(storage, [])
     // parent is depth 0, child would be depth 1 — cap at 0 forbids any child.
     await expect(start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent, maxDepth: 0 }))
       .rejects.toMatchObject({
@@ -138,18 +138,18 @@ describe('dsh-subagent-spawn-in-process', () => {
       })
   })
 
-  it('maps a child that hit its token ceiling to stopReason "max-tokens"', async () => {
-    const { ctx, parent } = await setup([maxTokensResponse('cut off')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: maps a child that hit its token ceiling to stopReason "max-tokens"', async (storage) => {
+    const { ctx, parent } = await setup(storage, [maxTokensResponse('cut off')])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     const result = await run.result
     expect(result.stopReason).toBe('max-tokens')
     await run.dispose()
   })
 
-  it('maps a child whose turn errored (script exhausted) to stopReason "error" with empty output', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: maps a child whose turn errored (script exhausted) to stopReason "error" with empty output', async (storage) => {
     // Empty script: the child's first model call throws "script exhausted", the
     // turn ends `error`, and there is no assistant/message → empty output.
-    const { ctx, parent } = await setup([])
+    const { ctx, parent } = await setup(storage, [])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     const result = await run.result
     expect(result.stopReason).toBe('error')
@@ -157,20 +157,20 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('rejects without publishing when the request signal is already aborted', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: rejects without publishing when the request signal is already aborted', async (storage) => {
     // An already-aborted signal emits no future event, so start must check it before listening and
     // settle aborted without running the child. The empty model script proves no turn occurs.
     const controller = new AbortController()
     controller.abort()
-    const { ctx, parent } = await setup([])
+    const { ctx, parent } = await setup(storage, [])
     await expect(start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent, signal: controller.signal }))
       .rejects.toBe(controller.signal.reason)
   })
 
-  it('same-tick cancellation rejects start and prevents child publication', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: same-tick cancellation rejects start and prevents child publication', async (storage) => {
     // Same-tick cancellation must win before async factory publication: no child may become
     // visible, `started` must not fulfill, and the empty script proves no model turn occurs.
-    const { ctx, parent } = await setup([])
+    const { ctx, parent } = await setup(storage, [])
     const beforeAgents = ctx.agents.list().length
     const beforeSessions = ctx.sessions.list().length
     const published: string[] = []
@@ -189,10 +189,10 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(published).toEqual([])
   })
 
-  it('disposing a running child settles the activation as aborted', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: disposing a running child settles the activation as aborted', async (storage) => {
     // 'hang' makes the child's model stream one chunk then wait until aborted.
     const controller = new AbortController()
-    const { ctx, parent } = await setup(['hang'])
+    const { ctx, parent } = await setup(storage, ['hang'])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent, signal: controller.signal })
     await new Promise(r => setTimeout(r, 30))
     await run.dispose()
@@ -201,8 +201,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('dispose cancels the child and reaches quiescence', async () => {
-    const { ctx, parent } = await setup(['hang'])
+  it.each(['jsonl', 'sqlite'] as const)('%s: dispose cancels the child and reaches quiescence', async (storage) => {
+    const { ctx, parent } = await setup(storage, ['hang'])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     await new Promise(r => setTimeout(r, 30))
     await run.dispose()
@@ -210,8 +210,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(result.stopReason).toBe('aborted')
   })
 
-  it('the provider supplies fresh local preparation for managed activations', async () => {
-    const { ctx, parent } = await setup([textResponse('x')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: the provider supplies fresh local preparation for managed activations', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('x')])
     const run = await start(ctx, 'spawn', { prompt: [{ type: 'text', text: 'p' }], parent })
     expect('steer' in run).toBe(false)
     expect('resume' in run).toBe(false)
@@ -230,8 +230,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('inherits the parent cwd into the child session', async () => {
-    const { ctx } = await setup([textResponse('x')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: inherits the parent cwd into the child session', async (storage) => {
+    const { ctx } = await setup(storage, [textResponse('x')])
     // A parent WITH a cwd (config agents have none, so create one explicitly).
     const parentHandle = await ctx.agents.create({
       sessionId: brandString<SessionId>('cwd-parent-session'),
@@ -246,8 +246,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await parentHandle.dispose()
   })
 
-  it('uses request.agentOptions.model when the parent has no model of its own', async () => {
-    const { ctx } = await setup([textResponse('explicit model child')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: uses request.agentOptions.model when the parent has no model of its own', async (storage) => {
+    const { ctx } = await setup(storage, [textResponse('explicit model child')])
     // A parent with NO model (its own turns would need one supplied per-request).
     const parentHandle = await ctx.agents.create({
       sessionId: brandString<SessionId>('modelless-parent-session'),
@@ -266,8 +266,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     await parentHandle.dispose()
   })
 
-  it('advertises every start-time capability', async () => {
-    const { ctx } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: advertises every start-time capability', async (storage) => {
+    const { ctx } = await setup(storage, [])
     const provider = ctx.subagents.getProvider('spawn')!
     expect(provider.capabilities).toEqual({
       agentOptions: true,
@@ -290,8 +290,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(ctx.subagents.getProvider('spawn')).toBeUndefined()
   })
 
-  it('captures structured output through the shipped plugin (driver runtime, plugin wiring)', async () => {
-    const { ctx, parent } = await setup([
+  it.each(['jsonl', 'sqlite'] as const)('%s: captures structured output through the shipped plugin (driver runtime, plugin wiring)', async (storage) => {
+    const { ctx, parent } = await setup(storage, [
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
     ])
     const run = await start(ctx, 'spawn', {
@@ -306,12 +306,12 @@ describe('dsh-subagent-spawn-in-process', () => {
     await run.dispose()
   })
 
-  it('a backend unload does not revoke an accepted holder-owned run', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: a backend unload does not revoke an accepted holder-owned run', async (storage) => {
     // Rebuild the stack by hand so we hold the backend's fiber.
     const ctx = new Context()
     const adapter = new MockAdapter(['hang'])
     await mountAgentLoopTestDependencies(ctx)
-    await mountLocalActivations(ctx)
+    await mountLocalActivations(storage, ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -373,8 +373,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(typeof unwrapped.apply).toBe('function')
   })
 
-  it('spawning from a DISPOSING parent fails loud with no orphaned child (INACTIVE_EFFECT teaching error)', async () => {
-    const { ctx } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: spawning from a DISPOSING parent fails loud with no orphaned child (INACTIVE_EFFECT teaching error)', async (storage) => {
+    const { ctx } = await setup(storage, [])
     // A handle-owned parent we can dispose (config agents dispose with the loop fiber).
     const parentHandle = await ctx.agents.create({
       sessionId: brandString<SessionId>('doomed-s'),
@@ -395,8 +395,8 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(published).toEqual([])
   })
 
-  it('parent disposal during the child setup transaction prevents every publication notification', async () => {
-    const { ctx } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: parent disposal during the child setup transaction prevents every publication notification', async (storage) => {
+    const { ctx } = await setup(storage, [])
     const parentHandle = await ctx.agents.create({
       sessionId: brandString<SessionId>('setup-race-parent-session'),
       agentOptions: { provider: 'mock', model: 'mock' },

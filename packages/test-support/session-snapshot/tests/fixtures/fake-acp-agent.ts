@@ -135,7 +135,9 @@ function instantiate(value: unknown): unknown {
 /** Persist an open turn so cancellation tests wait on agent state, not presentation output. */
 async function persistParkedTurnStart(): Promise<void> {
   persistence = new Context()
-  await persistence.plugin(persistencePlugin, { root: sessionsRoot, compression: 'none' })
+  await persistence.plugin(persistencePlugin, {
+    root: sessionsRoot, compression: 'none', storage: process.env.DSH_SNAPSHOT_STORAGE as 'jsonl' | 'sqlite',
+  })
   parkedHandle = await persistence.sessionPersistence.create({
     version: SESSION_FORMAT_VERSION, id: SessionId(sessionId), createdAt: 1,
     cwd: sessionCwd, delegationDepth: 0, isSeeded: false,
@@ -238,6 +240,14 @@ async function handleFrame(frame: Record<string, unknown>): Promise<void> {
   }
 }
 
+function reverseRecordKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reverseRecordKeys)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).reverse().map(([key, child]) => [key, key === 'tools' ? child : reverseRecordKeys(child)]))
+  }
+  return value
+}
+
 async function writeLogs(): Promise<void> {
   if (logsWritten) return
   logsWritten = true
@@ -270,7 +280,7 @@ async function writeLogs(): Promise<void> {
     mkdirSync(dirname(target), { recursive: true })
     const records = log.lines.map(line => instantiate(line))
     if (header !== undefined) records[0] = { delegationDepth: 0, ...header }
-    writeFileSync(target, records.map(line => JSON.stringify(line)).join('\n') + '\n')
+    writeFileSync(target, records.map(line => JSON.stringify(process.env.DSH_SNAPSHOT_REVERSE_RECORD_KEYS === '1' ? reverseRecordKeys(line) : line)).join('\n') + '\n')
   }
 }
 

@@ -20,10 +20,10 @@ type Script = ConstructorParameters<typeof MockAdapter>[0]
  * and keeps working itself. This is the multi-provider coexistence the seam
  * exists for — the named registry lets one runtime hold both transports.
  */
-async function setup(script: Script) {
+async function setup(storage: 'jsonl' | 'sqlite', script: Script) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -39,15 +39,15 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
 }
 
 describe('multi-subagent coexistence (spawn + fork on one context)', () => {
-  it('both providers register and coexist', async () => {
-    const { ctx } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: both providers register and coexist', async (storage) => {
+    const { ctx } = await setup(storage, [])
     expect(ctx.subagents.getProvider('fork')).toBeDefined()
     expect(ctx.subagents.getProvider('spawn')).toBeDefined()
   })
 
-  it('the same parent drives a spawn child AND a fork child, then keeps working', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: the same parent drives a spawn child AND a fork child, then keeps working', async (storage) => {
     // Script order: parent turn 1, spawn child, fork child, parent turn 2.
-    const { ctx, parent } = await setup([
+    const { ctx, parent } = await setup(storage, [
       textResponse('parent turn one'),
       textResponse('spawn child reply'),
       textResponse('fork child reply'),

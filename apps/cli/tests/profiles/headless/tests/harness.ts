@@ -41,8 +41,10 @@ export interface CodingHarnessOptions {
    * config — per-context, not per-agent). Omitted ⇒ no persona prefix section.
    */
   personaPrefix?: string
-  /** Durable JSONL persistence root (the resume suite needs it; others stay file-free). */
+  /** Durable persistence root; omitted roots keep the suite file-free. */
   persistenceRoot?: string
+  /** Persistence backend; omitted values use the plugin's JSONL default. */
+  persistenceStorage?: 'jsonl' | 'sqlite'
   /**
    * Load {@link BasicCompactionEngine} with this config so the compaction e2e can
    * trigger compaction at a small, controlled history size. Omitted ⇒ no
@@ -90,11 +92,12 @@ export async function codingHarness(workdir: string, options: CodingHarnessOptio
     await ctx.plugin(ToolResultPruner)
     await ctx.plugin(BasicCompactionEngine, options.compact)
   }
-  // Durable JSONL persistence is opt-in: only the resume e2e needs it, and the
-  // other suites stay file-free. Loaded last so a resume's deferred
-  // `ctx.inject(['sessionPersistence'])` resolves once this is present.
+  // Loaded last so a resume's deferred persistence injection resolves here.
   if (options.persistenceRoot !== undefined) {
-    await ctx.plugin(JsonlSessionPersistence, { root: options.persistenceRoot })
+    await ctx.plugin(JsonlSessionPersistence, {
+      root: options.persistenceRoot,
+      ...options.persistenceStorage === undefined ? {} : { storage: options.persistenceStorage },
+    })
     await ctx.plugin(SessionCheckpointPolicy)
   }
   return ctx

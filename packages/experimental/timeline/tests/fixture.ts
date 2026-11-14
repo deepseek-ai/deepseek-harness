@@ -122,6 +122,7 @@ export class Adapter extends LlmAdapter {
   }
 }
 export async function setup(
+  backend: 'jsonl' | 'sqlite',
   config: Partial<Timeline.Config> = {},
   adapter = new Adapter(),
   restore?: { root: string; sessionId: SessionId },
@@ -129,7 +130,7 @@ export async function setup(
   const root = restore?.root ?? (await mkdtemp(join(tmpdir(), 'dsh-timeline-test-')))
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(Jsonl, { root, compression: 'none', storage: 'jsonl' })
+  await ctx.plugin(Jsonl, { root, compression: 'none', storage: backend })
   ctx.llm.registerAdapter(['fixture'], adapter)
   ctx.tools.register(
     defineTool({

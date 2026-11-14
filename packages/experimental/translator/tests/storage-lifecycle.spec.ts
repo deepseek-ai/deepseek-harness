@@ -11,10 +11,10 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-describe('translation storage lifecycle', () => {
+describe.each(['jsonl', 'sqlite'] as const)('translation storage lifecycle (%s)', (backend) => {
   it('rejects a canceled queued request promptly without dispatching it', async () => {
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-    const b = await storageFixture(cleanups, { reply: async (call, response) => {
+    const b = await storageFixture(cleanups, backend, { reply: async (call, response) => {
       entered.resolve(undefined); await release.promise; storageReply(call, response)
     } })
     cleanups.push(async () => { release.resolve(undefined) })
@@ -33,7 +33,7 @@ describe('translation storage lifecycle', () => {
   })
 
   it('joins an accepted storage checkpoint after public cancellation on unload', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession()
+    const b = await storageFixture(cleanups, backend), original = await b.createSession()
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     cleanups.push(async () => { release.resolve(undefined) })
     const flush = b.ctx.sessions.flush.bind(b.ctx.sessions)
@@ -56,7 +56,7 @@ describe('translation storage lifecycle', () => {
   })
 
   it('refuses a withdrawn persistence provider after its metadata lookup settles', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession()
+    const b = await storageFixture(cleanups, backend), original = await b.createSession()
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     cleanups.push(async () => { release.resolve(undefined) })
     const stat = b.ctx.sessionPersistence.stat.bind(b.ctx.sessionPersistence)
@@ -74,7 +74,7 @@ describe('translation storage lifecycle', () => {
 
   it('pins the live Session used by an accepted translation', async () => {
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-    const b = await storageFixture(cleanups, { async reply(call, response) {
+    const b = await storageFixture(cleanups, backend, { async reply(call, response) {
       entered.resolve(undefined); await release.promise; storageReply(call, response)
     } })
     cleanups.push(async () => { release.resolve(undefined) })
@@ -90,7 +90,7 @@ describe('translation storage lifecycle', () => {
   })
 
   it('requires an active live writer rather than treating an in-memory append as durable', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession(brandString<SessionId>('live-without-writer'), true)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(brandString<SessionId>('live-without-writer'), true)
     await original.writer?.close()
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_STORAGE_ERROR' })
@@ -99,7 +99,7 @@ describe('translation storage lifecycle', () => {
   })
 
   it('refuses a historical Session unavailable after metadata lookup before dispatch', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession(SessionId('deleted'), false)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(SessionId('deleted'), false)
     const stat = b.ctx.sessionPersistence.stat.bind(b.ctx.sessionPersistence)
     vi.spyOn(b.ctx.sessionPersistence, 'stat').mockImplementation(async (id, options) => {
       const value = await stat(id, options)

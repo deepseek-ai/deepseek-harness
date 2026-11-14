@@ -13,9 +13,9 @@ import SubagentRuntime from '../src/index.ts'
 import { mountLocalActivations } from './local-activation.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-it.each(['absent', 'unused'] as const)('returns the closing answer when send_message is %s', async (availability) => {
+it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['absent', 'unused'] as const).map(value => [storage, value] as const)))('%s: returns the closing answer when send_message is %s', async (storage, availability) => {
   const ctx = new Context()
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
@@ -42,9 +42,9 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   }
 })
 
-it('delivers structured output to the parent when the child has send_message', async () => {
+it.each(['jsonl', 'sqlite'] as const)('%s: delivers structured output to the parent when the child has send_message', async (storage) => {
   const ctx = new Context()
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)

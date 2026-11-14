@@ -61,6 +61,15 @@ const backends: PersistenceMount[] = [
     name: 'JSONL',
     mount: async (ctx, root) => await ctx.plugin(JsonlSessionPersistence, {
       root: join(root, 'jsonl'),
+      storage: 'jsonl',
+      compression: 'none',
+    }),
+  },
+  {
+    name: 'SQLite',
+    mount: async (ctx, root) => await ctx.plugin(JsonlSessionPersistence, {
+      root: join(root, 'sqlite'),
+      storage: 'sqlite',
       compression: 'none',
     }),
   },

@@ -7,6 +7,8 @@ import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   assertPersistedSessionVersion,
+  normalizeSessionSnapshots,
+  normalizeSessionFormatMetadata,
   assertSessionFixtureVersion,
   defineAcpSnapshotSuite,
   latestPersistedSessionPaths,
@@ -171,8 +173,51 @@ function staleRefreshFixtures(dir: string): void {
   ].join('\n'))
 }
 
-describe('defineAcpSnapshotSuite: replay mode', () => {
-  defineAcpSnapshotSuite({ agent: AGENT, snapshotsDir: REPLAY_DIR, scenarios: REPLAY_SCENARIOS, mode: 'replay' })
+describe.each(['jsonl', 'sqlite'] as const)('defineAcpSnapshotSuite: replay mode (%s)', (storage) => {
+  defineAcpSnapshotSuite({
+    agent: AGENT, snapshotsDir: REPLAY_DIR,
+    scenarios: REPLAY_SCENARIOS.map(scenario => ({
+      ...scenario, env: { ...scenario.env, DSH_SNAPSHOT_STORAGE: storage, DSH_SNAPSHOT_REVERSE_RECORD_KEYS: '1' },
+    })), mode: 'replay',
+  })
+})
+
+describe('logical Session snapshot records', () => {
+  const original = readFileSync(join(REPLAY_DIR, 'pin-turn', 'session.v4.jsonl'), 'utf8')
+  const records = (): Record<string, unknown>[] => original.trimEnd().split('\n')
+    .map(line => JSON.parse(line) as Record<string, unknown>)
+  const encode = (values: readonly unknown[]): string => values.map(value => JSON.stringify(value)).join('\n') + '\n'
+  const logical = (text: string): unknown[] => normalizeSessionSnapshots([normalizeSessionFormatMetadata(text)], fixtureContext(text))[0]!
+    .trimEnd().split('\n').map((line): unknown => JSON.parse(line))
+
+  it('ignores object key order at every depth', () => {
+    const reorder = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(reorder)
+      if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).reverse().map(([key, child]) => [key, reorder(child)]))
+      }
+      return value
+    }
+    const actual = encode(records().map(reorder))
+    expect(actual).not.toBe(original)
+    expect(logical(actual)).toEqual(logical(original))
+  })
+
+  it.each(['missing event', 'extra event', 'event order', 'field value', 'array order'] as const)(
+    'preserves a change to %s', (change) => {
+      const expected = records()
+      const actual = records()
+      if (change === 'missing event') actual.splice(1, 1)
+      if (change === 'extra event') actual.splice(1, 0, actual[1]!)
+      if (change === 'event order') [actual[1], actual[2]] = [actual[2]!, actual[1]!]
+      if (change === 'field value') actual[1]!.data = { turn: 2 }
+      if (change === 'array order') {
+        expected[7]!.sourceEventSeqs = [0, 2]
+        actual[7]!.sourceEventSeqs = [2, 0]
+      }
+      expect(logical(encode(actual))).not.toEqual(logical(encode(expected)))
+    },
+  )
 })
 
 // The record suite's tests run in registration order: rec-pin re-records the

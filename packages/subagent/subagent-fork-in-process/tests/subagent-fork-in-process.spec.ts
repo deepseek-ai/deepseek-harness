@@ -25,10 +25,10 @@ const emptyStop: StreamChunk[] = [{ type: 'finish', reason: { kind: 'stop' } }]
 /**
  * Drives the REAL fork backend with a real loop + scripted mock MODEL.
  */
-async function setup(script: Script) {
+async function setup(storage: 'jsonl' | 'sqlite', script: Script) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await mountLocalActivations(ctx)
+  await mountLocalActivations(storage, ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -43,8 +43,8 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
 }
 
 describe('dsh-subagent-fork-in-process', () => {
-  it('emits subagent/start only after the seeded child is published', async () => {
-    const { ctx, parent } = await setup([textResponse('child answer')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: emits subagent/start only after the seeded child is published', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('child answer')])
     let childAtStart: ReturnType<typeof ctx.agents.get>
     ctx.on('subagent/start', (info) => {
       if (info.provider === 'fork') childAtStart = ctx.agents.get(info.id)
@@ -60,10 +60,10 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('forks an UNSEEDED (fresh) child when the parent has no completed turn', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: forks an UNSEEDED (fresh) child when the parent has no completed turn', async (storage) => {
     // The parent has never completed a turn → empty prefix → the provider omits
     // the seed → the child runs fresh. Exercises the `seed.length > 0` false arm.
-    const { ctx, parent } = await setup([textResponse('fresh child')])
+    const { ctx, parent } = await setup(storage, [textResponse('fresh child')])
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     const result = await run.result
     expect(result.stopReason).toBe('completed')
@@ -76,8 +76,8 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('seeds every completed parent turn through the last turn/end', async () => {
-    const { ctx, parent } = await setup([textResponse('first'), textResponse('second'), textResponse('child')])
+  it.each(['jsonl', 'sqlite'] as const)('%s: seeds every completed parent turn through the last turn/end', async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('second'), textResponse('child')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q1' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q2' }], source: { kind: 'user' } }))
@@ -94,8 +94,8 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('seeds the child with the parent\'s completed-turn prefix (child inherits context)', async () => {
-    const { ctx, parent } = await setup([textResponse('parent answer'), textResponse('child answer')])
+  it.each(['jsonl', 'sqlite'] as const)("%s: seeds the child with the parent's completed-turn prefix (child inherits context)", async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('parent answer'), textResponse('child answer')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     const parentPrefixLen = parent.session.snapshotEvents().length
@@ -120,11 +120,11 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('produces a balanced seed: forking mid-turn excludes the open turn', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: produces a balanced seed: forking mid-turn excludes the open turn', async (storage) => {
     // Drive the parent so it has one completed turn, then start a SECOND turn that is still
     // open (a hanging model call), and fork while it's in flight. The seed must stop after the
     // balanced first turn.
-    const { ctx, parent } = await setup([textResponse('done'), 'hang', textResponse('child')])
+    const { ctx, parent } = await setup(storage, [textResponse('done'), 'hang', textResponse('child')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q1' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     // Start a second turn that hangs (open turn/start + open step, never ends).
@@ -147,8 +147,8 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('captures structured output through the shipped plugin (seeded child, driver runtime)', async () => {
-    const { ctx, parent } = await setup([
+  it.each(['jsonl', 'sqlite'] as const)('%s: captures structured output through the shipped plugin (seeded child, driver runtime)', async (storage) => {
+    const { ctx, parent } = await setup(storage, [
       textResponse('parent turn'),
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 9 }),
     ])
@@ -166,10 +166,10 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('does NOT return the seeded parent output when the child produces no message of its own', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: does NOT return the seeded parent output when the child produces no message of its own', async (storage) => {
     // `readResult` must scan only child-owned events after the seed. The child emits no assistant
     // message, so scanning the whole log would incorrectly return the parent's distinctive text.
-    const { ctx, parent } = await setup([textResponse('parent stale'), emptyStop])
+    const { ctx, parent } = await setup(storage, [textResponse('parent stale'), emptyStop])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
     await parent.whenIdle()
 
@@ -182,8 +182,8 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('advertises every start-time capability', async () => {
-    const { ctx } = await setup([])
+  it.each(['jsonl', 'sqlite'] as const)('%s: advertises every start-time capability', async (storage) => {
+    const { ctx } = await setup(storage, [])
     expect(ctx.subagents.getProvider('fork')!.capabilities).toEqual({
       agentOptions: true,
       agentPreset: false,
@@ -205,8 +205,8 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(ctx.subagents.getProvider('fork')).toBeUndefined()
   })
 
-  it('contributes the completed-turn prefix as a continuable child\'s seed', async () => {
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('child answer')])
+  it.each(['jsonl', 'sqlite'] as const)("%s: contributes the completed-turn prefix as a continuable child's seed", async (storage) => {
+    const { ctx, parent } = await setup(storage, [textResponse('parent turn'), textResponse('child answer')])
     const provider = ctx.subagents.getProvider('fork')!
     const signal = new AbortController().signal
 

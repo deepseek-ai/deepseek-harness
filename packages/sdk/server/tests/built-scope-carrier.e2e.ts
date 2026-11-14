@@ -48,7 +48,7 @@ try {
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true });
   await ctx.plugin(AgentLoop, { agents: [] });
   await ctx.plugin(SubagentRuntime);
-  await ctx.plugin(JsonlSessionPersistence, { root: storageRoot });
+  await ctx.plugin(JsonlSessionPersistence, { storage: process.argv[1], root: storageRoot });
   await new Promise((ready) => setTimeout(ready, 50));
 
   const notifications = [];
@@ -90,8 +90,8 @@ try {
 `
 
 describe.skipIf(!existsSync(jsonrpcBundle))('dsh-sdk-jsonrpc-server BUILT scope carrier', () => {
-  it('preserves parent-scoped completion after child disposal', async () => {
-    const { stdout, stderr } = await execFileAsync(process.execPath, ['--input-type=module', '-e', builtRuntimeProbe], {
+  it.each(['jsonl', 'sqlite'] as const)('%s preserves parent-scoped completion after child disposal', async (storage) => {
+    const { stdout, stderr } = await execFileAsync(process.execPath, ['--input-type=module', '-e', builtRuntimeProbe, storage], {
       cwd: repoRoot,
       timeout: 15_000,
     })

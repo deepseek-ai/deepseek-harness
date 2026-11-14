@@ -220,7 +220,7 @@ export interface BridgeHarness {
 type AcpConfigOverrides = { [K in keyof AcpConfig]?: AcpConfig[K] | undefined }
 
 /** Build the bridge and a connected SDK client over cross-wired byte streams. */
-export async function makeBridgeHarness(options: {
+export async function makeBridgeHarness(storage: 'jsonl' | 'sqlite', options: {
   script?: (StreamChunk[] | 'hang')[]
   config?: AcpConfigOverrides
   persona?: string
@@ -233,7 +233,7 @@ export async function makeBridgeHarness(options: {
   const ownsPersistenceRoot = options.persistenceRoot === undefined
   const persistenceRoot = options.persistenceRoot ?? await mkdtemp(join(tmpdir(), 'dsh-acp-test-'))
   await mountAgentLoopTestDependencies(ctx, { systemPrompt: { personaPrefix: options.persona ?? '' } })
-  await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { storage, root: persistenceRoot, compression: 'none' })
   await ctx.plugin(TokenMeter)
   if (options.attachments !== false) await ctx.plugin(MemoryAttachmentStore)
   const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })

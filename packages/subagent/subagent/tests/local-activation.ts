@@ -11,16 +11,17 @@ import { onTestFinished } from 'vitest'
 
 /**
  * Mount isolated persistence and remove it after the context reaches quiescence.
+ * @param storage - session backend for this test case.
  * @param ctx - test runtime that owns the local child sessions.
  */
-export async function mountLocalActivations(ctx: Context): Promise<void> {
+export async function mountLocalActivations(storage: 'jsonl' | 'sqlite', ctx: Context): Promise<void> {
   await mountWorkingDirectoryFixture(ctx)
   const root = await mkdtemp(join(tmpdir(), 'dsh-local-activation-'))
   onTestFinished(async () => {
     await ctx.fiber.dispose()
     await rm(root, { recursive: true, force: true })
   })
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { root, storage })
 }
 
 /**

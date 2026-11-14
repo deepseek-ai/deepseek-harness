@@ -681,12 +681,12 @@ describe('dsh-tool-subagent local activation', () => {
   })
 
   /** Boot the real continuable stack without any model-facing follow-up adapter. */
-  async function continuableSetup(modelSelection = false) {
+  async function continuableSetup(storage: 'jsonl' | 'sqlite', modelSelection = false) {
     const ctx = new Context()
     const root = mkdtempSync(path.join(tmpdir(), 'dsh-tool-subagent-continuable-'))
     fixtures.push({ ctx, root })
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root })
+    await ctx.plugin(JsonlSessionPersistence, { storage, root })
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -705,8 +705,8 @@ describe('dsh-tool-subagent local activation', () => {
     return { ctx, parent }
   }
 
-  it.each([undefined, 'high'] as const)('starts the explicitly selected parent model with effort %s', async (effort) => {
-    const { ctx, parent } = await continuableSetup(true)
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([undefined, 'high'] as const).map(value => [storage, value] as const)))('%s: starts the explicitly selected parent model with effort %s', async (storage, effort) => {
+    const { ctx, parent } = await continuableSetup(storage, true)
     parent.options.reasoningEffort = brandString<ReasoningEffortId>('high')
     let child: Agent | undefined
     ctx.on('subagent/start', (info) => { child = ctx.agents.get(info.id) })
@@ -721,8 +721,8 @@ describe('dsh-tool-subagent local activation', () => {
     expect(parent.options.reasoningEffort).toBe('high')
   })
 
-  it('classifies local activations concurrency-safe', async () => {
-    const { ctx } = await continuableSetup()
+  it.each(['jsonl', 'sqlite'] as const)('%s: classifies local activations concurrency-safe', async (storage) => {
+    const { ctx } = await continuableSetup(storage)
     expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
       callId: brandString<ToolCallId>('subagent-continuable'),
@@ -731,8 +731,8 @@ describe('dsh-tool-subagent local activation', () => {
     })).toEqual({ kind: 'parallel' })
   })
 
-  it('starts a local activation and returns only its name in the tool receipt', async () => {
-    const { ctx, parent } = await continuableSetup()
+  it.each(['jsonl', 'sqlite'] as const)('%s: starts a local activation and returns only its name in the tool receipt', async (storage) => {
+    const { ctx, parent } = await continuableSetup(storage)
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')!
     // Continuable delegation has no Task, so the schema promises no collection.
     expect(schema.description).not.toContain('job_output')
@@ -771,8 +771,8 @@ describe('dsh-tool-subagent local activation', () => {
     expect(loaded.events.some(event => event.type === 'assistant/message')).toBe(true)
   })
 
-  it('starts a child under a requested name and rejects a sibling with the same name', async () => {
-    const { ctx, parent } = await continuableSetup()
+  it.each(['jsonl', 'sqlite'] as const)('%s: starts a child under a requested name and rejects a sibling with the same name', async (storage) => {
+    const { ctx, parent } = await continuableSetup(storage)
     const named = await callSubagent(ctx, { description: 'review', prompt: 'review it', name: 'reviewer' }, { agent: parent })
     expect(named.isError, text(named)).toBe(false)
     expect(text(named)).toBe('started subagent reviewer')
@@ -788,8 +788,8 @@ describe('dsh-tool-subagent local activation', () => {
     }, { timeout: 5_000 })
   })
 
-  it('hides continuable guidance when the current agent cannot see the tool', async () => {
-    const { ctx, parent } = await continuableSetup()
+  it.each(['jsonl', 'sqlite'] as const)('%s: hides continuable guidance when the current agent cannot see the tool', async (storage) => {
+    const { ctx, parent } = await continuableSetup(storage)
     parent.ctx.tools.restrict({ deny: ['subagent'] })
 
     expect(ctx.tools.get('subagent', parent)).toBeUndefined()
@@ -797,8 +797,8 @@ describe('dsh-tool-subagent local activation', () => {
     expect(assembly.sections.find(section => section.name === 'tool:subagent')?.text).toBe('')
   })
 
-  it('isolates a cancelled continuable preparation from a concurrent sibling', async () => {
-    const { ctx, parent } = await continuableSetup()
+  it.each(['jsonl', 'sqlite'] as const)('%s: isolates a cancelled continuable preparation from a concurrent sibling', async (storage) => {
+    const { ctx, parent } = await continuableSetup(storage)
     const bothPreparing = Promise.withResolvers<undefined>()
     const releasePreparations = Promise.withResolvers<undefined>()
     const cancelled = new AbortController()

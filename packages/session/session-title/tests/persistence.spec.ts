@@ -62,8 +62,8 @@ async function expectPersistedTitle(ctx: Context, id: SessionId): Promise<void> 
   }
 }
 
-describe('session title persistence round trips', () => {
-  it('round-trips through a remounted JSONL backend', async () => {
+describe.each(['jsonl', 'sqlite'] as const)('session title persistence round trips (%s)', (storage) => {
+  it('round-trips through a remounted backend', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-title-jsonl-'))
     roots.push(root)
     const id = brandString<SessionId>('title-jsonl')
@@ -71,7 +71,7 @@ describe('session title persistence round trips', () => {
     await writer.plugin(SessionStore)
     await writer.plugin(SessionProjectionRegistry)
     await writer.plugin(AgentRegistry)
-    await writer.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await writer.plugin(JsonlSessionPersistence, { root, storage, compression: 'none' })
     await writer.plugin(SessionTitleService, CONFIG)
     await appendPersistedTitle(writer, id)
     await writer.fiber.dispose()
@@ -79,7 +79,7 @@ describe('session title persistence round trips', () => {
     const reader = new Context()
     await reader.plugin(SessionStore)
     await reader.plugin(SessionProjectionRegistry)
-    await reader.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await reader.plugin(JsonlSessionPersistence, { root, storage, compression: 'none' })
     await expectPersistedTitle(reader, id)
     await reader.fiber.dispose()
   })

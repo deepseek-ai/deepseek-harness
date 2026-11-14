@@ -14,9 +14,9 @@ afterEach(async () => {
 })
 const identity: TranslationIdentity = { provider: 'bing', text: 'source', sourceLanguage: 'auto', targetLanguage: 'zh', recipe: 'fixture' }
 
-describe('accepted translation write settlement', () => {
+describe.each(['jsonl', 'sqlite'] as const)('accepted translation write settlement (%s)', (backend) => {
   it.each([false, true])('holds identical admission until the accepted result write settles (reject=%s)', async (rejectWrite) => {
-    const b = await storageFixture(cleanups), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
+    const b = await storageFixture(cleanups, backend), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
     const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
     const deadline = Promise.withResolvers<never>()
     const stopped = new TranslationError('TRANSLATION_TIMEOUT', 'consumer deadline'), writeFailure = new Error('verification unavailable')
@@ -69,7 +69,7 @@ describe('accepted translation write settlement', () => {
   })
 
   it('keeps storage disposal pending until a write outliving its consumer settles', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession()
+    const b = await storageFixture(cleanups, backend), original = await b.createSession()
     let storage: TranslationStorage | undefined
     const owner = b.ctx.plugin({ apply(ctx: Context) { storage = new TranslationStorage(ctx) } })
     await owner.await()

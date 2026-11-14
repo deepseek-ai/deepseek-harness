@@ -1,7 +1,6 @@
 /** Common paid requests and results survive Host restart without altering main conversation input. */
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import type { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite'
 import { setImmediate } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { paidFixture } from './paid-fixture.ts'
@@ -36,39 +35,47 @@ function historicalEvents(): SessionEvent[] {
   ]
 }
 
-describe('common paid translation persistence', () => {
+describe.each(['jsonl', 'sqlite'] as const)('common paid translation persistence (%s)', (backend) => {
   it.each(['caller cancellation', 'provider deadline'] as const)(
     'keeps a pending result ahead of an immediate retry after %s without billing again', async (interruption) => {
-      const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } })
-      const backend = Reflect.get(b.ctx.sessionPersistence, 'sqlite') as SqliteLogs
-      expect(typeof backend.append).toBe('function')
+      const b = await paidFixture(cleanups, backend, { translator: { deepseekTimeoutMs: 60_000 } })
       const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
       cleanups.push(async () => { release.resolve(undefined) })
-      const persist = backend.append.bind(backend)
-      vi.spyOn(backend, 'append').mockImplementation(async (...args) => {
-        if (results(args[1]).length > 0) {
+      let resultPending = false
+      b.ctx.on('session/event', (_session, event) => {
+        if (pluginRecordOf(event)?.type === 'plugin:translator/result') resultPending = true
+      })
+      const flush = b.ctx.sessions.flush.bind(b.ctx.sessions)
+      vi.spyOn(b.ctx.sessions, 'flush').mockImplementation(async (session) => {
+        if (resultPending) {
           entered.resolve(undefined)
           await release.promise
         }
-        return persist(...args)
+        return flush(session)
       })
       const caller = new AbortController(), reason = new Error('Canceled while saving the translation')
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const scheduled = vi.spyOn(globalThis, 'setTimeout')
       try {
         const first = b.translate('deepseek-official', 'Original paragraph', caller.signal).catch((error: unknown) => error)
         await entered.promise
         expect(b.requests).toHaveLength(1)
         if (interruption === 'caller cancellation') caller.abort(reason)
-        else await vi.advanceTimersByTimeAsync(60_000)
+        else {
+          const deadlines = scheduled.mock.calls.filter(([, delay]) => delay === 60_000)
+          expect(deadlines).toHaveLength(1)
+          // Advancing the shared clock would also flush the accepted result behind the write barrier.
+          deadlines[0]![0]()
+        }
         const rejected = await first
         if (interruption === 'caller cancellation') expect(rejected).toBe(reason)
         else expect(rejected).toMatchObject({ code: 'TRANSLATION_TIMEOUT' })
         expect(results(await b.readEvents(b.session!.id))).toEqual([])
-        const stat = vi.spyOn(backend, 'stat')
+        const open = vi.spyOn(b.ctx.sessionPersistence, 'open')
         const retry = b.translate('deepseek-official').then(text => ({ text }), (error: unknown) => ({ error }))
         // Retry admission starts in promise reactions; one event-loop turn drains those without releasing the write barrier.
         await setImmediate()
-        const readsBeforeCommit = stat.mock.calls.length
+        const readsBeforeCommit = open.mock.calls.length
         release.resolve(undefined)
         await expect(retry).resolves.toEqual({ text: '翻译结果' })
         expect(readsBeforeCommit).toBe(0)
@@ -80,13 +87,14 @@ describe('common paid translation persistence', () => {
         expect(b.errors).toEqual([])
       } finally {
         release.resolve(undefined)
+        scheduled.mockRestore()
         vi.useRealTimers()
       }
     })
 
   it.each(providers.flatMap(provider => ['credentials', 'native-owner'].map(unavailable => ({ provider, unavailable }))))(
     'reuses $provider after a complete restart with unavailable $unavailable and zero new HTTP', async ({ provider, unavailable }) => {
-      const b = await paidFixture(cleanups), id = b.session!.id, oldContext = b.ctx
+      const b = await paidFixture(cleanups, backend), id = b.session!.id, oldContext = b.ctx
       const specification = () => b.ctx.translator.resolve({ provider, text: 'Original paragraph', targetLanguage: 'zh', sessionId: id })
       expect(await b.ctx.translator.translate(specification())).toBe('翻译结果')
       const committed = await b.readEvents(id)
@@ -111,7 +119,7 @@ describe('common paid translation persistence', () => {
 
   it.each(providers)('requires a live writer for uncached %s before preparation and retains independent input and result', async (provider) => {
     const id = brandString<SessionId>('historical-paid-translation')
-    const b = await paidFixture(cleanups, { withSession: false, withSessionQuery: true })
+    const b = await paidFixture(cleanups, backend, { withSession: false, withSessionQuery: true })
     const original = await b.createHistorical(id, historicalEvents())
     await b.restart()
     using observation = await b.ctx.sessionQuery.observeSession(id, { projectionMode: 'none' })
@@ -153,7 +161,7 @@ describe('common paid translation persistence', () => {
   })
 
   it('refuses a missing historical Session before paid dispatch', async () => {
-    const b = await paidFixture(cleanups, { withSession: false })
+    const b = await paidFixture(cleanups, backend, { withSession: false })
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ provider: 'deepseek-official', text: 'source',
       targetLanguage: 'zh', sessionId: brandString<SessionId>('missing-historical') })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
@@ -162,7 +170,7 @@ describe('common paid translation persistence', () => {
   })
 
   it('does not claim a historical writer on a cache miss or dispatch paid work', async () => {
-    const b = await paidFixture(cleanups, { withSession: false }), original = await b.createHistorical(brandString<SessionId>('owned-history'), historicalEvents())
+    const b = await paidFixture(cleanups, backend, { withSession: false }), original = await b.createHistorical(brandString<SessionId>('owned-history'), historicalEvents())
     await using writer = await b.ctx.sessionPersistence.open(original.id, 'write')
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ provider: 'deepseek-official', text: 'source',
       targetLanguage: 'zh', sessionId: original.id })))
@@ -174,7 +182,7 @@ describe('common paid translation persistence', () => {
   })
 
   it('withholds paid translated text when its durable result cannot be written', async () => {
-    const b = await paidFixture(cleanups), session = b.session!
+    const b = await paidFixture(cleanups, backend), session = b.session!
     const flush = b.ctx.sessions.flush.bind(b.ctx.sessions)
     const checkpoint = vi.spyOn(b.ctx.sessions, 'flush').mockImplementation(async (value) => {
       if (b.requests.length > 0) throw new Error('Fixture result storage unavailable')
@@ -191,7 +199,7 @@ describe('common paid translation persistence', () => {
   })
 
   it('does not reuse a saved paid result when the configured output-token cap changes', async () => {
-    const b = await paidFixture(cleanups), id = b.session!.id
+    const b = await paidFixture(cleanups, backend), id = b.session!.id
     const spec = () => b.ctx.translator.resolve({ provider: 'deepseek-official', text: 'Original paragraph', targetLanguage: 'zh', sessionId: id })
     expect(await b.ctx.translator.translate(spec())).toBe('翻译结果')
     await b.restart({ translator: { deepseekMaxOutputTokens: 16 } })

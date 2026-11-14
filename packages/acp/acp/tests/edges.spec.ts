@@ -34,8 +34,8 @@ describe('ACP automation output boundary', () => {
     harness = undefined
   })
 
-  it('emits committed reasoning, generic tool lifecycle, usage, and final text in order', async () => {
-    harness = await makeBridgeHarness({ script: [toolCallResponse(), textResponse('done')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: emits committed reasoning, generic tool lifecycle, usage, and final text in order', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [toolCallResponse(), textResponse('done')] })
     harness.ctx.tools.register(defineContentToolFixture({
       name: 'echo',
       description: 'Return a deterministic result.',
@@ -87,8 +87,8 @@ describe('ACP automation output boundary', () => {
     expect(typeof harness.updates[5].used).toBe('number')
   })
 
-  it('ignores events from agents the bridge does not own', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('foreign')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: ignores events from agents the bridge does not own', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('foreign')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const { agent } = await harness.ctx.agents.create({
@@ -100,8 +100,8 @@ describe('ACP automation output boundary', () => {
     expect(harness.updates).toHaveLength(0)
   })
 
-  it('delivers output from a bridge-owned session driven by another in-process producer', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('external')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: delivers output from a bridge-owned session driven by another in-process producer', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('external')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
@@ -117,8 +117,8 @@ describe('ACP automation output boundary', () => {
     expect('messageId' in harness.updates[0]!).toBe(true)
   })
 
-  it('contains output conversion failure outside an ACP prompt', async () => {
-    harness = await makeBridgeHarness({ script: [[
+  it.each(['jsonl', 'sqlite'] as const)('%s: contains output conversion failure outside an ACP prompt', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [[
       { type: 'block-start', index: 0, blockType: 'image' },
       {
         type: 'block-end',
@@ -151,8 +151,8 @@ describe('ACP automation output boundary', () => {
   // failure never reaches the bridge; this pins that the prompt still settles
   // normally with such a client. The bridge's own write-failure guard is
   // transport-level and documented untestable at `notify`.
-  it('settles the prompt normally when the client rejects update notifications', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('answer')] })
+  it.each(['jsonl', 'sqlite'] as const)('%s: settles the prompt normally when the client rejects update notifications', async (storage) => {
+    harness = await makeBridgeHarness(storage, { script: [textResponse('answer')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     harness.onSessionUpdateError = () => {}

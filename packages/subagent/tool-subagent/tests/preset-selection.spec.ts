@@ -33,10 +33,10 @@ afterEach(async () => {
   }
 })
 
-async function mountSpawn(ctx: Context, providerName: string): Promise<void> {
+async function mountSpawn(storage: 'jsonl' | 'sqlite', ctx: Context, providerName: string): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), 'dsh-tool-preset-'))
   roots.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(JsonlSessionPersistence, { storage, root })
   await ctx.plugin(SubagentSpawn, { providerName })
 }
 
@@ -151,13 +151,13 @@ describe('spawn preset selection', () => {
     await expect(tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' })).rejects.toThrow(/requires the agent-presets service/)
   })
 
-  it.each([
+  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
     { config: { agentPreset: 'absent' }, selection: {} },
     { config: { allowedAgentPresets: ['absent'] }, selection: { agent_preset: 'absent' } },
-  ])('reports a missing preset only when delegation uses it: %j', async ({ config, selection }) => {
+  ]).map(value => [storage, value] as const)))('%s: reports a missing preset only when delegation uses it: %j', async (storage, { config, selection }) => {
     const { ctx, provider } = await setup(config)
     await provider.dispose()
-    await mountSpawn(ctx, 'custom-spawn')
+    await mountSpawn(storage, ctx, 'custom-spawn')
     const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('missing-child-preset') })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
@@ -168,10 +168,10 @@ describe('spawn preset selection', () => {
     expect(ctx.sessions.list()).toEqual(sessions)
   })
 
-  it('reports an unloadable child preset through the tool result', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: reports an unloadable child preset through the tool result', async (storage) => {
     const { ctx, presets, provider } = await setup({ agentPreset: 'reviewer' })
     await provider.dispose()
-    await mountSpawn(ctx, 'custom-spawn')
+    await mountSpawn(storage, ctx, 'custom-spawn')
     await presets.get('reviewer')!()
     await ctx.agentPresets.register({
       id: 'reviewer', plugins: [{ name: 'cordis:missing-plugin' }],
@@ -342,9 +342,9 @@ describe('spawn preset selection', () => {
     },
   )
 
-  it('switches to a preset with a missing child reference and retries delegation after declaration', async () => {
+  it.each(['jsonl', 'sqlite'] as const)('%s: switches to a preset with a missing child reference and retries delegation after declaration', async (storage) => {
     const { ctx } = await setup({})
-    await mountSpawn(ctx, 'spawn')
+    await mountSpawn(storage, ctx, 'spawn')
     await ctx.agentPresets.register({
       id: 'pending-reference',
       plugins: [{ name: 'cordis:subagentTool', config: {

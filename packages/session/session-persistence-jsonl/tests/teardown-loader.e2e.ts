@@ -1,7 +1,5 @@
-/** SQLite Segment teardown preserves events emitted by an asynchronously disposing injected consumer. */
+/** Persistence teardown preserves events emitted by an asynchronously disposing injected consumer. */
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { DatabaseSync } from 'node:sqlite'
-import { z } from 'zod'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -16,7 +14,7 @@ import { scheduler } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 
-it('waits for consumer teardown, persists its final event, and releases listeners and leases', async () => {
+it.each(['jsonl', 'sqlite'] as const)('%s waits for consumer teardown, persists its final event, and releases listeners and leases', async (storage) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-teardown-'))
   const ctx = new Context()
   const entered = Promise.withResolvers<undefined>()
@@ -55,7 +53,7 @@ it('waits for consumer teardown, persists its final event, and releases listener
       "  name: '@deepseek-ai/dsh-session-persistence-jsonl'",
       '  config:',
       `    root: ${JSON.stringify(root)}`,
-      '    storage: sqlite',
+      `    storage: ${storage}`,
       '    compression: none',
       '- id: consumer',
       '  name: async-persistence-consumer',
@@ -91,14 +89,22 @@ it('waits for consumer teardown, persists its final event, and releases listener
     const live = session!
     const oldReader = await ctx.sessionPersistence.open(live.id, 'read')
     const readStored = async (): Promise<unknown[]> => {
-      const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
+      const readerCtx = new Context()
+      await readerCtx.plugin(SessionPlugin.default)
+      await readerCtx.plugin(JsonlPlugin, { root, storage, compression: 'none' })
       try {
-        const header = z.object({ header: z.string() }).parse(db.prepare('SELECT header FROM traces WHERE trace_uuid = ?').get(live.id))
-        const events = db.prepare('SELECT payload FROM events ORDER BY seq').all()
-        const metadata: unknown = JSON.parse(header.header)
-        return [metadata, ...events.map((row): unknown => JSON.parse(z.object({ payload: z.string() }).parse(row).payload))]
-      } finally { db.close() }
+        const reader = await readerCtx.sessionPersistence.open(live.id, 'read')
+        try {
+          const { events } = await reader.read()
+          return [reader.header, ...events]
+        } finally {
+          await reader.close()
+        }
+      } finally {
+        await readerCtx.fiber.dispose()
+      }
     }
+
     const before = JSON.stringify(await readStored())
     expect(before).toContain('turn/start')
     expect(before).not.toContain('turn/end')

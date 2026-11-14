@@ -19,8 +19,8 @@ describe('fixed report limits', () => {
   it('falls back to English for an unsupported app locale', () => {
     expect(appLanguage('it-IT')).toBe('en')
   })
-  it('reads the live app language and rejects an enabled standalone installation', async () => {
-    const f = await setup()
+  it.each(['jsonl', 'sqlite'] as const)('reads the live app language and rejects an enabled standalone installation (%s)', async (backend) => {
+    const f = await setup(backend)
     try {
       await f.plugin.dispose()
       const standalone = { disabled: true, options: { name: 'cordis:@magolor/dsh-timeline' } }

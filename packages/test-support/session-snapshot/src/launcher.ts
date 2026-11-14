@@ -123,7 +123,7 @@ export function launchAcpTestAgent(options: AcpTestLaunchOptions): LaunchedAcpTe
     libBin: agent.libBinScript,
     configArgs: agent.profile === undefined
       ? ['--config', selectedConfig]
-      : profileArgs(agent.profile, agent.configPath, selectedConfig, options.env?.DSH_SNAPSHOT, cwd),
+      : profileArgs(agent.profile, agent.configPath, selectedConfig, options.env?.DSH_SNAPSHOT, cwd, options.env?.DSH_SNAPSHOT_STORAGE),
     tsconfigPath: agent.tsconfigPath,
     ...agent.profile === undefined ? {} : { sourceImport: 'tsx/esm' },
     env: {
@@ -346,6 +346,7 @@ function profileArgs(
   selectedPatch: string,
   snapshotMode: string | undefined,
   cwd: string,
+  storage: string | undefined,
 ): string[] {
   const base = resolve(cwd, basePatch)
   const selected = resolve(cwd, selectedPatch)
@@ -358,6 +359,11 @@ function profileArgs(
   mkdirSync(materializedRoot, { recursive: true })
   const materializedDir = mkdtempSync(join(materializedRoot, 'launch-'))
   const materialized = patches.map((file, index) => materializeProfilePatch(file, cwd, profile, materializedDir, index))
+  if (storage !== undefined) {
+    const storagePatch = join(materializedDir, 'session-storage.yml')
+    writeFileSync(storagePatch, stringifyEntryYaml([{ id: 'session-persistence-jsonl', config: { storage } }]))
+    materialized.push(storagePatch)
+  }
   return ['--profile', profile, ...materialized.flatMap(file => ['--patch', file])]
 }
 

@@ -21,7 +21,7 @@ import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
  * work (writes a file). Lives outside the *.e2e.ts pattern so importing it never
  * re-registers another file's tests.
  */
-export async function spawnHarness(workdir: string): Promise<Context> {
+export async function spawnHarness(storage: 'jsonl' | 'sqlite', workdir: string): Promise<Context> {
   const ctx = new Context()
   // This harness installs only the global default persona, so both parent and
   // spawned children render it. It stays neutral for both roles; the
@@ -37,7 +37,7 @@ export async function spawnHarness(workdir: string): Promise<Context> {
   await ctx.plugin(BashEnvPlugin)
   await ctx.plugin(LocalBashExecutor, { cwd: workdir, timeoutMs: 30_000 })
   await ctx.plugin(ToolBash)
-  await ctx.plugin(JsonlSessionPersistence, { root: join(workdir, '.sessions') })
+  await ctx.plugin(JsonlSessionPersistence, { storage, root: join(workdir, '.sessions') })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
