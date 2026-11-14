@@ -62,7 +62,6 @@ class UnusedShell extends ShellExecutor {
   override execute(): never { throw new Error('Unexpected shell execution') }
 }
 
-
 async function withPermissions(root: string) {
   const result = await initialized(root)
   await result.ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
@@ -145,6 +144,7 @@ describe('SDK persisted session resume', () => {
     await expect(server.handleRequest('session/resume', params)).rejects.toThrow('permission_mode')
     expect(resume).not.toHaveBeenCalled()
   })
+
   it('rejects independent subagent restoration before opening or repairing its log', async () => {
     const root = await storageRoot()
     const { ctx, server } = await initialized(root)
