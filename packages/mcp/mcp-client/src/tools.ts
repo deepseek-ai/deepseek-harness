@@ -54,7 +54,10 @@ export class McpToolRegistrationError extends McpLocalError {
 /** State for one sync generation: the current set of disposers keyed by public name. */
 export type ToolDisposers = Map<string, () => void>
 
-/** Canonical MCP result exposed to PTC mode without discarding protocol blocks. */
+/**
+ * Canonical MCP result exposed to PTC mode without discarding protocol blocks.
+ * Each image block admitted to durable model context also carries its `attachment` reference.
+ */
 export type McpResult<Structured extends JsonValue = JsonValue> = {
   content: JsonValue[]
   structuredContent?: Structured
@@ -349,7 +352,7 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
     schema: {
       type: 'object',
       properties: {
-        content: { type: 'array', items: {} },
+        content: { type: 'array', items: {}, description: 'MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.' },
         structuredContent: structuredSchema ?? {},
       },
       required: structuredSchema === undefined ? ['content'] : ['content', 'structuredContent'],
@@ -401,12 +404,18 @@ function createExecutor(
         ? { structuredContent: result.structuredContent as JsonValue }
         : {},
     }
-    if (containsImage(content)) {
-      const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
-      const projected = await prepareImageProjection(ctx, exec, content, rawName)
-      projections.set(exec, { value, fallback, content: projected })
+    if (!containsImage(content)) return value
+    const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
+    const { content: projected, attachments } = await prepareImageProjection(ctx, exec, content, rawName)
+    const admitted: McpResult = attachments === undefined ? value : {
+      ...value,
+      content: content.map((block, index) => {
+        const ref = attachments.get(index)
+        return ref === undefined || !isRecord(block) ? block : { ...block, attachment: { ...ref } }
+      }),
     }
-    return value
+    projections.set(exec, { value: admitted, fallback, content: projected })
+    return admitted
   }
 }
 
@@ -479,13 +488,14 @@ function imageDiagnostic(block: McpContentBlock, reason: string): string {
  * Decode, preflight, and durably save one MCP result's ordered image batch.
  * Any refusal projects every image as text while retaining the canonical raw
  * value for programmatic callers.
+ * @returns the projected content and, after admission, each image's reference by content index.
  */
 async function prepareImageProjection(
   ctx: Context,
   exec: ToolExecution,
   content: JsonValue[],
   toolName: string,
-): Promise<ContentBlock[]> {
+): Promise<{ content: ContentBlock[]; attachments?: ReadonlyMap<number, ImageAttachmentRef> }> {
   const decoded: SaveImageAttachment[] = []
   const validationErrors = new Map<number, string>()
   const imageIndexes: number[] = []
@@ -500,13 +510,13 @@ async function prepareImageProjection(
     }
   }
   if (validationErrors.size > 0) {
-    return projectContent(content, toolName, (block, index) => ({
+    return { content: projectContent(content, toolName, (block, index) => ({
       type: 'text',
       text: imageDiagnostic(
         block,
         validationErrors.get(index) ?? 'another image in the same result was invalid',
       ),
-    }))
+    })) }
   }
 
   let attachments: AttachmentStore
@@ -515,24 +525,27 @@ async function prepareImageProjection(
   } catch (error: unknown) {
     // resolveImageAdmission contains provider failures and throws Error only.
     const reason = (error as Error).message
-    return projectContent(content, toolName, block => ({ type: 'text', text: imageDiagnostic(block, reason) }))
+    return { content: projectContent(content, toolName, block => ({ type: 'text', text: imageDiagnostic(block, reason) })) }
   }
 
   try {
     const refs = await attachments.saveImages(decoded)
     const byIndex = new Map(imageIndexes.map((index, offset) => [index, refs[offset] as ImageAttachmentRef] as const))
-    return projectContent(content, toolName, (_block, index) => ({
-      type: 'image',
-      attachment: byIndex.get(index) as ImageAttachmentRef,
-    }))
+    return {
+      content: projectContent(content, toolName, (_block, index) => ({
+        type: 'image',
+        attachment: byIndex.get(index) as ImageAttachmentRef,
+      })),
+      attachments: byIndex,
+    }
   } catch (error: unknown) {
     const reason = isImageAdmissionError(error)
       ? `image admission rejected the result: ${error.message}`
       : 'durable image storage rejected the result'
-    return projectContent(content, toolName, block => ({
+    return { content: projectContent(content, toolName, block => ({
       type: 'text',
       text: imageDiagnostic(block, reason),
-    }))
+    })) }
   }
 }
 

@@ -202,8 +202,7 @@
             "maxTokens": true
           },
           "tools": [
-            "cordis_inspect_list",
-            "cordis_inspect_query",
+            "cordis_inspect",
             "job_kill",
             "job_list",
             "job_output",
@@ -298,8 +297,7 @@
             "maxTokens": true
           },
           "tools": [
-            "cordis_inspect_list",
-            "cordis_inspect_query",
+            "cordis_inspect",
             "job_kill",
             "job_list",
             "job_output",
@@ -1764,8 +1762,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -1890,8 +1887,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -3235,8 +3231,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -4253,8 +4248,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",

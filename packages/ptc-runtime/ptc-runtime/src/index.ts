@@ -10,6 +10,7 @@ import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
 export { PtcImage } from './image.ts'
+export { PtcInspectableValue } from './inspectable-value.ts'
 
 export type {
   PtcBindingErrorClass,

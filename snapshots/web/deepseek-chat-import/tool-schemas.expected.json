@@ -137,6 +137,45 @@
       }
     },
     {
+      "name": "cordis_inspect",
+      "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "platform": {
+                "type": "string",
+                "description": "Provider platform.",
+                "enum": [
+                  "host",
+                  "client"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "description": "Provider ID from the directory."
+              },
+              "method": {
+                "type": "string",
+                "description": "Method name from the directory."
+              },
+              "input": {
+                "description": "Arguments matching the method's input schema."
+              }
+            },
+            "required": [
+              "platform",
+              "provider",
+              "method"
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "create_goal",
       "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
       "parameters": {
