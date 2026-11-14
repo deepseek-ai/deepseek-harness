@@ -208,7 +208,7 @@ async function migrate(root: string, jobs: number): Promise<number> {
     const compression = candidates.find(candidate => candidate.source !== undefined)?.source?.compression ?? 'zstd'
     const ctx = new Context()
     try {
-      await ctx.plugin(JsonlSessionPersistence, { root, compression, storage: 'jsonl' })
+      await ctx.plugin(JsonlSessionPersistence, { root, compression })
       let completed = 0
       await runMigrationJobs(candidates.length, jobs, async (index, retry) => {
         const candidate = candidates[index]

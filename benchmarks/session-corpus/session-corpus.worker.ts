@@ -135,7 +135,7 @@ async function memory(): Promise<CorpusMemory> {
 async function mountHost(root: string): Promise<{ readonly ctx: Context; readonly controller: SessionController }> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'zstd', storage: 'jsonl' })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'zstd' })
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root: join(root, 'storages') })
   await ctx.plugin(StorageDomain, { backend: 'json' })

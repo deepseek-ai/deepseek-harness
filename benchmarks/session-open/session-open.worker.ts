@@ -166,7 +166,7 @@ class SessionBenchmarkHost {
       await ctx.plugin(SessionStore)
     }
     await installProjectionSet(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd', storage: 'jsonl' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
     let history: WebController | undefined
     if (scenario === 'first-history') {
       new BenchmarkSessionQuery(ctx)

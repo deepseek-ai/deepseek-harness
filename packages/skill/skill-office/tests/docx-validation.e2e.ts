@@ -39,7 +39,7 @@ d.save('input.docx')
         { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
         { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
         ...officeModelPatches(),
-        { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), storage: 'jsonl', compression: 'none' } },
+        { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
       ]))
     },
     async inspect(cwd) {

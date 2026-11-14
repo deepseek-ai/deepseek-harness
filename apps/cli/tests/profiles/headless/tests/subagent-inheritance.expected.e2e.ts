@@ -48,7 +48,7 @@ async function expectSession(actual: string, expectedPath: string): Promise<void
 /** Seed a completed parent turn with its read-only policy and current LLM selection. */
 async function seedReadOnlyParent(root: string, cwd: string): Promise<void> {
   const ctx = new Context()
-  await ctx.plugin(JsonlSessionPersistence, { root, storage: 'jsonl', compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   const meta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,

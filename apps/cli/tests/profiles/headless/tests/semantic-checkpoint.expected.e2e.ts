@@ -39,7 +39,7 @@ async function expectSession(actual: string, expectedPath: string): Promise<void
 
 async function seedInterruptedSession(root: string, cwd: string): Promise<string> {
   const ctx = new Context()
-  await ctx.plugin(JsonlSessionPersistence, { root, storage: 'jsonl', compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   const meta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,

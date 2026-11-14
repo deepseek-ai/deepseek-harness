@@ -25,7 +25,7 @@ async function prepareOffice(cwd: string) {
     { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
     ...officeToolPatches(),
     { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
-    { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), storage: 'jsonl', compression: 'none' } },
+    { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
   ]))
 }
 

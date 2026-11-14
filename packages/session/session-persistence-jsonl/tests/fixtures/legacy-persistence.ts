@@ -16,7 +16,7 @@ export const name = 'session-persistence-jsonl-legacy-tests'
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   await persistence.apply(ctx, {
-    root: config.root, storage: 'jsonl',
+    root: config.root,
     ...config.compression === undefined ? {} : { compression: config.compression },
     ...config.listConcurrency === undefined ? {} : { listConcurrency: config.listConcurrency },
   })

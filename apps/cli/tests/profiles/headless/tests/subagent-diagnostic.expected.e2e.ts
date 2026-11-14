@@ -47,7 +47,7 @@ async function expectSession(actual: string, expectedPath: string): Promise<void
  */
 async function seedCataloguedDescriptorlessChild(root: string, cwd: string): Promise<void> {
   const ctx = new Context()
-  await ctx.plugin(JsonlSessionPersistence, { root, storage: 'jsonl', compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   const parentMeta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id: parentId,

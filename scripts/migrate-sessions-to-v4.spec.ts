@@ -341,7 +341,7 @@ describe('one-time V4 migration command', () => {
       const ctx = new Context();
       let prototype;
       try {
-        await ctx.plugin(Backend, { root: ${JSON.stringify(temporaryRoot())}, storage: 'jsonl' });
+        await ctx.plugin(Backend, { root: ${JSON.stringify(temporaryRoot())} });
         prototype = Object.getPrototypeOf(ctx.sessionPersistence);
       } finally {
         await ctx.fiber.dispose();

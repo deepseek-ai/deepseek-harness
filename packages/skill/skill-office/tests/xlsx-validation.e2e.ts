@@ -95,7 +95,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
           { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
           ...officeModelPatches(),
           { id: 'attachment-local', config: { dshHome: imageRoot } },
-          { id: 'session-persistence-jsonl', config: { root: sessionRoot, storage: 'jsonl', compression: 'none' } },
+          { id: 'session-persistence-jsonl', config: { root: sessionRoot, compression: 'none' } },
         ]))
       },
       async inspect(cwd) {
