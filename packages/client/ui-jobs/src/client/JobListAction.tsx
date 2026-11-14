@@ -329,7 +329,9 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  *   observation, and kill controls, and the namespace translator.
  * @returns the trigger and its popover list, or null when there is nothing to show.
  */
-export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob, t }: JobListActionProps) {
+export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob, t, useAccess }: JobListActionProps) {
+  // The stop control follows job/kill; a reader that may list a job but not stop it sees the row only.
+  const mayKill = useAccess('job/kill')
   const activityId = useId()
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
@@ -552,7 +554,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
       onToggle={() => {
         setExpandedKey(current => current === String(job.id) ? undefined : String(job.id))
       }}
-      {...job.status === 'running'
+      {...job.status === 'running' && mayKill
         ? {
           kill: {
             state: killPhase?.key === String(job.id) ? killPhase.state : 'idle' as const,

@@ -30,7 +30,6 @@ import * as viewerModel from './viewer-model.tsx'
 import * as viewerPermission from './viewer-permission.tsx'
 import * as viewerSession from './viewer-session-plugin.ts'
 import * as viewerSessionRow from './viewer-session-row.tsx'
-import * as viewerSharePath from './viewer-share-path.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -43,7 +42,7 @@ export const inject = ['slots', 'locale', 'remote']
 
 /** Viewer-page plugins, each mounted with its own service requirements. */
 const VIEWER_PLUGINS = [
-  viewerSession, viewerBrand, viewerModel, viewerPermission, viewerSessionRow, viewerSharePath,
+  viewerSession, viewerBrand, viewerModel, viewerPermission, viewerSessionRow,
 ]
 
 /**
@@ -72,7 +71,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   ctx.slots.inject('conversation.chat.user.before', () => ctx.slots.register({
     name: 'conversation.chat.user.before',
     locale: NS,
-    select: owner => owner.kind === 'user' ? (shareViewerAuthor(owner.source) ?? null) : null,
+    select: owner => shareViewerAuthor(owner.source) ?? null,
   }, SharedSessionOrigin))
   if (isViewerPage()) {
     for (const plugin of VIEWER_PLUGINS) ctx.plugin(plugin)
