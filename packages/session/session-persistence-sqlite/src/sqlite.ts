@@ -184,6 +184,8 @@ export class SqliteLogs {
     try {
       const opened = new DatabaseSync(this.path, { timeout: this.busyTimeoutMs })
       db = opened
+      // Readers can acquire a snapshot as soon as schema creation commits.
+      opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
       this.transaction(opened, () => {
         const current = this.schemaState(opened)
         if (current.version === 0 && current.application === 0) {
@@ -194,7 +196,6 @@ export class SqliteLogs {
           throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
         }
       })
-      opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
       return opened
     } catch (error: unknown) {
       db?.close()

@@ -49,7 +49,7 @@ kind: "package-library"
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-`TracePersistence` 将 SQLite 历史与旧日志发现、导入结合。`SqliteLogs` 在独立根 Segment 中保存逻辑事件 JSON 和源事件序号数组。数据库 schema 检查与创建共享一个事务；schema 版本单调递增。Session 租约跨进程协调写入者，已提交路由记录为后续打开选择数据库。
+`TracePersistence` 将 SQLite 历史与旧日志发现、导入结合。`SqliteLogs` 在独立根 Segment 中保存逻辑事件 JSON 和源事件序号数组。WAL 模式在 schema 事务向并发读者发布表之前启用。数据库 schema 检查与创建共享一个事务；schema 版本单调递增。Session 租约跨进程协调写入者，已提交路由记录为后续打开选择数据库。
 
 | 文件 | 职责 |
 |---|---|

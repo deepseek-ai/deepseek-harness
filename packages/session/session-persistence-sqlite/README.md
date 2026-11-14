@@ -49,7 +49,7 @@ Each Session permits one writer. Public handle operations reject after closing b
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`TracePersistence` combines SQLite history with legacy discovery and import. `SqliteLogs` stores logical event JSON and source event sequence arrays in independent root Segments. Database schema checks and creation share a transaction; the schema version is monotonic. Session leases coordinate writers across processes, and committed routing records select the database for later opens.
+`TracePersistence` combines SQLite history with legacy discovery and import. `SqliteLogs` stores logical event JSON and source event sequence arrays in independent root Segments. WAL mode is enabled before the schema transaction publishes tables to concurrent readers. Database schema checks and creation share a transaction; the schema version is monotonic. Session leases coordinate writers across processes, and committed routing records select the database for later opens.
 
 | File | Responsibility |
 |---|---|

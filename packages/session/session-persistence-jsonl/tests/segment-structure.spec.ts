@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -38,6 +38,39 @@ it('serializes first-time schema creation across connections', async () => {
     expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all().map(row => row.name))
       .toEqual(expect.arrayContaining(['segments', 'traces', 'events']))
   } finally { db.close() }
+})
+
+it('enables WAL before a concurrent reader observes the created schema', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-first-reader-'))
+  const path = join(root, 'sessions.sqlite')
+  const logs = sqliteLogs(path, root, { busyTimeoutMs: 0 })
+  onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
+  let reader: DatabaseSync | undefined
+  // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
+  const exec = DatabaseSync.prototype.exec
+  const commit = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+    exec.call(this, sql)
+    if (sql === 'COMMIT' && reader === undefined) {
+      reader = new DatabaseSync(path)
+      reader.exec('BEGIN')
+      reader.prepare('SELECT name FROM sqlite_schema').all()
+    }
+  })
+  try {
+    await logs.start()
+    expect(reader).toBeDefined()
+    expect(reader?.prepare('PRAGMA journal_mode').get()).toMatchObject({ journal_mode: 'wal' })
+    const id = SessionId('first-created')
+    const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
+    const event: SessionEvent<'turn/start'> = { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }
+    await writer.append([event])
+    await writer.flush()
+    expect(reader?.prepare('SELECT count(*) AS events FROM events').get()).toMatchObject({ events: 0 })
+    expect((await writer.read()).events).toEqual([event])
+  } finally {
+    commit.mockRestore()
+    try { reader?.exec('ROLLBACK') } finally { reader?.close() }
+  }
 })
 
 it('reads an indexed event list by trace_uuid while unrelated malformed lists remain unread', async () => {
