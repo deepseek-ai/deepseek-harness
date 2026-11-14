@@ -21,8 +21,7 @@ import { scheduler } from 'node:timers/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import pLimit, { type LimitFunction } from 'p-limit'
 import {
-  SessionPersistence,
-  SessionFormatUnsupportedError,
+  SessionPersistence, SessionFormatUnsupportedError,
   SessionPersistenceCorruptionError,
   SessionAlreadyExistsError, SessionPersistenceNotFoundError,
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
@@ -67,7 +66,7 @@ interface LegacySessionSnapshot {
 }
 
 /** Prepared legacy history whose related sources are checked before destination publication. */
-interface PreparedLegacySession extends LegacySessionSnapshot {
+interface PreparedLegacySession {
   commit(publish: (snapshot: LegacySessionSnapshot) => Promise<void>): Promise<void>
 }
 
@@ -331,7 +330,7 @@ export class JsonlSessionPersistence extends SessionPersistence {
    * this backend (`list()`, the root encoding check, historical fingerprints).
    * Queued tasks of a cancelled listing run and reject at their signal check.
    */
-  readonly listLimit: LimitFunction
+  private readonly listLimit: LimitFunction
   private rootEncodingCheck: Promise<void> | undefined
   private readonly generationFormat: Omit<JsonlGenerationFormatAdapter, 'createRestore'>
   /**
@@ -401,14 +400,14 @@ export class JsonlSessionPersistence extends SessionPersistence {
    * Prepare logical history while the caller retains Session write ownership.
    * @param id - stored Session identity.
    * @param signal - optional cancellation for decoding and destination publication.
-   * @returns history and a commit operation that validates related sources before publication.
+   * @returns a commit operation that validates related sources before publishing the history.
    */
   async prepare(id: SessionId, signal?: AbortSignal): Promise<PreparedLegacySession> {
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
     const stored = await this.requireStoredLog(id, signal)
     const snapshot = { header: stored.meta, inheritedEventCount: stored.inheritedEventCount, events: stored.events }
-    return { ...snapshot, commit: async (publish) => {
+    return { commit: async (publish) => {
       signal?.throwIfAborted()
       if (stored.status === 'prepared') await stored.validateRelatedSources()
       signal?.throwIfAborted()

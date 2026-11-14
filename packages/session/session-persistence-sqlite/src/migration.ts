@@ -1,38 +1,14 @@
 /** Exclusive legacy Session import with same-provider open sequencing. @module */
-import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { JsonlSessionPersistence } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { setTimeout } from 'node:timers/promises'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
-import type { SessionAccess, SessionHandle, SessionPersistence, SessionPersistenceListOptions, SessionPersistenceOpenOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionAccess, SessionHandle, SessionPersistenceOpenOptions } from '@deepseek-ai/dsh-session-persistence'
 import type { SqliteLogs } from './sqlite.ts'
 
-/** Current logical history decoded from one immutable legacy artifact. */
-export interface LegacySessionSnapshot {
-  readonly header: SessionHeader
-  readonly inheritedEventCount: SessionLogOffset
-  readonly events: readonly SessionEvent[]
-}
-
-/** Prepared logical history retained under Session ownership until import. */
-export interface PreparedLegacySession extends LegacySessionSnapshot {
-  /**
-   * Commit the prepared history while Session ownership remains held.
-   * @param publish - destination-owned atomic import of the prepared snapshot.
-   * @returns completed destination commit.
-   */
-  commit(publish: (snapshot: LegacySessionSnapshot) => Promise<void>): Promise<void>
-}
-
 /** Historical reads used by the persistence service; no JSONL writes or live handles. */
-export interface JsonlBackend extends Pick<SessionPersistence, 'stat'> {
-  readonly listLimit: <T>(operation: () => Promise<T>) => Promise<T>
-  /** @param id - Session identity. @returns whether a physical legacy artifact exists. */
-  hasStoredJsonl(id: SessionId): Promise<boolean>
-  /** @param id - Session identity. @param signal - optional cancellation. @returns prepared logical prefix and commit. */
-  prepare(id: SessionId, signal?: AbortSignal): Promise<PreparedLegacySession>
-  /** @param options - optional cancellation. @param excluded - authoritative SQLite identities. @returns legacy metadata. */
-  list(options?: SessionPersistenceListOptions, excluded?: ReadonlySet<SessionId>): Promise<readonly SessionPersistenceSnapshot[]>
-}
+export type JsonlBackend = Pick<JsonlSessionPersistence, 'stat' | 'hasStoredJsonl' | 'prepare' | 'list'>
 
 /** Owns pending legacy opens until import, ownership handoff, and cleanup finish. */
 export class LegacySessionMigration {

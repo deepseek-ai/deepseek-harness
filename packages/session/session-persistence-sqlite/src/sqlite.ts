@@ -67,12 +67,6 @@ export interface SqliteLogsOptions {
   readonly path: string
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
   readonly legacyRoot: string
-  /** SQLite writer wait in milliseconds. */
-  readonly busyTimeoutMs?: number
-  /** Maximum intentional live write delay in milliseconds. */
-  readonly flushDelayMs?: number
-  /** Admitted live event count that starts a write before the delay elapses. */
-  readonly maxBufferedEvents?: number
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
@@ -85,11 +79,6 @@ export interface SqliteLogsOptions {
 export class SqliteLogs {
   /** Absolute database path, recorded in routing records. */
   readonly path: string
-  /** Maximum intentional live write delay in milliseconds. */
-  readonly flushDelayMs: number
-  /** Admitted live event count that starts a write before the delay elapses. */
-  readonly maxBufferedEvents: number
-  private readonly busyTimeoutMs: number
   private readonly legacyRoot: string
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteLogsOptions['acquireCreationLease']
@@ -111,9 +100,6 @@ export class SqliteLogs {
   constructor(options: SqliteLogsOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
-    this.busyTimeoutMs = options.busyTimeoutMs ?? 5000
-    this.flushDelayMs = options.flushDelayMs ?? 200
-    this.maxBufferedEvents = options.maxBufferedEvents ?? 256
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -182,7 +168,7 @@ export class SqliteLogs {
     const { DatabaseSync } = await import('node:sqlite')
     let db: DatabaseSync | undefined
     try {
-      const opened = new DatabaseSync(this.path, { timeout: this.busyTimeoutMs })
+      const opened = new DatabaseSync(this.path, { timeout: 5000 })
       db = opened
       // Readers can acquire a snapshot as soon as schema creation commits.
       opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
@@ -870,8 +856,8 @@ export class SqliteTrace implements SessionHandle {
     readonly inheritedEventCount = SessionLogOffset(0),
     private initialForkCut?: number, private forkWriteFrom?: number) {
     this.buffer = new LiveWriteBuffer({
-      delayMs: this.logs.flushDelayMs,
-      maxEvents: this.logs.maxBufferedEvents,
+      delayMs: 200,
+      maxEvents: 256,
       enqueue: operation => this.enqueue(operation),
       persist: batch => this.logs.append(this.header, batch),
       retry: (error) => {

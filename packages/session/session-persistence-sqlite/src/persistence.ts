@@ -3,6 +3,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { link, mkdir, open, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import type { Config } from '@deepseek-ai/dsh-session-persistence-jsonl'
+import pLimit, { type LimitFunction } from 'p-limit'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { SessionPersistence, SessionAlreadyExistsError, SessionPersistenceNotFoundError, materializeCreateHeader } from '@deepseek-ai/dsh-session-persistence'
@@ -26,10 +28,12 @@ export class TracePersistence extends SessionPersistence {
   private readonly migration: LegacySessionMigration
   private readonly rootPath: string
   private readonly jsonl: JsonlBackend
-  constructor(ctx: Context, owner: Context, root: string,
+  private readonly listLimit: LimitFunction
+  constructor(ctx: Context, owner: Context, config: Config,
     jsonl: JsonlBackend) {
     super(ctx)
-    this.rootPath = resolve(root)
+    this.rootPath = resolve(config.root)
+    this.listLimit = pLimit(config.listConcurrency ?? 3)
     this.directory = join(this.rootPath, '.segments')
     this.sqlite = new SqliteLogs({
       path: join(this.directory, 'sessions.sqlite'),
@@ -176,15 +180,15 @@ export class TracePersistence extends SessionPersistence {
     await this.assertRoutingDatabase()
     // Routing records publish after their commit, so reading them first guarantees each one's row is in the later scan.
     let names: string[] = []
-    try { names = await this.jsonl.listLimit(async () => {
+    try { names = await this.listLimit(async () => {
       options?.signal?.throwIfAborted()
       return readdir(this.directory)
     }) } catch (error: unknown) { if (!isAbsent(error)) throw error }
     const { entries: segmented, omitted } = await this.sqlite.scan(options?.signal)
     // A row omitted for its header is still stored; only a routing record without a row is lost state.
     const known = new Set([...segmented.map(entry => entry.header.id), ...omitted])
-    const entries = await this.jsonl.list(options, known)
-    const routes = await Promise.allSettled(names.filter(name => name.endsWith('.json')).map(name => this.jsonl.listLimit(async () => {
+    const entries = await this.jsonl.list(options)
+    const routes = await Promise.allSettled(names.filter(name => name.endsWith('.json')).map(name => this.listLimit(async () => {
       options?.signal?.throwIfAborted()
       const path = join(this.directory, name)
       const text = await readFile(path, { encoding: 'utf8', signal: options?.signal })
