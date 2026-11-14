@@ -18,9 +18,10 @@ export interface ColdSessionLog {
 }
 
 /**
- * Read one complete stored session log without taking ownership or mutating
- * storage: open a read handle, read the validated contiguous log, close the
- * handle, and append `interruptedTurnClosers` so a log whose writer crashed
+ * Read one complete stored session log without retaining write ownership.
+ * The backend may import legacy history before returning the read handle.
+ * Read the validated contiguous log, close the handle, and append
+ * `interruptedTurnClosers` so a log whose writer crashed
  * mid-turn folds as a balanced transcript. Backend failures propagate
  * unmapped — each caller owns its error taxonomy.
  * @param persistence - the mounted persistence service.
