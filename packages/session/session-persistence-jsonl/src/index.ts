@@ -1926,12 +1926,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // Keep this generator synchronous so thenable disposers are registered as functions, not awaited.
   ctx.effect(function* () {
     const tracker = new JsonlBackendTracker(name)
-    const segments = ctx.plugin({ name: 'session-segment-resources', apply() {} })
-    yield segments.dispose
+    yield tracker.install(ctx)
     service = ctx.plugin({
       name: 'session-persistence-jsonl-service',
       apply(serviceCtx: Context) {
-        tracker.install(segments.ctx)
         new JsonlSessionPersistence(serviceCtx, config, tracker)
       },
     })
