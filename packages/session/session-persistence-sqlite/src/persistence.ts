@@ -1,7 +1,7 @@
 /** SQLite Session persistence and durable takeover of legacy JSONL identities. @module */
 import { createHash, randomUUID } from 'node:crypto'
 import { link, mkdir, open, readFile, readdir, rm } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import pLimit, { type LimitFunction } from 'p-limit'
@@ -166,7 +166,8 @@ export class TracePersistence extends SessionPersistence {
     const snapshot = materializeCreateHeader(header)
     await this.start()
     await this.assertRoutingDatabase()
-    if (await this.stat(snapshot.id) !== undefined) throw new SessionAlreadyExistsError(snapshot.id)
+    // SQLite rejects an existing row itself; only the retained JSONL identity needs this check.
+    if (await this.jsonl.hasStoredJsonl(snapshot.id)) throw new SessionAlreadyExistsError(snapshot.id)
     return this.sqlite.create(snapshot, options)
   }
 
@@ -192,24 +193,19 @@ export class TracePersistence extends SessionPersistence {
       options?.signal?.throwIfAborted()
       return readdir(this.directory)
     }) } catch (error: unknown) { if (!isAbsent(error)) throw error }
-    const { entries: segmented, omitted } = await this.sqlite.scan(options?.signal)
+    const [{ entries: segmented, omitted }, entries] = await Promise.all([
+      this.sqlite.scan(options?.signal),
+      this.jsonl.list(options),
+    ])
     // A row omitted for its header is still stored; only a routing record without a row is lost state.
     const known = new Set([...segmented.map(entry => entry.header.id), ...omitted])
-    const entries = await this.jsonl.list(options)
-    const routes = await Promise.allSettled(names.filter(name => name.endsWith('.json')).map(name => this.listLimit(async () => {
-      options?.signal?.throwIfAborted()
-      const path = join(this.directory, name)
-      const text = await readFile(path, { encoding: 'utf8', signal: options?.signal })
-      options?.signal?.throwIfAborted()
-      const stored = this.parseMarker(text, path)
-      if (stored.database !== this.sqlite.path) {
-        throw new HarnessError('Recorded Segment storage differs from the configured database; restore the original configuration', 'SESSION_STORAGE_IDENTITY')
-      }
-      if (!known.has(stored.id)) {
+    // Routing records are named by their Session hash, so membership needs no record reads.
+    const routed = new Set([...known].map(id => basename(this.markerPath(id))))
+    for (const name of names) {
+      if (name.endsWith('.json') && !routed.has(name)) {
         throw new HarnessError('Recorded Segment Session is missing; restore its database before listing Sessions', 'SESSION_STORAGE_MISSING')
       }
-    })))
-    for (const route of routes) if (route.status === 'rejected') throw route.reason
+    }
     options?.signal?.throwIfAborted()
     return [...entries.filter(entry => !known.has(entry.header.id)), ...segmented]
   }

@@ -6,6 +6,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import { mkdir, open, stat, readdir, realpath } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -21,6 +22,7 @@ import { decodeHeader, decodeEvent, materializeHeader } from './codec.ts'
 import { SessionWriteLease } from './lease.ts'
 import { ensureDurableDirectoryWin32 } from './win32.ts'
 import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import { sessionDir } from './paths.ts'
 
@@ -29,6 +31,11 @@ export const SCHEMA_VERSION = 3
 const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
+/**
+ * Internal scheduling constant, not deployment configuration: decoded events
+ * between two event-loop yields while reading a stored history slice.
+ */
+const READ_DECODE_YIELD_EVENTS = 2048
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
@@ -471,10 +478,7 @@ export class SqliteLogs {
     const storedHeader = materializeHeader(header, inheritedCount)
     const batch = materializeAppendBatch(events)
     assertContiguous(header.id, batch, 0)
-    const payloads = batch.map((event) => {
-      decodeEvent(event)
-      return JSON.stringify(event)
-    })
+    const payloads = batch.map(event => JSON.stringify(event))
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
     this.transaction(db, () => {
@@ -613,14 +617,17 @@ export class SqliteLogs {
       }
       return { payloads, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
-    const decoded = stored.payloads.map((payload, index) => {
+    const decoded: (SessionFormatEvent & SessionEvent)[] = []
+    for (const [index, payload] of stored.payloads.entries()) {
+      // One synchronous transaction fetched the rows; decoding yields so a long history does not stall the event loop.
+      if (index > 0 && index % READ_DECODE_YIELD_EVENTS === 0) await setImmediate()
       try {
-        return decodeEvent(JSON.parse(payload))
+        decoded.push(decodeEvent(JSON.parse(payload)))
       } catch (error: unknown) {
         if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
         throw this.corruption(`session "${header.id}": stored event at index ${offset + index} is invalid`, error)
       }
-    })
+    }
     if (stored.complete) {
       try {
         restoreReleasedV4Artifact({ header: { ...header, delegationDepth: header.delegationDepth ?? 0 },
@@ -642,10 +649,7 @@ export class SqliteLogs {
    */
   async append(header: SessionHeader, batch: readonly SessionEvent[]): Promise<void> {
     const db = await this.database()
-    const payloads = batch.map((event) => {
-      decodeEvent(event)
-      return JSON.stringify(event)
-    })
+    const payloads = batch.map(event => JSON.stringify(event))
     this.transaction(db, () => {
       const row = this.ensureRow(db, header)
       assertContiguous(header.id, batch, row.event_count)

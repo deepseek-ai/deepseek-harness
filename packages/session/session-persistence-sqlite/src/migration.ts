@@ -38,10 +38,12 @@ export class LegacySessionMigration {
 
   private async migrate(id: SessionId, access: SessionAccess, signal?: AbortSignal): Promise<SessionHandle> {
     signal?.throwIfAborted()
-    if (await this.selected(id)) return this.sqlite.open(id, access, signal)
+    // The caller observed no SQLite row before queueing; the lease loop below rechecks before each attempt.
     // Header inspection does not decode history; the full snapshot is read only under ownership.
     const metadata = await this.jsonl.stat(id, signal === undefined ? undefined : { signal })
     if (metadata === undefined) {
+      // A Session committed to SQLite while this open was queued has no legacy metadata.
+      if (await this.selected(id)) return this.sqlite.open(id, access, signal)
       // The reader owns precise absent/malformed-header diagnostics.
       await this.jsonl.prepare(id, signal)
       throw new HarnessError('Legacy Session has no readable metadata', 'SESSION_STORAGE_CORRUPT')
