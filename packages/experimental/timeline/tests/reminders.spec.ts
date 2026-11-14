@@ -21,9 +21,9 @@ const checkpoint = (options: Adapter['main'][number] | undefined) =>
     ?.content.some(block => block.type === 'text' && block.text.includes('Task progress checkpoint')) ??
   false
 
-describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (backend) => {
+describe('stale task-tree reminders', () => {
   it('reports unavailable persistence and keeps that context stable within the turn', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const available = vi.spyOn(f.ctx.timeline, 'available').mockReturnValue(false)
     try {
       const context = async (signal?: AbortSignal) => {
@@ -45,7 +45,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     }
   })
   it('keeps one saved-plan snapshot per turn and refreshes it on the next turn, preserving progress', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let count = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -127,7 +127,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     }
   })
   it('shows an empty saved plan as pending', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     try {
       await executeTool(f.ctx, {
         name: 'timeline_tree', arguments: { action: 'start', title: 'Plan the release' },
@@ -141,7 +141,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     }
   })
   it('adds discussion handling only while a saved user annotation is open', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
         name,
@@ -185,7 +185,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     }
   })
   it('counts repeated admission for the same agent step once', async () => {
-    const f = await setup(backend, { intervalMs: 86400000, reminderIterations: 2 })
+    const f = await setup({ intervalMs: 86400000, reminderIterations: 2 })
     const signal = new AbortController().signal
     const requests = agentEvents(f.agent.ctx, f.agent)
     const admit = (step: number) => requests.waterfall('agent/request', { turn: 1, step, signal },
@@ -205,7 +205,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
   it('uses live reminder settings and restarts the count after a successful update', async () => {
     const adapter = new Adapter()
     adapter.steps = 8
-    const f = await setup(backend, { intervalMs: 86400000, reminderIterations: 7 }, adapter)
+    const f = await setup({ intervalMs: 86400000, reminderIterations: 7 }, adapter)
     adapter.mainActions[0] = () => {
       updateVolatile(
         (f.plugin.effectiveConfig as PluginConfig).reminderIterations,
@@ -237,7 +237,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     async (status) => {
       const adapter = new Adapter()
       adapter.steps = 0
-      const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+      const f = await setup({ intervalMs: 86400000 }, adapter)
       try {
         for (const [name, args] of [
           ['timeline_tree', { action: 'start', title: 'Saved goal' }],
@@ -272,7 +272,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
     const adapter = new Adapter()
     adapter.steps = 49
     adapter.mainActions[23] = () => [{ name: 'timeline_read', arguments: '{}' }]
-    const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+    const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
       f.start()
       await adapter.ready.promise
@@ -299,7 +299,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
         arguments: JSON.stringify({ tasks: [{ id: 'work', title: 'Ongoing work', status: 'active' }] }),
       },
     ]
-    const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+    const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
       f.start()
       await adapter.ready.promise
@@ -318,7 +318,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
   it('does not extend a closing response that reaches the reminder threshold', async () => {
     const adapter = new Adapter()
     adapter.steps = 23
-    const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+    const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
       f.start()
       await adapter.ready.promise
@@ -347,7 +347,7 @@ describe.each(['jsonl', 'sqlite'] as const)('stale task-tree reminders (%s)', (b
       adapter.mainActions[23] = () => [
         { name: 'timeline_tasks', arguments: JSON.stringify({ tasks: [{ id: 'missing' }] }) },
       ]
-      const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+      const f = await setup({ intervalMs: 86400000 }, adapter)
       const call = (name: string, args: object) =>
         executeTool(f.ctx, {
           name,

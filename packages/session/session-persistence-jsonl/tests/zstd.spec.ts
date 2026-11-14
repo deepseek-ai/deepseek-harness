@@ -8,7 +8,7 @@ import { performance } from 'node:perf_hooks'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import * as JsonlSessionPersistence from './fixtures/legacy-persistence.ts'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   generationLogPath, logPath, scanLog, sessionDir, toHeaderLine, type JsonlCompression,
 } from '../src/format.ts'

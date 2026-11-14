@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-tool-todo'
+import { scheduler } from 'node:timers/promises'
 
 export const name = 'snapshot-persistence-provider-unload'
 export const inject = ['loader', 'sessions']
@@ -45,6 +46,7 @@ export async function apply(ctx: Context): Promise<void> {
         entered.promise,
         unloading.then(() => { throw new Error('Persistence unloaded before its consumer cleanup') }),
       ])
+      await scheduler.yield()
       if (finished) throw new Error('Persistence did not await its consumer cleanup')
     } finally {
       release.resolve()

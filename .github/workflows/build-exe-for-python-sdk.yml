@@ -366,7 +366,7 @@ jobs:
             "${{ steps.smoke-venv-posix.outputs.python }}" \
             "$GITHUB_WORKSPACE/scripts/smoke-python-runtime.py" \
             --scenario all \
-            --installed-wheel --storage jsonl sqlite
+            --installed-wheel
 
       - name: Run installed-wheel keyless black-box tests (Windows)
         if: runner.os == 'Windows'
@@ -377,7 +377,7 @@ jobs:
           Remove-Item Env:DSH_RUNTIME_MODE -ErrorAction SilentlyContinue
           Push-Location $blackboxRoot
           try {
-            & "${{ steps.smoke-venv-windows.outputs.python }}" "$env:GITHUB_WORKSPACE\scripts\smoke-python-runtime.py" --scenario all --installed-wheel --storage jsonl sqlite
+            & "${{ steps.smoke-venv-windows.outputs.python }}" "$env:GITHUB_WORKSPACE\scripts\smoke-python-runtime.py" --scenario all --installed-wheel
             if ($LASTEXITCODE -ne 0) { throw "Installed-wheel black-box failed with exit code $LASTEXITCODE" }
           } finally {
             Pop-Location
@@ -445,7 +445,7 @@ jobs:
             "${{ steps.smoke-venv-posix.outputs.python }}" \
             "$GITHUB_WORKSPACE/scripts/smoke-python-runtime.py" \
             --scenario sdk-live \
-            --installed-wheel --storage jsonl sqlite
+            --installed-wheel
 
       - name: Run installed-wheel real API black-box test (Windows)
         if: >-
@@ -464,7 +464,7 @@ jobs:
           Remove-Item Env:DSH_RUNTIME_MODE -ErrorAction SilentlyContinue
           Push-Location $blackboxRoot
           try {
-            & "${{ steps.smoke-venv-windows.outputs.python }}" "$env:GITHUB_WORKSPACE\scripts\smoke-python-runtime.py" --scenario sdk-live --installed-wheel --storage jsonl sqlite
+            & "${{ steps.smoke-venv-windows.outputs.python }}" "$env:GITHUB_WORKSPACE\scripts\smoke-python-runtime.py" --scenario sdk-live --installed-wheel
             if ($LASTEXITCODE -ne 0) { throw "Installed-wheel live API smoke failed with exit code $LASTEXITCODE" }
           } finally {
             Pop-Location
@@ -518,8 +518,8 @@ jobs:
             /tmp/dsh-sdk/bin/python -m pip install "/work/dist-python/$SDK_WHEEL" "/work/dist-python/$RUNTIME_WHEEL"
             mkdir -p /tmp/dsh-sdk-manylinux-smoke
             cd /tmp/dsh-sdk-manylinux-smoke
-            env -u PYTHONPATH -u DSH_RUNTIME_MODE /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-default --installed-wheel --storage jsonl sqlite
-            env -u PYTHONPATH -u DSH_RUNTIME_MODE /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-mcp --installed-wheel --storage jsonl sqlite
+            env -u PYTHONPATH -u DSH_RUNTIME_MODE /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-default --installed-wheel
+            env -u PYTHONPATH -u DSH_RUNTIME_MODE /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-mcp --installed-wheel
           '
 
       - uses: actions/upload-artifact@v7.0.1

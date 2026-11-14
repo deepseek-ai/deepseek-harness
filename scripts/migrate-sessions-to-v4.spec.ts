@@ -194,7 +194,6 @@ describe('one-time V4 migration command', () => {
     })
     const target = join(source.directory, generationLogFilename(4, compression))
     const targetBytes = await readFile(target)
-    expect(existsSync(join(root, '.segments'))).toBe(false)
     const decoded = compression === 'none' ? targetBytes : Buffer.concat(await Promise.all(
       scanZstdFrames(targetBytes).frames.map(frame => decompressZstdFrame(targetBytes.subarray(frame.start, frame.end))),
     ))

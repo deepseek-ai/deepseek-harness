@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Save and resume Session history through one persistence plugin. The default JSONL backend saves per-session files. Explicitly select `storage: 'sqlite'` to import supported JSONL history on first open while retaining its source files. JSONL logs use checksummed Zstandard frames by default, or plain lines with `compression: 'none'`. Browser Workers use JSONL without compression. Configure a storage root before mounting the plugin.
+`dsh-session-persistence-jsonl` stores each session in a current append-only JSONL log and retains immutable historical format generations — checksummed Zstandard frames by default, raw newline-delimited lines when compression is disabled. It serves the current logical `SessionEvent` stream through persistence handles, so format migration, compression, historical decoding, and crash recovery remain storage-internal details. Choose it when consumers need a per-session file on disk; the logs are readable as plain lines when `compression: 'none'` is selected. A root directory is the one required configuration; durability, lazy materialization, [supported historical-format migration](../session-format-catalog/README.md), and torn-tail crash recovery come with the backend.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ Save and resume Session history through one persistence plugin. The default JSON
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin when a composition needs durable Sessions. Load the Session service and give the plugin a storage root.
+Mount this backend when a composition needs durable sessions backed by per-session files. The common path is explicit: load the session service, mount the backend, and give it a root directory.
 
 ### When to choose it
 
-Use the default JSONL backend for per-session files, browser Workers, or external line readers. Node applications can opt into the [SQLite backend](../session-persistence-sqlite/README.md) with `storage: 'sqlite'`. Both backends keep history under the configured root.
+Choose this backend when consumers benefit from one artifact per session — navigation, external tooling, or a raw line-readable log. It is the sole first-party Session-persistence provider. The backend keeps sessions under a deployment-controlled root: project-local, shared, temporary, or centralized.
 
 ### Minimal configuration
 
@@ -45,11 +45,8 @@ Use the default JSONL backend for per-session files, browser Workers, or externa
 | Field | Default | Meaning |
 |---|---|---|
 | `root` | required | Root directory for all session files |
-| `storage` | `'jsonl'` | New Session storage; browser Workers use `'jsonl'` with `compression: 'none'` |
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
 | `listConcurrency` | `3` | Maximum directory, header, and stat reads in flight, shared by every concurrent listing of this backend |
-
-With `storage: 'sqlite'`, opening a legacy Session imports its history before returning a handle. Concurrent readers wait for that import and then read SQLite while its writer remains active. An active legacy writer must release ownership before import; cancellation stops a waiting reader.
 
 Live-event write batching is not configuration: the batching window is the seam's internal scheduling policy inside each write handle.
 
@@ -57,7 +54,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### On-disk layout
 
-The following sections describe `storage: 'jsonl'` and the retained import source files. SQLite storage and ownership are documented in the [SQLite library](../session-persistence-sqlite/README.md). Each JSONL session gets a session-owned directory under a readable project directory. Every canonical generation starts with a physical header whose version equals its filename. The current format stores one physical row per durable event; the frozen v0 and v1 readers also understand their historical packed Assistant-delta rows. The current format stores `isSeeded` in the header and derives the inherited cut from the last tagged `session/end-seed` marker, while historical codecs translate their numeric `seedLength`. The format catalog completes that translation before a handle exposes current logical values. Current storage records use the lossless source-event representation described below:
+Each session gets a session-owned directory under a readable project directory. Every canonical generation starts with a physical header whose version equals its filename. The current format stores one physical row per durable event; the frozen v0 and v1 readers also understand their historical packed Assistant-delta rows. The current format stores `isSeeded` in the header and derives the inherited cut from the last tagged `session/end-seed` marker, while historical codecs translate their numeric `seedLength`. The format catalog completes that translation before a handle exposes current logical values. Current storage records use the lossless source-event representation described below:
 
 ```text
 <root>/

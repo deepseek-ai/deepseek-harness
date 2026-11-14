@@ -406,7 +406,6 @@ export async function bootWebOwner(options: WebOwnerOptions = {}): Promise<WebOw
     '- id: session-persistence-jsonl',
     '  config:',
     `    root: '${sessionsRoot}'`,
-    '    storage: jsonl',
     '    compression: none',
     '- insert:',
     '    - id: base-fixture-llm',

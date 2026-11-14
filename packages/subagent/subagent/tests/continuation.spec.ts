@@ -68,12 +68,13 @@ class GatedAdapter extends LlmAdapter {
   }
 }
 
-// Close later contexts that reopen a root before its owning cleanup removes it;
-// Windows rejects removal while any SQLite connection still holds the files.
+// Each persistence-backed temp root cleans up by closing its handle before
+// removing the directory: Windows rmSync over a dir holding a still-open handle
+// fails with EPERM.
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   const errors: unknown[] = []
-  for (const cleanup of cleanups.splice(0).reverse()) {
+  for (const cleanup of cleanups.splice(0)) {
     try { await cleanup() } catch (error) { errors.push(error) }
   }
   if (errors.length === 1) throw errors[0]
@@ -82,7 +83,7 @@ afterEach(async () => {
 
 /** Boot the full continuable stack: loop, persistence, providers, and subagents. */
 async function setupWith(
-  storage: 'jsonl' | 'sqlite',   adapter: LlmAdapter,
+  adapter: LlmAdapter,
   options: { persistence?: boolean; sessionQuery?: boolean; maxActiveSubagents?: number } = {},
 ) {
   const ctx = new Context()
@@ -92,7 +93,7 @@ async function setupWith(
   if (options.persistence !== false) {
     root = mkdtempSync(join(tmpdir(), 'dsh-subagent-continuation-'))
     const persistedRoot = root
-    const persistenceFiber = await ctx.plugin(JsonlSessionPersistence, { storage, root })
+    const persistenceFiber = await ctx.plugin(JsonlSessionPersistence, { root })
     disposePersistence = () => persistenceFiber.dispose()
     cleanups.push(async () => {
       await persistenceFiber.dispose()
@@ -112,9 +113,9 @@ async function setupWith(
   return { ctx, parent, disposePersistence, root, loop }
 }
 
-async function setup(storage: 'jsonl' | 'sqlite', script: Script, options: { persistence?: boolean } = {}) {
+async function setup(script: Script, options: { persistence?: boolean } = {}) {
   const adapter = new MockAdapter(script)
-  const booted = await setupWith(storage, adapter, options)
+  const booted = await setupWith(adapter, options)
   return { ...booted, adapter }
 }
 
@@ -294,10 +295,10 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: applies capacity edits to an existing root without stopping resident children', async (storage) => {
+  it('applies capacity edits to an existing root without stopping resident children', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter(Array.from({ length: 4 }, () => ({ chunks: textResponse('done'), gate: release.promise })))
-    const { ctx, parent } = await setupWith(storage, adapter, { maxActiveSubagents: 1 })
+    const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     try {
       const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -318,13 +319,13 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: defaults to eight live children and reuses capacity after settlement', async (storage) => {
+  it('defaults to eight live children and reuses capacity after settlement', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       ...Array.from({ length: 8 }, () => ({ chunks: textResponse('done'), gate: release.promise })),
       { chunks: textResponse('replacement') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     try {
       const started = await Promise.all(Array.from({ length: 8 }, () => ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })))
@@ -339,14 +340,14 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: shares slots across siblings, providers and nested children while isolating roots', async (storage) => {
+  it('shares slots across siblings, providers and nested children while isolating roots', async () => {
     const release = Promise.withResolvers<undefined>()
     const releaseParent = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('parent done'), gate: releaseParent.promise },
       ...Array.from({ length: 3 }, () => ({ chunks: textResponse('done'), gate: release.promise })),
     ])
-    const { ctx, parent } = await setupWith(storage, adapter, { maxActiveSubagents: 3 })
+    const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 3 })
     const other = await ctx.agentLoop.create(brandString<SessionId>('other-root'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
     parkParent(ctx, other)
@@ -376,8 +377,8 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reserves the last slot before asynchronous creation and returns it after failure', async (storage) => {
-    const { ctx, parent } = await setupWith(storage, new MockAdapter([textResponse('replacement')]), { maxActiveSubagents: 1 })
+  it('reserves the last slot before asynchronous creation and returns it after failure', async () => {
+    const { ctx, parent } = await setupWith(new MockAdapter([textResponse('replacement')]), { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     const agents = managerState(ctx).ownerCtx.agents
     const entered = Promise.withResolvers<undefined>()
@@ -406,14 +407,14 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: counts caller-awaited and parent-delivered runs against the same capacity', async (storage) => {
+  it('counts caller-awaited and parent-delivered runs against the same capacity', async () => {
     const release = Promise.withResolvers<undefined>()
     const releaseCaller = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('parent-delivered'), gate: release.promise },
       { chunks: textResponse('caller-awaited'), gate: releaseCaller.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter, { maxActiveSubagents: 1 })
+    const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     try {
       const child = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -438,7 +439,7 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: checks cold resume but accepts messages to an already resident child at capacity', async (storage) => {
+  it('checks cold resume but accepts messages to an already resident child at capacity', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first') },
@@ -446,7 +447,7 @@ describe('continuable activation capacity', () => {
       { chunks: textResponse('queued') },
       { chunks: textResponse('resumed') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter, { maxActiveSubagents: 1 })
+    const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     try {
       const old = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -467,13 +468,13 @@ describe('continuable activation capacity', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: retains the slot through disposal, including cleanup failure: %s', async (storage, failDisposal) => {
+  it.each([false, true])('retains the slot through disposal, including cleanup failure: %s', async (failDisposal) => {
     const releaseRun = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('busy'), gate: releaseRun.promise },
       { chunks: textResponse('replacement') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter, { maxActiveSubagents: 1 })
+    const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     const entered = Promise.withResolvers<undefined>()
     const releaseDisposal = Promise.withResolvers<undefined>()
@@ -507,8 +508,8 @@ describe('continuable activation capacity', () => {
 })
 
 describe('SubagentRuntime.startActivation', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: returns both identities at inbox acceptance, without waiting for the turn or the log', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [textResponse('first answer')])
+  it('returns both identities at inbox acceptance, without waiting for the turn or the log', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('first answer')])
     const enqueued: { id: MessageId; loggedYet: boolean; requestedYet: boolean }[] = []
     ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       // Acceptance is the boundary `startActivation` resolves at, so observe
@@ -528,12 +529,12 @@ describe('SubagentRuntime.startActivation', () => {
     expect(hasUserText(loaded.events, 'child task')).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: uses a caller-reserved child identity and rejects a duplicate reservation', async (storage) => {
+  it('uses a caller-reserved child identity and rejects a duplicate reservation', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('reserved answer'), gate: release.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const reservedId = brandString<SessionId>('00000000-0000-4000-8000-000000000123')
 
     const started = await ctx.subagents.startActivation({
@@ -563,8 +564,8 @@ describe('SubagentRuntime.startActivation', () => {
     expect(ctx.agents.get(reservedId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects reserved child ids for an external backend before dispatch', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects reserved child ids for an external backend before dispatch', async () => {
+    const { ctx, parent } = await setup([])
     const start = vi.fn(async () => { throw new Error('must not dispatch') })
     ctx.subagents.registerProvider({
       name: 'one-shot',
@@ -580,14 +581,14 @@ describe('SubagentRuntime.startActivation', () => {
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([brandString<SessionId>('parent')])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects synchronously when persistence is not configured', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')], { persistence: false })
+  it('rejects synchronously when persistence is not configured', async () => {
+    const { ctx, parent } = await setup([textResponse('unused')], { persistence: false })
     await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' }))
       .rejects.toThrow(/require session persistence/)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: publishes the reserved child id and appends the pre-turn descriptor', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('answer')])
+  it('publishes the reserved child id and appends the pre-turn descriptor', async () => {
+    const { ctx, parent } = await setup([textResponse('answer')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -612,7 +613,7 @@ describe('SubagentRuntime.startActivation', () => {
     expect(loaded.meta.origin).toBe('subagent')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: persists a selected reasoning effort and reapplies it on cold resume', async (storage) => {
+  it('persists a selected reasoning effort and reapplies it on cold resume', async () => {
     const effort = brandString<ReasoningEffortId>('max')
     const adapter = new MockAdapter([
       textResponse('first answer'),
@@ -621,7 +622,7 @@ describe('SubagentRuntime.startActivation', () => {
       efforts: [{ id: effort, name: 'Max' }],
       defaultEffort: effort,
     })
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const childEfforts: Array<string | undefined> = []
     ctx.on('agent/created', ({ agent }) => {
@@ -645,8 +646,8 @@ describe('SubagentRuntime.startActivation', () => {
     expect(childEfforts).toEqual(['max', 'max'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls the child back completely when the caller signal aborts before acceptance', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')])
+  it('rolls the child back completely when the caller signal aborts before acceptance', async () => {
+    const { ctx, parent } = await setup([textResponse('unused')])
     const controller = new AbortController()
     // Abort inside the child's creation window: setup runs before publication.
     ctx.on('agent/created', ({ agent: child }) => {
@@ -661,8 +662,8 @@ describe('SubagentRuntime.startActivation', () => {
     })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls the child back when the signal aborts between publication and acceptance', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')])
+  it('rolls the child back when the signal aborts between publication and acceptance', async () => {
+    const { ctx, parent } = await setup([textResponse('unused')])
     const controller = new AbortController()
     // `subagent/start` fires once the epoch is resident, before the prompt is
     // submitted, so cancelling here lands squarely in the handoff window.
@@ -677,8 +678,8 @@ describe('SubagentRuntime.startActivation', () => {
     })
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['parent', 'caller'] as const).map(value => [storage, value] as const)))('%s: releases the %s-delivery activation when its catalog append fails', async (storage, delivery) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')])
+  it.each(['parent', 'caller'] as const)('releases the %s-delivery activation when its catalog append fails', async (delivery) => {
+    const { ctx, parent } = await setup([textResponse('unused')])
     const childId = brandString<SessionId>('00000000-0000-4000-8000-000000000321')
     const catalogFailure = new Error('catalog append failed')
     const cleanupFailure = new Error('activation disposal also failed')
@@ -711,8 +712,8 @@ describe('SubagentRuntime.startActivation', () => {
     expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toEqual([])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: preserves prompt admission failure when Activation disposal also fails', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')])
+  it('preserves prompt admission failure when Activation disposal also fails', async () => {
+    const { ctx, parent } = await setup([textResponse('unused')])
     const childId = brandString<SessionId>('00000000-0000-4000-8000-000000000322')
     const admissionFailure = new Error('prompt admission failed')
     const cleanupFailure = new Error('activation disposal also failed')
@@ -742,8 +743,8 @@ describe('SubagentRuntime.startActivation', () => {
     ))).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls an unpublished Activation back when lifecycle publication fails', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('unused')])
+  it('rolls an unpublished Activation back when lifecycle publication fails', async () => {
+    const { ctx, parent } = await setup([textResponse('unused')])
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', info => void ends.push(info))
     ctx.on('internal/dispatch', (_mode, eventName) => {
@@ -760,8 +761,8 @@ describe('SubagentRuntime.startActivation', () => {
     await expect(drainManager(ctx)).resolves.toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a continuable child that would exceed the configured depth cap', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects a continuable child that would exceed the configured depth cap', async () => {
+    const { ctx, parent } = await setup([])
     await expect(ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
@@ -770,8 +771,8 @@ describe('SubagentRuntime.startActivation', () => {
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([brandString<SessionId>('parent')])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects an invalid continuable depth cap before provider preparation', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects an invalid continuable depth cap before provider preparation', async () => {
+    const { ctx, parent } = await setup([])
     await expect(ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
@@ -780,8 +781,8 @@ describe('SubagentRuntime.startActivation', () => {
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([brandString<SessionId>('parent')])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: omits undeclared composition fields from the descriptor', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('omits undeclared composition fields from the descriptor', async () => {
+    const { ctx } = await setup([])
     const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless'), {})
     const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
     const child = await vi.waitFor(() => {
@@ -800,8 +801,8 @@ describe('SubagentRuntime.startActivation', () => {
     await drainManager(ctx)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes without inventing a model route the descriptor never declared', async (storage) => {
-    const { ctx, root } = await setup(storage, [textResponse('first')])
+  it('cold-resumes without inventing a model route the descriptor never declared', async () => {
+    const { ctx, root } = await setup([textResponse('first')])
     const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless-resume'), {})
     const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -811,7 +812,7 @@ describe('SubagentRuntime.startActivation', () => {
 
     const fresh = new Context()
     await mountAgentLoopTestDependencies(fresh)
-    const freshPersistence = await fresh.plugin(JsonlSessionPersistence, { storage, root: root! })
+    const freshPersistence = await fresh.plugin(JsonlSessionPersistence, { root: root! })
     // This context opened a second handle on the same root; register it so
     // afterEach closes it before removing the root (even on a failure path).
     cleanups.push(async () => { await freshPersistence.dispose() })
@@ -835,8 +836,8 @@ describe('SubagentRuntime.startActivation', () => {
     await drainManager(fresh)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: continues turn numbering after an inherited fork prefix and pre-turn descriptor', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('continues turn numbering after an inherited fork prefix and pre-turn descriptor', async () => {
+    const { ctx, parent } = await setup([
       textResponse('parent turn'),
       textResponse('forked child'),
     ])
@@ -869,8 +870,8 @@ describe('continuable image Queue prompts', () => {
     },
   }
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: checks the subagent tree root model before accepting an image from a member', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('checks the subagent tree root model before accepting an image from a member', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const sender = ctx.agents.get(started.childId)!
     const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo').mockResolvedValue({ inputModalities: ['text'] } as never)
@@ -884,8 +885,8 @@ describe('continuable image Queue prompts', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: refuses an image follow-up when the child model declines image input, leaving no partial message', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('child work')])
+  it('refuses an image follow-up when the child model declines image input, leaving no partial message', async () => {
+    const { ctx, parent } = await setup([textResponse('child work')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo')
@@ -903,13 +904,13 @@ describe('continuable image Queue prompts', () => {
     await drainManager(ctx)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers an image follow-up to a resident child when its model accepts image input', async (storage) => {
+  it('delivers an image follow-up to a resident child when its model accepts image input', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child work'), gate: releaseFirst.promise },
       { chunks: textResponse('image reply') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => {
       expect(adapter.requests).toHaveLength(1)
@@ -934,10 +935,10 @@ describe('continuable image Queue prompts', () => {
     await drainManager(ctx)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: re-checks the disposal cutoff when a drain begins during a live image capability read', async (storage) => {
+  it('re-checks the disposal cutoff when a drain begins during a live image capability read', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('child work'), gate: releaseFirst.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const capability = Promise.withResolvers<{ inputModalities: string[] }>()
@@ -963,8 +964,8 @@ describe('continuable image Queue prompts', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a materialized image follow-up whose capability read raced a drain', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('child work')])
+  it('rejects a materialized image follow-up whose capability read raced a drain', async () => {
+    const { ctx, parent } = await setup([textResponse('child work')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     const capability = Promise.withResolvers<{ inputModalities: string[] }>()
@@ -991,8 +992,8 @@ describe('continuable image Queue prompts', () => {
       && event.data.content.some(block => block.type === 'image'))).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: defers to the text-only projection when the descriptor declares no model route', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('defers to the text-only projection when the descriptor declares no model route', async () => {
+    const { ctx } = await setup([])
     const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless-image'), {})
     const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -1008,8 +1009,8 @@ describe('continuable image Queue prompts', () => {
 })
 
 describe('target-only Queue residency routing', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: fails a cold follow-up when Session query is unavailable', async (storage) => {
-    const { ctx } = await setupWith(storage, new MockAdapter([]), {
+  it('fails a cold follow-up when Session query is unavailable', async () => {
+    const { ctx } = await setupWith(new MockAdapter([]), {
       persistence: false,
       sessionQuery: false,
     })
@@ -1018,14 +1019,14 @@ describe('target-only Queue residency routing', () => {
       .rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: enqueues in the same Activation while it is running, preserving one inbox FIFO', async (storage) => {
+  it('enqueues in the same Activation while it is running, preserving one inbox FIFO', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first'), gate: releaseFirst.promise },
       { chunks: textResponse('second') },
       { chunks: textResponse('third') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)
@@ -1044,8 +1045,8 @@ describe('target-only Queue residency routing', () => {
     expect(userTexts(loaded.events)).toEqual(['child task', 'first follow-up', 'second follow-up'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes a settled child into a new Activation', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('after resume')])
+  it('cold-resumes a settled child into a new Activation', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -1059,8 +1060,8 @@ describe('target-only Queue residency routing', () => {
     expect(loaded.events.filter(event => event.type === 'subagent/descriptor')).toHaveLength(1)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes after the initial provider unregisters', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('after resume')])
+  it('cold-resumes after the initial provider unregisters', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
     const disposeProvider = ctx.subagents.registerProvider({
       name: 'retired',
       capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
@@ -1089,7 +1090,7 @@ describe('target-only Queue residency routing', () => {
     expect(userTexts(loaded.events)).toEqual(['child task', 'continue without provider'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes a finished creator while its child keeps the same instance', async (storage) => {
+  it('cold-resumes a finished creator while its child keeps the same instance', async () => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -1097,7 +1098,7 @@ describe('target-only Queue residency routing', () => {
       { chunks: textResponse('leaf'), gate: releaseLeaf.promise },
       { chunks: textResponse('creator resumed') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const first = ctx.agents.get(creator.childId)!
@@ -1122,8 +1123,8 @@ describe('target-only Queue residency routing', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers to a nested target by id and rejects a root as a subagent target', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang', 'hang', 'hang'])
+  it('delivers to a nested target by id and rejects a root as a subagent target', async () => {
+    const { ctx, parent } = await setup(['hang', 'hang', 'hang'])
     const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const second = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const creator = ctx.agents.get(second.childId)!
@@ -1138,8 +1139,8 @@ describe('target-only Queue residency routing', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a cold target whose persisted identity cannot establish tree membership', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects a cold target whose persisted identity cannot establish tree membership', async () => {
+    const { ctx, parent } = await setup([])
     const childId = brandString<SessionId>('child-without-descriptor')
     const child = await ctx.agents.create({
       sessionId: childId,
@@ -1160,8 +1161,8 @@ describe('target-only Queue residency routing', () => {
       .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a cold target whose persisted descriptor is corrupt as not resumable', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects a cold target whose persisted descriptor is corrupt as not resumable', async () => {
+    const { ctx, parent } = await setup([])
     const childId = brandString<SessionId>('child-with-corrupt-descriptor')
     const child = await ctx.agents.create({
       sessionId: childId,
@@ -1185,14 +1186,14 @@ describe('target-only Queue residency routing', () => {
       })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports an unknown child id as unavailable', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('reports an unknown child id as unavailable', async () => {
+    const { ctx } = await setup([])
     await expect(queuePrompt(ctx, brandString<SessionId>('missing'), message('hello')))
       .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: propagates cancellation while inspecting a cold child', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first')])
+  it('propagates cancellation while inspecting a cold child', async () => {
+    const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     const inspectStarted = Promise.withResolvers<undefined>()
@@ -1222,8 +1223,8 @@ describe('target-only Queue residency routing', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: preserves a SubagentError raised while cold-materializing a child', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first')])
+  it('preserves a SubagentError raised while cold-materializing a child', async () => {
+    const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     const failure = new SubagentError('materialization denied', 'UNAUTHORIZED')
@@ -1233,8 +1234,8 @@ describe('target-only Queue residency routing', () => {
       .rejects.toBe(failure)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes a delivery that lost the race with final disposal', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('after the race')])
+  it('cold-resumes a delivery that lost the race with final disposal', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('after the race')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -1255,13 +1256,13 @@ describe('target-only Queue residency routing', () => {
 })
 
 describe('continuable human steering delivery', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: places resident steering in nextStep with its durable identity and source', async (storage) => {
+  it('places resident steering in nextStep with its durable identity and source', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first'), gate: release.promise },
       { chunks: textResponse('steered') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -1278,8 +1279,8 @@ describe('continuable human steering delivery', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes steering into nextStep instead of inventing another queue', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('steered')])
+  it('cold-resumes steering into nextStep instead of inventing another queue', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('steered')])
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -1295,7 +1296,7 @@ describe('continuable human steering delivery', () => {
 })
 
 describe('continuable child ownership', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['queue', 'steer'] as const).map(value => [storage, value] as const)))('%s: delivers human %s to a resident and cold child after its creator exits', async (storage, delivery) => {
+  it.each(['queue', 'steer'] as const)('delivers human %s to a resident and cold child after its creator exits', async (delivery) => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -1304,7 +1305,7 @@ describe('continuable child ownership', () => {
       { chunks: textResponse('resident follow-up') },
       { chunks: textResponse('cold follow-up') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const starts: SubagentRunInfo[] = []
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/start', info => void starts.push(info))
@@ -1344,14 +1345,14 @@ describe('continuable child ownership', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: releases a finished creator while its child remains owned by the subagent tree root', async (storage) => {
+  it('releases a finished creator while its child remains owned by the subagent tree root', async () => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('creator done'), gate: releaseCreator.promise },
       { chunks: textResponse('leaf'), gate: releaseLeaf.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = ctx.agents.get(creator.childId)!
@@ -1375,7 +1376,7 @@ describe('continuable child ownership', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: archives a descendant through an offline creator (cold resume=%s)', async (storage, coldResume) => {
+  it.each([false, true])('archives a descendant through an offline creator (cold resume=%s)', async (coldResume) => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -1383,7 +1384,7 @@ describe('continuable child ownership', () => {
       { chunks: textResponse('leaf'), ...coldResume ? {} : { gate: releaseLeaf.promise } },
       ...coldResume ? [{ chunks: textResponse('resumed leaf'), gate: releaseLeaf.promise }] : [],
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const archived: SessionId[] = []
     ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
@@ -1423,8 +1424,8 @@ describe('continuable child ownership', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not add a top-level parent to the waiting graph', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('done')])
+  it('does not add a top-level parent to the waiting graph', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     // The top-level parent remains independently registered after its child settles.
@@ -1433,13 +1434,13 @@ describe('continuable child ownership', () => {
 })
 
 describe('continuable durability and teardown', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: rechecks direct Agent inbox work accepted during the final flush', async (storage) => {
+  it('rechecks direct Agent inbox work accepted during the final flush', async () => {
     const releaseFirstTurn = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first answer'), gate: releaseFirstTurn.promise },
       { chunks: textResponse('late answer') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
@@ -1473,12 +1474,12 @@ describe('continuable durability and teardown', () => {
     expect(hasAssistantText(loaded.events, 'late answer')).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: retries after Session-only work completes during the final flush', async (storage) => {
+  it('retries after Session-only work completes during the final flush', async () => {
     const releaseFirstTurn = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('answer'), gate: releaseFirstTurn.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
@@ -1507,14 +1508,14 @@ describe('continuable durability and teardown', () => {
     expect(hasUserText(loaded.events, 'detached result')).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps a child acquired during the final flush before settling', async (storage) => {
+  it('keeps a child acquired during the final flush before settling', async () => {
     const releaseFirstTurn = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseFirstTurn.promise },
       { chunks: textResponse('grandchild answer'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
@@ -1542,12 +1543,12 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: lets explicit disposal win while the natural final flush is pending', async (storage) => {
+  it('lets explicit disposal win while the natural final flush is pending', async () => {
     const releaseFirstTurn = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('answer'), gate: releaseFirstTurn.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
@@ -1570,10 +1571,10 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(started.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rechecks maintenance that claims the Agent during the final flush', async (storage) => {
+  it('rechecks maintenance that claims the Agent during the final flush', async () => {
     const releaseFirstTurn = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: releaseFirstTurn.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
@@ -1614,12 +1615,12 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: settles despite the persistence backend being disposed mid-run', async (storage) => {
+  it('settles despite the persistence backend being disposed mid-run', async () => {
     const releaseResponse = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('unconfirmed answer'), gate: releaseResponse.promise },
     ])
-    const { ctx, parent, disposePersistence } = await setupWith(storage, adapter)
+    const { ctx, parent, disposePersistence } = await setupWith(adapter)
     const warnings: string[] = []
     ctx.logger.warn = (message: string) => { warnings.push(message) }
 
@@ -1636,8 +1637,8 @@ describe('continuable durability and teardown', () => {
     expect(warnings.join('\n')).not.toContain('final session flush')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: logs a failed final flush after every listener settles without failing the Activation', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('answer')])
+  it('logs a failed final flush after every listener settles without failing the Activation', async () => {
+    const { ctx, parent } = await setup([textResponse('answer')])
     const warnings: string[] = []
     const ends: SubagentRunEndInfo[] = []
     let peerFlushed = false
@@ -1657,10 +1658,10 @@ describe('continuable durability and teardown', () => {
     expect(ends.at(-1)?.stopReason).toBe('completed')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: logs a teardown failure reached through normal settlement', async (storage) => {
+  it('logs a teardown failure reached through normal settlement', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const warnings: string[] = []
     ctx.logger.warn = (message: string) => { warnings.push(message) }
 
@@ -1682,13 +1683,13 @@ describe('continuable durability and teardown', () => {
     }, { timeout: 5_000 })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposes every subagent tree instance on manager teardown', async (storage) => {
+  it('disposes every subagent tree instance on manager teardown', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child done'), gate: hold.promise },
       { chunks: textResponse('grandchild'), gate: hold.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -1711,7 +1712,7 @@ describe('continuable durability and teardown', () => {
     expect(loaded.meta.id).toBe(started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: drains one parent forest without disabling a sibling parent forest', async (storage) => {
+  it('drains one parent forest without disabling a sibling parent forest', async () => {
     const releaseTarget = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const releaseSibling = Promise.withResolvers<undefined>()
@@ -1721,7 +1722,7 @@ describe('continuable durability and teardown', () => {
       { chunks: textResponse('target grandchild'), gate: releaseGrandchild.promise },
       { chunks: textResponse('sibling follow-up') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const siblingParent = await ctx.agentLoop.create(
       brandString<SessionId>('sibling-parent'),
       { provider: 'mock', model: 'mock' },
@@ -1769,8 +1770,8 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not drain a subagent tree when only an ordinary member closes', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang', 'hang'])
+  it('does not drain a subagent tree when only an ordinary member closes', async () => {
+    const { ctx, parent } = await setup(['hang', 'hang'])
     const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const child = ctx.agents.get(creator.childId)!
     const leaf = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'caller' })
@@ -1784,7 +1785,7 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(leaf.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposes one activation without releasing siblings or descendants', async (storage) => {
+  it('disposes one activation without releasing siblings or descendants', async () => {
     const releaseTarget = Promise.withResolvers<undefined>()
     const releaseSibling = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
@@ -1793,7 +1794,7 @@ describe('continuable durability and teardown', () => {
       { chunks: textResponse('sibling'), gate: releaseSibling.promise },
       { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const sibling = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -1818,10 +1819,10 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports activation disposal failures after releasing the child', async (storage) => {
+  it('reports activation disposal failures after releasing the child', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('target'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const activation = managerState(ctx).resident.get(target.childId)!
@@ -1839,14 +1840,14 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(target.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: drains the subagent tree after an intermediate creator leaves the registry', async (storage) => {
+  it('drains the subagent tree after an intermediate creator leaves the registry', async () => {
     const releaseIntermediate = Promise.withResolvers<undefined>()
     const releaseDescendant = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('host task'), gate: releaseIntermediate.promise },
       { chunks: textResponse('continuable descendant'), gate: releaseDescendant.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     try {
       const handle = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
       const intermediate = ctx.agents.get(handle.childId)!
@@ -1877,8 +1878,8 @@ describe('continuable durability and teardown', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: awaits and rolls back an admitted materialization below a scoped root', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('awaits and rolls back an admitted materialization below a scoped root', async () => {
+    const { ctx, parent } = await setup([])
     const agents = managerState(ctx).ownerCtx.agents
     const create = agents.create.bind(agents)
     const published = Promise.withResolvers<SessionId>()
@@ -1909,8 +1910,8 @@ describe('continuable durability and teardown', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: ignores a stale scoped root without disabling its live same-id Agent', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('done')])
+  it('ignores a stale scoped root without disabling its live same-id Agent', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
     const stale = { ...parent, id: parent.id } as Agent
 
     await ctx.subagents.drainDescendants([stale])
@@ -1919,12 +1920,12 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a scoped teardown failure after releasing the selected branch', async (storage) => {
+  it('reports a scoped teardown failure after releasing the selected branch', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('target child'), gate: hold.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const activation = managerState(ctx).resident.get(started.childId)!
@@ -1942,8 +1943,8 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(started.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects new materialization and delivery once draining begins', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('done')])
+  it('rejects new materialization and delivery once draining begins', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -1955,8 +1956,8 @@ describe('continuable durability and teardown', () => {
       .rejects.toMatchObject({ code: 'DRAINING' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects an initial prompt when drain starts after materialization', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects an initial prompt when drain starts after materialization', async () => {
+    const { ctx, parent } = await setup([])
     const drains: Promise<void>[] = []
     const accepted: MessageId[] = []
     ctx.on('subagent/start', () => { drains.push(drainManager(ctx)) })
@@ -1970,8 +1971,8 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.list()).toEqual([parent])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: waits for a published materialization to finish rollback before drain resolves', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('waits for a published materialization to finish rollback before drain resolves', async () => {
+    const { ctx, parent } = await setup([])
     const order: string[] = []
     const drains: Promise<void>[] = []
     ctx.on('agent/created', ({ agent: child }) => {
@@ -1993,10 +1994,10 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.list()).toEqual([parent])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: admits a live follow-up before a later drain can begin disposal', async (storage) => {
+  it('admits a live follow-up before a later drain can begin disposal', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2020,10 +2021,10 @@ describe('continuable durability and teardown', () => {
     expect(order).toEqual(['enqueue', 'cancel'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: has no automatic replay for an accepted but unlogged message', async (storage) => {
+  it('has no automatic replay for an accepted but unlogged message', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('first'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     // Accepted into the inbox, but this queued turn never opens.
@@ -2041,8 +2042,8 @@ describe('continuable durability and teardown', () => {
 })
 
 describe('continuable review regressions', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: rechecks exact root liveness after cold-resume materialization', async (storage) => {
-    const { ctx } = await setup(storage, [textResponse('first')])
+  it('rechecks exact root liveness after cold-resume materialization', async () => {
+    const { ctx } = await setup([textResponse('first')])
     const parentId = brandString<SessionId>('replaceable-parent')
     const originalParent = await ctx.agents.create({
       sessionId: parentId,
@@ -2087,10 +2088,10 @@ describe('continuable review regressions', () => {
     await replacement.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts a later delivery after Agent.followup throws', async (storage) => {
+  it('accepts a later delivery after Agent.followup throws', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2110,9 +2111,9 @@ describe('continuable review regressions', () => {
     await drained
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: reports the child's own terminal reason, not teardown success", async (storage) => {
+  it('reports the child\'s own terminal reason, not teardown success', async () => {
     // The child hits its token ceiling; teardown still succeeds.
-    const { ctx, parent } = await setupWith(storage, new MockAdapter([
+    const { ctx, parent } = await setupWith(new MockAdapter([
       [{ type: 'block-start', index: 0, blockType: 'text' },
         { type: 'text-delta', index: 0, text: 'partial' },
         { type: 'block-end', index: 0, block: { type: 'text', text: 'partial' } },
@@ -2129,8 +2130,8 @@ describe('continuable review regressions', () => {
     expect(ends[0]!.stopReason).toBe('max-tokens')
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['turn/start', 'turn/end'] as const).map(value => [storage, value] as const)))('%s: settles a local child whose first %s append fails', async (storage, failedEvent) => {
-    const { ctx, parent, adapter } = await setup(storage, [textResponse('child answer')])
+  it.each(['turn/start', 'turn/end'] as const)('settles a local child whose first %s append fails', async (failedEvent) => {
+    const { ctx, parent, adapter } = await setup([textResponse('child answer')])
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', (info) => { ends.push(info) })
     ctx.on('subagent/start', ({ id }) => {
@@ -2161,8 +2162,8 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['turn/start', 'turn/end'] as const).map(value => [storage, value] as const)))('%s: accepts recovery after a local %s append failure', async (storage, failedEvent) => {
-    const { ctx, parent } = await setup(storage, failedEvent === 'turn/start'
+  it.each(['turn/start', 'turn/end'] as const)('accepts recovery after a local %s append failure', async (failedEvent) => {
+    const { ctx, parent } = await setup(failedEvent === 'turn/start'
       ? [textResponse('recovered')]
       : [textResponse('first answer'), textResponse('recovered')])
     let failed = false
@@ -2196,8 +2197,8 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: retains a local failure emitted during an earlier terminal notification', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('child answer')])
+  it('retains a local failure emitted during an earlier terminal notification', async () => {
+    const { ctx, parent } = await setup([textResponse('child answer')])
     ctx.on('session/event', (session, event) => {
       if (session === parent.session || event.type !== 'turn/end') return
       const child = ctx.agents.get(session.id)!
@@ -2214,8 +2215,8 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: ignores another Agent failure delivered to a local activation observer', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('child answer')])
+  it('ignores another Agent failure delivered to a local activation observer', async () => {
+    const { ctx, parent } = await setup([textResponse('child answer')])
     ctx.on('subagent/start', ({ id }) => {
       const child = ctx.agents.get(id)!
       child.ctx.emit('agent/error', { agent: parent, turn: 0, step: 0, error: new Error('unrelated failure') })
@@ -2229,10 +2230,10 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a live delivery whose caller signal aborted before admission', async (storage) => {
+  it('rejects a live delivery whose caller signal aborted before admission', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: releaseFirst.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2251,8 +2252,8 @@ describe('continuable review regressions', () => {
     expect(before).toBeGreaterThan(0)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: reports this epoch's own output, captured while the child was still live", async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('reports this epoch\'s own output, captured while the child was still live', async () => {
+    const { ctx, parent } = await setup([
       textResponse('first answer'), textResponse('first acknowledgement'),
       textResponse('second answer'), textResponse('second acknowledgement'),
     ])
@@ -2283,11 +2284,11 @@ describe('continuable review regressions', () => {
     expect(notices[1]!.text).toContain('second answer')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: keeps the epoch's earlier text past a final empty usage-only message", async (storage) => {
+  it('keeps the epoch\'s earlier text past a final empty usage-only message', async () => {
     // A tool-only max-tokens step records an empty assistant/message for
     // usage. The terminal event retains the previous assistant content,
     // including its tool call but not the intervening tool result.
-    const { ctx, parent } = await setup(storage, [
+    const { ctx, parent } = await setup([
       toolCallResponse('t1', 'noop', {}, 'partial one'),
       [
         { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -2321,8 +2322,8 @@ describe('continuable review regressions', () => {
     ])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a resumed epoch that opened no turn without the previous answer', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first answer')])
+  it('reports a resumed epoch that opened no turn without the previous answer', async () => {
+    const { ctx, parent } = await setup([textResponse('first answer')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -2343,12 +2344,12 @@ describe('continuable review regressions', () => {
     expect(ends[0]!.stopReason).toBe('refusal')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers a local result after handle cleanup and parent notifications', async (storage) => {
+  it('delivers a local result after handle cleanup and parent notifications', async () => {
     const turn = Promise.withResolvers<undefined>()
     const cleaning = Promise.withResolvers<undefined>()
     const cleanup = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: turn.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const followup = vi.spyOn(parent, 'followup')
     const steer = vi.spyOn(parent, 'steer')
     const ended = vi.fn()
@@ -2383,8 +2384,8 @@ describe('continuable review regressions', () => {
     await expect(waiting).resolves.toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports handle-disposal failure on the terminal edge', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('answer')])
+  it('reports handle-disposal failure on the terminal edge', async () => {
+    const { ctx, parent } = await setup([textResponse('answer')])
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', (info) => { ends.push(info) })
 
@@ -2407,10 +2408,10 @@ describe('continuable review regressions', () => {
     expect(ends[0]!.stopReason).toBe('error')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a pre-disposal teardown failure on the terminal edge', async (storage) => {
+  it('reports a pre-disposal teardown failure on the terminal edge', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', info => void ends.push(info))
 
@@ -2429,10 +2430,10 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: releases a naturally settled Activation when terminal capture fails', async (storage) => {
+  it('releases a naturally settled Activation when terminal capture fails', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', info => void ends.push(info))
 
@@ -2478,10 +2479,10 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: preserves independent pre-disposal and handle-disposal failures', async (storage) => {
+  it('preserves independent pre-disposal and handle-disposal failures', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const activation = managerState(ctx).resident.get(started.childId)!
     const handle = requireLocalActivation(activation).handle
@@ -2507,10 +2508,10 @@ describe('continuable review regressions', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cancels a running turn before the best-effort final flush', async (storage) => {
+  it('cancels a running turn before the best-effort final flush', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('slow'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const order: string[] = []
     ctx.on('session/flush', (session) => {
       if (session.header.parentSession !== undefined) order.push('flush')
@@ -2533,10 +2534,10 @@ describe('continuable review regressions', () => {
     expect(order.indexOf('cancel')).toBeLessThan(order.lastIndexOf('flush'))
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: releases an accepted message that is discarded instead of run', async (storage) => {
+  it('releases an accepted message that is discarded instead of run', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     // Queue a turn, then cancel so it is discarded rather than dequeued. The
@@ -2552,10 +2553,10 @@ describe('continuable review regressions', () => {
     expect(hasUserText(loaded.events, 'discarded')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: settles after removing the last message from an idle parked Inbox', async (storage) => {
+  it('settles after removing the last message from an idle parked Inbox', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2568,10 +2569,10 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: shares disposal when explicit close overtakes a queued idle settlement', async (storage) => {
+  it('shares disposal when explicit close overtakes a queued idle settlement', async () => {
     const turn = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: turn.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const activation = managerState(ctx).resident.get(started.childId)!
     const child = ctx.agents.get(started.childId)!
@@ -2595,10 +2596,10 @@ describe('continuable review regressions', () => {
     expect(managerState(ctx).resident.get(started.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps a maintenance task that claimed the idle phase after whenIdle resolved', async (storage) => {
+  it('keeps a maintenance task that claimed the idle phase after whenIdle resolved', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2623,10 +2624,10 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: settles when maintenance finishes after losing the idle phase', async (storage) => {
+  it('settles when maintenance finishes after losing the idle phase', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2646,13 +2647,13 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     { label: 'plugin', source: { kind: 'tool-jobs' as const } },
     { label: 'non-plugin', source: { kind: 'team-message', teamId: 't-1' } as never },
-  ]).map(value => [storage, value] as const)))('%s: keeps an idle child resident while its Inbox holds $label injected context', async (storage, { source }) => {
+  ])('keeps an idle child resident while its Inbox holds $label injected context', async ({ source }) => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2670,10 +2671,10 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps an idle child resident while plugin-sourced steering stays unclaimed', async (storage) => {
+  it('keeps an idle child resident while plugin-sourced steering stays unclaimed', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2693,10 +2694,10 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps an idle child resident while an interrupted turn leaves human steering parked', async (storage) => {
+  it('keeps an idle child resident while an interrupted turn leaves human steering parked', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2711,10 +2712,10 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: settles after a delivery discarded inside its own admission window', async (storage) => {
+  it('settles after a delivery discarded inside its own admission window', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: releaseFirst.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2736,10 +2737,10 @@ describe('continuable review regressions', () => {
     expect(hasUserText(loaded.events, 'doomed')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: settles after a later delivery discards older queued work', async (storage) => {
+  it('settles after a later delivery discards older queued work', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: releaseFirst.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -2760,8 +2761,8 @@ describe('continuable review regressions', () => {
     expect(hasUserText(loaded.events, 'doomed')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a prompt a pre-step rejection discarded as refusal', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('reports a prompt a pre-step rejection discarded as refusal', async () => {
+    const { ctx, parent } = await setup([])
     parkParent(ctx, parent)
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', (info) => { ends.push(info) })
@@ -2781,13 +2782,13 @@ describe('continuable review regressions', () => {
     expect(ends[0]!.stopReason).toBe('refusal')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: retains the Activation while an accepted message is still in the inbox', async (storage) => {
+  it('retains the Activation while an accepted message is still in the inbox', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first'), gate: releaseFirst.promise },
       { chunks: textResponse('second') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const registeredAtEnqueue: boolean[] = []
     // A synchronous inbox observer runs before the admitting microtask, the
     // exact window where `Agent.status` is still idle.
@@ -2830,8 +2831,8 @@ function settlementNotices(agent: Agent) {
 }
 
 describe('continuable adjacent-Agent delivery', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a stale sender before resolving either adjacent target', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects a stale sender before resolving either adjacent target', async () => {
+    const { ctx, parent } = await setup([])
     const stale = { ...parent, id: parent.id } as Agent
 
     await expect(ctx.subagents.sendMessage(stale, brandString<SessionId>('target'), message('stale'), {
@@ -2839,8 +2840,8 @@ describe('continuable adjacent-Agent delivery', () => {
     })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: explains that a host-owned child Session is not a resident continuable child', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('explains that a host-owned child Session is not a resident continuable child', async () => {
+    const { ctx, parent } = await setup([])
     const childId = brandString<SessionId>('host-owned-child')
     const handle = await ctx.agents.create({
       sessionId: childId,
@@ -2858,14 +2859,14 @@ describe('continuable adjacent-Agent delivery', () => {
     await handle.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: steers an idle direct parent and preserves sender attribution', async (storage) => {
+  it('steers an idle direct parent and preserves sender attribution', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
       { chunks: textResponse('parent report ack') },
       { chunks: textResponse('parent settlement ack') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => {
       expect(adapter.requests.filter(request => request.sessionId === started.childId)).toHaveLength(1)
@@ -2900,12 +2901,12 @@ describe('continuable adjacent-Agent delivery', () => {
     })
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['absent', 'replaced'] as const).map(value => [storage, value] as const)))('%s: rejects delivery when the subagent tree root is %s', async (storage, state) => {
+  it.each(['absent', 'replaced'] as const)('rejects delivery when the subagent tree root is %s', async (state) => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -2926,12 +2927,12 @@ describe('continuable adjacent-Agent delivery', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: propagates the subagent tree root inbox rejection', async (storage) => {
+  it('propagates the subagent tree root inbox rejection', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -2951,7 +2952,7 @@ describe('continuable adjacent-Agent delivery', () => {
 })
 
 describe('continuable settlement delivery', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['parent', 'root', 'sibling'] as const).map(value => [storage, value] as const)))('%s: omits closing text only after messaging the direct parent: %s', async (storage, target) => {
+  it.each(['parent', 'root', 'sibling'] as const)('omits closing text only after messaging the direct parent: %s', async (target) => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -2959,7 +2960,7 @@ describe('continuable settlement delivery', () => {
       { chunks: textResponse('leaf answer'), gate: releaseLeaf.promise },
       { chunks: textResponse('sibling done'), gate: releaseCreator.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     parkParent(ctx, parent)
     try {
       const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -2987,8 +2988,8 @@ describe('continuable settlement delivery', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: includes the child answer when messaging is available', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('the answer'), textResponse('parent ack')])
+  it('includes the child answer when messaging is available', async () => {
+    const { ctx, parent } = await setup([textResponse('the answer'), textResponse('parent ack')])
     await ctx.plugin(SubagentControl)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -3005,8 +3006,8 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers settlement even when the child already sent a message', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('the answer'), textResponse('parent ack')])
+  it('delivers settlement even when the child already sent a message', async () => {
+    const { ctx, parent } = await setup([textResponse('the answer'), textResponse('parent ack')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const live = ctx.agents.get(started.childId)
@@ -3028,7 +3029,7 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports the closing message again when the child received input after its message', async (storage) => {
+  it('reports the closing message again when the child received input after its message', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('interim'), gate: release.promise },
@@ -3036,7 +3037,7 @@ describe('continuable settlement delivery', () => {
       { chunks: textResponse('the answer') },
       { chunks: textResponse('parent ack') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const live = ctx.agents.get(started.childId)
@@ -3057,7 +3058,7 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports the closing message when the child ran a tool after its message, even past a short-circuiting tool policy', async (storage) => {
+  it('reports the closing message when the child ran a tool after its message, even past a short-circuiting tool policy', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: toolCallResponse('t1', 'noop', {}), gate: release.promise },
@@ -3065,7 +3066,7 @@ describe('continuable settlement delivery', () => {
       { chunks: textResponse('the answer') },
       { chunks: textResponse('parent ack') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     ctx.tools.register(defineTool({
       name: 'noop',
       description: 'does nothing',
@@ -3096,10 +3097,10 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     ['reports', 'another call follows the message in its step', ['send_message', 'noop'], 'Its closing message:\nthe answer'],
     ['omits', 'the message is the last call of its step', ['noop', 'send_message'], 'It sent you a message just before finishing, so its closing message is omitted.'],
-  ] as const).map(value => [storage, ...value] as const)))('%s: %s the closing message when %s', async (storage, _verb, _case, order, ending) => {
+  ] as const)('%s the closing message when %s', async (_verb, _case, order, ending) => {
     let childTurns = 0
     const respond = (options: GenerateOptions): StreamChunk[] => {
       const history = JSON.stringify(options.messages)
@@ -3120,7 +3121,7 @@ describe('continuable settlement delivery', () => {
         { type: 'finish', reason: { kind: 'tool-calls' } },
       ]
     }
-    const { ctx, parent } = await setup(storage, Array.from({ length: 6 }, () => respond))
+    const { ctx, parent } = await setup(Array.from({ length: 6 }, () => respond))
     await ctx.plugin(SubagentControl)
     ctx.tools.register(defineTool({
       name: 'noop',
@@ -3141,8 +3142,8 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers the terminal reason when the child never had a chance to report', async (storage) => {
-    const { ctx, parent } = await setup(storage, [maxTokensResponse('half an ans'), textResponse('parent ack')])
+  it('delivers the terminal reason when the child never had a chance to report', async () => {
+    const { ctx, parent } = await setup([maxTokensResponse('half an ans'), textResponse('parent ack')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -3152,8 +3153,8 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: tells the parent a policy-rejected delivery was declined, not finished', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('parent ack')])
+  it('tells the parent a policy-rejected delivery was declined, not finished', async () => {
+    const { ctx, parent } = await setup([textResponse('parent ack')])
     // A pre-step rejection on the child — a UserPromptSubmit deny, a policy
     // plugin — discards the claimed prompt without running it.
     ctx.on('agent/pre-step', async ({ agent: subject }, next) => {
@@ -3170,13 +3171,13 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a turn that failed before reaching its first step', async (storage) => {
+  it('reports a turn that failed before reaching its first step', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('the answer'), gate: releaseFirst.promise },
       { chunks: textResponse('parent ack') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     // The shipped durability checkpoint (`dsh-session-checkpoint-policy`) is
     // fail-closed at the step boundary, so a rejected write ends the turn after
     // it claimed its messages and before it entered a step.
@@ -3200,12 +3201,12 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports accepted work cut short before its first step as stopped', async (storage) => {
+  it('reports accepted work cut short before its first step as stopped', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const releaseCheckpoint = Promise.withResolvers<undefined>()
     const atCheckpoint = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('the answer'), gate: releaseFirst.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     // A step-boundary participant — the shipped durability checkpoint, a hook,
     // prompt assembly — holding the child's second turn open before its first
     // step, which is where teardown cancellation then catches it.
@@ -3235,10 +3236,10 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a child stopped before it ever reached the model as stopped', async (storage) => {
+  it('reports a child stopped before it ever reached the model as stopped', async () => {
     const releaseCheckpoint = Promise.withResolvers<undefined>()
     const atCheckpoint = Promise.withResolvers<undefined>()
-    const { ctx, parent } = await setupWith(storage, new GatedAdapter([]))
+    const { ctx, parent } = await setupWith(new GatedAdapter([]))
     ctx.on('agent/pre-step', async ({ agent: subject }, next) => {
       if (subject.session.header.parentSession === undefined) return next()
       atCheckpoint.resolve(undefined)
@@ -3261,11 +3262,11 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a child an ancestor interrupted before its first step as stopped', async (storage) => {
+  it('reports a child an ancestor interrupted before its first step as stopped', async () => {
     const atCheckpoint = Promise.withResolvers<undefined>()
     const releaseCheckpoint = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('parent ack') }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     ctx.on('agent/pre-step', async ({ agent: subject }, next) => {
       if (subject.session.header.parentSession === undefined) return next()
       atCheckpoint.resolve(undefined)
@@ -3287,13 +3288,13 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports accepted work cancelled before any turn could open as stopped', async (storage) => {
+  it('reports accepted work cancelled before any turn could open as stopped', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const releaseMaintenance = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('the answer'), gate: releaseChild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const live = ctx.agents.get(started.childId)
@@ -3324,8 +3325,8 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers the captured answer when local handle cleanup fails', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('the answer'), textResponse('parent ack')])
+  it('delivers the captured answer when local handle cleanup fails', async () => {
+    const { ctx, parent } = await setup([textResponse('the answer'), textResponse('parent ack')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const activation = await vi.waitFor(() => {
       const live = managerState(ctx).resident.get(started.childId)
@@ -3348,8 +3349,8 @@ describe('continuable settlement delivery', () => {
     await expect(started.dispose()).rejects.toThrow('scope unwind failed')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: gives an idle parent one ordinary turn on the notice', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [textResponse('the answer'), textResponse('parent ack')])
+  it('gives an idle parent one ordinary turn on the notice', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('the answer'), textResponse('parent ack')])
     const turnStarts: number[] = []
     ctx.on('session/event', (session, event) => {
       if (session.id === parent.id && event.type === 'turn/start') turnStarts.push(event.data.turn)
@@ -3363,7 +3364,7 @@ describe('continuable settlement delivery', () => {
     expect(turnStarts).toEqual([1])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: batches simultaneous notices into one step of a busy parent', async (storage) => {
+  it('batches simultaneous notices into one step of a busy parent', async () => {
     const releaseChildren = Promise.withResolvers<undefined>()
     const releaseParent = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -3372,7 +3373,7 @@ describe('continuable settlement delivery', () => {
       { chunks: textResponse('second child'), gate: releaseChildren.promise },
       { chunks: textResponse('parent reacts') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     // Open a parent turn first, so both notices arrive while it is running.
     parent.followup(createUserMessage({ content: message('start working'), source: { kind: 'user' } }))
     await vi.waitFor(() => { expect(parent.status).toBe('running') })
@@ -3402,10 +3403,10 @@ describe('continuable settlement delivery', () => {
 
 
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not wake a parent whose own teardown already began', async (storage) => {
+  it('does not wake a parent whose own teardown already began', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('interrupted'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeDefined() })
 
@@ -3425,10 +3426,10 @@ describe('continuable settlement delivery', () => {
     expect(parent.status).toBe('idle')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not wake a parent below a scoped teardown root', async (storage) => {
+  it('does not wake a parent below a scoped teardown root', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('interrupted'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeDefined() })
 
@@ -3440,10 +3441,10 @@ describe('continuable settlement delivery', () => {
     expect(parent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: records but cannot deliver a teardown notice once the parent is disposed too', async (storage) => {
+  it('records but cannot deliver a teardown notice once the parent is disposed too', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('interrupted'), gate: hold.promise }])
-    const { ctx } = await setupWith(storage, adapter)
+    const { ctx } = await setupWith(adapter)
     const parentId = brandString<SessionId>('closing-parent')
     const host = await ctx.agents.create({
       sessionId: parentId,
@@ -3475,8 +3476,8 @@ describe('continuable settlement delivery', () => {
       : [])).toEqual([{ inserted: 1, removed: 0 }, { inserted: 0, removed: 1 }])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not wake a parent whose scope is unwinding during factory unload', async (storage) => {
-    const { ctx, parent, loop } = await setup(storage, [textResponse('child answer')])
+  it('does not wake a parent whose scope is unwinding during factory unload', async () => {
+    const { ctx, parent, loop } = await setup([textResponse('child answer')])
     const flushing = Promise.withResolvers<undefined>()
     const releaseFlush = Promise.withResolvers<undefined>()
     const unwinding = Promise.withResolvers<undefined>()
@@ -3508,10 +3509,10 @@ describe('continuable settlement delivery', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: drops the notice without disturbing teardown when the parent is gone', async (storage) => {
+  it('drops the notice without disturbing teardown when the parent is gone', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: releaseChild.promise }])
-    const { ctx } = await setupWith(storage, adapter)
+    const { ctx } = await setupWith(adapter)
     const warnings: string[] = []
     ctx.logger.warn = (text: string) => { warnings.push(text) }
     const host = await ctx.agents.create({
@@ -3529,8 +3530,8 @@ describe('continuable settlement delivery', () => {
     expect(warnings).toEqual([])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: logs a rejected notice instead of failing the child's teardown", async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('the answer')])
+  it('logs a rejected notice instead of failing the child\'s teardown', async () => {
+    const { ctx, parent } = await setup([textResponse('the answer')])
     const warnings: string[] = []
     ctx.logger.warn = (text: string) => { warnings.push(text) }
     vi.spyOn(parent, 'followup').mockImplementation(() => {
@@ -3546,8 +3547,8 @@ describe('continuable settlement delivery', () => {
     expect(warnings.some(warning => warning.includes('settlement notice was not delivered'))).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: stays silent about a child the caller was told does not exist', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('stays silent about a child the caller was told does not exist', async () => {
+    const { ctx, parent } = await setup([])
     const drains: Promise<void>[] = []
     ctx.on('subagent/start', () => { drains.push(drainManager(ctx)) })
 
@@ -3559,8 +3560,8 @@ describe('continuable settlement delivery', () => {
 })
 
 describe('continuable lifecycle observation', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: emits one paired start/end per residency epoch', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first'), textResponse('second')])
+  it('emits one paired start/end per residency epoch', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('second')])
     parkParent(ctx, parent)
     const starts: SubagentRunInfo[] = []
     const ends: SubagentRunEndInfo[] = []
@@ -3588,8 +3589,8 @@ describe('continuable lifecycle observation', () => {
 })
 
 describe('continuable public API', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: exposes no host authority, residency query, cancellation, steering, or report operation', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('exposes no host authority, residency query, cancellation, steering, or report operation', async () => {
+    const { ctx } = await setup([])
     const subagents: Record<string, unknown> = ctx.subagents as unknown as Record<string, unknown>
     for (const absent of [
       'activationState',
@@ -3609,8 +3610,8 @@ describe('continuable public API', () => {
     expect(names).not.toContain('steer_subagent')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: catalogs caller-awaited local work without a notice and permits cold continuation', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first answer'), textResponse('second answer')])
+  it('catalogs caller-awaited local work without a notice and permits cold continuation', async () => {
+    const { ctx, parent } = await setup([textResponse('first answer'), textResponse('second answer')])
     parkParent(ctx, parent)
     const run = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     expect('steer' in run).toBe(false)
@@ -3631,8 +3632,8 @@ describe('continuable public API', () => {
     expect(stored.events.some(event => event.type === 'assistant/message' && JSON.stringify(event).includes('second answer'))).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a caller-signal abort before acceptance without delivering', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first')])
+  it('reports a caller-signal abort before acceptance without delivering', async () => {
+    const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
@@ -3645,13 +3646,13 @@ describe('continuable public API', () => {
     expect(hasUserText(loaded.events, 'aborted')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: does not cancel an accepted turn when the caller signal aborts afterwards', async (storage) => {
+  it('does not cancel an accepted turn when the caller signal aborts afterwards', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first'), gate: releaseFirst.promise },
       { chunks: textResponse('second') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
 
@@ -3668,8 +3669,8 @@ describe('continuable public API', () => {
 })
 
 describe('continuable errors', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects nested creation until the child has a managed Activation', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('child done')])
+  it('rejects nested creation until the child has a managed Activation', async () => {
+    const { ctx, parent } = await setup([textResponse('child done')])
     parkParent(ctx, parent)
     let observed = false
     ctx.on('agent/created', async ({ agent }) => {
@@ -3683,10 +3684,10 @@ describe('continuable errors', () => {
     expect(observed).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a duplicate Activation at the agent registry collision boundary', async (storage) => {
+  it('rejects a duplicate Activation at the agent registry collision boundary', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -3703,8 +3704,8 @@ describe('continuable errors', () => {
     hold.resolve(undefined)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects delegation from an unregistered instance and input to a closing startup', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('rejects delegation from an unregistered instance and input to a closing startup', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const unmanaged = await ctx.agents.create({
       sessionId: brandString<SessionId>('unmanaged'),
       meta: { parentSession: parent.id, origin: 'subagent' },
@@ -3736,10 +3737,10 @@ describe('continuable errors', () => {
     expect(ends[0]).toMatchObject(starts[0]!)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects establishing a child under a parent whose disposal already began', async (storage) => {
+  it('rejects establishing a child under a parent whose disposal already began', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('child'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -3755,8 +3756,8 @@ describe('continuable errors', () => {
     await drained
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([1, 2]).map(value => [storage, value] as const)))('%s: closes the subagent tree only after pending startup at depth %s rolls back', async (storage, depth) => {
-    const { ctx, parent } = await setup(storage, Array.from({ length: depth }, () => 'hang' as const))
+  it.each([1, 2])('closes the subagent tree only after pending startup at depth %s rolls back', async (depth) => {
+    const { ctx, parent } = await setup(Array.from({ length: depth }, () => 'hang' as const))
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const child = ctx.agents.get(started.childId)!
     const entered = Promise.withResolvers<AbortSignal>()
@@ -3813,13 +3814,13 @@ describe('continuable errors', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a failing branch after every branch settles, without pinning the rest', async (storage) => {
+  it('reports a failing branch after every branch settles, without pinning the rest', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child done'), gate: hold.promise },
       { chunks: textResponse('grandchild'), gate: hold.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -3847,13 +3848,13 @@ describe('continuable errors', () => {
     expect(loaded.meta.id).toBe(started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a new child at admission when the parent disposal transaction is already open', async (storage) => {
+  it('rejects a new child at admission when the parent disposal transaction is already open', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('parent child'), gate: hold.promise },
       { chunks: textResponse('unused') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const outer = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(outer.childId)
@@ -3876,13 +3877,13 @@ describe('continuable errors', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['agent/created', 'subagent/start'] as const).map(value => [storage, value] as const)))('%s: rejects child admission when parent disposal begins at %s', async (storage, event) => {
+  it.each(['agent/created', 'subagent/start'] as const)('rejects child admission when parent disposal begins at %s', async (event) => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('parent child'), gate: hold.promise },
       { chunks: textResponse('unused') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const outer = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(outer.childId)
@@ -3906,12 +3907,12 @@ describe('continuable errors', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: allows a sender to settle after a cold delivery fails', async (storage) => {
+  it('allows a sender to settle after a cold delivery fails', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child done'), gate: release.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -3928,13 +3929,13 @@ describe('continuable errors', () => {
 
 
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reapplies the descriptor model route and reasoning effort on cold resume', async (storage) => {
+  it('reapplies the descriptor model route and reasoning effort on cold resume', async () => {
     const effort = brandString<ReasoningEffortId>('high')
     const adapter = new MockAdapter([textResponse('first'), textResponse('resumed')], {
       efforts: [{ id: effort, name: 'High' }],
       defaultEffort: effort,
     })
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
@@ -3966,13 +3967,13 @@ describe('continuable errors', () => {
       : [])).toEqual([effort, effort])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: unloading the manager drains its live activations', async (storage) => {
+  it('unloading the manager drains its live activations', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('child'), gate: hold.promise }])
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
     const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-continuation-'))
-    const persistenceFiber = await ctx.plugin(JsonlSessionPersistence, { storage, root })
+    const persistenceFiber = await ctx.plugin(JsonlSessionPersistence, { root })
     cleanups.push(async () => {
       await persistenceFiber.dispose()
       rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -3996,7 +3997,7 @@ describe('continuable errors', () => {
 })
 
 describe('SubagentRuntime.interrupt', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: aborts the current turn durably, parks accepted follow-ups, and settles after direct Agent followup', async (storage) => {
+  it('aborts the current turn durably, parks accepted follow-ups, and settles after direct Agent followup', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('first'), gate: releaseFirst.promise },
@@ -4004,7 +4005,7 @@ describe('SubagentRuntime.interrupt', () => {
       { chunks: textResponse('third') },
       { chunks: textResponse('fourth') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -4039,14 +4040,14 @@ describe('SubagentRuntime.interrupt', () => {
     expect(turnEnds).toEqual(['aborted', 'completed', 'completed', 'completed'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: interrupts only the target while its resident descendant keeps running', async (storage) => {
+  it('interrupts only the target while its resident descendant keeps running', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child'), gate: releaseChild.promise },
       { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -4077,10 +4078,10 @@ describe('SubagentRuntime.interrupt', () => {
     expect(turnEnds).toEqual(['completed'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: interrupts a target by id as a trusted user operation', async (storage) => {
+  it('interrupts a target by id as a trusted user operation', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -4092,14 +4093,14 @@ describe('SubagentRuntime.interrupt', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: lets a deep exact live ancestor interrupt its descendant with the parent cause', async (storage) => {
+  it('lets a deep exact live ancestor interrupt its descendant with the parent cause', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child'), gate: releaseChild.promise },
       { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
@@ -4122,14 +4123,14 @@ describe('SubagentRuntime.interrupt', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects self, sibling, stale, and unrelated ancestor callers without touching the target', async (storage) => {
+  it('rejects self, sibling, stale, and unrelated ancestor callers without touching the target', async () => {
     const releaseA = Promise.withResolvers<undefined>()
     const releaseB = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('a'), gate: releaseA.promise },
       { chunks: textResponse('b'), gate: releaseB.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const targetStart = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const target = ctx.agents.get(targetStart.childId)!
@@ -4159,9 +4160,9 @@ describe('SubagentRuntime.interrupt', () => {
     await waitNoActivation(ctx, siblingStart.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts absent ids and interrupts caller-awaited local activations', async (storage) => {
+  it('accepts absent ids and interrupts caller-awaited local activations', async () => {
     const release = Promise.withResolvers<undefined>()
-    const { ctx, parent } = await setupWith(storage, new GatedAdapter([
+    const { ctx, parent } = await setupWith(new GatedAdapter([
       { chunks: textResponse('unfinished'), gate: release.promise },
     ]))
     ctx.subagents.interrupt(brandString<SessionId>('missing'), { kind: 'user' })
@@ -4184,18 +4185,18 @@ describe('SubagentRuntime.interrupt', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts an interrupt after natural completion', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('done')])
+  it('accepts an interrupt after natural completion', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
     ctx.subagents.interrupt(started.childId, { kind: 'user' })
     ctx.subagents.interrupt(started.childId, { kind: 'ancestor', agent: parent })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts an interrupt that lost the race with disposal without signalling twice', async (storage) => {
+  it('accepts an interrupt that lost the race with disposal without signalling twice', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!

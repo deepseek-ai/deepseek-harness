@@ -29,7 +29,7 @@ def test_plan_example_reports_truncation_and_accepts_explicit_dismissal(
     patch = tmp_path / "persistence.yml"
     patch.write_text(
         "- id: session-persistence-jsonl\n  config:\n    root: " + json.dumps(str(logs))
-        + "\n    storage: jsonl\n    compression: none\n", encoding="utf-8",
+        + "\n    compression: none\n", encoding="utf-8",
     )
     completion = (_Completion("PARTIAL_PLAN") if outcome == "max-tokens"
                   else _Completion("", tool_call=("exit_plan_mode", {"plan": _PLAN})))

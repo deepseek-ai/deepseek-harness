@@ -51,7 +51,7 @@ async function loadComposition(configPath: string): Promise<Context> {
   return ctx
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('message feedback through a real Loader composition (%s)', (storage) => {
+describe('message feedback through a real Loader composition', () => {
   it('persists canonical feedback across live and cold operations', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-message-feedback-loader-'))
     const configPath = join(root, 'cordis.yml')
@@ -60,7 +60,6 @@ describe.each(['jsonl', 'sqlite'] as const)('message feedback through a real Loa
       "- name: '@deepseek-ai/dsh-session-persistence-jsonl'",
       '  config:',
       `    root: ${JSON.stringify(join(root, 'sessions'))}`,
-      `    storage: ${storage}`,
       '    compression: none',
       "- name: '@deepseek-ai/dsh-message-feedback'",
       '  config:',
@@ -78,7 +77,7 @@ describe.each(['jsonl', 'sqlite'] as const)('message feedback through a real Loa
     const unownedRequest = {
       sessionId: unowned.id, messageId: unownedFixture.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null,
     }
-    // A mounted persistence listener alone does not persist Sessions without a write handle.
+    // A mounted JSONL listener alone does not persist Sessions without a write handle.
     await expect(first.messageFeedback.put(unownedRequest)).rejects.toThrow(/not found/u)
     expect(await first.sessionPersistence.stat(unowned.id)).toBeUndefined()
     const unownedItems = await first.messageFeedback.list({ sessionId: unowned.id })

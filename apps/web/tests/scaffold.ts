@@ -88,8 +88,6 @@ import { startPrefixProxy, type PrefixProxy } from './prefix-proxy.ts'
 import { REPO_ROOT, requireBuilt, requireDist } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-const SNAPSHOT_STORAGE = (process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') as 'jsonl' | 'sqlite'
-
 type AppBoot = typeof import('@deepseek-ai/dsh-app-boot')
 let builtAppBoot: AppBoot | undefined
 
@@ -598,7 +596,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       : [{ id: 'agent-default-model', config: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }],
     ...extraOverlayPatches,
     { id: 'agent-preset-registry', config: { default: 'standard' } },
-    { id: 'session-persistence-jsonl', config: { root: persistenceRoot, storage: SNAPSHOT_STORAGE } },
+    { id: 'session-persistence-jsonl', config: { root: persistenceRoot } },
     // Content search is enabled here although the shipped bundles default it
     // off (`openAt: never`, pinned by apps/cli/tests/lazy-search-startup):
     // the seeded-session scenarios navigate by content search, and these e2e
@@ -1288,12 +1286,11 @@ async function assertReplaySession(
     sessionIds: typeof expectedHeader.id === 'string' ? [expectedHeader.id] : [],
     cwd: typeof expectedHeader.cwd === 'string' ? expectedHeader.cwd : '\0no-cwd\0',
   }
-  const actualSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0]!
-    .split(harnessHome).join('{{harnessHome}}')
-  const expectedSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0]!
-    .split(harnessHome).join('{{harnessHome}}')
-  const records = (text: string): unknown[] => text.split('\n').filter(line => line.trim() !== '').map((line): unknown => JSON.parse(line))
-  expect(records(actualSnapshot), `${fixturePath}: persisted replay`).toEqual(records(expectedSnapshot))
+  const actualSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0]
+    ?.split(harnessHome).join('{{harnessHome}}')
+  const expectedSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0]
+    ?.split(harnessHome).join('{{harnessHome}}')
+  expect(actualSnapshot, `${fixturePath}: persisted replay`).toBe(expectedSnapshot)
 
   if (manifest.header?.pin !== true) return
   const normalizePrompt = (value: string): string => value
@@ -1563,7 +1560,7 @@ export async function seedSession(
   return meta.id
 }
 
-/** Materialize one detached Session fixture through the booted persistence provider. */
+/** Materialize one detached Session fixture through the shipped JSONL provider. */
 async function persistSeedSession(
   scaffold: WebScaffold,
   meta: SessionHeader,
@@ -1571,10 +1568,9 @@ async function persistSeedSession(
 ): Promise<void> {
   const seeder = new Context()
   try {
-    await seeder.plugin(JsonlSessionPersistence, {
-      root: scaffold.persistenceRoot,
-      storage: SNAPSHOT_STORAGE,
-    })
+    // Same root as the booted tree with the plugin's own default compression,
+    // so the host's directory-scan list() sees one consistent encoding.
+    await seeder.plugin(JsonlSessionPersistence, { root: scaffold.persistenceRoot })
     const handle = await seeder.sessionPersistence.create(meta)
     await handle.append(events)
     await handle.close()

@@ -48,7 +48,7 @@ describe('platform home patch', () => {
   it('keeps the composed JSONL row config and sets the plaintext compression the Worker requires', () => {
     expect(platformHomePatch(repoRoot, 'web')).toEqual([{
       id: 'session-persistence-jsonl',
-      config: { root: { __jsExpr: "dshHomePath('sessions')" }, compression: 'none', storage: 'jsonl' },
+      config: { root: { __jsExpr: "dshHomePath('sessions')" }, compression: 'none' },
     }])
   })
 })

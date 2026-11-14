@@ -42,7 +42,7 @@ afterEach(async () => {
   }
 })
 
-async function createHarness(storage: 'jsonl' | 'sqlite', withPersistence = true) {
+async function harness(withPersistence = true) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-projection-discovery-'))
   roots.push(root)
   const ctx = new Context()
@@ -53,7 +53,7 @@ async function createHarness(storage: 'jsonl' | 'sqlite', withPersistence = true
   await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
   await ctx.sessionProjections.register(titleProjectionDefinition)
   if (withPersistence) {
-    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'logs'), compression: 'none', storage })
+    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'logs'), compression: 'none' })
     const list = vi.spyOn(ctx.sessionPersistence, 'list').mockRejectedValue(new Error('unexpected corpus listing'))
     readAudits.push(() => {
       expect(list).not.toHaveBeenCalled()
@@ -70,7 +70,7 @@ async function createHarness(storage: 'jsonl' | 'sqlite', withPersistence = true
   return { ctx, root, controller }
 }
 
-type Harness = Awaited<ReturnType<typeof createHarness>>
+type Harness = Awaited<ReturnType<typeof harness>>
 
 async function stored(
   fixture: Harness,
@@ -152,8 +152,7 @@ async function seedCache(
   return { path, bytes }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('Session projection discovery (%s)', (storage) => {
-  const harness = (withPersistence = true) => createHarness(storage, withPersistence)
+describe('Session projection discovery', () => {
   it('defers V3 migration without reading child bodies or publishing a successor', async () => {
     const fixture = await harness()
     const parent = await stored(fixture, brandString<SessionId>('parent'), {}, 3)
@@ -247,27 +246,50 @@ describe.each(['jsonl', 'sqlite'] as const)('Session projection discovery (%s)',
     expect(fixture.ctx.agents.get(parent.header.id)).toBeUndefined()
   })
 
-  it('reads historical projections and publishes migration through the selected backend without a live Session', async () => {
+  it('reports read-prepared historical files as migration-required until a successor is published', async () => {
     const fixture = await harness()
     const parent = await stored(fixture, brandString<SessionId>('prepared-cold'), {}, 3)
-    using observation = await fixture.ctx.sessionQuery.observeSession(parent.header.id)
+    const observation = await fixture.ctx.sessionQuery.observeSession(parent.header.id)
+    observation[Symbol.dispose]()
+    const open = vi.spyOn(fixture.ctx.sessionPersistence, 'open').mockRejectedValue(new Error('unexpected body reread'))
+
     expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({
-      formatStatus: storage === 'sqlite' ? 'current' : 'migration-required',
+      formatStatus: 'migration-required',
     })
     await expect(fixture.controller.projections({ sessionId: parent.header.id }, new AbortController().signal))
-      .resolves.toEqual(storage === 'sqlite'
-        ? { kind: 'sequenced', ...observation.projections }
-        : { kind: 'migration-required', values: {} })
-    const writer = await fixture.ctx.sessionPersistence.open(parent.header.id, 'write')
-    await writer.close()
-    expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({ formatStatus: 'current' })
-    await expect(fixture.controller.projections({ sessionId: parent.header.id }, new AbortController().signal))
-      .resolves.toEqual({ kind: 'sequenced', ...observation.projections })
+      .resolves.toEqual({ kind: 'migration-required', values: {} })
+    expect(open).not.toHaveBeenCalled()
     expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
     expect(await readFile(parent.path, 'utf8')).toBe(parent.bytes)
-    expect((await readdir(dirname(parent.path))).filter(name => name !== 'session.lock')).toEqual(storage === 'sqlite'
-      ? ['session.v3.jsonl']
-      : ['session.v3.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`])
+    expect(await readdir(dirname(parent.path))).toEqual(['session.v3.jsonl'])
+  })
+
+  it('reads sequenced projections after write publication replaces the disk format status', async () => {
+    const fixture = await harness()
+    const parent = await stored(fixture, brandString<SessionId>('published-cold'), {}, 3)
+    using observation = await fixture.ctx.sessionQuery.observeSession(parent.header.id)
+    const expected = observation.projections
+    const signal = new AbortController().signal
+    await expect(fixture.controller.projections({ sessionId: parent.header.id }, signal))
+      .resolves.toEqual({ kind: 'migration-required', values: {} })
+
+    const writer = await fixture.ctx.sessionPersistence.open(parent.header.id, 'write')
+    try {
+      await writer.flush()
+    } finally {
+      await writer.close()
+    }
+
+    expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({
+      formatStatus: 'current',
+    })
+    await expect(fixture.controller.projections({ sessionId: parent.header.id }, signal))
+      .resolves.toEqual({ kind: 'sequenced', ...expected })
+    expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
+    expect(await readFile(parent.path, 'utf8')).toBe(parent.bytes)
+    // POSIX retains the write-lock inode after close; Windows uses a semaphore.
+    expect((await readdir(dirname(parent.path))).filter(name => name !== 'session.lock').sort())
+      .toEqual(['session.v3.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`].sort())
   })
 
   it('reports unsupported current-format events instead of deferring migration', async () => {

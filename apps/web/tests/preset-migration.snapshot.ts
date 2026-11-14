@@ -21,12 +21,6 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
   it.each([false, true])('resumes code as PTC (selection events=%s)', async (withSelections) => {
     const scaffold = await launchWebScaffold()
     try {
-      const sqlite = process.env.DSH_SNAPSHOT_STORAGE === 'sqlite'
-      const readStored = async (id: SessionId): Promise<string> => {
-        await using handle = await scaffold.ctx.sessionPersistence.open(id, 'read')
-        const { events } = await handle.read()
-        return [{ type: 'session', ...handle.header }, ...events].map(row => JSON.stringify(row)).join('\n') + '\n'
-      }
       const id = brandString<SessionId>('preset-migration')
       const fixture = await readFile(fixturePath, 'utf8')
       const [fixtureHeader, ...fixtureEvents] = fixture.trimEnd().split('\n')
@@ -103,10 +97,9 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
         .resolves.toMatchObject({ hasMore: false })
       const childWriter = await scaffold.ctx.sessionPersistence.open(childId, 'write')
       await childWriter.close()
-      const childText = sqlite ? await readStored(childId) : await readFile(childSuccessor).then(bytes =>
-        Buffer.concat(scanZstdFrames(bytes).frames
-          .map(({ start, end }) => zstdDecompressSync(bytes.subarray(start, end)))).toString('utf8'))
-      if (sqlite) await expect(readFile(childSuccessor)).rejects.toMatchObject({ code: 'ENOENT' })
+      const childPublished = await readFile(childSuccessor)
+      const childText = Buffer.concat(scanZstdFrames(childPublished).frames
+        .map(({ start, end }) => zstdDecompressSync(childPublished.subarray(start, end)))).toString('utf8')
       expect(childText.trimEnd().split('\n').map((line): unknown => JSON.parse(line))).toEqual([
         { ...childHeader, version: SESSION_FORMAT_VERSION, agentPreset: 'ptc' }, ...childRows,
       ])
@@ -116,10 +109,9 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
         .rejects.toMatchObject({ code: 'ENOENT' })
 
       await scaffold.ctx.sessions.flush(resolved.agent.session)
-      const published = sqlite ? await readStored(id) : await readFile(successor).then(bytes =>
-        Buffer.concat(scanZstdFrames(bytes).frames
-          .map(({ start, end }) => zstdDecompressSync(bytes.subarray(start, end)))).toString('utf8'))
-      if (sqlite) await expect(readFile(successor)).rejects.toMatchObject({ code: 'ENOENT' })
+      const publishedBytes = await readFile(successor)
+      const published = Buffer.concat(scanZstdFrames(publishedBytes).frames
+        .map(({ start, end }) => zstdDecompressSync(publishedBytes.subarray(start, end)))).toString('utf8')
       const expected = [
         { ...header, version: SESSION_FORMAT_VERSION, agentPreset: 'ptc' },
         ...rows.map(row => row['type'] === 'agent-preset/selected'
@@ -139,14 +131,12 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
         { type: 'approval/policy', seq: rows.length + 5, time: 0, data: { policy: 'ask' } },
       ].map(row => JSON.stringify(row)).join('\n') + '\n'
       const context = { sessionIds: [id], cwd: scaffold.workspaceCwd }
-      const records = (text: string): unknown[] => normalizeSessionSnapshots([text], context)[0]!.trimEnd()
-        .split('\n').map((line): unknown => JSON.parse(line))
-      expect(records(published)).toEqual(records(expected))
+      expect(normalizeSessionSnapshots([published], context)).toEqual(normalizeSessionSnapshots([expected], context))
       expect(await readFile(predecessor)).toEqual(source)
       await expect(scaffold.ctx.sessionPersistence.open(corruptHeaderId, 'read')).rejects.toThrow(/invalid frame magic/)
       expect(await readFile(corruptHeaderPath)).toEqual(corruptHeaderSource)
       expect((await readdir(dirname(predecessor))).filter(name => name.endsWith('.jsonl.zstd')).sort())
-        .toEqual(sqlite ? ['session.v2.jsonl.zstd'] : ['session.v2.jsonl.zstd', `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`])
+        .toEqual(['session.v2.jsonl.zstd', `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`])
     } finally {
       await scaffold.close()
     }

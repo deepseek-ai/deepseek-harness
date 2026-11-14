@@ -88,8 +88,6 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 嵌套的 `workspace.expected/<directory>/.empty` 标记表示空目录；实际 workspace 中的同名文件仍按普通文件比较。
 
-`DSH_SNAPSHOT_STORAGE` 为子进程与 Web 快照测试选择 `jsonl`（默认）或 `sqlite`。两种后端使用同一份预期 fixture。可比较日志会解析为 JSON 记录：忽略对象字段顺序，但每个字段值、事件数量、事件顺序与数组顺序都参与比较。
-
 ### 固定请求 header 与系统提示
 
 每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。系统提示是 surface 节点 0，作为 `system/message` 事件记录在该步骤第一个 `request/header` 之前；每个 fixture 把其文本块存储为 `"text":"{{system}}"`，提示词伴随文件保留完整文本。该 pin 的 `request/header` 事件存储 `"tools":"{{tools}}"`，同时保留配置与原因，结构化 schema 伴随文件保留完整目录。包含 developer 消息的日志会在各 header 中保留有序工具名，而不使用 token，以便继续校验历史工具添加引用。自身作用域组合出不同请求的 child Session 按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`；运行中提示词发生变化的场景——替换节点 0，或在 `in-history` 路由上追加到已缓存历史之后——声明 `expectedPromptChanges`，每次变化在提示词伴随文件中增加一个 `<!-- system/message change N -->` 小节。manifest 中对应字段为 `header.changes` 与 `header.promptChanges`。没有工具的请求头在 sidecar 中保留空 schema 集，使后续首次添加仍与其请求头对齐。
@@ -102,6 +100,7 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 - **持久记录等待超时**——即使首次日志收集就超过期限，`waitForTurnStart`、`waitForTurnEnd`、`waitForSubagentTurnEnd`、`waitForGoalPhase`、`waitForInboxMessage`、`waitForTitleAfterTurnEnd` 和 `waitForEventAfterTurnEnd` 也会指出会话或子会话及等待期限。子会话等待还会指出目标轮次。这些等待都通过错误的 cause 保留底层失败。`waitForTurnStart` 会立即拒绝格式错误的轮次记录。
 - **fixture 保护拒绝已提交文件**——遗留场景目录、缺失文件、一个 header 类别包含多个 pin、重复的伴随文件内容、未擦除的提示文本或工具 schema、没有前置 `system/message` 的 `request/header`，以及格式错误的 pin header 都会在比较运行前使套件失败。
+- **会话收集需要原始 JSONL mode**——快照配置使用 JSONL 后端的 `compression: 'none'`；压缩 JSONL 没有快照收集路径。
 - **构建 mode 需要当前产物**——选择 `DSH_EXAMPLE_MODE=lib` 前先运行 `pnpm run build`；源 mode 仍是零构建路径。
 
 -----
@@ -116,7 +115,7 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 ### 设计
 
-共享核心拥有 manifest、generation 限定角色选择、workspace 设置／比较、类型化身份映射、normalizer 与 fixture 不变式。ACP 适配器增加四个可组合层：launcher、场景 harness、normalizer 与 suite factory。`launchAcpTestAgent` 在 tsx 下启动源码 profile，或在普通 Node 下启动已构建 `lib` profile，通过原始字节 stdout tee 连接 SDK client，收集 Session update 与 stderr，默认拒绝未处理的权限请求，并负责关闭。`runScenario` 驱动 ACP JSON-RPC stdio，并通过 `SessionPersistence.list/open/read` 读取已提交的逻辑历史，包括压缩 JSONL 与 SQLite 会话。清理会等待尚未完成的 Session 读取结束，再删除其存储目录。纯 normalizer 把 cwd 路径与类型化身份变为稳定 token，将时间归零、展开物理来源区间，并擦除系统提示词文本与工具 schema bulk。`defineAcpSnapshotSuite` 注册比较、generation 限定 fixture 回写与实时一致性保护。
+共享核心拥有 manifest、generation 限定角色选择、workspace 设置／比较、类型化身份映射、normalizer 与 fixture 不变式。ACP 适配器增加四个可组合层：launcher、场景 harness、normalizer 与 suite factory。`launchAcpTestAgent` 在 tsx 下启动源码 profile，或在普通 Node 下启动已构建 `lib` profile，通过原始字节 stdout tee 连接 SDK client，收集 Session update 与 stderr，默认拒绝未处理的权限请求，并负责关闭。`runScenario` 驱动 ACP JSON-RPC stdio，并收集每个 Session 目录中数值最高的持久原始 JSONL generation。纯 normalizer 把 cwd 路径与类型化身份变为稳定 token，将时间归零、展开物理来源区间，并擦除系统提示词文本与工具 schema bulk。`defineAcpSnapshotSuite` 注册比较、generation 限定 fixture 回写与实时一致性保护。
 
 ### 源码地图
 
@@ -168,6 +167,7 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 这些限制说明何时需要对该工具包特别小心。它们是当前包约束，不是任务积压。
 
+- **会话收集需要原始 JSONL mode**——`runScenario` 收集持久化 `.jsonl` 日志，因此快照配置使用 JSONL 后端的 `compression: 'none'`；压缩 JSONL 没有快照收集路径。
 - **构建 mode 需要当前产物**——选择 `DSH_EXAMPLE_MODE=lib` 前先运行 `pnpm run build`；源 mode 仍是零构建路径。
 - **ACP 继续覆盖协议行为**——刺激来自 ACP 客户端的取消与权限往返留在该适配器；组装式一次性行为与持久控制行为使用 headless 与 SDK 适配器。
 

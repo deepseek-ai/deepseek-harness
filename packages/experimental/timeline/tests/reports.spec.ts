@@ -18,19 +18,19 @@ afterEach(async () => {
   for (const fixture of fixtures.splice(0)) await fixture.close()
   vi.useRealTimers()
 })
-async function running(backend: 'jsonl' | 'sqlite', config = {}, adapter = new Adapter()) {
-  const fixture = await setup(backend, config, adapter)
+async function running(config = {}, adapter = new Adapter()) {
+  const fixture = await setup(config, adapter)
   fixtures.push(fixture)
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
   fixture.start()
   await adapter.ready.promise
   return fixture
 }
-describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real agent loop (%s)', (backend) => {
+describe('background summaries through a real agent loop', () => {
   it('admits a waiting third Session before serving the earlier sessions again', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await setup(backend, { maxConcurrent: 1, rollupFactors: [] }, adapter)
+    const f = await setup({ maxConcurrent: 1, rollupFactors: [] }, adapter)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const agents = [f.agent]
     const ids = [f.agent.session.id]
@@ -86,7 +86,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
       }
     }
     const adapter = new SelectiveAdapter()
-    const f = await setup(backend, { rollupFactors: [3], timeoutMs: 50 }, adapter)
+    const f = await setup({ rollupFactors: [3], timeoutMs: 50 }, adapter)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     try {
       f.start()
@@ -122,7 +122,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('sends no Timeline view changes during a quiet turn with a large unchanged plan', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await setup(backend, { reportsEnabled: false }, adapter)
+    const f = await setup({ reportsEnabled: false }, adapter)
     fixtures.push(f)
     const session = f.agent.session
     const now = Date.now()
@@ -157,7 +157,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     }
   })
   it('uses the newly selected provider for a due rollup when work resumes', async () => {
-    const f = await setup(backend, { rollupFactors: [2] })
+    const f = await setup({ rollupFactors: [2] })
     const replacement = new Adapter()
     replacement.calls = 0
     f.ctx.llm.registerAdapter(['replacement'], replacement)
@@ -196,7 +196,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   })
 
   it('defers dispatch when Session persistence cannot acknowledge the interval', async () => {
-    const f = await running(backend)
+    const f = await running()
     const flush = vi.spyOn(f.ctx.sessions, 'flush').mockResolvedValueOnce(false)
     try {
       await vi.advanceTimersByTimeAsync(60000)
@@ -209,7 +209,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     }
   })
   it('keeps the turn alive if neither a report request nor its failure can be saved', async () => {
-    const f = await running(backend)
+    const f = await running()
     const failed = Promise.withResolvers<undefined>()
     const append = vi.spyOn(f.ctx.timeline, 'append')
       .mockRejectedValueOnce('Report storage unavailable')
@@ -238,7 +238,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
         arguments: JSON.stringify({ action: 'start', title: 'Fix session recovery' }),
       },
     ]
-    const f = await running(backend, { reportsEnabled: false }, adapter)
+    const f = await running({ reportsEnabled: false }, adapter)
     await vi.advanceTimersByTimeAsync(15 * 60000)
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toMatchObject([
       { title: 'Fix session recovery' },
@@ -249,7 +249,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('keeps saved reports and resumes base reports and rollups after enabling', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { rollupFactors: [2] }, adapter)
+    const f = await running({ rollupFactors: [2] }, adapter)
     const { reportsEnabled } = f.plugin.effectiveConfig as PluginConfig
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
@@ -268,7 +268,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('cancels an in-flight report without recording a failure or stopping the turn', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await adapter.checkStarted.promise
     const { reportsEnabled } = f.plugin.effectiveConfig as PluginConfig
@@ -286,7 +286,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('starts the first zero-tool interval at the turn that resumes a long-idle session', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await setup(backend, { intervalMs: 900000, rollupFactors: [4, 4] }, adapter)
+    const f = await setup({ intervalMs: 900000, rollupFactors: [4, 4] }, adapter)
     fixtures.push(f)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     await vi.advanceTimersByTimeAsync(143 * 3600000)
@@ -305,7 +305,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it.each(outputLanguages)('uses fixed %s no-activity text without a model query', async (language) => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { language }, adapter)
+    const f = await running({ language }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]?.summary.progress).toEqual([languageText[language].noActivity])
@@ -314,7 +314,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it.each([true, false])(
     'identifies independent-runtime main requests through Agent admission; main=%s',
     async (main) => {
-      const f = await running(backend)
+      const f = await running()
       const namespace: unknown = await import(
         /* @vite-ignore */ `${import.meta.resolve('@deepseek-ai/dsh-llm/src/call-config.ts')}?timeline-independent-runtime`,
       )
@@ -346,7 +346,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it.each(['compaction', 'session-title'] as const)(
     'excludes %s requests even when they share the admitted turn signal',
     async (purpose) => {
-      const f = await running(backend)
+      const f = await running()
       const previous = f.adapter.main.at(-1)
       if (previous?.signal === undefined) throw new Error('The main request signal is missing')
       for await (const chunk of f.ctx.llm.stream({
@@ -365,7 +365,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     },
   )
   it('ignores an already cancelled main request and keeps the previous report context', async () => {
-    const f = await running(backend)
+    const f = await running()
     const cancelled = new AbortController()
     await agentEvents(f.agent.ctx, f.agent).waterfall('agent/request',
       { turn: 0, step: 2, signal: cancelled.signal },
@@ -381,7 +381,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(JSON.stringify(f.adapter.checks.at(-1)?.messages)).not.toContain('Cancelled context')
   })
   it('records the request before dispatch and does not send it when persistence fails', async () => {
-    const f = await running(backend)
+    const f = await running()
     const append = vi.spyOn(f.ctx.timeline, 'append').mockImplementationOnce(async () => {
       throw new Error('Cannot save request')
     })
@@ -397,7 +397,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('applies elapsed thresholds to complete non-multiple periods without reusing children', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { intervalMs: 600000, rollupFactors: [2.5, 2.4] }, adapter)
+    const f = await running({ intervalMs: 600000, rollupFactors: [2.5, 2.4] }, adapter)
     let previous = 0
     for (const [minute, count] of [
       [10, 1],
@@ -426,7 +426,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     })
   })
   it('adds every level prompt to the global instructions, including the first level', async () => {
-    const f = await running(backend, {
+    const f = await running({
       summaryPrompt: 'Global stable instructions.',
       levelPrompts: ['First-level emphasis.', 'Higher-level emphasis.'],
       rollupFactors: [2],
@@ -445,7 +445,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('uses 15-minute reports and 1-hour/4-hour rollups while retaining the one-minute floor', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { intervalMs: 900000, rollupFactors: [4, 4] }, adapter)
+    const f = await running({ intervalMs: 900000, rollupFactors: [4, 4] }, adapter)
     await vi.advanceTimersByTimeAsync(899999)
     expect(f.reports()).toHaveLength(0)
     await vi.advanceTimersByTimeAsync(1)
@@ -462,7 +462,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('uses the synced app language in the task prompt and zero-activity summaries', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { language: 'zh-CN' }, adapter)
+    const f = await running({ language: 'zh-CN' }, adapter)
     const prompt = await f.ctx.systemPrompt.assemble({ scope: f.agent })
     expect(prompt.sections.find(section => section.name === 'timeline:planning')?.text).toContain(
       "discussion replies in 简体中文. Follow the user's language instructions for all other work and conversation.",
@@ -489,7 +489,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
         userActions: [],
       }),
     ]
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]?.summary).toEqual(summary)
@@ -500,7 +500,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.records.filter(event => event.type === 'plugin:timeline/failure')).toHaveLength(0)
   })
   it('waits for a backward wall clock without losing activity or writing reversed intervals', async () => {
-    const f = await running(backend)
+    const f = await running()
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     const end = f.reports()[0]?.end
@@ -523,7 +523,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     'covers completed tool work while another tool is running; prior work %s',
     async (priorWork) => {
       const adapter = new Adapter()
-      const f = await setup(backend, {}, adapter)
+      const f = await setup({}, adapter)
       fixtures.push(f)
       const started = Promise.withResolvers<undefined>()
       const release = Promise.withResolvers<undefined>()
@@ -573,7 +573,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     },
   )
   it('waits for the next complete snapshot when the surface changes without a new tool call', async () => {
-    const f = await running(backend)
+    const f = await running()
     const session = f.agent.session
     session.append('user/message', createUserMessage({
       source: { kind: 'user' },
@@ -592,7 +592,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
       ],
       defaultEffort: ReasoningEffortId('maximum'),
     }
-    const f = await running(backend, { reportReasoningEffort: 'brief', reportMaxTokens: 512 }, adapter)
+    const f = await running({ reportReasoningEffort: 'brief', reportMaxTokens: 512 }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(adapter.main.at(-1)?.reasoningEffort).toBe('maximum')
@@ -600,7 +600,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(adapter.checks[0]?.maxTokens).toBe(512)
   })
   it('rejects an explicit unsupported report effort before recording or dispatching a request', async () => {
-    const f = await running(backend, { reportReasoningEffort: 'unavailable' })
+    const f = await running({ reportReasoningEffort: 'unavailable' })
     await vi.advanceTimersByTimeAsync(60000)
     await vi.waitFor(() => {
       expect(f.records.some(record =>
@@ -614,7 +614,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.agent.status).toBe('running')
   })
   it('reports one tool call without a viewer or a workload threshold, and leaves the main task running', async () => {
-    const f = await running(backend)
+    const f = await running()
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]?.summary).toEqual(summary)
@@ -635,7 +635,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     )
   })
   it('keeps tool results as report context without offering the main task tools to the summarizer', async () => {
-    const f = await running(backend)
+    const f = await running()
     const main = f.adapter.main.at(-1)
     const original = JSON.stringify(main)
     expect(main?.tools?.some(tool => tool.name === 'echo')).toBe(true)
@@ -651,7 +651,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('bounds response content without charging repeated JSON framing for tiny stream deltas', async () => {
     const adapter = new Adapter()
     adapter.tinyDeltas = true
-    const f = await running(backend, { maxResponseBytes: Buffer.byteLength(adapter.answer) + 128 }, adapter)
+    const f = await running({ maxResponseBytes: Buffer.byteLength(adapter.answer) + 128 }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]?.summary).toEqual(summary)
@@ -659,7 +659,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('hard-codes no activity without calling the model, including later empty intervals', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]).toMatchObject({
@@ -676,7 +676,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('rolls completed children up and avoids model calls for an entirely quiet hierarchy', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, { rollupFactors: [2, 2] }, adapter)
+    const f = await running({ rollupFactors: [2, 2] }, adapter)
     for (const count of [1, 3, 4, 7]) {
       await vi.advanceTimersByTimeAsync(60000)
       await f.waitRecords('plugin:timeline/report', count)
@@ -686,7 +686,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(adapter.checks).toHaveLength(0)
   })
   it('uses the editable prompt for base reports and rollups', async () => {
-    const f = await running(backend, { summaryPrompt: 'Custom short report instructions.', rollupFactors: [2] })
+    const f = await running({ summaryPrompt: 'Custom short report instructions.', rollupFactors: [2] })
     for (const count of [1, 3]) {
       await vi.advanceTimersByTimeAsync(60000)
       await f.waitRecords('plugin:timeline/report', count)
@@ -700,7 +700,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.reports().map(report => report.level)).toEqual([0, 0, 1])
   })
   it('uses the current plugin language for both report levels without changing or forking the working agent', async () => {
-    const f = await running(backend, { rollupFactors: [2], levelPrompts: ['', 'Combine the child results.'] })
+    const f = await running({ rollupFactors: [2], levelPrompts: ['', 'Combine the child results.'] })
     const original = structuredClone(f.adapter.main.at(-1)?.messages)
     const references = f.plugin.effectiveConfig as PluginConfig
     updateVolatile(references.language, Config({ language: 'zh-CN' }).language)
@@ -725,7 +725,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.ctx.agents.list()).toHaveLength(1)
   })
   it('summarizes mixed children even after a surface event invalidates the base snapshot', async () => {
-    const f = await running(backend, { rollupFactors: [2], levelPrompts: ['', 'Condense child reports.'] })
+    const f = await running({ rollupFactors: [2], levelPrompts: ['', 'Condense child reports.'] })
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     f.agent.session.append(
@@ -751,7 +751,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.reports().at(-1)?.children).toHaveLength(2)
   })
   it('keeps live settings references and applies cadence and prompt changes to subsequent work', async () => {
-    const f = await running(backend, { rollupFactors: [2] })
+    const f = await running({ rollupFactors: [2] })
     const references = f.plugin.effectiveConfig as PluginConfig
     const changed = Config({
       intervalMs: 120000,
@@ -784,7 +784,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('retries a malformed response at the next interval without consuming the activity watermark', async () => {
     const adapter = new Adapter()
     adapter.answer = 'not JSON'
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/failure')
     expect(f.reports()).toHaveLength(0)
@@ -800,7 +800,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('waits for an admitted model route before rolling up saved model reports', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await setup(backend, { rollupFactors: [2] }, adapter)
+    const f = await setup({ rollupFactors: [2] }, adapter)
     fixtures.push(f)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const session = f.agent.session
@@ -835,7 +835,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   })
   it('rolls up saved reports whose older records lack generation and activity times', async () => {
     const adapter = new Adapter()
-    const f = await setup(backend, { rollupFactors: [2] }, adapter)
+    const f = await setup({ rollupFactors: [2] }, adapter)
     fixtures.push(f)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const session = f.agent.session
@@ -859,7 +859,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(adapter.checks).toHaveLength(2)
   })
   it('commits a buffered report once when a report flush fails before recovery', async () => {
-    const f = await running(backend, { rollupFactors: [2] })
+    const f = await running({ rollupFactors: [2] })
     let failed = false
     f.ctx.on('session/flush', (session) => {
       if (session === f.agent.session && f.reports().length === 1 && !failed) {
@@ -881,7 +881,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('counts main work during an auxiliary query toward the next report', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await adapter.checkStarted.promise
     await vi.advanceTimersByTimeAsync(30000)
@@ -895,7 +895,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('aborts and drains a summary when the plugin unloads', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await adapter.checkStarted.promise
     expect(adapter.active).toBe(1)
@@ -907,7 +907,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it.each([1, 4])(
     'catches up due levels after %ih idle without counting idle time as work',
     async (hours) => {
-      const f = await running(backend, { intervalMs: 900000, rollupFactors: [4, 4] })
+      const f = await running({ intervalMs: 900000, rollupFactors: [4, 4] })
       const start = Date.now()
       await vi.advanceTimersByTimeAsync(24000)
       f.adapter.release.resolve(undefined)
@@ -934,7 +934,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     },
   )
   it('reconciles uncovered work across a plugin reload and keeps captured report ranges stable', async () => {
-    const f = await running(backend, { rollupFactors: [2] })
+    const f = await running({ rollupFactors: [2] })
     const start = Date.now()
     await vi.advanceTimersByTimeAsync(24000)
     f.adapter.release.resolve(undefined)
@@ -966,7 +966,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     })
   })
   it('retries a failed rollup before another base report is due', async () => {
-    const f = await running(backend, { intervalMs: 600000, rollupFactors: [2.5] })
+    const f = await running({ intervalMs: 600000, rollupFactors: [2.5] })
     for (const count of [1, 2]) {
       await vi.advanceTimersByTimeAsync(600000)
       await f.waitRecords('plugin:timeline/report', count)
@@ -992,7 +992,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   })
   it('restores successful thresholds and uncovered short work in a fresh Host', async () => {
     const config = { intervalMs: 900000, rollupFactors: [4, 4] }
-    const f = await running(backend, config)
+    const f = await running(config)
     await vi.advanceTimersByTimeAsync(900000)
     await f.waitRecords('plugin:timeline/report')
     const first = f.reports()[0]
@@ -1012,7 +1012,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     await vi.advanceTimersByTimeAsync(4 * 3600000)
     const adapter = new Adapter()
     adapter.calls = 0
-    const next = await setup(backend, config, adapter, restore)
+    const next = await setup(config, adapter, restore)
     fixtures.push(next)
     expect(next.reports()).toEqual([first])
     expect(adapter.checks).toHaveLength(0)
@@ -1029,7 +1029,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(next.reports()).toHaveLength(4)
   })
   it('schedules reports only for agents in the plugin scope', async () => {
-    const f = await setup(backend, {}, new Adapter())
+    const f = await setup({}, new Adapter())
     fixtures.push(f)
     await f.plugin.dispose()
     const parent = {}
@@ -1063,7 +1063,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(f.adapter.checks.map(request => request.sessionId)).toEqual([inside.agent.session.id])
   })
   it('writes a scoped agent report only once when a root installation also exists', async () => {
-    const f = await setup(backend, { intervalMs: 60000 })
+    const f = await setup({ intervalMs: 60000 })
     fixtures.push(f)
     const parent = {}
     const scoped = await createScope(f.ctx, parent).ctx.isolate('timeline').plugin(Timeline, { intervalMs: 60000 })
@@ -1090,7 +1090,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     const config = { intervalMs: 600000, rollupFactors: [2.5] }
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running(backend, config, adapter)
+    const f = await running(config, adapter)
     for (const count of [1, 2]) {
       await vi.advanceTimersByTimeAsync(600000)
       await f.waitRecords('plugin:timeline/report', count)
@@ -1105,7 +1105,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
     expect(adapter.checks).toHaveLength(0)
   })
   it('does not report a quiet Session merely because it is opened or the plugin reloads', async () => {
-    const f = await setup(backend, { intervalMs: 900000, rollupFactors: [4, 4] })
+    const f = await setup({ intervalMs: 900000, rollupFactors: [4, 4] })
     fixtures.push(f)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     await vi.advanceTimersByTimeAsync(8 * 3600000)
@@ -1120,7 +1120,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('records a timeout and drains the canceled auxiliary stream', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, { timeoutMs: 50 }, adapter)
+    const f = await running({ timeoutMs: 50 }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await adapter.checkStarted.promise
     await vi.advanceTimersByTimeAsync(50)
@@ -1131,7 +1131,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('does not rearm a disposed Agent after its independent report settles', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, {}, adapter)
+    const f = await running({}, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await adapter.checkStarted.promise
     await f.disposeAgent()
@@ -1142,7 +1142,7 @@ describe.each(['jsonl', 'sqlite'] as const)('background summaries through a real
   it('bounds concurrent summaries queued by multiple Sessions', async () => {
     const adapter = new Adapter()
     adapter.checkRelease = Promise.withResolvers<undefined>()
-    const f = await running(backend, { maxConcurrent: 1 }, adapter)
+    const f = await running({ maxConcurrent: 1 }, adapter)
     const others = await Promise.all(
       ['second', 'third'].map(async (id) => {
         const agent = await f.harness.create(SessionId(id), { provider: 'fixture', model: 'timeline' })

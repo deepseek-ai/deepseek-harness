@@ -30,9 +30,6 @@ if TYPE_CHECKING:
     from deepseek_harness import Notification, RunResult
 
 
-StorageBackend = Literal["jsonl", "sqlite"]
-
-
 EXPECTED_TEXT = "runtime smoke ok"
 LIVE_API_SENTINEL = "PYTHON_SDK_LIVE_OK"
 CODE_PROMPT = "Use run_code to compute the packaged worker smoke value."
@@ -166,7 +163,6 @@ RECOVERY_SNAPSHOT_FILENAMES = ("result.json", "requests.json", "session.v4.jsonl
 MCP_SERVER_SCRIPT = """\
 import json
 import os
-import sqlite3
 import sys
 import time
 
@@ -247,15 +243,13 @@ def write_profile_patch(
     name: str,
     sessions: Path,
     patches: list[dict[str, object]],
-    *,
-    storage: StorageBackend = "jsonl",
 ) -> Path:
     """Write one JSON-form dsh profile patch with deterministic persistence."""
     path = root / name
     path.write_text(json.dumps([
         {
             "id": "session-persistence-jsonl",
-            "config": {"root": str(sessions), "storage": storage, "compression": "none"},
+            "config": {"root": str(sessions), "compression": "none"},
         },
         {"id": "session-telemetry-otel", "disabled": True},
         *patches,
@@ -265,7 +259,6 @@ def write_profile_patch(
 
 def write_advanced_profile_patch(
     root: Path, name: str, sessions: Path, mode: Literal["native", "ptc"] = "native",
-    *, storage: StorageBackend = "jsonl",
 ) -> Path:
     """Write the shared custom, snapshot, and restart profile patch."""
     return write_profile_patch(root, name, sessions, [
@@ -293,10 +286,10 @@ def write_advanced_profile_patch(
             {"id": "cordis-host-runner", "name": "@deepseek-ai/dsh-cordis-host-runner"},
             {"id": "cordis-tool", "name": "@deepseek-ai/dsh-tool-cordis"},
         ]},
-    ], storage=storage)
+    ])
 
 
-def write_mcp_patch(root: Path, sessions: Path, server_script: Path, *, storage: StorageBackend = "jsonl") -> Path:
+def write_mcp_patch(root: Path, sessions: Path, server_script: Path) -> Path:
     """Write a profile patch that mounts the packaged MCP client."""
     return write_profile_patch(root, "mcp.patch.yml", sessions, [{
         "insert": [{
@@ -312,7 +305,7 @@ def write_mcp_patch(root: Path, sessions: Path, server_script: Path, *, storage:
                 "reconnect": {"enabled": False},
             },
         }],
-    }], storage=storage)
+    }])
 
 
 class MockModelHandler(BaseHTTPRequestHandler):
@@ -864,7 +857,6 @@ def main() -> None:
         default="all",
     )
     parser.add_argument("--exe", type=Path)
-    parser.add_argument("--storage", choices=("jsonl", "sqlite"), nargs="+", default=("jsonl",))
     parser.add_argument(
         "--installed-wheel",
         action="store_true",
@@ -902,76 +894,70 @@ def main() -> None:
         return
 
     if args.scenario == "sdk-live":
-        for storage in args.storage:
-            smoke_sdk_live(storage=storage)
-            print(f"smoke-python-runtime: sdk-live ({storage}) passed")
+        smoke_sdk_live()
+        print("smoke-python-runtime: sdk-live passed")
         return
 
-    for storage in args.storage:
-        with MockModel() as model:
-            if args.scenario == "sdk-plugin-manager":
-                assert args.exe is not None
-                with tempfile.TemporaryDirectory(prefix="dsh-sdk-plugin-cache-") as cache:
-                    subprocess.run([str(args.exe.resolve())], check=True, capture_output=True, text=True,
-                                   env={**os.environ, "DSH_RESOURCE_CACHE": cache, "DSH_RUNTIME_DOWNLOAD": "primary"})
-                    smoke_sdk_plugin_manager(model.url, args.exe.resolve(), Path(cache), storage=storage)
-            if args.scenario in {"all", "sdk-authoring"}:
-                assert args.exe is not None
-                smoke_sdk_authoring(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.scenario in {"all", "sdk-default"}:
-                smoke_sdk_default(model.url, storage=storage)
-            if args.scenario in {"all", "sdk-custom"}:
-                assert args.exe is not None
-                smoke_sdk_custom(model.url, args.exe.resolve(), storage=storage)
-            if args.scenario in {"all", "sdk-minimal"}:
-                assert args.exe is not None
-                smoke_sdk_minimal(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.scenario in {"all", "sdk-minimal-in-history"}:
-                assert args.exe is not None
-                smoke_sdk_minimal(model.url, args.exe.resolve(), args.update_snapshots, in_history=True, storage=storage)
-            if args.scenario in {"all", "sdk-dynamic-tools"}:
-                assert args.exe is not None
-                smoke_sdk_dynamic_tools(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.scenario in {"all", "sdk-fs-search"}:
-                assert args.exe is not None
-                smoke_sdk_fs_search(model.url, args.exe.resolve(), storage=storage)
-            if args.scenario in {"all", "sdk-spawn-node"}:
-                assert args.exe is not None
-                smoke_sdk_spawn_node(model.url, args.exe.resolve(), storage=storage)
-            if args.scenario in {"all", "sdk-mcp"}:
-                smoke_sdk_mcp(model.url, None if args.exe is None else args.exe.resolve(), storage=storage)
-            if args.scenario in {"all", "sdk-snapshot"}:
-                assert args.exe is not None
-                smoke_sdk_snapshot(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.scenario in {"all", "sdk-snapshot", "sdk-recovery"}:
-                assert args.exe is not None
-                smoke_sdk_scheduler_recovery(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.scenario in {"all", "sdk-restart"}:
-                assert args.exe is not None
-                smoke_sdk_v3_resume(model.url, args.exe.resolve(), storage=storage)
-                smoke_sdk_restart_snapshot(model.url, args.exe.resolve(), args.update_snapshots, storage=storage)
-            if args.installed_wheel and args.scenario in {"all", "sdk-profile-plugin"}:
-                smoke_sdk_profile_plugin(model.url, storage=storage)
-            if args.scenario in {"all", "direct"}:
-                assert args.exe is not None
-                smoke_direct(model.url, args.exe.resolve(), storage=storage)
-            if not MockModelHandler.requests:
-                raise AssertionError("mock model endpoint received no requests")
-        print(f"smoke-python-runtime: {args.scenario} ({storage}) passed")
+    with MockModel() as model:
+        if args.scenario == "sdk-plugin-manager":
+            assert args.exe is not None
+            with tempfile.TemporaryDirectory(prefix="dsh-sdk-plugin-cache-") as cache:
+                subprocess.run([str(args.exe.resolve())], check=True, capture_output=True, text=True,
+                               env={**os.environ, "DSH_RESOURCE_CACHE": cache, "DSH_RUNTIME_DOWNLOAD": "primary"})
+                smoke_sdk_plugin_manager(model.url, args.exe.resolve(), Path(cache))
+        if args.scenario in {"all", "sdk-authoring"}:
+            assert args.exe is not None
+            smoke_sdk_authoring(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.scenario in {"all", "sdk-default"}:
+            smoke_sdk_default(model.url)
+        if args.scenario in {"all", "sdk-custom"}:
+            assert args.exe is not None
+            smoke_sdk_custom(model.url, args.exe.resolve())
+        if args.scenario in {"all", "sdk-minimal"}:
+            assert args.exe is not None
+            smoke_sdk_minimal(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.scenario in {"all", "sdk-minimal-in-history"}:
+            assert args.exe is not None
+            smoke_sdk_minimal(model.url, args.exe.resolve(), args.update_snapshots, in_history=True)
+        if args.scenario in {"all", "sdk-dynamic-tools"}:
+            assert args.exe is not None
+            smoke_sdk_dynamic_tools(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.scenario in {"all", "sdk-fs-search"}:
+            assert args.exe is not None
+            smoke_sdk_fs_search(model.url, args.exe.resolve())
+        if args.scenario in {"all", "sdk-spawn-node"}:
+            assert args.exe is not None
+            smoke_sdk_spawn_node(model.url, args.exe.resolve())
+        if args.scenario in {"all", "sdk-mcp"}:
+            smoke_sdk_mcp(model.url, None if args.exe is None else args.exe.resolve())
+        if args.scenario in {"all", "sdk-snapshot"}:
+            assert args.exe is not None
+            smoke_sdk_snapshot(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.scenario in {"all", "sdk-snapshot", "sdk-recovery"}:
+            assert args.exe is not None
+            smoke_sdk_scheduler_recovery(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.scenario in {"all", "sdk-restart"}:
+            assert args.exe is not None
+            smoke_sdk_v3_resume(model.url, args.exe.resolve())
+            smoke_sdk_restart_snapshot(model.url, args.exe.resolve(), args.update_snapshots)
+        if args.installed_wheel and args.scenario in {"all", "sdk-profile-plugin"}:
+            smoke_sdk_profile_plugin(model.url)
+        if args.scenario in {"all", "direct"}:
+            assert args.exe is not None
+            smoke_direct(model.url, args.exe.resolve())
+        if not MockModelHandler.requests:
+            raise AssertionError("mock model endpoint received no requests")
+    print(f"smoke-python-runtime: {args.scenario} passed")
 
 
-def smoke_sdk_authoring(
-    base_url: str, executable: Path, update_snapshots: bool, *, storage: StorageBackend = "jsonl",
-) -> None:
+def smoke_sdk_authoring(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Query the bundled Python and switch skills without replacing that environment."""
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-authoring-cache-") as cache_directory:
-        _smoke_sdk_authoring_cached(base_url, executable, update_snapshots, Path(cache_directory), storage=storage)
+        _smoke_sdk_authoring_cached(base_url, executable, update_snapshots, Path(cache_directory))
 
 
-def _smoke_sdk_authoring_cached(
-    base_url: str, executable: Path, update_snapshots: bool, cache: Path, *, storage: StorageBackend = "jsonl",
-) -> None:
+def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshots: bool, cache: Path) -> None:
     from deepseek_harness import DeepSeekHarness
 
     cache_environment = {**os.environ, "DSH_RESOURCE_CACHE": str(cache), "DSH_RUNTIME_DOWNLOAD": "primary"}
@@ -986,6 +972,7 @@ def _smoke_sdk_authoring_cached(
                 skill = home / "skills/office-docx/SKILL.md"
                 skill.parent.mkdir(parents=True)
                 skill.write_text("---\nname: office-docx\ndescription: CUSTOM_OFFICE_DOCX\n---\nUse the bundled Python for custom document work.\n")
+            patch = root / "skills.patch.yml"
             # Fix the model-visible clock in this child only; native timers stay live.
             patch_rows = [
                 {"insert": [{"id": "authoring-clock", "name": (
@@ -995,7 +982,7 @@ def _smoke_sdk_authoring_cached(
             ]
             if mode == "disabled":
                 patch_rows.append({"id": "skill-office", "disabled": True})
-            patch = write_profile_patch(root, "skills.patch.yml", home / "sessions", patch_rows, storage=storage)
+            patch.write_text(json.dumps(patch_rows))
             first = len(MockModelHandler.requests)
             with DeepSeekHarness(
                 provider="deepseek-official", model="smoke-model", cwd=str(root),
@@ -1006,7 +993,6 @@ def _smoke_sdk_authoring_cached(
             ) as harness:
                 result = harness.run(AUTHORING_PROMPT, session_id="authoring")
             assert result.final_response == EXPECTED_TEXT, result.final_response
-            assert_session_log(home / "sessions", root, EXPECTED_TEXT, storage=storage, executable=executable)
             requests = MockModelHandler.requests[first:]
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
@@ -1044,13 +1030,11 @@ def _smoke_sdk_authoring_cached(
                     update_snapshots, AUTHORING_SNAPSHOT_DIRECTORY,
                     ("model-visible.json",),
                 )
-    smoke_sdk_plugin_manager(base_url, executable, cache, storage=storage)
+    smoke_sdk_plugin_manager(base_url, executable, cache)
     print("smoke-python-runtime: bundled Python, default skills, replacement and disabled skills passed")
 
 
-def smoke_sdk_plugin_manager(
-    base_url: str, executable: Path, cache: Path, *, storage: StorageBackend = "jsonl",
-) -> None:
+def smoke_sdk_plugin_manager(base_url: str, executable: Path, cache: Path) -> None:
     """Approve a real local installation with bundled pnpm, then load it after restart."""
     from deepseek_harness import ApprovalRequestParams, DeepSeekHarness
 
@@ -1073,11 +1057,10 @@ def smoke_sdk_plugin_manager(
             "insert": [{"id": "sdk-managed-fixture", "name": "dsh-sdk-managed-fixture"}],
         }]))
         home = root / "home"
-        patch = write_profile_patch(root, "storage.patch.yml", home / "sessions", [], storage=storage)
         environment = {"PATH": "", "DSH_RESOURCE_CACHE": str(cache),
                        "DSH_PERMISSION_MODE": "workspace-write", "DSH_TELEMETRY_DISABLED": "1"}
         config = dict(provider="deepseek-official", model="smoke-model", cwd=str(root),
-                      dsh_bin=str(executable), dsh_home=str(home), env=environment, patches=(str(patch),),
+                      dsh_bin=str(executable), dsh_home=str(home), env=environment,
                       api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60)
         with ThreadPoolExecutor(max_workers=2) as worker:
             harness = DeepSeekHarness(**config, approval_requests=True)
@@ -1107,12 +1090,8 @@ def smoke_sdk_plugin_manager(
         with DeepSeekHarness(**config) as restarted:
             result = restarted.run(PROFILE_PLUGIN_PROMPT, session_id="installed-after-restart")
             assert result.final_response == PROFILE_PLUGIN_TEXT, result.final_response
-        logs = read_session_logs(home / "sessions", storage=storage, executable=executable)
-        assert set(logs) == {"rejected", "allowed-once", "installed-after-restart"}, logs.keys()
         example = Path(__file__).resolve().parent.parent / "python/sdk/examples/manage_plugins.py"
         example_home = root / "example-home"
-        example_home.mkdir()
-        write_profile_patch(example_home, "cordis.patch.yml", example_home / "sessions", [], storage=storage)
         example_environment = {**os.environ, **environment, "DEEPSEEK_BASE_URL": base_url,
                                "DEEPSEEK_API_KEY": "sk-keyless-smoke"}
         example_args = [sys.executable, str(example), "--dsh-home", str(example_home),
@@ -1283,7 +1262,7 @@ def assert_installed_wheel_environment() -> Path:
     return executable
 
 
-def smoke_sdk_live(*, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_live() -> None:
     """Run a real-model, tool-using two-turn task through installed wheels."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1301,7 +1280,6 @@ def smoke_sdk_live(*, storage: StorageBackend = "jsonl") -> None:
         marker = root / "live-api-marker.txt"
         session_id = "installed-wheel-live-api"
         shell_tool = "pwsh" if IS_WINDOWS else "bash"
-        patch = write_profile_patch(root, "storage.patch.yml", sessions, [], storage=storage)
         create_prompt = (
             f"Use the {shell_tool} tool to create the file at the absolute path below with exact UTF-8 "
             f"content {LIVE_API_SENTINEL}, with no newline or byte-order mark. "
@@ -1312,7 +1290,6 @@ def smoke_sdk_live(*, storage: StorageBackend = "jsonl") -> None:
             model="deepseek-v4-flash",
             cwd=str(root),
             dsh_home=str(dsh_home),
-            patches=(str(patch),),
             env={
                 "DSH_PERMISSION_MODE": "danger-full-access",
                 "DSH_TELEMETRY_DISABLED": "1",
@@ -1350,7 +1327,7 @@ def smoke_sdk_live(*, storage: StorageBackend = "jsonl") -> None:
                     raise AssertionError(f"verify turn wrote unexpected bytes to receipt {receipt}")
                 if not marker.is_file() or marker.read_bytes() != challenge:
                     raise AssertionError(f"verify turn changed source file {marker}")
-        assert_session_log(sessions, root, storage=storage)
+        assert_zstd_session_log(sessions)
 
 
 def assert_live_turn(label: str, result: RunResult) -> None:
@@ -1398,20 +1375,18 @@ def safe_turn_end(value: object) -> object:
     }
 
 
-def smoke_sdk_default(base_url: str, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_default(base_url: str) -> None:
     from deepseek_harness import DeepSeekHarness
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-default-") as temporary:
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_profile_patch(root, "storage.patch.yml", sessions, [], storage=storage)
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
             cwd=str(root),
             dsh_home=str(dsh_home),
-            patches=(str(patch),),
             env={
                 "DSH_PERMISSION_MODE": "danger-full-access",
                 "DSH_TELEMETRY_DISABLED": "1",
@@ -1426,12 +1401,11 @@ def smoke_sdk_default(base_url: str, *, storage: StorageBackend = "jsonl") -> No
             f"events={[event.get('type') for event in result.events]!r} "
             f"turn_end={safe_turn_end(next((event.get('data', event) for event in reversed(result.events) if event.get('type') == 'turn/end'), {}))!r}"
         )
-        assert_session_log(sessions, root, storage=storage)
+        assert_zstd_session_log(sessions)
         # The installed runtime starts with an empty PATH; no checkout or global pnpm can satisfy the tool.
         before = (dsh_home / "profiles/sdk/package.json").read_bytes()
         with DeepSeekHarness(
             provider="deepseek-official", model="smoke-model", cwd=str(root), dsh_home=str(dsh_home),
-            patches=(str(patch),),
             env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "PATH": "",
                  "DSH_PRIMARY_RUNTIME": "", "DSH_RESOURCE_CACHE": str(root / "empty-resource-cache")},
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
@@ -1441,7 +1415,7 @@ def smoke_sdk_default(base_url: str, *, storage: StorageBackend = "jsonl") -> No
         assert (dsh_home / "profiles/sdk/package.json").read_bytes() == before
 
 
-def smoke_sdk_custom(base_url: str, executable: Path, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_custom(base_url: str, executable: Path) -> None:
     from deepseek_harness import DeepSeekHarness
 
     cases: tuple[tuple[Literal["native", "ptc"], tuple[tuple[str, str], ...]], ...] = (
@@ -1453,7 +1427,7 @@ def smoke_sdk_custom(base_url: str, executable: Path, *, storage: StorageBackend
             root = Path(temporary).resolve()
             dsh_home = root / "home"
             sessions = dsh_home / "sessions"
-            patch = write_advanced_profile_patch(root, "custom.patch.yml", sessions, mode, storage=storage)
+            patch = write_advanced_profile_patch(root, "custom.patch.yml", sessions, mode)
             with DeepSeekHarness(
                 provider="deepseek-official",
                 model="smoke-model",
@@ -1472,11 +1446,11 @@ def smoke_sdk_custom(base_url: str, executable: Path, *, storage: StorageBackend
                 for prompt, expected in turns:
                     result = harness.run(prompt, session_id=f"custom-{mode}")
                     assert result.final_response == expected, result.final_response
-            assert_session_log(sessions, root, *(expected for _, expected in turns), storage=storage, executable=executable)
+            assert_session_log(sessions, root, *(expected for _, expected in turns))
 
 
 def smoke_sdk_minimal(
-    base_url: str, executable: Path, update_snapshots: bool, *, in_history: bool = False, storage: StorageBackend = "jsonl",
+    base_url: str, executable: Path, update_snapshots: bool, *, in_history: bool = False,
 ) -> None:
     """Exercise the shipped standalone minimal profile through the packaged executable."""
     from deepseek_harness import DeepSeekHarness
@@ -1487,12 +1461,7 @@ def smoke_sdk_minimal(
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        storage_patch = root / "persistence.patch.yml"
-        storage_patch.write_text(json.dumps([{
-            "id": "sessions",
-            "config": {"root": str(sessions), "storage": storage, "compression": "none"},
-        }]))
-        patches = (str(storage_patch),)
+        patches = ()
         if in_history:
             patch = root / "in-history.patch.yml"
             patch.write_text(json.dumps([
@@ -1504,7 +1473,7 @@ def smoke_sdk_minimal(
                     "name": (Path(__file__).resolve().parent / "fixtures/python-sdk-in-history-prompt.mjs").as_uri(),
                 }]},
             ]))
-            patches += (str(patch),)
+            patches = (str(patch),)
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
@@ -1522,11 +1491,11 @@ def smoke_sdk_minimal(
         event_text = json.dumps(result.events)
         if MINIMAL_TEXT not in event_text:
             raise AssertionError(f"minimal agent run emitted no final response: {result.events}")
-        assert_session_log(sessions, root, MINIMAL_TEXT, "COUNT=1", "COUNT=2", storage=storage, executable=executable)
+        assert_session_log(sessions, root, MINIMAL_TEXT, "COUNT=1", "COUNT=2")
 
         requests = MockModelHandler.requests[first_request:]
         if in_history:
-            logs = read_session_logs(sessions, storage=storage, executable=executable)
+            logs = read_session_logs(sessions)
             files = build_in_history_snapshot_files(result, requests, logs[result.session_id])
             compare_snapshot_files(
                 files, update_snapshots, IN_HISTORY_SNAPSHOT_DIRECTORY, IN_HISTORY_SNAPSHOT_FILENAMES,
@@ -1538,7 +1507,7 @@ def smoke_sdk_minimal(
             )
 
 
-def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: bool, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Observe native tool changes through the shipped SDK profile and its durable log."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1567,7 +1536,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
                 "id": "dynamic-tools",
                 "name": (Path(__file__).resolve().parent / "fixtures/python-sdk-dynamic-tools.mjs").as_uri(),
             }]},
-        ], storage=storage)
+        ])
         with DeepSeekHarness(
             provider="deepseek-official", model="smoke-model", cwd=str(root),
             dsh_bin=str(executable), dsh_home=str(dsh_home), patches=(str(patch),),
@@ -1583,7 +1552,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
             result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke")
         assert result.final_response == DYNAMIC_TOOLS_TEXT, result.final_response
         assert task.read_text(encoding="utf-8") == "Call snapshot_ping once.\n"
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         assert set(logs) == {result.session_id}, sorted(logs)
         files = build_dynamic_tools_snapshot_files(
             result, MockModelHandler.requests[first_request:], logs[result.session_id], root,
@@ -1593,7 +1562,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
         )
 
 
-def smoke_sdk_fs_search(base_url: str, executable: Path, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_fs_search(base_url: str, executable: Path) -> None:
     """Exercise real grep and glob spawns through the packaged executable."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1605,7 +1574,7 @@ def smoke_sdk_fs_search(base_url: str, executable: Path, *, storage: StorageBack
         patch = write_profile_patch(root, "fs-search.patch.yml", sessions, [
             {"id": "skill-filesystem", "disabled": True},
             {"id": "tool-fs-search", "config": {"sampleOverCapGlobResults": False}},
-        ], storage=storage)
+        ])
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
@@ -1624,10 +1593,10 @@ def smoke_sdk_fs_search(base_url: str, executable: Path, *, storage: StorageBack
             result = harness.run(FS_SEARCH_PROMPT, session_id="fs-search-smoke")
 
         assert result.final_response == FS_SEARCH_TEXT, result.final_response
-        assert_session_log(sessions, root, FS_SEARCH_TEXT, FS_SEARCH_MARKER, "needle.txt", storage=storage, executable=executable)
+        assert_session_log(sessions, root, FS_SEARCH_TEXT, FS_SEARCH_MARKER, "needle.txt")
 
 
-def smoke_sdk_spawn_node(base_url: str, executable: Path, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_spawn_node(base_url: str, executable: Path) -> None:
     """A shell command starting with `node` must reach the machine's Node, not the executable."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1635,7 +1604,7 @@ def smoke_sdk_spawn_node(base_url: str, executable: Path, *, storage: StorageBac
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_profile_patch(root, "spawn-node.patch.yml", sessions, [], storage=storage)
+        patch = write_profile_patch(root, "spawn-node.patch.yml", sessions, [])
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
@@ -1654,10 +1623,10 @@ def smoke_sdk_spawn_node(base_url: str, executable: Path, *, storage: StorageBac
             result = harness.run(SPAWN_NODE_PROMPT, session_id="spawn-node-smoke")
 
         assert result.final_response == SPAWN_NODE_TEXT, result.final_response
-        assert_session_log(sessions, root, SPAWN_NODE_TEXT, "PKG_EXECPATH=ABSENT", storage=storage, executable=executable)
+        assert_session_log(sessions, root, SPAWN_NODE_TEXT, "PKG_EXECPATH=ABSENT")
 
 
-def smoke_sdk_mcp(base_url: str, executable: Path | None, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_mcp(base_url: str, executable: Path | None) -> None:
     """Discover and call an external stdio MCP tool through the packaged client."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1667,7 +1636,7 @@ def smoke_sdk_mcp(base_url: str, executable: Path | None, *, storage: StorageBac
         sessions = dsh_home / "sessions"
         server_script = root / "mcp_server.py"
         server_script.write_text(MCP_SERVER_SCRIPT)
-        patch = write_mcp_patch(root, sessions, server_script, storage=storage)
+        patch = write_mcp_patch(root, sessions, server_script)
         discovery_log = server_script.with_suffix(".log")
         with DeepSeekHarness(
             provider="deepseek-official",
@@ -1694,17 +1663,16 @@ def smoke_sdk_mcp(base_url: str, executable: Path | None, *, storage: StorageBac
             "tools/list",
             "tools/call",
         ]
-        assert_session_log(sessions, root, MCP_TEXT, "mcp__fixture__add", "42", storage=storage, executable=executable)
+        assert_session_log(sessions, root, MCP_TEXT, "mcp__fixture__add", "42")
 
 
-def smoke_sdk_profile_plugin(base_url: str, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_profile_plugin(base_url: str) -> None:
     """Install an external bundle through Python's dsh command and load it in the SDK."""
     from deepseek_harness import DeepSeekHarness
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-profile-plugin-") as temporary:
         root = Path(temporary).resolve()
         dsh_home = root / "home"
-        patch = write_profile_patch(root, "storage.patch.yml", dsh_home / "sessions", [], storage=storage)
         plugin = root / "plugin"
         plugin.mkdir()
         (plugin / "package.json").write_text(json.dumps({
@@ -1760,7 +1728,6 @@ def smoke_sdk_profile_plugin(base_url: str, *, storage: StorageBackend = "jsonl"
             model="smoke-model",
             cwd=str(root),
             dsh_home=str(dsh_home),
-            patches=(str(patch),),
             env={
                 "DSH_PERMISSION_MODE": "danger-full-access",
                 "DSH_TELEMETRY_DISABLED": "1",
@@ -1778,18 +1745,17 @@ def smoke_sdk_profile_plugin(base_url: str, *, storage: StorageBackend = "jsonl"
             ) from error
 
         assert result.final_response == PROFILE_PLUGIN_TEXT, result.final_response
-        assert_session_log(dsh_home / "sessions", root, storage=storage)
+        assert_zstd_session_log(dsh_home / "sessions")
 
 
-def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Exercise native and PTC calls in independent packaged-runtime compositions."""
     for mode in ("native", "ptc"):
-        smoke_sdk_snapshot_mode(base_url, executable, update_snapshots, mode, storage=storage)
+        smoke_sdk_snapshot_mode(base_url, executable, update_snapshots, mode)
 
 
 def smoke_sdk_snapshot_mode(
     base_url: str, executable: Path, update_snapshots: bool, mode: Literal["native", "ptc"],
-    *, storage: StorageBackend = "jsonl",
 ) -> None:
     """Drive one supported presentation through the SDK and persistent Session log."""
     from deepseek_harness import DeepSeekHarness
@@ -1798,7 +1764,7 @@ def smoke_sdk_snapshot_mode(
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_advanced_profile_patch(root, "snapshot.patch.yml", sessions, mode, storage=storage)
+        patch = write_advanced_profile_patch(root, "snapshot.patch.yml", sessions, mode)
         feedback_patch = write_profile_patch(root, "feedback.patch.yml", sessions, [{"insert": [
             {"id": "snapshot-tool", "name": (
                 Path(__file__).resolve().parent / "fixtures/python-snapshot-tool.mjs"
@@ -1817,13 +1783,13 @@ def smoke_sdk_snapshot_mode(
             {"id": "snapshot-feedback-producer", "name": (
                 Path(__file__).resolve().parent.parent / "snapshots/sdk/text-turn/feedback-producer.mjs"
             ).as_uri()},
-        ]}], storage=storage)
+        ]}])
         creation_patch = write_profile_patch(root, "creation.patch.yml", sessions, [
             {"insert": [{
                 "id": "serial-created-fixture",
                 "name": str(Path(__file__).resolve().parents[1] / "packages/core/agent-loop/tests/fixtures/serial-created.mjs"),
             }]},
-        ], storage=storage)
+        ])
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
@@ -1902,7 +1868,7 @@ def smoke_sdk_snapshot_mode(
             "name": "AutoReviewDeniedError", "code": "AUTO_REVIEW_DENIED", "reason": "  transport raw\r\nreason  ",
         }], errors
 
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         child_ids = snapshot_child_ids(result, expected_children)
         expected_ids = {SNAPSHOT_SESSION_ID, *child_ids}
         if set(logs) != expected_ids:
@@ -1923,7 +1889,7 @@ def smoke_sdk_snapshot_mode(
         )
 
 
-def smoke_sdk_v3_resume(base_url: str, executable: Path, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_v3_resume(base_url: str, executable: Path) -> None:
     """Migrate persisted V3 history and reopen the published log in a fresh runtime."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1950,7 +1916,7 @@ def smoke_sdk_v3_resume(base_url: str, executable: Path, *, storage: StorageBack
         records = [header, *({**event, "seq": seq, "time": seq + 10} for seq, event in enumerate(events))]
         original = "".join(json.dumps(record) + "\n" for record in records).encode("utf-8")
         source.write_bytes(original)
-        patch = write_profile_patch(root, "v3-resume.patch.yml", sessions, [], storage=storage)
+        patch = write_profile_patch(root, "v3-resume.patch.yml", sessions, [])
         request_count = len(MockModelHandler.requests)
 
         def connect() -> DeepSeekHarness:
@@ -1964,28 +1930,23 @@ def smoke_sdk_v3_resume(base_url: str, executable: Path, *, storage: StorageBack
         with connect() as harness:
             session = harness.resume_session(session_id)
             assert session.id == session_id, f"migration resumed {session.id!r}"
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         assert set(logs) == {session_id}, f"unexpected persisted sessions: {list(logs)}"
         assert any(row.get("type") == "user/message" and row.get("data") == message for row in logs[session_id]), (
             "the migrated log lost the saved V3 user message"
         )
-        migrated = logs[session_id]
-        if storage == "jsonl":
-            (published,) = latest_persisted_session_paths(sessions)
-            migrated_bytes = published.read_bytes()
+        (published,) = latest_persisted_session_paths(sessions)
+        migrated = published.read_bytes()
 
         with connect() as harness:
             session = harness.resume_session(session_id)
             assert session.id == session_id, f"restart resumed {session.id!r}"
-        reopened = read_session_logs(sessions, storage=storage, executable=executable)[session_id]
-        assert reopened[:len(migrated)] == migrated, "restart rewrote the published session history"
-        if storage == "jsonl":
-            assert published.read_bytes().startswith(migrated_bytes), "restart rewrote the published JSONL generation"
+        assert published.read_bytes().startswith(migrated), "restart rewrote the published session history"
         assert source.read_bytes() == original, "resuming changed the original V3 log"
         assert len(MockModelHandler.requests) == request_count, "resuming sent a model request"
 
 
-def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots: bool, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Check isolated sessions and explicit history restoration across runtime restarts."""
     from deepseek_harness import DeepSeekHarness
 
@@ -1993,7 +1954,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_advanced_profile_patch(root, "restart.patch.yml", sessions, storage=storage)
+        patch = write_advanced_profile_patch(root, "restart.patch.yml", sessions)
         first_request = len(MockModelHandler.requests)
 
         def connect(model: str = "smoke-model") -> DeepSeekHarness:
@@ -2025,7 +1986,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
                 f"restart snapshot responses differ: {first.final_response!r}, {second.final_response!r}"
             )
 
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         expected_ids = {RESTART_FIRST_SESSION_ID, RESTART_SECOND_SESSION_ID}
         if set(logs) != expected_ids:
             raise AssertionError(f"restart snapshot expected two durable sessions: {sorted(logs)}")
@@ -2074,7 +2035,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
                 for message in messages
             ):
                 raise AssertionError(f"resumed model history has no {role} message: {expected}")
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         if set(logs) != expected_ids:
             raise AssertionError(f"resume created an unexpected durable session: {sorted(logs)}")
         restored = logs[RESTART_FIRST_SESSION_ID]
@@ -2122,7 +2083,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         )
 
 
-def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapshots: bool, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Keep a failed tool turn usable through the real Messages serializer and SDK."""
     from deepseek_harness import DeepSeekHarness
 
@@ -2131,7 +2092,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        base_patch = write_advanced_profile_patch(root, "base.patch.yml", sessions, storage=storage)
+        base_patch = write_advanced_profile_patch(root, "base.patch.yml", sessions)
         patch = write_profile_patch(root, "recovery.patch.yml", sessions, [
             {"id": "tool-todo", "disabled": False},
             {"id": "session-title-llm", "disabled": True},
@@ -2143,7 +2104,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
                     / "snapshots/sdk/tool-scheduler-recovery/scheduler-failure.mjs"
                 ).as_uri(),
             }]},
-        ], storage=storage)
+        ])
 
         def connect() -> DeepSeekHarness:
             return DeepSeekHarness(
@@ -2169,7 +2130,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         requests = MockModelHandler.requests[first_request:]
         if len(requests) != 2:
             raise AssertionError(f"scheduler recovery expected two serialized model requests: {requests}")
-        logs = read_session_logs(sessions, storage=storage, executable=executable)
+        logs = read_session_logs(sessions)
         records = logs[RECOVERY_SESSION_ID]
         calls = [record["data"]["callId"] for record in records if record.get("type") == "tool/call"]
         if calls != list(RECOVERY_CALL_IDS[:2]):
@@ -2213,12 +2174,12 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         )
 
 
-def smoke_direct(base_url: str, executable: Path, *, storage: StorageBackend = "jsonl") -> None:
+def smoke_direct(base_url: str, executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="dsh-direct-") as temporary:
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_profile_patch(root, "direct.patch.yml", sessions, [], storage=storage)
+        patch = write_profile_patch(root, "direct.patch.yml", sessions, [])
         environment = {
             **os.environ,
             "DSH_HOME": str(dsh_home),
@@ -2251,7 +2212,7 @@ def smoke_direct(base_url: str, executable: Path, *, storage: StorageBackend = "
             peer.read_until(lambda message: message.get("id") == "shutdown")
         finally:
             peer.close()
-        assert_session_log(sessions, root, EXPECTED_TEXT, storage=storage, executable=executable)
+        assert_session_log(sessions, root, EXPECTED_TEXT)
 
 
 def smoke_packaged_runner(executable: Path) -> None:
@@ -2540,51 +2501,49 @@ def selected_snapshot_session_files(directory: Path) -> dict[int, Path]:
     return {index: value[1] for index, value in selected.items()}
 
 
-def assert_session_log(
-    sessions: Path, cwd: Path, *expected_texts: str,
-    storage: StorageBackend = "jsonl", executable: Path | None = None,
-) -> None:
-    """Read one complete Session through the selected persistence provider."""
-    logs = read_session_logs(sessions, storage=storage, executable=executable)
+def assert_session_log(sessions: Path, cwd: Path, *expected_texts: str) -> None:
+    logs = latest_persisted_session_paths(sessions)
     if len(logs) != 1:
-        raise AssertionError(f"expected one persisted Session under {sessions}, found {list(logs)}")
-    records = next(iter(logs.values()))
-    header = records[0]
+        raise AssertionError(f"expected one JSONL session log under {sessions}, found {logs}")
+    content = logs[0].read_text()
+    assert_persisted_session_version(logs[0], content)
+    lines = content.splitlines()
+    header = json.loads(lines[0])
     if header.get("cwd") != str(cwd):
         raise AssertionError(f"session header cwd is not absolute/canonical: {header}")
-    if not any(record.get("type") == "turn/end" for record in records[1:]):
-        raise AssertionError(f"persisted Session has no completed turn under {sessions}")
-    rendered = render_jsonl(records)
+    rendered = "\n".join(lines)
     for expected in expected_texts:
         if expected not in rendered:
-            raise AssertionError(f"session log has no {expected!r} response under {sessions}")
+            raise AssertionError(f"session log has no {expected!r} response: {logs[0]}")
 
 
-def read_session_logs(
-    sessions: Path, *, storage: StorageBackend = "jsonl", executable: Path | None = None,
-) -> dict[str, list[dict[str, object]]]:
-    """Collect cold logical histories through the installed profile's persistence API."""
-    from deepseek_harness import DeepSeekHarness
+def assert_zstd_session_log(sessions: Path) -> None:
+    logs = latest_persisted_session_paths(sessions, compressed=True)
+    if len(logs) != 1:
+        raise AssertionError(f"expected one Zstandard JSONL session log under {sessions}, found {logs}")
+    if not logs[0].read_bytes().startswith(bytes.fromhex("28b52ffd")):
+        raise AssertionError(f"session log has no Zstandard magic: {logs[0]}")
 
-    if storage == "sqlite" and not (sessions / ".segments" / "sessions.sqlite").is_file():
-        raise AssertionError(f"expected SQLite session database under {sessions}")
-    with tempfile.TemporaryDirectory(prefix="dsh-sdk-session-reader-") as temporary:
-        root = Path(temporary).resolve()
-        output = root / "sessions.json"
-        patch = write_profile_patch(root, "reader.patch.yml", sessions, [{"insert": [{
-            "id": "python-sdk-session-reader",
-            "name": (Path(__file__).resolve().parent / "fixtures/python-sdk-session-reader.mjs").as_uri(),
-            "config": {"output": str(output)},
-        }]}], storage=storage)
-        with DeepSeekHarness(
-            dsh_bin=None if executable is None else str(executable),
-            cwd=str(root), dsh_home=str(root / "home"), patches=(str(patch),),
-            env={"DSH_TELEMETRY_DISABLED": "1"}, request_timeout_seconds=60,
-        ):
-            pass
-        logs: dict[str, list[dict[str, object]]] = json.loads(output.read_text(encoding="utf-8"))
-    for session_id, records in logs.items():
-        assert_current_session_version(session_header_version(render_jsonl(records), session_id), session_id)
+
+def read_session_logs(sessions: Path) -> dict[str, list[dict[str, object]]]:
+    """Parse every persisted JSONL session into a map keyed by header id."""
+    logs: dict[str, list[dict[str, object]]] = {}
+    for path in latest_persisted_session_paths(sessions):
+        content = path.read_text(encoding="utf-8")
+        assert_persisted_session_version(path, content)
+        records = [
+            json.loads(line)
+            for line in content.splitlines()
+            if line
+        ]
+        if not records or records[0].get("type") != "session":
+            raise AssertionError(f"session log has no header: {path}")
+        session_id = records[0].get("id")
+        if not isinstance(session_id, str):
+            raise AssertionError(f"session log header has no string id: {path}")
+        if session_id in logs:
+            raise AssertionError(f"duplicate persisted session id: {session_id}")
+        logs[session_id] = records
     return logs
 
 
@@ -3294,21 +3253,6 @@ def normalize_snapshot_comparison_text(
     return content
 
 
-def _same_json_value(actual: object, expected: object) -> bool:
-    """Compare parsed JSON, preserving array order and distinguishing booleans from numbers."""
-    if isinstance(actual, bool) or isinstance(expected, bool):
-        return type(actual) is type(expected) and actual == expected
-    if isinstance(actual, dict) and isinstance(expected, dict):
-        return actual.keys() == expected.keys() and all(
-            _same_json_value(value, expected[key]) for key, value in actual.items()
-        )
-    if isinstance(actual, list) and isinstance(expected, list):
-        return len(actual) == len(expected) and all(
-            _same_json_value(value, other) for value, other in zip(actual, expected)
-        )
-    return actual == expected
-
-
 def compare_snapshot_files(
     files: dict[str, str],
     update: bool,
@@ -3387,16 +3331,7 @@ def compare_snapshot_files(
         expected_text = expected_path.read_text(encoding="utf-8")
         compared_actual = normalize_snapshot_comparison_text(name, actual, actual_native_version)
         compared_expected = normalize_snapshot_comparison_text(expected_path.name, expected_text, expected_native_version)
-        if name.endswith(".jsonl"):
-            matches = _same_json_value(
-                [json.loads(line) for line in compared_actual.splitlines() if line],
-                [json.loads(line) for line in compared_expected.splitlines() if line],
-            )
-        elif name.endswith(".json"):
-            matches = _same_json_value(json.loads(compared_actual), json.loads(compared_expected))
-        else:
-            matches = compared_actual == compared_expected
-        if matches:
+        if compared_actual == compared_expected:
             continue
         diff = "".join(difflib.unified_diff(
             compared_expected.splitlines(keepends=True),

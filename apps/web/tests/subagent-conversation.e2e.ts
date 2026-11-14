@@ -22,7 +22,6 @@ import {
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, writeComposerDraft } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { sessionDir } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const AVAILABLE_CHILD_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/ui.expected.md', import.meta.url))
@@ -1012,6 +1011,10 @@ describe('web e2e: migration-required subagent catalog', () => {
     } finally {
       await parentHandle.close()
     }
+    const projects = (await readdir(scaffold.persistenceRoot, { withFileTypes: true })).filter(entry => entry.isDirectory())
+    expect(projects).toHaveLength(1)
+    const project = projects[0]
+    if (project === undefined) throw new Error('parent seed has no project directory')
     // Keep historical bytes on disk; seeding through the writer would migrate them before the browser opens.
     for (const [id, parentSession, label, depth] of [
       [childId, parentId, childLabel, 1],
@@ -1032,7 +1035,7 @@ describe('web e2e: migration-required subagent catalog', () => {
         { ...header, id, createdAt: createdAt + depth, cwd: scaffold.workspaceCwd, parentSession, origin: 'subagent', delegationDepth: depth },
         ...body.map((event, seq) => ({ ...event, seq, time: createdAt + depth + seq + 1 })),
       ]
-      const directory = sessionDir(scaffold.persistenceRoot, scaffold.workspaceCwd, id)
+      const directory = join(scaffold.persistenceRoot, project.name, id)
       const path = join(directory, 'session.v3.jsonl.zstd')
       const source = Buffer.concat(rows.map(row => zstdCompressSync(Buffer.from(`${JSON.stringify(row)}\n`))))
       await mkdir(directory, { recursive: true })

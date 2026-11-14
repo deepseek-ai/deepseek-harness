@@ -34,7 +34,7 @@ async function measure(unrelated: number) {
       ] : []
       await writeFile(join(directory, 'session.v3.jsonl'), [header, ...events].map(row => JSON.stringify(row) + '\n').join(''))
     }
-    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     const parent = brandString<SessionId>('parent')
     const timed = async (operation: () => Promise<unknown>): Promise<number> => {
       const start = performance.now()

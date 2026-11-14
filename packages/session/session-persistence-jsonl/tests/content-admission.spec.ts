@@ -1,7 +1,5 @@
 /** V2 content admission refuses entire generations without publishing a valid prefix. */
-import { brandString } from '@deepseek-ai/dsh-brand'
 
-import { importedRows } from './fixtures/segments.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
@@ -11,8 +9,9 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { generationLogPath, type JsonlCompression } from '../src/format.ts'
-import { compressZstdFrame } from '../src/zstd.ts'
+import { generationLogPath, scanLog, type JsonlCompression } from '../src/format.ts'
+import { compressZstdFrame, decompressZstdFrame, scanZstdFrames } from '../src/zstd.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const id = brandString<SessionId>('content-admission')
 const text = { type: 'text', text: 'Keep tool/code-dispatch and tools-code-mode literal. 图片' }
@@ -131,7 +130,7 @@ async function mount(compression: JsonlCompression): Promise<Context> {
   if (root === undefined) throw new Error('persistence fixture is not initialized')
   const ctx = new Context()
   contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression })
   return ctx
 }
 
@@ -221,10 +220,19 @@ describe.each(['none', 'zstd'] as const)('V2 admitted content publication (%s)',
       expect((await writer.read()).events).toEqual(restored.events)
       await writer.flush()
     } finally { await writer.close() }
-    const published = importedRows(root!, id)
-    expect(published.slice(1)).toEqual(restored.events)
+    const successor = generationLogPath(root!, undefined, id, SESSION_FORMAT_VERSION, compression)
+    const published = await readFile(successor)
+    let decoded = published
+    if (compression === 'zstd') {
+      const { frames, tornStart } = scanZstdFrames(published)
+      expect(tornStart).toBeUndefined()
+      decoded = Buffer.concat(await Promise.all(frames.map(frame =>
+        decompressZstdFrame(published.subarray(frame.start, frame.end)),
+      )))
+    }
+    expect(scanLog(decoded).events).toEqual(restored.events)
     expect(await observe(path)).toEqual(original)
-    await expectOnlyGenerations([path])
+    await expectOnlyGenerations([path, successor])
 
     await ctx.fiber.dispose()
     const fresh = await mount(compression)
@@ -234,7 +242,7 @@ describe.each(['none', 'zstd'] as const)('V2 admitted content publication (%s)',
       expect((await reopened.read()).events).toEqual(restored.events)
     } finally { await reopened.close() }
     expect(await observe(path)).toEqual(original)
-    expect(importedRows(root!, id)).toEqual(published)
-    await expectOnlyGenerations([path])
+    expect(await readFile(successor)).toEqual(published)
+    await expectOnlyGenerations([path, successor])
   })
 })

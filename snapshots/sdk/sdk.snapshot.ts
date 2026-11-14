@@ -9,10 +9,6 @@
  * fixtures and rewrites expected outputs.
  */
 
-import { Context } from '@deepseek-ai/cordis'
-import * as persistencePlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -20,6 +16,7 @@ import { basename, delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  assertPersistedSessionVersion,
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
@@ -362,34 +359,13 @@ async function jsonlFiles(dir: string): Promise<string[]> {
   return latestPersistedSessionPaths(entries).map(entry => join(dir, entry))
 }
 
-/** Collect settled logical histories through the existing persistence service. */
-async function collectStoredSessionLogs(root: string): Promise<HarvestedLog[]> {
-  const ctx = new Context()
-  try {
-    await ctx.plugin(persistencePlugin, { root, compression: 'none' })
-    const logs: HarvestedLog[] = []
-    for (const snapshot of await ctx.sessionPersistence.list()) {
-      const handle = await ctx.sessionPersistence.open(snapshot.header.id, 'read')
-      try {
-        const { events } = await handle.read()
-        const header = sessionFormatCatalog.encodeCurrentHeader(
-          { ...handle.header, delegationDepth: handle.header.delegationDepth ?? 0 }, handle.inheritedEventCount,
-        )
-        const content = [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent({
-          ...event, data: snapshotSessionFormatJson(event.data),
-        }))].map(record => JSON.stringify(record)).join('\n') + '\n'
-        logs.push({ id: handle.id, createdAt: handle.header.createdAt,
-          ...handle.header.parentSession === undefined ? {} : { parentSession: handle.header.parentSession }, content })
-      } finally { await handle.close() }
-    }
-    return logs
-  } finally { await ctx.fiber.dispose() }
-}
-
 async function persistedLogs(sessionsRoot: string): Promise<PersistedLog[]> {
-  return (await collectStoredSessionLogs(sessionsRoot)).map(log => ({
-    path: join(sessionsRoot, '.segments', 'sessions.sqlite'), content: log.content,
-    header: JSON.parse(log.content.slice(0, log.content.indexOf('\n'))) as Record<string, unknown>,
+  const files = await jsonlFiles(sessionsRoot)
+  return Promise.all(files.map(async (path) => {
+    const content = await readFile(path, 'utf8')
+    expect(assertPersistedSessionVersion(basename(path), content), `${path}: current writer`).toBe(SESSION_FORMAT_VERSION)
+    const header = JSON.parse(content.slice(0, content.indexOf('\n'))) as Record<string, unknown>
+    return { path, content, header }
   }))
 }
 

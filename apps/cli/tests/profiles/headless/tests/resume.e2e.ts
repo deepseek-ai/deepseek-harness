@@ -10,7 +10,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * Proves durable conversation continuity end-to-end: run 1 tells the REAL model
- * a fact and persists the turn; run 2 is a fresh harness (new Context,
+ * a fact and persists the turn to JSONL; run 2 is a fresh harness (new Context,
  * same `.sessions` root) that RESUMES the persisted session id and asks the
  * model to recall the fact. The recall can only come from the rehydrated event
  * log — a fresh session would have no idea. Key-gated like the other e2es.
@@ -24,21 +24,21 @@ let root: string | undefined
 
 afterEach(async () => {
   // Dispose even on failure/retry: agent-loop teardown stops the loop and the
-  // persistence backend flushes; then drop the on-disk session log.
+  // JSONL backend flushes; then drop the on-disk session log.
   await ctx?.fiber.dispose()
   ctx = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY).each(['jsonl', 'sqlite'] as const)('resume: continue a persisted session across processes (%s)', (storage) => {
+describe.skipIf(!process.env.DEEPSEEK_API_KEY)('resume: continue a persisted session across processes', () => {
   it('recalls a fact stored in a prior, separately-disposed session', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-resume-e2e-'))
 
     // Run 1: a fresh agent on a KNOWN session id learns a secret, then we
-    // dispose the whole context (simulating process exit) so only the durable
+    // dispose the whole context (simulating process exit) so only the JSONL
     // log on disk survives.
-    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root, persistenceStorage: storage })
+    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root })
     const first = (await ctx.agents.create({
       sessionId: SESSION_ID,
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
@@ -51,7 +51,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY).each(['jsonl', 'sqlite'] as const
     // Run 2: a brand-new context over the SAME root resumes the persisted
     // session. The loaded event log seeds the live session, so the model sees
     // run 1's exchange as conversation history.
-    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root, persistenceStorage: storage })
+    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root })
     const resumed = (await ctx.agents.resume({
       resumeSessionId: SESSION_ID,
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },

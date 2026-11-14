@@ -10,7 +10,6 @@
 
 - id: session-persistence-jsonl
   config:
-    storage: jsonl
     root: './.sessions'
     compression: none
 

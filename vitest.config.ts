@@ -106,7 +106,6 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // win32.spec's injected bindings and exercised natively by every
       // Windows suite through the real backend.
       'packages/session/session-persistence-jsonl/src/lease.ts',
-      'packages/session/session-persistence-sqlite/src/lease.ts',
       // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
       'packages/experimental/cua-macos/src/shared-native.ts',
       // The GitHub CLI runner's suite stands in for `gh` with POSIX shell

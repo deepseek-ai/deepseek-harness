@@ -8,8 +8,8 @@ import { reportSchema, taskId } from '../src/records.ts'
 import { prioritiesOf } from '../src/tasks.ts'
 import { setup } from './fixture.ts'
 
-async function fixture(backend: 'jsonl' | 'sqlite') {
-  const f = await setup(backend, { intervalMs: 86400000 })
+async function fixture() {
+  const f = await setup({ intervalMs: 86400000 })
   let count = 0
   const call = (name: string, args: object) =>
     executeTool(f.ctx, {
@@ -40,9 +40,9 @@ async function fixture(backend: 'jsonl' | 'sqlite') {
   return { ...f, call, base, view }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('user-owned Timeline feedback (%s)', (backend) => {
+describe('user-owned Timeline feedback', () => {
   it('acknowledges a saved note retry after its task retires without admitting a new note', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     try {
       const request = {
         action: 'annotate' as const,
@@ -73,7 +73,7 @@ describe.each(['jsonl', 'sqlite'] as const)('user-owned Timeline feedback (%s)',
     }
   })
   it('preserves user priorities and immutable note pairs across model patches, retries, and reload', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     try {
       const request = {
         action: 'annotate' as const,
@@ -130,7 +130,7 @@ describe.each(['jsonl', 'sqlite'] as const)('user-owned Timeline feedback (%s)',
     }
   })
   it('links report discussion to exact historical content and retains drafts after failed writes', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     try {
       const report = reportSchema.parse({
         id: 'history',
@@ -187,7 +187,7 @@ describe.each(['jsonl', 'sqlite'] as const)('user-owned Timeline feedback (%s)',
     }
   })
   it('does not send an expired priority notice or fail a running turn when injection throws', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     try {
       f.start()
       await f.adapter.ready.promise
@@ -210,7 +210,7 @@ describe.each(['jsonl', 'sqlite'] as const)('user-owned Timeline feedback (%s)',
     }
   })
   it('inherits priority without changing completion and coalesces only P0 notices for running work', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     try {
       await f.ctx.timeline.edit({
         ...f.base,

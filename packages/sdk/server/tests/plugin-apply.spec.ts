@@ -69,7 +69,6 @@ async function settle(): Promise<void> {
 
 /** Mount the real plugin on a minimal harness with in-memory stdio and exit. */
 async function mountPlugin(
-  storage: 'jsonl' | 'sqlite',
   storageDir: string,
   options: {
     writeDelayMs?: number
@@ -81,7 +80,7 @@ async function mountPlugin(
   await mountAgentLoopTestDependencies(ctx)
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: storageDir })
+  await ctx.plugin(JsonlSessionPersistence, { root: storageDir })
   await new Promise(resolve => setTimeout(resolve, 50))
   await options.beforeServer?.(ctx)
 
@@ -171,10 +170,10 @@ async function mockCompletionServer(): Promise<{ url: string; requests: unknown[
 }
 
 describe('dsh-sdk-jsonrpc-server plugin apply', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: serves initialize over the injected stdio pair', async (storage) => {
+  it('serves initialize over the injected stdio pair', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-init-'))
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    const harness = await mountPlugin(storage, storageDir)
+    const harness = await mountPlugin(storageDir)
     try {
       harness.send({ jsonrpc: '2.0', id: 'init-1', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model' } })
 
@@ -191,7 +190,7 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: waits for Loader-owned adapter registration before initialize', async (storage) => {
+  it('waits for Loader-owned adapter registration before initialize', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-readiness-'))
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     let markStarted!: () => void
@@ -199,7 +198,7 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     const started = new Promise<void>((resolve) => { markStarted = resolve })
     const ready = new Promise<void>((resolve) => { release = resolve })
     let delayedEntry: Promise<string> | undefined
-    const harness = await mountPlugin(storage, storageDir, {
+    const harness = await mountPlugin(storageDir, {
       beforeServer: async (ctx) => {
         await ctx.plugin(Loader)
         ctx.loader.builtins['delayed-readiness'] = {
@@ -246,12 +245,12 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: drives a session/prompt turn end-to-end and forwards session notifications as output frames', async (storage) => {
+  it('drives a session/prompt turn end-to-end and forwards session notifications as output frames', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-prompt-'))
     const llmServer = await mockCompletionServer()
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     vi.stubEnv('DEEPSEEK_BASE_URL', llmServer.url)
-    const harness = await mountPlugin(storage, storageDir)
+    const harness = await mountPlugin(storageDir)
     try {
       harness.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'dsagent-model' } })
       await harness.waitForFrame(frame => frame.id === 1, 'initialize response')
@@ -288,9 +287,9 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: answers shutdown before exiting 0 exactly once, even against a racing second shutdown', async (storage) => {
+  it('answers shutdown before exiting 0 exactly once, even against a racing second shutdown', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-shutdown-'))
-    const harness = await mountPlugin(storage, storageDir, { writeDelayMs: 10 })
+    const harness = await mountPlugin(storageDir, { writeDelayMs: 10 })
     try {
       // One chunk makes the two deferred exit callbacks race.
       const first = { jsonrpc: '2.0', id: 'sd-1', method: 'shutdown' }
@@ -331,9 +330,9 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: still disposes and exits once when the flush callback fails', async (storage) => {
+  it('still disposes and exits once when the flush callback fails', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-flush-failure-'))
-    const harness = await mountPlugin(storage, storageDir, { failFlush: true })
+    const harness = await mountPlugin(storageDir, { failFlush: true })
     try {
       harness.send({ jsonrpc: '2.0', id: 'sd-fail', method: 'shutdown' })
 
@@ -353,9 +352,9 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: stops serving on a bare fiber dispose (HMR-style unload) without calling exit', async (storage) => {
+  it('stops serving on a bare fiber dispose (HMR-style unload) without calling exit', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-dispose-'))
-    const harness = await mountPlugin(storage, storageDir)
+    const harness = await mountPlugin(storageDir)
     try {
       // Prove the handler-rejection path is live before disposal.
       harness.send({ jsonrpc: '2.0', id: 'probe-1', method: 'nope/unknown' })

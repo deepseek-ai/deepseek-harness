@@ -25,9 +25,8 @@ import {
   SessionPersistenceNotFoundError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import * as JsonlSessionPersistence from './fixtures/legacy-persistence.ts'
+import * as JsonlSessionPersistence from '../src/index.ts'
 import { LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
-import { SessionWriteLease as SqliteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
 import type { JsonlSessionHandle } from '../src/storage.ts'
 import { sessionDir } from '../src/format.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -433,22 +432,4 @@ describe('cross-process write lock', () => {
     await a.close()
     await b.close()
   })
-})
-
-describe.skipIf(process.platform === 'win32')('SQLite artifact leases', () => {
-  it.each(['flock', 'flockBusy', 'lockStat', 'dropLockOnStat', 'swapLockOnStat'] as const)(
-    'cleans up and preserves exclusion after %s', async (fault) => {
-      const root = await freshRoot()
-      const id = brandString<SessionId>('sqlite-lease')
-      if (fault === 'swapLockOnStat') refuse.swapLockOnStat = 3
-      else refuse[fault] = true
-      if (fault === 'dropLockOnStat') {
-        const lease = await SqliteLease.acquire(root, id)
-        await lease.release()
-        await lease.release()
-      } else await expect(SqliteLease.acquire(root, id)).rejects.toThrow()
-      const successor = await SqliteLease.acquire(root, id)
-      await successor.release()
-    },
-  )
 })

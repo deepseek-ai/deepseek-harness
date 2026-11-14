@@ -25,15 +25,6 @@
     },
     {
       "path": "../../util/http-proxy"
-    },
-    {
-      "path": "../../session/session-format-catalog"
-    },
-    {
-      "path": "../../session/session-persistence"
-    },
-    {
-      "path": "../../session/session-persistence-jsonl"
     }
   ]
 }

@@ -6,8 +6,7 @@ import { delimiter, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { runScenario as runStoredScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
+import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
 
 const fsControl = vi.hoisted(() => ({
@@ -112,10 +111,7 @@ function environmentEcho(rawStdout: string): Record<string, unknown> {
   return JSON.parse(text.slice('env:'.length)) as Record<string, unknown>
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
-  const runScenario: typeof runStoredScenario = (input, options) => runStoredScenario(input, {
-    ...options, env: { ...options.env, DSH_SNAPSHOT_STORAGE: storage },
-  })
+describe('runScenario', () => {
   it('surfaces an asynchronous child spawn failure through startup and close', async () => {
     const { dir } = await scenario({})
     const launched = launchAcpTestAgent({ agent: AGENT, cwd: join(dir, 'missing') })
@@ -194,10 +190,6 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     ])
     await Promise.all([
       writeFile(basePatch, [
-        '- id: session-persistence-jsonl',
-        '  config:',
-        '    root: ./sessions',
-        '    compression: none',
         '- id: asserted',
         '  name: ./plugin.mjs',
         '  disabled: true',
@@ -230,7 +222,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
       agent: profileAgent,
       cwd: dir,
       configPath: selectedPatch,
-      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile, DSH_SNAPSHOT_STORAGE: storage },
+      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
     })
     await live.spawned
     await live.close()
@@ -239,9 +231,6 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     expect(materialized).toContain(pathToFileURL(join(patchDir, 'plugin.mjs')).href)
     expect(materialized).toContain(pathToFileURL(join(dir, 'nested.mjs')).href)
     expect(materialized).toContain('example-package')
-    expect(materialized).toContain('root: ./sessions')
-    expect(materialized).toContain('compression: none')
-    expect(materialized).toContain(`storage: ${storage}`)
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package')))
       .toBe(await realpath(packageDir))
     expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package')))
@@ -531,7 +520,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
-          { type: 'turn/start', seq: 0, time: 9, data: { turn: 1 } },
+          { type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } },
         ],
       }],
     })
@@ -785,7 +774,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
             data: {
               target: 'next-turn',
               start: 0,
-              inserted: [createUserMessage({ content: [{ type: 'text', text: 'durable marker' }], source: { kind: 'user' } })],
+              inserted: [{ role: 'user', content: [{ type: 'text', text: 'durable marker' }] }],
             },
           },
         ],
@@ -828,7 +817,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
           { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title', messageSeqs: [], source: { kind: 'user' } } },
+          { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title' } },
         ],
       }],
     })
@@ -853,10 +842,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'turn/start', seq: 2, time: 3, data: { turn: 2 } },
-          { type: 'turn/end', seq: 3, time: 4, data: { turn: 2, reason: { kind: 'stop' } } },
-          { type: 'turn/start', seq: 4, time: 5, data: { turn: 3 } },
+          { type: 'turn/start', seq: 0, time: 1, data: { turn: 3 } },
         ],
       }],
     })
@@ -873,7 +859,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     expect(result.sessionLogs[0]?.content).toContain('"turn":3')
   })
 
-  it('waitForTurnStart rejects missing, earlier, and closed durable turns', { timeout: 20_000 }, async () => {
+  it('waitForTurnStart rejects missing, earlier, and malformed durable turns', { timeout: 20_000 }, async () => {
     const missing = await scenario({})
     await expect(runScenario(
       { steps: [...boot, { op: 'waitForTurnStart', timeoutMs: 200 }] },
@@ -925,6 +911,29 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
       { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
     )).rejects.toThrow(/did not persist turn\/start within 200ms/)
 
+    for (const turn of [undefined, 0]) {
+      const malformed = await scenario({
+        prompt: 'hang-until-cancel',
+        persistLogsOnCancel: true,
+        logs: [{
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/start', seq: 0, time: 1, data: turn === undefined ? {} : { turn } },
+          ],
+        }],
+      })
+      await expect(runScenario(
+        {
+          steps: [
+            ...boot,
+            { op: 'promptAndCancel', text: 'hang' },
+            { op: 'waitForTurnStart' },
+          ],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: malformed.fixtureFile },
+      )).rejects.toThrow('invalid persisted turn/start record')
+    }
   })
 
   it('waitForTurnEnd times out for a missing log and an open logged turn', { timeout: 20_000 }, async () => {
@@ -1008,28 +1017,15 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     const reading = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     let pendingRead: Promise<unknown> | undefined
-    let readSettled = false
     const originalReaddir = readdir
-    const originalRm = rm
     const spy = vi.spyOn(fsPromises, 'readdir').mockImplementation(async (...args) => {
       if (pendingRead === undefined && String(args[0]).includes('acp-snap-sessions-')) {
-        const read = (async () => {
-          await release.promise
-          try { return await originalReaddir(...args) }
-          finally { readSettled = true }
-        })()
+        const read = release.promise.then(() => originalReaddir(...args))
         pendingRead = read
         reading.resolve(undefined)
         return await read
       }
       return await originalReaddir(...args)
-    })
-    const remove = vi.spyOn(fsPromises, 'rm').mockImplementation(async (...args) => {
-      const path = String(args[0])
-      const readingStorage = path.includes('acp-snap-sessions-') && !readSettled
-      await originalRm(...args)
-      if (path.includes('acp-snap-cwd-')) release.resolve(undefined)
-      expect(readingStorage).toBe(false)
     })
     const run = runScenario(
       { steps: [...boot, step] },
@@ -1045,7 +1041,6 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
       release.resolve(undefined)
       await Promise.allSettled([pendingRead, run, rejected])
       spy.mockRestore()
-      remove.mockRestore()
     }
   })
 
@@ -1068,7 +1063,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
             { type: 'session', version: 0, id: 'child-1', createdAt: 2, parentSession: '{{SID}}', delegationDepth: 1 },
             { type: 'subagent/descriptor', seq: 0, time: 1, data: {} },
             { type: 'turn/start', seq: 1, time: 2, data: { turn: 1 } },
-            { type: 'request/header', seq: 2, time: 3, data: { header: { config: { provider: 'fixture' } }, reason: 'initial' } },
+            { type: 'request/header', seq: 2, time: 3, data: { header: {}, reason: 'initial' } },
             { type: 'turn/end', seq: 3, time: 4, data: { turn: 1, reason: { kind: 'completed' } } },
           ],
         },
@@ -1112,7 +1107,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
           lines: [
             { type: 'session', version: 0, id: 'child-1', createdAt: 2, parentSession: '{{SID}}', delegationDepth: 1 },
             { type: 'turn/start', seq: 0, time: 1, data: { turn: 1, trigger: { kind: 'message' } } },
-            { type: 'request/header', seq: 1, time: 2, data: { header: { config: { provider: 'fixture' } }, reason: 'initial' } },
+            { type: 'request/header', seq: 1, time: 2, data: { header: {}, reason: 'initial' } },
             { type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
             { type: 'subagent/descriptor', seq: 3, time: 4, data: {} },
           ],
@@ -1146,7 +1141,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title', messageSeqs: [], source: { kind: 'user' } } },
+          { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title' } },
           { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
         ],
       }],
@@ -1173,7 +1168,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
           { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'user/message', surfaceOp: 'append', seq: 2, time: 3, data: createUserMessage({ content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } }) },
+          { type: 'user/message', seq: 2, time: 3, data: { content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } } },
         ],
       }],
     })
@@ -1196,7 +1191,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'user/message', surfaceOp: 'append', seq: 1, time: 1, data: createUserMessage({ content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } }) },
+          { type: 'user/message', seq: 1, time: 1, data: { content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } } },
           { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
         ],
       }],
@@ -1359,11 +1354,15 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
       strayRootFile: true,
       strayBucketFile: true,
       logs: [
+        // File names chosen so readdir feeds the sort children-first AND
+        // parent-in-the-middle: the comparator then sees a parent on both
+        // sides of a pair, plus the same-createdAt (localeCompare) tiebreak.
         { file: 'b1/aa-child-c/session.jsonl', lines: [{ type: 'session', version: 0, id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
-        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: '{{SID}}', createdAt: 1 }] },
+        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: 'superseded-parent', createdAt: 1 }] },
         { file: 'b1/bb-parent/session.v1.jsonl', lines: [{ type: 'session', version: 1, id: '{{SID}}', createdAt: 900 }] },
         { file: 'b1/cc-child-a/session.jsonl', lines: [{ type: 'session', version: 0, id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
-        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, id: 'earliest-child', createdAt: 100, parentSession: '{{SID}}' }] },
+        // Missing id/createdAt fall back to ''/0; earliest child by createdAt.
+        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, parentSession: '{{SID}}' }] },
       ],
     })
     const result = await runScenario(
@@ -1372,20 +1371,19 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     )
     expect(result.sessionLogs.map(l => [l.id, l.createdAt])).toEqual([
       [result.sessionId, 900],
-      ['earliest-child', 100],
+      ['', 0],
       ['aaaaaaaa-0000-4000-8000-000000000000', 500],
       ['cccccccc-0000-4000-8000-000000000000', 500],
     ])
     expect(result.sessionLogs[1]?.parentSession).toBe(result.sessionId)
   })
 
-  it('omits an empty persisted generation from the Session listing', { timeout: 20_000 }, async () => {
+  it('rejects an empty persisted generation', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ logs: [{ file: 'b/empty/session.jsonl', lines: [] }] })
-    const result = await runScenario(
+    await expect(runScenario(
       { steps: boot },
       { agent: AGENT, mode: 'replay', fixtureFile },
-    )
-    expect(result.sessionLogs).toEqual([])
+    )).rejects.toThrow('session.jsonl: session fixture is empty')
   })
 
   it('rejects a persisted filename/header generation mismatch', { timeout: 20_000 }, async () => {
@@ -1395,7 +1393,7 @@ describe.each(['jsonl', 'sqlite'] as const)('runScenario (%s)', (storage) => {
     await expect(runScenario(
       { steps: boot },
       { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow('session generation filename identifies v1, but its header identifies v0')
+    )).rejects.toThrow('filename declares Session format v1, header declares v0')
   })
 
   it('yields no logs when the sessions root vanished', { timeout: 20_000 }, async () => {

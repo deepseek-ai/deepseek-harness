@@ -72,8 +72,8 @@ jobs:
           python -m pip install \
             "dist/deepseek_harness_sdk-$VERSION-py3-none-any.whl" \
             "dist/deepseek_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_x86_64.whl"
-          python scripts/smoke-python-runtime.py --scenario sdk-default --storage jsonl sqlite
-          python scripts/smoke-python-runtime.py --scenario sdk-mcp --storage jsonl sqlite
+          python scripts/smoke-python-runtime.py --scenario sdk-default
+          python scripts/smoke-python-runtime.py --scenario sdk-mcp
 
   validate:
     name: Validate release candidate

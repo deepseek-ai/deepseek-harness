@@ -10,7 +10,7 @@ import { scheduler } from 'node:timers/promises'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import * as JsonlSessionPersistence from './fixtures/legacy-persistence.ts'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath,
   logPath, parseGenerationLogFilename, projectDir, projectKey, scanLog, sessionDir, SessionLogScanner,
@@ -363,20 +363,7 @@ runPersistenceContract('jsonl-none', async () => {
   }
 })
 
-runLiveWritePathContract('jsonl', LIVE_WRITE_BATCH_MAX_DELAY_MS, {
-  failWrites(ctx, failure, sessionId) {
-    const backend = ctx.sessionPersistence as SessionPersistence & JsonlHandleStorage
-    const persist = backend.persistBatch.bind(backend)
-    let calls = 0
-    const spy = vi.spyOn(backend, 'persistBatch').mockImplementation(async (...args) => {
-      if (sessionId === undefined || args[0].id === sessionId) { calls++; throw failure }
-      await persist(...args)
-    })
-    return { calls: () => calls, restore: () => { spy.mockRestore() } }
-  },
-  backgroundFailure: id => ({ level: 'warn', text: `session-persistence: background write for session "${id}" failed` }),
-  disposalFailure: id => ({ level: 'warn', text: `session-persistence: final drain for session "${id}" failed` }),
-}, async () => {
+runLiveWritePathContract('jsonl', LIVE_WRITE_BATCH_MAX_DELAY_MS, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-jsonl-live-'))
   dirs.push(dir)
   const mount = async (): Promise<Context> => {

@@ -59,7 +59,7 @@ async function readStoredEvents(ctx: Context, sessionId: SessionId): Promise<rea
   }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (storage) => {
+describe('config-driven session id', () => {
   it('applies launcher identities by configured id without changing unmatched entries', async () => {
     const ctx = await makeCoreContext()
     ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, {
@@ -116,7 +116,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-duplicate-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
 
     const outcome = await ctx.plugin(AgentLoop, {
       agents: [
@@ -135,7 +135,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-reload-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('first'), textResponse('second')]))
     const config = { agents: [{ id: 'main', sessionId: brandString<SessionId>('config-exact-reload'), provider: 'mock', model: 'mock' }] }
 
@@ -164,7 +164,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-overlap-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('saved')]))
     const sessionId = brandString<SessionId>('config-exact-overlap')
     const config = { agents: [{ id: 'main', sessionId, provider: 'mock', model: 'mock' }] }
@@ -211,7 +211,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-cancel-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     const sessionId = brandString<SessionId>('config-exact-cancel')
     const config = { agents: [{ id: 'main', sessionId, model: 'mock' }] }
     const firstLoop = await ctx.plugin(AgentLoop, config)
@@ -267,7 +267,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-failure-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     const failure = new Error('persistence index failed')
     const listenerFailure = new Error('failure observer failed')
     const asyncListenerFailure = new Error('async failure observer failed')
@@ -303,7 +303,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-unrenderable-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     const unrenderable = {
       [Symbol.toPrimitive](): never {
         throw new Error('coercion escaped')
@@ -341,7 +341,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
       const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-exact-dispose-'))
       dirs.push(root)
       const ctx = await makeCoreContext()
-      await ctx.plugin(JsonlSessionPersistence, { root, storage })
+      await ctx.plugin(JsonlSessionPersistence, { root })
       const opening = Promise.withResolvers<SessionHandle>()
       vi.spyOn(ctx.sessionPersistence, 'open').mockReturnValue(opening.promise)
       const closed = vi.fn(async () => {})
@@ -402,7 +402,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx1.plugin(ToolRuntime)
     await ctx1.plugin(NativeToolExecutor)
     await ctx1.plugin(AgentRegistry)
-    await ctx1.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx1.plugin(JsonlSessionPersistence, { root })
     await ctx1.plugin(AgentLoop, { agents: [{ id: brandString<SessionId>('cfg'), provider: 'mock', model: 'mock' }] })
     ctx1.llm.registerAdapter(['mock'], new MockAdapter([textResponse('cfg')]))
     await expect.poll(() => ctx1.agents.list().length).toBe(1)
@@ -426,7 +426,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx2.plugin(ToolRuntime)
     await ctx2.plugin(NativeToolExecutor)
     await ctx2.plugin(AgentRegistry)
-    await ctx2.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx2.plugin(JsonlSessionPersistence, { root })
     await ctx2.plugin(AgentLoop, { agents: [{ id: brandString<SessionId>('cfg'), provider: 'mock', model: 'mock' }] })
     ctx2.llm.registerAdapter(['mock'], new MockAdapter([textResponse('cfg2')]))
     await expect.poll(() => ctx2.agents.list().length).toBe(1)
@@ -453,7 +453,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx1.plugin(ToolRuntime)
     await ctx1.plugin(NativeToolExecutor)
     await ctx1.plugin(AgentRegistry)
-    await ctx1.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx1.plugin(JsonlSessionPersistence, { root })
     await ctx1.plugin(AgentLoop, { agents: [] })
     ctx1.llm.registerAdapter(['mock'], new MockAdapter([textResponse('first')]))
     const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('sticky-1'), agentOptions: { provider: 'mock', model: 'mock' } })
@@ -473,7 +473,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx2.plugin(NativeToolExecutor)
     await ctx2.plugin(AgentRegistry)
     await ctx2.plugin(AgentLoop, { agents: [{ id: brandString<SessionId>('main'), provider: 'mock', model: 'mock', resumeSessionId: brandString<SessionId>('sticky-1') }] })
-    await ctx2.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx2.plugin(JsonlSessionPersistence, { root })
     ctx2.llm.registerAdapter(['mock'], new MockAdapter([textResponse('second')]))
 
     // The deferred resume runs after the backend is available.
@@ -496,7 +496,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-resume-route-'))
     dirs.push(root)
     const ctx1 = await makeCoreContext()
-    await ctx1.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx1.plugin(JsonlSessionPersistence, { root })
     await ctx1.plugin(AgentLoop, { agents: [] })
     ctx1.llm.registerAdapter(['mock'], new MockAdapter([textResponse('first')]))
     const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('sticky-route'), agentOptions: { provider: 'mock', model: 'mock' } })
@@ -507,7 +507,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx1.fiber.dispose()
 
     const ctx2 = await makeCoreContext()
-    await ctx2.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx2.plugin(JsonlSessionPersistence, { root })
     await ctx2.plugin(AgentLoop, { agents: [{ id: brandString<SessionId>('main'), ...route, resumeSessionId: brandString<SessionId>('sticky-route') }] })
     await expect.poll(() => ctx2.agents.get(brandString<SessionId>('sticky-route')), { timeout: 5_000 }).toBeDefined()
     const resumed = ctx2.agents.get(brandString<SessionId>('sticky-route'))!
@@ -530,7 +530,7 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
     await ctx.plugin(AgentLoop, { agents: [{ id: brandString<SessionId>('main'), provider: 'mock', model: 'mock', resumeSessionId: brandString<SessionId>('does-not-exist') }] })
     const warn = vi.spyOn((ctx.agentLoop as unknown as { ctx: { logger: { warn: (...a: unknown[]) => void } } }).ctx.logger, 'warn')
       .mockImplementation(() => undefined)
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('x')]))
 
     // The deferred resume fails (no such session on disk). It must be contained:
@@ -544,12 +544,12 @@ describe.each(['jsonl', 'sqlite'] as const)('config-driven session id (%s)', (st
   })
 })
 
-describe.each(['jsonl', 'sqlite'] as const)('startup reporting after factory teardown (%s)', (storage) => {
+describe('startup reporting after factory teardown', () => {
   it('suppresses the configured-restore failure report once the loop is disposed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-disposed-report-'))
     dirs.push(root)
     const ctx = await makeCoreContext()
-    await ctx.plugin(JsonlSessionPersistence, { root, storage })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('x')]))
 
     // A restore open that hangs until after the loop is gone: the eventual

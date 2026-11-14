@@ -99,7 +99,7 @@ def live_smoke(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.invalid")
     monkeypatch.setattr(deepseek_harness, "DeepSeekHarness", ScriptedHarness)
     monkeypatch.setattr(globals_["secrets"], "token_hex", fresh_challenge)
-    monkeypatch.setitem(globals_, "assert_session_log", lambda sessions, *_args, **_kwargs: state.checked_logs.append(sessions))
+    monkeypatch.setitem(globals_, "assert_zstd_session_log", state.checked_logs.append)
     return state
 
 
@@ -705,53 +705,6 @@ def test_snapshot_generation_comparison_rejects_changed_payload(tmp_path: Path) 
             }) + "\n"},
             False, tmp_path, ("session.v2.jsonl",),
         )
-
-
-def test_snapshot_comparison_ignores_object_keys_and_retains_array_order(tmp_path: Path) -> None:
-    filename = f"session.v{SESSION_FORMAT_VERSION}.jsonl"
-    header = {"type": "session", "version": SESSION_FORMAT_VERSION, "id": "ordered"}
-    event = {"type": "plugin:fixture/ordered", "ignorable": True, "data": {"text": "saved", "items": [1, 2], "active": True}}
-    second = {"type": "plugin:fixture/end", "ignorable": True, "data": {"done": True}}
-    golden = "".join(json.dumps(record) + "\n" for record in [header, event, second])
-    (tmp_path / filename).write_text(golden, encoding="utf-8")
-    reordered = [
-        {"id": "ordered", "version": SESSION_FORMAT_VERSION, "type": "session"},
-        {"data": {"active": True, "items": [1, 2], "text": "saved"}, "ignorable": True, "type": "plugin:fixture/ordered"},
-        second,
-    ]
-    compare = SMOKE["compare_snapshot_files"]
-
-    def check(records: list[dict[str, object]]) -> None:
-        compare({filename: "".join(json.dumps(record) + "\n" for record in records)}, False, tmp_path, (filename,))
-
-    check(reordered)
-    for changed in [
-        [reordered[0], reordered[2], reordered[1]],
-        reordered[:2],
-        [reordered[0], {**event, "data": {**event["data"], "items": [2, 1]}}, second],
-        [reordered[0], {**event, "data": {"items": [1, 2], "active": True}}, second],
-        [reordered[0], {**event, "data": {**event["data"], "active": 1}}, second],
-    ]:
-        with pytest.raises(AssertionError, match="executable snapshot mismatch"):
-            check(changed)
-    assert (tmp_path / filename).read_text(encoding="utf-8") == golden
-
-
-def test_json_snapshot_comparison_preserves_values_and_types(tmp_path: Path) -> None:
-    filename = "result.json"
-    value = {"active": False, "items": [{"number": 1, "text": "saved"}, 2]}
-    golden = json.dumps(value) + "\n"
-    (tmp_path / filename).write_text(golden, encoding="utf-8")
-    compare = SMOKE["compare_snapshot_files"]
-    compare({filename: json.dumps({"items": [{"text": "saved", "number": 1.0}, 2], "active": False})}, False, tmp_path, (filename,))
-    for changed in [
-        {**value, "active": 0},
-        {**value, "items": [2, {"number": 1, "text": "saved"}]},
-        {**value, "items": [{"number": 1, "text": "changed"}, 2]},
-    ]:
-        with pytest.raises(AssertionError, match="executable snapshot mismatch"):
-            compare({filename: json.dumps(changed)}, False, tmp_path, (filename,))
-    assert (tmp_path / filename).read_text(encoding="utf-8") == golden
 
 
 @pytest.mark.parametrize("version", [SESSION_FORMAT_VERSION - 1, SESSION_FORMAT_VERSION + 1])

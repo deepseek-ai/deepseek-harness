@@ -27,8 +27,8 @@ describe('ACP machine permission policy', () => {
     return { agent, toolName: 'bash', callId: brandString<ToolCallId>('call-9'), ...overrides }
   }
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: maps the two advertised one-shot choices', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('maps the two advertised one-shot choices', async () => {
+    harness = await makeBridgeHarness()
     harness.onPermission = () => {
       expect(harness?.sessionUpdates.at(-1)?.update).toMatchObject({
         sessionUpdate: 'tool_call',
@@ -51,23 +51,23 @@ describe('ACP machine permission policy', () => {
     await expect(harness.ctx.approval.request(request)).resolves.toBe('rejected')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: maps cancellation and unknown choices without granting access', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('maps cancellation and unknown choices without granting access', async () => {
+    harness = await makeBridgeHarness()
     const request = await ownedRequest()
     await expect(harness.ctx.approval.request(request)).resolves.toBe('cancelled')
     harness.onPermission = () => ({ outcome: { outcome: 'selected', optionId: 'unknown-grant' } })
     await expect(harness.ctx.approval.request(request)).resolves.toBe('rejected')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: fails closed when the client errors the permission request', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('fails closed when the client errors the permission request', async () => {
+    harness = await makeBridgeHarness()
     const request = await ownedRequest()
     harness.onPermission = () => { throw new Error('client gone') }
     await expect(harness.ctx.approval.request(request)).resolves.toBe('unavailable')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delegates a same-id foreign agent', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('delegates a same-id foreign agent', async () => {
+    harness = await makeBridgeHarness()
     const request = await ownedRequest()
     const events = [{ type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } }]
     const foreign = {
@@ -84,8 +84,8 @@ describe('ACP machine permission policy', () => {
     expect(harness.permissionRequests).toHaveLength(0)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delegates requests that have no protocol tool-call identity', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('delegates requests that have no protocol tool-call identity', async () => {
+    harness = await makeBridgeHarness()
     const request = await ownedRequest()
     await expect(harness.ctx.approval.request({ agent: request.agent, toolName: request.toolName }))
       .resolves.toBe('unavailable')

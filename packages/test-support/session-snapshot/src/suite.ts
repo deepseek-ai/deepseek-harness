@@ -1483,8 +1483,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           const actualSnapshots = normalizeSessionSnapshots(harvested, ctx, { nativeWriterOutput: true })
           const expectedSnapshots = normalizeSessionSnapshots(fixtures, fixtureCtx, { nativeWriterOutput: true })
           for (const [index, actual] of actualSnapshots.entries()) {
-            expect(parseJsonlRecords(actual), `${fixtureFiles[index]} mismatch`)
-              .toEqual(parseJsonlRecords(expectedSnapshots[index] as string))
+            expect(actual, `${fixtureFiles[index]} mismatch`).toEqual(expectedSnapshots[index])
           }
         }
 

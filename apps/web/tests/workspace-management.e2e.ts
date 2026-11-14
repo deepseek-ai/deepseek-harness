@@ -11,13 +11,14 @@
 // are host RPCs with no model involvement, and the one session row the
 // flat/hover/menu/archive scenarios need comes from a seeded fixture (the
 // seeded-history seed reused verbatim — no new recording).
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join, sep } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { logPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -254,8 +255,9 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       .map(snapshot => snapshot.header)
       .find(candidate => candidate.id === SEED_ID)
     if (header === undefined) throw new Error('seeded Session log disappeared before deletion')
+    const seededLogPath = logPath(scaffold.persistenceRoot, header.cwd, header.id, 'zstd')
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
-    await expect(scaffold.ctx.sessionPersistence.stat(header.id)).resolves.toBeDefined()
+    await stat(seededLogPath)
 
     // The attachment stream can lag the Host commit while New Session is
     // already visible. A row count or position cannot identify the seed.
@@ -301,7 +303,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       { timeout: 10_000 },
     ).toBe(1)
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
-    await expect(scaffold.ctx.sessionPersistence.stat(header.id)).resolves.toBeDefined()
+    await stat(seededLogPath)
     expect((await readPersistedEvents(scaffold, brandString<SessionId>(SEED_ID))).length).toBeGreaterThan(0)
 
     // Re-registering the exact deleted path immediately, without a reload, is
@@ -325,7 +327,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await expect.poll(() => page.getByText('Ungrouped', { exact: true }).count(), { timeout: 10_000 })
       .toBeGreaterThanOrEqual(1)
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
-    await expect(scaffold.ctx.sessionPersistence.stat(header.id)).resolves.toBeDefined()
+    await stat(seededLogPath)
 
     // Restore the deleted-registry state so reload still verifies deletion
     // persistence independently of the successful re-registration above.
@@ -348,7 +350,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     ).toBe(1)
     expect(scaffold.ctx.workspaceRegistry.get(workspace.id)).toBeUndefined()
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
-    await expect(scaffold.ctx.sessionPersistence.stat(header.id)).resolves.toBeDefined()
+    await stat(seededLogPath)
     expect((await readPersistedEvents(scaffold, brandString<SessionId>(SEED_ID))).length).toBeGreaterThan(0)
 
     expect(transientSlotErrors).toEqual([])

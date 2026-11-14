@@ -19,15 +19,9 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
-import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
-import * as persistencePlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { sessionDir } from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
 
 /** One scripted session log: a transcript path under the sessions root plus its JSONL lines. */
 interface ScriptedLog {
@@ -93,11 +87,8 @@ let sessionId = ''
 let sessionCwd = ''
 /** The parked prompt request id while `hang-until-cancel` waits for the cancel notification. */
 let parkedPromptId: number | string | null = null
-/** Persistence retained across the parked turn and its cancellation. */
-let persistence: Context | undefined
-let parkedHandle: SessionHandle | undefined
-let parkedTurnReady: Promise<void> | undefined
-let logsWritten = false
+/** The transient raw JSONL log that proves the parked turn started durably. */
+let parkedTurnLog: string | undefined
 /** Resolvers for outbound permission responses, keyed by request id. */
 const pendingOutbound = new Map<number, (result: unknown) => void>()
 
@@ -133,17 +124,21 @@ function instantiate(value: unknown): unknown {
 }
 
 /** Persist an open turn so cancellation tests wait on agent state, not presentation output. */
-async function persistParkedTurnStart(): Promise<void> {
-  persistence = new Context()
-  await persistence.plugin(persistencePlugin, {
-    root: sessionsRoot, compression: 'none', storage: process.env.DSH_SNAPSHOT_STORAGE as 'jsonl' | 'sqlite',
-  })
-  parkedHandle = await persistence.sessionPersistence.create({
-    version: SESSION_FORMAT_VERSION, id: SessionId(sessionId), createdAt: 1,
-    cwd: sessionCwd, delegationDepth: 0, isSeeded: false,
-  })
-  await parkedHandle.append([{ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }])
-  await parkedHandle.flush()
+function persistParkedTurnStart(): void {
+  parkedTurnLog = join(sessionsRoot, 'ready', sessionId, 'session.jsonl')
+  mkdirSync(dirname(parkedTurnLog), { recursive: true })
+  writeFileSync(parkedTurnLog, [
+    JSON.stringify({ type: 'session', version: 0, id: sessionId, createdAt: 1, cwd: sessionCwd, delegationDepth: 0 }),
+    JSON.stringify({ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }),
+    '',
+  ].join('\n'))
+}
+
+/** Remove the transient open-turn log before publishing any scripted final logs. */
+function clearParkedTurnStart(): void {
+  if (parkedTurnLog === undefined) return
+  rmSync(parkedTurnLog, { force: true })
+  parkedTurnLog = undefined
 }
 
 async function handlePrompt(id: number | string): Promise<void> {
@@ -188,14 +183,13 @@ async function handlePrompt(id: number | string): Promise<void> {
       respondError(id, 'model exploded')
       return
     case 'hang-until-cancel':
+      persistParkedTurnStart()
       parkedPromptId = id
-      parkedTurnReady = persistParkedTurnStart()
-      await parkedTurnReady
       return
   }
 }
 
-async function handleFrame(frame: Record<string, unknown>): Promise<void> {
+function handleFrame(frame: Record<string, unknown>): void {
   const id = frame.id as number | string | undefined
   const method = frame.method as string | undefined
   const params = (frame.params ?? {}) as Record<string, unknown>
@@ -228,8 +222,8 @@ async function handleFrame(frame: Record<string, unknown>): Promise<void> {
       if (parkedPromptId !== null) {
         const parked = parkedPromptId
         parkedPromptId = null
-        await parkedTurnReady
-        if (behavior.persistLogsOnCancel === true) await writeLogs()
+        clearParkedTurnStart()
+        if (behavior.persistLogsOnCancel === true) writeLogs()
         respond(parked, { stopReason: 'cancelled' })
       }
       return
@@ -240,54 +234,17 @@ async function handleFrame(frame: Record<string, unknown>): Promise<void> {
   }
 }
 
-function reverseRecordKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(reverseRecordKeys)
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).reverse().map(([key, child]) => [key, key === 'tools' ? child : reverseRecordKeys(child)]))
-  }
-  return value
-}
-
-async function writeLogs(): Promise<void> {
-  if (logsWritten) return
-  logsWritten = true
+function writeLogs(): void {
   for (const log of behavior.logs ?? []) {
-    const header = instantiate(log.lines[0]) as {
-      id?: string
-      cwd?: string
-      createdAt?: number
-      parentSession?: string
-      delegationDepth?: number
-    } | undefined
-    if (persistence !== undefined && header !== undefined) {
-      const id = SessionId(header.id as string)
-      const handle = id === sessionId ? parkedHandle as SessionHandle : await persistence.sessionPersistence.create({
-        version: SESSION_FORMAT_VERSION, id, createdAt: header.createdAt as number, isSeeded: false,
-        delegationDepth: header.delegationDepth ?? 0,
-        ...header.parentSession === undefined ? {} : { parentSession: SessionId(header.parentSession) },
-      } satisfies SessionHeader)
-      const stored = await handle.read()
-      const scripted = log.lines.slice(1).map(line => instantiate(line) as SessionEvent)
-      // The parked turn already owns its first start record; cancellation only appends.
-      if (id === sessionId && scripted[0]?.type === 'turn/start' && scripted[0].data.turn === 1) scripted.shift()
-      await handle.append(scripted.map((event, index) => ({ ...event, seq: SessionSeq(stored.events.length + index) })))
-      await handle.flush()
-      if (id !== sessionId) await handle.close()
-      continue
-    }
-    const id = header?.id ?? basename(dirname(log.file))
-    const target = join(sessionDir(sessionsRoot, header?.cwd, SessionId(id)), basename(log.file))
+    const target = join(sessionsRoot, log.file)
     mkdirSync(dirname(target), { recursive: true })
-    const records = log.lines.map(line => instantiate(line))
-    if (header !== undefined) records[0] = { delegationDepth: 0, ...header }
-    writeFileSync(target, records.map(line => JSON.stringify(process.env.DSH_SNAPSHOT_REVERSE_RECORD_KEYS === '1' ? reverseRecordKeys(line) : line)).join('\n') + '\n')
+    writeFileSync(target, log.lines.map(l => JSON.stringify(instantiate(l))).join('\n') + '\n')
   }
 }
 
-async function flushLogsAndExit(): Promise<void> {
-  await writeLogs()
-  await parkedHandle?.close()
-  await persistence?.fiber.dispose()
+function flushLogsAndExit(): void {
+  clearParkedTurnStart()
+  writeLogs()
   if (behavior.strayRootFile === true) writeFileSync(join(sessionsRoot, 'stray.txt'), 'not a bucket\n')
   if (behavior.strayBucketFile === true) {
     mkdirSync(join(sessionsRoot, 'bucket-noise'), { recursive: true })
@@ -321,6 +278,6 @@ async function flushLogsAndExit(): Promise<void> {
 const rl = createInterface({ input: process.stdin })
 rl.on('line', (line) => {
   if (line.trim().length === 0) return
-  void handleFrame(JSON.parse(line) as Record<string, unknown>)
+  handleFrame(JSON.parse(line) as Record<string, unknown>)
 })
-rl.on('close', () => { void flushLogsAndExit() })
+rl.on('close', () => { flushLogsAndExit() })

@@ -58,7 +58,7 @@ function chat(id: string, leafAt: number): ExportSessionFile {
 }
 
 /** Boot the plugin rows through the Loader with stand-ins for the Connection route registry and the attachment store. */
-async function boot(backend: 'jsonl' | 'sqlite', saveImage: (input: SaveImageAttachment) => Promise<ImageAttachmentRef> = () => Promise.reject(new Error('unused'))) {
+async function boot(saveImage: (input: SaveImageAttachment) => Promise<ImageAttachmentRef> = () => Promise.reject(new Error('unused'))) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-deepseek-import-loader-')))
   const workspacePath = join(root, 'project')
   await mkdir(workspacePath)
@@ -68,7 +68,6 @@ async function boot(backend: 'jsonl' | 'sqlite', saveImage: (input: SaveImageAtt
     "- name: '@deepseek-ai/dsh-session-persistence-jsonl'",
     '  config:',
     `    root: ${JSON.stringify(join(root, 'sessions'))}`,
-    `    storage: ${backend}`,
     "- name: '@deepseek-ai/dsh-storage'",
     "- name: '@deepseek-ai/dsh-storage-json'",
     '  config:',
@@ -143,8 +142,8 @@ async function boot(backend: 'jsonl' | 'sqlite', saveImage: (input: SaveImageAtt
 const lines = async (response: Response): Promise<DeepseekChatImportLine[]> =>
   (await response.text()).split('\n').filter(line => line !== '').map(line => JSON.parse(line) as DeepseekChatImportLine)
 
-it.each(['jsonl', 'sqlite'] as const)('imports an uploaded archive through the registered route into a chosen Workspace (%s)', async (backend) => {
-  const { ctx, routes, workspace, workspacePath, post } = await boot(backend)
+it('imports an uploaded archive through the registered route into a chosen Workspace', async () => {
+  const { ctx, routes, workspace, workspacePath, post } = await boot()
   const signal = new AbortController().signal
   const as = (principal: Principal) => ctx.extend({
     invocation: {
@@ -225,10 +224,10 @@ it.each(['jsonl', 'sqlite'] as const)('imports an uploaded archive through the r
   expect(routes.size).toBe(0)
 })
 
-it.each(['jsonl', 'sqlite'] as const)('cancels a running import when the plugin unloads and finishes unloading only after it stops (%s)', async (backend) => {
+it('cancels a running import when the plugin unloads and finishes unloading only after it stops', async () => {
   const saving = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<ImageAttachmentRef>()
-  const { ctx, routes, post, importer } = await boot(backend, () => {
+  const { ctx, routes, post, importer } = await boot(() => {
     saving.resolve(undefined)
     return release.promise
   })

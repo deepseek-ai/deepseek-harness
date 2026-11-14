@@ -89,13 +89,13 @@ async function mockCompletionServer(): Promise<{ url: string; requests: unknown[
   return { url: `http://127.0.0.1:${address.port}`, requests, headers }
 }
 
-async function mountHarness(storageDir: string, storage: 'jsonl' | 'sqlite', workingDirectory = false) {
+async function makeHarness(storageDir: string, workingDirectory = false) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, { workingDirectory })
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(JsonlSessionPersistence, { root: storageDir, storage })
+  await ctx.plugin(JsonlSessionPersistence, { root: storageDir })
   await new Promise(resolve => setTimeout(resolve, 50))
   return ctx
 }
@@ -158,8 +158,7 @@ async function settleSubagent(
   }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('HarnessSdkJsonRpcServer (%s)', (storage) => {
-  const makeHarness = (storageDir: string, workingDirectory = false) => mountHarness(storageDir, storage, workingDirectory)
+describe('HarnessSdkJsonRpcServer', () => {
   it('reports a nested child creator after disposal when lifecycle dispatch belongs to the Team root', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-nested-creator-'))
     const ctx = await makeHarness(storageDir)

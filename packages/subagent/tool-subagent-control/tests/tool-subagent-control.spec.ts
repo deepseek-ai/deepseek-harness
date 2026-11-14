@@ -62,13 +62,13 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
-async function setupWith(storage: 'jsonl' | 'sqlite', adapter: MockAdapter | GatedAdapter, park = true) {
+async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-tool-subagent-control-'))
   roots.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root })
+  await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
@@ -82,8 +82,8 @@ async function setupWith(storage: 'jsonl' | 'sqlite', adapter: MockAdapter | Gat
   return { ctx, parent, adapter, controlFiber }
 }
 
-async function setup(storage: 'jsonl' | 'sqlite', script: ConstructorParameters<typeof MockAdapter>[0]) {
-  return setupWith(storage, new MockAdapter(script))
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
+  return setupWith(new MockAdapter(script))
 }
 
 function text(result: { content: readonly { type: string; text?: string }[] }): string {
@@ -115,8 +115,8 @@ async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void>
 }
 
 describe('dsh-tool-subagent-control', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: registers send_message once, globally, with the two required parameters', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('registers send_message once, globally, with the two required parameters', async () => {
+    const { ctx } = await setup([])
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'send_message')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
@@ -130,9 +130,9 @@ describe('dsh-tool-subagent-control', () => {
     })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps the send_message definition and ordering byte-identical in a fork child', async (storage) => {
+  it('keeps the send_message definition and ordering byte-identical in a fork child', async () => {
     const release = Promise.withResolvers<undefined>()
-    const { ctx, parent, adapter } = await setupWith(storage, new GatedAdapter([
+    const { ctx, parent, adapter } = await setupWith(new GatedAdapter([
       { chunks: textResponse('parent done') },
       { chunks: textResponse('child done'), gate: release.promise },
     ]), false)
@@ -177,8 +177,8 @@ describe('dsh-tool-subagent-control', () => {
     expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: JSON-encodes identity ids in logged runtime context', async (storage) => {
-    const { ctx } = await setup(storage, [textResponse('child done')])
+  it('JSON-encodes identity ids in logged runtime context', async () => {
+    const { ctx } = await setup([textResponse('child done')])
     const parent = await ctx.agentLoop.create(brandString<SessionId>('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation({
@@ -202,11 +202,11 @@ describe('dsh-tool-subagent-control', () => {
     expect(guidance).not.toContain(started.childId)
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     { name: 'send_message', instruction: 'To message other agents', other: 'Use list_agents' },
     { name: 'list_agents', instruction: 'Use list_agents', other: 'To message other agents' },
-  ]).map(value => [storage, value] as const)))('%s: gates $name guidance independently in an agent scope', async (storage, { name, instruction, other }) => {
-    const { ctx, parent } = await setup(storage, [])
+  ])('gates $name guidance independently in an agent scope', async ({ name, instruction, other }) => {
+    const { ctx, parent } = await setup([])
     const { agent: child } = await ctx.agents.create({
       sessionId: brandString<SessionId>('communication-child'),
       meta: { origin: 'subagent', parentSession: parent.id },
@@ -233,8 +233,8 @@ describe('dsh-tool-subagent-control', () => {
     toolSet.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps collaboration instructions when controls are mounted in an agent scope', async (storage) => {
-    const { ctx, parent, controlFiber } = await setup(storage, [])
+  it('keeps collaboration instructions when controls are mounted in an agent scope', async () => {
+    const { ctx, parent, controlFiber } = await setup([])
     await controlFiber.dispose()
     await parent.ctx.plugin(tool)
     const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
@@ -242,8 +242,8 @@ describe('dsh-tool-subagent-control', () => {
     expect(context).toContain('Use list_agents')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: identifies independent roots and forks before their collaboration instructions', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('identifies independent roots and forks before their collaboration instructions', async () => {
+    const { ctx, parent } = await setup([])
     const { agent: fork } = await ctx.agents.create({
       sessionId: brandString<SessionId>('ordinary-fork'), meta: { parentSession: parent.id },
     })
@@ -258,11 +258,11 @@ describe('dsh-tool-subagent-control', () => {
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble({}))).not.toContain('To message other agents')
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     new Error('root lookup failed'),
     new SubagentError('root data is unreadable', 'PERSISTENCE_UNAVAILABLE'),
-  ]).map(value => [storage, value] as const)))('%s: propagates identity lookup errors other than an unavailable root: $message', async (storage, error) => {
-    const { ctx, parent } = await setup(storage, [])
+  ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
+    const { ctx, parent } = await setup([])
     const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => { throw error })
     try {
       await expect(ctx.systemPrompt.assemble({ agent: parent, scope: parent })).rejects.toBe(error)
@@ -271,8 +271,8 @@ describe('dsh-tool-subagent-control', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: retains the caller id when its subagent tree root is unavailable', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('retains the caller id when its subagent tree root is unavailable', async () => {
+    const { ctx, parent } = await setup([])
     const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => {
       throw new SubagentError('root is unavailable', 'UNAUTHORIZED')
     })
@@ -287,8 +287,8 @@ describe('dsh-tool-subagent-control', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps required identity while both discovery and messaging are filtered', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('keeps required identity while both discovery and messaging are filtered', async () => {
+    const { ctx, parent } = await setup([])
     ctx.systemPrompt.suppressRuntimeContext()
     const available = await ctx.systemPrompt.assemble({ agent: parent, scope: parent })
     expect(available.tools.find(tool => tool.name === 'list_agents')?.description)
@@ -306,8 +306,8 @@ describe('dsh-tool-subagent-control', () => {
     toolSet.dispose()
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['parent', 'caller'] as const).map(value => [storage, value] as const)))('%s: keeps %s result delivery independent of messaging tools', async (storage, delivery) => {
-    const { ctx, parent, adapter, controlFiber } = await setup(storage, [textResponse('child result')])
+  it.each(['parent', 'caller'] as const)('keeps %s result delivery independent of messaging tools', async (delivery) => {
+    const { ctx, parent, adapter, controlFiber } = await setup([textResponse('child result')])
     await controlFiber.dispose()
     const followup = vi.spyOn(parent, 'followup')
     const started = await ctx.subagents.startActivation({
@@ -322,9 +322,9 @@ describe('dsh-tool-subagent-control', () => {
     expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: lets a continuable child steer its direct parent with send_message', async (storage) => {
+  it('lets a continuable child steer its direct parent with send_message', async () => {
     const release = Promise.withResolvers<undefined>()
-    const { ctx, parent, adapter } = await setupWith(storage, new GatedAdapter([
+    const { ctx, parent, adapter } = await setupWith(new GatedAdapter([
       { chunks: textResponse('child done'), gate: release.promise },
     ]))
     const started = await ctx.subagents.startActivation({
@@ -364,8 +364,8 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cold-resumes a settled child and reports delivery', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first answer'), textResponse('second answer')])
+  it('cold-resumes a settled child and reports delivery', async () => {
+    const { ctx, parent } = await setup([textResponse('first answer'), textResponse('second answer')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -398,8 +398,8 @@ describe('dsh-tool-subagent-control', () => {
     ])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: steers the nearest step of an open turn', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [textResponse('first'), textResponse('second')])
+  it('steers the nearest step of an open turn', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('first'), textResponse('second')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -430,8 +430,8 @@ describe('dsh-tool-subagent-control', () => {
     ])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a delivery failure as an errored, not-delivered result', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('reports a delivery failure as an errored, not-delivered result', async () => {
+    const { ctx, parent } = await setup([])
     const result = await callTool(ctx, 'send_message', {
       agent: 'no-such-child',
       message: 'hello?',
@@ -440,8 +440,8 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('unavailable')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: rejects a caller outside the child's subagent tree", async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('first')])
+  it('rejects a caller outside the child\'s subagent tree', async () => {
+    const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -460,8 +460,8 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('not a member of this subagent tree')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: fails loud when invoked without a calling agent', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('fails loud when invoked without a calling agent', async () => {
+    const { ctx } = await setup([])
     const result = await callTool(ctx, 'send_message', { agent: 'x', message: 'y' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
@@ -519,8 +519,8 @@ describe('dsh-tool-subagent-control', () => {
 })
 
 describe('dsh-tool-subagent-control interrupt_agent', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: registers interrupt_agent with the single agent parameter and current-turn wording', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('registers interrupt_agent with the single agent parameter and current-turn wording', async () => {
+    const { ctx } = await setup([])
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'interrupt_agent')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
@@ -529,14 +529,14 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(schemas[0]!.description).toContain('send_message')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: interrupts a running direct child with the parent cause, parking its queue', async (storage) => {
+  it('interrupts a running direct child with the parent cause, parking its queue', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('held'), gate: releaseFirst.promise },
       { chunks: textResponse('parked answer') },
       { chunks: textResponse('waking answer') },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -586,14 +586,14 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     ])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: lets a deep live ancestor interrupt a descendant it did not directly create', async (storage) => {
+  it('lets a deep live ancestor interrupt a descendant it did not directly create', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child'), gate: releaseChild.promise },
       { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -624,14 +624,14 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects self, sibling, and unrelated callers without touching the target', async (storage) => {
+  it('rejects self, sibling, and unrelated callers without touching the target', async () => {
     const releaseA = Promise.withResolvers<undefined>()
     const releaseB = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('a'), gate: releaseA.promise },
       { chunks: textResponse('b'), gate: releaseB.promise },
     ])
-    const { ctx, parent } = await setupWith(storage, adapter)
+    const { ctx, parent } = await setupWith(adapter)
     const target = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -670,8 +670,8 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts an absent target as a no-op without cold-resuming it', async (storage) => {
-    const { ctx, parent } = await setup(storage, [textResponse('done')])
+  it('accepts an absent target as a no-op without cold-resuming it', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
@@ -690,8 +690,8 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(ctx.agents.get(started.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: fails loud when invoked without a calling agent', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('fails loud when invoked without a calling agent', async () => {
+    const { ctx } = await setup([])
     const result = await callTool(ctx, 'interrupt_agent', { agent: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')

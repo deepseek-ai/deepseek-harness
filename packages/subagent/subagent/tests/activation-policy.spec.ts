@@ -38,11 +38,11 @@ afterEach(async () => {
   await rm(workspace, { recursive: true, force: true })
 })
 
-async function setupWalled(storage: 'jsonl' | 'sqlite', script: Script): Promise<{ ctx: Context; parent: Agent }> {
+async function setupWalled(script: Script): Promise<{ ctx: Context; parent: Agent }> {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await mountLocalActivations(storage, ctx)
+  await mountLocalActivations(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: workspace })
   await ctx.plugin(SandboxedFileSystem, { cwd: workspace })
@@ -78,10 +78,10 @@ function toolResultTexts(agent: Agent): string[] {
 }
 
 describe('in-process policy inheritance', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['auto', 'danger-full-access'] as const).map(value => [storage, value] as const)))(
-    '%s: records the parent %s identity before publishing a DSH in-process child',
-    async (storage, preset) => {
-      const { ctx, parent } = await setupWalled(storage, [textResponse('child done')])
+  it.each(['auto', 'danger-full-access'] as const)(
+    'records the parent %s identity before publishing a DSH in-process child',
+    async (preset) => {
+      const { ctx, parent } = await setupWalled([textResponse('child done')])
       parent.session.append('permission/preset', { preset })
       setSandboxMode(parent.session, 'danger-full-access')
       ctx.provide('permissionPresets', {
@@ -103,11 +103,11 @@ describe('in-process policy inheritance', () => {
     },
   )
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     { seedPreset: 'auto', preset: 'danger-full-access' },
     { seedPreset: 'danger-full-access', preset: 'auto' },
-  ] as const).map(value => [storage, value] as const)))('%s: captures $preset before child creation and overrides the $seedPreset fork prefix', async (storage, { seedPreset, preset }) => {
-    const { ctx, parent } = await setupWalled(storage, [textResponse('child done')])
+  ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', async ({ seedPreset, preset }) => {
+    const { ctx, parent } = await setupWalled([textResponse('child done')])
     parent.session.append('permission/preset', { preset: seedPreset })
     setSandboxMode(parent.session, 'danger-full-access')
     const seed = parent.session.snapshotEvents()
@@ -133,9 +133,9 @@ describe('in-process policy inheritance', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: records the parent sandbox override and the approval pin before publishing a spawn child', async (storage) => {
+  it('records the parent sandbox override and the approval pin before publishing a spawn child', async () => {
     const script: Script = []
-    const { ctx, parent } = await setupWalled(storage, script)
+    const { ctx, parent } = await setupWalled(script)
     const blocked = join(workspace, 'spawn-blocked.txt')
     setSandboxMode(parent.session, 'read-only')
     // No parent approval override: the child pin must not depend on one.
@@ -201,9 +201,9 @@ describe('in-process policy inheritance', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: places inherited events after a fork prefix so fresh policy wins stale seed state', async (storage) => {
+  it('places inherited events after a fork prefix so fresh policy wins stale seed state', async () => {
     const script: Script = []
-    const { ctx, parent } = await setupWalled(storage, script)
+    const { ctx, parent } = await setupWalled(script)
     const blocked = join(workspace, 'fork-blocked.txt')
     setSandboxMode(parent.session, 'workspace-write')
     const seed = parent.session.snapshotEvents()
@@ -236,9 +236,9 @@ describe('in-process policy inheritance', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: captures policy at delegation before asynchronous child creation', async (storage) => {
+  it('captures policy at delegation before asynchronous child creation', async () => {
     const script: Script = [textResponse('child done')]
-    const { ctx, parent } = await setupWalled(storage, script)
+    const { ctx, parent } = await setupWalled(script)
     setSandboxMode(parent.session, 'read-only')
 
     const starting = startPreparedActivation(spawnRequest(parent), {})
@@ -254,9 +254,9 @@ describe('in-process policy inheritance', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: leaves an unswitched sandbox on the deployment default while still pinning approval', async (storage) => {
+  it('leaves an unswitched sandbox on the deployment default while still pinning approval', async () => {
     const script: Script = []
-    const { parent } = await setupWalled(storage, script)
+    const { parent } = await setupWalled(script)
     const allowed = join(workspace, 'default-allowed.txt')
     script.push(
       toolCallResponse('write', 'write', { file_path: allowed, content: 'fine' }),
@@ -278,9 +278,9 @@ describe('in-process policy inheritance', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a child escalation deterministically even when an answerer would allow it', async (storage) => {
+  it('rejects a child escalation deterministically even when an answerer would allow it', async () => {
     const script: Script = []
-    const { ctx, parent } = await setupWalled(storage, script)
+    const { ctx, parent } = await setupWalled(script)
     // A granting answerer proves the pin resolves before any answerer runs.
     let consulted = false
     ctx.on('approval/request', () => {

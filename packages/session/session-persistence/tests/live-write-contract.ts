@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh-session-persistence/tests/live-write-contract
  */
 
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { appendPluginRecord, pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -31,47 +31,7 @@ export interface LiveWriteBackend {
   readonly remount: () => Promise<Context>
 }
 
-/** One installed write failure, active until restored. */
-export interface LiveWriteFault {
-  /** Number of durable writes the fault intercepted, including writes it passed through. */
-  readonly calls: () => number
-  /** Remove the fault so later writes reach storage. */
-  readonly restore: () => void
-}
-
-/** One logger diagnostic the backend emits for a contained failure. */
-export interface LiveWriteDiagnostic {
-  /** Logger method receiving the diagnostic. */
-  readonly level: 'warn' | 'error'
-  /** Text the diagnostic contains. */
-  readonly text: string
-}
-
-/** Backend-owned failure injection and the diagnostics its contained failures produce. */
-export interface LiveWriteFaults {
-  /**
-   * Make the backend's routed durable writes reject at its storage primitive.
-   * @param ctx - context holding the mounted backend.
-   * @param failure - rejection value of each failing write.
-   * @param sessionId - the only Session whose writes fail; every Session when omitted.
-   * @returns the installed fault.
-   */
-  readonly failWrites: (ctx: Context, failure: unknown, sessionId?: SessionId) => LiveWriteFault
-  /**
-   * Diagnostic for a failed background batch write.
-   * @param id - affected Session.
-   * @returns the expected logger method and text.
-   */
-  readonly backgroundFailure: (id: SessionId) => LiveWriteDiagnostic
-  /**
-   * Diagnostic for a failed final drain after `session/disposed`.
-   * @param id - affected Session.
-   * @returns the expected logger method and text.
-   */
-  readonly disposalFailure: (id: SessionId) => LiveWriteDiagnostic
-}
-
-async function readAll(persistence: SessionPersistence, id: ReturnType<typeof SessionId>): Promise<readonly SessionEvent[]> {
+async function readAll(persistence: SessionPersistence, id: SessionId): Promise<readonly SessionEvent[]> {
   const reader = await persistence.open(id, 'read')
   try {
     return (await reader.read()).events
@@ -84,27 +44,14 @@ async function readAll(persistence: SessionPersistence, id: ReturnType<typeof Se
  * Run the backend-agnostic live-write-path suite.
  * @param name - suite label, e.g. `jsonl` / `sqlite`.
  * @param batchDelayMs - the provider's fixed live batching window.
- * @param faults - the backend's write-failure injection and diagnostics.
  * @param make - factory producing one fresh mounted backend per test; every
  *   created context is disposed by the test that made it.
  */
 export function runLiveWritePathContract(
   name: string,
   batchDelayMs: number,
-  faults: LiveWriteFaults,
   make: () => Promise<LiveWriteBackend>,
 ): void {
-  const inject = (ctx: Context, failure: unknown, sessionId?: SessionId): LiveWriteFault => {
-    const fault = faults.failWrites(ctx, failure, sessionId)
-    onTestFinished(() => { fault.restore() })
-    return fault
-  }
-  const spyDiagnostics = (ctx: Context, level: LiveWriteDiagnostic['level']) => {
-    const spy = vi.spyOn(ctx.logger, level).mockImplementation(() => undefined)
-    onTestFinished(() => { spy.mockRestore() })
-    return spy
-  }
-
   describe(`live session write path: ${name}`, () => {
     it('routes published events into the active write handle within one batching window', async ({ task, signal }) => {
       const { ctx } = await make()
@@ -172,25 +119,25 @@ export function runLiveWritePathContract(
       const { ctx } = await make()
       const session = ctx.sessions.create(brandString<SessionId>('flush-surfaces'))
       const handle = await ctx.sessionPersistence.create(session.header)
-      const diagnostic = faults.backgroundFailure(session.id)
-      const warned = spyDiagnostics(ctx, diagnostic.level)
+      const warned = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
       const failure = new Error('backend write refused')
       // Inject at the service's storage primitive: the routed drain writes
       // through the handle's internal chain, not the public append.
-      const persist = inject(ctx, failure)
+      const persist = vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
+        .mockRejectedValue(failure)
 
       vi.useFakeTimers()
       session.append('turn/start', { turn: 1 })
       await vi.advanceTimersByTimeAsync(batchDelayMs)
       vi.useRealTimers()
       await vi.waitFor(() => {
-        expect(warned.mock.calls.join('\n')).toContain(diagnostic.text)
+        expect(warned.mock.calls.join('\n')).toContain('background write for session "flush-surfaces" failed')
       })
 
       // The barrier retries the retained batch and rejects loudly...
       await expect(ctx.sessions.flush(session)).rejects.toBe(failure)
       // ...and once the backend recovers, the same events land exactly once.
-      persist.restore()
+      persist.mockRestore()
       await expect(ctx.sessions.flush(session)).resolves.toBe(true)
       expect((await readAll(ctx.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0])
       warned.mockRestore()
@@ -204,8 +151,13 @@ export function runLiveWritePathContract(
       const failing = ctx.sessions.create(brandString<SessionId>('flush-all-failing'))
       const healthyHandle = await ctx.sessionPersistence.create(healthy.header)
       const failingHandle = await ctx.sessionPersistence.create(failing.header)
+      const service = ctx.sessionPersistence as unknown as {
+        persistBatch: (header: { id: string }, ...rest: unknown[]) => Promise<void>
+      }
+      const original = service.persistBatch.bind(service)
       const failure = new Error('backend write refused')
-      const persist = inject(ctx, failure, failing.id)
+      const persist = vi.spyOn(service, 'persistBatch').mockImplementation((header, ...rest) =>
+        header.id === failing.id ? Promise.reject(failure) : original(header, ...rest))
 
       vi.useFakeTimers()
       try {
@@ -221,7 +173,7 @@ export function runLiveWritePathContract(
       // The healthy session flushed durably despite its neighbor's failure...
       expect((await readAll(ctx.sessionPersistence, healthy.id)).map(event => event.seq)).toEqual([0])
       // ...and the failed batch is retained: a recovered backend flushes it exactly once.
-      persist.restore()
+      persist.mockRestore()
       await ctx.sessionPersistence.flush()
       expect((await readAll(ctx.sessionPersistence, failing.id)).map(event => event.seq)).toEqual([0])
       await healthyHandle.close()
@@ -255,13 +207,12 @@ export function runLiveWritePathContract(
       }, { inject: ['sessions'] }))
       if (session === undefined) throw new Error('session was not created')
       const handle = await ctx.sessionPersistence.create(session.header)
-      const diagnostic = faults.disposalFailure(session.id)
-      const warned = spyDiagnostics(ctx, diagnostic.level)
+      const warned = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
       vi.spyOn(handle, 'close').mockRejectedValue(new Error('drain exploded'))
       session.append('turn/start', { turn: 1 })
       await owner.dispose()
       await vi.waitFor(() => {
-        expect(warned.mock.calls.join('\n')).toContain(diagnostic.text)
+        expect(warned.mock.calls.join('\n')).toContain('final drain for session "disposed-drain-fails" failed')
       })
       warned.mockRestore()
       await ctx.fiber.dispose()
@@ -287,7 +238,8 @@ export function runLiveWritePathContract(
       const session = ctx.sessions.create(brandString<SessionId>('close-drain-fails'))
       const handle = await ctx.sessionPersistence.create(session.header)
       const failure = new Error('storage refused the drain')
-      inject(ctx, failure)
+      vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
+        .mockRejectedValue(failure)
       session.append('turn/start', { turn: 1 })
       await expect(handle.close()).rejects.toBe(failure)
       // Ownership was released despite the failed drain: the id is claimable.
@@ -300,7 +252,9 @@ export function runLiveWritePathContract(
       const { ctx } = await make()
       const session = ctx.sessions.create(brandString<SessionId>('close-drain-string'))
       const handle = await ctx.sessionPersistence.create(session.header)
-      inject(ctx, 'backend string refusal')
+      vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error arm is the case under test.
+        .mockImplementation(() => Promise.reject('backend string refusal'))
       session.append('turn/start', { turn: 1 })
       await expect(handle.close()).rejects.toThrow('backend string refusal')
       await ctx.fiber.dispose()
@@ -310,12 +264,14 @@ export function runLiveWritePathContract(
       const { ctx } = await make()
       const session = ctx.sessions.create(brandString<SessionId>('retained-order'))
       const handle = await ctx.sessionPersistence.create(session.header)
-      const warned = spyDiagnostics(ctx, faults.backgroundFailure(session.id).level)
+      const warned = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
+      const host = ctx.sessionPersistence as unknown as { persistBatch: (...args: unknown[]) => Promise<void> }
       // Materialize under real timers first: the write lock is acquired ahead
       // of the first materializing write, and that real I/O must not sit
       // inside the fake-timer window below.
       await handle.flush()
-      const persist = inject(ctx, new Error('first drain refused'))
+      const real = host.persistBatch.bind(host)
+      const persist = vi.spyOn(host, 'persistBatch').mockRejectedValue(new Error('first drain refused'))
 
       vi.useFakeTimers()
       session.append('turn/start', { turn: 1 })
@@ -327,9 +283,9 @@ export function runLiveWritePathContract(
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await vi.advanceTimersByTimeAsync(batchDelayMs * 4)
       vi.useRealTimers()
-      expect(persist.calls()).toBe(1)
+      expect(persist).toHaveBeenCalledTimes(1)
 
-      persist.restore()
+      persist.mockImplementation(real)
       await expect(ctx.sessions.flush(session)).resolves.toBe(true)
       expect((await readAll(ctx.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0, 1, 2, 3])
       warned.mockRestore()

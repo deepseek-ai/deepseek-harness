@@ -10,16 +10,15 @@ const built = ['lib/index.js', 'lib/worker.cjs']
   .every(path => existsSync(join(packageRoot, path)))
 
 describe.skipIf(!built)('built migration verifier (plain node)', () => {
-  it('imports history and verifies exported JSONL without runtime workspace imports', async () => {
+  it('publishes history and verifies it without runtime workspace imports', async () => {
     const script = `
-      import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+      import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
       import { tmpdir } from 'node:os'
       import { join } from 'node:path'
       import { Worker } from 'node:worker_threads'
       import { Context } from '@deepseek-ai/cordis'
       import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
       import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-      import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 
       const terminate = Worker.prototype.terminate
       let terminations = 0
@@ -36,15 +35,12 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
         await writeFile(join(directory, 'session.jsonl'), JSON.stringify({
           type: 'session', version: 0, id, createdAt: 1, delegationDepth: 0,
         }) + '\\n')
-        await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
+        await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
         const handle = await ctx.sessionPersistence.open(id, 'write')
-        const { events } = await handle.read()
-        const header = sessionFormatCatalog.encodeCurrentHeader(handle.header, handle.inheritedEventCount)
         await handle.close()
         await ctx.sessionPersistence.flush()
-        const currentPath = join(root, 'export.v' + SESSION_FORMAT_VERSION + '.jsonl')
-        await writeFile(currentPath, [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent(event))]
-          .map(record => JSON.stringify(record)).join('\\n') + '\\n')
+        const currentPath = join(directory, 'session.v' + SESSION_FORMAT_VERSION + '.jsonl')
+        const header = JSON.parse((await readFile(currentPath, 'utf8')).trim())
         await mkdir(join(root, 'lib'))
         await copyFile('package.json', join(root, 'package.json'))
         const workerPath = join(root, 'lib', 'worker.cjs')

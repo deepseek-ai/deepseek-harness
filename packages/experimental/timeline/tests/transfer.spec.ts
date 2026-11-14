@@ -1,6 +1,6 @@
 import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
 import { executeTool } from './execute-tool.ts'
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,8 +15,8 @@ const fixtures: Awaited<ReturnType<typeof setup>>[] = []
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) await fixture.close()
 })
-async function fixture(backend: 'jsonl' | 'sqlite') {
-  const f = await setup(backend, { intervalMs: 86400000 })
+async function fixture() {
+  const f = await setup({ intervalMs: 86400000 })
   f.adapter.calls = 0
   f.adapter.release.resolve(undefined)
   fixtures.push(f)
@@ -38,20 +38,20 @@ const imported = (
     continue: proceed,
   })
 
-describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public storage (%s)', (backend) => {
+describe('task-tree transfer through public storage', () => {
   it('rejects import conflicts and configured tree and task limits', async () => {
-    const f = await setup(backend, { maxTrees: 1 })
+    const f = await setup({ maxTrees: 1 })
     fixtures.push(f)
     await imported(f)
     await expect(imported(f, 'checkpoint-one', true)).rejects.toThrow('identity was already used')
     await expect(imported(f, 'new-copy', true)).rejects.toThrow('At most 1 task trees')
-    const bounded = await setup(backend, { maxTasks: 1 })
+    const bounded = await setup({ maxTasks: 1 })
     fixtures.push(bounded)
     await expect(imported(bounded)).rejects.toThrow('At most 1 tasks')
     expect(bounded.ctx.timeline.stateOf(bounded.agent.session).view.trees).toEqual([])
   })
   it('cancels a draft import without an agent turn and refuses stale draft cancellation after a turn starts', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const first = await imported(f)
     if (first.action !== 'import') throw new Error('Missing import result')
     expect(
@@ -86,7 +86,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toHaveLength(1)
   })
   it('activates a cold conversation through its public controller and preserves activation errors', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     let denied = false
     const resolveAgent = vi.fn(() =>
       Promise.resolve(denied ? { error: new Error('Session writer is held elsewhere') } : { agent: f.agent }),
@@ -102,7 +102,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toHaveLength(1)
   })
   it('copies a plan atomically, retains discussions and priorities, and reuses a modified copy without reverting it', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const first = await imported(f)
     if (first.action !== 'import') throw new Error('Missing import result')
     const view = () => f.ctx.timeline.stateOf(f.agent.session).view
@@ -138,7 +138,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(view().trees).toHaveLength(2)
   })
   it('removes only the selected tree, immediately notifies the conversation, and keeps stale import retries removed after restart decoding', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     f.start()
     await f.agent.whenIdle()
     f.adapter.main = []
@@ -162,7 +162,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.adapter.main).toHaveLength(1)
   })
   it('rejects damaged imports and uncertain saves without publishing a partial tree', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await expect(
       f.ctx.timeline.edit({
         action: 'import',
@@ -180,7 +180,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.adapter.main).toHaveLength(0)
   })
   it('recovers a prepared import after a failed flush and delivers continuation only once', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const { root, agent: { session } } = f
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
     vi.spyOn(f.ctx.sessions, 'flush')
@@ -195,7 +195,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     const adapter = new Adapter()
     adapter.calls = 0
     adapter.release.resolve(undefined)
-    const recovered = await setup(backend, { intervalMs: 86400000 }, adapter, { root, sessionId: session.id })
+    const recovered = await setup({ intervalMs: 86400000 }, adapter, { root, sessionId: session.id })
     fixtures.push(recovered)
     expect(recovered.ctx.timeline.stateOf(recovered.agent.session).view.trees).toEqual([])
     await expect(imported(recovered, 'retry-save', true, true)).rejects.toThrow('identity was already used')
@@ -210,7 +210,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(verify?.history.at(-1)).toMatchObject({ status: 'paused', previousProgress: 0.4, progress: 0.4 })
   })
   it('acknowledges a buffered continuation once when the inbox flush recovers', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
     const flushes = vi.spyOn(f.ctx.sessions, 'flush')
       .mockImplementationOnce(flush)
@@ -227,7 +227,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     }
   })
   it('recovers an unacknowledged ready marker without a second tree or continuation', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const session = f.agent.session
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
     vi.spyOn(f.ctx.sessions, 'flush')
@@ -242,7 +242,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.adapter.main).toHaveLength(1)
   })
   it('keeps a parked continuation across restart and never queues it twice', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const { root, agent: { session } } = f
     // Model a restart after the inbox record commits and before the driver claims the message.
     vi.spyOn(f.agent, 'followup').mockImplementation((message) => {
@@ -252,20 +252,12 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     const id = f.agent.inbox.nextTurn[0]?.id
     expect(id).toBeDefined()
     const crashStore = await mkdtemp(join(tmpdir(), 'timeline-parked-'))
-    try {
-      await cp(root, crashStore, { recursive: true })
-      await f.close({ preserve: true })
-      await rm(root, { recursive: true, force: true })
-      // Restore the saved data at its original path, including SQLite routing records.
-      await cp(crashStore, root, { recursive: true })
-    } finally {
-      await rm(crashStore, { recursive: true, force: true })
-    }
+    await cp(root, crashStore, { recursive: true })
     const adapter = new Adapter()
     adapter.calls = 0
     adapter.release.resolve(undefined)
-    const recovered = await setup(backend, { intervalMs: 86400000 }, adapter, { root, sessionId: session.id })
-    fixtures.splice(fixtures.indexOf(f), 1, recovered)
+    const recovered = await setup({ intervalMs: 86400000 }, adapter, { root: crashStore, sessionId: session.id })
+    fixtures.push(recovered)
     expect(await imported(recovered, 'parked-notice', false, true)).toMatchObject({ reused: true, notified: false })
     expect(recovered.agent.inbox.nextTurn.map(message => message.id)).toEqual([id])
     recovered.start()
@@ -277,7 +269,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(JSON.stringify(adapter.main[0]?.messages)).toContain('Continue task tree')
   })
   it('rejects excessive units even when the checkpoint declares the task complete', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await expect(f.ctx.timeline.edit({
       action: 'import',
       sessionId: f.agent.session.id,
@@ -291,7 +283,7 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toEqual([])
   })
   it('reserves idle maintenance while a save is pending, then releases queued work with the imported plan', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
     const admitted = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -318,9 +310,9 @@ describe.each(['jsonl', 'sqlite'] as const)('task-tree transfer through public s
   })
 })
 
-describe.each(['jsonl', 'sqlite'] as const)('human Timeline command (%s)', (backend) => {
+describe('human Timeline command', () => {
   it('imports without a session working directory and reports filesystem and result failures', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.plugin(Commands)
     await f.ctx.plugin(FsLocal, { cwd: f.root })
     const { agent } = await f.ctx.agents.create({
@@ -339,7 +331,7 @@ describe.each(['jsonl', 'sqlite'] as const)('human Timeline command (%s)', (back
     expect((await run())?.result).toMatchObject({ kind: 'error', text: 'Invalid Timeline import response' })
   })
   it('explains duplicate flags, unavailable filesystems and failed reads', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.plugin(Commands)
     const run = (text: string) => f.ctx.commands.execute(f.agent, text, [], new AbortController().signal)
     expect((await run('/timeline plan.timeline.json'))?.result.kind).toBe('error')
@@ -354,7 +346,7 @@ describe.each(['jsonl', 'sqlite'] as const)('human Timeline command (%s)', (back
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toEqual([])
   })
   it('reports a saved continuation even when admission cannot be confirmed', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.plugin(Commands)
     await f.ctx.plugin(FsLocal, { cwd: f.root })
     const path = join(f.root, 'plan.timeline.json')
@@ -379,7 +371,7 @@ describe.each(['jsonl', 'sqlite'] as const)('human Timeline command (%s)', (back
     expect(f.ctx.timeline.stateOf(f.agent.session).view.trees).toHaveLength(1)
   })
   it('imports a quoted @file into a blank session before any model request, then supports an explicit continuation', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.plugin(Commands)
     await f.ctx.plugin(FsLocal, { cwd: f.root })
     const path = join(f.root, 'my plan.timeline.json')

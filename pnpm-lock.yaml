@@ -18795,12 +18795,6 @@ importers:
       '@deepseek-ai/dsh-session-format':
         specifier: workspace:*
         version: link:../../session/session-format
-      '@deepseek-ai/dsh-session-format-catalog':
-        specifier: workspace:*
-        version: link:../../session/session-format-catalog
-      '@deepseek-ai/dsh-session-persistence-jsonl':
-        specifier: workspace:*
-        version: link:../../session/session-persistence-jsonl
       js-yaml:
         specifier: ^4.3.2
         version: 4.3.2
@@ -18844,9 +18838,6 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
-      '@deepseek-ai/dsh-session-persistence':
-        specifier: workspace:*
-        version: link:../../session/session-persistence
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../../subagent/subagent

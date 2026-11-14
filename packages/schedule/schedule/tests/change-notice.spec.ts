@@ -44,13 +44,13 @@ class ReplyAdapter extends LlmAdapter {
 }
 
 /** Schedule service beside a production AgentLoop with one idle Agent that answers through {@link ReplyAdapter}. */
-async function setup(storage: 'jsonl' | 'sqlite') {
+async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-notice-'))
   roots.push(root)
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: join(root, 'sessions'), compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root: join(root, 'schedule-storage') })
@@ -74,8 +74,8 @@ function turns(session: Session): number {
   return session.snapshotEvents().filter(event => event.type === 'turn/start').length
 }
 
-it.each(['jsonl', 'sqlite'] as const)('%s: adds notices queued while the Agent is idle to the first step of its next turn', async (storage) => {
-  const { service, adapter, agent } = await setup(storage)
+it('adds notices queued while the Agent is idle to the first step of its next turn', async () => {
+  const { service, adapter, agent } = await setup()
   const created = await service.create({
     title: 'Standup', prompt: 'Prompt', timing: { kind: 'rrule', rrule: distant }, target: { kind: 'session', sessionId: agent.session.id },
   }, brandString<SessionId>('actor'))
@@ -93,8 +93,8 @@ it.each(['jsonl', 'sqlite'] as const)('%s: adds notices queued while the Agent i
   ])
 })
 
-it.each(['jsonl', 'sqlite'] as const)('%s: adds one step to a turn whose last step was running when a notice arrived', async (storage) => {
-  const { service, adapter, agent } = await setup(storage)
+it('adds one step to a turn whose last step was running when a notice arrived', async () => {
+  const { service, adapter, agent } = await setup()
   // The Agent created the task itself, so only the later edit notifies it.
   const created = await service.create({
     title: 'Standup', prompt: 'Prompt', timing: { kind: 'rrule', rrule: distant }, target: { kind: 'session', sessionId: agent.session.id },

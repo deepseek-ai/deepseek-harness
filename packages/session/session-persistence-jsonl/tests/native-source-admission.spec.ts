@@ -36,7 +36,7 @@ describe.each(modes)('native message-source admission ($compression, $access)', 
     await writeFile(path, bytes)
     const ctx = new Context()
     contexts.push(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression })
     return { ctx, path, bytes, event }
   }
 

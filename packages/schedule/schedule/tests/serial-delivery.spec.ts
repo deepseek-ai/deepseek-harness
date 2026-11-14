@@ -26,20 +26,20 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function core(storage: 'jsonl' | 'sqlite', persistenceRoot: string) {
+async function core(persistenceRoot: string) {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: persistenceRoot, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
   await ctx.plugin(AgentLoop, { agents: [] })
   return ctx
 }
 
 describe('due delivery during Agent creation', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: enqueues the reminder without starting a turn before every creation listener finishes', async (storage) => {
+  it('enqueues the reminder without starting a turn before every creation listener finishes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-serial-'))
     roots.push(root)
-    const ctx = await core(storage, join(root, 'sessions'))
+    const ctx = await core(join(root, 'sessions'))
     const warnings = vi.spyOn(ctx.logger, 'warn')
     await ctx.plugin(Storage)
     await ctx.plugin(StorageJson, { root: join(root, 'schedule-storage') })

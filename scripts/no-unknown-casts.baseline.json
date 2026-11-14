@@ -786,6 +786,7 @@
     "2166ba7b8163e2fc969222574356bc9f9b40dc0582ad3308f79d7c75b40196a7": 1,
     "8f233d5f2bd936153983216f55268c8ed68d5c2324f41002e223779d9ffe57e8": 1,
     "a973ca70955fca286a9e73b9b50ed77664b7de5b91bc9e480368e537ec21bb91": 1,
+    "b40f3bbda2adba664b54271ea4b552ffb2c78a239d39d8b1e882cca164d21c4f": 2,
     "bffcb662f965953221b90492f4393ce17c357275db1a3fbd69c887cb8564610c": 1
   },
   "packages/core/agent-loop/tests/scope-lifecycle.spec.ts": {
@@ -1521,6 +1522,9 @@
   "packages/session/session-persistence-jsonl/tests/native-source-admission.spec.ts": {
     "24b3f41708c436a3b161317d9b04439dff484aa8f5a913ed3c68a299f490e3b9": 1
   },
+  "packages/session/session-persistence-jsonl/tests/v2-system-migration.spec.ts": {
+    "e3b3858336ae260253abe549d2b763f5087ab4e8650f4eb5b323339eff0a6ce4": 1
+  },
   "packages/session/session-persistence-jsonl/tests/zstd.spec.ts": {
     "71b7a878e6188e21f9e735a03a79e060e88184269c9890e414a4eef5ae58878f": 1,
     "aa35ddb1a441f4aa934fca868f66fb0899db603c8a222ca86a138e23741c350e": 2,
@@ -1533,6 +1537,9 @@
     "8d4dd6feb816dcd78c30b429f44633f30615ace594fb7d7915b4ebb47d41f2d3": 1,
     "99f0255dde94c77c2a1c8fa17af0ce85168bdac1bedce584b6e915c811456078": 1,
     "f863f076a3f52a9500a87f4bc7de87d247a5176875a4fde248c3992da9064c0a": 1
+  },
+  "packages/session/session-persistence/tests/live-write-contract.ts": {
+    "b40f3bbda2adba664b54271ea4b552ffb2c78a239d39d8b1e882cca164d21c4f": 5
   },
   "packages/session/session-persistence/tests/storage-contract.spec.ts": {
     "1fba888e4068c1a19754657dc6d8d0f524a33211420783d4ec826c1b68dc5913": 1,

@@ -64,7 +64,7 @@ function agentFor(ctx: Context, session: Session): Agent {
   return agent
 }
 
-async function fixture(backend: 'jsonl' | 'sqlite', options: { cache?: boolean; retainOnArchive?: boolean; maxOutputBytes?: number } = {}) {
+async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; maxOutputBytes?: number } = {}) {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-archive-')))
   cleanups.push(() => rm(temporary, { recursive: true, force: true }))
   const root = await repository(temporary)
@@ -79,7 +79,7 @@ async function fixture(backend: 'jsonl' | 'sqlite', options: { cache?: boolean; 
   await ctx.plugin(UnusedSandbox)
   await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
   await ctx.plugin(WorkingDirectoryService)
-  await ctx.plugin(SessionPersistence, { root: join(temporary, 'sessions'), compression: 'none', storage: backend })
+  await ctx.plugin(SessionPersistence, { root: join(temporary, 'sessions'), compression: 'none' })
   await ctx.plugin(ArchiveQueries)
   await ctx.plugin(Storage)
   ctx.storage.backend.register('memory', new MemoryStorageBackend(new MemoryMediaPool()))
@@ -121,9 +121,9 @@ function detachable(f: Fixture, id: string, meta: { cwd?: string }): { session: 
   return { session, detach }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup (%s)', (backend) => {
+describe('archive-triggered worktree cleanup', () => {
   it('removes the clean checkout the archived Session created and keeps its branch and commits', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await writeFile(join(f.worktree.path, 'local.txt'), 'not pushed\n')
     await git(f.worktree.path, 'add', 'local.txt')
     await git(f.worktree.path, 'commit', '-m', 'local commit')
@@ -140,7 +140,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('removes a clean checkout whose file listing exceeds maxOutputBytes', async () => {
-    const f = await fixture(backend, { maxOutputBytes: 1_024 })
+    const f = await fixture({ maxOutputBytes: 1_024 })
     for (let index = 0; index < 64; index++) {
       await writeFile(join(f.worktree.path, `file-${String(index).padStart(3, '0')}-${'x'.repeat(24)}.txt`), `${index}\n`)
     }
@@ -153,7 +153,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains a checkout whose status output exceeds maxOutputBytes instead of failing', async () => {
-    const f = await fixture(backend, { maxOutputBytes: 1_024 })
+    const f = await fixture({ maxOutputBytes: 1_024 })
     for (let index = 0; index < 64; index++) {
       await writeFile(join(f.worktree.path, `untracked-${String(index).padStart(3, '0')}-${'x'.repeat(24)}.txt`), `${index}\n`)
     }
@@ -164,7 +164,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('removes a clean checkout when the worktree listing exceeds maxOutputBytes', async () => {
-    const f = await fixture(backend, { maxOutputBytes: 1_024 })
+    const f = await fixture({ maxOutputBytes: 1_024 })
     for (let index = 0; index < 8; index++) await git(f.root, 'worktree', 'add', '--detach', join(f.temporary, `extra-${index}`))
     expect((await git(f.root, 'worktree', 'list', '--porcelain', '-z')).length).toBeGreaterThan(1_024)
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -173,7 +173,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('returns from admission before the inspection runs', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const release = Promise.withResolvers<undefined>()
     const list = f.ctx.sessionQuery.listSessions.bind(f.ctx.sessionQuery)
     vi.spyOn(f.ctx.sessionQuery, 'listSessions').mockImplementation(async (...args) => {
@@ -188,7 +188,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('removes the checkout after the Session moved elsewhere, and the ordinary ensure contract holds afterwards', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.workingDirectory.set(f.agent, f.root)
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'removed' })
@@ -203,7 +203,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains an untracked file but not ignored files', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await writeFile(join(f.worktree.path, 'keep.txt'), 'keep')
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'retained' })
@@ -218,7 +218,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('registers nothing for a Session that created no checkout or only inherited one', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const other = f.ctx.sessions.create(brandString<SessionId>('no-checkout'), { meta: { cwd: f.root } })
     await f.ctx.workspaceRegistry.archiveSession(other.id)
     expect(await f.ctx.worktrees.cleanupOf(other, null)).toBeNull()
@@ -232,7 +232,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains a checkout while a fork or a directory borrower is unarchived, and does not reconsider when they archive', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const seed = f.session.snapshotEvents()
     const fork = f.ctx.sessions.create(brandString<SessionId>('fork'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
@@ -252,7 +252,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('treats a subagent child beneath the archived Session as archived', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const child = f.ctx.sessions.create(brandString<SessionId>('child'), {
       meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: f.session.id },
     })
@@ -266,7 +266,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains a checkout for an unrelated subagent child that works inside it', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const other = f.ctx.sessions.create(brandString<SessionId>('other-parent'), { meta: { cwd: f.root } })
     f.ctx.sessions.create(brandString<SessionId>('other-child'), { meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: other.id } })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -274,7 +274,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('removes a persisted checkout without loading its Agent, reading cold Sessions from the projection cache when present', async () => {
-    const f = await fixture(backend, { cache: true })
+    const f = await fixture({ cache: true })
     const owner = detachable(f, 'cold-owner', { cwd: f.root })
     const agent = agentFor(f.ctx, owner.session)
     const registration = f.ctx.agents.register(agent)
@@ -300,7 +300,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains a checkout while a live fork that moved elsewhere still carries its creation', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const seed = f.session.snapshotEvents()
     const fork = f.ctx.sessions.create(brandString<SessionId>('fork-elsewhere'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
@@ -315,7 +315,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('treats a cached cold Session that recorded no directory as working nowhere', async () => {
-    const f = await fixture(backend, { cache: true })
+    const f = await fixture({ cache: true })
     const nowhere = detachable(f, 'cold-nowhere', {})
     await f.ctx.sessionProjectionCache.write(nowhere.session)
     await persisted(f, nowhere.session)
@@ -325,7 +325,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('reads a cold Session from its log without the cache', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const borrower = detachable(f, 'cold-borrower', { cwd: f.worktree.path })
     await persisted(f, borrower.session)
     borrower.detach()
@@ -335,14 +335,14 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('does not wait for the archived Session\'s own stopping work', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     f.ctx.on('workspace/session-activity', async (_request, next) => [{ kind: 'turn' }, ...await next()])
     await f.ctx.workspaceRegistry.archiveSession(f.session.id, { stopActivity: true })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
   })
 
   it('retains a checkout under its creator\'s read-only policy', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     f.session.append('sandbox/mode', { mode: 'read-only' })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'retained' })
@@ -350,7 +350,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('keeps the archive and reports a failed removal', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const warning = vi.spyOn(f.ctx.logger, 'warn').mockImplementation(() => {})
     removeCheckout.mockRejectedValue(new Error('checkout removal denied'))
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -361,7 +361,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('cancels an unadmitted removal on unarchive and waits for an admitted one', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     removeCheckout.mockImplementation(async (...args) => {
@@ -384,7 +384,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('holds directory entry into a checkout being removed and leaves other paths alone', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     removeCheckout.mockImplementation(async (...args) => {
@@ -413,7 +413,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('registers nothing for a cold Session without creations and ignores an unarchive without an attempt', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const cold = detachable(f, 'cold-empty', { cwd: f.root })
     await persisted(f, cold.session)
     cold.detach()
@@ -426,7 +426,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('retains a checkout for a borrower that appeared between the eligible inspection and the locked recheck', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const list = f.ctx.sessionQuery.listSessions.bind(f.ctx.sessionQuery)
     vi.spyOn(f.ctx.sessionQuery, 'listSessions').mockImplementationOnce(async (...args) => {
       const records = await list(...args)
@@ -440,7 +440,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('treats a subagent child whose parent is unknown to the corpus as unarchived', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     f.ctx.sessions.create(brandString<SessionId>('orphan-child'), {
       meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: brandString<SessionId>('never-existed') },
     })
@@ -449,7 +449,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('skips a creation record whose payload fails validation', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const handle = await f.ctx.sessionProjections.register(worktreeProjection)
     const before = handle.stateOf(f.session).created
     appendPluginRecord(f.session, CREATED_RECORD, { path: '', branch: 'x', baseCommit: 'y', repositoryRoot: 'z' })
@@ -457,7 +457,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('registers no attempt while retainOnArchive is set, and resumes once it is cleared', async () => {
-    const f = await fixture(backend, { retainOnArchive: true })
+    const f = await fixture({ retainOnArchive: true })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toBeNull()
     await access(f.worktree.path)
@@ -468,7 +468,7 @@ describe.each(['jsonl', 'sqlite'] as const)('archive-triggered worktree cleanup 
   })
 
   it('withdraws listeners before draining, so disposal neither fails unrelated access nor serves a stale result', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     removeCheckout.mockImplementation(async () => {

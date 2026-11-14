@@ -88,8 +88,6 @@ For an initial headless live recording with no Session file, temporarily set `in
 
 A nested `workspace.expected/<directory>/.empty` marker represents an empty directory; a marker in the actual workspace remains a regular file.
 
-`DSH_SNAPSHOT_STORAGE` selects `jsonl` (default) or `sqlite` for subprocess and Web snapshot tests. Both backends use the same expected fixtures. Comparable logs are parsed as JSON records: object field order is ignored, while every field value, event count, event order, and array order remains significant.
-
 ### Pinning request headers and system prompts
 
 A pin owns its generated `system-prompt.expected.md` or `tool-schemas.expected.json` sidecar by default; `systemPromptSource` and `toolSchemasSource` name another pin when the complete corresponding sequence is identical, so each distinct version is committed once. The system prompt is surface node 0, logged as a `system/message` event before the step's first `request/header`; every fixture stores its text block as `"text":"{{system}}"` and the prompt sidecar keeps the full text. The pin's `request/header` events store `"tools":"{{tools}}"` while retaining config and reason, and the structured schema sidecar keeps the full catalogs. Logs containing developer messages retain ordered tool names in each header instead of the token so historical addition references remain verifiable. A child Session whose own scope composes a different request declares it per fixture index with `pinsChildToolSchemas` and `pinsChildSystemPrompts`. A scenario that changes the request header mid-run declares `expectedHeaderChanges`; a scenario whose prompt changes mid-run — replacing node 0, or appending after the cached history on an `in-history` route — declares `expectedPromptChanges`, and each change adds a `<!-- system/message change N -->` section to the prompt sidecar. The manifest spells these `header.changes` and `header.promptChanges`. Headers without tools retain an empty schema set in the sidecar, so the first later addition stays aligned with its header.
@@ -102,6 +100,7 @@ A scenario requiring a non-Windows host declares `posixOnly`, which skips its ru
 
 - **A durable wait times out** — `waitForTurnStart`, `waitForTurnEnd`, `waitForSubagentTurnEnd`, `waitForGoalPhase`, `waitForInboxMessage`, `waitForTitleAfterTurnEnd`, and `waitForEventAfterTurnEnd` identify the session or child and deadline even when the first log harvest exceeds that deadline. Child waits also name the requested turn. All retain the underlying failure as the error cause. `waitForTurnStart` rejects malformed turn records immediately.
 - **A fixture guard rejects the committed files** — orphan scenario dirs, missing files, multiple pins for one header class, duplicate sidecar content, unscrubbed prompt text or tool schemas, a `request/header` with no preceding `system/message`, and malformed pinning headers all fail the suite before comparisons run.
+- **The session harvest needs raw JSONL mode** — snapshot configs set the JSONL backend's `compression: 'none'`; compressed JSONL has no snapshot-harvest path.
 - **Built mode needs current artifacts** — run `pnpm run build` before selecting `DSH_EXAMPLE_MODE=lib`; source mode remains the zero-build path.
 
 -----
@@ -116,7 +115,7 @@ This section explains the design of the kit; the observable behavior is fully co
 
 ### Design
 
-The shared core owns manifests, generation-qualified role selection, workspace setup/comparison, typed identity mapping, normalizers, and fixture invariants. The ACP adapter adds four composable layers: launcher, scenario harness, normalizers, and suite factory. `launchAcpTestAgent` boots a source profile under tsx or a built `lib` profile under plain Node, connects the SDK client over a raw-byte stdout tee, collects Session updates and stderr, fails closed on unhandled permission requests, and owns shutdown. `runScenario` drives ACP JSON-RPC stdio and reads committed logical histories through `SessionPersistence.list/open/read`, including compressed JSONL and SQLite sessions. Cleanup waits for pending Session reads before removing their storage. The pure normalizers replace cwd paths and typed identities with stable tokens, zero times, expand physical source-event ranges, and scrub system-prompt text and tool-schema bulk. `defineAcpSnapshotSuite` registers comparisons, generation-qualified fixture write-back, and the live uniformity guard.
+The shared core owns manifests, generation-qualified role selection, workspace setup/comparison, typed identity mapping, normalizers, and fixture invariants. The ACP adapter adds four composable layers: launcher, scenario harness, normalizers, and suite factory. `launchAcpTestAgent` boots a source profile under tsx or a built `lib` profile under plain Node, connects the SDK client over a raw-byte stdout tee, collects Session updates and stderr, fails closed on unhandled permission requests, and owns shutdown. `runScenario` drives ACP JSON-RPC stdio and harvests the numerically highest persisted raw JSONL generation for every Session directory. The pure normalizers replace cwd paths and typed identities with stable tokens, zero times, expand physical source-event ranges, and scrub system-prompt text and tool-schema bulk. `defineAcpSnapshotSuite` registers comparisons, generation-qualified fixture write-back, and the live uniformity guard.
 
 ### Source map
 
@@ -168,6 +167,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define when the kit needs special care. They are current package constraints, not a task backlog.
 
+- **Session harvest requires raw JSONL mode** — `runScenario` collects persisted `.jsonl` logs, so snapshot configs set the JSONL backend's `compression: 'none'`; compressed JSONL has no snapshot-harvest path.
 - **Built mode requires current artifacts** — run `pnpm run build` before selecting `DSH_EXAMPLE_MODE=lib`; source mode remains the zero-build path.
 - **ACP remains for protocol behavior** — cancellation and permission round trips whose stimulus is the ACP client stay on that adapter; assembled one-shot and persistent-control behavior uses headless and SDK adapters.
 

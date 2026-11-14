@@ -13,7 +13,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import type {} from '../src/index.ts'
 import { apply } from '../src/host/share-host.ts'
 
@@ -149,13 +149,6 @@ async function host(options: {
 }
 
 describe('owner host credential horizon', () => {
-  beforeEach(() => {
-    // Relay I/O and polling use real timers; only credential expiry uses this fixed clock.
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(START + 60_000)
-  })
-  afterEach(() => { vi.useRealTimers() })
-
   it('adopts the horizon the Relay reports for a claim past the signed expiry', async () => {
     const relay = await relayStandIn({ claim: { body: { claimed: true, ownerCredentialExpiresAt: LIVE } } })
     onTestFinished(relay.close)

@@ -114,8 +114,7 @@ describe.skipIf(!requireBuiltArtifacts)('built CLI lazy-search startup', () => {
       const result = await runBuiltWeb(cwd)
       expect(result.stdout).toMatch(/dsh web: http:\/\/127\.0\.0\.1:\d+/u)
       expect(result.code).toBe(0)
-      // Node 24.9 warns about the SQLite persistence used even while full-text search is off.
-      expect(result.stderr.replace(/\(node:\d+\) ExperimentalWarning: SQLite[^\n]*\n(?:\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n)?/gu, '')).toBe('')
+      expect(result.stderr).not.toMatch(/ExperimentalWarning: SQLite/u)
     } finally {
       await rm(cwd, { recursive: true, force: true })
     }

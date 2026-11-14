@@ -13,7 +13,7 @@ import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import ClaudeCodeMods, { defineMod } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-it.each(['jsonl', 'sqlite'] as const)('reports the final committed cwd when a persisted Session resumes, retaining its original project (%s)', async (backend) => {
+it('reports the final committed cwd when a persisted Session resumes, retaining its original project', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-mods-resume-directory-')))
   const origin = join(root, 'project')
   const current = join(origin, 'current')
@@ -26,7 +26,7 @@ it.each(['jsonl', 'sqlite'] as const)('reports the final committed cwd when a pe
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(LocalFileSystem, { cwd: origin })
     await ctx.plugin(WorkingDirectory, { defaultDirectory: origin })
-    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none', storage: backend })
+    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(ClaudeCodeMods)
     await ctx.plugin(defineMod({

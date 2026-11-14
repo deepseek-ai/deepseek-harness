@@ -11,9 +11,9 @@ import { newId, taskId } from '../src/records.ts'
 import { delegationContext } from '../src/delegation.ts'
 import { setup } from './fixture.ts'
 
-describe.each(['jsonl', 'sqlite'] as const)('manager-owned delegated planning (%s)', (backend) => {
+describe('manager-owned delegated planning', () => {
   it('limits guidance when restored worker ancestry is missing or cyclic', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const create = async (id: SessionId, parentSession?: SessionId) => (
       await f.ctx.agents.create({
         sessionId: id,
@@ -37,7 +37,7 @@ describe.each(['jsonl', 'sqlite'] as const)('manager-owned delegated planning (%
     }
   })
   it('hides worker planning, keeps user forks independent, and shares bounded assignment references', async () => {
-    const f = await setup(backend, { intervalMs: 86400000, language: 'zh-CN' })
+    const f = await setup({ intervalMs: 86400000, language: 'zh-CN' })
     let sequence = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -135,7 +135,7 @@ describe.each(['jsonl', 'sqlite'] as const)('manager-owned delegated planning (%
   })
 
   it('denies stale and agent-local worker writes without changing manager tasks or discussions', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let sequence = 0
     const call = (agent: typeof f.agent, name: string, args: object) =>
       executeTool(f.ctx, {
@@ -223,7 +223,7 @@ describe.each(['jsonl', 'sqlite'] as const)('manager-owned delegated planning (%
   })
 
   it('runs worker iterations without planning reminders or separate timed reports', async () => {
-    const f = await setup(backend, { reminderIterations: 2, intervalMs: 60000 })
+    const f = await setup({ reminderIterations: 2, intervalMs: 60000 })
     try {
       const worker = (
         await f.ctx.agents.create({

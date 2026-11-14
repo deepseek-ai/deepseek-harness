@@ -45,7 +45,7 @@ describe.each(modes)('native developer admission ($compression, $access)', ({ co
     const path = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, bytes)
-    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression })
     return { ctx, path, bytes, events }
   }
 

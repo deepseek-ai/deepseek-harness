@@ -17,7 +17,6 @@ import {
 } from './scaffold.ts'
 import { openSettings, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { sessionDir } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -465,7 +464,9 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     const [header, ...events] = realizeSeedFixture(scaffold, await readFile(SEED, 'utf8'), id).trimEnd().split('\n')
       .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
     expect(header?.version).toBe(3)
-    const directory = sessionDir(scaffold.persistenceRoot, scaffold.workspaceCwd, id)
+    const projects = (await readdir(scaffold.persistenceRoot, { withFileTypes: true })).filter(entry => entry.isDirectory())
+    expect(projects).toHaveLength(1)
+    const directory = join(scaffold.persistenceRoot, projects[0]!.name, id)
     const predecessor = join(directory, 'session.v3.jsonl.zstd')
     const createdAt = WEB_FIXTURE_TIME - 90_000
     const rows = [{ ...header, id, cwd: scaffold.workspaceCwd, createdAt },
@@ -477,13 +478,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
 
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    const group = page.getByRole('treeitem', { name: /^Ungrouped/ })
-    await group.waitFor()
-    if (await group.getAttribute('aria-expanded') !== 'true') {
-      await page.getByText('Ungrouped', { exact: true }).click()
-    }
-    const showMore = page.getByRole('button', { name: /^Show \d+ more sessions$/ })
-    if (await showMore.count() > 0) await showMore.click()
+    await page.getByRole('button', { name: /^Show \d+ more sessions$/ }).click()
     const row = page.locator(`[data-row-key="session:${id}"]`)
     await row.waitFor()
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
@@ -511,9 +506,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
       await expect.poll(() => row.getAttribute('aria-selected')).toBe('true')
       await expect.poll(() => scaffold.ctx.agents.get(id)).toBeDefined()
       await expect(scaffold.ctx.sessionPersistence.stat(id)).resolves.toMatchObject({ formatStatus: 'current' })
-      expect(await readdir(directory)).toEqual((process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') === 'sqlite'
-        ? ['session.lock', 'session.v3.jsonl.zstd']
-        : ['session.lock', 'session.v3.jsonl.zstd', `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`])
+      expect(await readdir(directory)).toContain(`session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`)
       expect(await readFile(predecessor)).toEqual(source)
       expect(forkRequests).toEqual(['/api/session/fork'])
       expect(scaffold.ctx.agents.list().filter(agent => !existing.has(agent.id) && agent.id !== id)).toEqual([])

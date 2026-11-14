@@ -17,7 +17,7 @@ import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-async function fixture(storage: 'jsonl' | 'sqlite' ) {
+async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-child-directory-'))
   const origin = join(root, 'origin')
   const first = join(origin, 'first')
@@ -31,7 +31,7 @@ async function fixture(storage: 'jsonl' | 'sqlite' ) {
   })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: join(root, 'sessions') })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -48,8 +48,8 @@ async function fixture(storage: 'jsonl' | 'sqlite' ) {
 }
 
 describe('subagent working directories', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['spawn', 'fork']).map(value => [storage, value] as const)))('%s: %s inherits current directory independently of origin and inherited history', async (storage, provider) => {
-    const { ctx, parent, origin, first, second } = await fixture(storage)
+  it.each(['spawn', 'fork'])('%s inherits current directory independently of origin and inherited history', async (provider) => {
+    const { ctx, parent, origin, first, second } = await fixture()
     await ctx.workingDirectory.set(parent, first)
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'record first directory' }], source: { kind: 'user' } }))
     await parent.whenIdle()
@@ -66,8 +66,8 @@ describe('subagent working directories', () => {
     await run.dispose()
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['relative', 'absolute']).map(value => [storage, value] as const)))('%s: retains an explicit %s directory when a continuable child cold-resumes', async (storage, form) => {
-    const { ctx, parent, origin, first, second } = await fixture(storage)
+  it.each(['relative', 'absolute'])('retains an explicit %s directory when a continuable child cold-resumes', async (form) => {
+    const { ctx, parent, origin, first, second } = await fixture()
     const selected = await realpath(second)
     const started = await ctx.subagents.startActivation({
       delivery: 'caller',
@@ -87,8 +87,8 @@ describe('subagent working directories', () => {
     expect(last?.data).toMatchObject({ cwd: selected })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls back a local child whose setup realm has no directory service', async (storage) => {
-    const { ctx, parent, second, adapter } = await fixture(storage)
+  it('rolls back a local child whose setup realm has no directory service', async () => {
+    const { ctx, parent, second, adapter } = await fixture()
     const beforeSessions = ctx.sessions.list().length
     const childId = brandString<SessionId>('missing-directory-service')
     const create = ctx.agents.create.bind(ctx.agents)

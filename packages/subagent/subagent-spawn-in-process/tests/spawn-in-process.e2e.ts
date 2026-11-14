@@ -21,9 +21,9 @@ afterEach(async () => {
 })
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('spawn backend with-key smoke', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: a parent delegates to a child that writes a file on disk', async (storage) => {
+  it('a parent delegates to a child that writes a file on disk', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-subagent-spawn-e2e-'))
-    ctx = await spawnHarness(storage, workdir)
+    ctx = await spawnHarness(workdir)
     const parent = await ctx.agentLoop.create(brandString<SessionId>('e2e-parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, { cwd: workdir })
 
     parent.followup(createUserMessage({

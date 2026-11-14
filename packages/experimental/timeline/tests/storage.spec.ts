@@ -14,8 +14,8 @@ const fixtures: Awaited<ReturnType<typeof setup>>[] = []
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) await fixture.close()
 })
-async function fixture(backend: 'jsonl' | 'sqlite') {
-  const value = await setup(backend, { intervalMs: 86400000 })
+async function fixture() {
+  const value = await setup({ intervalMs: 86400000 })
   fixtures.push(value)
   return value
 }
@@ -28,9 +28,9 @@ function tree(session: Session, id = 'work'): TimelineRecordMap['plugin:timeline
   }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (backend) => {
+describe('public Timeline storage', () => {
   it('flushes a buffered priority before a queued retry returns and sends one notice', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const session = f.agent.session
     const change = tree(session)
     const task = taskId.parse('check')
@@ -61,7 +61,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     }
   })
   it('keeps whole-tree discussion context and treats an unchanged priority as a no-op', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const session = f.agent.session
     const change = tree(session)
     const task = taskId.parse('check')
@@ -89,7 +89,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     await expect(f.ctx.timeline.edit({ ...input, id: 'note-000000000000ffff' })).rejects.toThrow('discussions per Session')
   })
   it('accepts authenticated edit RPCs and contains invalid requests and cancellation', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const owner = new Peer(f.ctx, { principal: { kind: 'owner' } })
     const viewer = new Peer(f.ctx, {
       principal: {
@@ -132,7 +132,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     }
   })
   it('rejects edits against unavailable targets and unacknowledged sessions', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const sessionId = f.agent.session.id
     const missing = treeId.parse('missing')
     await expect(f.ctx.timeline.edit({ action: 'remove', sessionId: SessionId('unknown'), tree: missing }))
@@ -152,7 +152,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     await expect(storage.append(f.agent.session, 'plugin:timeline/tree', change)).rejects.toThrow('storage is closed')
   })
   it('preserves concurrent task patches and rejects invalid edits without changing the stored view', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     let count = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -180,7 +180,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     expect(f.ctx.timeline.stateOf(f.agent.session).view).toEqual(before)
   })
   it('rejects an oversized tree write before it reaches the session log', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const session = f.agent.session
     const change = tree(session)
     change.tree.tasks = patchTasks([], Array.from({ length: 180 }, (_, index) => ({
@@ -192,7 +192,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     expect(f.ctx.timeline.stateOf(session).view.trees).toEqual([])
   })
   it('drains an acknowledged log write before plugin unload finishes', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const change = tree(f.agent.session)
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
     const admitted = Promise.withResolvers<undefined>()
@@ -211,7 +211,7 @@ describe.each(['jsonl', 'sqlite'] as const)('public Timeline storage (%s)', (bac
     expect((await f.handle.read()).events.some(event => pluginRecordOf(event)?.type === 'plugin:timeline/tree')).toBe(true)
   })
   it('starts each Session independently and rejects mismatched or invalid storage writes', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const { session: other } = await f.ctx.agents.create({ sessionId: SessionId('other'), meta: { cwd: process.cwd() } }).then(result => result.agent)
     await f.ctx.timeline.append(f.agent.session, 'plugin:timeline/tree', tree(f.agent.session))
     expect(f.ctx.timeline.stateOf(other).view.trees).toEqual([])

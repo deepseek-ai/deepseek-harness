@@ -3,12 +3,9 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   assertPersistedSessionVersion,
-  normalizeSessionSnapshots,
-  normalizeSessionFormatMetadata,
   assertSessionFixtureVersion,
   defineAcpSnapshotSuite,
   latestPersistedSessionPaths,
@@ -173,51 +170,8 @@ function staleRefreshFixtures(dir: string): void {
   ].join('\n'))
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('defineAcpSnapshotSuite: replay mode (%s)', (storage) => {
-  defineAcpSnapshotSuite({
-    agent: AGENT, snapshotsDir: REPLAY_DIR,
-    scenarios: REPLAY_SCENARIOS.map(scenario => ({
-      ...scenario, env: { ...scenario.env, DSH_SNAPSHOT_STORAGE: storage, DSH_SNAPSHOT_REVERSE_RECORD_KEYS: '1' },
-    })), mode: 'replay',
-  })
-})
-
-describe('logical Session snapshot records', () => {
-  const original = readFileSync(join(REPLAY_DIR, 'pin-turn', 'session.v4.jsonl'), 'utf8')
-  const records = (): Record<string, unknown>[] => original.trimEnd().split('\n')
-    .map(line => JSON.parse(line) as Record<string, unknown>)
-  const encode = (values: readonly unknown[]): string => values.map(value => JSON.stringify(value)).join('\n') + '\n'
-  const logical = (text: string): unknown[] => normalizeSessionSnapshots([normalizeSessionFormatMetadata(text)], fixtureContext(text))[0]!
-    .trimEnd().split('\n').map((line): unknown => JSON.parse(line))
-
-  it('ignores object key order at every depth', () => {
-    const reorder = (value: unknown): unknown => {
-      if (Array.isArray(value)) return value.map(reorder)
-      if (value !== null && typeof value === 'object') {
-        return Object.fromEntries(Object.entries(value).reverse().map(([key, child]) => [key, reorder(child)]))
-      }
-      return value
-    }
-    const actual = encode(records().map(reorder))
-    expect(actual).not.toBe(original)
-    expect(logical(actual)).toEqual(logical(original))
-  })
-
-  it.each(['missing event', 'extra event', 'event order', 'field value', 'array order'] as const)(
-    'preserves a change to %s', (change) => {
-      const expected = records()
-      const actual = records()
-      if (change === 'missing event') actual.splice(1, 1)
-      if (change === 'extra event') actual.splice(1, 0, actual[1]!)
-      if (change === 'event order') [actual[1], actual[2]] = [actual[2]!, actual[1]!]
-      if (change === 'field value') actual[1]!.data = { turn: 2 }
-      if (change === 'array order') {
-        expected[7]!.sourceEventSeqs = [0, 2]
-        actual[7]!.sourceEventSeqs = [2, 0]
-      }
-      expect(logical(encode(actual))).not.toEqual(logical(encode(expected)))
-    },
-  )
+describe('defineAcpSnapshotSuite: replay mode', () => {
+  defineAcpSnapshotSuite({ agent: AGENT, snapshotsDir: REPLAY_DIR, scenarios: REPLAY_SCENARIOS, mode: 'replay' })
 })
 
 // The record suite's tests run in registration order: rec-pin re-records the
@@ -239,11 +193,11 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
     // The scenario's own env layer reached the subprocess.
     expect(stdout).toContain('\\"permissionMode\\":\\"never\\"')
 
-    const blocked = readFileSync(join(refreshDir, 'blocked-log', sessionFixtureName(0, SESSION_FORMAT_VERSION)), 'utf8')
+    const blocked = readFileSync(join(refreshDir, 'blocked-log', 'session.v3.jsonl'), 'utf8')
     expect(blocked).toContain('"decision":"block"')
     expect(blocked).not.toContain('"decision":"stale"')
 
-    const authored = readFileSync(join(refreshDir, 'authored-error', sessionFixtureName(0, SESSION_FORMAT_VERSION)), 'utf8')
+    const authored = readFileSync(join(refreshDir, 'authored-error', 'session.v3.jsonl'), 'utf8')
     expect(authored).toContain('"message":"model exploded"')
     expect(authored).not.toContain('"error":"stale"')
 
@@ -266,7 +220,7 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
     const childPrompt = readFileSync(join(refreshDir, 'plain-turn', 'system-prompt.1.expected.md'), 'utf8')
     expect(childPrompt).toBe('SYS PROMPT\n\nCHILD GUIDANCE\n')
 
-    const pinSession = readFileSync(join(refreshDir, 'pin-turn', sessionFixtureName(0, SESSION_FORMAT_VERSION)), 'utf8')
+    const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.v3.jsonl'), 'utf8')
     expect(pinSession).toContain('"cwd":"{{cwd}}"')
     expect(readFileSync(join(refreshDir, 'pin-turn', 'session.jsonl'), 'utf8'))
       .not.toContain('"version"')
@@ -288,7 +242,7 @@ describe('defineAcpSnapshotSuite: record inventory write-back', () => {
   })
 
   it('creates a missing primary fixture and preserves generations for a retired child role', () => {
-    const fixture = readFileSync(join(recordDir, 'rec-pin', sessionFixtureName(0, SESSION_FORMAT_VERSION)), 'utf8')
+    const fixture = readFileSync(join(recordDir, 'rec-pin', 'session.v3.jsonl'), 'utf8')
     expect(fixture).toContain('"type":"session"')
     expect(fixture).toContain('"cwd":"{{cwd}}"')
     if (!BOOTSTRAP) {
@@ -301,7 +255,7 @@ describe('defineAcpSnapshotSuite: record inventory write-back', () => {
   it('retains an unchanged message relationship across the recorded parent and child fixtures', () => {
     const existingMessageId = '22222222-2222-4222-8222-222222222222'
     const freshMessageId = '11111111-1111-4111-8111-111111111111'
-    const fixtures = [sessionFixtureName(0, SESSION_FORMAT_VERSION), sessionFixtureName(1, SESSION_FORMAT_VERSION)]
+    const fixtures = ['session.v3.jsonl', 'session.1.v3.jsonl']
       .map(file => readFileSync(join(recordDir, 'rec-child', file), 'utf8'))
 
     for (const fixture of fixtures) {

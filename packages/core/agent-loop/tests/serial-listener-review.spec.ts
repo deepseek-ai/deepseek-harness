@@ -28,11 +28,11 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function mountCore(storage: 'jsonl' | 'sqlite', persistenceRoot?: string) {
+async function core(persistenceRoot?: string) {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  if (persistenceRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, storage, compression: 'none' })
+  if (persistenceRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
   await ctx.plugin(AgentLoop, { agents: [] })
   return ctx
 }
@@ -74,8 +74,7 @@ function dueWorkProducer(sessionId: SessionId, plugin: string) {
   return { producer, delivery: delivery.promise }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('serial creation listener integrations (%s)', (storage) => {
-  const core = (persistenceRoot?: string) => mountCore(storage, persistenceRoot)
+describe('serial creation listener integrations', () => {
   it('rolls back creation when file-reference prompt installation fails', async () => {
     const ctx = await core()
     const errors: string[] = []

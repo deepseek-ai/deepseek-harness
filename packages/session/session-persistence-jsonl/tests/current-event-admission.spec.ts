@@ -29,7 +29,7 @@ describe('current event admission at EOF', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-current-admission-'))
     ctx = new Context()
-    await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   })
 
   afterEach(async () => {

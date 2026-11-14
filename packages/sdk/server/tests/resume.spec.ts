@@ -28,11 +28,11 @@ async function storageRoot(): Promise<string> {
   return root
 }
 
-async function mountRuntime(root: string, storage: 'jsonl' | 'sqlite', persistence = true, reasoning?: LlmModelReasoningInfo) {
+async function runtime(root: string, persistence = true, reasoning?: LlmModelReasoningInfo) {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
-  if (persistence) await ctx.plugin(JsonlSessionPersistence, { root, storage })
+  if (persistence) await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new MockAdapter([textResponse('remembered')], reasoning)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -48,8 +48,8 @@ async function mountRuntime(root: string, storage: 'jsonl' | 'sqlite', persisten
   return { ctx, server, adapter, events }
 }
 
-async function initializeRuntime(root: string, storage: 'jsonl' | 'sqlite') {
-  const result = await mountRuntime(root, storage)
+async function initialized(root: string) {
+  const result = await runtime(root)
   await result.server.initialize({ cwd: root, provider: 'mock', model: 'mock' })
   return result
 }
@@ -62,10 +62,7 @@ class UnusedShell extends ShellExecutor {
   override execute(): never { throw new Error('Unexpected shell execution') }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('SDK persisted session resume (%s)', (storage) => {
-  const runtime = (root: string, persistence = true, reasoning?: LlmModelReasoningInfo) =>
-    mountRuntime(root, storage, persistence, reasoning)
-  const initialized = (root: string) => initializeRuntime(root, storage)
+
 async function withPermissions(root: string) {
   const result = await initialized(root)
   await result.ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
@@ -75,6 +72,7 @@ async function withPermissions(root: string) {
   return result
 }
 
+describe('SDK persisted session resume', () => {
   it.each([undefined, 'danger-full-access'])('applies persisted or explicit permissions before resumed execution: %s', async (permissionMode) => {
     const root = await storageRoot()
     const sessionId = brandString<SessionId>('saved-permissions')

@@ -47,7 +47,7 @@ const SCHEMA: ObjectJsonSchema = {
 /**
  * Real loop and local preparation isolate activation-scoped structured output.
  */
-async function setup(storage: 'jsonl' | 'sqlite', script: Script, options: SetupOptions = {}) {
+async function setup(script: Script, options: SetupOptions = {}) {
   const ctx = new Context()
   const adapter = new MockAdapter(script)
   await mountAgentLoopTestDependencies(ctx, {
@@ -61,7 +61,7 @@ async function setup(storage: 'jsonl' | 'sqlite', script: Script, options: Setup
       run: options.codeRun ?? (() => Promise.resolve({ output: [] })),
     } as never)
   }
-  await mountLocalActivations(storage, ctx)
+  await mountLocalActivations(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -112,8 +112,8 @@ function deliverInput(
 }
 
 describe('in-process structured output', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['steer', 'queue'] as const).map(value => [storage, value] as const)))('%s: consumes accepted %s input before committing a structured result', async (storage, delivery) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it.each(['steer', 'queue'] as const)('consumes accepted %s input before committing a structured result', async (delivery) => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('before-input', STRUCTURED_OUTPUT_TOOL, { answer: 1 }),
       ...delivery === 'queue' ? [textResponse('Ready for the queued correction.')] : [],
       toolCallResponse('after-input', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
@@ -149,13 +149,13 @@ describe('in-process structured output', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     { toolMode: 'native', blocked: false },
     { toolMode: 'native', blocked: true },
     { toolMode: 'ptc', blocked: false },
     { toolMode: 'ptc', blocked: true },
-  ] as const).map(value => [storage, value] as const)))('%s: closes input through $toolMode result policy and reopens only after rejection ($blocked)', async (storage, { toolMode, blocked }) => {
-    const { ctx, parent } = await setup(storage, ['hang'], {
+  ] as const)('closes input through $toolMode result policy and reopens only after rejection ($blocked)', async ({ toolMode, blocked }) => {
+    const { ctx, parent } = await setup(['hang'], {
       toolMode,
       codeRun: async (request) => {
         const capture = request.bindings.at(0)?.functions[STRUCTURED_OUTPUT_TOOL]
@@ -203,8 +203,8 @@ describe('in-process structured output', () => {
     expect((await run.result).structured).toEqual(blocked ? undefined : { answer: 42 })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: captures a valid structured_output call and surfaces result.structured', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('captures a valid structured_output call and surfaces result.structured', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 42, note: 'done' }),
     ])
     let acknowledgement: unknown
@@ -219,8 +219,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: stops the turn after a successful capture — no extra model step is spent', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('stops the turn after a successful capture — no extra model step is spent', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 1 }),
       textResponse('MUST NOT BE CONSUMED'),
     ])
@@ -231,7 +231,7 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: denies tool calls that FOLLOW the capture in the same response — terminal means terminal', async (storage) => {
+  it('denies tool calls that FOLLOW the capture in the same response — terminal means terminal', async () => {
     // One model response carrying structured_output FIRST and a side-effecting
     // call after it: the continuation veto only fires at step end, so without
     // the pre-execute deny the trailing call would still run after the final
@@ -243,7 +243,7 @@ describe('in-process structured output', () => {
       { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } },
       { type: 'finish', reason: { kind: 'tool-calls' } },
     ] as Script[number]
-    const { ctx, parent } = await setup(storage, [response])
+    const { ctx, parent } = await setup([response])
     let sideEffectRan = false
     ctx.tools.register(defineContentToolFixture({
       name: 'side_effect',
@@ -263,7 +263,7 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a later prepended pre-execute listener cannot resurrect dispatch after capture', async (storage) => {
+  it('a later prepended pre-execute listener cannot resurrect dispatch after capture', async () => {
     const response = [
       ...toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 5 }).slice(0, -2),
       { type: 'block-start', index: 1, blockType: 'tool-call' },
@@ -271,7 +271,7 @@ describe('in-process structured output', () => {
       { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } },
       { type: 'finish', reason: { kind: 'tool-calls' } },
     ] as Script[number]
-    const { ctx, parent } = await setup(storage, [response])
+    const { ctx, parent } = await setup([response])
     let sideEffectRan = false
     ctx.tools.register(defineContentToolFixture({
       name: 'side_effect',
@@ -301,14 +301,14 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: leaves tool calls that PRECEDE the capture in the same response untouched', async (storage) => {
+  it('leaves tool calls that PRECEDE the capture in the same response untouched', async () => {
     const response = [
       { type: 'block-start', index: 0, blockType: 'tool-call' },
       { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('c1'), name: 'side_effect', arguments: '{}' } },
       ...toolCallResponse('c2', STRUCTURED_OUTPUT_TOOL, { answer: 6 }).map(chunk =>
         'index' in chunk ? { ...chunk, index: 1 } : chunk),
     ] as Script[number]
-    const { ctx, parent } = await setup(storage, [response])
+    const { ctx, parent } = await setup([response])
     let sideEffectRan = false
     ctx.tools.register(defineContentToolFixture({
       name: 'side_effect',
@@ -328,8 +328,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: an invalid call gets an INVALID_ARGS isError result and the model retries in-turn', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('an invalid call gets an INVALID_ARGS isError result and the model retries in-turn', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 'not-a-number' }),
       toolCallResponse('c2', STRUCTURED_OUTPUT_TOOL, { answer: 7 }),
     ])
@@ -345,8 +345,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a clean finish without a capture is an immediate error to the parent — deliberately NO re-prompt', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('a clean finish without a capture is an immediate error to the parent — deliberately NO re-prompt', async () => {
+    const { ctx, parent, adapter } = await setup([
       textResponse('here is my answer in prose'),
       textResponse('MUST NOT BE CONSUMED'),
     ])
@@ -361,9 +361,9 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: an errored child keeps its honest error result (no capture expected)', async (storage) => {
+  it('an errored child keeps its honest error result (no capture expected)', async () => {
     // Script exhaustion on the first call → the child turn errors.
-    const { ctx, parent, adapter } = await setup(storage, [])
+    const { ctx, parent, adapter } = await setup([])
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     const result = await run.result
     expect(result.stopReason).toBe('error')
@@ -371,15 +371,15 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposing a running structured child settles aborted without requiring a capture', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('disposing a running structured child settles aborted without requiring a capture', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     await run.dispose()
     expect((await run.result).stopReason).toBe('aborted')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts a final structured result without waiting for descendants', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('accepts a final structured result without waiting for descendants', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('spawn-child', 'start_descendant', {}),
       toolCallResponse('final-capture', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
     ])
@@ -411,8 +411,8 @@ describe('in-process structured output', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: waits through interim idle while delegated work supplies the final structured answer', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('waits through interim idle while delegated work supplies the final structured answer', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('delegate', 'delegate_answer', {}),
       textResponse('Waiting for the delegated answer.'),
       toolCallResponse('capture', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
@@ -453,8 +453,8 @@ describe('in-process structured output', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects new input after capture until closure, then cold-resumes without the schema', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('rejects new input after capture until closure, then cold-resumes without the schema', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('capture', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
       textResponse('ordinary resumed answer'),
     ])
@@ -487,16 +487,16 @@ describe('in-process structured output', () => {
     expect(toolNames(adapter.requests[1]!)).not.toContain(STRUCTURED_OUTPUT_TOOL)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a schema outside the subset loud, before any child exists', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('rejects a schema outside the subset loud, before any child exists', async () => {
+    const { ctx, parent } = await setup([])
     await expect(startTestActivation(ctx, 'spawn', structuredRequest(parent, {
       outputSchema: { type: 'object', oneOf: [] },
     }))).rejects.toThrow(/unsupported JSON schema/)
     expect(ctx.agents.get(brandString<SessionId>('parent'))).toBeDefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a schema carrying non-JSON values fails as JsonSchemaError at the validation boundary', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('a schema carrying non-JSON values fails as JsonSchemaError at the validation boundary', async () => {
+    const { ctx, parent } = await setup([])
     const schema: ObjectJsonSchema = { type: 'object' }
     Object.defineProperty(schema, 'default', { value: () => {}, enumerable: true })
     await expect(startTestActivation(ctx, 'spawn', structuredRequest(parent, {
@@ -504,8 +504,8 @@ describe('in-process structured output', () => {
     }))).rejects.toThrow(/unsupported JSON schema.*annotation must be lossless JSON data/)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a post-execute BLOCK on the capture call denies the capture: log and result agree on failure', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('a post-execute BLOCK on the capture call denies the capture: log and result agree on failure', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 7 }),
       textResponse('continues after the blocked capture'),
     ])
@@ -533,8 +533,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a post-execute accept-with-replacement still commits the capture', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('a post-execute accept-with-replacement still commits the capture', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 8 }),
     ])
     ctx.on('tools/post-execute', (exec, _result, next) => {
@@ -550,8 +550,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: commits only after a later prepended post-execute wrapper returns the authoritative result', async (storage) => {
-    const { ctx, parent } = await setup(storage, [
+  it('commits only after a later prepended post-execute wrapper returns the authoritative result', async () => {
+    const { ctx, parent } = await setup([
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 8 }),
       textResponse('capture was rejected'),
     ])
@@ -575,8 +575,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: appends the structured instruction to the child REQUEST's system text (base prompt preserved)", async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 1 })])
+  it('appends the structured instruction to the child REQUEST\'s system text (base prompt preserved)', async () => {
+    const { ctx, parent, adapter } = await setup([toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 1 })])
     // A context-wide section stands in for the deployment persona: the
     // instruction must APPEND to the other scoped and global sections, not
     // replace them (AgentOptions has no prompt field — the instruction is an
@@ -591,8 +591,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps pure PTC mode at one wire tool and exposes structured capture through the SDK only', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('keeps pure PTC mode at one wire tool and exposes structured capture through the SDK only', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })', description: 'Capture the structured answer' }),
     ], {
       toolMode: 'ptc',
@@ -618,8 +618,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: discards a nested capture when the enclosing run_code execution fails', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('discards a nested capture when the enclosing run_code execution fails', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('c1', RUN_CODE_NAME, { code: 'await tools.structured_output({ answer: 12 }); throw new Error("boom")', description: 'Capture then fail the program' }),
       textResponse('outer code failed'),
     ], {
@@ -647,8 +647,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: discards a nested capture when post-policy blocks the enclosing run_code result', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('discards a nested capture when post-policy blocks the enclosing run_code result', async () => {
+    const { ctx, parent, adapter } = await setup([
       toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })', description: 'Capture the structured answer' }),
       textResponse('outer code was blocked'),
     ], {
@@ -672,8 +672,8 @@ describe('in-process structured output', () => {
     await run.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: the instruction rides ONLY structured requests: appended for the child, absent for a plain agent', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, [
+  it('the instruction rides ONLY structured requests: appended for the child, absent for a plain agent', async () => {
+    const { ctx, parent, adapter } = await setup([
       textResponse('parent answer'),
       toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 1 }),
     ])
@@ -691,8 +691,8 @@ describe('in-process structured output', () => {
   })
 
   describe('scoped registration (each child owns its capture tool)', () => {
-    it.each(['jsonl', 'sqlite'] as const)('%s: a plain agent never sees the tool: nothing is registered globally at all', async (storage) => {
-      const { ctx, parent, adapter } = await setup(storage, [textResponse('parent answer')])
+    it('a plain agent never sees the tool: nothing is registered globally at all', async () => {
+      const { ctx, parent, adapter } = await setup([textResponse('parent answer')])
       parent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
       await parent.whenIdle()
       // Scoped registration: the global view has no capture tool, ever.
@@ -700,8 +700,8 @@ describe('in-process structured output', () => {
       expect(toolNames(adapter.requests[0]!)).not.toContain(STRUCTURED_OUTPUT_TOOL)
     })
 
-    it.each(['jsonl', 'sqlite'] as const)('%s: a structured child sees structured_output with ITS schema; a plain agent never sees the tool', async (storage) => {
-      const { ctx, parent, adapter } = await setup(storage, [
+    it('a structured child sees structured_output with ITS schema; a plain agent never sees the tool', async () => {
+      const { ctx, parent, adapter } = await setup([
         // Parent turn (a plain agent): must NOT see the tool.
         textResponse('parent answer'),
         // Child turn: must see it, with the run's schema.
@@ -720,13 +720,13 @@ describe('in-process structured output', () => {
       await run.dispose()
     })
 
-    it.each(['jsonl', 'sqlite'] as const)('%s: two concurrent structured children each see their OWN schema', async (storage) => {
+    it('two concurrent structured children each see their OWN schema', async () => {
       const otherSchema: ObjectJsonSchema = {
         type: 'object',
         properties: { verdict: { type: 'string', enum: ['real', 'bogus'] } },
         required: ['verdict'],
       }
-      const { ctx, parent, adapter } = await setup(storage, [
+      const { ctx, parent, adapter } = await setup([
         (options: GenerateOptions) => {
           // Answer with whatever schema this child was given — proves each
           // request carried the right one regardless of scheduling order.
@@ -757,8 +757,8 @@ describe('in-process structured output', () => {
       await runB.dispose()
     })
 
-    it.each(['jsonl', 'sqlite'] as const)('%s: places the capture tool and instruction in their canonical orders', async (storage) => {
-      const { ctx, parent, adapter } = await setup(storage, [
+    it('places the capture tool and instruction in their canonical orders', async () => {
+      const { ctx, parent, adapter } = await setup([
         toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 7 }),
       ])
       // A global tool sorts lexicographically after structured_output, while a
@@ -787,8 +787,8 @@ describe('in-process structured output', () => {
       await run.dispose()
     })
 
-    it.each(['jsonl', 'sqlite'] as const)('%s: a non-structured agent request keeps tools ABSENT when it had none (no tools: [] materialized)', async (storage) => {
-      const { parent, adapter } = await setup(storage, [textResponse('plain')])
+    it('a non-structured agent request keeps tools ABSENT when it had none (no tools: [] materialized)', async () => {
+      const { parent, adapter } = await setup([textResponse('plain')])
       parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
       await parent.whenIdle()
       const request = adapter.requests[0]!
@@ -796,8 +796,8 @@ describe('in-process structured output', () => {
       await new Promise(resolve => setTimeout(resolve, 0))
     })
 
-    it.each(['jsonl', 'sqlite'] as const)('%s: registrations survive provider reload and are removed before result delivery', async (storage) => {
-      const { ctx, parent, disposeProvider } = await setup(storage, [
+    it('registrations survive provider reload and are removed before result delivery', async () => {
+      const { ctx, parent, disposeProvider } = await setup([
         toolCallResponse('c1', STRUCTURED_OUTPUT_TOOL, { answer: 4 }),
       ])
       expect(ctx.tools.get(STRUCTURED_OUTPUT_TOOL)).toBeUndefined()
@@ -815,8 +815,8 @@ describe('in-process structured output', () => {
     })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a structured_output call from an agent WITHOUT a structured run is UNKNOWN_TOOL (the tool does not exist for it)', async (storage) => {
-    const { ctx, parent } = await setup(storage, [])
+  it('a structured_output call from an agent WITHOUT a structured run is UNKNOWN_TOOL (the tool does not exist for it)', async () => {
+    const { ctx, parent } = await setup([])
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: 'x' as never,
@@ -828,8 +828,8 @@ describe('in-process structured output', () => {
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a structured_output call with NO calling agent at all is UNKNOWN_TOOL', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('a structured_output call with NO calling agent at all is UNKNOWN_TOOL', async () => {
+    const { ctx } = await setup([])
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: 'x' as never,
@@ -840,8 +840,8 @@ describe('in-process structured output', () => {
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: a failed execution stage is discarded and never promoted by a later call', async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('a failed execution stage is discarded and never promoted by a later call', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     // A prepended post-execute listener blocks the first capture without
     // delegating. The final-result notification discards that execution's
@@ -885,8 +885,8 @@ describe('in-process structured output', () => {
     expect((await run.result).structured).toEqual({ answer: 9 })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: reusing a failed execution's call id never promotes its discarded stage", async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('reusing a failed execution\'s call id never promotes its discarded stage', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     // Block the first capture after its body stages a value. Its final error
     // discards that execution's stage.
@@ -931,8 +931,8 @@ describe('in-process structured output', () => {
     expect((await run.result).structured).toEqual({ answer: 5 })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: a pre-execute deny with call-id reuse cannot promote another execution's stage", async (storage) => {
-    const { ctx, parent } = await setup(storage, ['hang'])
+  it('a pre-execute deny with call-id reuse cannot promote another execution\'s stage', async () => {
+    const { ctx, parent } = await setup(['hang'])
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     // Discard the first capture's stage via a final post-execute block.
     let blocks = 1

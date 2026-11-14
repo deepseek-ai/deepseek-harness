@@ -7,7 +7,7 @@
  * export-shape bug class stays guarded — see docs/postmortem/0001), drives it
  * over real ACP JSON-RPC stdio with a deterministic input script, tees raw
  * stdout (for the expected-output and purity checks) into an SDK client app,
- * and — in record mode — harvests the persisted logical Session history after a graceful
+ * and — in record mode — harvests the persisted session JSONL after a graceful
  * shutdown flush. The pure normalizers in ./normalize.ts turn the captured
  * stdout frames and the session-log events into stable, snapshot-able text.
  *
@@ -16,7 +16,7 @@
  * @module @deepseek-ai/dsh-session-snapshot/harness
  */
 
-import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -35,11 +35,11 @@ import {
   type AgentUnderTest,
   type LaunchedAcpTestAgent,
 } from './launcher.ts'
-import { Context } from '@deepseek-ai/cordis'
-import * as persistencePlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { clearedProxyEnv } from '@deepseek-ai/dsh-http-proxy'
+import {
+  assertPersistedSessionVersion,
+  latestPersistedSessionPaths,
+} from './session-files.ts'
 import { captureWorkspaceSnapshot, type WorkspaceSnapshotEntry } from './workspace.ts'
 
 export type { AgentUnderTest } from './launcher.ts'
@@ -238,8 +238,8 @@ export function snapshotSpillRoot(
 
 /**
  * Run a scenario end-to-end against a freshly-spawned subprocess. Owns the
- * child and its generated dirs; always tears them down after pending Session
- * reads settle. Returns the captured stdout and harvested session logs.
+ * child and its generated dirs; always tears them down. Returns the captured stdout
+ * and (record mode) the harvested session-log path.
  *
  * @param input The scenario's input script (steps + optional permission answers).
  * @param opts The agent to boot, the mode, and the fixture wiring.
@@ -248,10 +248,7 @@ export function snapshotSpillRoot(
 export async function runScenario(input: InputScript, opts: RunOptions): Promise<RunResult> {
   const cwd = await mkdtemp(join(opts.workspaceParent ?? tmpdir(), 'acp-snap-cwd-'))
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
-  const storage = (opts.env?.DSH_SNAPSHOT_STORAGE ?? process.env.DSH_SNAPSHOT_STORAGE ?? 'jsonl') as 'jsonl' | 'sqlite'
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
-  let logRead = Promise.resolve<HarvestedLog[]>([])
-  const readLogs = (): Promise<HarvestedLog[]> => (logRead = harvestSessionLogs(sessionsRoot, storage))
   let spillRoot: string | undefined
   // Everything past the temp-dir creation is followed by failure-safe cleanup,
   // so a failure in workspace seeding, spawn, or any step never leaks resources.
@@ -282,7 +279,6 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
       DSH_SNAPSHOT: opts.mode,
       DSH_SNAPSHOT_FILE: opts.fixtureFile,
       DSH_SNAPSHOT_SESSIONS_ROOT: sessionsRoot,
-      DSH_SNAPSHOT_STORAGE: storage,
       DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
       DSH_SNAPSHOT_SPILL_LOCATOR_ROOT: snapshotSpillRoot(opts.fixtureFile),
       DSH_HOME: join(cwd, '.dsh'),
@@ -338,13 +334,13 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
         match => active.waitForUpdate(match),
         () => sessionId,
         (id) => { sessionId = id },
-        (id, timeoutMs, minimumTurn) => waitForPersistedTurnStart(readLogs, id, timeoutMs, minimumTurn),
-        (id, timeoutMs) => waitForPersistedTurnEnd(readLogs, id, timeoutMs),
-        (child, timeoutMs, minimumTurn) => waitForPersistedChildTurnEnd(readLogs, child, timeoutMs, minimumTurn),
-        (id, phase, timeoutMs) => waitForPersistedGoalPhase(readLogs, id, phase, timeoutMs),
-        (id, text, timeoutMs) => waitForPersistedInboxMessage(readLogs, id, text, timeoutMs),
-        (id, timeoutMs) => waitForPersistedTitleAfterTurnEnd(readLogs, id, timeoutMs),
-        (id, type, timeoutMs) => waitForPersistedEventAfterTurnEnd(readLogs, id, type, timeoutMs),
+        (id, timeoutMs, minimumTurn) => waitForPersistedTurnStart(sessionsRoot, id, timeoutMs, minimumTurn),
+        (id, timeoutMs) => waitForPersistedTurnEnd(sessionsRoot, id, timeoutMs),
+        (child, timeoutMs, minimumTurn) => waitForPersistedChildTurnEnd(sessionsRoot, child, timeoutMs, minimumTurn),
+        (id, phase, timeoutMs) => waitForPersistedGoalPhase(sessionsRoot, id, phase, timeoutMs),
+        (id, text, timeoutMs) => waitForPersistedInboxMessage(sessionsRoot, id, text, timeoutMs),
+        (id, timeoutMs) => waitForPersistedTitleAfterTurnEnd(sessionsRoot, id, timeoutMs),
+        (id, type, timeoutMs) => waitForPersistedEventAfterTurnEnd(sessionsRoot, id, type, timeoutMs),
       )
       // A permission exchange happens while a step's request is in flight, so
       // by the time the step settles any script bug it exposed is captured —
@@ -357,7 +353,7 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
     await active.close()
     // Harvest EVERY persisted log (parent + any subagent children) while the
     // generated dirs still exist, ordered primary-first.
-    sessionLogs = await readLogs()
+    sessionLogs = await harvestSessionLogs(sessionsRoot)
     const finalWorkspace = await captureWorkspaceSnapshot(cwd, {
       ignoredRootEntries: ['.agents', '.dsh', '.dsh-profile-patches', '.dsh-snapshot-stream-ready'],
     })
@@ -395,8 +391,6 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
   /* v8 ignore next 1 -- launch itself can only throw on a defensive synchronous spawn API failure */
   await cleanup(() => launched?.close('SIGKILL') ?? Promise.resolve())
   await cleanup(() => rm(cwd, { recursive: true, force: true }))
-  // A wait deadline can expire while its harvest still owns database or file handles.
-  await Promise.allSettled([logRead])
   await cleanup(() => rm(sessionsRoot, { recursive: true, force: true }))
   const allocatedSpillRoot = spillRoot
   if (allocatedSpillRoot !== undefined) await cleanup(() => rm(allocatedSpillRoot, { recursive: true, force: true }))
@@ -566,17 +560,27 @@ async function runStep(
 
 /** Wait until persistence exposes an open turn for the selected session. */
 async function waitForPersistedTurnStart(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
   minimumTurn?: number,
 ): Promise<void> {
+  let invalidRecord: { error: unknown } | undefined
   const detail = minimumTurn === undefined ? 'turn/start' : `turn/start at or beyond turn ${minimumTurn}`
   const message = `snapshot-harness: session "${sessionId}" did not persist ${detail} within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
-      const openTurn = log === undefined ? undefined : latestOpenTurn(log.content)
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      let openTurn: number | undefined
+      try {
+        openTurn = log === undefined ? undefined : latestOpenTurn(log.content)
+      } catch (error) {
+        // A malformed persisted record is a scenario bug, not a not-yet state:
+        // vi.waitFor retries every callback throw, so capture the validation
+        // failure, resolve the wait, and rethrow immediately below.
+        invalidRecord = { error }
+        return
+      }
       if (openTurn === undefined || (minimumTurn !== undefined && openTurn < minimumTurn)) {
         throw new Error(message)
       }
@@ -584,23 +588,24 @@ async function waitForPersistedTurnStart(
   } catch (cause) {
     throw new Error(message, { cause })
   }
+  if (invalidRecord !== undefined) throw invalidRecord.error
 }
 
 /**
- * Wait until persistence exposes one complete closing turn boundary.
+ * Wait until the raw JSONL backend exposes one complete closing turn boundary.
  * The ACP cancel notification settles its prompt before the agent necessarily
  * reaches quiescence, so cancellation snapshots use this external boundary to
  * keep subprocess disposal from changing an `aborted` turn into `disposed`.
  */
 async function waitForPersistedTurnEnd(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
 ): Promise<void> {
   const message = `snapshot-harness: session "${sessionId}" did not persist turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestTurnIsClosed(log.content)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -618,7 +623,7 @@ async function waitForPersistedTurnEnd(
  * own model work reached a closed turn.
  */
 async function waitForPersistedChildTurnEnd(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   child: number,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
   minimumTurn = 1,
@@ -626,7 +631,7 @@ async function waitForPersistedChildTurnEnd(
   const message = `snapshot-harness: subagent child #${child} did not persist closed turn ${minimumTurn} within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs())[child]
+      const log = (await harvestSessionLogs(root))[child]
       if (log === undefined || !latestTurnIsClosed(log.content)
         || !hasRequestHeaderAfterDescriptor(log.content)
         || !hasClosedTurn(log.content, minimumTurn)) {
@@ -649,7 +654,7 @@ function hasClosedTurn(content: string, turn: number): boolean {
 
 /** Wait until the latest durable goal snapshot reaches one phase. */
 async function waitForPersistedGoalPhase(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   phase: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -657,7 +662,7 @@ async function waitForPersistedGoalPhase(
   const message = `snapshot-harness: session "${sessionId}" did not persist goal phase "${phase}" within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const content = (await readLogs()).find(log => log.id === sessionId)?.content
+      const content = (await harvestSessionLogs(root)).find(log => log.id === sessionId)?.content
       const matched = content?.split('\n').filter(Boolean).some((line) => {
         const event = JSON.parse(line) as { type?: unknown; data?: { goal?: { phase?: unknown } } }
         return event.type === 'goal/change' && event.data?.goal?.phase === phase
@@ -671,7 +676,7 @@ async function waitForPersistedGoalPhase(
 
 /** Wait until an inserted inbox message contains scenario-owned text. */
 async function waitForPersistedInboxMessage(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   text: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -679,7 +684,7 @@ async function waitForPersistedInboxMessage(
   const message = `snapshot-harness: session "${sessionId}" did not persist expected inbox message within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
       const matched = log?.content.split('\n').some((line) => {
         if (line.length === 0) return false
         const record = JSON.parse(line) as {
@@ -710,14 +715,14 @@ function hasRequestHeaderAfterDescriptor(content: string): boolean {
 
 /** Wait until a complete provider or fallback title record follows the latest closed turn. */
 async function waitForPersistedTitleAfterTurnEnd(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
 ): Promise<void> {
   const message = `snapshot-harness: session "${sessionId}" did not persist session/title after turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestTitleFollowsTurnEnd(log.content)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -727,7 +732,7 @@ async function waitForPersistedTitleAfterTurnEnd(
 
 /** Wait until a complete record of `type` follows the latest closed turn. */
 async function waitForPersistedEventAfterTurnEnd(
-  readLogs: () => Promise<HarvestedLog[]>,
+  root: string,
   sessionId: string,
   type: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
@@ -735,7 +740,7 @@ async function waitForPersistedEventAfterTurnEnd(
   const message = `snapshot-harness: session "${sessionId}" did not persist ${type} after turn/end within ${timeoutMs}ms`
   try {
     await vi.waitFor(async () => {
-      const log = (await readLogs()).find(candidate => candidate.id === sessionId)
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
       if (log === undefined || !latestEventFollowsTurnEnd(log.content, type)) throw new Error(message)
     }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
   } catch (cause) {
@@ -778,37 +783,64 @@ function latestEventFollowsTurnEnd(content: string, type: string): boolean {
   return turnEnd >= 0 && complete.lastIndexOf(`\n{"type":"${type}",`) > turnEnd
 }
 
-/** Return the latest open turn number from a validated logical history. */
+/** Return the latest open turn number, validating the persisted boundary record. */
 function latestOpenTurn(content: string): number | undefined {
   const complete = content.slice(0, content.lastIndexOf('\n') + 1)
   const start = complete.lastIndexOf('\n{"type":"turn/start",')
   if (start <= complete.lastIndexOf('\n{"type":"turn/end",')) return undefined
   const end = complete.indexOf('\n', start + 1)
-  const record = JSON.parse(complete.slice(start + 1, end)) as { data: { turn: number } }
-  return record.data.turn
+  const record = JSON.parse(complete.slice(start + 1, end)) as { data?: { turn?: unknown } | null }
+  const turn = record.data?.turn
+  if (!Number.isSafeInteger(turn) || (turn as number) < 1) {
+    throw new Error('snapshot-harness: invalid persisted turn/start record')
+  }
+  return turn as number
 }
 
-/** Read settled logical Session histories through the provider and order the parent before its children. */
-async function harvestSessionLogs(root: string, storage: 'jsonl' | 'sqlite'): Promise<HarvestedLog[]> {
-  const ctx = new Context()
+/**
+ * Harvest every latest-generation raw JSONL Session under a sessions root, parse each
+ * header line, and return them ordered primary-first: the top-level session (no
+ * `parentSession`) leads, then each subagent child by ascending `createdAt`.
+ *
+ * Snapshot configs select the JSONL backend's raw mode, which lays each immutable
+ * generation beneath `<root>/<project>/<session-id>/`. Recursive collection
+ * chooses the numerically highest generation for the primary and every child.
+ * Returns `[]` if no log was
+ * produced (a no-session scenario).
+ */
+async function harvestSessionLogs(root: string): Promise<HarvestedLog[]> {
+  let files: string[]
   try {
-    await ctx.plugin(persistencePlugin, { root, compression: 'none', storage })
-    const logs: HarvestedLog[] = []
-    for (const snapshot of await ctx.sessionPersistence.list()) {
-      const handle = await ctx.sessionPersistence.open(snapshot.header.id, 'read')
-      try {
-        const { events } = await handle.read()
-        const header = sessionFormatCatalog.encodeCurrentHeader(
-          { delegationDepth: 0, ...handle.header }, handle.inheritedEventCount,
-        )
-        const content = [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent({
-          ...event, data: snapshotSessionFormatJson(event.data),
-        }))].map(record => JSON.stringify(record)).join('\n') + '\n'
-        logs.push({ id: handle.id, createdAt: handle.header.createdAt,
-          ...handle.header.parentSession === undefined ? {} : { parentSession: handle.header.parentSession }, content })
-      } finally { await handle.close() }
-    }
-    return logs.sort((a, b) => Number(a.parentSession !== undefined) - Number(b.parentSession !== undefined)
-      || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-  } finally { await ctx.fiber.dispose() }
+    files = await readdir(root, { recursive: true })
+  } catch {
+    return []
+  }
+  const logs: HarvestedLog[] = []
+  for (const file of latestPersistedSessionPaths(files)) {
+    const content = await readFile(join(root, file), 'utf8')
+    assertPersistedSessionVersion(basename(file), content)
+    /* v8 ignore next -- the generation validator above rejects header-less content. */
+    const firstLine = content.split('\n').find(line => line.trim().length > 0) ?? '{}'
+    const header = JSON.parse(firstLine) as { id?: unknown; createdAt?: unknown; parentSession?: unknown }
+    logs.push({
+      id: typeof header.id === 'string' ? header.id : '',
+      createdAt: typeof header.createdAt === 'number' ? header.createdAt : 0,
+      ...typeof header.parentSession === 'string' ? { parentSession: header.parentSession } : {},
+      content,
+    })
+  }
+  // Primary (no parentSession) first, then children by ascending createdAt. A
+  // scenario has exactly one top-level session. Subagent children are created
+  // synchronously and strictly sequentially, so their createdAt values are
+  // strictly ordered; the recordedId tiebreak only keeps a degenerate
+  // same-millisecond collision (unreachable here) deterministic. This harvest
+  // order must match the replay load order in dsh-llm-replay's loadSessionScripts
+  // so session.<n>.jsonl maps to the same child on record and replay — replay
+  // re-sorts childFiles by the same key, so the two stay consistent.
+  logs.sort((a, b) => {
+    const ap = Number(a.parentSession !== undefined)
+    const bp = Number(b.parentSession !== undefined)
+    return ap - bp || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+  })
+  return logs
 }

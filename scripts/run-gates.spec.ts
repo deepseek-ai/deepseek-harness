@@ -993,10 +993,8 @@ describe('Node 24 lane ownership', () => {
       'node-compat',
       'publint',
       'snapshot',
-      'snapshot-sqlite',
       'expected-output',
       'web-snapshot',
-      'web-snapshot-sqlite',
       'doc-typecheck',
       'node-next-types',
       'built-bin-smoke',
@@ -1013,20 +1011,15 @@ describe('Node 24 lane ownership', () => {
     })
     for (const id of [
       'snapshot',
-      'snapshot-sqlite',
       'expected-output',
       'web-snapshot',
-      'web-snapshot-sqlite',
       'doc-typecheck',
       'node-next-types',
       'built-bin-smoke',
     ]) {
       expect(subject.find(item => item.id === id)?.needs).toEqual(['build'])
     }
-    expect(subject.find(item => item.id === 'snapshot')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib', DSH_SNAPSHOT_STORAGE: 'jsonl' })
-    expect(subject.find(item => item.id === 'snapshot-sqlite')).toMatchObject({
-      env: { DSH_EXAMPLE_MODE: 'lib', DSH_SNAPSHOT_STORAGE: 'sqlite' }, after: ['snapshot'],
-    })
+    expect(subject.find(item => item.id === 'snapshot')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
     expect(subject.find(item => item.id === 'expected-output')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
     expect(subject.find(item => item.id === 'built-bin-smoke')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
     expect(subject.find(item => item.id === 'doc-typecheck')?.env).toEqual({
@@ -1045,12 +1038,11 @@ describe('Node 24 lane ownership', () => {
       ]),
     )
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({
-      displayCommand: 'DSH_SNAPSHOT_STORAGE=jsonl DSH_SNAPSHOT=replay pnpm run test:web:built',
-      env: { DSH_SNAPSHOT: 'replay', DSH_SNAPSHOT_STORAGE: 'jsonl' },
+      displayCommand: 'DSH_SNAPSHOT=replay pnpm run test:web:built',
+      env: { DSH_SNAPSHOT: 'replay' },
       after: [
         'publint',
         'snapshot',
-        'snapshot-sqlite',
         'expected-output',
         'doc-typecheck',
         'node-next-types',
@@ -1066,8 +1058,8 @@ describe('Linux primary graph', () => {
     const web = subject.find(item => item.id === 'web-snapshot')
 
     expect(web).toMatchObject({
-      displayCommand: 'DSH_SNAPSHOT_STORAGE=jsonl DSH_SNAPSHOT=replay pnpm run test:web:built',
-      env: { DSH_SNAPSHOT: 'replay', DSH_SNAPSHOT_STORAGE: 'jsonl' },
+      displayCommand: 'DSH_SNAPSHOT=replay pnpm run test:web:built',
+      env: { DSH_SNAPSHOT: 'replay' },
       needs: ['build'],
     })
   })

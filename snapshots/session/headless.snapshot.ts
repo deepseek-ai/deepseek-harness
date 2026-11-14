@@ -1,9 +1,5 @@
 /** Recorded-session replay through the shipped headless `dsh` profile. */
 
-import { Context } from '@deepseek-ai/cordis'
-import * as persistencePlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { startHttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
 import { chmod, cp, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -13,18 +9,19 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, sep } from 'n
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { deriveEventMessage, foldSurface, SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionHeader } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, foldSurface, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
 import {
+  assertPersistedSessionVersion,
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
   fixtureContext,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
+  latestPersistedSessionPaths,
   materializeProfilePatch,
   normalizeSessionSnapshots,
   normalizedHeaders,
@@ -199,33 +196,14 @@ function contextOf(logs: readonly string[]): NormalizeContext {
   }
 }
 
-/** Collect settled logical histories through the existing persistence service. */
-async function collectStoredSessionLogs(root: string): Promise<HarvestedLog[]> {
-  const ctx = new Context()
-  try {
-    await ctx.plugin(persistencePlugin, { root, compression: 'none' })
-    const logs: HarvestedLog[] = []
-    for (const snapshot of await ctx.sessionPersistence.list()) {
-      const handle = await ctx.sessionPersistence.open(snapshot.header.id, 'read')
-      try {
-        const { events } = await handle.read()
-        const header = sessionFormatCatalog.encodeCurrentHeader(
-          { ...handle.header, delegationDepth: handle.header.delegationDepth ?? 0 }, handle.inheritedEventCount,
-        )
-        const content = [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent({
-          ...event, data: snapshotSessionFormatJson(event.data),
-        }))].map(record => JSON.stringify(record)).join('\n') + '\n'
-        logs.push({ id: handle.id, createdAt: handle.header.createdAt,
-          ...handle.header.parentSession === undefined ? {} : { parentSession: handle.header.parentSession }, content })
-      } finally { await handle.close() }
-    }
-    return logs
-  } finally { await ctx.fiber.dispose() }
-}
-
 async function persistedSessions(cwd: string): Promise<SessionLog[]> {
   const root = join(cwd, '.dsh', 'sessions')
-  const logs = (await collectStoredSessionLogs(root)).map(log => ({ content: log.content, header: headerOf(log.content) }))
+  const files = latestPersistedSessionPaths(await readdir(root, { recursive: true }))
+  const logs = await Promise.all(files.map(async (file): Promise<SessionLog> => {
+    const content = await readFile(join(root, file), 'utf8')
+    expect(assertPersistedSessionVersion(basename(file), content), `${file}: current writer`).toBe(SESSION_FORMAT_VERSION)
+    return { content, header: headerOf(content) }
+  }))
   // Siblings bind to fixture roles by catalog publication order; concurrent
   // provider startup can publish an older Session after a newer one.
   const catalogOrders = new Map(logs.map(log => [log.header.id, new Map(
@@ -1251,35 +1229,25 @@ describe('headless recorded-session snapshots', () => {
 
   it.each([10, 20])('assigns sibling roles by catalog order when the first child timestamp is %i', async (firstCreatedAt) => {
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-headless-catalog-order-'))
-    const ctx = new Context()
     try {
-      await ctx.plugin(persistencePlugin, { root: join(cwd, '.dsh', 'sessions'), compression: 'none' })
-      const headers: SessionHeader[] = [
-        { version: SESSION_FORMAT_VERSION, id: SessionId('parent'), createdAt: 1, isSeeded: false, delegationDepth: 0 },
-        { version: SESSION_FORMAT_VERSION, id: SessionId('child-z'), createdAt: firstCreatedAt,
-          parentSession: SessionId('parent'), isSeeded: false, delegationDepth: 0 },
-        { version: SESSION_FORMAT_VERSION, id: SessionId('child-a'), createdAt: 10,
-          parentSession: SessionId('parent'), isSeeded: false, delegationDepth: 0 },
-      ]
-      for (const header of headers) {
-        const handle = await ctx.sessionPersistence.create(header)
-        try {
-          if (header.id === SessionId('parent')) await handle.append([
-            { type: 'subagent/catalog', seq: SessionSeq(0), time: 1,
-              data: { version: 3, childId: SessionId('child-z'), childCreatedAt: firstCreatedAt, mode: 'continuable', name: 'z', label: 'first' } },
-            { type: 'subagent/catalog', seq: SessionSeq(1), time: 2,
-              data: { version: 3, childId: SessionId('child-a'), childCreatedAt: 10, mode: 'continuable', name: 'a', label: 'second' } },
-          ])
-          await handle.flush()
-        } finally { await handle.close() }
+      const logs = [
+        [
+          { type: 'session', version: SESSION_FORMAT_VERSION, id: 'parent', createdAt: 1 },
+          { type: 'subagent/catalog', data: { childId: 'child-z' } },
+          { type: 'subagent/catalog', data: { childId: 'child-a' } },
+        ],
+        [{ type: 'session', version: SESSION_FORMAT_VERSION, id: 'child-z', createdAt: firstCreatedAt, parentSession: 'parent' }],
+        [{ type: 'session', version: SESSION_FORMAT_VERSION, id: 'child-a', createdAt: 10, parentSession: 'parent' }],
+      ].map(rows => rows.map(row => JSON.stringify(row)).join('\n') + '\n')
+      for (const content of logs) {
+        const directory = join(cwd, '.dsh', 'sessions', String(headerOf(content).id))
+        await mkdir(directory, { recursive: true })
+        await writeFile(join(directory, `session.v${SESSION_FORMAT_VERSION}.jsonl`), content)
       }
       const actual = await persistedSessions(cwd)
       expect(actual.map(log => log.header.id)).toEqual(['parent', 'child-z', 'child-a'])
-      expect(actual.map(log => log.header.createdAt)).toEqual([1, firstCreatedAt, 10])
-      expect(records((actual[0] as SessionLog).content).filter(record => record.type === 'subagent/catalog')
-        .map(record => (record.data as JsonObject).childId)).toEqual(['child-z', 'child-a'])
+      expect(actual.map(log => log.content)).toEqual(logs)
     } finally {
-      await ctx.fiber.dispose()
       await rm(cwd, { recursive: true, force: true })
     }
   })

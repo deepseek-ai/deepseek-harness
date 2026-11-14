@@ -37,7 +37,7 @@ async function waitForMarker(path: string, expected: string): Promise<string> {
   return content
 }
 
-async function crashAt(storage: 'jsonl' | 'sqlite', mode: 'request' | 'tool'): Promise<{ root: string; markerText: string }> {
+async function crashAt(mode: 'request' | 'tool'): Promise<{ root: string; markerText: string }> {
   const root = await mkdtemp(join(tmpdir(), `dsh-semantic-${mode}-`))
   roots.push(root)
   const marker = join(root, 'failpoint')
@@ -46,7 +46,7 @@ async function crashAt(storage: 'jsonl' | 'sqlite', mode: 'request' | 'tool'): P
   const expectedMarker = mode === 'request' ? 'request-dispatched' : 'tool-side-effect'
   // The SIGKILL-at-failpoint choreography stays custom: the child must die
   // mid-write, so no timeout or graceful termination may reach it first.
-  const child = execa(process.execPath, ['--import', tsxLoader, childScript, mode, root, marker, storage], {
+  const child = execa(process.execPath, ['--import', tsxLoader, childScript, mode, root, marker], {
     cwd: repoRoot,
     env: { TSX_TSCONFIG_PATH: join(repoRoot, 'tsconfig.json') },
     stdin: 'ignore',
@@ -68,10 +68,10 @@ async function crashAt(storage: 'jsonl' | 'sqlite', mode: 'request' | 'tool'): P
 // Read the crashed durable log and balance it the way a resuming reader does:
 // the stored events stay untouched; `interruptedTurnClosers` supplies the
 // in-memory closers for the interrupted tail turn.
-async function load(storage: 'jsonl' | 'sqlite', root: string): Promise<SessionEvent[]> {
+async function load(root: string): Promise<SessionEvent[]> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(JsonlSessionPersistence, { root, storage, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   try {
     const handle = await ctx.sessionPersistence.open(sessionId, 'read')
     try {
@@ -90,10 +90,10 @@ afterEach(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('semantic checkpoint hard-crash recovery', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: persists the complete request before model dispatch', async (storage) => {
-    const crashed = await crashAt(storage, 'request')
+  it('persists the complete request before model dispatch', async () => {
+    const crashed = await crashAt('request')
     expect(crashed.markerText).toBe('request-dispatched')
-    const events = await load(storage, crashed.root)
+    const events = await load(crashed.root)
     expect(events.map(event => event.type)).toEqual([
       'agent/inbox/spliced', 'turn/start', 'agent/inbox/spliced',
       'step/start', 'system/message', 'user/message', 'request/header', 'request/context', 'step/end', 'turn/end',
@@ -103,10 +103,10 @@ describe.skipIf(process.platform === 'win32')('semantic checkpoint hard-crash re
     })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: persists tool intent before a side effect and repairs its missing result as unknown', async (storage) => {
-    const crashed = await crashAt(storage, 'tool')
+  it('persists tool intent before a side effect and repairs its missing result as unknown', async () => {
+    const crashed = await crashAt('tool')
     expect(crashed.markerText).toBe('tool-side-effect')
-    const events = await load(storage, crashed.root)
+    const events = await load(crashed.root)
     expect(events.some(event => event.type === 'assistant/message')).toBe(true)
     expect(events.some(event => event.type === 'tool/call')).toBe(true)
     const result = events.find(event => event.type === 'tool/result')

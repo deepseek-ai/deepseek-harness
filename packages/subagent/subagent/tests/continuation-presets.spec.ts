@@ -39,7 +39,7 @@ afterEach(async () => {
 })
 
 /** Real preset mounts, Agent lifecycle, and persistence with a scripted model. */
-async function setup(storage: 'jsonl' | 'sqlite', script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('done'), textResponse('continued'), textResponse('done again')]) {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('done'), textResponse('continued'), textResponse('done again')]) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-continuation-presets-'))
   roots.push(root)
   const ctx = new Context()
@@ -48,7 +48,7 @@ async function setup(storage: 'jsonl' | 'sqlite', script: ConstructorParameters<
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: join(root, 'sessions') })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
   const presets = await ctx.plugin(AgentPresets, { default: 'coding' })
@@ -103,8 +103,8 @@ function continueChild(ctx: Context, childId: SessionId) {
 }
 
 describe('child preset start validation', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects an explicit same-as-parent preset before starting a fork', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('rejects an explicit same-as-parent preset before starting a fork', async () => {
+    const { ctx, parent, adapter } = await setup()
     const beforeSessions = ctx.sessions.list().length
     const beforeEvents = parent.session.snapshotEvents()
     const published: string[] = []
@@ -126,8 +126,8 @@ describe('child preset start validation', () => {
     expect(adapter.requests).toEqual([])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: propagates a registry join failure unchanged', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('propagates a registry join failure unchanged', async () => {
+    const { ctx, parent, adapter } = await setup()
     const failure = new Error('Child already joined a preset')
     vi.spyOn(ctx.agentPresets, 'composeFrom').mockImplementation(() => { throw failure })
 
@@ -136,8 +136,8 @@ describe('child preset start validation', () => {
     expect(adapter.requests).toEqual([])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects an unknown independent preset with the registry RemoteError as a HarnessError', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('rejects an unknown independent preset with the registry RemoteError as a HarnessError', async () => {
+    const { ctx, parent, adapter } = await setup()
     const failure: unknown = await ctx.subagents.startActivation(startSpec(parent, 'absent')).catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(HarnessError)
     expect(failure).toMatchObject({ name: 'RemoteError', code: 'agent-preset/not-found', message: 'Unknown agent preset: absent' })
@@ -145,8 +145,8 @@ describe('child preset start validation', () => {
     expect(adapter.requests).toEqual([])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls back an independent spawn when the preset service has unloaded', async (storage) => {
-    const { ctx, parent, adapter, presets } = await setup(storage)
+  it('rolls back an independent spawn when the preset service has unloaded', async () => {
+    const { ctx, parent, adapter, presets } = await setup()
     await presets.dispose()
     expect(ctx.get('agentPresets')).toBeUndefined()
     const beforeSessions = ctx.sessions.list().length
@@ -171,8 +171,8 @@ describe('child preset start validation', () => {
 })
 
 describe('continuable child presets', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: records an independent selection before its descriptor and sends only the selected preset tools', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('records an independent selection before its descriptor and sends only the selected preset tools', async () => {
+    const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))
     const stored = await settled(ctx, started.childId)
@@ -196,8 +196,8 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores an explicit same-as-parent selection after the parent switches and the provider unloads', async (storage) => {
-    const { ctx, parent, adapter, spawn } = await setup(storage)
+  it('restores an explicit same-as-parent selection after the parent switches and the provider unloads', async () => {
+    const { ctx, parent, adapter, spawn } = await setup()
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation(startSpec(parent, 'coding'))
     await settled(ctx, started.childId)
@@ -214,8 +214,8 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores a nested target with its own preset while its creator remains offline', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, ['hang', textResponse('leaf'), textResponse('continued')])
+  it('restores a nested target with its own preset while its creator remains offline', async () => {
+    const { ctx, parent, adapter } = await setup(['hang', textResponse('leaf'), textResponse('continued')])
     parkParent(ctx, parent)
     const creator = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))
     const branch = ctx.agents.get(creator.childId)!
@@ -237,8 +237,8 @@ describe('continuable child presets', () => {
     expect(ctx.agents.get(creator.childId)).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores the latest projected selection when it differs from the creation header', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('restores the latest projected selection when it differs from the creation header', async () => {
+    const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const stopSelecting = ctx.on('agent/created', async ({ agent, source }) => {
       if (source === 'startup' && agent.session.header.parentSession === parent.id) {
@@ -258,8 +258,8 @@ describe('continuable child presets', () => {
       .toEqual([['reviewing_only'], ['reviewing_only']])
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([undefined, 'coding']).map(value => [storage, value] as const)))('%s: restores historical children from their own header preset %s', async (storage, agentPreset) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it.each([undefined, 'coding'])('restores historical children from their own header preset %s', async (agentPreset) => {
+    const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const childId = brandString<SessionId>('historical-child')
     const historical = await ctx.agents.create({
@@ -295,8 +295,8 @@ describe('continuable child presets', () => {
       .toContain('Historical child persona.')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores a fork from its own later preset selection', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage)
+  it('restores a fork from its own later preset selection', async () => {
+    const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const stopSelecting = ctx.on('agent/created', async ({ agent, source }) => {
       if (source === 'startup' && agent.session.header.parentSession === parent.id) {
@@ -317,8 +317,8 @@ describe('continuable child presets', () => {
       .toEqual([['reviewing_only'], ['reviewing_only']])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a retired preset on resume even while the creator still retains its generation', async (storage) => {
-    const { ctx, parent, adapter, unregister } = await setup(storage)
+  it('rejects a retired preset on resume even while the creator still retains its generation', async () => {
+    const { ctx, parent, adapter, unregister } = await setup()
     await ctx.agentPresets.select(parent, 'reviewing')
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent work' }], source: { kind: 'user' } }))
     await parent.whenIdle()
@@ -335,8 +335,8 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['missing', 'broken'] as const).map(value => [storage, value] as const)))('%s: refuses an independent cold resume when its preset is %s', async (storage, failure) => {
-    const { ctx, parent, adapter, unregister } = await setup(storage)
+  it.each(['missing', 'broken'] as const)('refuses an independent cold resume when its preset is %s', async (failure) => {
+    const { ctx, parent, adapter, unregister } = await setup()
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))
     const created = await settled(ctx, started.childId)
@@ -356,8 +356,8 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: refuses restoration when a recorded preset selection cannot be projected', async (storage) => {
-    const { ctx, parent, adapter, presets } = await setup(storage)
+  it('refuses restoration when a recorded preset selection cannot be projected', async () => {
+    const { ctx, parent, adapter, presets } = await setup()
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))
     await settled(ctx, started.childId)

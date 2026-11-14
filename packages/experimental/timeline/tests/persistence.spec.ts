@@ -10,8 +10,8 @@ afterEach(async () => {
   for (const f of fixtures.splice(0)) await f.close()
 })
 
-async function fixture(backend: 'jsonl' | 'sqlite') {
-  const f = await setup(backend, { intervalMs: 86400000 })
+async function fixture() {
+  const f = await setup({ intervalMs: 86400000 })
   fixtures.push(f)
   return f
 }
@@ -42,23 +42,23 @@ async function seed(f: Awaited<ReturnType<typeof setup>>) {
   return tree
 }
 
-async function restart(backend: 'jsonl' | 'sqlite', f: Awaited<ReturnType<typeof setup>>, adapter = new Adapter()) {
+async function restart(f: Awaited<ReturnType<typeof setup>>, adapter = new Adapter()) {
   const restore = { root: f.root, sessionId: f.agent.session.id }
   await f.close({ preserve: true })
   fixtures.splice(fixtures.indexOf(f), 1)
-  const next = await setup(backend, { intervalMs: 86400000 }, adapter, restore)
+  const next = await setup({ intervalMs: 86400000 }, adapter, restore)
   fixtures.push(next)
   return next
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('session-scoped Timeline persistence (%s)', (backend) => {
+describe('session-scoped Timeline persistence', () => {
   it('reopens an ordinary saved Session without creating a plan or disrupting its next turn', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     await f.ctx.sessions.flush(f.agent.session)
     const adapter = new Adapter()
     adapter.calls = 0
     adapter.release.resolve(undefined)
-    const next = await restart(backend, f, adapter)
+    const next = await restart(f, adapter)
     expect(next.ctx.timeline.available(next.agent.session)).toBe(true)
     expect(next.ctx.timeline.stateOf(next.agent.session).view.trees).toEqual([])
     next.start()
@@ -70,7 +70,7 @@ describe.each(['jsonl', 'sqlite'] as const)('session-scoped Timeline persistence
     expect(next.ctx.timeline.stateOf(next.agent.session).view.reports).toEqual([])
   })
   it('restores plans, user priority, discussion pairs and report coverage in a fresh host', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const tree = await seed(f)
     await f.ctx.timeline.edit({
       action: 'priority',
@@ -120,7 +120,7 @@ describe.each(['jsonl', 'sqlite'] as const)('session-scoped Timeline persistence
       }),
     })
     const saved = f.ctx.timeline.stateOf(f.agent.session)
-    const next = await restart(backend, f)
+    const next = await restart(f)
     const current = next.ctx.timeline.stateOf(next.agent.session)
     expect(current.view.trees).toEqual(saved.view.trees)
     expect(current.calls).toEqual(saved.calls)
@@ -131,7 +131,7 @@ describe.each(['jsonl', 'sqlite'] as const)('session-scoped Timeline persistence
   })
 
   it('does not reapply an older tool call after newer checkpoints, selection changes, or restart', async () => {
-    const f = await fixture(backend)
+    const f = await fixture()
     const tree = await seed(f)
     const first = {
       name: 'timeline_tasks',
@@ -148,7 +148,7 @@ describe.each(['jsonl', 'sqlite'] as const)('session-scoped Timeline persistence
       ).isError,
     ).not.toBe(true)
     await call(f, 'timeline_tree', { action: 'start', title: 'Another goal' })
-    const next = await restart(backend, f)
+    const next = await restart(f)
     const selected = next.ctx.timeline.stateOf(next.agent.session).view.activeTreeId
     const result = await executeTool(next.ctx, { ...first, agent: next.agent })
     expect(result.isError).not.toBe(true)

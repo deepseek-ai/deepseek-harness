@@ -36,7 +36,7 @@ function text(content: readonly ContentBlock[]): string {
     : block.type === 'tool-call' ? `call:${block.name}` : block.type).join(' | ')
 }
 
-it.each(['jsonl', 'sqlite'] as const)('continues an imported conversation with its finished history and without excluded replies (%s)', async (backend) => {
+it('continues an imported conversation with its finished history and without excluded replies', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-deepseek-import-resume-'))
   cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
   const conversation = {
@@ -66,7 +66,7 @@ it.each(['jsonl', 'sqlite'] as const)('continues an imported conversation with i
   const ctx = new Context()
   cleanups.push(async () => { await ctx.fiber.dispose() })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  await ctx.plugin(JsonlPersistence, { root: join(root, 'sessions'), compression: 'none', storage: backend })
+  await ctx.plugin(JsonlPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await mountAgentLoopTestHarness(ctx)
   const adapter = new MockAdapter([textResponse('Bus 2 is faster.')])
   ctx.llm.registerAdapter(['mock'], adapter)

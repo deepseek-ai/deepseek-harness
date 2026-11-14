@@ -314,7 +314,7 @@ export function gatesForMode(selected: Mode): Gate[] {
     case 'ci-primary':
       return ciPrimaryGates()
     case 'ci-linux-primary':
-      return [...ciPrimaryGates(), ...sessionBackendGates(webSnapshotGate(['build']))]
+      return [...ciPrimaryGates(), webSnapshotGate(['build'])]
     case 'ci-static':
       return ciStaticGates({ ownsBuild: false })
     case 'ci-lint-contracts-ready':
@@ -329,7 +329,7 @@ export function gatesForMode(selected: Mode): Gate[] {
     case 'ci-bench':
       return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts'], { label: 'performance benchmarks' })]
     case 'ci-snapshot':
-      return [ciBuildGate(), ...sessionBackendGates(snapshotGate())]
+      return [ciBuildGate(), snapshotGate()]
     case 'ci-artifacts':
       return ciArtifactGates()
     case 'ci-consumers':
@@ -359,7 +359,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
         pnpmScript('stale-pull-requests', 'test:stale-pull-requests', { label: 'Stale pull-request reminders' }),
         pnpmScript('duplication', 'duplication'),
-        ...sessionBackendGates(snapshotGate()),
+        snapshotGate(),
         expectedOutputGate(),
         pnpmScript('build', 'build'),
         pnpmScript('build:web', 'build:web'),
@@ -442,7 +442,7 @@ function ciPrimaryGates(): Gate[] {
     pnpmScript('duplication', 'duplication'),
     ...coverageGates(),
     ...nodeCompatSmokeGates(),
-    ...sessionBackendGates(snapshotGate()),
+    snapshotGate(),
     ...docSyncLeafGates({
       docTypecheckNeeds: ['typert-contracts'],
       docTypecheckScript: 'doc-typecheck:contracts-ready',
@@ -551,7 +551,6 @@ function ciConsumerGates(): Gate[] {
   const buildArtifactReaders = [
     'publint',
     'snapshot',
-    'snapshot-sqlite',
     'expected-output',
     'doc-typecheck',
     'node-next-types',
@@ -564,9 +563,9 @@ function ciConsumerGates(): Gate[] {
       env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
     }),
     pnpmScript('publint', 'publint', { needs: builtTree }),
-    ...sessionBackendGates(snapshotGate(builtTree)),
+    snapshotGate(builtTree),
     expectedOutputGate(builtTree),
-    ...sessionBackendGates(webSnapshotGate(builtTree, buildArtifactReaders)),
+    webSnapshotGate(builtTree, buildArtifactReaders),
     pnpmScript('doc-typecheck', 'doc-typecheck:contracts-ready', {
       needs: builtTree,
       env: { DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' },
@@ -577,18 +576,6 @@ function ciConsumerGates(): Gate[] {
     }),
     builtBinSmokeGate(builtTree),
   ]
-}
-
-/** Run each persistence adapter against the same expected outputs, serially per lane. */
-function sessionBackendGates(gate: Gate): Gate[] {
-  return (['jsonl', 'sqlite'] as const).map(storage => ({
-    ...gate,
-    id: storage === 'jsonl' ? gate.id : `${gate.id}-sqlite`,
-    label: `${gate.label} (${storage})`,
-    env: { ...gate.env, DSH_SNAPSHOT_STORAGE: storage },
-    displayCommand: `DSH_SNAPSHOT_STORAGE=${storage} ${gate.displayCommand}`,
-    ...storage === 'sqlite' ? { after: [...gate.after ?? [], gate.id] } : {},
-  }))
 }
 
 function webSnapshotGate(needs: string[], after?: string[]): Gate {

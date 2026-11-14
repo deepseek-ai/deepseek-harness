@@ -1,10 +1,11 @@
-import { realpath } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
+import { zstdDecompressSync } from 'node:zlib'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { persistedSessionLogs } from '../../session-logs.ts'
+import { scanZstdFrames } from '@deepseek-ai/dsh-session-persistence-jsonl/src/zstd.js'
 
 const PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS = 60_000
 const PRODUCTION_PROFILE_TEST_TIMEOUT_MS = PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS + 15_000
@@ -26,10 +27,16 @@ describe('headless-agent keyless smoke', () => {
       tsconfigPath,
       processTimeoutMs: PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS,
       inspect: async (cwd) => {
-        const sessionsDir = await realpath(join(cwd, '.sessions'))
-        const logs = await persistedSessionLogs(sessionsDir, 'zstd')
-        expect(logs).toHaveLength(1)
-        const records = logs[0]!.content.trim().split('\n')
+        const sessionsDir = join(cwd, '.sessions')
+        const files = await readdir(sessionsDir, { recursive: true })
+        const relativePath = files.find(file => file.endsWith('.jsonl.zstd'))
+        if (relativePath === undefined) return
+        const compressed = await readFile(join(sessionsDir, relativePath))
+        expect(compressed.subarray(0, 4).toString('hex')).toBe('28b52ffd')
+        const { frames, tornStart } = scanZstdFrames(compressed)
+        expect(tornStart).toBeUndefined()
+        const records = frames.flatMap(({ start, end }) =>
+          zstdDecompressSync(compressed.subarray(start, end)).toString().trim().split('\n'))
           .map(line => JSON.parse(line) as Record<string, unknown>)
         persistedHeader = records[0]
         const requestHeader = records.find(record => record.type === 'request/header')

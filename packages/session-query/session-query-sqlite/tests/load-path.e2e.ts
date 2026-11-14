@@ -32,13 +32,13 @@ async function temporaryPath(name: string): Promise<string> {
 }
 
 describe('dsh-session-query-sqlite real Loader path', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: unwraps, mounts, and searches the real persistence backend', async (storage) => {
+  it('unwraps, mounts, and searches the real persistence backend', async () => {
     const persistenceRoot = await temporaryPath('canonical')
     const searchPath = await temporaryPath('derived.db')
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SessionStore)
-    const persistence = await ctx.plugin(JsonlSessionPersistence, { storage,
+    const persistence = await ctx.plugin(JsonlSessionPersistence, {
       root: persistenceRoot,
       compression: 'none',
     })

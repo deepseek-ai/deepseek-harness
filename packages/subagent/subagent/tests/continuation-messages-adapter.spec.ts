@@ -17,7 +17,7 @@ import SubagentRuntime, { type SubagentRunEndInfo } from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-it.each(['jsonl', 'sqlite'] as const)('%s: continues the parent through default Messages after a reasoning-bearing continuable child settles', async (storage) => {
+it('continues the parent through default Messages after a reasoning-bearing continuable child settles', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-settlement-messages-'))
   const ctx = new Context()
   let http: Awaited<ReturnType<typeof server>> | undefined
@@ -44,7 +44,7 @@ it.each(['jsonl', 'sqlite'] as const)('%s: continues the parent through default 
       prepareExtensions: () => Promise.resolve({ fields: {}, accept: () => Promise.resolve() }),
     })
     await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-    await ctx.plugin(JsonlSessionPersistence, { storage, root })
+    await ctx.plugin(JsonlSessionPersistence, { root })
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)

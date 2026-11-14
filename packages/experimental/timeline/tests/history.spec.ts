@@ -10,8 +10,8 @@ afterEach(async () => {
   vi.useRealTimers()
   for (const f of fixtures.splice(0)) await f.close()
 })
-async function fixture(backend: 'jsonl' | 'sqlite') {
-  const f = await setup(backend)
+async function fixture() {
+  const f = await setup()
   fixtures.push(f)
   let sequence = 0
   const call = (name: string, args: object, id = `history-${sequence++}`) =>
@@ -26,9 +26,9 @@ async function fixture(backend: 'jsonl' | 'sqlite') {
   return { f, call }
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('internal task revision history (%s)', (backend) => {
+describe('internal task revision history', () => {
   it('records edits and derived group progress once, without recording no-ops or failed batches', async () => {
-    const { f, call } = await fixture(backend)
+    const { f, call } = await fixture()
     expect(
       (
         await call('timeline_tasks', {
@@ -92,7 +92,7 @@ describe.each(['jsonl', 'sqlite'] as const)('internal task revision history (%s)
   })
 
   it('retains each revision and its description without repeating full task details', async () => {
-    const { f, call } = await fixture(backend)
+    const { f, call } = await fixture()
     const details = 'Evidence '.repeat(400)
     await call('timeline_tasks', { tasks: [{ id: 'check', title: 'Verify restart', description: 'Check recovery.', details }] })
     expect((await call('timeline_tasks', { tasks: [{ id: 'check', done: [1, 2], note: 'Restart check passed.' }] })).isError).not.toBe(true)
@@ -104,7 +104,7 @@ describe.each(['jsonl', 'sqlite'] as const)('internal task revision history (%s)
     ])
   })
   it('keeps history through restart and checkpoints but excludes it from agent and report inputs', async () => {
-    const { f, call } = await fixture(backend)
+    const { f, call } = await fixture()
     const archived = 'Archived text visible only in change history.'
     await call('timeline_tasks', { tasks: [{ id: 'check', title: 'Verify restart', description: archived }] })
     await call('timeline_tasks', {
@@ -136,7 +136,7 @@ describe.each(['jsonl', 'sqlite'] as const)('internal task revision history (%s)
     vi.useRealTimers()
     await f.close({ preserve: true })
     fixtures.splice(fixtures.indexOf(f), 1)
-    const next = await setup(backend, {}, undefined, { root, sessionId })
+    const next = await setup({}, undefined, { root, sessionId })
     fixtures.push(next)
     expect(next.ctx.timeline.stateOf(next.agent.session).view.trees[0]?.tasks[0]?.history).toEqual(
       tree.tasks[0]?.history,
@@ -144,7 +144,7 @@ describe.each(['jsonl', 'sqlite'] as const)('internal task revision history (%s)
   })
 
   it('does not publish a new revision when its durable write fails', async () => {
-    const { f, call } = await fixture(backend)
+    const { f, call } = await fixture()
     await call('timeline_tasks', { tasks: [{ id: 'check', title: 'Verify restart' }] })
     const before = f.ctx.timeline.stateOf(f.agent.session).view.trees
     vi.spyOn(f.ctx.sessions, 'flush').mockRejectedValueOnce(new Error('Write failed'))

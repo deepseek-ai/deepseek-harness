@@ -25,9 +25,9 @@ function toolsOf(fixture: Awaited<ReturnType<typeof setup>>, prefix: string) {
     })
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop (%s)', (backend) => {
+describe('agent tools in the production loop', () => {
   it('reports only open task discussions in status queries and exposes saved report failures', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const call = toolsOf(f, 'discussion')
     const session = f.agent.session
     try {
@@ -55,7 +55,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('keeps reads useful when a restored view lacks an annotation target or task parent', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const call = toolsOf(f, 'incomplete-view')
     const session = f.agent.session
     try {
@@ -86,7 +86,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('reports an unexpected task validation failure without saving the patch', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const call = toolsOf(f, 'invalid-patch')
     try {
       await call('timeline_tree', { action: 'start', title: 'Review recovery' })
@@ -104,7 +104,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('requires an agent to use the planning tools and provides compact call labels', async () => {
-    const f = await setup(backend)
+    const f = await setup()
     try {
       for (const [name, args, title] of [
         ['timeline_tree', { action: 'start', title: 'Plan' }, 'Timeline task tree'],
@@ -128,7 +128,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('selects existing trees, bounds new trees, and validates each read target', async () => {
-    const f = await setup(backend, { intervalMs: 86400000, maxTrees: 2 })
+    const f = await setup({ intervalMs: 86400000, maxTrees: 2 })
     const call = toolsOf(f, 'selection')
     const start = (title: string) => call('timeline_tree', { action: 'start', title })
     const view = () => f.ctx.timeline.stateOf(f.agent.session).view
@@ -175,7 +175,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('saves stable card metadata without changing native text, and returns the original receipt on retry', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const run = toolsOf(f, 'card')
     const call = (id: string, name: string, args: object) => run(name, args, id)
     const readReceipt = (result: Awaited<ReturnType<typeof call>>) =>
@@ -214,7 +214,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('serializes concurrent card baselines with the acknowledged task writes', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let id = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -252,7 +252,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('supplies live task guidance once in the writing tool description without changing the system prefix', async () => {
-    const f = await setup(backend, { intervalMs: 86400000, taskPrompt: 'Explain what recovery checks prove.' })
+    const f = await setup({ intervalMs: 86400000, taskPrompt: 'Explain what recovery checks prove.' })
     let count = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -300,7 +300,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('rejects removed estimate arguments atomically instead of silently accepting an obsolete tool shape', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let count = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {
@@ -335,7 +335,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('distinguishes the complete report count from its bounded recent sample', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     try {
       for (let index = 0; index < 4; index++)
         await f.ctx.timeline.append(f.agent.session, 'plugin:timeline/report', {
@@ -374,7 +374,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('returns one short tree identity for repeated starts with the same tool call', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     try {
       const call = {
         name: 'timeline_tree',
@@ -413,7 +413,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('toggles only Timeline-owned Todo restrictions through live settings without changing presets', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const parent = {}
     const preset = createScope(f.ctx, parent)
     let writes = 0
@@ -473,7 +473,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
   })
   it('advertises floating-point weights and accepts fractional values without rounding model data', async () => {
     const adapter = new Adapter()
-    const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+    const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
       expect(f.ctx.tools.schemas(f.agent).find(tool => tool.name === 'timeline_tasks')).toMatchObject({
         parameters: { properties: { tasks: { items: { properties: { weight: { type: 'number' } } } } } },
@@ -504,7 +504,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('updates the fixed language rule in the next prompt assembly', async () => {
-    const f = await setup(backend)
+    const f = await setup()
     try {
       const prompt = () => f.ctx.systemPrompt.assemble({ scope: f.agent })
       expect(
@@ -526,7 +526,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('denies an explicit agent-local Todo override without breaking registration', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let writes = 0
     try {
       await f.agent.ctx.inject(['tools'], (scope) => {
@@ -563,7 +563,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('replaces inherited preset Todo tools and restores them when unloaded', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const parent = {}
     const preset = createScope(f.ctx, parent)
     try {
@@ -616,7 +616,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
   })
   it('creates and updates a named tree through real model tool calls', async () => {
     const adapter = new Adapter()
-    const f = await setup(backend, { intervalMs: 86400000 }, adapter)
+    const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
       adapter.mainActions = [
         () => [
@@ -685,7 +685,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('updates an addressed tree and returns weights without ETA inputs', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     const call = async (name: string, args: object) => {
       const result = await executeTool(f.ctx, {
         name,
@@ -739,7 +739,7 @@ describe.each(['jsonl', 'sqlite'] as const)('agent tools in the production loop 
     }
   })
   it('returns bounded leaf-status queries without changing selection or including report history', async () => {
-    const f = await setup(backend, { intervalMs: 86400000 })
+    const f = await setup({ intervalMs: 86400000 })
     let count = 0
     const call = (name: string, args: object) =>
       executeTool(f.ctx, {

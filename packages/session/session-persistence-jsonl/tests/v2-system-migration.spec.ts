@@ -1,6 +1,5 @@
+import { freezeMessage, type MessageId } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { freezeMessage, MessageId } from '@deepseek-ai/dsh-llm'
-import { importedRows } from './fixtures/segments.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -33,7 +32,7 @@ afterEach(async () => {
 async function mount(): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { storage: 'sqlite', root, compression: 'none' })
+  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   return ctx
 }
 
@@ -138,7 +137,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       await reader.close()
     }
     expect(await observeFile(sourcePath)).toEqual(original)
-    expect((await readdir(directory)).filter(name => name !== 'session.lock')).toEqual(directoryBefore)
+    expect(await readdir(directory)).toEqual(directoryBefore)
     const independent = await mount()
     const independentReader = await independent.sessionPersistence.open(id, 'read')
     try {
@@ -148,7 +147,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       await independentReader.close()
     }
     expect(await observeFile(sourcePath)).toEqual(original)
-    expect((await readdir(directory)).filter(name => name !== 'session.lock')).toEqual(directoryBefore)
+    expect(await readdir(directory)).toEqual(directoryBefore)
 
     const writer = await ctx.sessionPersistence.open(id, 'write')
     try {
@@ -158,9 +157,10 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
     }
     expect(await observeFile(sourcePath)).toEqual(original)
     expect((await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort())
-      .toEqual(['session.v2.jsonl'])
-    const published = importedRows(root, id)
-    expect(published[0]).toMatchObject({ version: SESSION_FORMAT_VERSION, id })
+      .toEqual(['session.v2.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`])
+    const publishedPath = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, 'none')
+    const published = (await readFile(publishedPath, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line) as unknown)
+    expect(published[0]).toMatchObject({ type: 'session', version: SESSION_FORMAT_VERSION, id })
     expect(published.slice(1)).toEqual(prepared)
 
     const reopened = await mount()
@@ -213,7 +213,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       await reader.close()
     }
     expect(await observeFile(sourcePath)).toEqual(original)
-    expect((await readdir(dirname(sourcePath))).filter(name => name !== 'session.lock')).toEqual(['session.v2.jsonl'])
+    expect(await readdir(dirname(sourcePath))).toEqual(['session.v2.jsonl'])
 
     const writer = await ctx.sessionPersistence.open(id, 'write')
     let expected: readonly SessionEvent[]

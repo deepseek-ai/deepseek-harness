@@ -70,14 +70,14 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function setup(storage: 'jsonl' | 'sqlite', script: ConstructorParameters<typeof MockAdapter>[0], enabled = true) {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabled = true) {
   const ctx = new Context()
   contexts.add(ctx)
   await mountAgentLoopTestDependencies(ctx)
   await mountWorkingDirectoryFixture(ctx)
   const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-tool-team-'))
   roots.push(storageRoot)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root: storageRoot })
+  await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
@@ -184,8 +184,8 @@ async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
 }
 
 describe('dsh-tool-team', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([true, false]).map(value => [storage, value] as const)))('%s: cancels reassignment without appending when discovery observes cancellation: %s', async (storage, observesCancellation) => {
-    const { ctx, lead } = await setup(storage, ['hang'])
+  it.each([true, false])('cancels reassignment without appending when discovery observes cancellation: %s', async (observesCancellation) => {
+    const { ctx, lead } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'worker', 'stay running')
     const childId = childActivation.childId
     await waitRunning(ctx, childId)
@@ -215,8 +215,8 @@ describe('dsh-tool-team', () => {
     expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: accepts and reports task owners by agent name', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang'])
+  it('accepts and reports task owners by agent name', async () => {
+    const { ctx, lead } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'worker', 'stay running')
     await waitRunning(ctx, childActivation.childId)
     const task = await ctx.agentTeams.createTask(lead, { subject: 'work', description: 'assign by name' })
@@ -235,8 +235,8 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childActivation.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps Team tools local when an external activation starts and settles', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('keeps Team tools local when an external activation starts and settles', async () => {
+    const { ctx, lead } = await setup([])
     const externalId = brandString<SessionId>('team-external-result')
     ctx.effect(() => ctx.subagents.registerProvider({
       name: 'external-team-fixture', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
@@ -260,8 +260,8 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: adds task tools and policy alongside shared subagent identity', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang', 'hang'])
+  it('adds task tools and policy alongside shared subagent identity', async () => {
+    const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const teamTool = (name: string) => ctx.tools.get(name, scopeOf(lead.ctx))
@@ -300,10 +300,10 @@ describe('dsh-tool-team', () => {
     await Promise.all([waitNoAgent(ctx, namedId), waitNoAgent(ctx, unnamedId)])
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     ['spawn', undefined], ['fork', undefined], ['fork', 'in-history'],
-  ] as const).map(value => [storage, ...value] as const)))('%s: records %s teammate identity with update mode %s and keeps the wire prefix', async (storage, provider, systemPromptUpdate) => {
-    const { ctx, lead, adapter } = await setup(storage, [textResponse('parent answer'), textResponse('child answer')])
+  ] as const)('records %s teammate identity with update mode %s and keeps the wire prefix', async (provider, systemPromptUpdate) => {
+    const { ctx, lead, adapter } = await setup([textResponse('parent answer'), textResponse('child answer')])
     if (systemPromptUpdate !== undefined) adapter.systemPromptUpdate = systemPromptUpdate
     await runTurn(lead, 'Parent task')
     const parentRequest = serializeRequest(adapter.requests[0]!)
@@ -323,8 +323,8 @@ describe('dsh-tool-team', () => {
     expect(runtimeContextText(adapter.requests[1]!)).toContain(agentIdentity('agent-1'))
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reuses the inherited Lead identity in an ordinary fork', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [textResponse('parent answer'), textResponse('fork answer')])
+  it('reuses the inherited Lead identity in an ordinary fork', async () => {
+    const { ctx, lead, adapter } = await setup([textResponse('parent answer'), textResponse('fork answer')])
     await runTurn(lead, 'Parent task')
     const seed = lead.session.snapshotEvents()
     const handle = await ctx.agents.create({
@@ -351,8 +351,8 @@ describe('dsh-tool-team', () => {
     await handle.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: identifies nested descendants with the tree root rather than their direct parent', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('identifies nested descendants with the tree root rather than their direct parent', async () => {
+    const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
       sessionId: brandString<SessionId>('identity-child'),
       meta: { parentSession: lead.id, origin: 'subagent' },
@@ -367,8 +367,8 @@ describe('dsh-tool-team', () => {
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`The root agent of your collaboration tree is ${JSON.stringify(child.agent.id)}.`)
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([undefined, 'in-history'] as const).map(value => [storage, value] as const)))('%s: appends current Lead identity to a teammate fork with update mode %s', async (storage, systemPromptUpdate) => {
-    const { ctx, lead, adapter } = await setup(storage, [textResponse('review done'), textResponse('lead notified'), textResponse('fork answer')])
+  it.each([undefined, 'in-history'] as const)('appends current Lead identity to a teammate fork with update mode %s', async (systemPromptUpdate) => {
+    const { ctx, lead, adapter } = await setup([textResponse('review done'), textResponse('lead notified'), textResponse('fork answer')])
     if (systemPromptUpdate !== undefined) adapter.systemPromptUpdate = systemPromptUpdate
     const teammateActivation = await spawn(ctx, lead, 'reviewer', 'Review the work')
     const teammateId = teammateActivation.childId
@@ -400,8 +400,8 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores compacted identity and does not repeat an unchanged retained snapshot', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [
+  it('restores compacted identity and does not repeat an unchanged retained snapshot', async () => {
+    const { ctx, lead, adapter } = await setup([
       toolCallResponse('first-list', 'team_task_list', {}),
       toolCallResponse('second-list', 'team_task_list', {}),
       textResponse('done'),
@@ -435,8 +435,8 @@ describe('dsh-tool-team', () => {
       && event.data.source.kind === 'runtime-context')).toHaveLength(2)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps required agent identities when optional runtime context is suppressed', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [textResponse('worker done')])
+  it('keeps required agent identities when optional runtime context is suppressed', async () => {
+    const { ctx, lead, adapter } = await setup([textResponse('worker done')])
     ctx.systemPrompt.suppressRuntimeContext()
     const childActivation = await spawn(ctx, lead, 'reviewer', 'Review the work')
     const childId = childActivation.childId
@@ -445,8 +445,8 @@ describe('dsh-tool-team', () => {
     expect(runtimeContextText(adapter.requests[0]!)).toContain(agentIdentity('agent-1'))
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps ordinary inbox waiting when the task plugin unloads', async (storage) => {
-    const { ctx, lead, fiber } = await setup(storage, [])
+  it('keeps ordinary inbox waiting when the task plugin unloads', async () => {
+    const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
     lead.inject(createUserMessage({ content: [{ type: 'text', text: 'pending input' }], source: { kind: 'user' } }))
     const result = await execute(ctx, lead, 'wait_agent', {})
@@ -455,8 +455,8 @@ describe('dsh-tool-team', () => {
     expect(lead.inbox.nextStep).toHaveLength(1)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: adapts task CAS operations and waits to canonical JSON', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang'])
+  it('adapts task CAS operations and waits to canonical JSON', async () => {
+    const { ctx, lead } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'json-worker', 'wait')
     const childId = childActivation.childId
     const child = await waitRunning(ctx, childId)
@@ -506,8 +506,8 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: adapts optional task filters, mutations, pagination, and default waiting', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang'])
+  it('adapts optional task filters, mutations, pagination, and default waiting', async () => {
+    const { ctx, lead } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'fork-worker', 'stay active', 'fork')
     const childId = childActivation.childId
     await waitRunning(ctx, childId)
@@ -580,8 +580,8 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: distinguishes an agent named unowned from tasks without an owner', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang'])
+  it('distinguishes an agent named unowned from tasks without an owner', async () => {
+    const { ctx, lead } = await setup(['hang'])
     const child = await ctx.subagents.startActivation({
       provider: 'spawn', name: 'unowned', label: 'Worker', parent: lead,
       prompt: [{ type: 'text', text: 'wait' }], signal: SIGNAL, delivery: 'caller',
@@ -600,8 +600,8 @@ describe('dsh-tool-team', () => {
     await child.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reads and edits saved owner names without traversing descendant Sessions', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('reads and edits saved owner names without traversing descendant Sessions', async () => {
+    const { ctx, lead } = await setup([])
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Saved ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
     lead.session.append('team/task', {
@@ -619,8 +619,8 @@ describe('dsh-tool-team', () => {
     expect(lookup).not.toHaveBeenCalled()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: names a historical task owner by its Session id', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('names a historical task owner by its Session id', async () => {
+    const { ctx, lead } = await setup([])
     const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
     lead.session.append('team/task', {
@@ -631,8 +631,8 @@ describe('dsh-tool-team', () => {
       .toMatchObject({ owner: 'missing-worker' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: edits a task whose historical owner is outside the readable catalogs', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('edits a task whose historical owner is outside the readable catalogs', async () => {
+    const { ctx, lead } = await setup([])
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
     lead.session.append('team/task', {
@@ -653,8 +653,8 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/task')).toHaveLength(3)
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (storage, cataloged) => {
-    const { ctx, lead } = await setup(storage, [])
+  it.each([false, true])('rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (cataloged) => {
+    const { ctx, lead } = await setup([])
     const id = brandString<SessionId>('historical-worker')
     for (const phase of ['provisioning', 'active'] as const) lead.session.append('team/member', {
       version: 2, teamId: brandString<TeamId>(lead.id),
@@ -672,8 +672,8 @@ describe('dsh-tool-team', () => {
     })).isError).toBe(true)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: removes and reinstalls every Team registration across plugin HMR without stopping the child', async (storage) => {
-    const { ctx, lead, fiber } = await setup(storage, ['hang'])
+  it('removes and reinstalls every Team registration across plugin HMR without stopping the child', async () => {
+    const { ctx, lead, fiber } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'hmr-worker', 'wait')
     const childId = childActivation.childId
     const child = await waitRunning(ctx, childId)
@@ -699,8 +699,8 @@ describe('dsh-tool-team', () => {
     await replacement.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: installs tools once when the plugin activates as Agent creation dispatch begins', async (storage) => {
-    const { ctx, lead, fiber } = await setup(storage, [])
+  it('installs tools once when the plugin activates as Agent creation dispatch begins', async () => {
+    const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
     const id = brandString<SessionId>('install-during-publication')
     const stop = ctx.on('internal/dispatch', (_type, name) => {
@@ -724,8 +724,8 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: leaves all current waits pending when tasks change', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [])
+  it('leaves all current waits pending when tasks change', async () => {
+    const { ctx, lead, adapter } = await setup([])
     const child = await ctx.agents.create({
       sessionId: brandString<SessionId>('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
@@ -756,8 +756,8 @@ describe('dsh-tool-team', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps waiting across Team mode changes until its own inbox receives input', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [])
+  it('keeps waiting across Team mode changes until its own inbox receives input', async () => {
+    const { ctx, lead, adapter } = await setup([])
     vi.useFakeTimers()
     const waiting = await startWait(ctx, lead)
     let returned = false
@@ -776,8 +776,8 @@ describe('dsh-tool-team', () => {
     expect(await waiting.result).toMatchObject({ isError: false, value: { timedOut: false } })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps waiting across successful and failed task flushes', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('keeps waiting across successful and failed task flushes', async () => {
+    const { ctx, lead } = await setup([])
     vi.useFakeTimers()
     const flush = ctx.sessions.flush.bind(ctx.sessions)
     const entered = Promise.withResolvers<undefined>()
@@ -812,8 +812,8 @@ describe('dsh-tool-team', () => {
     expect(await afterCommit.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rolls back plugin registrations after a global tool collision', async (storage) => {
-    const { ctx, lead, fiber } = await setup(storage, [])
+  it('rolls back plugin registrations after a global tool collision', async () => {
+    const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
     ctx.tools.register(defineContentToolFixture({
       name: 'team_task_create',
@@ -828,8 +828,8 @@ describe('dsh-tool-team', () => {
     expect(assembled.contexts.some(context => context.name === 'team:identity')).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: applies directly without configuration and rejects removed configuration keys', async (storage) => {
-    const { ctx, lead, fiber } = await setup(storage, [])
+  it('applies directly without configuration and rejects removed configuration keys', async () => {
+    const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
     for (const key of ['interrupt', 'freshProvider', 'forkProvider']) {
       expect(() => { toolTeam.apply(ctx, { [key]: 'x' }) }).toThrow(`${key} is no longer supported`)
@@ -838,8 +838,8 @@ describe('dsh-tool-team', () => {
     expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: switches tools and guidance for one tree while preserving tasks and ordinary subagents', async (storage) => {
-    const { ctx, lead } = await setup(storage, ['hang'], false)
+  it('switches tools and guidance for one tree while preserving tasks and ordinary subagents', async () => {
+    const { ctx, lead } = await setup(['hang'], false)
     const other = await ctx.agents.create({ sessionId: brandString<SessionId>('other-root'), agentOptions: { provider: 'mock', model: 'mock' } })
     const child = await waitRunning(ctx, (await spawn(ctx, lead, 'ordinary-child', 'work')).childId)
     for (const agent of [lead, child, other.agent]) expect(teamTools(await assembly(ctx, agent))).toEqual([])
@@ -862,8 +862,8 @@ describe('dsh-tool-team', () => {
     await other.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: updates model requests when Team is switched on and off within a turn', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [
+  it('updates model requests when Team is switched on and off within a turn', async () => {
+    const { ctx, lead, adapter } = await setup([
       toolCallResponse('before-team', 'list_agents', {}),
       toolCallResponse('with-team', 'list_agents', {}),
       textResponse('ordinary work continues'),
@@ -895,8 +895,8 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps tools consistent with an appended selection if flushing fails, and permits retry', async (storage) => {
-    const { ctx, lead } = await setup(storage, [], false)
+  it('keeps tools consistent with an appended selection if flushing fails, and permits retry', async () => {
+    const { ctx, lead } = await setup([], false)
     const failure = new Error('storage unavailable')
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
     await expect(ctx.agentTeams.setEnabled(lead, true)).rejects.toBe(failure)
@@ -905,8 +905,8 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: finishes an admitted task mutation after Team is disabled', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('finishes an admitted task mutation after Team is disabled', async () => {
+    const { ctx, lead } = await setup([])
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     const flush = ctx.sessions.flush.bind(ctx.sessions)
@@ -936,8 +936,8 @@ describe('dsh-tool-team', () => {
     expect(ctx.agentTeams.listTasks(lead)).toEqual([expect.objectContaining({ subject: 'started' })])
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reads Team mode for prompts independently of tool restrictions', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('reads Team mode for prompts independently of tool restrictions', async () => {
+    const { ctx, lead } = await setup([])
     lead.ctx.tools.restrict({ deny: TEAM_TOOLS })
     const built = await assembly(ctx, lead)
     expect(teamTools(built)).toEqual([])
@@ -949,8 +949,8 @@ describe('dsh-tool-team', () => {
     expect(renderContextSnapshot(disabled)).toContain(leadIdentity(lead))
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps step admission stable while task operations enforce the current mode', async (storage) => {
-    const { ctx, lead } = await setup(storage, [], false)
+  it('keeps step admission stable while task operations enforce the current mode', async () => {
+    const { ctx, lead } = await setup([], false)
     const resolve = () => ctx.tools.resolve({ agent: lead, modelSelection: { provider: 'mock', model: 'mock' }, signal: SIGNAL })
     const disabled = await resolve()
     await ctx.agentTeams.setEnabled(lead, true)
@@ -972,8 +972,8 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: installs Team scope before a cold-resumed teammate request', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [textResponse('first'), textResponse('lead received settlement'), 'hang'])
+  it('installs Team scope before a cold-resumed teammate request', async () => {
+    const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
     const childActivation = await spawn(ctx, lead, 'cold-worker', 'finish once')
     const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
@@ -994,8 +994,8 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps Team tools absent while an orphaned subagent continues ordinary work', async (storage) => {
-    const { ctx, lead, adapter } = await setup(storage, [
+  it('keeps Team tools absent while an orphaned subagent continues ordinary work', async () => {
+    const { ctx, lead, adapter } = await setup([
       textResponse('child done'), textResponse('parent received settlement'), textResponse('independent work done'),
     ])
     const parent = await ctx.agents.create({
@@ -1032,18 +1032,18 @@ describe('dsh-tool-team', () => {
     await orphan.dispose()
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     new Error('root lookup failed'),
     new SubagentError('root lookup failed', 'CONTINUATION_UNAVAILABLE'),
-  ]).map(value => [storage, value] as const)))('%s: propagates unexpected identity lookup failures: %s', async (storage, failure) => {
-    const { ctx, lead } = await setup(storage, [])
+  ])('propagates unexpected identity lookup failures: %s', async (failure) => {
+    const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
     await expect(assembly(ctx, lead)).rejects.toMatchObject({ code: 'TOOL_ACTIVATION_FAILED', cause: failure })
     await expect(ctx.systemPrompt.assemble({ scope: lead, agent: lead })).rejects.toBe(failure)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: omits Team guidance when its root is unavailable', async (storage) => {
-    const { ctx, lead } = await setup(storage, [])
+  it('omits Team guidance when its root is unavailable', async () => {
+    const { ctx, lead } = await setup([])
     const unavailable = (): never => { throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED') }
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(unavailable)
     vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(unavailable)
@@ -1052,8 +1052,8 @@ describe('dsh-tool-team', () => {
     expect(context).not.toContain('You are a teammate in the Team')
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: fails safely without a calling Agent and has the function-plugin export shape', async (storage) => {
-    const { ctx } = await setup(storage, [])
+  it('fails safely without a calling Agent and has the function-plugin export shape', async () => {
+    const { ctx } = await setup([])
     const result = await execute(ctx, undefined, 'team_task_list', {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('unknown tool "team_task_list"')

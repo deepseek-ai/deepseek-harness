@@ -6,7 +6,7 @@
 // under the standard discipline: turn 1 produces a bash call plus two
 // parallel reads in one assistant message (tool-call density for the
 // trajectory ledger/timing lanes), turn 2 a markdown-rich reply.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, Response } from 'playwright'
@@ -25,7 +25,6 @@ import {
 } from './scaffold.ts'
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 import { expectWrappedTerminalCommand } from './terminal-command-browser.ts'
-import { generationLogPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/navigation-panes', import.meta.url))
 const SEED = join(SNAPSHOT_DIR, 'session.v3.jsonl')
@@ -502,27 +501,18 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
     expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
 
-    const snapshot = await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID))
-    expect(snapshot?.header.id).toBe(SEED_ID)
-    const sourcePath = generationLogPath(scaffold.persistenceRoot, scaffold.workspaceCwd,
-      brandString<SessionId>(SEED_ID), SESSION_FORMAT_VERSION, 'zstd')
-    const sqlite = process.env.DSH_SNAPSHOT_STORAGE === 'sqlite'
-    expect(snapshot?.location).toEqual(sqlite ? undefined : { kind: 'jsonl', path: sourcePath })
+    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID)))?.location?.path
+    if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
+    expect((await stat(sourcePath)).isFile()).toBe(true)
+    expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
     const markdown = await page.evaluate(() => navigator.clipboard.readText())
-    const sourceBlock = `Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\`\n\n`
-    if (sqlite) expect(markdown).not.toContain('Session file:')
-    else expect(markdown).toContain(sourceBlock)
-    const normalized = markdown.replace(sourceBlock, '').split(scaffold.workspaceCwd).join('{{cwd}}')
-    // The artifact location is asserted separately; both backends share the transcript body.
-    const fixtureSourceBlock = 'Session file:\n\n```text\n{{sessionFile}}\n```\n\n'
-    if (MODE === 'refresh') {
-      const titleEnd = normalized.indexOf('\n\n') + 2
-      const fixture = normalized.slice(0, titleEnd) + fixtureSourceBlock + normalized.slice(titleEnd)
-      await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, fixture.replace(/\n$/u, ''), MODE)
-    }
-    const expected = await readFile(COPY_MARKDOWN_EXPECTED, 'utf8')
-    expect(normalized).toBe(expected.replace(fixtureSourceBlock, ''))
-    expect(normalized).not.toContain('Session file:')
+    expect(markdown).toContain(`Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\``)
+    const normalized = markdown
+      .split(sourcePath).join('{{sessionFile}}')
+      .split(scaffold.workspaceCwd).join('{{cwd}}')
+    // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
+    await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
+    expect(normalized).toContain('Session file:\n\n```text\n{{sessionFile}}\n```')
     expect(normalized).toContain('# NavScenario: first run bash to')
     expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')
     expect(normalized).toContain('<details><summary>3 previous messages</summary>')

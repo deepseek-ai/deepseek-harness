@@ -18,8 +18,8 @@ describe('ACP connection ownership', () => {
     await bridge?.dispose()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposal cancels a running prompt and awaits agent teardown', async (storage) => {
-    harness = await makeBridgeHarness(storage, { script: ['hang'] })
+  it('disposal cancels a running prompt and awaits agent teardown', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
@@ -32,9 +32,9 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposal drains asynchronous assistant image delivery before releasing sessions', async (storage) => {
+  it('disposal drains asynchronous assistant image delivery before releasing sessions', async () => {
     const script: StreamChunk[][] = []
-    harness = await makeBridgeHarness(storage, { script })
+    harness = await makeBridgeHarness({ script })
     const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(4), mediaType: 'image/png' })
     script.push([
       { type: 'block-start', index: 0, blockType: 'image' },
@@ -63,8 +63,8 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: drains continuable subagents before disposing its own sessions', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('drains continuable subagents before disposing its own sessions', async () => {
+    harness = await makeBridgeHarness()
     const order: string[] = []
     let drainedParents: readonly Agent[] = []
     // A continuable Activation outlives the turn that started it, so the bridge
@@ -88,8 +88,8 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: cancels its own prompt before awaiting the descendant drain', async (storage) => {
-    harness = await makeBridgeHarness(storage, { script: ['hang'] })
+  it('cancels its own prompt before awaiting the descendant drain', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
     const order: string[] = []
     const release = Promise.withResolvers<undefined>()
     harness.ctx.provide('subagents', {
@@ -124,8 +124,8 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: reports a failed continuable drain and still disposes its sessions', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('reports a failed continuable drain and still disposes its sessions', async () => {
+    harness = await makeBridgeHarness()
     const warnings: string[] = []
     harness.ctx.logger.warn = (message: string) => { warnings.push(message) }
     harness.ctx.provide('subagents', {
@@ -141,8 +141,8 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: awaits every owned session disposal and reports nested failure reasons', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('awaits every owned session disposal and reports nested failure reasons', async () => {
+    harness = await makeBridgeHarness()
     const create = harness.ctx.agents.create.bind(harness.ctx.agents)
     const releaseSecond = Promise.withResolvers<undefined>()
     const warnings: string[] = []
@@ -194,8 +194,8 @@ describe('ACP connection ownership', () => {
     await disposed.dispose().catch(() => undefined)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: an ACP-only reload rejects new sessions before creating an orphan', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('an ACP-only reload rejects new sessions before creating an orphan', async () => {
+    harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await harness.acpFiber.dispose()
     await expect(harness.client.newSession({ cwd: process.cwd(), mcpServers: [] }))
@@ -203,11 +203,11 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.list()).toHaveLength(0)
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     ['a client disconnect', 'closeClientTransport'],
     ['a failed client transport', 'abortClientTransport'],
-  ] as const).map(value => [storage, ...value] as const)))('%s: %s disposes its session without plugin disposal', async (storage, _name, disconnect) => {
-    harness = await makeBridgeHarness(storage, { script: ['hang'] })
+  ] as const)('%s disposes its session without plugin disposal', async (_name, disconnect) => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
     const bridge = harness
     const create = bridge.ctx.agents.create.bind(bridge.ctx.agents)
     const disposalStarted = Promise.withResolvers<undefined>()
@@ -257,8 +257,8 @@ describe('ACP connection ownership', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disconnect and plugin disposal share one quiescence boundary', async (storage) => {
-    harness = await makeBridgeHarness(storage, { script: ['hang'] })
+  it('disconnect and plugin disposal share one quiescence boundary', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
@@ -270,8 +270,8 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))).toBeUndefined()
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: disposing a session-less bridge is idempotent', async (storage) => {
-    harness = await makeBridgeHarness(storage)
+  it('disposing a session-less bridge is idempotent', async () => {
+    harness = await makeBridgeHarness()
     await Promise.all([harness.acpFiber.dispose(), harness.acpFiber.dispose()])
     expect(harness.ctx.agents.list()).toHaveLength(0)
   })

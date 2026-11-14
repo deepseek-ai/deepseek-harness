@@ -39,7 +39,7 @@ async function registerTurnBoundary(ctx: Context): Promise<void> {
   await ctx.plugin(AgentRegistry)
 }
 
-describe.each(['jsonl', 'sqlite'] as const)('tool-session-query with the real SQLite query provider and %s persistence', (backend) => {
+describe('tool-session-query with the real SQLite provider', () => {
   it('searches live prior-step history and a persisted same-workspace log', { timeout: 20_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-tool-session-query-'))
     temporaryDirectories.push(root)
@@ -51,7 +51,7 @@ describe.each(['jsonl', 'sqlite'] as const)('tool-session-query with the real SQ
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none', storage: backend })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
 
@@ -125,7 +125,7 @@ describe.each(['jsonl', 'sqlite'] as const)('tool-session-query with the real SQ
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
-    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none', storage: backend })
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
 

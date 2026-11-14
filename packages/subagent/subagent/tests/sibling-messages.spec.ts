@@ -60,13 +60,13 @@ afterEach(async () => {
 })
 
 /** Boot persistence, the Agent loop, one spawn provider, and the routed model. */
-async function setup(storage: 'jsonl' | 'sqlite', replies: Record<string, Reply[]>, maxActiveSubagents = 16) {
+async function setup(replies: Record<string, Reply[]>, maxActiveSubagents = 16) {
   const ctx = new Context()
   disposers.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-siblings-'))
   roots.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root })
+  await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
@@ -129,8 +129,8 @@ function textOf(event: SessionEvent<'user/message'>): string {
 }
 
 describe('subagent sibling messages', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps duplicate descriptions as display text and names siblings uniquely', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: [textResponse('done'), textResponse('resumed')] })
+  it('keeps duplicate descriptions as display text and names siblings uniquely', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('resumed')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
@@ -151,8 +151,8 @@ describe('subagent sibling messages', () => {
     await settled(ctx, a)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps unrelated parents outside sibling delivery even when descriptions match', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
+  it('keeps unrelated parents outside sibling delivery even when descriptions match', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const other = await ctx.agentLoop.create(brandString<SessionId>('other-parent'), { provider: 'mock', model: 'mock' })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
@@ -168,8 +168,8 @@ describe('subagent sibling messages', () => {
 
 
 describe('tree-wide messages', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps ordinary forks independent and rejects stale callers or broken ancestry', async (storage) => {
-    const { ctx, parent } = await setup(storage, {})
+  it('keeps ordinary forks independent and rejects stale callers or broken ancestry', async () => {
+    const { ctx, parent } = await setup({})
     expect(ctx.subagents.rootOf(parent)).toBe(parent)
     expect(() => ctx.subagents.rootOf({ ...parent })).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     const source = ctx.sessions.create(brandString<SessionId>('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
@@ -192,8 +192,8 @@ describe('tree-wide messages', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: delivers across branches, to deeper descendants, and back to the Lead', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: ['hang'], leaf: ['hang'] })
+  it('delivers across branches, to deeper descendants, and back to the Lead', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'], leaf: ['hang'] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
@@ -220,8 +220,8 @@ describe('tree-wide messages', () => {
     await expect(ctx.subagents.sendMessage(sender, a, [], { signal })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: restores only the target within subagent tree capacity while its creator remains offline', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, {
+  it('restores only the target within subagent tree capacity while its creator remains offline', async () => {
+    const { ctx, parent, adapter } = await setup({
       a: ['hang'], branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')],
     }, 2)
     const branchId = await start(ctx, parent, 'branch')
@@ -249,8 +249,8 @@ describe('tree-wide messages', () => {
     expect(branchMessages.some(event => textOf(event).includes('cold cousin'))).toBe(false)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rechecks the sender after asynchronous target discovery', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
+  it('rechecks the sender after asynchronous target discovery', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
@@ -273,8 +273,8 @@ describe('tree-wide messages', () => {
       query.mockRestore()
     }
   })
-  it.each(['jsonl', 'sqlite'] as const)('%s: leaves the offline creator untouched when target history cannot be read', async (storage) => {
-    const { ctx, parent } = await setup(storage, { branch: ['hang'], leaf: [textResponse('done')] })
+  it('leaves the offline creator untouched when target history cannot be read', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('done')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
@@ -291,8 +291,8 @@ describe('tree-wide messages', () => {
     expect(ctx.agents.get(leafId)).toBeUndefined()
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => (['missing', 'cyclic'] as const).map(value => [storage, value] as const)))('%s: rejects %s creation evidence before restoring a target', async (storage, evidence) => {
-    const { ctx, parent } = await setup(storage, { branch: ['hang'], leaf: [textResponse('done')] })
+  it.each(['missing', 'cyclic'] as const)('rejects %s creation evidence before restoring a target', async (evidence) => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('done')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
@@ -316,8 +316,8 @@ describe('tree-wide messages', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: rejects a replaced root after asynchronous target discovery', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
+  it('rejects a replaced root after asynchronous target discovery', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
@@ -342,8 +342,8 @@ describe('tree-wide messages', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([false, true]).map(value => [storage, value] as const)))('%s: restores the target while its creator is still closing (cleanup failure=%s)', async (storage, failCleanup) => {
-    const { ctx, parent } = await setup(storage, { branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')] })
+  it.each([false, true])('restores the target while its creator is still closing (cleanup failure=%s)', async (failCleanup) => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
@@ -379,8 +379,8 @@ describe('tree-wide messages', () => {
 })
 
 describe('agent names', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: records requested and default names and rejects duplicates and invalid names before startup', async (storage) => {
-    const { ctx, parent, adapter } = await setup(storage, { a: ['hang'], b: ['hang'] })
+  it('records requested and default names and rejects duplicates and invalid names before startup', async () => {
+    const { ctx, parent, adapter } = await setup({ a: ['hang'], b: ['hang'] })
     const reviewer = await startNamed(ctx, parent, 'a', 'reviewer')
     const unnamed = await startNamed(ctx, parent, 'b')
     expect([reviewer.name, unnamed.name]).toEqual(['reviewer', 'agent-1'])
@@ -399,8 +399,8 @@ describe('agent names', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: holds a requested name across concurrent startup and releases it when startup fails', async (storage) => {
-    const { ctx, parent } = await setup(storage, { a: ['hang'], b: ['hang'], c: ['hang'] })
+  it('holds a requested name across concurrent startup and releases it when startup fails', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'], c: ['hang'] })
     const first = startNamed(ctx, parent, 'a', 'worker')
     const concurrent = startNamed(ctx, parent, 'c')
     await expect(startNamed(ctx, parent, 'b', 'worker')).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
@@ -417,8 +417,8 @@ describe('agent names', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: names nested members by path and resolves names without granting authority', async (storage) => {
-    const { ctx, parent } = await setup(storage, { branch: ['hang'], leaf: ['hang'] })
+  it('names nested members by path and resolves names without granting authority', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: ['hang'] })
     const branch = await startNamed(ctx, parent, 'branch', 'reviewer')
     const branchAgent = await running(ctx, branch.childId)
     const leaf = await startNamed(ctx, branchAgent, 'leaf', 'checker')
@@ -441,8 +441,8 @@ describe('agent names', () => {
     await settled(ctx, leaf.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)("%s: restores a cold member's path from the catalogs along its creation chain", async (storage) => {
-    const { ctx, parent } = await setup(storage, { branch: ['hang'], leaf: [textResponse('first'), 'hang'] })
+  it('restores a cold member\'s path from the catalogs along its creation chain', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('first'), 'hang'] })
     const branch = await startNamed(ctx, parent, 'branch', 'reviewer')
     const branchAgent = await running(ctx, branch.childId)
     const leaf = await startNamed(ctx, branchAgent, 'leaf', 'checker')
@@ -457,8 +457,8 @@ describe('agent names', () => {
     await settled(ctx, leaf.childId)
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: addresses members below an unnamed historical creator by Session id', async (storage) => {
-    const { ctx, parent } = await setup(storage, { legacy: ['hang'], leaf: ['hang'] })
+  it('addresses members below an unnamed historical creator by Session id', async () => {
+    const { ctx, parent } = await setup({ legacy: ['hang'], leaf: ['hang'] })
     const legacy = await ctx.agentLoop.create(brandString<SessionId>('legacy-child'), { provider: 'mock', model: 'mock' })
     bindSubagentActivation(ctx, legacy, parent)
     expect(ctx.subagents.namesOf(legacy)).toEqual({ self: 'legacy-child', parent: 'lead' })

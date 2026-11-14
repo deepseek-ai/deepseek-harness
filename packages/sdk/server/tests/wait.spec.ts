@@ -15,14 +15,14 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-async function setup(storage: 'jsonl' | 'sqlite', beforeServer?: (ctx: Context) => void) {
+async function setup(beforeServer?: (ctx: Context) => void) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-wait-'))
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(JsonlSessionPersistence, { storage, root })
+  await ctx.plugin(JsonlSessionPersistence, { root })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(Array.from({ length: 5 }, () => textResponse('answer'))))
   beforeServer?.(ctx)
   const server = new HarnessSdkJsonRpcServer(ctx, {
@@ -41,8 +41,8 @@ async function setup(storage: 'jsonl' | 'sqlite', beforeServer?: (ctx: Context) 
 }
 
 describe('SDK session/wait with parked child input', () => {
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([1, 2]).map(value => [storage, value] as const)))('%s: finishes after interrupting a child at depth %s with unclaimed steering', async (storage, depth) => {
-    const { ctx, server, dispose } = await setup(storage)
+  it.each([1, 2])('finishes after interrupting a child at depth %s with unclaimed steering', async (depth) => {
+    const { ctx, server, dispose } = await setup()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     let closeChildren: (() => Promise<void>) | undefined
@@ -97,8 +97,8 @@ describe('SDK session/wait with parked child input', () => {
 })
 
 describe('SDK session/wait failures', () => {
-  it.each(['jsonl', 'sqlite'] as const)('%s: keeps an unowned descendant failure separate from the SDK root outcome', async (storage) => {
-    const { ctx, server, dispose } = await setup(storage)
+  it('keeps an unowned descendant failure separate from the SDK root outcome', async () => {
+    const { ctx, server, dispose } = await setup()
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
       const parent = ctx.agents.get(brandString<SessionId>('main'))!
@@ -132,11 +132,11 @@ describe('SDK session/wait failures', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([
+  it.each([
     ['turn/start', 'before'], ['turn/start', 'during'],
     ['turn/end', 'before'], ['turn/end', 'during'],
-  ] as const).map(value => [storage, ...value] as const)))('%s: rejects a later %s failure %s waiting and allows successful recovery', async (storage, failedEvent, timing) => {
-    const { ctx, server, dispose } = await setup(storage)
+  ] as const)('rejects a later %s failure %s waiting and allows successful recovery', async (failedEvent, timing) => {
+    const { ctx, server, dispose } = await setup()
     const children = Promise.withResolvers<boolean>()
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
@@ -180,8 +180,8 @@ describe('SDK session/wait failures', () => {
     }
   })
 
-  it.each(['jsonl', 'sqlite'] as const)('%s: leaves a represented turn error in the durable outcome', async (storage) => {
-    const { ctx, server, dispose } = await setup(storage)
+  it('leaves a represented turn error in the durable outcome', async () => {
+    const { ctx, server, dispose } = await setup()
     try {
       ctx.on('agent/pre-step', () => { throw new Error('represented failure') })
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'fail normally' }] })
@@ -194,9 +194,9 @@ describe('SDK session/wait failures', () => {
     }
   })
 
-  it.each((['jsonl', 'sqlite'] as const).flatMap(storage => ([new Error('terminal publication failed'), undefined]).map(value => [storage, value] as const)))('%s: retains an error emitted during terminal publication (%s)', async (storage, failure) => {
+  it.each([new Error('terminal publication failed'), undefined])('retains an error emitted during terminal publication (%s)', async (failure) => {
     let enabled = true
-    const { ctx, server, dispose } = await setup(storage, (ctx) => {
+    const { ctx, server, dispose } = await setup((ctx) => {
       ctx.on('session/event', (session, event) => {
         if (!enabled || event.type !== 'turn/end') return
         const agent = ctx.agents.get(session.id)
