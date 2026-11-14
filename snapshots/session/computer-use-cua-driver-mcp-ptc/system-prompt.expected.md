@@ -458,12 +458,12 @@ interface ToolOutputMap {
   list_mcp_resource_templates: JsonValue;
   list_mcp_resources: JsonValue;
   "mcp__cua-driver-mcp__disconnect": {
-    /** MCP content blocks in order. A viewable image block is an Image; inspect it to see the image. */
+    /** MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block. */
     content: JsonValue[];
     structuredContent?: JsonValue;
   };
   "mcp__cua-driver-mcp__screenshot": {
-    /** MCP content blocks in order. A viewable image block is an Image; inspect it to see the image. */
+    /** MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block. */
     content: JsonValue[];
     structuredContent?: JsonValue;
   };

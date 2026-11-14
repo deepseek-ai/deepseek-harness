@@ -184,7 +184,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 #### 模型看到什么
 
-发现成功后，SDK 接受的 MCP 工具以原生工具名称 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）出现，携带服务器描述和输入 schema。重新同步会替换注册代；释放或重连预算耗尽会移除工具。未声明 tools 能力的服务器以空工具集连接。在 PTC 模式下，每个工具的 SDK 输出声明会为其 `content` 数组附上说明：`MCP content blocks in order. A viewable image block is an Image; inspect it to see the image.`
+发现成功后，SDK 接受的 MCP 工具以原生工具名称 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）出现，携带服务器描述和输入 schema。重新同步会替换注册代；释放或重连预算耗尽会移除工具。未声明 tools 能力的服务器以空工具集连接。在 PTC 模式下，每个工具的 SDK 输出声明会为其 `content` 数组附上说明：`MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.`
 
 #### Token 影响
 
@@ -198,7 +198,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 #### 模型看到什么
 
-公开工具名称和 JSON 参数保留在 assistant 历史中。规范值始终为程序化调用方与 PTC 模式调用方保留完整的 MCP JSON 块与可选结构化内容；受支持的图片块在确切路由能力得到证明后，按原始顺序与文本一起投影。程序能读取最终结果保留的每张图片时，PTC 程序将这些图片块作为 `Image` 接收，`inspect` 将其显示为图片而非 base64，且图片仅在被 inspect 时进入对话；否则程序接收原始块，图片作为额外上下文附加。被拒绝的图片、音频、嵌入资源、资源链接与未知块继续以有界文本诊断可见；MCP `isError` 会在图片持久化之前拒绝调用。
+公开工具名称和 JSON 参数保留在 assistant 历史中。规范值始终为程序化调用方与 PTC 模式调用方保留完整的 MCP JSON 块与可选结构化内容；受支持的图片块在确切路由能力得到证明后，按原始顺序与文本一起投影。程序能读取最终结果保留的每张图片时，PTC 程序将这些图片块作为 `Image` 接收，`inspect` 将其显示为图片而非 base64，且结果的文本与图片仅在被 inspect 时进入对话；否则程序接收原始块，完整的结果内容作为额外上下文附加。被拒绝的图片、音频、嵌入资源、资源链接与未知块继续以有界文本诊断可见；MCP `isError` 会在图片持久化之前拒绝调用。
 
 #### Token 影响
 

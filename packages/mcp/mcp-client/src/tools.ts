@@ -352,7 +352,7 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
     schema: {
       type: 'object',
       properties: {
-        content: { type: 'array', items: {}, description: 'MCP content blocks in order. A viewable image block is an Image; inspect it to see the image.' },
+        content: { type: 'array', items: {}, description: 'MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.' },
         structuredContent: structuredSchema ?? {},
       },
       required: structuredSchema === undefined ? ['content'] : ['content', 'structuredContent'],

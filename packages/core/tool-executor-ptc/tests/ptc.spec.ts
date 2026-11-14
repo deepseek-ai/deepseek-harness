@@ -1788,16 +1788,21 @@ describe('the run_code dispatch bridge', () => {
     expect(content[2]).toEqual({ type: 'image', data: 'Ag==', attachment: removed })
   })
 
-  it.each(['missing', 'throwing'] as const)('delivers referenced result images as deferred context with %s image storage paths', async (storage) => {
+  it.each(['missing', 'throwing', 'deep'] as const)('delivers referenced result images as deferred context with %s substitution input', async (storage) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     onTestFinished(() => ctx.fiber.dispose())
-    if (storage === 'throwing') {
-      ctx.provide('attachments', { imageHostPath: () => { throw new Error('invalid reference') } } as never)
+    if (storage !== 'missing') {
+      ctx.provide('attachments', { imageHostPath: () => {
+        if (storage === 'throwing') throw new Error('invalid reference')
+        return '/host/image.png'
+      } } as never)
       ctx.provide('fs', { processPathFromHostPath: (path: string) => path } as never)
     }
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const shown = { attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1 }
-    const raw = { content: [{ type: 'image', data: 'AQ==', attachment: shown }] }
+    let deep: JsonValue = []
+    for (let depth = 0; depth < (storage === 'deep' ? 5_000 : 0); depth++) deep = [deep]
+    const raw = { content: [{ type: 'image', data: 'AQ==', attachment: shown }], deep }
     ctx.tools.register(defineTool({
       name: 'screenshot', description: 'Return an image without a program path.', parameters: {},
       output: { schema: { type: 'json' }, render: () => [{ type: 'image', attachment: shown }] },
@@ -1811,9 +1816,13 @@ describe('the run_code dispatch bridge', () => {
 
     const result = await runCode(ctx, 'program')
 
-    expect(value).toEqual(raw)
+    // Recursive equality would exceed the stack on the deep fixture; the deep member is checked by depth.
+    expect((value as typeof raw).content).toEqual(raw.content)
+    let depth = 0
+    for (let level: JsonValue = (value as typeof raw).deep; Array.isArray(level) && level.length > 0; level = level[0]!) depth++
+    expect(depth).toBe(storage === 'deep' ? 5_000 : 0)
     expect(result.additionalContexts).toMatchObject([{ source: { kind: 'ptc-mode' }, content: [{ type: 'image', attachment: shown }] }])
-    expect(warn).toHaveBeenCalledTimes(storage === 'throwing' ? 1 : 0)
+    expect(warn).toHaveBeenCalledTimes(storage === 'missing' ? 0 : 1)
   })
 
   it.each([

@@ -184,7 +184,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server without the tools capability connects with an empty tool set. In PTC mode, each tool's SDK output declaration documents its `content` array: `MCP content blocks in order. A viewable image block is an Image; inspect it to see the image.`
+After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server without the tools capability connects with an empty tool set. In PTC mode, each tool's SDK output declaration documents its `content` array: `MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.`
 
 #### Token effect
 
@@ -198,7 +198,7 @@ The tool-definition prefix stays stable while the discovered set and schemas are
 
 #### What the model sees
 
-The public tool name and JSON arguments remain in assistant history. The canonical value retains the complete MCP JSON blocks and optional structured content for programmatic and PTC mode callers; supported image blocks project beside text in their original order after exact route-capability proof. When the program can read every image the final result keeps, a PTC program receives those image blocks as `Image`s that `inspect` shows as pictures, not base64, and the pictures enter the conversation only when inspected; otherwise the program receives the raw blocks and the pictures are attached as additional context. Refused images, audio, embedded resources, resource links, and unknown blocks remain visible as bounded text diagnostics, and MCP `isError` rejects the call before image persistence.
+The public tool name and JSON arguments remain in assistant history. The canonical value retains the complete MCP JSON blocks and optional structured content for programmatic and PTC mode callers; supported image blocks project beside text in their original order after exact route-capability proof. When the program can read every image the final result keeps, a PTC program receives those image blocks as `Image`s that `inspect` shows as pictures, not base64, and the result's text and pictures enter the conversation only when inspected; otherwise the program receives the raw blocks and the complete result content is attached as additional context. Refused images, audio, embedded resources, resource links, and unknown blocks remain visible as bounded text diagnostics, and MCP `isError` rejects the call before image persistence.
 
 #### Token effect
 

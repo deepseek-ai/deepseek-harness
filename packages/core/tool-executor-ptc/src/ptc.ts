@@ -567,17 +567,16 @@ export function createRunCodeTransport(
                 if (parked === undefined) return
                 const result = await executor.complete(parked.exec, parked)
                 const images = result.content.filter(block => block.type === 'image')
-                // A value that carries every result image hands them to the program; otherwise they reach the model directly.
-                const programValue = usesProgramImage || result.isError || images.length === 0 ? undefined
-                  : substituteProgramImages(result.value, images, (ref) => {
-                    // The ordered lane must not reject: an unresolvable reference keeps the images in model context.
-                    try {
-                      return readableImage(ref)
-                    } catch (error: unknown) {
-                      logger.warn(`tools: ${name} image ${String(ref.attachmentId)} has no program path: ${toolErrorMessage(error)}`)
-                      return undefined
-                    }
-                  })
+                // A value carrying every result image goes to the program; otherwise the content reaches the model directly.
+                let programValue: PtcJsonValue | undefined
+                if (!usesProgramImage && !result.isError && images.length > 0) {
+                  // The ordered lane must not reject: a failed substitution keeps the content in model context.
+                  try {
+                    programValue = substituteProgramImages(result.value, images, readableImage)
+                  } catch (error: unknown) {
+                    logger.warn(`tools: ${name} result images stay in model context: ${toolErrorMessage(error)}`)
+                  }
+                }
                 if (!usesProgramImage && !result.isError && images.length > 0 && programValue === undefined) {
                   exec.deferContext(createUserMessage({
                     content: result.content,
