@@ -27,7 +27,7 @@ import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to
 import { sessionDir } from './paths.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 1
 const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
@@ -36,6 +36,12 @@ const SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
  * between two event-loop yields while reading a stored history slice.
  */
 const READ_DECODE_YIELD_EVENTS = 2048
+/** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
+const BUSY_TIMEOUT_MS = 5000
+/** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
+const LIVE_WRITE_BATCH_MAX_DELAY_MS = 200
+/** Admitted live events that start a write before the delay elapses, bounding one transaction's size. */
+const LIVE_WRITE_BATCH_MAX_EVENTS = 256
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
@@ -94,7 +100,6 @@ export class SqliteLogs {
     header: SessionHeader
     inheritedCount: number
     head: SegmentId
-    fork?: { sourceId: SessionId; endSeq: number; writeFrom: number }
   }>()
   private readonly creating = new Set<SessionId>()
   private readonly directorySyncs = new Set<string>()
@@ -176,7 +181,7 @@ export class SqliteLogs {
     const { DatabaseSync } = await import('node:sqlite')
     let db: DatabaseSync | undefined
     try {
-      const opened = new DatabaseSync(this.path, { timeout: 5000 })
+      const opened = new DatabaseSync(this.path, { timeout: BUSY_TIMEOUT_MS })
       db = opened
       // Readers can acquire a snapshot as soon as schema creation commits.
       opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
@@ -356,38 +361,45 @@ export class SqliteLogs {
     this.statement(db, 'INSERT INTO segments VALUES (?, ?, ?, ?)').run(id, parent?.segment_uuid ?? null, parent === undefined ? null : end, base)
   }
 
-  /** Locate the Segment holding the first `end` source events; `end` never exceeds the source event count. */
-  private cut(db: DatabaseSync, source: Metadata, end: number): { parent?: Segment; end: number } {
+  /**
+   * Locate the Segment a fork of `source` at `end` attaches to, through the ancestor index rather than the parent chain.
+   * Fork creation is the consumer; `end` never exceeds the source event count.
+   * @param db - open database inside the caller's transaction.
+   * @param source - forked Trace metadata.
+   * @param end - exclusive logical prefix length shared with the source.
+   * @returns the attachment Segment and the prefix length within it; no Segment for an empty prefix.
+   */
+  cut(db: DatabaseSync, source: Metadata, end: number): { parent?: Segment; end: number } {
     if (end === 0) return { end: 0 }
-    const visited = new Set<SegmentId>()
-    let current = this.segment(db, source.tail_segment_uuid), visible = source.event_count - current.base_seq
-    for (;;) {
-      if (visited.has(current.segment_uuid) || visible < 0 || visible > current.event_count) {
-        throw new HarnessError('Invalid Trace segment chain', 'SESSION_STORAGE_CORRUPT')
-      }
-      visited.add(current.segment_uuid)
-      if (current.parent_segment_uuid === null || end >= current.base_seq) return { parent: current, end: end - current.base_seq }
-      const child = current
-      current = this.segment(db, child.parent_segment_uuid)
-      visible = child.parent_end_seq
-      if (current.base_seq + visible !== child.base_seq) throw new HarnessError('Invalid segment offset', 'SESSION_STORAGE_CORRUPT')
-    }
+    const tail = this.segment(db, source.tail_segment_uuid)
+    if (end >= tail.base_seq) return { parent: tail, end: end - tail.base_seq }
+    // Among ancestors starting at or before the cut, the deepest one holds it; an empty-prefix tie is logically equivalent.
+    const raw = this.statement(db, `SELECT s.*, a.end_seq AS visible_end, COALESCE((SELECT seq + 1 FROM events
+      WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
+      JOIN segments s ON s.segment_uuid = a.ancestor_uuid
+      WHERE a.segment_uuid = ? AND s.base_seq <= ? ORDER BY s.base_seq DESC, a.end_seq DESC LIMIT 1`).get(tail.segment_uuid, end)
+    if (raw === undefined) throw new HarnessError('Invalid Trace segment chain', 'SESSION_STORAGE_CORRUPT')
+    let parent: Segment, visible: number
+    try {
+      parent = segmentRow.parse(raw)
+      visible = z.object({ visible_end: z.number().int().nonnegative() }).parse(raw).visible_end
+    } catch (error: unknown) { throw this.corruption('Stored SQLite predecessor metadata is invalid', error) }
+    const within = end - parent.base_seq
+    if (within > visible || within > parent.event_count) throw new HarnessError('Invalid segment offset', 'SESSION_STORAGE_CORRUPT')
+    return { parent, end: within }
   }
 
   /**
    * Reserve a pending Trace; its rows commit with the first append or flush.
    * @param header - loop-owned metadata.
    * @param options - optional cancellation and inherited count.
-   * @param fork - source prefix recorded by the awaited fork waterfall; the child shares its durable rows.
    * @returns exclusive in-process write handle.
    */
-  async create(header: SessionHeader, options?: SessionPersistenceCreateOptions,
-    fork?: { sourceId: SessionId; endSeq: number }): Promise<SqliteTrace> {
+  async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SqliteTrace> {
     this.check()
     options?.signal?.throwIfAborted()
-    const meta = { ...header }
     // Preserve the existing seeded/cut refusal before reserving a Session.
-    materializeHeader(meta, options?.inheritedEventCount)
+    const meta = materializeHeader(header, options?.inheritedEventCount)
     const inheritedCount = options?.inheritedEventCount ?? 0
     if (this.creating.has(meta.id) || this.pendingCreates.has(meta.id) || this.writers.has(meta.id)) {
       throw new SessionAlreadyExistsError(meta.id)
@@ -398,20 +410,7 @@ export class SqliteLogs {
       if (!await this.exists()) await this.assertNewDatabase()
       this.check()
       options?.signal?.throwIfAborted()
-      let pendingFork: { sourceId: SessionId; endSeq: number; writeFrom: number } | undefined
-      if (fork !== undefined) {
-        const source = this.row(await this.database(), fork.sourceId)
-        if (source === undefined && !this.pendingCreates.has(fork.sourceId)) throw new SessionPersistenceNotFoundError(fork.sourceId)
-        // Share only the durable source prefix within the requested cut.
-        // The child seed writes any remaining events into its own tail.
-        pendingFork = { ...fork, writeFrom: Math.min(fork.endSeq, source?.event_count ?? 0) }
-      }
-      this.pendingCreates.set(meta.id, {
-        header: meta,
-        inheritedCount,
-        head: segmentId(randomUUID()),
-        ...(pendingFork === undefined ? {} : { fork: pendingFork }),
-      })
+      this.pendingCreates.set(meta.id, { header: meta, inheritedCount, head: segmentId(randomUUID()) })
       return await this.admit(meta, 'write', inheritedCount, true)
     } catch (error: unknown) {
       this.pendingCreates.delete(meta.id)
@@ -484,7 +483,7 @@ export class SqliteLogs {
     this.transaction(db, () => {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = segmentId(randomUUID())
-      this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
+      this.newSegment(db, head, undefined, 0)
       this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(storedHeader), head, inheritedCount)
       const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
       for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
@@ -552,8 +551,7 @@ export class SqliteLogs {
       }, () => {
         this.assertHealthy()
       },
-      SessionLogOffset(inheritedCount), this.pendingCreates.get(header.id)?.fork?.endSeq,
-      this.pendingCreates.get(header.id)?.fork?.writeFrom)
+      SessionLogOffset(inheritedCount))
       this.handles.add(handle)
       if (access === 'write') this.writers.set(header.id, handle)
       return handle
@@ -671,17 +669,7 @@ export class SqliteLogs {
     const pending = this.pendingCreates.get(header.id)
     if (pending === undefined) throw new SessionPersistenceNotFoundError(header.id)
     const head = pending.head
-    if (pending.fork === undefined) this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
-    else {
-      const source = this.row(db, pending.fork.sourceId)
-      if (source === undefined) {
-        if (!this.pendingCreates.has(pending.fork.sourceId)) throw new SessionPersistenceNotFoundError(pending.fork.sourceId)
-        this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
-      } else {
-        const cut = this.cut(db, source, pending.fork.writeFrom)
-        this.newSegment(db, head, cut.parent, cut.end)
-      }
-    }
+    this.newSegment(db, head, undefined, 0)
     const storedHeader = materializeHeader(header, SessionLogOffset(pending.inheritedCount))
     this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(
       header.id, JSON.stringify(storedHeader), head, pending.inheritedCount,
@@ -699,7 +687,6 @@ export class SqliteLogs {
     this.assertHealthy()
     const pending = this.pendingCreates.get(header.id)
     if (pending === undefined) return
-    if (pending.fork !== undefined) throw new HarnessError('Fork creation requires its constructor seed before flush', 'SESSION_FORK_SEED_REQUIRED')
     const db = await this.database()
     this.transaction(db, () => { this.ensureRow(db, header) })
     this.pendingCreates.delete(header.id)
@@ -865,11 +852,10 @@ export class SqliteTrace implements SessionHandle {
     private readonly logs: SqliteLogs,
     private readonly release: () => Promise<void>, private readonly acquireLease: () => Promise<void>,
     private readonly checkStorage: () => void,
-    readonly inheritedEventCount = SessionLogOffset(0),
-    private initialForkCut?: number, private forkWriteFrom?: number) {
+    readonly inheritedEventCount = SessionLogOffset(0)) {
     this.buffer = new LiveWriteBuffer({
-      delayMs: 200,
-      maxEvents: 256,
+      delayMs: LIVE_WRITE_BATCH_MAX_DELAY_MS,
+      maxEvents: LIVE_WRITE_BATCH_MAX_EVENTS,
       enqueue: operation => this.enqueue(operation),
       persist: batch => this.logs.append(this.header, batch),
       retry: (error) => {
@@ -941,22 +927,7 @@ export class SqliteTrace implements SessionHandle {
     if (this.access !== 'write') throw new SessionReadOnlyError(this.id, 'append')
     if (events.length === 0) return
     options?.signal?.throwIfAborted()
-    const forkCut = this.initialForkCut
-    if (forkCut !== undefined) {
-      assertContiguous(this.id, events, 0)
-      const marker = events[forkCut]
-      if (marker?.type !== 'session/end-seed' || marker.data.inherited !== true) {
-        throw new HarnessError('Fork seed is missing its inherited-prefix marker', 'SESSION_FORK_SEED_REQUIRED')
-      }
-      /* v8 ignore start -- a fork seed is admitted before any live event by construction. */
-      if (this.buffer.length > 0 || this.buffer.active) {
-        throw new HarnessError('Fork seed cannot follow admitted live events', 'SESSION_FORK_SEED_REQUIRED')
-      }
-      /* v8 ignore stop */
-    }
-    /* v8 ignore next -- a fork handle always carries its durable write offset with the logical marker. */
-    const writeFrom = this.forkWriteFrom ?? forkCut
-    const batch = materializeAppendBatch(forkCut === undefined ? events : events.slice(writeFrom))
+    const batch = materializeAppendBatch(events)
     // Live and explicit batches own separate durable writes. Drain admitted live
     // events first so an aborted or failed explicit append cannot take them.
     await this.drainLive()
@@ -968,8 +939,6 @@ export class SqliteTrace implements SessionHandle {
       options?.signal?.throwIfAborted()
       try {
         await this.logs.append(this.header, batch)
-        this.initialForkCut = undefined
-        this.forkWriteFrom = undefined
       } catch (error: unknown) {
         if (error instanceof HarnessError && error.code === 'SESSION_STORAGE_PUBLICATION') this.failure = error
         throw error
