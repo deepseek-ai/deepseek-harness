@@ -10,11 +10,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, type ToolCallId  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import { PtcRuntime, PtcRuntimeError, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcRuntime, PtcRuntimeError, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunFailure, PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -1706,25 +1707,30 @@ describe('the run_code dispatch bridge', () => {
     ])
   })
 
-  it('records image-bearing sub-call results for the TypeScript runtime', async () => {
+  it('delivers result images the program value does not reference as deferred context', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
-    ctx.tools.register(defineContentToolFixture({
+    ctx.tools.register(defineTool({
       name: 'image_result',
       description: 'Return one durable image.',
       parameters: {},
-      execute: () => Promise.resolve([
-        { type: 'text', text: 'image result' },
-        {
-          type: 'image',
-          attachment: {
-            attachmentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as never,
-            mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      output: {
+        schema: { type: 'json' },
+        render: () => [
+          { type: 'text', text: 'image result' },
+          {
+            type: 'image',
+            attachment: {
+              attachmentId: brandString<AttachmentId>('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+              mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+            },
           },
-        },
-      ]),
+        ],
+      },
+      execute: () => Promise.resolve({ content: [{ type: 'text', text: 'image result' }, { type: 'image', data: 'AQ==' }] }),
     }))
+    let value: unknown
     runtime.behavior = async (request) => {
-      await request.bindings[0]!.functions.image_result!({})
+      value = await request.bindings[0]!.functions.image_result!({})
       return printed('done')
     }
 
@@ -1738,6 +1744,76 @@ describe('the run_code dispatch bridge', () => {
       ],
     }])
     expect(result.content).toEqual([{ type: 'text', text: 'done' }])
+    expect(value).toEqual({ content: [{ type: 'text', text: 'image result' }, { type: 'image', data: 'AQ==' }] })
+  })
+
+  it('substitutes program images for value entries that reference finalized result images', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    const ref = (letter: string) => ({
+      attachmentId: brandString<AttachmentId>(`sha256:${letter.repeat(64)}`), mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1,
+    })
+    ctx.provide('attachments', { imageHostPath: (image: { attachmentId: string }) => `/host/${image.attachmentId}.png` } as never)
+    ctx.provide('fs', { processPathFromHostPath: (path: string) => `/program${path}` } as never)
+    const shown = ref('a')
+    const removed = ref('b')
+    ctx.tools.register(defineTool({
+      name: 'screenshot',
+      description: 'Return text, one shown image, and one image a policy removed.',
+      parameters: {},
+      output: {
+        schema: { type: 'json' },
+        render: () => [{ type: 'text', text: 'Window state' }, { type: 'image', attachment: shown }],
+      },
+      execute: () => Promise.resolve({ content: [
+        { type: 'text', text: 'Window state' },
+        { type: 'image', data: 'AQ==', attachment: shown },
+        { type: 'image', data: 'Ag==', attachment: removed },
+      ] }),
+    }))
+    let value: unknown
+    runtime.behavior = async (request) => {
+      value = await request.bindings[0]!.functions.screenshot!({})
+      return printed('done')
+    }
+
+    const result = await runCode(ctx, 'program')
+
+    expect(result.isError).toBe(false)
+    expect(result.additionalContexts).toBeUndefined()
+    const content = (value as { content: unknown[] }).content
+    expect(content[0]).toEqual({ type: 'text', text: 'Window state' })
+    expect(content[1]).toBeInstanceOf(PtcImage)
+    expect(content[1]).toMatchObject({ path: `/program/host/${shown.attachmentId}.png`, attachment: shown })
+    expect(content[2]).toEqual({ type: 'image', data: 'Ag==', attachment: removed })
+  })
+
+  it.each(['missing', 'throwing'] as const)('delivers referenced result images as deferred context with %s image storage paths', async (storage) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    if (storage === 'throwing') {
+      ctx.provide('attachments', { imageHostPath: () => { throw new Error('invalid reference') } } as never)
+      ctx.provide('fs', { processPathFromHostPath: (path: string) => path } as never)
+    }
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const shown = { attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1 }
+    const raw = { content: [{ type: 'image', data: 'AQ==', attachment: shown }] }
+    ctx.tools.register(defineTool({
+      name: 'screenshot', description: 'Return an image without a program path.', parameters: {},
+      output: { schema: { type: 'json' }, render: () => [{ type: 'image', attachment: shown }] },
+      execute: () => Promise.resolve(raw),
+    }))
+    let value: unknown
+    runtime.behavior = async (request) => {
+      value = await request.bindings[0]!.functions.screenshot!({})
+      return printed('done')
+    }
+
+    const result = await runCode(ctx, 'program')
+
+    expect(value).toEqual(raw)
+    expect(result.additionalContexts).toMatchObject([{ source: { kind: 'ptc-mode' }, content: [{ type: 'image', attachment: shown }] }])
+    expect(warn).toHaveBeenCalledTimes(storage === 'throwing' ? 1 : 0)
   })
 
   it.each([
