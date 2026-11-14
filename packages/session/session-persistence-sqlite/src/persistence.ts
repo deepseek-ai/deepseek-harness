@@ -13,7 +13,7 @@ import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistence
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
-import { SqliteLogs, isAbsent } from './sqlite.ts'
+import { SqliteStore, isAbsent } from './sqlite.ts'
 import { SessionWriteLease } from './lease.ts'
 import { sessionDir } from './paths.ts'
 import { LegacySessionMigration } from './migration.ts'
@@ -22,9 +22,9 @@ import type { JsonlBackend } from './migration.ts'
 const marker = z.object({ id: z.string().transform(SessionId), database: z.string() }).strict()
 
 /** Routes the existing logical Session API; Segment identifiers never cross this service. */
-export class TracePersistence extends SessionPersistence {
+export class SqliteSessionPersistence extends SessionPersistence {
   private readonly directory: string
-  private readonly sqlite: SqliteLogs
+  private readonly sqlite: SqliteStore
   private readonly migration: LegacySessionMigration
   private readonly rootPath: string
   private readonly jsonl: JsonlBackend
@@ -36,7 +36,7 @@ export class TracePersistence extends SessionPersistence {
     this.rootPath = resolve(config.root)
     this.listLimit = pLimit(config.listConcurrency ?? 3)
     this.directory = join(this.rootPath, '.segments')
-    this.sqlite = new SqliteLogs({
+    this.sqlite = new SqliteStore({
       path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
       publish: id => this.publish(id),

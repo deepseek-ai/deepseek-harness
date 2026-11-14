@@ -2,7 +2,7 @@
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { Config as JsonlConfig, JsonlSessionPersistence } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Config as JsonlConfigOptions } from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { TracePersistence } from './persistence.ts'
+import { SqliteSessionPersistence } from './persistence.ts'
 
 /** Loader label for the SQLite Session persistence provider. */
 export const name = 'session-persistence-sqlite'
@@ -28,7 +28,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       name: 'session-persistence-sqlite-service',
       apply(serviceCtx: Context) {
         const legacy = new JsonlSessionPersistence(serviceCtx.isolate('sessionPersistence'), config)
-        new TracePersistence(serviceCtx, resources.ctx, config, legacy)
+        new SqliteSessionPersistence(serviceCtx, resources.ctx, config, legacy)
       },
     })
     yield service.dispose

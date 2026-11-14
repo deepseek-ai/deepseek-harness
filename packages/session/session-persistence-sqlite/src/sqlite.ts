@@ -84,7 +84,7 @@ function unknownOutcome(cause: unknown): HarnessError {
 }
 
 /** Resolved settings and provider callbacks for one SQLite Segment store. */
-export interface SqliteLogsOptions {
+export interface SqliteStoreOptions {
   /** Absolute database path. */
   readonly path: string
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
@@ -98,12 +98,12 @@ export interface SqliteLogsOptions {
 }
 
 /** Trace persistence over private predecessor-linked Segments in one SQLite database. */
-export class SqliteLogs {
+export class SqliteStore {
   /** Absolute database path, recorded in routing records. */
   readonly path: string
   private readonly legacyRoot: string
   private readonly published: (id: SessionId) => Promise<void>
-  private readonly acquireCreationLease: SqliteLogsOptions['acquireCreationLease']
+  private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
   private readonly pendingCreates = new Map<SessionId, {
     header: SessionHeader
@@ -117,9 +117,9 @@ export class SqliteLogs {
   private closing: Promise<void> | undefined
   private failure: Error | undefined
   private readonly chains = new Map<SessionId, { head: SegmentId; nodes: Map<SegmentId, Segment> }>()
-  private readonly handles = new Set<SqliteTrace>()
-  private readonly writers = new Map<SessionId, SqliteTrace>()
-  constructor(options: SqliteLogsOptions) {
+  private readonly handles = new Set<SqliteSessionHandle>()
+  private readonly writers = new Map<SessionId, SqliteSessionHandle>()
+  constructor(options: SqliteStoreOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
     this.published = options.publish
@@ -402,7 +402,7 @@ export class SqliteLogs {
    * @param options - optional cancellation and inherited count.
    * @returns exclusive in-process write handle.
    */
-  async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SqliteTrace> {
+  async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SqliteSessionHandle> {
     this.check()
     options?.signal?.throwIfAborted()
     // Preserve the existing seeded/cut refusal before reserving a Session.
@@ -436,7 +436,7 @@ export class SqliteLogs {
    * @returns handle over the original stored identity.
    */
   async open(id: SessionId, access: SessionAccess, signal?: AbortSignal,
-    ownership?: { release(): Promise<void> }): Promise<SqliteTrace> {
+    ownership?: { release(): Promise<void> }): Promise<SqliteSessionHandle> {
     this.check(); signal?.throwIfAborted()
     const pending = this.pendingCreates.get(id)
     if (pending !== undefined) return this.admit(pending.header, access, pending.inheritedCount)
@@ -543,14 +543,14 @@ export class SqliteLogs {
    * immediately before its first commit, so an unused create leaves no filesystem footprint.
    */
   private async admit(header: SessionHeader, access: SessionAccess, inheritedCount = 0, created = false,
-    ownership?: { release(): Promise<void> }): Promise<SqliteTrace> {
+    ownership?: { release(): Promise<void> }): Promise<SqliteSessionHandle> {
     if (access === 'write' && this.writers.has(header.id)) throw new SessionAlreadyOwnedError(header.id)
     let lease = access === 'write' && !created
       ? ownership ?? await this.acquireWriteLease(header, false)
       : undefined
     try {
       this.check()
-      const handle = new SqliteTrace(header, access, this, async () => {
+      const handle = new SqliteSessionHandle(header, access, this, async () => {
         this.handles.delete(handle)
         if (![...this.handles].some(active => active.id === header.id)) this.chains.delete(header.id)
         if (access === 'write') {
@@ -851,7 +851,7 @@ export class SqliteLogs {
 }
 
 /** One SessionHandle over a logical SQLite event stream. */
-export class SqliteTrace implements SessionHandle {
+export class SqliteSessionHandle implements SessionHandle {
   private closed = false
   private pending: Promise<void> = Promise.resolve()
   private closing: Promise<void> | undefined
@@ -859,7 +859,7 @@ export class SqliteTrace implements SessionHandle {
   private primed: SessionEvent[] | undefined
   private readonly buffer: LiveWriteBuffer
   constructor(readonly header: SessionHeader, readonly access: SessionAccess,
-    private readonly logs: SqliteLogs,
+    private readonly store: SqliteStore,
     private readonly release: () => Promise<void>, private readonly acquireLease: () => Promise<void>,
     private readonly checkStorage: () => void,
     readonly inheritedEventCount = SessionLogOffset(0)) {
@@ -867,7 +867,7 @@ export class SqliteTrace implements SessionHandle {
       delayMs: LIVE_WRITE_BATCH_MAX_DELAY_MS,
       maxEvents: LIVE_WRITE_BATCH_MAX_EVENTS,
       enqueue: operation => this.enqueue(operation),
-      persist: batch => this.logs.append(this.header, batch),
+      persist: batch => this.store.append(this.header, batch),
       retry: (error) => {
         if (error instanceof HarnessError && error.code === 'SESSION_STORAGE_PUBLICATION') {
           this.failure = error
@@ -894,7 +894,7 @@ export class SqliteTrace implements SessionHandle {
     const primed = this.primed
     this.primed = undefined
     const events = primed === undefined
-      ? await this.logs.read(this.header, offset, length) : primed.slice(offset, offset + length)
+      ? await this.store.read(this.header, offset, length) : primed.slice(offset, offset + length)
     // The synchronous SQLite read cannot be interrupted; a cancelled read still returns no events.
     options?.signal?.throwIfAborted()
     return { eventState: 'detached' as const, events }
@@ -918,7 +918,7 @@ export class SqliteTrace implements SessionHandle {
       if (this.closed) throw new SessionHandleClosedError(this.id, 'receive')
       this.primed = undefined
       const batch = materializeAppendBatch([event])
-      this.buffer.append(batch, (error) => { this.logs.reportFailure(this.id, error) })
+      this.buffer.append(batch, (error) => { this.store.reportFailure(this.id, error) })
       return Promise.resolve()
     } catch (error: unknown) {
       this.failure = new HarnessError('Session event admission failed', 'SESSION_STORAGE_FAILED', { cause: error })
@@ -948,7 +948,7 @@ export class SqliteTrace implements SessionHandle {
     return this.enqueue(async () => {
       options?.signal?.throwIfAborted()
       try {
-        await this.logs.append(this.header, batch)
+        await this.store.append(this.header, batch)
       } catch (error: unknown) {
         if (error instanceof HarnessError && error.code === 'SESSION_STORAGE_PUBLICATION') this.failure = error
         throw error
@@ -963,7 +963,7 @@ export class SqliteTrace implements SessionHandle {
     do { await this.drainLive() } while (this.buffer.length > 0)
     return this.enqueue(async () => {
       options?.signal?.throwIfAborted()
-      try { await this.logs.materialize(this.header) }
+      try { await this.store.materialize(this.header) }
       catch (error: unknown) {
         if (error instanceof HarnessError && error.code === 'SESSION_STORAGE_PUBLICATION') this.failure = error
         throw error

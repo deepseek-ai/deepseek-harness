@@ -5,7 +5,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { setTimeout } from 'node:timers/promises'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionHandle, SessionPersistenceOpenOptions } from '@deepseek-ai/dsh-session-persistence'
-import type { SqliteLogs } from './sqlite.ts'
+import type { SqliteStore } from './sqlite.ts'
 
 /** Historical reads used by the persistence service; no JSONL writes or live handles. */
 export type JsonlBackend = Pick<JsonlSessionPersistence, 'stat' | 'hasStoredJsonl' | 'prepare' | 'list'>
@@ -15,7 +15,7 @@ export class LegacySessionMigration {
   private readonly pending = new Map<SessionId, Promise<unknown>>()
   private closing = false
   private readonly stopped = new AbortController()
-  constructor(private readonly jsonl: JsonlBackend, private readonly sqlite: SqliteLogs,
+  constructor(private readonly jsonl: JsonlBackend, private readonly sqlite: SqliteStore,
     private readonly selected: (id: SessionId) => Promise<boolean>, private readonly publish: (id: SessionId) => Promise<void>) {}
 
   /**
@@ -48,7 +48,7 @@ export class LegacySessionMigration {
       await this.jsonl.prepare(id, signal)
       throw new HarnessError('Legacy Session has no readable metadata', 'SESSION_STORAGE_CORRUPT')
     }
-    let lease: Awaited<ReturnType<SqliteLogs['acquireSessionLease']>> | undefined
+    let lease: Awaited<ReturnType<SqliteStore['acquireSessionLease']>> | undefined
     const waitingSignal = signal === undefined ? this.stopped.signal : AbortSignal.any([signal, this.stopped.signal])
     for (;;) {
       waitingSignal.throwIfAborted()
