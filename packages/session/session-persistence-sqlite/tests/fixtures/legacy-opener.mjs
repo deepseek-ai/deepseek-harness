@@ -43,6 +43,8 @@ try {
     await commands.next()
   } catch (error) {
     process.stdout.write(`${error.name}\n`)
+    // The suite asserts on the name; the message and cause go to the inherited stderr for diagnosis.
+    process.stderr.write(`legacy opener ${access} ${id}: ${String(error)}${error.cause === undefined ? '' : ` (cause: ${String(error.cause)})`}\n`)
   }
 } finally {
   await ctx.fiber.dispose()
