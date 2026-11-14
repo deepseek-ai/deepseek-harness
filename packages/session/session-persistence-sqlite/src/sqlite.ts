@@ -3,7 +3,7 @@ import { LiveWriteBuffer } from './buffer.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import { mkdir, open, stat, readdir, realpath } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -31,10 +31,10 @@ const APPLICATION_ID = 0x44535043
 const SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
-const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(),
+const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
   tail_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
 const traceIdentity = z.object({ trace_uuid: z.string().transform(sessionIdentity) })
-const TRACE_METADATA_SQL = `SELECT t.trace_uuid, header, tail_segment_uuid, inherited_count,
+const TRACE_METADATA_SQL = `SELECT t.trace_uuid, header, tail_segment_uuid, inherited_count, base_seq,
   base_seq + COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count
   FROM traces t LEFT JOIN segments s ON s.segment_uuid = t.tail_segment_uuid`
 const segmentFields = { segment_uuid: z.string().transform(segmentId), event_count: z.number().int().nonnegative() }
@@ -91,6 +91,7 @@ export class SqliteLogs {
   }>()
   private readonly creating = new Set<SessionId>()
   private readonly directorySyncs = new Set<string>()
+  private readonly statements = new Map<string, StatementSync>()
   private ready: Promise<DatabaseSync> | undefined
   private closing: Promise<void> | undefined
   private failure: Error | undefined
@@ -301,9 +302,18 @@ export class SqliteLogs {
     this.assertHealthy()
   }
 
+  private statement(db: DatabaseSync, sql: string): StatementSync {
+    let statement = this.statements.get(sql)
+    if (statement === undefined) {
+      statement = db.prepare(sql)
+      this.statements.set(sql, statement)
+    }
+    return statement
+  }
+
   private row(db: DatabaseSync, id: SessionId) {
     this.assertHealthy()
-    const raw = db.prepare(`${TRACE_METADATA_SQL} WHERE t.trace_uuid = ?`).get(id)
+    const raw = this.statement(db, `${TRACE_METADATA_SQL} WHERE t.trace_uuid = ?`).get(id)
     if (raw === undefined) return undefined
     return this.parseMetadata(raw, id)
   }
@@ -314,7 +324,7 @@ export class SqliteLogs {
   }
 
   private segment(db: DatabaseSync, id: SegmentId): Segment {
-    const row = db.prepare('SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segments s WHERE segment_uuid = ?').get(id)
+    const row = this.statement(db, 'SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segments s WHERE segment_uuid = ?').get(id)
     if (row === undefined) throw new HarnessError('Trace references a missing segment', 'SESSION_STORAGE_CORRUPT')
     try { return segmentRow.parse(row) }
     catch (error: unknown) { throw this.corruption(`stored SQLite segment "${id}" metadata is invalid`, error) }
@@ -322,7 +332,7 @@ export class SqliteLogs {
 
   /** Fetch indexed ancestor metadata together, retaining the authoritative chain checks during reads. */
   private parents(db: DatabaseSync, id: SegmentId, offset: number, nodes: Map<SegmentId, Segment>): void {
-    const rows = db.prepare(`SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid
+    const rows = this.statement(db, `SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid
       ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
       JOIN segments s ON s.segment_uuid = a.ancestor_uuid
       WHERE a.segment_uuid = ? AND (s.base_seq > ? OR s.base_seq + a.end_seq > ?)`).all(id, offset, offset)
@@ -336,7 +346,7 @@ export class SqliteLogs {
 
   private newSegment(db: DatabaseSync, id: SegmentId, parent: Segment | undefined, end: number): void {
     const base = parent === undefined ? 0 : parent.base_seq + end
-    db.prepare('INSERT INTO segments VALUES (?, ?, ?, ?)').run(id, parent?.segment_uuid ?? null, parent === undefined ? null : end, base)
+    this.statement(db, 'INSERT INTO segments VALUES (?, ?, ?, ?)').run(id, parent?.segment_uuid ?? null, parent === undefined ? null : end, base)
   }
 
   /** Locate the Segment holding the first `end` source events; `end` never exceeds the source event count. */
@@ -470,9 +480,9 @@ export class SqliteLogs {
     this.transaction(db, () => {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = segmentId(randomUUID())
-      db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
-      db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(storedHeader), head, inheritedCount)
-      const insert = db.prepare('INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
+      this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
+      this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(storedHeader), head, inheritedCount)
+      const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
       for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
     })
     try { await this.published(header.id) }
@@ -586,7 +596,7 @@ export class SqliteLogs {
         if (current.base_seq + end !== child.base_seq) throw new HarnessError('Invalid segment offset', 'SESSION_STORAGE_CORRUPT')
       }
       const payloads: string[] = [], stop = offset + Math.min(length, Math.max(0, meta.event_count - offset))
-      const select = db.prepare('SELECT payload FROM events WHERE segment_uuid = ? AND seq >= ? AND seq < ? ORDER BY seq')
+      const select = this.statement(db, 'SELECT payload FROM events WHERE segment_uuid = ? AND seq >= ? AND seq < ? ORDER BY seq')
       for (const { segment, end } of ranges.reverse()) {
         const start = Math.max(0, offset - segment.base_seq), finish = Math.min(end, stop - segment.base_seq)
         if (finish <= start) continue
@@ -603,12 +613,9 @@ export class SqliteLogs {
       }
       return { payloads, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
-    const parsed: SessionEvent[] = []
     const decoded = stored.payloads.map((payload, index) => {
       try {
-        const event = decodeEvent(JSON.parse(payload))
-        parsed.push(event)
-        return event
+        return decodeEvent(JSON.parse(payload))
       } catch (error: unknown) {
         if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
         throw this.corruption(`session "${header.id}": stored event at index ${offset + index} is invalid`, error)
@@ -623,7 +630,7 @@ export class SqliteLogs {
         throw this.corruption(`session "${header.id}": stored V4 relationships are invalid`, error)
       }
     }
-    const events = validateStoredEvents(header, parsed, { kind: 'sqlite', path: this.path })
+    const events = validateStoredEvents(header, decoded, { kind: 'sqlite', path: this.path })
     assertContiguous(header.id, events, offset)
     return events
   }
@@ -642,9 +649,9 @@ export class SqliteLogs {
     this.transaction(db, () => {
       const row = this.ensureRow(db, header)
       assertContiguous(header.id, batch, row.event_count)
-      const tail = this.segment(db, row.tail_segment_uuid)
-      const insert = db.prepare('INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
-      for (const [index, payload] of payloads.entries()) insert.run(tail.segment_uuid, tail.event_count + index, payload)
+      const start = row.event_count - row.base_seq
+      const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
+      for (const [index, payload] of payloads.entries()) insert.run(row.tail_segment_uuid, start + index, payload)
     })
     this.pendingCreates.delete(header.id)
     try { await this.published(header.id) }
@@ -660,19 +667,19 @@ export class SqliteLogs {
     const pending = this.pendingCreates.get(header.id)
     if (pending === undefined) throw new SessionPersistenceNotFoundError(header.id)
     const head = pending.head
-    if (pending.fork === undefined) db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
+    if (pending.fork === undefined) this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
     else {
       const source = this.row(db, pending.fork.sourceId)
       if (source === undefined) {
         if (!this.pendingCreates.has(pending.fork.sourceId)) throw new SessionPersistenceNotFoundError(pending.fork.sourceId)
-        db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
+        this.statement(db, 'INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
       } else {
         const cut = this.cut(db, source, pending.fork.writeFrom)
         this.newSegment(db, head, cut.parent, cut.end)
       }
     }
     const storedHeader = materializeHeader(header, SessionLogOffset(pending.inheritedCount))
-    db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(
+    this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(
       header.id, JSON.stringify(storedHeader), head, pending.inheritedCount,
     )
     row = this.row(db, header.id)
@@ -760,7 +767,7 @@ export class SqliteLogs {
       const db = await this.database()
       // One joined query observes all durable metadata in the same read snapshot.
       this.transaction(db, () => {
-        for (const trace of db.prepare(`${TRACE_METADATA_SQL} ORDER BY t.trace_uuid`).all()) {
+        for (const trace of this.statement(db, `${TRACE_METADATA_SQL} ORDER BY t.trace_uuid`).all()) {
           signal?.throwIfAborted()
           const id = traceIdentity.parse(trace).trace_uuid
           seen.add(id)
@@ -836,6 +843,7 @@ export class SqliteLogs {
         const db = await this.ready.catch((_error: unknown) => undefined)
         try { db?.close() } catch (error: unknown) { failures.push(error) }
       }
+      this.statements.clear()
       if (failures.length > 0) throw new AggregateError(failures, 'SQLite disposal failed')
     })()
   }

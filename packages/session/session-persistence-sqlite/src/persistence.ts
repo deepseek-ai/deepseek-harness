@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { SessionPersistence, SessionAlreadyExistsError, SessionPersistenceNotFoundError, materializeCreateHeader } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistenceOpenOptions,
-  SessionPersistenceStatOptions, SessionPersistenceListOptions } from '@deepseek-ai/dsh-session-persistence'
+  SessionPersistenceStatOptions, SessionPersistenceListOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
@@ -29,6 +29,7 @@ export class TracePersistence extends SessionPersistence {
   private readonly rootPath: string
   private readonly jsonl: JsonlBackend
   private readonly listLimit: LimitFunction
+  private readonly publishedRoutes = new Set<SessionId>()
   constructor(ctx: Context, owner: Context, config: Config,
     jsonl: JsonlBackend) {
     super(ctx)
@@ -43,7 +44,8 @@ export class TracePersistence extends SessionPersistence {
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },
     })
     this.jsonl = jsonl
-    this.migration = new LegacySessionMigration(jsonl, this.sqlite, id => this.selected(id), id => this.publish(id))
+    this.migration = new LegacySessionMigration(jsonl, this.sqlite,
+      async id => await this.selected(id) !== undefined, id => this.publish(id))
     this.sqlite.install(owner, () => this.migration.close())
   }
 
@@ -95,33 +97,35 @@ export class TracePersistence extends SessionPersistence {
     }
   }
 
-  private async selected(id: SessionId): Promise<boolean> {
+  private async selected(id: SessionId, signal?: AbortSignal): Promise<SessionPersistenceSnapshot | undefined> {
     let text: string
     try { text = await readFile(this.markerPath(id), 'utf8') }
     catch (error: unknown) {
       if (!isAbsent(error)) throw error
       await this.assertRoutingDatabase()
-      return await this.sqlite.stat(id) !== undefined
+      return this.sqlite.stat(id, signal)
     }
     const selected = this.parseMarker(text, this.markerPath(id))
     await this.assertRoutingDatabase()
     if (selected.id !== id || selected.database !== this.sqlite.path) {
       throw new HarnessError('Recorded Segment storage differs from the configured database; restore the original configuration', 'SESSION_STORAGE_IDENTITY')
     }
-    if (await this.sqlite.stat(id) === undefined) {
+    const snapshot = await this.sqlite.stat(id, signal)
+    if (snapshot === undefined) {
       if (!await this.sqlite.hasDatabase()) {
         throw new HarnessError('Recorded Segment database is missing; restore it before opening the Session', 'SESSION_STORAGE_MISSING')
       }
       throw new SessionPersistenceNotFoundError(id)
     }
-    return true
+    return snapshot
   }
 
   /**
-   * Atomically publish durable backend selection after the database commit.
+   * Atomically publish durable backend selection once per Session in this provider after the database commit.
    * @param id - committed Session identity.
    */
   protected async publish(id: SessionId): Promise<void> {
+    if (this.publishedRoutes.has(id)) return
     if (process.platform === 'win32') await ensureDurableDirectoryWin32(this.directory)
     else await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const path = this.markerPath(id)
@@ -129,6 +133,7 @@ export class TracePersistence extends SessionPersistence {
       const stored = this.parseMarker(await readFile(path, 'utf8'), path)
       if (stored.id !== id || stored.database !== this.sqlite.path) throw new HarnessError('Stored routing identity differs', 'SESSION_STORAGE_IDENTITY')
       await this.syncDirectory()
+      this.publishedRoutes.add(id)
       return
     } catch (error: unknown) { if (!isAbsent(error)) throw error }
     const temporary = join(this.directory, `.route-${randomUUID()}.tmp`)
@@ -147,6 +152,7 @@ export class TracePersistence extends SessionPersistence {
       }
       await this.syncDirectory()
     } finally { await rm(temporary, { force: true }) }
+    this.publishedRoutes.add(id)
   }
 
   private async syncDirectory(): Promise<void> {
@@ -172,7 +178,9 @@ export class TracePersistence extends SessionPersistence {
 
   async stat(id: SessionId, options?: SessionPersistenceStatOptions) {
     options?.signal?.throwIfAborted()
-    return await this.selected(id) ? this.sqlite.stat(id, options?.signal) : this.jsonl.stat(id, options)
+    const snapshot = await this.selected(id, options?.signal)
+    options?.signal?.throwIfAborted()
+    return snapshot === undefined ? this.jsonl.stat(id, options) : snapshot
   }
 
   async list(options?: SessionPersistenceListOptions) {
