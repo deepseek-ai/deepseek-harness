@@ -38,7 +38,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 ### 获得的能力
 
-插件加载后，一个 `wecom` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用文件工具打开所需的子指南（例如 `wecomcli-doc` 或 `wecomcli-message`），并在当前沙箱与审批策略下通过普通 Shell 工具按这个路径运行 `wecom-cli`。`wecom-cli auth show --status` 报告未授权时，agent 会请用户到插件页连接企业微信；只有用户要求在对话中完成时，才运行 CLI 自带的 `auth init`，并因为它会在工作区之外写入而申请单条命令审批。
+插件加载后，一个 `wecom` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用文件工具打开所需的子指南（例如 `wecomcli-doc` 或 `wecomcli-message`），并在当前沙箱与审批策略下通过普通 Shell 工具按这个路径运行 `wecom-cli`。`wecom-cli auth show --status` 报告未授权时，agent 会请用户到插件页连接企业微信；只有用户要求在对话中完成时，才运行 CLI 自带的 `auth init`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。命令返回 `errcode` 853004（`cli token expired`）时，agent 不会请用户重新授权，也不会转述服务端的升级建议，而是带 `sandbox_permissions` 和 `justification` 重跑同一条命令，因为在文件沙箱下 CLI 保存不了刚换到的 token。
 
 子指南来自 `WecomTeam/wecom-cli` 在提交 `4c74ff2` 时的 `skills/`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/wecom/`；文件就位之前，skill 目录中没有 `wecom` skill，插件页会报告下载状态。下载失败时，由插件页的检查重试。
 
@@ -118,7 +118,7 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 #### 模型看到什么
 
-`wecom` 的 `skill` 工具结果约 2,000 个字符：DSH 指引、为 15 个子指南各写一句话并保留上游分流规则的索引，以及打开子指南的方式。DSH 指引要求 agent 按当前运行时上下文给出的绝对路径运行插件提供的 `wecom-cli`，先请用户到插件页连接，再考虑自行运行 `auth init --noninteractive`，并以单条命令审批运行该命令；与 `wecomcli-shared` 不一致时以它为准。其资源根目录是下载目录，即 `skillsDir` 或 `$DSH_HOME/cache/wecom/skills-<摘要>`，因此 agent 用文件工具而不是 `skill` 工具打开 `skills/<name>/SKILL.md`，把子指南按名字提到的技能当作对应子指南，并按子指南自己的目录解析其中的相对路径。
+`wecom` 的 `skill` 工具结果约 2,300 个字符：DSH 指引、为 15 个子指南各写一句话并保留上游分流规则的索引，以及打开子指南的方式。DSH 指引要求 agent 按当前运行时上下文给出的绝对路径运行插件提供的 `wecom-cli`，先请用户到插件页连接，再考虑自行运行 `auth init --noninteractive`，第一次运行该命令就申请 `sandbox_permissions`，命令返回 `errcode` 853004 时带 `sandbox_permissions` 重跑同一条命令，而不是请用户重新授权或转述服务端的升级建议，重跑后仍返回 853004 才请用户重新授权；与 `wecomcli-shared` 不一致时以它为准。其资源根目录是下载目录，即 `skillsDir` 或 `$DSH_HOME/cache/wecom/skills-<摘要>`，因此 agent 用文件工具而不是 `skill` 工具打开 `skills/<name>/SKILL.md`，把子指南按名字提到的技能当作对应子指南，并按子指南自己的目录解析其中的相对路径。
 
 #### Token 影响
 
@@ -167,6 +167,7 @@ Scripts in the WeCom skill call `wecom-cli` by name; start only the commands tha
 - 子指南跟随上游提交 `4c74ff2`；更新时要用 `scripts/upstream-skills-digest.ts` 生成新的固定信息，之后按新的子指南核对总入口的索引和 DSH 指引。
 - 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，agent 没有 `wecom` skill。
 - 插件卸载或改为固定其他提交后，已下载的子指南仍留在 `$DSH_HOME/cache/wecom/`。
+- 在文件沙箱下，`wecom-cli` 读取已保存的授权时不需要写入，所以在已保存的 token 过期之前命令可以直接运行。token 过期后，CLI 无法把刚换到的 token 保存到工作区之外的配置目录，命令会返回 `errcode` 853004 和服务端的升级建议。重跑这条命令需要一次单条命令审批，之后命令又可以在沙箱中运行，直到下一次过期。页面的检查只读取本地状态，不会刷新 token。
 
 <a id="dev-note"></a>
 ### 开发备注
