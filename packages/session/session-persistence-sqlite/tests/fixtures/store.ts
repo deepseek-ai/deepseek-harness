@@ -20,7 +20,7 @@ import { sessionDir } from '../../src/paths.ts'
  * @returns an unopened store.
  */
 export function sqliteLogs(path: string, root: string, overrides: Partial<SqliteLogsOptions> = {}): SqliteLogs {
-  return new SqliteLogs({ path, legacyRoot: root, busyTimeoutMs: 5000, flushDelayMs: 200, maxBufferedEvents: 256,
+  return new SqliteLogs({ path, legacyRoot: root,
     acquireCreationLease: header => SessionWriteLease.acquire(sessionDir(root, header.cwd, header.id), header.id),
     publish: async () => {}, report: () => {}, ...overrides })
 }
@@ -62,7 +62,17 @@ export function countSqliteReads(): { payloadRows: () => number; segmentQueries:
   const prepare = DatabaseSync.prototype.prepare
   const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSync, sql: string) {
     const statement = prepare.call(this, sql)
-    if (sql.startsWith('SELECT s.*')) segmentQueries++
+    if (sql.startsWith('SELECT s.*')) {
+      const get = statement.get.bind(statement), all = statement.all.bind(statement)
+      Object.defineProperty(statement, 'get', { value: (...args: Parameters<StatementSync['get']>) => {
+        segmentQueries++
+        return get(...args)
+      } })
+      Object.defineProperty(statement, 'all', { value: (...args: Parameters<StatementSync['all']>) => {
+        segmentQueries++
+        return all(...args)
+      } })
+    }
     if (sql === 'SELECT payload FROM events WHERE segment_uuid = ? AND seq >= ? AND seq < ? ORDER BY seq') {
       const all = statement.all.bind(statement)
       Object.defineProperty(statement, 'all', { value: (...args: Parameters<StatementSync['all']>) => {

@@ -19,7 +19,7 @@ async function fixture() {
   const sqlite = new SqliteLogs({ path: join(root, 'sessions.sqlite'), legacyRoot: root,
     acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {} })
   const jsonl: JsonlBackend = {
-    listLimit: operation => operation(), hasStoredJsonl: async () => true, list: async () => [],
+    hasStoredJsonl: async () => true, list: async () => [],
     stat: async () => ({ header, revision: SessionPersistenceRevision('legacy'), eventCount: 0 }),
     prepare: async () => ({ header, inheritedEventCount: SessionLogOffset(0), events: [],
       commit: async publish => publish({ header, inheritedEventCount: SessionLogOffset(0), events: [] }) }),
@@ -106,7 +106,7 @@ it('republishes routing when a competing importer commits under lease acquisitio
   const root = await mkdtemp(join(tmpdir(), 'sqlite-routing-import-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const provider = new TracePersistence(ctx, ctx, root, jsonl)
+  const provider = new TracePersistence(ctx, ctx, { root }, jsonl)
   // oxlint-disable-next-line typescript/unbound-method -- Called with the native store receiver below.
   const acquire = SqliteLogs.prototype.acquireSessionLease
   const fault = vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementationOnce(async function (this: SqliteLogs, metadata) {

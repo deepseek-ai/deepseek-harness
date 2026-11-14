@@ -31,10 +31,10 @@ async function fixture() {
   if (!(storage instanceof TracePersistence)) throw new Error('Missing SQLite provider')
   return { root: fixture.root, ctx, storage }
 }
-async function raw(publish: () => Promise<void> = async () => {}, count = 2, failedClose = false) {
+async function raw(publish: () => Promise<void> = async () => {}, failedClose = false) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-failures-')), path = join(root, 'events.sqlite')
   const report = vi.fn()
-  const logs = sqliteLogs(path, root, { publish, maxBufferedEvents: count, report })
+  const logs = sqliteLogs(path, root, { publish, report })
   onTestFinished(async () => {
     try {
       if (failedClose) await expect(logs.close()).rejects.toMatchObject({ message: 'SQLite disposal failed', errors: [expect.any(Error)] })
@@ -271,7 +271,7 @@ it('marks unknown when an operation failure and its rollback both fail', async (
 })
 
 it('aggregates failed writer barriers and disposal failures without losing their cause', async () => {
-  const { logs, path } = await raw(async () => {}, 256, true)
+  const { logs, path } = await raw(async () => {}, true)
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
@@ -592,7 +592,7 @@ it('ignores events from a Session without a persistence writer', async () => {
 })
 
 it('reports a database close failure after draining and releasing the writer', async () => {
-  const { logs } = await raw(async () => {}, 2, true)
+  const { logs } = await raw(async () => {}, true)
   const writer = await logs.create(header()); await writer.flush(); await writer.close()
   const failure = Object.assign(new Error('database close failed'), { code: 'EIO' })
   // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the intercepted database receiver.

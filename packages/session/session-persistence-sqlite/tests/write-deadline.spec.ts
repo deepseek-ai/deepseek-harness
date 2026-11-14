@@ -18,7 +18,7 @@ it.each([false, true])('schedules a threshold batch during drain settlement, fai
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-drain-settlement-'))
   const reported = Promise.withResolvers<unknown>()
   const logs = sqliteLogs(join(root, 'sessions.sqlite'), root, {
-    maxBufferedEvents: 1, report: (_id, error) => { reported.resolve(error) },
+    report: (_id, error) => { reported.resolve(error) },
   })
   onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
   const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: SessionId('settlement'), createdAt: 0, isSeeded: false })
@@ -28,17 +28,19 @@ it.each([false, true])('schedules a threshold batch during drain settlement, fai
   let refused = false
   const spy = vi.spyOn(logs, 'append').mockImplementation(async (...args) => {
     if (args[1][0]?.seq === 0) { entered.resolve(undefined); await release.promise }
-    if (args[1][0]?.seq === 1 && fail && !refused) { refused = true; throw failure }
+    if (args[1][0]?.seq === 256 && fail && !refused) { refused = true; throw failure }
     await append(...args)
-    if (args[1][0]?.seq === 1) stored.resolve(undefined)
+    if (args[1][0]?.seq === 256) stored.resolve(undefined)
   })
   onTestFinished(() => { release.resolve(undefined); spy.mockRestore() })
-  await writer.receive(event(0))
+  for (let seq = 0; seq < 256; seq++) await writer.receive(event(seq))
   await entered.promise
   // This queue barrier places admission after the drain's last batch, before its completion handler.
   const pending: unknown = Reflect.get(writer, 'pending')
   if (!(pending instanceof Promise)) throw new Error('Missing write queue barrier')
-  const admission = pending.then(() => writer.receive(event(1)))
+  const admission = pending.then(() => Promise.all(
+    Array.from({ length: 256 }, (_, seq) => writer.receive(event(seq + 256))),
+  ))
   release.resolve(undefined)
   await writer.drainLive()
   await admission
@@ -50,13 +52,13 @@ it.each([false, true])('schedules a threshold batch during drain settlement, fai
   await stored.promise
   await writer.close()
   const reader = await logs.open(writer.id, 'read')
-  try { expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1]) }
+  try { expect((await reader.read()).events.map(event => event.seq)).toEqual(Array.from({ length: 512 }, (_, seq) => seq)) }
   finally { await reader.close() }
 })
 
 it('starts a follow-up write once its own batching deadline elapsed during the preceding commit', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-deadline-'))
-  const logs = sqliteLogs(join(root, 'sessions.sqlite'), root, { flushDelayMs: 200, maxBufferedEvents: 2 })
+  const logs = sqliteLogs(join(root, 'sessions.sqlite'), root)
   const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: SessionId('deadline'), createdAt: 0, isSeeded: false })
   await writer.flush()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
@@ -69,6 +71,7 @@ it('starts a follow-up write once its own batching deadline elapsed during the p
   vi.useFakeTimers()
   try {
     await writer.receive(event(0)); await writer.receive(event(1))
+    await vi.advanceTimersByTimeAsync(200)
     await entered.promise
     await writer.receive(event(2))
     // The follow-up deadline expires while the first commit remains owned by the barrier.

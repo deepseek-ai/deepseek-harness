@@ -13,7 +13,7 @@ import { sqliteLogs, forkTrace } from './fixtures/store.ts'
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-recovery-'))
   const path = join(root, 'sessions.sqlite')
-  const logs = sqliteLogs(path, root, { busyTimeoutMs: 1, flushDelayMs: 200 })
+  const logs = sqliteLogs(path, root)
   onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
   const header = (name: string): SessionHeader => ({ version: SESSION_FORMAT_VERSION, id: SessionId(name), createdAt: 0, isSeeded: false })
   const event = (seq: number): SessionEvent<'turn/start'> => ({ type: 'turn/start', seq: SessionSeq(seq), time: 0, data: { turn: seq + 1 } })

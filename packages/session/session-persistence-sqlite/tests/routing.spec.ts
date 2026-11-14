@@ -55,8 +55,7 @@ vi.mock('../src/win32.ts', async (importOriginal) => {
 
 class Adapter extends TracePersistence {
   constructor(ctx: Context, root: string) {
-    super(ctx, ctx, root, {
-      listLimit: operation => operation(),
+    super(ctx, ctx, { root }, {
       async prepare() { throw new Error('legacy preparation') },
       async stat() { return undefined },
       async list() { return [] },
@@ -118,14 +117,17 @@ it.each(['linux', 'win32'])('publishes routing using the %s durable namespace', 
     faults.directory = join(root, '.segments')
     await storage.publishRoute(header.id)
     await storage.publishRoute(header.id)
-    expect(faults.directorySyncs).toBe(platform === 'linux' ? 2 : 0)
+    expect(faults.directorySyncs).toBe(platform === 'linux' ? 1 : 0)
     expect(faults.directoryCloses).toBe(faults.directorySyncs)
   } finally { Object.defineProperty(process, 'platform', descriptor) }
 })
 
 it.each(['identity', 'parse', 'race', 'link-failure'] as const)('retains routing publication failure for %s', async (fault) => {
-  const { root, storage } = await fixture()
-  const writer = await storage.create(header); await writer.flush(); await writer.close()
+  const { root, storage: initial } = await fixture()
+  const writer = await initial.create(header); await writer.flush(); await writer.close()
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  const storage = new Adapter(ctx, root)
   const { readdir, readFile } = await import('node:fs/promises')
   const directory = join(root, '.segments')
   const name = (await readdir(directory)).find(name => name.endsWith('.json'))
@@ -143,6 +145,7 @@ it.each(['identity', 'parse', 'race', 'link-failure'] as const)('retains routing
     else await expect(storage.publishRoute(header.id)).rejects.toThrow('link failure')
     faults.op = ''
   }
+  await storage.publishRoute(header.id)
 })
 
 

@@ -3271,7 +3271,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 ## `@deepseek-ai/dsh-session-persistence-jsonl`
 
-- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:108`](../packages/session/session-persistence-jsonl/src/index.ts)
+- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:107`](../packages/session/session-persistence-jsonl/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
@@ -3305,7 +3305,7 @@ export type JsonlCompression = 'zstd' | 'none'
 ## `@deepseek-ai/dsh-session-persistence-sqlite`
 
 - `refs`: [`JsonlConfigOptions`](#deepseek-aidsh-session-persistence-jsonl)
-- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:13`](../packages/session/session-persistence-sqlite/src/index.ts)
+- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:11`](../packages/session/session-persistence-sqlite/src/index.ts)
 
 ```ts config-catalog
 /** Storage root and JSONL settings used when importing legacy Sessions. */

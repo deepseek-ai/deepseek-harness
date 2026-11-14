@@ -38,6 +38,7 @@ it('selects a cut inside an earlier ancestor rather than sharing the later child
 
 it('forks bounded prefixes into private tails without copying historical event rows', async () => {
   const { logs, path, id, header, event } = await fixture()
+  const reads = countSqliteReads()
   const source = await logs.create(header)
   const sourcePrefix = [event(0), event(1), event(2), event(3)]
   await source.append(sourcePrefix)
@@ -59,7 +60,7 @@ it('forks bounded prefixes into private tails without copying historical event r
     const beforeForks = [count('traces'), count('segments'), count('events')]
     let current = branchId
     let prefix: SessionEvent[] = (await branch.read()).events
-    const reads = countSqliteReads()
+    const beforePayloads = reads.payloadRows()
     for (let index = 0; index < 128; index++) {
       const next = SessionId(`descendant-${index}`)
       await forkTrace(logs, current, next, prefix)
@@ -67,7 +68,7 @@ it('forks bounded prefixes into private tails without copying historical event r
       current = next
     }
     expect([count('traces'), count('segments'), count('events')]).toEqual(beforeForks.map(value => value + 128))
-    expect(reads.payloadRows()).toBe(0)
+    expect(reads.payloadRows() - beforePayloads).toBe(0)
     const last = await logs.open(current, 'read')
     const beforeTail = reads.segmentQueries()
     expect((await last.read(131, 1)).events).toHaveLength(1)
