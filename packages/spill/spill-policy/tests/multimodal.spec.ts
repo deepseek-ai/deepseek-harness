@@ -114,8 +114,12 @@ describe('multimodal spill', () => {
     const result = await execute()
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected MCP success')
-    expect(result.value).toEqual({ content: original })
     expect(result.content.map(block => block.type)).toEqual(['text', 'image', 'text', 'image', 'text'])
+    const [first, second] = result.content.filter((block): block is ImageBlock => block.type === 'image')
+    expect(result.value).toEqual({ content: [
+      original[0], { ...original[1] as object, attachment: first!.attachment },
+      original[2], { ...original[3] as object, attachment: second!.attachment }, original[4],
+    ] })
     const saved = await savedResult(result.content)
     expect(saved).toContain('B'.repeat(20000))
     expect(saved).not.toContain(PNG.toString('base64'))
@@ -209,7 +213,11 @@ describe('multimodal spill', () => {
         if (failure) await expect(binding({})).rejects.toThrow('capture failed')
         else {
           const resolved = await binding({})
-          expect(resolved instanceof PtcInspectableValue ? resolved.value : resolved).toEqual({ content: original })
+          // The omitted image stays JSON: its reference is not part of the finalized content.
+          const omitted: unknown = expect.objectContaining({ mediaType: 'image/png' })
+          expect(resolved instanceof PtcInspectableValue ? resolved.value : resolved).toEqual({ content: [
+            original[0], { ...original[1] as object, attachment: omitted }, original[2],
+          ] })
         }
         return { output: [], value: 'complete' }
       }
