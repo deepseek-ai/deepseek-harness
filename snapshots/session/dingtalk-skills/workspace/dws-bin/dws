@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Offline dws stand-in reporting a signed-in user.
 const args = process.argv.slice(2).join(' ')
-if (args !== 'auth status --format json') {
+if (args !== 'auth status --readonly --format json') {
   process.stderr.write(`unexpected dws arguments: ${args}\n`)
   process.exit(1)
 }

@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 ### 你会得到
 
-下载完成后，技能目录中会多一个 `dingtalk` skill。Agent 用 `skill` 工具加载它，用文件工具打开当前产品对应的子指南（例如 `dingtalk-calendar` 或 `dingtalk-doc`），并在当前沙箱和审批策略下通过普通 Shell 工具按路径运行 `dws`；运行子指南脚本的命令会把 `dws` 所在目录放到 PATH 最前面。命令报告未登录或登录过期时，Agent 会请用户在插件页面连接钉钉；只有用户要求在对话中完成时，它才运行 `dws auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。
+下载完成后，技能目录中会多一个 `dingtalk` skill。Agent 用 `skill` 工具加载它，用文件工具打开当前产品对应的子指南（例如 `dingtalk-calendar` 或 `dingtalk-doc`），并在当前沙箱和审批策略下通过普通 Shell 工具按路径运行 `dws`；运行子指南脚本的命令会把 `dws` 所在目录放到 PATH 最前面。Agent 用 `dws auth status --readonly --format json` 检查登录状态，这项检查不写 `~/.dws`，在文件沙箱下也能报告真实状态。检查或命令报告未登录、登录过期时，Agent 会请用户在插件页面连接钉钉；只有用户要求在对话中完成时，它才运行 `dws auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。命令因为文件沙箱拒绝写入 `~/.dws` 而失败时，不算登录失效，Agent 会带 `sandbox_permissions` 和 `justification` 重跑同一条命令。
 
 在 Plugin Manager 中关闭插件会撤下这个 skill、运行时上下文中的路径和账号区块。CLI 的登录和已下载的资产会保留。
 
@@ -123,7 +123,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 #### 模型看到的内容
 
-`dingtalk` 的 `skill` 工具结果约 2,100 个字符：DSH 指引、16 个子指南各一句话的索引，以及打开方式。DSH 指引要求 Agent 按当前运行时上下文给出的绝对路径运行插件提供的 `dws`，不另装或升级，不运行 `dws skill setup`，在自己运行 `dws auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；dws 报告 CLI 访问未开启时，告诉用户需要组织管理员开启；两者不一致时以 DSH 指引为准。它的资源目录是 DSH 缓存中 skill 根目录下的 `dingtalk` 目录，因此 Agent 用文件工具而不是 `skill` 工具打开 `guides/<名字>/SKILL.md`，并以每个子指南自己的目录解析其中的相对路径和脚本。
+`dingtalk` 的 `skill` 工具结果约 2,400 个字符：DSH 指引、16 个子指南各一句话的索引，以及打开方式。DSH 指引要求 Agent 按当前运行时上下文给出的绝对路径运行插件提供的 `dws`，不另装或升级，不运行 `dws skill setup`，只用 `dws auth status --readonly --format json` 检查登录状态，在自己运行 `dws auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；命令因为写不了 `~/.dws` 而失败时，带 `sandbox_permissions` 重跑同一条命令，而不是请用户重新连接，对话中出现过一次这种拒绝后，后面访问钉钉数据的命令第一次运行就申请；dws 报告 CLI 访问未开启时，告诉用户需要组织管理员开启；两者不一致时以 DSH 指引为准。它的资源目录是 DSH 缓存中 skill 根目录下的 `dingtalk` 目录，因此 Agent 用文件工具而不是 `skill` 工具打开 `guides/<名字>/SKILL.md`，并以每个子指南自己的目录解析其中的相对路径和脚本。
 
 #### Token 影响
 
@@ -172,7 +172,7 @@ Scripts in the DingTalk skill call `dws` by name; start only the commands that r
 - 插件不设置 `DWS_CHANNEL`，在只允许已登记渠道访问 CLI 的组织中未经验证。
 - 除非同时设置了 `binDir` 和 `skillsDir`，第一次检查需要能访问 GitHub 或 Gitee，成功之前没有 `dingtalk` skill；Gitee 镜像可能比 release 晚几天。下载源必须发送 `Content-Length`。
 - dws 保留其默认的遥测和更新检查；DSH 指引要求 Agent 不要升级它。
-- 在文件沙箱下，刷新令牌或写入 `~/.dws` 的普通命令可能被拒绝，此时需要单条命令审批。
+- 在文件沙箱下，访问钉钉数据的 `dws` 命令都会在打开 `~/.dws` 下的锁文件时失败，每条命令都需要单条命令审批才能运行。不带 `--readonly` 的 `dws auth status` 在文件沙箱下以退出码 0 把已登录的账号报告成未登录，因此自己运行这项检查的子指南脚本（例如考勤签到报表）会以登录错误退出。
 - 移除插件或换到新版本后，已下载的资产和 skill 根目录仍会留在 Harness 缓存中。
 - 子指南对应 release `v1.0.64`；更新版本需要修改固定的大小和摘要，再对照新的子指南检查总入口的索引和 DSH 指引。
 
