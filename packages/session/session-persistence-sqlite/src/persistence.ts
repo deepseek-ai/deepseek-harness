@@ -13,7 +13,7 @@ import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistence
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
-import { SqliteLogs } from './sqlite.ts'
+import { SqliteLogs, isAbsent } from './sqlite.ts'
 import { SessionWriteLease } from './lease.ts'
 import { sessionDir } from './paths.ts'
 import { LegacySessionMigration } from './migration.ts'
@@ -80,20 +80,15 @@ export class TracePersistence extends SessionPersistence {
     return join(this.directory, `${createHash('sha256').update(id).digest('hex')}.json`)
   }
 
-  private parseMarker(text: string, path: string) {
-    try { return marker.parse(JSON.parse(text)) }
+  /** Decode one routing record and require it to name `id` in the configured database. */
+  private readMarker(text: string, path: string, id: SessionId): void {
+    let stored: z.infer<typeof marker>
+    try { stored = marker.parse(JSON.parse(text)) }
     catch (error: unknown) {
       throw new HarnessError(`Stored Segment routing record is invalid: ${path}`, 'SESSION_STORAGE_CORRUPT', { cause: error })
     }
-  }
-
-  private async assertRoutingDatabase(): Promise<void> {
-    if (await this.sqlite.hasDatabase()) return
-    let names: string[]
-    try { names = await readdir(this.directory) }
-    catch (error: unknown) { if (isAbsent(error)) return; throw error }
-    if (names.some(name => name.endsWith('.json'))) {
-      throw new HarnessError('The Segment database is missing but routing records remain; restore the database before creating Sessions', 'SESSION_STORAGE_MISSING')
+    if (stored.id !== id || stored.database !== this.sqlite.path) {
+      throw new HarnessError('Recorded Segment storage differs from the configured database; restore the original configuration', 'SESSION_STORAGE_IDENTITY')
     }
   }
 
@@ -102,14 +97,11 @@ export class TracePersistence extends SessionPersistence {
     try { text = await readFile(this.markerPath(id), 'utf8') }
     catch (error: unknown) {
       if (!isAbsent(error)) throw error
-      await this.assertRoutingDatabase()
+      await this.sqlite.assertRoutingDatabase()
       return this.sqlite.stat(id, signal)
     }
-    const selected = this.parseMarker(text, this.markerPath(id))
-    await this.assertRoutingDatabase()
-    if (selected.id !== id || selected.database !== this.sqlite.path) {
-      throw new HarnessError('Recorded Segment storage differs from the configured database; restore the original configuration', 'SESSION_STORAGE_IDENTITY')
-    }
+    this.readMarker(text, this.markerPath(id), id)
+    await this.sqlite.assertRoutingDatabase()
     const snapshot = await this.sqlite.stat(id, signal)
     if (snapshot === undefined) {
       if (!await this.sqlite.hasDatabase()) {
@@ -130,8 +122,7 @@ export class TracePersistence extends SessionPersistence {
     else await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const path = this.markerPath(id)
     try {
-      const stored = this.parseMarker(await readFile(path, 'utf8'), path)
-      if (stored.id !== id || stored.database !== this.sqlite.path) throw new HarnessError('Stored routing identity differs', 'SESSION_STORAGE_IDENTITY')
+      this.readMarker(await readFile(path, 'utf8'), path, id)
       await this.syncDirectory()
       this.publishedRoutes.add(id)
       return
@@ -146,8 +137,7 @@ export class TracePersistence extends SessionPersistence {
         else await link(temporary, path)
       } catch (error: unknown) {
         if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
-          const stored = this.parseMarker(await readFile(path, 'utf8'), path)
-          if (stored.id !== id || stored.database !== this.sqlite.path) throw new HarnessError('Stored routing identity differs', 'SESSION_STORAGE_IDENTITY')
+          this.readMarker(await readFile(path, 'utf8'), path, id)
         } else throw error
       }
       await this.syncDirectory()
@@ -165,7 +155,7 @@ export class TracePersistence extends SessionPersistence {
     options?.signal?.throwIfAborted()
     const snapshot = materializeCreateHeader(header)
     await this.start()
-    await this.assertRoutingDatabase()
+    await this.sqlite.assertRoutingDatabase()
     // SQLite rejects an existing row itself; only the retained JSONL identity needs this check.
     if (await this.jsonl.hasStoredJsonl(snapshot.id)) throw new SessionAlreadyExistsError(snapshot.id)
     return this.sqlite.create(snapshot, options)
@@ -186,7 +176,7 @@ export class TracePersistence extends SessionPersistence {
 
   async list(options?: SessionPersistenceListOptions) {
     options?.signal?.throwIfAborted()
-    await this.assertRoutingDatabase()
+    await this.sqlite.assertRoutingDatabase()
     // Routing records publish after their commit, so reading them first guarantees each one's row is in the later scan.
     let names: string[] = []
     try { names = await this.listLimit(async () => {
@@ -211,8 +201,4 @@ export class TracePersistence extends SessionPersistence {
   }
 
   async flush(): Promise<void> { await this.sqlite.flush() }
-}
-
-function isAbsent(error: unknown): boolean {
-  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }

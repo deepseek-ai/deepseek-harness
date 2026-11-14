@@ -59,6 +59,15 @@ const segmentRow = z.union([
 type Metadata = z.infer<typeof metadata>
 type Segment = z.infer<typeof segmentRow>
 
+/**
+ * Whether a filesystem rejection reports a missing path.
+ * @param error - rejected value from a `node:fs` operation.
+ * @returns true for `ENOENT`.
+ */
+export function isAbsent(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
+}
+
 /** Normalize one rejected value for error causes and close-failure aggregation. */
 function asError(error: unknown): Error {
   /* v8 ignore next -- rejected values are normally Error; normalize a hostile rejection. */
@@ -149,28 +158,26 @@ export class SqliteLogs {
     })
   }
 
-  private async assertNewDatabase(): Promise<void> {
+  /**
+   * Refuse to use or create a database while routing records claim one that is missing.
+   * @returns resolves when the database file exists or no routing record requires it.
+   */
+  async assertRoutingDatabase(): Promise<void> {
+    if (this.ready !== undefined || await this.databaseFileExists()) return
     let records: string[]
     try { records = await readdir(join(this.legacyRoot, '.segments')) }
     catch (error: unknown) {
-      if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return
+      if (isAbsent(error)) return
       throw error
     }
     if (!records.some(record => record.endsWith('.json'))) return
     // Another initializer may have created the database while routing records were read.
-    try { await stat(this.path) }
-    catch (error: unknown) {
-      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error
-      throw new HarnessError('The Segment database is missing but routing records remain; restore the database before writing', 'SESSION_STORAGE_MISSING')
-    }
+    if (await this.databaseFileExists()) return
+    throw new HarnessError('The Segment database is missing but routing records remain; restore the database before using Sessions', 'SESSION_STORAGE_MISSING')
   }
 
   private async initialize(): Promise<DatabaseSync> {
-    try { await stat(this.path) }
-    catch (error: unknown) {
-      if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') await this.assertNewDatabase()
-      else throw error
-    }
+    await this.assertRoutingDatabase()
     await this.ensureDirectory(dirname(this.path))
     // Retain the routing directory before the first Session commit.
     await this.ensureDirectory(join(this.legacyRoot, '.segments'))
@@ -407,7 +414,7 @@ export class SqliteLogs {
     this.creating.add(meta.id)
     try {
       if (await this.stat(meta.id) !== undefined) throw new SessionAlreadyExistsError(meta.id)
-      if (!await this.exists()) await this.assertNewDatabase()
+      await this.assertRoutingDatabase()
       this.check()
       options?.signal?.throwIfAborted()
       this.pendingCreates.set(meta.id, { header: meta, inheritedCount, head: segmentId(randomUUID()) })
@@ -488,9 +495,14 @@ export class SqliteLogs {
       const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
       for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
     })
-    try { await this.published(header.id) }
+    await this.route(header.id)
+  }
+
+  /** Publish routing after a commit; the committed rows stay authoritative when publication fails. */
+  private async route(id: SessionId): Promise<void> {
+    try { await this.published(id) }
     catch (error: unknown) {
-      throw new HarnessError('Legacy Session committed, but routing publication failed; reopen the Session',
+      throw new HarnessError('Session history committed, but routing publication failed; close and reopen the Session',
         'SESSION_STORAGE_PUBLICATION', { cause: error })
     }
   }
@@ -656,8 +668,7 @@ export class SqliteLogs {
       for (const [index, payload] of payloads.entries()) insert.run(row.tail_segment_uuid, start + index, payload)
     })
     this.pendingCreates.delete(header.id)
-    try { await this.published(header.id) }
-    catch (error: unknown) { throw new HarnessError('Events committed, but routing publication failed; close and reopen the Session', 'SESSION_STORAGE_PUBLICATION', { cause: error }) }
+    await this.route(header.id)
   }
 
   private ensureRow(db: DatabaseSync, header: SessionHeader): Metadata {
@@ -690,11 +701,7 @@ export class SqliteLogs {
     const db = await this.database()
     this.transaction(db, () => { this.ensureRow(db, header) })
     this.pendingCreates.delete(header.id)
-    try { await this.published(header.id) }
-    catch (error: unknown) {
-      throw new HarnessError('Session committed, but routing publication failed; close and reopen the Session',
-        'SESSION_STORAGE_PUBLICATION', { cause: error })
-    }
+    await this.route(header.id)
   }
 
   /**
@@ -722,13 +729,16 @@ export class SqliteLogs {
       revision: SessionPersistenceRevision(`${row.tail_segment_uuid}:${row.event_count}`) }
   }
 
-  private async exists(): Promise<boolean> {
-    if (this.ready !== undefined) return true
+  private async databaseFileExists(): Promise<boolean> {
     try { await stat(this.path); return true }
     catch (error: unknown) {
-      if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false
+      if (isAbsent(error)) return false
       throw error
     }
+  }
+
+  private async exists(): Promise<boolean> {
+    return this.ready !== undefined || this.databaseFileExists()
   }
 
   /**
