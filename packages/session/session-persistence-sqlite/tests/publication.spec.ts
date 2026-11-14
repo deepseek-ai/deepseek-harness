@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { expect, it, vi } from 'vitest'
-import { SqliteLogs, SqliteTrace } from '../src/sqlite.ts'
+import { SqliteStore, SqliteSessionHandle } from '../src/sqlite.ts'
 import { routeOf } from './fixtures/store.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
@@ -59,13 +59,13 @@ it('reports a live routing failure and retains its rejected durability checkpoin
   const { context: ctx } = await fixture.mount('sqlite')
   const reported = Promise.withResolvers<undefined>()
   // oxlint-disable-next-line typescript/unbound-method -- Forwarded with its store receiver.
-  const reportFailure = SqliteLogs.prototype.reportFailure
-  const report = vi.spyOn(SqliteLogs.prototype, 'reportFailure').mockImplementation(function (this: SqliteLogs, id, error) {
+  const reportFailure = SqliteStore.prototype.reportFailure
+  const report = vi.spyOn(SqliteStore.prototype, 'reportFailure').mockImplementation(function (this: SqliteStore, id, error) {
     reportFailure.call(this, id, error)
     reported.resolve(undefined)
   })
   const writer = await ctx.sessionPersistence.create(header)
-  if (!(writer instanceof SqliteTrace)) throw new Error('Expected SQLite writer')
+  if (!(writer instanceof SqliteSessionHandle)) throw new Error('Expected SQLite writer')
   faults.routes = true
   try {
     await writer.receive(event(0))

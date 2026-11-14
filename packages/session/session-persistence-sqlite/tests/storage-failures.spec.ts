@@ -11,8 +11,8 @@ import { SessionAlreadyExistsError, SessionFormatUnsupportedError, SessionHandle
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { SessionWriteLease } from '../src/lease.ts'
-import { TracePersistence } from '../src/persistence.ts'
-import { forkTrace, sqliteLogs } from './fixtures/store.ts'
+import { SqliteSessionPersistence } from '../src/persistence.ts'
+import { sharedHistory, sqliteLogs } from './fixtures/store.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 
 /** A coded refusal or an error class from a durable read. */
@@ -28,7 +28,7 @@ const event = (seq: number): SessionEvent => seq % 2 === 0
 async function fixture() {
   const fixture = await persistenceFixture()
   const { context: ctx, persistence: storage } = await fixture.mount('sqlite')
-  if (!(storage instanceof TracePersistence)) throw new Error('Missing SQLite provider')
+  if (!(storage instanceof SqliteSessionPersistence)) throw new Error('Missing SQLite provider')
   return { root: fixture.root, ctx, storage }
 }
 async function raw(publish: () => Promise<void> = async () => {}, failedClose = false) {
@@ -64,7 +64,8 @@ it.each([
     try { db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run('source') } finally { db.close() }
   }
   await expectRefusal(storage.open(header().id, 'write'), open)
-  await expectRefusal(storage.list(), list)
+  if (fault === 'missing-row') await expectRefusal(storage.list(), list)
+  else expect(await storage.list()).toHaveLength(1)
   expect((await readdir(root, { recursive: true })).some(name => name.endsWith('.jsonl'))).toBe(false)
 })
 
@@ -130,12 +131,6 @@ it('fails on invalid selected event data while unrelated Session bodies remain r
   expect(await storage.stat(SessionId('healthy'))).toMatchObject({ eventCount: 0 })
 })
 
-it('refuses a fork create when its source row is missing', async () => {
-  const { logs } = await raw()
-  await expect(logs.create(header('child'), { inheritedEventCount: SessionLogOffset(0) }, { sourceId: SessionId('absent'), endSeq: 0 }))
-    .rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
-})
-
 it('preserves complete Session metadata without exposing Segment identifiers', async () => {
   const { logs } = await raw()
   const meta: SessionHeader = { ...header(), cwd: tmpdir(), parentSession: SessionId('parent'), origin: 'subagent', delegationDepth: 2, agentPreset: 'test' }
@@ -157,7 +152,7 @@ it.each([
   'refuses corrupted $fault instead of returning partial history', async ({ fault, error }) => {
     const { logs, path } = await raw()
     const source = await logs.create(header()); await source.append([event(0), event(1)]); await source.close()
-    await forkTrace(logs, header().id, SessionId('child'), [event(0)])
+    await sharedHistory(logs, header().id, SessionId('child'), [event(0)])
     const reader = await logs.open(SessionId('child'), 'read')
     const db = new DatabaseSync(path)
     try {
@@ -173,17 +168,6 @@ it.each([
       await expectRefusal(fault === 'identity' ? logs.open(SessionId('child'), 'read') : reader.read(), error)
     } finally { db.close(); await reader.close() }
   })
-
-it('forks from the empty prefix and refuses an absent source or an existing target', async () => {
-  const { logs } = await raw()
-  const source = await logs.create(header()); await source.append([event(0)]); await source.close()
-  await forkTrace(logs, header().id, SessionId('empty'), [])
-  const child = await logs.open(SessionId('empty'), 'read')
-  expect((await child.read()).events.map(item => item.type)).toEqual(['session/end-seed'])
-  await child.close()
-  await expect(forkTrace(logs, SessionId('absent'), SessionId('new'), [])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
-  await expect(forkTrace(logs, header().id, SessionId('empty'), [])).rejects.toBeInstanceOf(SessionAlreadyExistsError)
-})
 
 it('refuses live events on a closed handle and keeps close idempotent', async () => {
   const { logs } = await raw()
@@ -376,20 +360,6 @@ it('rolls back materialization when a database trigger removes its new metadata'
   } finally { db.close(); await writer.close() }
 })
 
-it('refuses fork if the source disappears while acquiring its write lease', async () => {
-  const { logs, path } = await raw()
-  const writer = await logs.create(header()); await writer.flush(); await writer.close()
-  const acquire = SessionWriteLease.acquire.bind(SessionWriteLease)
-  const spy = vi.spyOn(SessionWriteLease, 'acquire').mockImplementationOnce(async (...args) => {
-    const db = new DatabaseSync(path)
-    try { db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run(header().id) } finally { db.close() }
-    return acquire(...args)
-  })
-  try {
-    await expect(forkTrace(logs, header().id, SessionId('child'), [])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
-  } finally { spy.mockRestore() }
-})
-
 it('rejects a corrupt stored header identity during stat', async () => {
   const { logs, path } = await raw()
   const writer = await logs.create(header()); await writer.flush(); await writer.close()
@@ -428,15 +398,6 @@ it('refuses importing a legacy identity already committed in SQLite', async () =
 it('keeps an absent materialization a no-op', async () => {
   const { logs } = await raw()
   await logs.materialize(header())
-})
-
-it('refuses a fork constructor seed with an invalid marker', async () => {
-  const { logs } = await raw()
-  const parent = await logs.create(header()); await parent.flush()
-  const child = await logs.create({ ...header('bad-child'), isSeeded: true },
-    { inheritedEventCount: SessionLogOffset(0) }, { sourceId: parent.id, endSeq: 0 })
-  await expect(child.append([event(0)])).rejects.toMatchObject({ code: 'SESSION_FORK_SEED_REQUIRED' })
-  await child.close(); await parent.close()
 })
 
 it('aggregates write-open validation and ownership cleanup failures', async () => {
@@ -487,15 +448,6 @@ it.each([1, 2])('reports %i owned lease release failures', async (failures) => {
     await writer.flush()
     await expect(writer.close()).rejects.toThrow(failures === 1 ? 'release failed' : 'SQLite write ownership release failed')
   } finally { fault.mockRestore() }
-})
-
-it('refuses materializing a pending fork before its constructor seed', async () => {
-  const { logs } = await raw()
-  const parent = await logs.create(header()); await parent.flush()
-  const child = await logs.create({ ...header('pending-fork'), isSeeded: true },
-    { inheritedEventCount: SessionLogOffset(0) }, { sourceId: parent.id, endSeq: 0 })
-  await expect(logs.materialize(child.header)).rejects.toMatchObject({ code: 'SESSION_FORK_SEED_REQUIRED' })
-  await child.close(); await parent.close()
 })
 
 it('refuses initializing a missing database when Session routing records remain', async () => {
@@ -553,13 +505,14 @@ it('classifies retired V4 events as unsupported when reading durable rows', asyn
 
 it('refuses invalid indexed predecessor metadata before returning inherited events', async () => {
   const { logs, path } = await raw()
-  const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
-  await forkTrace(logs, header().id, SessionId('child'), [event(0)])
+  const writer = await logs.create(header()); await writer.append([event(0), event(1)]); await writer.close()
+  await sharedHistory(logs, header().id, SessionId('child'), [event(0), event(1)])
   const db = new DatabaseSync(path)
   try {
     db.exec('DROP TRIGGER segments_no_reparent; PRAGMA ignore_check_constraints = ON')
     db.exec('UPDATE segments SET parent_end_seq = -1 WHERE parent_segment_uuid IS NULL')
   } finally { db.close() }
+  await expect(sharedHistory(logs, SessionId('child'), SessionId('bad-cut'), [event(0)])).rejects.toThrow('predecessor metadata is invalid')
   const reader = await logs.open(SessionId('child'), 'read')
   try { await expect(reader.read(0, 1)).rejects.toThrow('predecessor metadata is invalid') }
   finally { await reader.close() }
@@ -568,18 +521,18 @@ it('refuses invalid indexed predecessor metadata before returning inherited even
 it('forks an earlier ancestor prefix and refuses invalid ancestry during cut selection', async () => {
   const { logs, path } = await raw()
   const source = await logs.create(header()); await source.append([event(0), event(1), event(2)]); await source.close()
-  await forkTrace(logs, header().id, SessionId('child'), [event(0), event(1)])
-  await forkTrace(logs, SessionId('child'), SessionId('grandchild'), [event(0)])
+  await sharedHistory(logs, header().id, SessionId('child'), [event(0), event(1)])
+  await sharedHistory(logs, SessionId('child'), SessionId('grandchild'), [event(0)])
   const grandchild = await logs.open(SessionId('grandchild'), 'read')
   try { expect((await grandchild.read()).events.map(item => item.seq)).toEqual([0, 1]) }
   finally { await grandchild.close() }
   const db = new DatabaseSync(path)
   try {
-    db.exec('DROP TRIGGER segments_no_reparent; PRAGMA ignore_check_constraints = ON')
-    db.exec("UPDATE segments SET parent_end_seq = 0 WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
-    await expect(forkTrace(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('offset')
-    db.exec("UPDATE segments SET parent_segment_uuid = segment_uuid WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
-    await expect(forkTrace(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('chain')
+    db.exec('DROP TRIGGER ancestors_no_update; DROP TRIGGER ancestors_no_delete')
+    db.exec("UPDATE segment_ancestors SET end_seq = 0 WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
+    await expect(sharedHistory(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('offset')
+    db.exec("DELETE FROM segment_ancestors WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
+    await expect(sharedHistory(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('chain')
   } finally { db.close() }
 })
 

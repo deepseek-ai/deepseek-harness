@@ -8,7 +8,7 @@ import { SESSION_FORMAT_VERSION, SessionId, SessionSeq, SessionStore } from '@de
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { sqliteLogs } from './fixtures/store.ts'
 import * as persistence from '../src/index.ts'
-import { SqliteLogs, SqliteTrace } from '../src/sqlite.ts'
+import { SqliteStore, SqliteSessionHandle } from '../src/sqlite.ts'
 
 const event = (seq: number): SessionEvent => seq % 2 === 0
   ? { type: 'turn/start', seq: SessionSeq(seq), time: 0, data: { turn: seq / 2 + 1 } }
@@ -101,13 +101,13 @@ it('retains the published settlement event under an immediate-close interleaving
   await ctx.plugin(persistence, { root, compression: 'none' })
   const session = ctx.sessions.create(SessionId('settlement-parity'))
   const writer = await ctx.sessionPersistence.create(session.header)
-  if (!(writer instanceof SqliteTrace)) throw new Error('Missing provider handle')
+  if (!(writer instanceof SqliteSessionHandle)) throw new Error('Missing provider handle')
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   let restore: () => void
   {
     // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted store as receiver below.
-    const original = SqliteLogs.prototype.append
-    const spy = vi.spyOn(SqliteLogs.prototype, 'append').mockImplementationOnce(async function (this: SqliteLogs, ...args) {
+    const original = SqliteStore.prototype.append
+    const spy = vi.spyOn(SqliteStore.prototype, 'append').mockImplementationOnce(async function (this: SqliteStore, ...args) {
       entered.resolve(undefined)
       await release.promise
       await original.call(this, ...args)

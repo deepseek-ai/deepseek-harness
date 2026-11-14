@@ -9,7 +9,7 @@ import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SCHEMA_VERSION } from '../src/sqlite.ts'
-import { countSqliteReads, forkTrace, sqliteLogs } from './fixtures/store.ts'
+import { countSqliteReads, sharedHistory, sqliteLogs } from './fixtures/store.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-persistence-')), path = join(root, 'sessions.sqlite')
@@ -28,8 +28,8 @@ it('selects a cut inside an earlier ancestor rather than sharing the later child
   const prefix = [event(0), event(1), event(2)]
   await parent.append(prefix)
   const childId = SessionId('later-child'), descendantId = SessionId('earlier-cut')
-  await forkTrace(logs, id, childId, prefix)
-  await forkTrace(logs, childId, descendantId, prefix.slice(0, 1))
+  await sharedHistory(logs, id, childId, prefix)
+  await sharedHistory(logs, childId, descendantId, prefix.slice(0, 1))
   await using descendant = await logs.open(descendantId, 'read')
   expect((await descendant.read()).events).toEqual([
     prefix[0], { type: 'session/end-seed', seq: SessionSeq(1), time: 0, data: { inherited: true } },
@@ -48,7 +48,7 @@ it('forks bounded prefixes into private tails without copying historical event r
       .parse(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()).n
     const before = [count('traces'), count('segments'), count('events')]
     const branchId = SessionId('branch')
-    await forkTrace(logs, id, branchId, sourcePrefix.slice(0, 2))
+    await sharedHistory(logs, id, branchId, sourcePrefix.slice(0, 2))
     expect([count('traces'), count('segments'), count('events')]).toEqual(before.map(value => value + 1))
     const branch = await logs.open(branchId, 'write')
     expect(branch.inheritedEventCount).toBe(2)
@@ -63,7 +63,7 @@ it('forks bounded prefixes into private tails without copying historical event r
     const beforePayloads = reads.payloadRows()
     for (let index = 0; index < 128; index++) {
       const next = SessionId(`descendant-${index}`)
-      await forkTrace(logs, current, next, prefix)
+      await sharedHistory(logs, current, next, prefix)
       prefix = [...prefix, { type: 'session/end-seed', seq: SessionSeq(prefix.length), time: 0, data: { inherited: true } }]
       current = next
     }
@@ -179,4 +179,23 @@ it('stores logical JSON events and reads their source coordinates from an indexe
     expect((await reader.read(4, 1)).events).toEqual([ranged])
     expect((await reader.read()).events).toEqual(batch)
   } finally { await reopened.close() }
+})
+
+it('reads an empty inherited prefix from its independent child Segment', async () => {
+  const { logs, id, header } = await fixture()
+  const writer = await logs.create(header)
+  await writer.flush()
+  await sharedHistory(logs, id, SessionId('empty-child'), [])
+  const child = await logs.open(SessionId('empty-child'), 'read')
+  try { expect((await child.read()).events).toMatchObject([{ type: 'session/end-seed', seq: 0 }]) }
+  finally { await child.close(); await writer.close() }
+})
+
+it('reads long histories across decoding yields and restores headers without an explicit delegation depth', async () => {
+  const { logs, header, event } = await fixture()
+  const events = Array.from({ length: 2050 }, (_, seq) => event(seq))
+  const writer = await logs.create(header)
+  await writer.append(events)
+  expect(await logs.read(header, 0, events.length)).toEqual(events)
+  await writer.close()
 })

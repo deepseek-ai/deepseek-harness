@@ -9,7 +9,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq, SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import * as persistence from '../src/index.ts'
-import { SqliteTrace } from '../src/sqlite.ts'
+import { SqliteSessionHandle } from '../src/sqlite.ts'
 import { sqliteLogs } from './fixtures/store.ts'
 import { SessionWriteLease } from '../src/lease.ts'
 import { sessionDir } from '../src/paths.ts'
@@ -29,7 +29,7 @@ it.each(['commit', 'rollback'] as const)('isolates every SQLite handle after an 
   await ctx.sessions.flush(cached)
   await first.close()
   const primed = await ctx.sessionPersistence.open(cached.id, 'write')
-  if (!(primed instanceof SqliteTrace)) throw new Error('Expected a SQLite handle')
+  if (!(primed instanceof SqliteSessionHandle)) throw new Error('Expected a SQLite handle')
   const pendingId = SessionId('pending')
   const pending = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: pendingId, createdAt: 0, isSeeded: false })
   const pendingReader = await ctx.sessionPersistence.open(pendingId, 'read')

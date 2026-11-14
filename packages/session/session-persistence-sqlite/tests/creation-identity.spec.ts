@@ -125,3 +125,14 @@ it.each(['provider', 'root', 'consumer-first'] as const)('preserves the final ev
   try { expect((await reader.read()).events.map(item => item.type)).toEqual(['turn/start', 'turn/end']) }
   finally { await reader.close() }
 })
+
+it('rejects creation of an existing legacy JSONL identity before reserving a SQLite writer', async () => {
+  const fixture = await persistenceFixture()
+  const jsonl = await fixture.mount('jsonl')
+  const writer = await jsonl.persistence.create(header)
+  await writer.flush(); await writer.close()
+  const sqlite = await fixture.mount('sqlite')
+  await expect(sqlite.persistence.create(header)).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+  const reader = await sqlite.persistence.open(header.id, 'read')
+  await reader.close()
+})

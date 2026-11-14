@@ -9,7 +9,7 @@ import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
 import * as persistence from '../src/index.ts'
-import { SqliteLogs } from '../src/sqlite.ts'
+import { SqliteStore } from '../src/sqlite.ts'
 
 it('public list emits an identity once when first materialization completes after pending capture', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-list-once-'))
@@ -21,8 +21,8 @@ it('public list emits an identity once when first materialization completes afte
   let writing: Promise<void> | undefined
   const materialize = () => writing ??= writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }])
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted store as receiver below.
-  const scan = SqliteLogs.prototype.scan
-  const spy = vi.spyOn(SqliteLogs.prototype, 'scan').mockImplementationOnce(async function (this: SqliteLogs, ...args) {
+  const scan = SqliteStore.prototype.scan
+  const spy = vi.spyOn(SqliteStore.prototype, 'scan').mockImplementationOnce(async function (this: SqliteStore, ...args) {
     Object.defineProperty(this, 'exists', { configurable: true, value: async () => { await materialize(); return true } })
     try { return await scan.call(this, ...args) }
     finally { Reflect.deleteProperty(this, 'exists') }
@@ -54,8 +54,8 @@ it.each(['corrupt', 'unsupported'] as const)('omits %s headers whose first commi
     } finally { db.close() }
   })()
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted store as receiver below.
-  const scan = SqliteLogs.prototype.scan
-  const spy = vi.spyOn(SqliteLogs.prototype, 'scan').mockImplementationOnce(async function (this: SqliteLogs, ...args) {
+  const scan = SqliteStore.prototype.scan
+  const spy = vi.spyOn(SqliteStore.prototype, 'scan').mockImplementationOnce(async function (this: SqliteStore, ...args) {
     Object.defineProperty(this, 'exists', { configurable: true, value: async () => {
       await materialize()
       return true

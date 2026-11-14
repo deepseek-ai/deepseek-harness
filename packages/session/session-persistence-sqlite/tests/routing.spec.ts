@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import { TracePersistence } from '../src/persistence.ts'
+import { SqliteSessionPersistence } from '../src/persistence.ts'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,7 +53,7 @@ vi.mock('../src/win32.ts', async (importOriginal) => {
     publishNewFileWin32: (source: string, target: string) => actual.link(source, target) }
 })
 
-class Adapter extends TracePersistence {
+class Adapter extends SqliteSessionPersistence {
   constructor(ctx: Context, root: string) {
     super(ctx, ctx, { root }, {
       async prepare() { throw new Error('legacy preparation') },
@@ -167,8 +167,8 @@ it.each(['open', 'stat', 'readdir', 'exists'] as const)('refuses database initia
 it('refuses orphan routing records before admitting new Sessions', async () => {
   const { storage, root } = await fixture()
   await storage.publishRoute(header.id)
-  const { SqliteLogs } = await import('../src/sqlite.ts')
-  const database = vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockResolvedValue(false)
+  const { SqliteStore } = await import('../src/sqlite.ts')
+  const database = vi.spyOn(SqliteStore.prototype, 'hasDatabase').mockResolvedValue(false)
   await expect(storage.stat(header.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
   await rm(join(root, '.segments'), { recursive: true })
   expect(await storage.stat(header.id)).toBeUndefined()
@@ -180,9 +180,9 @@ it('refuses orphan routing records before admitting new Sessions', async () => {
 it('reports a database removed between routing validation and row inspection', async () => {
   const { storage } = await fixture()
   const writer = await storage.create(header); await writer.flush(); await writer.close()
-  const { SqliteLogs } = await import('../src/sqlite.ts')
-  vi.spyOn(SqliteLogs.prototype, 'stat').mockResolvedValue(undefined)
-  vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockResolvedValueOnce(true).mockResolvedValue(false)
+  const { SqliteStore } = await import('../src/sqlite.ts')
+  vi.spyOn(SqliteStore.prototype, 'stat').mockResolvedValue(undefined)
+  vi.spyOn(SqliteStore.prototype, 'hasDatabase').mockResolvedValue(false)
   await expect(storage.stat(header.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
 })
 
@@ -199,9 +199,9 @@ it('refuses a competing publication with a different identity', async () => {
 
 it('honors cancellation while entering the bounded routing scan', async () => {
   const { storage } = await fixture()
-  const { SqliteLogs } = await import('../src/sqlite.ts')
+  const { SqliteStore } = await import('../src/sqlite.ts')
   const aborted = new AbortController()
-  vi.spyOn(SqliteLogs.prototype, 'hasDatabase').mockImplementation(async () => { aborted.abort(); return true })
+  vi.spyOn(SqliteStore.prototype, 'assertRoutingDatabase').mockImplementation(async () => { aborted.abort() })
   await expect(storage.list({ signal: aborted.signal })).rejects.toThrow()
 })
 
@@ -225,4 +225,21 @@ it('allows an empty routing directory without a database', async () => {
   const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
   await actual.mkdir(join(root, '.segments'), { recursive: true })
   expect(await storage.stat(header.id)).toBeUndefined()
+})
+
+it('accepts a database initialized while its routing directory is being inspected', async () => {
+  const { root } = await fixture()
+  const { sqliteLogs } = await import('./fixtures/store.ts')
+  const path = join(root, 'events.sqlite')
+  const observer = sqliteLogs(path, root), initializer = sqliteLogs(path, root)
+  const fs = await import('node:fs/promises')
+  const actual = await vi.importActual<typeof fs>('node:fs/promises')
+  const readdir = vi.spyOn(fs, 'readdir').mockImplementationOnce(async (...args) => {
+    await initializer.start()
+    await actual.mkdir(join(root, '.segments'), { recursive: true })
+    await actual.writeFile(join(root, '.segments', 'published.json'), '{}')
+    return actual.readdir(...args)
+  })
+  try { await observer.assertRoutingDatabase() }
+  finally { readdir.mockRestore(); await observer.close(); await initializer.close() }
 })

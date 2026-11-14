@@ -1,14 +1,16 @@
 /** SQLite store fixtures and observations of durable event rows. @module */
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { StatementSync } from 'node:sqlite'
+import { z } from 'zod'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { onTestFinished, vi } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
-import { SqliteLogs } from '../../src/sqlite.ts'
-import type { SqliteLogsOptions } from '../../src/sqlite.ts'
+import { SqliteStore } from '../../src/sqlite.ts'
+import type { SqliteStoreOptions } from '../../src/sqlite.ts'
 import { SessionWriteLease } from '../../src/lease.ts'
 import { sessionDir } from '../../src/paths.ts'
 
@@ -19,26 +21,43 @@ import { sessionDir } from '../../src/paths.ts'
  * @param overrides - option replacements for the test.
  * @returns an unopened store.
  */
-export function sqliteLogs(path: string, root: string, overrides: Partial<SqliteLogsOptions> = {}): SqliteLogs {
-  return new SqliteLogs({ path, legacyRoot: root,
+export function sqliteLogs(path: string, root: string, overrides: Partial<SqliteStoreOptions> = {}): SqliteStore {
+  return new SqliteStore({ path, legacyRoot: root,
     acquireCreationLease: header => SessionWriteLease.acquire(sessionDir(root, header.cwd, header.id), header.id),
     publish: async () => {}, report: () => {}, ...overrides })
 }
 
 /**
- * Fork through the product path: reserve the source prefix, then append the constructor seed.
- * The prefix events stand in for the in-memory source log; only their seqs reach storage.
- * @param logs - store holding the source.
+ * Populate a persisted shared prefix for Segment read and cut-selection tests.
+ * @param logs - store containing the durable source.
  * @param source - source Session.
- * @param target - new child Session.
- * @param prefix - inherited source events, contiguous from seq 0.
+ * @param target - child fixture identity.
+ * @param prefix - prefix selecting the shared length.
  */
-export async function forkTrace(logs: SqliteLogs, source: SessionId, target: SessionId, prefix: readonly SessionEvent[]): Promise<void> {
-  const endSeq = prefix.length
-  const marker: SessionEvent<'session/end-seed'> = { type: 'session/end-seed', seq: SessionSeq(endSeq), time: 0, data: { inherited: true } }
-  const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: target, createdAt: 0, isSeeded: true },
-    { inheritedEventCount: SessionLogOffset(endSeq) }, { sourceId: source, endSeq })
-  try { await writer.append([...prefix, marker]) } finally { await writer.close() }
+export async function sharedHistory(logs: SqliteStore, source: SessionId, target: SessionId,
+  prefix: readonly SessionEvent[]): Promise<void> {
+  const snapshot = await logs.stat(source)
+  if (snapshot === undefined) throw new Error('Missing source fixture')
+  // Cached statements must use the connection owned by this store.
+  const db = await logs['database']()
+  {
+    const stored = z.object({ header: z.string(), inherited_count: z.number(), base_seq: z.number(),
+      tail_segment_uuid: z.string().transform(value => brandString<Parameters<SqliteStore['cut']>[1]['tail_segment_uuid']>(value)) })
+      .parse(db.prepare('SELECT header, inherited_count, tail_segment_uuid, base_seq FROM traces JOIN segments ON segment_uuid = tail_segment_uuid WHERE trace_uuid = ?').get(source))
+    const cut = logs.cut(db, { ...stored, event_count: z.number().parse(snapshot.eventCount) }, prefix.length)
+    const segment = randomUUID()
+    const marker: SessionEvent<'session/end-seed'> = { type: 'session/end-seed', seq: SessionSeq(prefix.length), time: 0, data: { inherited: true } }
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const id = brandString<Parameters<SqliteStore['cut']>[1]['tail_segment_uuid']>(segment)
+      logs['newSegment'](db, id, cut.parent, cut.end)
+      db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(target,
+        JSON.stringify({ version: SESSION_FORMAT_VERSION, id: target, createdAt: 0, isSeeded: true,
+          delegationDepth: 0 }), segment, prefix.length)
+      db.prepare('INSERT INTO events VALUES (?, 0, ?)').run(segment, JSON.stringify(marker))
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
+  }
 }
 
 /**

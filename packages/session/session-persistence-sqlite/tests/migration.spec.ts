@@ -6,9 +6,9 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionId, SessionLogOffset, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
-import { TracePersistence } from '../src/persistence.ts'
+import { SqliteSessionPersistence } from '../src/persistence.ts'
 import { SessionAlreadyOwnedError, SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
-import { SqliteLogs } from '../src/sqlite.ts'
+import { SqliteStore } from '../src/sqlite.ts'
 import { LegacySessionMigration } from '../src/migration.ts'
 import type { JsonlBackend } from '../src/migration.ts'
 
@@ -16,7 +16,7 @@ const id = SessionId('migration')
 const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sqlite-import-sequence-'))
-  const sqlite = new SqliteLogs({ path: join(root, 'sessions.sqlite'), legacyRoot: root,
+  const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root,
     acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {} })
   const jsonl: JsonlBackend = {
     hasStoredJsonl: async () => true, list: async () => [],
@@ -69,7 +69,7 @@ it('reuses a commit that wins while metadata is read', async () => {
 it('publishes a commit that wins while the artifact lease is acquired', async () => {
   const { sqlite, migration, selected } = await fixture()
   await sqlite.importLegacy(header, SessionLogOffset(0), [])
-  selected.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValue(true)
+  selected.mockResolvedValueOnce(false).mockResolvedValue(true)
   const handle = await migration.open(id, 'write')
   await handle.close()
 })
@@ -106,10 +106,10 @@ it('republishes routing when a competing importer commits under lease acquisitio
   const root = await mkdtemp(join(tmpdir(), 'sqlite-routing-import-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const provider = new TracePersistence(ctx, ctx, { root }, jsonl)
+  const provider = new SqliteSessionPersistence(ctx, ctx, { root }, jsonl)
   // oxlint-disable-next-line typescript/unbound-method -- Called with the native store receiver below.
-  const acquire = SqliteLogs.prototype.acquireSessionLease
-  const fault = vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementationOnce(async function (this: SqliteLogs, metadata) {
+  const acquire = SqliteStore.prototype.acquireSessionLease
+  const fault = vi.spyOn(SqliteStore.prototype, 'acquireSessionLease').mockImplementationOnce(async function (this: SqliteStore, metadata) {
     await this.importLegacy(metadata, SessionLogOffset(0), [])
     return acquire.call(this, metadata)
   })
@@ -118,4 +118,13 @@ it('republishes routing when a competing importer commits under lease acquisitio
     await handle.close()
     expect(await provider.stat(id)).toMatchObject({ header })
   } finally { fault.mockRestore() }
+})
+
+it('opens a concurrent SQLite commit when queued legacy metadata no longer exists', async () => {
+  const { sqlite, jsonl, selected, migration } = await fixture()
+  await sqlite.importLegacy(header, SessionLogOffset(0), [])
+  vi.spyOn(jsonl, 'stat').mockResolvedValue(undefined)
+  selected.mockResolvedValue(true)
+  const reader = await migration.open(id, 'read')
+  await reader.close()
 })

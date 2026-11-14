@@ -1,4 +1,4 @@
-/** Initialization retries, automatic rollbacks, and forks before the first durable parent write. @module */
+/** Initialization retries, automatic rollbacks, and durable parent writes. @module */
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,7 @@ import { SessionId, SessionSeq, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
-import { sqliteLogs, forkTrace } from './fixtures/store.ts'
+import { sqliteLogs } from './fixtures/store.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-recovery-'))
@@ -51,25 +51,6 @@ it('retains retryable state after SQLite automatically rolls back an append', as
     expect((await writer.read()).events).toEqual([event(0)])
     await writer.close()
   } finally { db.close() }
-})
-
-it.each([0, 1] as const)('forks a live parent with %i events before its first commit without forcing parent publication', async (count) => {
-  const { path, logs, header, event } = await fixture()
-  const parent = await logs.create(header('parent'))
-  const prefix = count === 0 ? [] : [event(0)]
-  for (const entry of prefix) await parent.receive(entry)
-  await forkTrace(logs, parent.id, SessionId('child'), prefix)
-  const child = await logs.open(SessionId('child'), 'read')
-  try {
-    expect((await child.read()).events).toMatchObject([...prefix, { type: 'session/end-seed', seq: count }])
-  } finally { await child.close() }
-  const db = new DatabaseSync(path)
-  try {
-    expect(db.prepare('SELECT trace_uuid FROM traces WHERE trace_uuid = ?').get(parent.id)).toBeUndefined()
-  } finally { db.close() }
-  await parent.flush()
-  expect((await parent.read()).events).toEqual(prefix)
-  await parent.close()
 })
 
 it('retries the same append after SQLITE_FULL automatically ends its transaction', async () => {

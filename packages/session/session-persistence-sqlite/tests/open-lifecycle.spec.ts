@@ -1,7 +1,7 @@
 /** Cancellation and disposal while SQLite opens an existing Session. @module */
 import { expect, it, vi } from 'vitest'
 import { SessionWriteLease } from '../src/lease.ts'
-import { SqliteLogs } from '../src/sqlite.ts'
+import { SqliteStore } from '../src/sqlite.ts'
 import { sessionDir } from '../src/paths.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
@@ -37,8 +37,8 @@ it('returns no history when cancellation arrives during the write-open restore r
   await writer.close()
   const controller = new AbortController(), reason = new Error('cancel restore read')
   // oxlint-disable-next-line typescript/unbound-method -- Forwarded with its store receiver.
-  const read = SqliteLogs.prototype.read
-  const spy = vi.spyOn(SqliteLogs.prototype, 'read').mockImplementationOnce(async function (this: SqliteLogs, ...args) {
+  const read = SqliteStore.prototype.read
+  const spy = vi.spyOn(SqliteStore.prototype, 'read').mockImplementationOnce(async function (this: SqliteStore, ...args) {
     const events = await read.call(this, ...args)
     controller.abort(reason)
     return events
