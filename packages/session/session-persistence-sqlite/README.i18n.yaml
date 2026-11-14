@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/session/session-persistence-sqlite/README.md
+/:
+  en: 41aded9a1a358caf
+  zh: a26bdb1b0a5bb29f
+/deepseek-ai-dsh-session-persistence-sqlite:
+  en: 22cf683fb8ec6976
+  zh: c4c0244b1b7340bd
+/deepseek-ai-dsh-session-persistence-sqlite/summary:
+  en: 0c2d3cfbff915c15
+  zh: ccf1f73680574484
+/deepseek-ai-dsh-session-persistence-sqlite/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: 0b283b30acc898ed
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package:
+  en: 9cda015eba91ac02
+  zh: 0646d4625a15535c
+/deepseek-ai-dsh-session-persistence-sqlite/understand-the-implementation:
+  en: 0fedbac9938c1c3b
+  zh: 9be02ab1175bd7b2
+/deepseek-ai-dsh-session-persistence-sqlite/further-exploration:
+  en: 133df48b9cd05d67
+  zh: 7024d007a0b10082
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/persisted-history:
+  en: 010d35cf2ef5b758
+  zh: d57e7bc5d6d92a3d
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/persisted-history/what-the-model-sees:
+  en: 3950e76b8ae1b1b4
+  zh: dc32341e2f212a52
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/persisted-history/token-effect:
+  en: ee6aa5668004664c
+  zh: 71f1056c8821e043
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/persisted-history/kv-cache-effect:
+  en: 2917f1a38ac3fede
+  zh: 586b1ea29d200336
+/deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work:
+  en: 565ba240c0d04b6c
+  zh: 702d48592c9cd883
+/deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: 25e979141fbe5501

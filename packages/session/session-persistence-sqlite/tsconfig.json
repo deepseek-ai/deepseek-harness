@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../session-persistence-jsonl"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

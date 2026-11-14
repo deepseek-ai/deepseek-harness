@@ -7,8 +7,6 @@
  */
 
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import '@deepseek-ai/dsh-session-persistence'
-import { TracePersistence } from '@deepseek-ai/dsh-session-persistence-sqlite'
 import z from '@deepseek-ai/schemastery'
 import {
   createSessionFormatCatalogWithChildren,
@@ -23,6 +21,7 @@ import { scheduler } from 'node:timers/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import pLimit, { type LimitFunction } from 'p-limit'
 import {
+  SessionPersistence,
   SessionFormatUnsupportedError,
   SessionPersistenceCorruptionError,
   SessionAlreadyExistsError, SessionPersistenceNotFoundError,
@@ -60,8 +59,17 @@ import {
   type PreparedJsonlMigration,
 } from './generation.ts'
 
-type JsonlBackend = ConstructorParameters<typeof TracePersistence>[3]
-type PreparedLegacySession = Awaited<ReturnType<JsonlBackend['prepare']>>
+/** Logical JSONL history retained until its destination commits under write ownership. */
+interface LegacySessionSnapshot {
+  readonly header: SessionHeader
+  readonly inheritedEventCount: SessionLogOffsetType
+  readonly events: readonly SessionEvent[]
+}
+
+/** Prepared legacy history whose related sources are checked before destination publication. */
+interface PreparedLegacySession extends LegacySessionSnapshot {
+  commit(publish: (snapshot: LegacySessionSnapshot) => Promise<void>): Promise<void>
+}
 
 export type { JsonlCompression } from './format.ts'
 
@@ -98,8 +106,6 @@ const DEFAULT_LIST_CONCURRENCY = 3
 
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
-  /** Storage for Sessions; defaults to JSONL. SQLite explicitly enables legacy import. */
-  storage?: 'sqlite' | 'jsonl'
   /**
    * Root directory for all session files. Required (no default): a default of
    * `process.cwd()` would scatter session files as the process's cwd changes
@@ -312,17 +318,12 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 }
 
 /**
- * Existing JSONL storage used to read historical Sessions during SQLite import.
+ * JSONL Session persistence with historical-format migration.
  * Sessions materialize lazily: a created session is
  * visible to this process immediately, reaches disk on its first append or
  * flush, and never existed if the process crashes before that.
  */
-class JsonlSessionPersistence implements JsonlBackend {
-  /** Process-local identity used by persistence observation caches. */
-  readonly identity: symbol = Symbol('sessionPersistence')
-  /** Backend label for diagnostics and effects. */
-  readonly name = 'session-persistence-jsonl'
-
+export class JsonlSessionPersistence extends SessionPersistence {
   private root: string
   private compression: JsonlCompression
   /**
@@ -357,7 +358,14 @@ class JsonlSessionPersistence implements JsonlBackend {
   /** One joinable decode/migration operation per selected historical Session file revision. */
   private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
-  constructor(private readonly ctx: Context, public config: Config, private readonly tracker: JsonlBackendTracker) {
+  /**
+   * @param ctx - context used for scoped diagnostics and filesystem reads.
+   * @param config - JSONL root, physical encoding, and listing concurrency.
+   * @param tracker - handle bookkeeping; omitted creates bookkeeping for legacy reads.
+   */
+  constructor(ctx: Context, public config: Config,
+    private readonly tracker = new JsonlBackendTracker('session-persistence-jsonl')) {
+    super(ctx)
     /* v8 ignore next 5 -- generated catalog and Session source share one build-time version owner. */
     if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
       throw new Error(
@@ -389,7 +397,12 @@ class JsonlSessionPersistence implements JsonlBackend {
     return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
   }
 
-  /** Prepare existing logical history for SQLite while the caller retains Session ownership. */
+  /**
+   * Prepare logical history while the caller retains Session write ownership.
+   * @param id - stored Session identity.
+   * @param signal - optional cancellation for decoding and destination publication.
+   * @returns history and a commit operation that validates related sources before publication.
+   */
   async prepare(id: SessionId, signal?: AbortSignal): Promise<PreparedLegacySession> {
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
@@ -403,7 +416,11 @@ class JsonlSessionPersistence implements JsonlBackend {
     } }
   }
 
-  /** Whether a legacy artifact already occupies this Session identity. */
+  /**
+   * Check whether a JSONL artifact occupies the Session identity.
+   * @param id - stored Session identity.
+   * @returns whether the artifact exists.
+   */
   async hasStoredJsonl(id: SessionId): Promise<boolean> {
     await this.ensureRootEncoding()
     return await this.findLog(id) !== undefined
@@ -740,7 +757,7 @@ class JsonlSessionPersistence implements JsonlBackend {
       const sources = await children()
       const related = await prepareCatalogFacts(id, sources, this.compression, signal)
       for (const failure of related.failures) {
-        this.ctx.logger.warn(`${this.name}: session "${id}" catalog retained a child with unknown descriptor (raw log: ${failure.path}): ${String(failure.error)}`)
+        this.ctx.logger.warn(`${name}: session "${id}" catalog retained a child with unknown descriptor (raw log: ${failure.path}): ${String(failure.error)}`)
       }
       const membership = sources.map(source => source.path).sort()
       validateRelatedSources = async () => {
@@ -995,7 +1012,7 @@ class JsonlSessionPersistence implements JsonlBackend {
   async truncateTornTail(header: SessionHeader, truncateTo: number): Promise<void> {
     this.coldLogMemo.delete(header.id)
     await this.repair(header, truncateTo)
-    this.ctx.logger.warn(`${this.name}: session "${header.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
+    this.ctx.logger.warn(`${name}: session "${header.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
   }
 
   /**
@@ -1892,7 +1909,6 @@ export const name = 'session-persistence-jsonl'
 
 /** Loader schema for the backend's root, physical encoding, and listing concurrency. */
 export const Config: z<Config> = z.object({
-  storage: z.union([z.const('sqlite'), z.const('jsonl')]).default('jsonl'),
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(DEFAULT_LIST_CONCURRENCY),
@@ -1916,13 +1932,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     service = ctx.plugin({
       name: 'session-persistence-jsonl-service',
       apply(serviceCtx: Context) {
-        const legacy = new JsonlSessionPersistence(serviceCtx, config, tracker)
-        if (config.storage !== 'sqlite') {
-          tracker.install(segments.ctx)
-          serviceCtx.provide('sessionPersistence', legacy)
-          return
-        }
-        new TracePersistence(serviceCtx, segments.ctx, config.root, legacy)
+        tracker.install(segments.ctx)
+        new JsonlSessionPersistence(serviceCtx, config, tracker)
       },
     })
     yield service.dispose
