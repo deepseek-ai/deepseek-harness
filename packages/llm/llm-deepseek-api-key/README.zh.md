@@ -55,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-API key 读取调用 `dsh-credentials` 的 `resolveCredentialRef` 与 `credentialRefConfigured`，并用 `dsh-llm` 的 `assertUsableApiKey` 校验值；共享传输层不读取任何凭据。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
+API key 的读取经由 `ctx.deepseekAuth`：它按路由的 `apiKeyEnv` 引用读取密钥，并检查密钥能否放进 HTTP 请求头；本插件把不可用的密钥报告为 `INVALID_CREDENTIAL`，共享传输层不读取任何凭据。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
 
 <a id="further-exploration"></a>
 ## 进一步探索
