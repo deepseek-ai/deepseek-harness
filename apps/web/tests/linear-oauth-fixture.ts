@@ -3,7 +3,10 @@
  * and authorization-server metadata, dynamic client registration, an
  * authorization endpoint that approves every request by redirecting straight
  * back to the caller, a token endpoint, and a Streamable HTTP MCP endpoint
- * that requires the issued bearer token and answers JSON-RPC with plain JSON.
+ * that requires a bearer token this fixture issued and answers JSON-RPC with
+ * plain JSON. The `initialize`, `tools/list`, and `ping` answers are written
+ * by hand because `apps/web` carries no MCP SDK dependency; the scenario only
+ * needs the handshake and the tool listing to succeed.
  */
 import { once } from 'node:events'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -14,6 +17,8 @@ export interface LinearOAuthFixture {
   readonly origin: string
   /** Authorization pages the browser opened. */
   authorizations(): number
+  /** Errors thrown while answering requests, each answered with a 500; the scenario expects none. */
+  failures(): readonly unknown[]
   /** Stop listening and close open connections. */
   close(): Promise<void>
 }
@@ -24,7 +29,9 @@ export interface LinearOAuthFixture {
  */
 export async function startLinearOAuthFixture(): Promise<LinearOAuthFixture> {
   let origin = '', authorizations = 0, tokens = 0, registrations = 0
-  const json = (response: ServerResponse, value: unknown, status = 200): void => {
+  const issued = new Set<string>()
+  const failures: unknown[] = []
+  const json =(response: ServerResponse, value: unknown, status = 200): void => {
     response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(value))
   }
   async function text(request: IncomingMessage): Promise<string> {
@@ -60,9 +67,12 @@ export async function startLinearOAuthFixture(): Promise<LinearOAuthFixture> {
     } else if (url.pathname === '/token') {
       await text(request)
       tokens++
-      json(response, { access_token: 'linear-access-' + String(tokens), refresh_token: 'linear-refresh-' + String(tokens), token_type: 'Bearer', expires_in: 3600 })
+      const token = 'linear-access-' + String(tokens)
+      issued.add(token)
+      json(response, { access_token: token, refresh_token: 'linear-refresh-' + String(tokens), token_type: 'Bearer', expires_in: 3600 })
     } else if (url.pathname === '/mcp') {
-      if (request.headers.authorization === undefined) {
+      const token = request.headers.authorization?.replace(/^Bearer /u, '')
+      if (token === undefined || !issued.has(token)) {
         response.writeHead(401, { 'www-authenticate': `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"` }).end()
       } else await answerMcp(request, response)
     } else response.writeHead(404).end()
@@ -84,7 +94,10 @@ export async function startLinearOAuthFixture(): Promise<LinearOAuthFixture> {
     }
   }
   const server = createServer((request, response) => {
-    handle(request, response).catch(() => { if (!response.headersSent) response.writeHead(500).end() })
+    handle(request, response).catch((error: unknown) => {
+      failures.push(error)
+      if (!response.headersSent) response.writeHead(500).end()
+    })
   })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -94,6 +107,7 @@ export async function startLinearOAuthFixture(): Promise<LinearOAuthFixture> {
   return {
     origin,
     authorizations: () => authorizations,
+    failures: () => failures,
     close: async () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => { if (error === undefined) resolve(); else reject(error) })

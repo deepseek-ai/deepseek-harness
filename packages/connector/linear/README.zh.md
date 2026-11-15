@@ -33,7 +33,7 @@ Linear 插件在加载期间把 Linear 托管的 MCP 服务器 `https://mcp.line
 dsh plugin --profile web add @deepseek-ai/dsh-linear
 ```
 
-bundle patch 在 profile 其他层之后插入 `linear` 行。插件需要 `mcpManager` 与 `systemPrompt` 服务，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 提供它们。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpManager` 服务。
+bundle patch 在 profile 其他层之后插入 `linear` 行。插件需要 `mcpManager` 与 `systemPrompt` 服务：[base bundle](../../bundle/base/README.zh.md) 提供 `systemPrompt`，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 补上 MCP 管理器。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpManager` 服务。
 
 ### 授权与退出登录
 
@@ -112,11 +112,11 @@ Tools named `mcp__linear__*` come from the Linear plugin. In user-facing replies
 
 #### Token 影响
 
-插件加载期间，这两句固定文字为每次请求增加约 70 个 token。
+插件加载期间，这三句固定文字为每次请求增加约 70 个 token。
 
 #### KV Cache 影响
 
-这句话保持前缀稳定：只在插件加载或卸载时变化，授权或连接状态变化不会改变它。
+这段指引保持前缀稳定：只在插件加载或卸载时变化，授权或连接状态变化不会改变它。
 
 ### Linear 服务器工具与说明
 
@@ -142,7 +142,7 @@ Linear 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 - Desktop 每次启动都监听操作系统分配的端口。重启后再次授权会注册一个新的 OAuth 客户端，并保留之前的注册记录；已保存的 grant 在重启前后正常刷新。
 - 账号连接之前，共享资源的提示词仍把 `linear` 列为服务器名，对它的资源调用会失败，直到用户完成连接。
 - 一次 Linear 授权对应一个 Linear 工作区，供整个 Host 使用；没有账号或工作区选择器。
-- 付费 Linear 工作区可以要求管理员审批第三方应用。这时 Linear 让用户提交审批申请而不是直接授权，管理员批准后用户需要重新连接。
+- 付费 Linear 工作区可以要求管理员审批第三方应用（[Linear 文档](https://linear.app/docs/third-party-application-approvals)）。这时 Linear 让用户提交审批申请而不是直接授权，管理员批准后用户需要重新连接。
 - 停用或卸载插件会保留本地 grant。退出登录会删除本地 grant，但在用户于 Linear 一侧移除之前，该连接在 Linear 中仍处于已授权状态。
 
 <a id="dev-note"></a>

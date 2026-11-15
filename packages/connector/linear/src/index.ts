@@ -33,7 +33,7 @@ export interface Config {
   toolLoading: 'eager' | 'on-demand'
 }
 
-/* jscpd:ignore-start -- sibling connector plugins declare their MCP server and naming guidance through the same calls. */
+/* jscpd:ignore-start -- deliberate twin of dsh-notion and dsh-tencent-docs: the same MCP server and guidance registrations. */
 /** Runtime configuration schema for the Linear plugin. */
 export const Config: z<Partial<Config>, Config> = z.object({
   url: z.string().default('https://mcp.linear.app/mcp'),

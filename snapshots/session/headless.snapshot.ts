@@ -1523,8 +1523,9 @@ describe('headless recorded-session snapshots', () => {
               expect(mcpDemo.calls).toEqual(['ping'])
             }
             if (scenario.name === 'linear-plugin' && mcpDemo !== undefined) {
-              // Without a saved grant the Linear server is never contacted. The committed tool-schemas sidecar pins
-              // the absent tools; the transcript check below only guards the recorded text.
+              // Without a saved grant the Linear server is never contacted: the fixture records the authorization
+              // header of every request it receives, so an empty list means no request. The committed tool-schemas
+              // sidecar pins the absent tools; the transcript check below only guards the recorded text.
               expect(mcpDemo.authorization).toEqual([])
               expect(actualLogs[0]!.content).not.toContain('mcp__linear__ping')
             }

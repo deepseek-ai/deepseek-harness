@@ -72,5 +72,6 @@ describe('web e2e: Linear plugin connection', () => {
     await page.getByRole('dialog', { name: '退出 Linear 登录？' }).getByRole('button', { name: '退出登录', exact: true }).click()
     await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('disconnected')
     expect(tripwire.pageErrors).toEqual([])
+    expect(fixture.failures()).toEqual([])
   })
 })

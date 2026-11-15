@@ -137,3 +137,9 @@ it('refuses to load when a configured server already uses the Linear name', asyn
   await expect(b.mount().await()).rejects.toThrow('server "linear" is already configured or registered')
   expect(await b.prompt()).not.toContain(GUIDANCE)
 })
+
+it('refuses to load when a configured server already uses the Linear credential key', async () => {
+  const b = await fixture({ tracker: { transport: 'streamable-http', url: 'https://tracker.example/mcp', oauth: { credentialKey: 'mcp-client/linear' }, enabled: false } })
+  await expect(b.mount().await()).rejects.toThrow('OAuth credentialKey is already assigned to another server')
+  expect(await b.prompt()).not.toContain(GUIDANCE)
+})

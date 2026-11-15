@@ -33,7 +33,7 @@ Install the package as a bundle, for example from the Web sidebar's **Plugins** 
 dsh plugin --profile web add @deepseek-ai/dsh-linear
 ```
 
-The bundle patch inserts the `linear` row after the profile's other layers. The plugin requires the `mcpManager` and `systemPrompt` services, which the Web and Desktop compositions provide through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpManager` service.
+The bundle patch inserts the `linear` row after the profile's other layers. The plugin requires the `mcpManager` and `systemPrompt` services: the [base bundle](../../bundle/base/README.md) provides `systemPrompt`, and the Web and Desktop compositions add the MCP manager through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpManager` service.
 
 ### Authorize and sign out
 
@@ -112,11 +112,11 @@ Tools named `mcp__linear__*` come from the Linear plugin. In user-facing replies
 
 #### Token effect
 
-The two fixed sentences add about 70 tokens to every request while the plugin is loaded.
+The three fixed sentences add about 70 tokens to every request while the plugin is loaded.
 
 #### KV Cache effect
 
-The sentence is prefix-stable: it changes only when the plugin loads or unloads, not when authorization or the connection changes.
+The guidance is prefix-stable: it changes only when the plugin loads or unloads, not when authorization or the connection changes.
 
 ### Linear server tools and instructions
 
@@ -142,7 +142,7 @@ Linear's instructions (or, with `eager`, its tools) appear when the connection s
 - Desktop listens on an OS-assigned port for each launch. Authorizing again after a restart registers a new OAuth client and keeps the earlier registration record; saved grants refresh normally across restarts.
 - Before the account is connected, the shared resource prompt still lists `linear` as a server name, and resource calls to it fail until the user connects.
 - One Linear authorization covers one Linear workspace and serves the whole Host; there is no account or workspace picker.
-- A paid Linear workspace can require admin approval for third-party applications. There, Linear asks the user to request approval instead of granting access, and the user connects again after an admin approves.
+- A paid Linear workspace can require admin approval for third-party applications ([Linear documentation](https://linear.app/docs/third-party-application-approvals)). There, Linear asks the user to request approval instead of granting access, and the user connects again after an admin approves.
 - Turning the plugin off or uninstalling it keeps the local grant. Signing out deletes the local grant but leaves the connection authorized on Linear's side until the user removes it there.
 
 <a id="dev-note"></a>
