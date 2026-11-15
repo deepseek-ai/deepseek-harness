@@ -74,6 +74,7 @@ function props(
   killJob: JobsSectionProps['killJob'] = async () => true,
   watchRows: JobsSectionProps['watchRows'] = () => () => {},
   store: SectionStore = createJobsSectionStore().create(),
+  mayKill = true,
 ): JobsSectionProps {
   const jobsState: JobsSnapshot = { rows: jobs.length > 0 ? { [SESSION]: jobs } : {}, observed }
   function useJobs<T>(select: (value: JobsSnapshot) => T): T {
@@ -81,7 +82,9 @@ function props(
   }
   return {
     sessionId: SESSION, useJobs, watchRows, observe, killJob, useStore: hookOf(store), actions: store.actions, t,
-  } as Pick<JobsSectionProps, 'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't'> as JobsSectionProps
+    useAccess: () => mayKill,
+  } as Pick<JobsSectionProps,
+    'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't' | 'useAccess'> as JobsSectionProps
 }
 
 describe('JobsRunningIndicator', () => {
@@ -529,6 +532,12 @@ describe('JobsSection human kill', () => {
     // The stopping row offers no kill control any more, and the stale phase is gone.
     expect(screen.queryByRole('button', { name: stopTitle('pnpm run build') })).toBeNull()
     expect(document.querySelector('[data-kill-state]')).toBeNull()
+  })
+
+  it('omits the stop control without job/kill access', () => {
+    const view = render(<JobsSection {...props([job({ status: 'running' })], undefined, undefined, undefined, undefined, undefined, false)} />)
+    expect(view.getByText('pnpm run build')).toBeTruthy()
+    expect(view.container.querySelector('[data-kill-state]')).toBeNull()
   })
 })
 

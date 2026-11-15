@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Authentification Desktop",
+    "description": "Authentifie les requêtes Desktop avec un identifiant privé partagé par le processus parent et le processus Host."
+  }
+}

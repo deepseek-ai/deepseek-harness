@@ -308,14 +308,14 @@ export function probeFreePort(): Promise<number> {
  * @param page - browser page with the mounted sidebar.
  * @param locale - current UI language.
  */
-export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja' | 'de'): Promise<void> {
   const drawer = await page.evaluate(() => window.innerWidth < 768
     && !document.documentElement.hasAttribute('data-windows-titlebar'))
   await page.waitForFunction(expected => Boolean(document.querySelector('[data-sidebar-drawer]')) === expected, drawer)
   const closed = page.locator('[data-sidebar-drawer][data-sidebar-collapsed]')
   if (await closed.count() === 0) return
   await page.locator('[data-shell-leading]').getByRole('button', {
-    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true,
+    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く', de: 'Seitenleiste öffnen' }[locale], exact: true,
   }).click()
   await closed.waitFor({ state: 'detached' })
 }

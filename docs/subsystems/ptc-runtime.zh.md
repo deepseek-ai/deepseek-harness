@@ -115,7 +115,7 @@ type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 
 ## 绑定：宿主函数作为程序全局变量
 
-每个 `PtcBindingNamespace` 成为一个异步可调用函数的全局对象；PTC 传入 `tools`。参数与返回值必须是无损 JSON。提供方强制各自的传输上限；seam 不设统一的绑定字节上限。可选错误类描述符创建程序可见的类型化拒绝，无需在运行时内点名消费方。绑定名是自有属性，因此 `__proto__` 不能遍历原型：
+每个 `PtcBindingNamespace` 成为一个异步可调用函数的全局对象；PTC 传入 `tools`。参数与返回值必须是无损 JSON，宿主签发的 `PtcImage` 和 `PtcInspectableValue` 描述符由提供方适配。提供方强制各自的传输上限；seam 不设统一的绑定字节上限。可选错误类描述符创建程序可见的类型化拒绝，无需在运行时内点名消费方。绑定名是自有属性，因此 `__proto__` 不能遍历原型：
 
 ```ts type-equiv
 /**
@@ -126,13 +126,11 @@ type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
  * of a particular consumer such as PTC mode.
  */
 interface PtcBindingErrorClass {
-  /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link PtcBindingNamespace.global}. */
+  /** Constructor global and resulting `Error.name`; same identifier rule as {@link PtcBindingNamespace.global}. */
   name: string
   /**
-   * Non-empty own property for the member name. The portable exclusion set is
-   * `RESERVED_ERROR_MEMBERS` plus dunder-form names (`__x__`, non-empty
-   * middle), enforced identically by every backend; any other name —
-   * identifiers or not — is accepted everywhere.
+   * Non-empty own property for the member name, excluding `name`, `message`,
+   * and `stack` (`RESERVED_ERROR_MEMBERS`). Other property names are accepted.
    */
   memberNameProperty: string
 }
@@ -148,14 +146,10 @@ interface PtcBindingErrorClass {
  */
 interface PtcBindingNamespace {
   /**
-   * The global identifier the program sees. Must match the LANGUAGE-PORTABLE
-   * identifier subset `[A-Za-z_][A-Za-z0-9_]*` and no language's reserved
-   * words, so the same namespace list works against every backend regardless
-   * of `language` — a JS-only spelling like `$tools` is always rejected.
-   * Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
-   * `__dsh_main__`) are also refused everywhere; see its declaration for the
-   * exact set and why each entry is reserved.
+   * The global identifier the program sees. Must match `[A-Za-z_$][A-Za-z0-9_$]*`
+   * and exclude ECMAScript keywords and strict-mode names (`RESERVED_BINDING_WORDS`).
+   * Runtime output globals (`console`, `inspect`, `Image` in `RESERVED_BINDING_GLOBALS`)
+   * are also refused.
    */
   global: string
   /** The callable members, keyed by the exact name the program calls. */
@@ -174,13 +168,36 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
- * lossy or non-cloneable value with a descriptive error rather than corrupting
- * the run. No seam-level byte cap applies to a binding resolution. A rejection
- * of this function surfaces inside the program as a rejection of the
- * corresponding call.
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage and
+ * PtcInspectableValue values. An inspectable resolution delivers its JSON object
+ * or array to the program and uses its text only when that unchanged value is
+ * inspected directly. A runtime rejects a lossy or non-cloneable value with a
+ * descriptive error rather than corrupting the run. No seam-level byte cap
+ * applies to a binding resolution. A rejection of this function surfaces inside
+ * the program as a rejection of the corresponding call.
  */
 type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
+```
+
+`@deepseek-ai/dsh-ptc-runtime` 导出的 `PtcInspectableValue` 通过 `new PtcInspectableValue(value, text)`，为无损 JSON 对象或数组关联宿主提供的文本。提供方向程序交付数据本身，不暴露描述符，也不添加程序可见属性。只有直接 `inspect` 原结果，且其数据仍与初始快照一致时，才使用附带文本；空文本不产生输出。拷贝、字段选择、修改后的结果和嵌套值使用普通格式。该关联由 Node 进程拥有，不序列化到 Session 日志，复制程序值也不会传递该关联。参见 [`src/inspectable-value.ts`](../../packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts)。
+
+数据中可以包含宿主提供的 `PtcImage` 描述符。提供方在展示快照中保留对应程序 `Image` 的身份。直接展示未修改的容器时输出附带文本；展示 Image 字段时输出该图片。
+
+```ts public-api
+/** A binding result whose unchanged object or array displays the supplied text when inspected directly. */
+declare class PtcInspectableValue {
+  readonly [key: string]: PtcJsonValue;
+  /** The JSON object or array delivered unchanged to the program. */
+  readonly value: PtcJsonValue[] | { [key: string]: PtcJsonValue };
+  /** Text shown by a direct inspection of the unchanged value; empty text emits nothing. */
+  readonly text: string;
+  /**
+   * Associate an object or array with its host-authored inspection text.
+   * @param value - Lossless JSON data retained for programmatic access.
+   * @param text - Text to display instead of generic object formatting.
+   */
+  constructor(value: PtcJsonValue[] | { [key: string]: PtcJsonValue }, text: string);
+}
 ```
 
 ## 捕获的输出与失败分类体系
@@ -236,7 +253,7 @@ interface PtcRunFailure {
 
 ## 服务
 
-`PtcRuntime` 定义于 [`src/index.ts`](../../packages/ptc-runtime/ptc-runtime/src/index.ts)。`resolve(request)` 返回完整执行输入，`run(spec)` 执行它们。`executionInstructions` 提供由运行时拥有的使用说明，供消费方呈现。支持逐次覆盖时，`timeout` 报告配置的经过时间默认值和上限；每次请求仍由 `resolve` 验证并截断。`language` 选择支持的程序呈现；`isolation` 描述执行基底，不作安全声明。`sandboxMode` 声明文件策略支持，不提供约束的提供方返回 `undefined`。每个实现将各次运行的程序状态分离，并在资源释放期间终止且等待活跃执行。
+`PtcRuntime` 定义于 [`src/index.ts`](../../packages/ptc-runtime/ptc-runtime/src/index.ts)。`resolve(request)` 返回完整执行输入，`run(spec)` 执行它们。`executionInstructions` 提供由运行时拥有的使用说明，供消费方呈现。支持逐次覆盖时，`timeout` 报告配置的经过时间默认值和上限；每次请求仍由 `resolve` 验证并截断。`language` 标识源码语言，供消费方检查自身要求（参见 [PTC 执行器](../../packages/core/tool-executor-ptc/README.zh.md)）；`isolation` 描述执行基底，不作安全声明。`sandboxMode` 声明文件策略支持，不提供约束的提供方返回 `undefined`。每个实现将各次运行的程序状态分离，并在资源释放期间终止且等待活跃执行。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -250,7 +267,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.ptcRuntime` — `PtcRuntime` (abstract seam)
 
-Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
+Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects, with PtcRuntimeError. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
 
 ```ts cordis-catalog
 /**
@@ -281,7 +298,7 @@ registerEnvironmentInitializer(program: string): () => Promise<void>
  * Resolve supported options and provider defaults before execution.
  * @param request - Program, bindings, cancellation and optional execution choices.
  * @returns Complete directory, deadline and supported authority for run.
- * @throws When an explicit choice is invalid or unsupported by this provider.
+ * @throws When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.
  */
 abstract resolve(request: PtcRunRequest): PtcRunSpec
 

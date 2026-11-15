@@ -54,7 +54,7 @@
       "path": "../ui-session-panel"
     },
     {
-      "path": "../ui-session-status"
+      "path": "../ui-session-status/tsconfig.client.json"
     },
     {
       "path": "../ui-sidebar-right"

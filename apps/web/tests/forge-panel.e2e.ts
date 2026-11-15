@@ -79,9 +79,9 @@ const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')
 const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
 if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
   const fields = args[args.indexOf('--json') + 1]
-  process.stdout.write(JSON.stringify(fields === 'url'
-    ? { url: 'https://github.com/octo/demo/pull/7' }
-    : { number: 7, title: 'Add the pull request panel' }))
+  const url = 'https://github.com/octo/demo/pull/7'
+  process.stdout.write(fields !== 'url' ? JSON.stringify({ number: 7, title: 'Add the pull request panel' })
+    : args.includes('--jq') ? url + '\\n' : JSON.stringify({ url }))
   process.exit(0)
 }
 if (args[0] === 'pr' && args[1] === 'ready' && args[2] === '9') {
@@ -321,7 +321,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     }).filter(thread => thread.comments.nodes.length > 0)
     const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
     process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
-      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
+      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false, viewerDidAuthor: false,
         reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
         reviewThreads: page(threads) } } } }))
     process.exit(0)
@@ -474,12 +474,12 @@ interface PanelLaunch {
 /**
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
- * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup.
+ * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup through `bash` or a PTC program.
  * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, diff output limit, and
  * whether the extension fixture plugin loads.
  * @returns the scaffold, page, and checkout.
  */
-async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' = 'normal',
+async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' | 'ptc-reference' = 'normal',
   options: {
     desktop?: 'darwin' | 'win32'
     branch?: string
@@ -512,9 +512,13 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   const override = join(root, 'replay.override.json')
   // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
   if (scenario === 'follow-up') await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
-  if (scenario === 'reference') {
+  const reference = scenario === 'reference' || scenario === 'ptc-reference'
+  if (reference) {
     const command = `PATH=${JSON.stringify(`.fixture-bin:${process.env.PATH ?? ''}`)} gh pr view 7 --repo octo/demo --json number,title 2>&1 | head -200`
-    const call = { type: 'tool-call', id: 'view-pr', name: 'bash', arguments: JSON.stringify({ command, description: 'View PR metadata' }) }
+    const bash = { command, description: 'View PR metadata' }
+    const call = { type: 'tool-call', id: 'view-pr', ...scenario === 'reference'
+      ? { name: 'bash', arguments: JSON.stringify(bash) }
+      : { name: 'run_code', arguments: JSON.stringify({ code: `await tools.bash(${JSON.stringify(bash)})`, description: 'View PR metadata' }) } }
     await writeFile(override, JSON.stringify({ patches: [
       { at: 0, entry: { kind: 'chunks', chunks: [
         { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -547,7 +551,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   await git(project, 'branch', 'release')
   await git(project, 'commit', '--quiet', '--allow-empty', '-m', 'main only')
   if (options.branch !== undefined) await git(project, 'checkout', '--quiet', '-b', options.branch)
-  if (scenario === 'reference') {
+  if (reference) {
     // The model's confined command must own the CLI double's writable call log.
     const modelBin = join(project, '.fixture-bin')
     await mkdir(modelBin)
@@ -586,6 +590,11 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   onTestFailed(async () => { await saveFailureShot(page, failureShot) })
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+  if (scenario === 'ptc-reference') {
+    const [agent] = scaffold.ctx.agents.list()
+    if (agent === undefined) throw new Error('The connected workspace has no blank Session')
+    await scaffold.ctx.agentPresets.select(agent, 'ptc')
+  }
   return { scaffold, page, root, project, tripwire }
 }
 
@@ -758,16 +767,12 @@ it.skipIf(MODE === 'record')('reports incomplete filter configuration and retrie
   expect(tripwire.warnings).toEqual([])
 })
 
-it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
-  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
-  const { settled } = await sendPrompt(page, scaffold)
-  const sessionId = await settled
-  const events = await readPersistedEvents(scaffold, sessionId)
-  const request = events.find(event => event.type === 'request/header')
-  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
-  const toolOutput = events.flatMap(event => event.type === 'tool/result'
-    ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
-  expect(toolOutput).toContain('Add the pull request panel')
+/**
+ * Expect the panel to show PR 7, which the model viewed by number without its URL in the output, and the lookup that resolved it.
+ * @param launch - the panel launched for a reference scenario.
+ * @param sessionId - Session whose binding records are read.
+ */
+async function expectNumberedReference({ scaffold, page, project, tripwire }: PanelLaunch, sessionId: SessionId): Promise<void> {
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
@@ -784,9 +789,35 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
     })
   }).toEqual([{ action: 'reference', url: PULL }])
   const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
-  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
+  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url', '--jq', '.url'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
+}
+
+it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
+  const launch = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
+  const { settled } = await sendPrompt(launch.page, launch.scaffold)
+  const sessionId = await settled
+  const events = await readPersistedEvents(launch.scaffold, sessionId)
+  const request = events.find(event => event.type === 'request/header')
+  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
+  const toolOutput = events.flatMap(event => event.type === 'tool/result'
+    ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
+  expect(toolOutput).toContain('Add the pull request panel')
+  await expectNumberedReference(launch, sessionId)
+})
+
+it.skipIf(MODE === 'record')('automatically shows a numbered PR that a PTC program views when gh JSON omits its URL', async () => {
+  const launch = await launchPanel('web-e2e-forge-ptc-reference', 'ptc-reference')
+  const { settled } = await sendPrompt(launch.page, launch.scaffold)
+  const sessionId = await settled
+  const events = await readPersistedEvents(launch.scaffold, sessionId)
+  expect(events.find(event => event.type === 'request/header')?.data.header.tools?.map(tool => tool.name)).toEqual(['run_code'])
+  expect(events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])).toEqual(['run_code'])
+  const dispatches = events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [event.data] : [])
+  expect(dispatches.map(dispatch => [dispatch.name, dispatch.isError])).toEqual([['bash', false]])
+  expect(dispatches[0]?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('Add the pull request panel')
+  await expectNumberedReference(launch, sessionId)
 })
 
 it.skipIf(MODE === 'record')('starts a Session in a worktree before its first message, follows its change request, and restores the removed worktree', async () => {

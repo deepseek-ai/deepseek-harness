@@ -328,7 +328,9 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  *   observation, and kill controls, and the namespace translator.
  * @returns the job list, or null when there is nothing to show.
  */
-export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, useStore, actions, t }: JobsSectionProps) {
+export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, useStore, actions, t, useAccess }: JobsSectionProps) {
+  // The stop control follows job/kill; a reader that may list a job but not stop it sees the row only.
+  const mayKill = useAccess('job/kill')
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
   const [expandedKey, setExpandedKey] = useState<string | undefined>(undefined)
@@ -427,7 +429,7 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
       onToggle={() => {
         setExpandedKey(current => current === String(job.id) ? undefined : String(job.id))
       }}
-      {...job.status === 'running'
+      {...job.status === 'running' && mayKill
         ? {
           kill: {
             state: killPhase?.key === String(job.id) ? killPhase.state : 'idle' as const,

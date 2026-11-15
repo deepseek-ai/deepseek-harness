@@ -6,6 +6,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MarketIndexSummary, MarketSearchResult, PluginDetail, PluginDetailDocumentId, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
+import { gitMarketIndexSource, isGitMarketIndexSourceAddress } from '@deepseek-ai/dsh-plugin-market-index/source'
 import { declaredQuery, INITIAL_QUERY, type DiscoverQuery } from './presentation.ts'
 
 /** Why the last listing read failed: the index could not be fetched, is not a valid index, or changed while its pages loaded. */
@@ -13,8 +14,16 @@ export type ListingFailure = 'fetch' | 'invalid' | 'changed'
 
 /** Why the last source change was refused. */
 export type SourceFailure =
-  | { readonly kind: 'invalid' | 'duplicate' | 'unavailable' }
+  | { readonly kind: 'invalid' | 'invalid-git' | 'duplicate' | 'unavailable' }
   | { readonly kind: 'other'; readonly reason: string }
+
+type SourceKind = 'http' | 'git'
+
+/** The optional location of an index in Git. */
+interface SourceOptions {
+  readonly path: string
+  readonly ref: string
+}
 
 /** Plugins loaded before "Show more", and loaded again by each press. */
 export const PAGE_SIZE = 50
@@ -45,6 +54,7 @@ export interface DiscoverState {
   /** Whether the source editor is open; it is always shown when no source exists. */
   readonly editing: boolean
   readonly draft: string
+  readonly sourceOptions: SourceOptions
   readonly saving: boolean
   readonly sourceFailure: SourceFailure | null
 }
@@ -122,6 +132,7 @@ export interface DiscoverFace extends DetailFace {
   readonly retry: () => void
   readonly toggleSources: () => void
   readonly editDraft: (text: string) => void
+  readonly editSourceOptions: (options: Partial<SourceOptions>) => void
   readonly addSource: () => void
   readonly removeSource: (url: string) => void
 }
@@ -129,12 +140,18 @@ export interface DiscoverFace extends DetailFace {
 /** Largest page the Host returns, the `limit` bound of `pluginMarket.search`. */
 const MAX_PAGE = 100
 
+const INITIAL_SOURCE_OPTIONS: SourceOptions = { path: '', ref: '' }
+
 const INITIAL: DiscoverState = {
-  status: 'idle', indexes: [], selected: null, listing: null, editing: false, draft: '', saving: false, sourceFailure: null,
+  status: 'idle', indexes: [], selected: null, listing: null, editing: false, draft: '', sourceOptions: INITIAL_SOURCE_OPTIONS,
+  saving: false, sourceFailure: null,
 }
 
-function sourceFailure(failure: RemoteFailure): SourceFailure {
-  if (failure.code === 'plugin-market/invalid-index-url') return { kind: failure.details.reason === 'duplicate' ? 'duplicate' : 'invalid' }
+function sourceFailure(failure: RemoteFailure, kind?: SourceKind): SourceFailure {
+  if (failure.code === 'plugin-market/invalid-index-url') {
+    if (failure.details.reason === 'duplicate') return { kind: 'duplicate' }
+    return { kind: kind === 'git' ? 'invalid-git' : 'invalid' }
+  }
   if (failure.code === 'plugin-market/settings-unavailable') return { kind: 'unavailable' }
   return { kind: 'other', reason: failure.message }
 }
@@ -209,13 +226,9 @@ export class DiscoverController {
       },
       toggleSources: () => { this.patch({ editing: !this.state().editing, sourceFailure: null }) },
       editDraft: (text) => { this.patch({ draft: text, sourceFailure: null }) },
-      addSource: () => {
-        const draft = this.state().draft.trim()
-        if (draft === '') return
-        this.selectAdded = true
-        void this.saveSources([...this.state().indexes.map(index => index.url), draft], true)
-      },
-      removeSource: (url) => { void this.saveSources(this.state().indexes.map(index => index.url).filter(item => item !== url), false) },
+      editSourceOptions: (options) => { this.patch({ sourceOptions: { ...this.state().sourceOptions, ...options }, sourceFailure: null }) },
+      addSource: () => { this.addSource() },
+      removeSource: (url) => { void this.saveSources(this.state().indexes.map(index => index.url).filter(item => item !== url)) },
     }
   }
 
@@ -400,16 +413,37 @@ export class DiscoverController {
     this.patch({ listing, indexes })
   }
 
-  private async saveSources(urls: string[], adding: boolean): Promise<void> {
+  private addSource(): void {
+    const { draft, sourceOptions, indexes, saving } = this.state()
+    const address = draft.trim()
+    if (saving || address === '') return
+    const kind = isGitMarketIndexSourceAddress(address) ? 'git' : 'http'
+    let url = address
+    if (kind === 'git') {
+      try {
+        url = gitMarketIndexSource(address, sourceOptions.path.trim() || undefined, sourceOptions.ref.trim() || undefined)
+      } catch {
+        this.patch({ sourceFailure: { kind: 'invalid-git' } })
+        return
+      }
+    }
+    this.selectAdded = true
+    void this.saveSources([...indexes.map(index => index.url), url], kind)
+  }
+
+  private async saveSources(urls: string[], adding?: SourceKind): Promise<void> {
+    if (this.state().saving) return
+    const isDisposed = (): boolean => this.disposed
     this.patch({ saving: true, sourceFailure: null })
     const answer = await this.ctx.remote.pluginMarket.setIndexes(urls)
-    if (this.disposed) return
+    if (isDisposed()) return
     if (!answer.ok) {
       this.selectAdded = false
-      this.patch({ saving: false, sourceFailure: sourceFailure(answer.error) })
+      this.patch({ saving: false, sourceFailure: sourceFailure(answer.error, adding) })
       return
     }
-    this.patch({ saving: false, ...adding ? { draft: '' } : {} })
     await this.loadIndexes()
+    if (isDisposed()) return
+    this.patch({ saving: false, ...adding === undefined ? {} : { draft: '', sourceOptions: INITIAL_SOURCE_OPTIONS } })
   }
 }

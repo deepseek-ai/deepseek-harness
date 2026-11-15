@@ -3,29 +3,35 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-session-status/README.md
 /:
-  en: 11efe93e9b428342
-  zh: 56d90a359ee86ad5
+  en: dc68a4aaa22727ac
+  zh: aef571e08a364bf1
 /deepseek-ai-dsh-client-ui-session-status:
   en: d572f680cca905e6
   zh: 7c397a1fb746b47f
 /deepseek-ai-dsh-client-ui-session-status/summary:
-  en: a3e8fe090a557c9b
-  zh: 782500fb80b92712
+  en: 5fe776aee839b428
+  zh: 5c183742a98dded0
 /deepseek-ai-dsh-client-ui-session-status/table-of-contents:
-  en: 3e7914c761a1310c
-  zh: 82c46d3a4d5e6a55
-/deepseek-ai-dsh-client-ui-session-status/status-table:
-  en: 4c1c64a9e5aa133d
-  zh: 9248ed3f64a4ebc9
+  en: d152484eb41ac6b4
+  zh: 7b30b973a849247d
+/deepseek-ai-dsh-client-ui-session-status/use-this-package:
+  en: fe9e33d12e5df30e
+  zh: 5037b80cad259f47
+/deepseek-ai-dsh-client-ui-session-status/understand-the-implementation:
+  en: 64919e36946e9fa8
+  zh: e6b2d66e98f2bf38
+/deepseek-ai-dsh-client-ui-session-status/further-exploration:
+  en: e1bb29cafbeee6ec
+  zh: 6b9af92c1ef2b0e5
 /deepseek-ai-dsh-client-ui-session-status/model-experience:
-  en: 687076082426c060
-  zh: 5888fcd520d0e53e
+  en: 745f3b288309a4b3
+  zh: e4150220b50a0338
 /deepseek-ai-dsh-client-ui-session-status/model-experience/kv-cache-effect:
-  en: 99bd3bc7d244944a
-  zh: 0021893ed90b2686
+  en: a4bc54a4825f89d2
+  zh: 1a96ffe54bc0192e
 /deepseek-ai-dsh-client-ui-session-status/known-limitations-and-deferred-work:
-  en: 52d467a078cc3486
-  zh: c373685b879ad6de
+  en: ac174b1d3bdc68aa
+  zh: 6ece23133dc7dc87
 /deepseek-ai-dsh-client-ui-session-status/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
-  zh: e88aeb617ffb74ea
+  zh: 6df6019931844fb2

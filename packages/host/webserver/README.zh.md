@@ -58,13 +58,21 @@ kind: "package-reference"
 
 ### 注册路由
 
+WebServer 事件以发起它的 WebServer 为 Cordis subject。普通监听器仅接收相同 `webServer` isolation 中的事件；`{ global: true }` 明确跳过此过滤。请求处理、页面注入和入口 URL 收集均遵循此规则。自定义发起者也必须把自己的 WebServer 实例作为 subject 传入。
+
 `register(route)` 添加具名的 `exact`／`prefix` HTTP route，`registerUpgrade(route)` 为精确 pathname 添加 upgrade route，两者返回的 disposer 都会移除注册。同一张表内的重复路径会抛错——route 模式是组合层约定，冲突即配置错误。HTTP 匹配先在整张表中匹配精确 route，再匹配最长前缀，最后交给回退；upgrade 只做精确匹配，未命中连接直接关闭。
 
-具名 route 可以用 `resource(request, peer?)` 代替 `handler`：一个把 Fetch `Request` 映射为 `Response` 的函数。经 HTTP 时只有 `GET` 与 `HEAD` 能到达它——其他方法得到带 `Allow: GET, HEAD` 的 405，请求 body 从不读取——请求不带 Peer，携带客户端的 header，URL 是把请求目标按一个占位 origin 解析得到的，客户端的 authority 只保留在 `host` 头里。响应按背压写回，gzip 的处理与 handler 的响应相同；`HEAD` 不发送 body，客户端断开会中止 `request.signal` 并取消 body。`readResource(request, peer)` 返回同一 URL 经 HTTP 会得到的响应，由 resource 按 `peer` 计算（`HEAD` 读取不返回 body）：它遵循 HTTP 的匹配顺序；路径属于 handler、或落到未认领或 handler 形式的回退时返回 404；`GET`、`HEAD` 以外的方法返回 405；不检查 cookie、Host 或 Origin，因此调用方须先准入读者。
+具名路由可以使用 `resource(request, peer?)` 代替 `handler`，将 Fetch `Request` 映射为 `Response`。准入后仅 `GET` 与 `HEAD` 可到达 resource；其他方法返回带 `Allow: GET, HEAD` 的405，不读取正文。resource 接收准入 Peer（若有）与客户端请求头；URL 将请求目标按占位 origin 解析，客户端 authority 保留在 `host` 中。响应按背压及与 handler 相同的 gzip 规则发送；`HEAD` 不发送正文，断开会中止 `request.signal` 并取消正文。`readResource(request, peer)` 使用显式准入的 Peer 在进程内分发，不检查 Cookie、Host 或 Origin，但解析出的 `deny` 返回403。它遵循 HTTP 匹配顺序，对 handler 或未认领回退返回404，对非 GET/HEAD 读取返回405；HEAD 读取不返回正文。
+
+HTTP 请求在路由查找前经过 `webserver/request(request, response, next)`。监听器拥有响应或等待 `next()`，请求错误处理器容纳中间件异常。匹配后，HTTP 与 upgrade 路由解析 `auth`，可为固定策略或读取请求事实的同步选择器。默认 `required` 要求存活 Peer；`anonymous` 免凭据；`deny` 不分发，直接返回403。其余策略通过同步 `webserver/authorize(request, policy)` 采用首个决策。无人决策时匿名放行，认证返回503。HTTP 与 upgrade 的准入拒绝响应均携带 `Cache-Control: no-store`。Connection 提供来源检查与有序凭据验证；来源检查同样适用于匿名路由。HTTP handler 接收 `(req, res, peer?)`，upgrade 接收 `(req, socket, head, peer?)`，resource 保留已有 Peer 参数。进程内读取不触发此事件。
+
+已准入的 upgrade 在已注册协议 handler 前经过 `webserver/upgrade(req, socket, head, peer, next)`。waterfall 携带已选定的 Peer，匿名准入可为 `undefined`；被拒绝的请求不会进入。监听器自行处理 Socket，或等待 `next()` 委派。WebServer 等待同步或异步协议 handler，并在中间件或 handler 拒绝时记录日志、销毁该 Socket。Provider 专属 Socket 限制与凭据清理属于监听器，不属于 WebServer 或 Gateway。
+
+`webserver/entry-url(baseUrl, entries)` 根据传入的服务器基地址同步收集完整入口 URL。监听器追加 `{ label, url, open }` 入口。WebApp 在就绪后触发该事件。WebApp 拥有按序打印与首个可自动打开入口的浏览器交接。该事件不认证请求，也不改变监听器或公告地址配置。
 
 ### 回退席位
 
-`registerFallback(handler)` 或 `registerFallback({ resource })` 认领所有未被具名 route 命中的请求的唯一一个应答方。第二次注册会抛错；没有注册回退时服务器回答 404。在随附的 Web 组合中，[SPA dist 服务器](../frontend-static/README.zh.md)拥有该席位，并对其渲染的每个 index 响应调用 `renderIndex`。
+`registerFallback(handler)` 或含 `handler`/`resource` 及可选 `auth` 的对象认领未匹配请求的唯一应答方。裸 handler 同样默认采用 `required` 准入。第二次注册抛错，未认领席位返回404。随附 Web 组合由 [SPA dist 服务器](../frontend-static/README.zh.md)持有席位，选择 index 认证访问及静态资源匿名访问，并为 index 响应调用 `renderIndex`。
 
 index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexInjections(peer)` 收集一张全新的注入表——每次调用发一次 `webserver/index-inject` 事件，把 `peer` 传给每个订阅方，订阅方推入其当前行——`renderIndex(html, peer)` 先把这些行渲染进 index.html 正文，再按注册顺序应用原始 `tapIndex(transform)` 转换。`script-preload` 行会渲染为 classic script 的提示性 preload 链接。静态部署会在启动 payload 中携带同一批行。`applyIndexTaps(html)` 只应用原始转换；它是任何行都无法表达的标记的逃生口。
 
@@ -82,7 +90,7 @@ index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexI
 
 ### 设计理念
 
-本包是一个普通路由注册表，唯一的 harness 词汇是 index 渲染所代表的 Peer：`WebServer` 继承 Cordis `Service`，持有三张路由表、回退 slot、原始 index 转换列表，以及 `webserver/index-inject` 事件，index 渲染器经其收集行。index 渲染每次响应组合两层：`renderIndex` 先把包含提示性 `script-preload` 行的全新注入表渲染进正文，再按注册顺序应用原始转换；`applyIndexTaps` 只运行转换。upgrade handler 拥有协议握手与连接内容；webserver 只交付原始 socket 与 request。`host`、`port`、`protocol` getter 与 `getOrigin()` 暴露其他插件据以自适应的组合期事实（例如 directory-picker 选择器），而显式的 `tls: null` 会归一为未设置监听，使 `protocol` 只有一个来源。
+`WebServer` 继承 Cordis `Service`，拥有匹配、路由准入、响应交付与 index 渲染。Connection 通过事件提供来源/凭据决策，WebServer 不依赖具体认证实现。index 渲染收集新的 `webserver/index-inject` 行，渲染后执行原始转换。upgrade handler 在准入后拥有协议协商与连接内容。监听器 getter 与 `getOrigin()` 暴露配置决定的传输事实；显式 `tls: null` 表示 HTTP 监听器。
 
 ### 匹配与生命周期
 
@@ -129,7 +137,7 @@ index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexI
 这些限制说明服务器在何处有意保持最小。它们是当前包约束，不是任务积压。
 
 - **不管理证书生命周期**：`tls` 只提供激活时存在的 PEM 文件——载体从不申请、续期或监视它们，并采用 Node 默认的 TLS 策略。替换证书需要重新加载。
-- **不提供服务器级认证或来源策略**：`dsh-client-connection` 等 route owner 会实施自己的请求策略。绑定非回环地址仍会向该网络公开未受保护的 route 与静态资源。
+- **凭据与来源策略需要准入监听器**——载体执行路由声明，但不自行验证凭据。无人决策时，认证路由返回503，匿名路由仍可访问；活动 Connection 监听器对两者均执行来源检查。
 - **Socket 选项固定不变**：配置只选择绑定宿主与端口；在具体部署产生需求前，backlog 和其他 socket 设置仍保持内部实现。
 
 <a id="dev-note"></a>

@@ -23,7 +23,7 @@ async function fixture(text?: string, rows: object[] = []): Promise<ProfileConte
   await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: rows }]))
   const patchPath = join(dir, 'cordis.patch.yml')
   await (text === undefined ? rm(patchPath) : writeFile(patchPath, text))
-  return { name: 'test', dir, patchPath, installAnchor, cwd: home, home, startedBundles: ['bundle'], overlays: [], telemetryDisabledEnv: undefined }
+  return { name: 'test', dir, patchPath, installAnchor, cwd: home, home, startedBundles: ['bundle'], overlayPaths: [], telemetryDisabledEnv: undefined }
 }
 
 it('preserves comments, expressions, unrelated configuration and the last override', async () => {

@@ -75,7 +75,8 @@ const LISTING: MarketSearchResult = {
 
 const READY: DiscoverState = {
   status: 'ready', indexes: [{ url: A, title: LISTING.title }, { url: B }], selected: A,
-  listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: LISTING, answered: INITIAL_QUERY, failure: null }, editing: false, draft: '', saving: false, sourceFailure: null,
+  listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: LISTING, answered: INITIAL_QUERY, failure: null },
+  editing: false, draft: '', sourceOptions: { path: '', ref: '' }, saving: false, sourceFailure: null,
 }
 
 function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<PluginMarketLocaleKey, string> = en) {
@@ -85,7 +86,7 @@ function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<Plugin
   const actions = {
     ensure: vi.fn(), reload: vi.fn(), select: vi.fn(), search: vi.fn(), more: vi.fn(), refresh: vi.fn(), retry: vi.fn(),
     toggleSources: vi.fn(),
-    editDraft: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
+    editDraft: vi.fn(), editSourceOptions: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
     loadDetail: vi.fn(), retryDetail: vi.fn(), detailImage: vi.fn(() => undefined),
   }
   const install = vi.fn()
@@ -279,6 +280,40 @@ describe('DiscoverSection', () => {
     openMenu(/^Switch plugin index/)
     pick(en.manageSources)
     expect(actions.toggleSources).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the Raw index title before its GitHub repository on the button and in the menu', () => {
+    const url = 'https://raw.githubusercontent.com/acme/plugins/main/index.json'
+    const other = 'git+ssh://git@github.com/acme/internal.git'
+    const label = 'Alpha index · github:acme/plugins'
+    const { actions } = renderTab({
+      indexes: [{ url, title: LISTING.title }, { url: other, title: 'Internal plugins' }], selected: url,
+      listing: { url, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url }, answered: INITIAL_QUERY, failure: null },
+    })
+    const button = screen.getByRole('button', { name: `Switch plugin index, currently ${label}` })
+    expect(within(button).getByText(label)).toBeTruthy()
+    fireEvent.click(button)
+    expect(screen.getByRole('menuitem', { name: label })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'github:acme/internal' }))
+    expect(actions.select).toHaveBeenCalledWith(other)
+  })
+
+  it('distinguishes Git indexes in the same GitHub repository by ref and file path', () => {
+    const url = 'git+https://github.com/acme/plugins.git'
+    const other = 'git+ssh://git@github.com/acme/plugins.git?path=market%2Findex.json&ref=release%2Fstable'
+    const label = 'github:acme/plugins · HEAD:index.json'
+    const otherLabel = 'github:acme/plugins · release/stable:market/index.json'
+    const listing: ListingState = {
+      url, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url }, answered: INITIAL_QUERY, failure: null,
+    }
+    const { actions, set } = renderTab({ indexes: [{ url }, { url: other }], selected: url, listing })
+    openMenu(`Switch plugin index, currently ${label}`)
+    expect(screen.getByRole('menuitem', { name: label })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: otherLabel }))
+    expect(actions.select).toHaveBeenCalledWith(other)
+    set({ selected: other, listing: { ...listing, url: other, value: { ...LISTING, url: other } } })
+    const button = screen.getByRole('button', { name: `Switch plugin index, currently ${otherLabel}` })
+    expect(within(button).getByText(otherLabel)).toBeTruthy()
   })
 
   it('opens an entry page with its source facts and actions, and returns to the list', () => {
@@ -481,6 +516,7 @@ describe('DiscoverSection', () => {
     expect(actions.addSource).toHaveBeenCalledOnce()
     for (const [failure, text] of [
       [{ kind: 'invalid' }, en.sourceInvalid], [{ kind: 'duplicate' }, en.sourceDuplicate],
+      [{ kind: 'invalid-git' }, en.sourceInvalidGit],
       [{ kind: 'unavailable' }, en.sourceUnavailable], [{ kind: 'other', reason: 'boom' }, en.sourceFailed],
     ] as const) {
       set({ sourceFailure: failure })
@@ -492,6 +528,27 @@ describe('DiscoverSection', () => {
     expect(actions.toggleSources).toHaveBeenCalledOnce()
     set({ indexes: [] })
     expect(screen.queryByRole('list', { name: en.sourcesLabel })).toBeNull()
+  })
+
+  it('shows Git file options only for a recognized repository address', () => {
+    const { actions, set } = renderTab({ editing: true, draft: 'https://git.example/acme/plugins' })
+    const dialog = within(screen.getByRole('dialog', { name: en.sourcesTitle }))
+    const address = dialog.getByRole('textbox', { name: en.sourceUrl })
+    const add = dialog.getByRole('button', { name: en.addSource })
+    expect(dialog.queryByRole('combobox')).toBeNull()
+    expect(add.hasAttribute('disabled')).toBe(false)
+    expect(dialog.queryByRole('textbox', { name: en.sourcePath })).toBeNull()
+    expect(dialog.queryByRole('textbox', { name: en.sourceRef })).toBeNull()
+    set({ draft: 'git@github.com:acme/plugins.git' })
+    expect(add.hasAttribute('disabled')).toBe(false)
+    expect(dialog.getByRole('textbox', { name: en.sourceUrl })).toBe(address)
+    fireEvent.change(dialog.getByRole('textbox', { name: en.sourcePath }), { target: { value: 'market/index.json' } })
+    fireEvent.change(dialog.getByRole('textbox', { name: en.sourceRef }), { target: { value: 'main' } })
+    expect(actions.editSourceOptions).toHaveBeenNthCalledWith(1, { path: 'market/index.json' })
+    expect(actions.editSourceOptions).toHaveBeenNthCalledWith(2, { ref: 'main' })
+    set({ draft: 'https://raw.githubusercontent.com/acme/plugins/main/index.json' })
+    expect(dialog.queryByRole('textbox', { name: en.sourcePath })).toBeNull()
+    expect(dialog.queryByRole('textbox', { name: en.sourceRef })).toBeNull()
   })
 
   it('renders the Chinese copy and dates', () => {

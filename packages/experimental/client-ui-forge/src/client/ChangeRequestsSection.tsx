@@ -80,20 +80,19 @@ type Translate = ChangeRequestsSectionProps['t']
 /** Sign-in the repository's host still needs before its change requests show. */
 interface SignInNeed {
   readonly host: string
-  readonly forge: string
   readonly readiness: ForgeReadiness
 }
 
 function signInNeedOf(state: ForgePanelState): SignInNeed | null {
   const { repository, readiness } = state
   if (repository === null || readiness === null || readiness.state === 'ready') return null
-  return { host: repository.host, forge: repository.forge, readiness }
+  return { host: repository.host, readiness }
 }
 
 /**
  * The status row above the cards while the host cannot serve the change
- * requests yet: sign-in, with the command to copy for GitHub, or a failed
- * sign-in check. A reason the host gave shows from the info button; a clipped
+ * requests yet: sign-in, with the command to copy when the provider names
+ * one, or a failed sign-in check. A reason the host gave shows from the info button; a clipped
  * title or command crawls into view while the pointer rests on the row.
  */
 function SignInRow({ need, copyText, t }: {
@@ -105,9 +104,9 @@ function SignInRow({ need, copyText, t }: {
   const commandRef = useRef<HTMLSpanElement>(null)
   const titleMarquee = useHoverMarquee(titleRef)
   const commandMarquee = useHoverMarquee(commandRef)
-  const { host, forge, readiness } = need
+  const { host, readiness } = need
   const unavailable = readiness.state === 'unavailable'
-  const command = !unavailable && forge === 'github' ? `gh auth login --hostname ${host}` : undefined
+  const command = unavailable ? undefined : readiness.signIn?.command
   const marquee = command === undefined ? titleMarquee : commandMarquee
   let trailing: ReactNode
   if (command !== undefined) {

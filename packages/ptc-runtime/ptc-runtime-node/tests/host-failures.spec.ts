@@ -59,13 +59,18 @@ describe('Node runtime host failures', () => {
     const h = await setup({}, 'read-only')
     expect(h.runtime.sandboxMode).toBe('read-only')
     expect(() => h.runtime.resolve({ ...request, cwd: 'relative' })).toThrow('cwd must be absolute')
+    expect(() => h.runtime.resolve({ ...request, cwd: 'relative' })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' }))
     await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: 1 })).rejects.toThrow('resolved sandbox policy')
+    await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: 1 })).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' })
     const spec = h.runtime.resolve(request)
     await expect(h.runtime.run({ ...spec, timeoutMs: Infinity })).rejects.toThrow('resolved cwd and timeout')
+    await expect(h.runtime.run({ ...spec, timeoutMs: Infinity })).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' })
     expect(h.spawn).not.toHaveBeenCalled()
     await h.ctx.fiber.dispose()
     expect(() => h.runtime.resolve(request)).toThrow('resolve after disposal')
+    expect(() => h.runtime.resolve(request)).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' }))
     await expect(h.runtime.run(spec)).rejects.toThrow('run after disposal')
+    await expect(h.runtime.run(spec)).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
   })
 
   it('fails a required unavailable sandbox before spawning', async () => {
@@ -535,7 +540,7 @@ it('preserves execution context for bindings delivered by an external control st
   h.receive((raw) => {
     const message = raw as { t: string; m?: string; r?: unknown }
     if ('m' in message && message.m === 'run') booted.resolve(undefined)
-    if (message.t === 's') h.complete({ value: message.r })
+    if (message.t === 's') h.complete(message.r)
   })
   const context = new AsyncLocalStorage<string>()
   const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),

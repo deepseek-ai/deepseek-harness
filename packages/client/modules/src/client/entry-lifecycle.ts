@@ -15,14 +15,3 @@ export async function tearDownEntryFiber(entry: Entry): Promise<void> {
   while (fiber.inertia !== undefined) await fiber.inertia
   delete entry.fiber
 }
-
-/**
- * Remove styles after their plugin's effect cleanup has settled.
- * @param id - Package whose factory owns the style tags.
- */
-export function removeOwnedStyles(id: string): void {
-  if (typeof document === 'undefined') return
-  for (const el of document.querySelectorAll('style[data-plugin]')) {
-    if (el.getAttribute('data-plugin') === id) el.remove()
-  }
-}

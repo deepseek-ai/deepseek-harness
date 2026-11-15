@@ -129,7 +129,7 @@ async function fixture(bundles = ['addon', 'other'], before?: (home: string, dir
   await before?.(home, dir)
   const profile: ProfileContext = {
     name: 'test', dir, patchPath: join(dir, 'cordis.patch.yml'), home, cwd: home,
-    installAnchor: join(home, 'package.json'), startedBundles: bundles, overlays: [], telemetryDisabledEnv: undefined,
+    installAnchor: join(home, 'package.json'), startedBundles: bundles, overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   writeFileSync(profile.patchPath, JSON.stringify([{ insert: [
     { id: 'timer', name: 'cordis:timer' },
@@ -348,7 +348,7 @@ it('reports a stopped entry that no recomposition started again by its fiber sta
   f.ctx.registry.delete(plugin)
   await Promise.all(fibers.map(fiber => fiber.await()))
   // Applying the same patches leaves the unchanged Include's rows alone.
-  const warnings = await f.ctx.hmr.runExclusive(() => reconcileProfilePatches(f.ctx.root, readProfilePatches('test', f.profile), 'test'))
+  const warnings = await f.ctx.hmr.runExclusive(() => reconcileProfilePatches(f.ctx[Context.root], readProfilePatches('test', f.profile), 'test'))
   expect(warnings).toEqual([expect.stringMatching(/^addon \(addon\): fiber state 4/u)])
 })
 

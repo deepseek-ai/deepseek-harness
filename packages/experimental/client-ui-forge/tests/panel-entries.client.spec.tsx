@@ -209,9 +209,13 @@ describe('ChangeRequestsSection', () => {
     expect(screen.queryByRole('menuitem', { name: en['change.markReady'] })).toBeNull()
   })
 
-  it('asks to sign in above the cards with the command to copy', () => {
+  it.each([
+    ['github', 'github.com', 'gh auth login --hostname github.com'],
+    ['gitlab', 'gitlab.example.test', 'glab auth login --hostname gitlab.example.test'],
+  ] as const)('asks to sign in to a %s host above the cards with the command its provider names', (forge, host, command) => {
     const b = section(ready({
-      readiness: { state: 'unauthenticated', message: 'not logged in' },
+      repository: { forge, host, owner: 'octo', name: 'demo' },
+      readiness: { state: 'unauthenticated', message: 'not logged in', signIn: { command } },
       changeRequests: [entry(1, snapshot(1))],
     }))
     const root = b.view.container.querySelector('[data-forge-panel]') as HTMLElement
@@ -220,29 +224,29 @@ describe('ChangeRequestsSection', () => {
     expect(row.getAttribute('data-forge-signin')).toBe('unauthenticated')
     // The command is the row's detail line, and Copy its trailing control.
     expect(rowParts(row)).toBe('body(icon lines(content detail)) trailing')
-    expect(row.querySelector('[data-row-part="detail"]')?.textContent).toBe('gh auth login --hostname github.com')
-    expect(within(row).getByText('Sign in to github.com')).toBeTruthy()
-    expect(within(row).getByText('gh auth login --hostname github.com')).toBeTruthy()
+    expect(row.querySelector('[data-row-part="detail"]')?.textContent).toBe(command)
+    expect(within(row).getByText(`Sign in to ${host}`)).toBeTruthy()
+    expect(within(row).getByText(command)).toBeTruthy()
     const copy = within(row).getByRole('button', { name: en['signin.copy'] })
     expect(copy.textContent).toBe(en['signin.copyShort'])
     fireEvent.click(copy)
-    expect(b.copyText).toHaveBeenCalledWith('gh auth login --hostname github.com')
+    expect(b.copyText).toHaveBeenCalledWith(command)
     expect(within(row).queryByRole('button', { name: en['reason.show'] })).toBeNull()
   })
 
   it('shows the section for a sign-in alone, without the card list', () => {
-    const b = section(ready({ readiness: { state: 'unauthenticated', message: null } }))
+    const b = section(ready({ readiness: { state: 'unauthenticated', message: null, signIn: null } }))
     expect(b.view.getByRole('status').textContent).toContain('Sign in to github.com')
     expect(b.view.queryByRole('list')).toBeNull()
   })
 
   it.each([
-    ['asks to sign in to another code host', { forge: 'gitlab', state: 'unauthenticated' }, 'Sign in to gitlab.example.test'],
+    ['asks to sign in when the provider names no sign-in command', { forge: 'github', state: 'unauthenticated' }, 'Sign in to gitlab.example.test'],
     ['says the host could not be read', { forge: 'github', state: 'unavailable' }, "Can't read change requests on gitlab.example.test"],
   ] as const)('%s and gives the reason from the info button', (_label, { forge, state }, title) => {
     const b = section(ready({
       repository: { forge, host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
-      readiness: { state, message: 'token expired' },
+      readiness: { state, message: 'token expired', signIn: null },
     }))
     const row = b.view.getByRole('status')
     expect([row.textContent, row.querySelector('code, [data-forge-signin] button:not([data-forge-reason])')]).toEqual([title, null])
@@ -254,12 +258,12 @@ describe('ChangeRequestsSection', () => {
   })
 
   it.each([
-    ['another code host', { forge: 'gitlab', state: 'unauthenticated' }],
+    ['a provider that names no sign-in command', { forge: 'github', state: 'unauthenticated' }],
     ['an unreachable host', { forge: 'github', state: 'unavailable' }],
   ] as const)('offers no info button for %s that gave no reason', (_label, { forge, state }) => {
     const b = section(ready({
       repository: { forge, host: 'github.com', owner: 'octo', name: 'demo' },
-      readiness: { state, message: null },
+      readiness: { state, message: null, signIn: null },
     }))
     expect(within(b.view.getByRole('status')).queryByRole('button')).toBeNull()
     expect(rowParts(b.view.getByRole('status'))).toBe('body(icon content)')
@@ -268,7 +272,7 @@ describe('ChangeRequestsSection', () => {
   it.each([
     ['sign-in is unknown', { readiness: null }],
     ['the host is signed in', {}],
-    ['no provider serves the repository', { repository: null, readiness: { state: 'unauthenticated' as const, message: 'not logged in' } }],
+    ['no provider serves the repository', { repository: null, readiness: { state: 'unauthenticated' as const, message: 'not logged in', signIn: null } }],
   ])('shows no notice while %s', (_label, over) => {
     const b = section(ready({ ...over, changeRequests: [entry(1, snapshot(1))] }))
     expect(b.view.queryByRole('status')).toBeNull()
