@@ -232,7 +232,7 @@ importers:
         specifier: ^1.33.0
         version: 1.33.0
       mdast-util-from-markdown:
-        specifier: ^2.0.3
+        specifier: ^2.1.0
         version: 2.1.0(supports-color@9.4.0)
       mdast-util-gfm:
         specifier: ^3.1.0
