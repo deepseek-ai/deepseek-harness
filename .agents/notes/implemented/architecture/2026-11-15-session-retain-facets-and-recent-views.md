@@ -108,6 +108,7 @@ ui-workspace [navigation](../../../../packages/client/ui-workspace/src/client/na
 
 - A background Session switches back without a history request, while it performs no Conversation folding until it is shown again.
 - An unretained Session keeps the memory of its last assembly until it is shown again or its binding retires.
+- The attention-protected recent views have no upper bound: an unread completion stays protected until the user reads it, so each Session that finishes unread while the user is elsewhere keeps its generation, loaded event window, and history follow stream until it is read, marked read, removed, or archived.
 - Returning to a Session that ran in the background pays one catch-up fold, at most equal to the post-open fold of a fresh opening, without a network request.
 - A rendering owner that omits `conversation: true` sees an unretained stale or empty snapshot without an error.
 - `SessionRetainOptions` and `SessionBinding` are pre-stable public interfaces; every consumer and the test fixture changed together.

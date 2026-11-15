@@ -108,6 +108,7 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 
 - 后台 Session 切回时无需历史请求，而在再次显示之前不做任何 Conversation 折叠。
 - 未被保留的 Session 保留其最后一次折叠的内存，直到再次显示或其 binding 退役。
+- 受关注保护的最近访问会话没有总量上限：完成未读会一直受保护直到用户读过，因此用户不在时每个以未读状态完成的 Session 都会保留其 generation、已加载的事件窗口和历史跟随流，直到被读过、标为已读、被移除或归档。
 - 切回在后台运行过的 Session 要付出一次补折，最多等同于新打开时的一次打开后折叠，但不走网络。
 - 漏写 `conversation: true` 的渲染方会看到未被保留的陈旧或空快照，不会报错。
 - `SessionRetainOptions` 与 `SessionBinding` 是 pre-stable 公开接口；所有消费方和测试替身已一同修改。
