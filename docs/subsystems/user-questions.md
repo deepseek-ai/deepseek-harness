@@ -240,11 +240,29 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
  * Answer a continued question. The reply is steered into the agent as a
  * user message whose source names the call; that message is also the
  * record that closes the question in the projection.
+ *
+ * The only call this method can answer is one the projection lists as
+ * `continued` on this Session, and it steers a user message into the running
+ * turn, so it speaks for the person the Session runs for. A LiveShare reader
+ * reaches it through the Session read role, which is safe only while an
+ * approval question cannot become `continued`: the projection tracks only
+ * calls made under the timed `ask_user_question` schema, and a call becomes
+ * `continued` only by returning the pending result a timed wait produces (or,
+ * for PTC, a pending dispatch) or by resume repair recording
+ * `TOOL_OUTCOME_UNKNOWN` for a call the process never finished. Plan review
+ * (`plan-review`) and the CUA approvals (`approval`) reach `ctx.userQuestions.ask`
+ * without a `wait` and without a `timeout`, so their result is a settled
+ * answer, an abort, or a failure, never a pending result, and they stay out
+ * of the projection. A future approval surface must keep asking without
+ * `wait`/`timeout`, or it must gain its own owner-only gate; giving it a timed
+ * form makes an approval answerable by a share viewer.
  * @param agent - Live root agent for the owning Session.
  * @param callId - Continued question identity.
  * @param answer - Complete structured answer batch, one item per question of the call.
- * @returns Whether the question is still continued; an accepted reply stays
- *   queued until the agent admits its user message.
+ * @returns Whether the question is still continued (`false` when this Session
+ *   lists no such continued call, or its composition carries no Session
+ *   projections); an accepted reply stays queued until the agent admits its
+ *   user message.
  * @throws {UserQuestionError} `BAD_ANSWER` when the batch does not name each
  *   question of the call exactly once, or `REPLY_QUEUED` when a reply is
  *   already waiting for admission.

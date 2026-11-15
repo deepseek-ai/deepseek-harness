@@ -1,7 +1,8 @@
 /** Validate and capture the binding names available to one program. */
-import { PtcImage, RESERVED_BINDING_WORDS, PtcRuntimeError, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcInspectableValue, RESERVED_BINDING_WORDS, PtcRuntimeError, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcBindingNamespace, PtcJsonValue, PtcProgramFormat, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
-import { snapshotPtcJsonValue, encodePtcJsonWire, type PtcJsonWire, type PtcImageWire } from './json-wire.ts'
+import { snapshotPtcJsonValue, encodePtcJsonWire, type PtcImageWire } from './json-wire.ts'
+import type { BindingResult } from './protocol.ts'
 import { RESERVED_PREFIX } from './evaluators/scoped-repl.ts'
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 /**
@@ -58,9 +59,15 @@ export function validateBindings(request: PtcRunRequest, programFormat: PtcProgr
  */
 export async function invokeBinding(
   binding: PtcBindingFunction | undefined, args: PtcJsonValue, image?: (value: PtcImage) => PtcImageWire,
-): Promise<PtcJsonWire> {
+): Promise<BindingResult> {
   if (!binding) throw new Error('binding is unavailable in this evaluation; reacquire the current tool')
-  const value = snapshotPtcJsonValue(await binding(args), value => image !== undefined && value instanceof PtcImage)
+  const resolved = await binding(args)
+  const inspection = resolved instanceof PtcInspectableValue ? resolved.text : undefined
+  const value = snapshotPtcJsonValue(resolved instanceof PtcInspectableValue ? resolved.value : resolved,
+    value => image !== undefined && value instanceof PtcImage)
   if (value === undefined) throw new Error('binding resolution must be lossless JSON')
-  return encodePtcJsonWire(value, candidate => candidate instanceof PtcImage ? image?.(candidate) : undefined)
+  return {
+    value: encodePtcJsonWire(value, candidate => candidate instanceof PtcImage ? image?.(candidate) : undefined),
+    ...inspection === undefined ? {} : { inspection },
+  }
 }

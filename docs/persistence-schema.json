@@ -416,7 +416,7 @@
     {"digest":"88a610b831be6d92612a464be5c7d0b88ec24d97bd299837bf74bf7672183c9a","names":[],"sources":["packages/llm/llm/src/types.ts:500"]},
     {"digest":"8a046b52331959aa3394680d6acbe09b8a5447c6b61375f263445bfcef19b7f1","names":[],"sources":[]},
     {"digest":"8a6e1ec9e8db346b0e02f027db73c07a94f067a26d40c1aef1abd09c47ce7ba0","names":[],"sources":[]},
-    {"digest":"8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad","names":[],"sources":["packages/interaction/permission-presets/src/index.ts:54"]},
+    {"digest":"8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad","names":[],"sources":["packages/interaction/permission-presets/src/index.ts:61"]},
     {"digest":"8ad45ad053b4d89f8865c17cc9ff3b8748e86045f3f0fb816269a34af2619141","names":[],"sources":["packages/experimental/hook-protocol/src/types.ts:31"]},
     {"digest":"8af841fc9b265ade3441caf9fe40dd24db24226befba48150e6d0eeccc1389c3","names":[],"sources":[]},
     {"digest":"8bb8c3751a6ce64b61aba1ec7ae798c00a5803c4d868a0430873216c6569ed52","names":[],"sources":["packages/session/session-log-deepseek/src/types.ts:96"]},

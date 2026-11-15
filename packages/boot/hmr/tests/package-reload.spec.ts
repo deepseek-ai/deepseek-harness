@@ -129,7 +129,7 @@ async function fixture(bundles = ['addon', 'other'], before?: (home: string, dir
   await before?.(home, dir)
   const profile: ProfileContext = {
     name: 'test', dir, patchPath: join(dir, 'cordis.patch.yml'), home, cwd: home,
-    installAnchor: join(home, 'package.json'), startedBundles: bundles, overlays: [], telemetryDisabledEnv: undefined,
+    installAnchor: join(home, 'package.json'), startedBundles: bundles, overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   writeFileSync(profile.patchPath, JSON.stringify([{ insert: [
     { id: 'timer', name: 'cordis:timer' },
