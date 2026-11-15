@@ -893,7 +893,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionBinding',
-    declaration: 'export interface SessionBinding {\n    readonly sessionId: SessionId;\n    readonly session: SessionFace;\n    readonly eventSource: SessionEventSource;\n    readonly ctx: AgentContext;\n}',
+    declaration: 'export interface SessionBinding {\n    readonly sessionId: SessionId;\n    readonly session: SessionFace;\n    readonly eventSource: SessionEventSource;\n    readonly ctx: AgentContext;\n    facet(facet: SessionRetainFacet): ObservableSnapshot<boolean>;\n}',
   },
   {
     name: 'SessionEventChange',
@@ -956,12 +956,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionRequestId = Branded<\'session-request-id\'>;',
   },
   {
+    name: 'SessionRetainFacet',
+    declaration: 'export type SessionRetainFacet = Extract<keyof SessionRetainFacetMap, string>;',
+  },
+  {
+    name: 'SessionRetainFacetMap',
+    declaration: 'export interface SessionRetainFacetMap {\n}',
+  },
+  {
     name: 'SessionRetainInfo',
     declaration: 'export interface SessionRetainInfo {\n    readonly referenceCount: number;\n    readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>;\n}',
   },
   {
     name: 'SessionRetainOptions',
-    declaration: 'export interface SessionRetainOptions {\n    readonly source: SessionReferenceSource;\n    readonly signal?: AbortSignal | undefined;\n}',
+    declaration: 'export interface SessionRetainOptions {\n    readonly source: SessionReferenceSource;\n    readonly facets?: Readonly<Partial<Record<SessionRetainFacet, boolean>>> | undefined;\n    readonly signal?: AbortSignal | undefined;\n}',
   },
   {
     name: 'SessionSearchResultItem',

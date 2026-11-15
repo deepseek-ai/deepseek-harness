@@ -97,7 +97,7 @@ class SidebarSessionView implements Disposable {
   private readonly reference: SessionReference
 
   constructor(readonly id: SessionId, sessions: ISessions) {
-    this.reference = sessions.retain(id, { source: 'sidebarView' })
+    this.reference = sessions.retain(id, { source: 'sidebarView', facets: { conversation: true } })
     void this.reference.ready.catch((error: unknown) => { console.error('opening failed:', error) })
   }
 

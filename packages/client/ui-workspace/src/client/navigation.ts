@@ -14,6 +14,7 @@ import type {
 // Type-only: pulls the `agentPreset` Session projection value into this program.
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -23,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { DraftInitializationOptions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { RowToast } from './contract/slots.ts'
 import { pinOrderAccounts, pinOrderSource } from './pin-order.ts'
+import { RecentSessionViews } from './recent-views.ts'
 import type { WorkspaceViewStoreActions } from './stores.ts'
 
 interface MainSelection {
@@ -174,6 +176,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     {}, { persist: { name: 'dsh.sessions.current' } },
   )
   private mainReference: SessionReference | undefined
+  private readonly recentViews: RecentSessionViews
   private restorationNavigation: AbortSignal | undefined
 
   /**
@@ -193,14 +196,17 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly notify: (toast: RowToast) => void,
   ) {
     super(ctx, 'uiWorkspace')
+    this.recentViews = new RecentSessionViews(sessions, workspaces, ctx.uiSession.sessionStatus)
     ctx.effect(() => {
       const stop = this.watchNavigation()
+      const stopRecentViews = this.recentViews.start()
       return () => {
         stop()
         this.lifetime.abort()
         const reference = this.mainReference
         this.mainReference = undefined
         reference?.release()
+        stopRecentViews()
       }
     }, 'ui-workspace: Workspace navigation policy')
   }
@@ -516,6 +522,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const previous = this.mainReference
     this.mainReference = undefined
     this.selection.set({})
+    if (previous !== undefined) this.recentViews.leave(previous.sessionId)
     previous?.release()
     this.ctx.layout.selectPanel(null)
   }
@@ -527,7 +534,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     beforeOpen?: (sessionId: SessionId) => void,
   ): void {
     signal.throwIfAborted()
-    const reference = this.sessions.retain(target, { source: 'mainView' })
+    const reference = this.sessions.retain(target, { source: 'mainView', facets: { conversation: true } })
     try {
       signal.throwIfAborted()
       beforeOpen?.(reference.sessionId)
@@ -548,6 +555,10 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
     const previous = this.mainReference
     this.mainReference = reference
+    // The new main reference already holds the target, so releasing its recent entry first keeps the
+    // list within its limit when the main view returns to a recent Session.
+    this.recentViews.enter(reference.sessionId)
+    if (previous !== undefined && previous.sessionId !== reference.sessionId) this.recentViews.leave(previous.sessionId)
     previous?.release()
     if (panel === 'reveal') this.ctx.layout.selectPanel(null)
   }

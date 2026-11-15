@@ -780,7 +780,7 @@ describe('ui-workspace apply', () => {
     toast.dismissToast()
     ;(faceOf(b.slots.entries('workspace.toast').find(row => row.options.key === 'forkRequiresOpen')!) as ToastDisplayInjected<'forkRequiresOpen'>)
       .display({ kind: 'forkRequiresOpen', sessionId: sid('source'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
-    expect(b.retain).toHaveBeenCalledExactlyOnceWith('source', { source: 'mainView' })
+    expect(b.retain).toHaveBeenCalledExactlyOnceWith('source', { source: 'mainView', facets: { conversation: true } })
     expect(b.selectPanel).toHaveBeenCalledExactlyOnceWith(null)
     expect(b.fork).toHaveBeenCalledOnce()
   })
@@ -888,7 +888,7 @@ describe('ui-workspace apply', () => {
     browser.startSession(undefined, { clearPreviousDraft: false })
     expect(startSession).toHaveBeenLastCalledWith(undefined, { clearPreviousDraft: false })
     browser.open('session' as never)
-    expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView' })
+    expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView', facets: { conversation: true } })
     const signal = new AbortController().signal
     await expect(browser.searchSessions('match', signal)).resolves.toEqual({
       items: [{ sessionId: 'session', snippet: 'match' }],

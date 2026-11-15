@@ -17,6 +17,10 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
     referenceTestView: unknown
     referenceTestWork: unknown
   }
+  interface SessionRetainFacetMap {
+    referenceTestFacet: unknown
+    referenceTestOtherFacet: unknown
+  }
 }
 
 const viewSource: SessionReferenceSource = 'referenceTestView'
@@ -281,6 +285,51 @@ describe('Client reference sources', () => {
     reference.release()
     expect(() => b.svc.retain(ID, { source: workSource })).toThrow('Controller is disposed')
     expect(() => b.svc.retainAgentScope(ID)).toThrow('Controller is disposed')
+  })
+})
+
+describe('Client retained facets', () => {
+  it('counts each facet across references and notifies only when its retention starts or stops', async ({ mock, start }) => {
+    const b = await bench(mock, start)
+    using plain = b.svc.retain(ID, { source: workSource })
+    const facet = plain.binding.facet('referenceTestFacet')
+    const other = plain.binding.facet('referenceTestOtherFacet')
+    expect(plain.binding.facet('referenceTestFacet')).toBe(facet)
+    const changed = vi.fn()
+    const stop = facet.subscribe(changed)
+    expect(facet.getSnapshot()).toBe(false)
+    const first = b.svc.retain(ID, { source: viewSource, facets: { referenceTestFacet: true, referenceTestOtherFacet: false } })
+    const second = b.svc.retain(ID, { source: viewSource, facets: { referenceTestFacet: true } })
+    expect(facet.getSnapshot()).toBe(true)
+    expect(other.getSnapshot()).toBe(false)
+    expect(changed).toHaveBeenCalledTimes(1)
+    first.release()
+    first.release()
+    expect(facet.getSnapshot()).toBe(true)
+    expect(changed).toHaveBeenCalledTimes(1)
+    second.release()
+    expect(facet.getSnapshot()).toBe(false)
+    expect(changed).toHaveBeenCalledTimes(2)
+    stop()
+  })
+
+  it('ends retained facets with the generation, including through root disposal', async ({ mock, start }) => {
+    const b = await bench(mock, start)
+    const reference = b.svc.retain(ID, { source: viewSource, facets: { referenceTestFacet: true } })
+    const facet = reference.binding.facet('referenceTestFacet')
+    const changed = vi.fn()
+    facet.subscribe(changed)
+    reference.release()
+    expect(facet.getSnapshot()).toBe(false)
+    const replacement = b.svc.retain(ID, { source: viewSource, facets: { referenceTestFacet: true } })
+    const replacementFacet = replacement.binding.facet('referenceTestFacet')
+    expect(replacementFacet).not.toBe(facet)
+    const replacementChanged = vi.fn()
+    replacementFacet.subscribe(replacementChanged)
+    await b.ctx.fiber.dispose()
+    expect(replacementFacet.getSnapshot()).toBe(false)
+    expect(replacementChanged).toHaveBeenCalledTimes(1)
+    expect(changed).toHaveBeenCalledTimes(1)
   })
 })
 

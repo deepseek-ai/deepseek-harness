@@ -120,6 +120,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
     workspaceOperation: unknown
+    /** Recently viewed Sessions kept receiving history after leaving the main view. */
+    recentViews: unknown
   }
 }
 

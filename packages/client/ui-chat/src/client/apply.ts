@@ -105,18 +105,31 @@ export function apply(ctx: Context): void {
       // replacement or paging never does, because an old failure scrolling
       // back into view is not news.
       const dispose = binding.ctx.effect(() => {
-        const stop = binding.eventSource.subscribe(() => {
-          const { change } = binding.eventSource.getSnapshot()
-          if (change.kind !== 'append') return
-          for (const { event } of change.entries) {
-            if (event.type !== 'turn/end' || event.data.reason.kind !== 'error') continue
-            const { code } = event.data.reason.error
-            if (quotaNoticeHolds.size > 0 || (code !== 'QUOTA' && code !== 'ACCOUNT_QUOTA')) continue
-            quotaNotice.set({ code, seq: ++quotaNoticeSeq })
-          }
-        })
+        // Live quota failures are reported only while a rendering reference retains the Session's Conversation.
+        const retained = binding.facet('conversation')
+        let stopEvents = (): void => {}
+        const follow = (): void => {
+          stopEvents()
+          stopEvents = () => {}
+          if (!retained.getSnapshot()) return
+          stopEvents = binding.eventSource.subscribe(() => {
+            // A dispatch in progress keeps calling copied listeners after unsubscription.
+            if (!retained.getSnapshot()) return
+            const { change } = binding.eventSource.getSnapshot()
+            if (change.kind !== 'append') return
+            for (const { event } of change.entries) {
+              if (event.type !== 'turn/end' || event.data.reason.kind !== 'error') continue
+              const { code } = event.data.reason.error
+              if (quotaNoticeHolds.size > 0 || (code !== 'QUOTA' && code !== 'ACCOUNT_QUOTA')) continue
+              quotaNotice.set({ code, seq: ++quotaNoticeSeq })
+            }
+          })
+        }
+        const stopRetained = retained.subscribe(follow)
+        follow()
         return () => {
-          stop()
+          stopRetained()
+          stopEvents()
           chatSources.delete(binding)
           quotaSubscriptions.delete(dispose)
         }

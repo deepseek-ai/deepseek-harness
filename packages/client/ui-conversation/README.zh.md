@@ -30,7 +30,9 @@ kind: "package-reference"
 
 `UiConversation.events` 是 event Definition 的唯一 registry，`UiConversation.views` 是 target snapshot builder 的唯一 registry。两者都拒绝重复 key、保持注册顺序、返回幂等 disposer，并在 contribution roster 变化时重建现有 binding。`UiConversation.binding(bindingOrSessionId)` 为当前 Session Controller binding 返回 identity 稳定的 Conversation binding，不会另开事件源。 View Definition 可以声明 `toolCallFocus`，将工具调用 id 转换为自身的焦点标识。仅当此目标拥有可见的 View 条目时，Conversation 才提供 Inspect 回调；Chat 直接使用回调，不选择目标。
 
-`ConversationBinding.openTurn` 是对象标识稳定的只读来源：最新轮次的开始事件已加载且尚未结束时提供其编号，否则为 `undefined`。观察到的轮次变化同步发布，即使没有活动视图也是如此。固定停止输入同时读取这个来源、会话运行状态和待处理交互状态。卸载会话绑定会解除其事件源订阅。
+`ConversationBinding.openTurn` 是对象标识稳定的只读来源：最新轮次的开始事件已加载且尚未结束时提供其编号，否则为 `undefined`。在 `conversation` retain 子要素被保留期间，观察到的轮次变化同步发布，即使没有活动视图也是如此。固定停止输入同时读取这个来源、会话运行状态和待处理交互状态。卸载会话绑定会解除其事件源订阅。
+
+本包声明 `conversation` retain 子要素。只有当某个 Session 引用保留该子要素时，绑定才跟随其事件源；主视图和侧栏视图等渲染方会请求它。未被保留时，Session 仍接收事件，但绑定既不折叠也不发布：读取方看到最后一次发布的快照，目标激活与注册表重建也会等待。恢复保留后，绑定折叠期间收到的事件（出现缺口时从完整窗口重建），并发布一次。
 
 适配器把每个 `SessionEventLikeEntry` 直接交给 assembler。外层 `type` 区分持久事件与 Client-only transient event，内部 `event` 则统一公开 `type`、`seq`、`time` 与 `data`；Definition 接收这个内部 `SessionEventLike`。replacement window 可以包含两种 entry，历史 prepend 携带持久 entry，实时 append 则可以携带任一种。持久与瞬态事件使用同一组 match/start/update 接口。当前最早的 start 初始化 State；后续所有 Match，包括同一身份的其他 start，都用于更新。不消费 Assistant delta 的 Definition 对 `assistant/live-chunk` 返回 `null`。replace window 或 revision 断档从完整已加载窗口重建；连续 revision 的 append、prepend 与 Assistant settlement 使用增量组装。settlement 只删除具名 attempt 的 transient match，应用可选持久 entry，并从剩余最早的 start 重算受影响的 Context，刷新前序索引及 dependent，不替换无关 target node。没有剩余 start 的 Context 不保留 State，但其 key 和已发布节点仍保留，供后续证据复用，直到完整窗口重建；所属 Definition 可以隐藏这些节点。assembler 拥有 Context 匹配、Turn/Step location、target node 物化、target activity 和稳定 target source。`ConversationSnapshot` 只包含与 target 无关的 View 与 active-target 事实；Session lifecycle 状态仍属于 `SessionSnapshot`。
 

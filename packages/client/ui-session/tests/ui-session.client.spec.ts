@@ -109,11 +109,13 @@ function createSessionsBench(ctx: Context): SessionsBench {
         getSnapshot: () => snapshot.getSnapshot(),
         subscribe: (listener: () => void) => snapshot.subscribe(listener),
       } as unknown as SessionBinding['session']
+      const retainedFacet = createSnapshotStore(true)
       const binding: SessionBinding = {
         sessionId: id,
         session,
         eventSource: new MutableSessionEventSource(),
         ctx: scopeCtx as AgentContext,
+        facet: () => retainedFacet,
       }
       bindings.set(id, binding)
       scopes.set(id, scopeCtx)

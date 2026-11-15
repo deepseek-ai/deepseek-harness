@@ -95,7 +95,7 @@ describe('session rename through the assembled browser', () => {
       summary: { title: 'Persisted title', displayTitle: 'Session title', cwd: '/w/alpha' },
       session: { rename: vi.fn() },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
     await runtime.mount({ inject: [...inject], apply })
@@ -169,7 +169,7 @@ describe('session rename through the assembled browser', () => {
       summary: { title: '旧标题', displayTitle: '旧标题', cwd: '/w/alpha' },
       session: { rename },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
     await runtime.mount({ inject: [...inject], apply })
@@ -211,7 +211,7 @@ describe('session rename through the assembled browser', () => {
       summary: { title: '旧标题', displayTitle: '旧标题', cwd: '/w/alpha' },
       session: { rename },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
     await runtime.mount({ inject: [...inject], apply })

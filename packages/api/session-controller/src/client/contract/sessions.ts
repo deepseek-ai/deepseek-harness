@@ -14,7 +14,7 @@ import type { SessionSearchResultItem } from '../sessions/manager.ts'
 import type { SessionBinding, SessionListState } from '../sessions/service.ts'
 import type { SessionFace } from './session.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { SessionReferenceSource } from '../index.ts'
+import type { SessionReferenceSource, SessionRetainFacet } from '../index.ts'
 
 export type { AgentContext } from '../scope.ts'
 
@@ -32,9 +32,14 @@ export interface SessionReference extends Disposable {
   release(): void
 }
 
-/** Consumer identity and optional cancellation of one acquisition waiter. */
+/** Consumer identity, retained facets, and optional cancellation of one acquisition waiter. */
 export interface SessionRetainOptions {
   readonly source: SessionReferenceSource
+  /**
+   * Facets this reference keeps alive beyond the history stream every reference retains.
+   * A facet is retained only when its key is `true`; the set is fixed for the reference's lifetime.
+   */
+  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, boolean>>> | undefined
   readonly signal?: AbortSignal | undefined
 }
 

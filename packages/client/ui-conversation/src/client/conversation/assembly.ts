@@ -27,16 +27,31 @@ import { ConversationGroupRegistry } from './group-registry.ts'
 import { ConversationInteractionRegistry } from './interaction-registry.ts'
 import { UserTextRegistry } from './user-text-registry.ts'
 
-/** Observable faces published for one Session's Conversation assembly. */
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionRetainFacetMap {
+    /**
+     * Conversation assembly of the Session's event window. While no reference retains it, the
+     * Session still receives events but its Conversation binding neither folds nor publishes;
+     * readers see the last published snapshot until retention resumes and folds the window once.
+     */
+    conversation: unknown
+  }
+}
+
+/**
+ * Observable faces published for one Session's Conversation assembly. Every face follows the
+ * Session only while a reference retains the `conversation` facet.
+ */
 export interface ConversationBinding {
   readonly snapshot: ObservableSnapshot<ConversationSnapshot>
   /**
    * Identity-stable source of the latest turn number, undefined unless its start is loaded and it remains open.
-   * Turn changes publish synchronously, including without an active View.
+   * Turn changes publish synchronously while the facet is retained, including without an active View.
    */
   readonly openTurn: ObservableSnapshot<number | undefined>
   /**
-   * Add one selected target to the Session's monotonic active set.
+   * Add one selected target to the Session's monotonic active set; while the facet is not retained,
+   * the target's view is built from the last folded state and catches up when retention resumes.
    * @param target - registered or subsequently registered Conversation target.
    */
   activate(target: string): void
@@ -59,19 +74,34 @@ class BoundConversation implements ConversationBinding {
   private readonly targetSources = new Map<string, ObservableSnapshot<unknown>>()
   private revision = -1
   private frame: number | undefined
+  private following = false
+  /** Resuming rebuilds the whole window: set until the first fold and by registry changes while not following. */
+  private stale = true
   private disposeFeed: () => void = () => {}
+  private disposeRetained: () => void = () => {}
 
+  /**
+   * @param feed - the Session's contiguous event window.
+   * @param assembler - this binding's Node assembler.
+   * @param retained - whether any reference retains the `conversation` facet; assembly follows the feed only while true.
+   */
   constructor(
-    feed: SessionEventSource,
+    private readonly feed: SessionEventSource,
     private readonly assembler: ConversationNodeAssembler,
+    private readonly retained: ObservableSnapshot<boolean>,
   ) {
     this.viewStore = assembler
     this.snapshot = createSnapshotStore(this.currentSnapshot())
     this.openTurn = createSnapshotStore(assembler.openTurn())
-    this.replace(feed.getSnapshot())
-    this.disposeFeed = feed.subscribe(() => {
-      this.accept(feed.getSnapshot())
-    })
+  }
+
+  /**
+   * Begin following facet retention; the owner registers this binding's disposal first,
+   * so subscriptions acquired before a failed initial fold still have an owner.
+   */
+  start(): void {
+    this.disposeRetained = this.retained.subscribe(() => { this.follow(this.retained.getSnapshot()) })
+    this.follow(this.retained.getSnapshot())
   }
 
   target<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
@@ -97,11 +127,60 @@ class BoundConversation implements ConversationBinding {
     this.publishing(() => this.assembler.activateTarget(target))
   }
 
-  rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
+  rebuild(): void {
+    if (!this.following) {
+      this.stale = true
+      return
+    }
+    this.publish(this.assembler.rebuildRegistry())
+  }
 
   dispose(): void {
+    this.following = false
+    this.disposeRetained()
     this.cancelFrame()
     this.disposeFeed()
+  }
+
+  /**
+   * Start or stop following the feed. Stopping keeps the last published snapshot readable.
+   * Resuming subscribes first, so a failed catch-up is repaired by the next window change.
+   */
+  private follow(retained: boolean): void {
+    if (retained === this.following) return
+    this.following = retained
+    if (!retained) {
+      this.disposeFeed()
+      this.disposeFeed = () => {}
+      this.cancelFrame()
+      return
+    }
+    // A dispatch already in progress keeps a copy of its listeners, so the callback checks
+    // whether the binding still follows rather than relying on unsubscription alone.
+    this.disposeFeed = this.feed.subscribe(() => {
+      if (this.following) this.accept(this.feed.getSnapshot())
+    })
+    this.resume()
+  }
+
+  /**
+   * Fold the window changes received while not following and publish once synchronously: a stale
+   * binding rebuilds the whole window, otherwise contiguous changes fold incrementally and a gap rebuilds.
+   */
+  private resume(): void {
+    const window = this.feed.getSnapshot()
+    try {
+      if (this.stale) {
+        this.stale = false
+        this.revision = window.revision
+        this.assembler.rebuildRegistry(window.entries, window.hasMore)
+      } else {
+        this.accept(window)
+      }
+    } finally {
+      this.cancelFrame()
+      this.publishing(() => this.assembler.flush())
+    }
   }
 
   private replace(window: SessionEventWindow): void {
@@ -269,6 +348,7 @@ export class UiConversation extends Service {
     const binding = new BoundConversation(
       owner.eventSource,
       new ConversationNodeAssembler(this.events, this.views, this.groups),
+      owner.facet('conversation'),
     )
     const record: BindingRecord = { source: owner, binding, disposeScope: () => {} }
     this.bindings.set(owner, record)
@@ -277,6 +357,13 @@ export class UiConversation extends Service {
       'ui-conversation binding',
     )
     record.disposeScope = () => { void disposeScope() }
+    try {
+      binding.start()
+    } catch (error: unknown) {
+      // A failed initial fold leaves no binding behind, so the next resolution starts afresh.
+      this.drop(record, true)
+      throw error
+    }
     return binding
   }
 

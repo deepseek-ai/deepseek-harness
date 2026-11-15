@@ -7,10 +7,11 @@ import {
 import type {
   AgentContext, ISessions, ProjectionsFace, SessionBinding, SessionFace, SessionListState,
   SessionEventLikeEntry, SessionLiveEventEntry, SessionSearchResultItem,
-  SessionReference, SessionReferenceSource, SessionRetainInfo, SessionRetainOptions,
+  SessionReference, SessionReferenceSource, SessionRetainFacet, SessionRetainInfo, SessionRetainOptions,
   SessionSnapshot, SessionSummary, SessionTarget, SubmissionHandle,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import { scopeIdentityOf } from '@deepseek-ai/dsh-api-session-controller/src/client/scope.ts'
+import { heldFacets, RetainedFacets } from '@deepseek-ai/dsh-api-session-controller/src/client/sessions/facets.ts'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -205,6 +206,7 @@ interface SessionGeneration {
   readonly lifetime: AbortController
   readonly opening: Promise<void>
   retention: SessionRetainInfo
+  readonly facets: RetainedFacets
   live: boolean
 }
 
@@ -213,6 +215,9 @@ interface OpeningControl {
   readonly resolve: () => void
   readonly reject: (error: unknown) => void
 }
+
+/** Fixture references default to a rendering use, so Conversation assembly runs as it does under a main view. */
+const DEFAULT_TEST_RETAIN: SessionRetainOptions = { source: 'testFixture', facets: { conversation: true } }
 
 function freezeRetainedBy(
   counts: Partial<Record<SessionReferenceSource, number>>,
@@ -343,6 +348,7 @@ export class TestSessions implements ISessions {
       for (const [id, generation] of this.generations) {
         generation.live = false
         generation.retention = EMPTY_RETAIN_INFO
+        generation.facets.releaseAll()
         generation.lifetime.abort(new Error('test Session Controller is disposed'))
         this.publishRetention(id)
       }
@@ -526,14 +532,14 @@ export class TestSessions implements ISessions {
   /* jscpd:ignore-start -- The fixture intentionally mirrors production SessionReference acquisition and release semantics. */
   retain(
     target: SessionTarget,
-    options: SessionRetainOptions = { source: 'testFixture' },
+    options: SessionRetainOptions = DEFAULT_TEST_RETAIN,
   ): SessionReference {
-    const { source, signal } = options
+    const { source, signal, facets } = options
     signal?.throwIfAborted()
     if (this.closed) throw new Error('test Session Controller is disposed')
     const id = this.resolveTarget(target)
     const generation = this.generations.get(id) ?? this.materialize(id, this.require(id))
-    const reference = this.retainGeneration(id, generation, source)
+    const reference = this.retainGeneration(id, generation, source, heldFacets(facets))
     try {
       reference.attachOpening(generation.opening, signal)
       return reference
@@ -577,7 +583,7 @@ export class TestSessions implements ISessions {
   retainFor(
     ownerCtx: Context,
     target: SessionTarget,
-    options: SessionRetainOptions = { source: 'testFixture' },
+    options: SessionRetainOptions = DEFAULT_TEST_RETAIN,
   ): SessionReference {
     const reference = this.retain(target, options)
     try {
@@ -720,6 +726,7 @@ export class TestSessions implements ISessions {
     id: SessionId,
     generation: SessionGeneration,
     source: SessionReferenceSource,
+    facets: readonly SessionRetainFacet[],
   ): TestSessionReference {
     const previous = generation.retention
     generation.retention = Object.freeze({
@@ -729,8 +736,10 @@ export class TestSessions implements ISessions {
         [source]: (previous.retainedBy[source] ?? 0) + 1,
       }),
     })
+    generation.facets.retain(facets)
     const reference = new TestSessionReference(id, generation, () => {
       if (!generation.live) return
+      generation.facets.release(facets)
       const count = generation.retention.referenceCount - 1
       const { [source]: sourceCount = 0, ...otherSources } = generation.retention.retainedBy
       const retainedBy = sourceCount > 1
@@ -774,14 +783,16 @@ export class TestSessions implements ISessions {
     const opening = Promise.withResolvers<void>()
     void opening.promise.catch(() => {})
     const lifetime = new AbortController()
+    const facets = new RetainedFacets()
     const generation: SessionGeneration = {
-      binding: { sessionId: id, session, eventSource: session.eventSource, ctx },
+      binding: { sessionId: id, session, eventSource: session.eventSource, ctx, facet: facet => facets.source(facet) },
       snapshot,
       session,
       fiber,
       lifetime,
       opening: opening.promise,
       retention: EMPTY_RETAIN_INFO,
+      facets,
       live: true,
     }
     this.generations.set(id, generation)
@@ -789,6 +800,7 @@ export class TestSessions implements ISessions {
       if (generation.live) {
         generation.live = false
         generation.retention = EMPTY_RETAIN_INFO
+        generation.facets.releaseAll()
         if (this.generations.get(id) === generation) this.generations.delete(id)
         this.publishRetention(id)
       }
@@ -816,6 +828,7 @@ export class TestSessions implements ISessions {
     if (!generation.live) return
     generation.live = false
     generation.retention = EMPTY_RETAIN_INFO
+    generation.facets.releaseAll()
     /* v8 ignore next -- this synchronous path drops only the generation currently stored for id. */
     if (this.generations.get(id) === generation) this.generations.delete(id)
     generation.lifetime.abort(new Error(`test Session generation "${id}" is released`))
