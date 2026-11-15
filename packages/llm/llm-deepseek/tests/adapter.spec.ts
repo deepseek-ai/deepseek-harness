@@ -200,7 +200,7 @@ describe('direct Messages HTTP', () => {
     const files = new DeepSeekFileStore()
     const llm = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({ baseURL: source.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key' }), resolveUserId: () => 'test-user' as AnonymousUserId,
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' } }), resolveUserId: () => 'test-user' as AnonymousUserId,
       resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files,
       prepareExtensions: prepare,
     })
@@ -217,7 +217,7 @@ describe('direct Messages HTTP', () => {
     const first = await endpoint(), second = await endpoint()
     let config = resolveAdapterOptions({ baseURL: first.url, maxTokens: 10, models: [{ id: MODEL, systemPromptUpdate: 'in-history' }] })
     const files = new DeepSeekFileStore()
-    const llm = new DeepSeekAdapter({ options: () => config, resolveAuth: snapshot => Promise.resolve({ headers: { 'x-api-key': snapshot.maxTokens === 10 ? 'first' : 'second' }, value: snapshot.maxTokens === 10 ? 'first' : 'second' }), resolveUserId: () => 'user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions })
+    const llm = new DeepSeekAdapter({ options: () => config, resolveAuth: snapshot => Promise.resolve({ headers: { 'x-api-key': snapshot.maxTokens === 10 ? 'first' : 'second' } }), resolveUserId: () => 'user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions })
     const prepared = await llm.prepareCall('deepseek-official', MODEL)
     config = resolveAdapterOptions({ baseURL: second.url, maxTokens: 20 })
     expect(prepared.model.systemPromptUpdate).toBe('in-history')
@@ -250,7 +250,7 @@ describe('direct Messages HTTP', () => {
     const withdrawn = new AbortController()
     const onRequestError = vi.fn(async (error: unknown) => new LlmError('credential withdrawn', 'ACCOUNT_SIGN_IN_REQUIRED', { cause: error }))
     const stream = adapter({ baseURL: http.url }, {
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key', revoked: withdrawn.signal, onRequestError }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, revoked: withdrawn.signal, onRequestError }),
     }).stream(options())[Symbol.asyncIterator]()
     expect((await stream.next()).value).toMatchObject({ type: 'block-start' })
     expect((await stream.next()).value).toMatchObject({ type: 'text-delta' })
@@ -264,7 +264,7 @@ describe('direct Messages HTTP', () => {
   it('reports a withdrawal the provider does not name as a transport failure, without contacting the provider', async () => {
     const http = await endpoint()
     const llm = adapter({ baseURL: http.url }, {
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key', revoked: AbortSignal.abort() }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, revoked: AbortSignal.abort() }),
     })
     await expect(chunks(llm.stream(options()))).rejects.toMatchObject({ code: 'TRANSPORT' })
     expect(http.requests).toEqual([])
@@ -307,7 +307,7 @@ describe('direct Messages HTTP', () => {
     vi.stubGlobal('fetch', async () => new Response('Unauthorized', { status: 401 }))
     const llm = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({}),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'fixture-key' }, value: 'fixture-key',
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'fixture-key' },
         onRequestError: async () => { throw new Error('credential storage unavailable') },
       }),
       resolveUserId: () => 'fixture-user' as import('@deepseek-ai/dsh-anonymous-user-id').AnonymousUserId,

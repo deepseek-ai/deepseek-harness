@@ -488,7 +488,6 @@ export class DeepSeekAccount extends TypertRemoteService {
     const { ctx } = this
     return {
       headers: { [ACCOUNT_TOKEN_HEADER]: token },
-      value: token,
       revoked,
       reject: async () => {
         try { await ctx.get('deepseekAccount')?.rejectToken(token) }
