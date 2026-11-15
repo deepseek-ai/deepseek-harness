@@ -80,18 +80,6 @@ function spotOf(file: ForgeDiffFile, side: 'L' | 'R', line: number): LineSpot {
 }
 
 /**
- * Find the collapsed unchanged lines that hold a line: the index of the hunk they precede, or the hunk count after the last hunk.
- * @param file - the diff file.
- * @param side - side the line numbers.
- * @param line - the line.
- * @returns the gap index, or undefined when a hunk shows the line.
- */
-export function gapOf(file: ForgeDiffFile, side: 'L' | 'R', line: number): number | undefined {
-  const spot = spotOf(file, side, line)
-  return spot.kind === 'gap' ? spot.index : undefined
-}
-
-/**
  * Order a file's threads as its section shows them: threads on the whole file, then threads on lines by the row of their
  * last line, then outdated threads, then threads the chosen commits do not show. Threads on unchanged lines sort
  * by the collapsed lines that hold them.

@@ -7,7 +7,7 @@ import {
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
-import { changedFileTree, filesInTreeOrder, filterFileTree, type ChangedFileNode } from './file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree, viewedNodes, type ChangedFileNode } from './file-tree.ts'
 import type { NS } from './locales.ts'
 import css from './ChangedFiles.module.css'
 
@@ -29,23 +29,31 @@ export interface ChangedFilesProps extends PropsLocale<typeof NS> {
   readonly menu?: boolean
   /** Unresolved host review threads by file path; files without any are absent. */
   readonly threadCounts?: ReadonlyMap<string, number>
+  /** Paths of the files marked viewed at their current change, which draw subdued with any directory they fill. */
+  readonly viewed?: ReadonlySet<string>
 }
 
-function Rows({ nodes, depth, props }: {
+const NONE_VIEWED: ReadonlySet<string> = new Set()
+
+function Rows({ nodes, depth, done, props }: {
   readonly nodes: readonly ChangedFileNode[]
   readonly depth: number
+  /** Paths of the viewed files and of the directories whose files are all viewed. */
+  readonly done: ReadonlySet<string>
   readonly props: ChangedFilesProps
 }): ReactNode {
-  return nodes.map(node => <Row key={node.path} node={node} depth={depth} props={props} />)
+  return nodes.map(node => <Row key={node.path} node={node} depth={depth} done={done} props={props} />)
 }
 
 /**
  * One file or directory of the tree. The tree already shows each row's directory, so only a renamed file
  * names its paths in a tooltip; a name the row clips crawls into view while the pointer rests on the row.
  */
-function Row({ node, depth, props }: {
+function Row({ node, depth, done, props }: {
   readonly node: ChangedFileNode
   readonly depth: number
+  /** Paths of the viewed files and of the directories whose files are all viewed. */
+  readonly done: ReadonlySet<string>
   readonly props: ChangedFilesProps
 }): ReactNode {
   const { state, toggle, jump, menu, threadCounts, t } = props
@@ -56,9 +64,12 @@ function Row({ node, depth, props }: {
   const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
   const renamed = node.kind === 'file' && node.file.previousPath !== null
     ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : null
+  const viewed = done.has(node.path)
   const button = (
-    <button type="button" role={menu ? 'menuitem' : undefined} className={clsx(css.row, !directory && state.selected === node.path && css.selected)}
+    <button type="button" role={menu ? 'menuitem' : undefined}
+      className={clsx(css.row, !directory && state.selected === node.path && css.selected, viewed && css.viewed)}
       style={{ paddingInlineStart: `${8 + depth * 14}px` }} aria-label={renamed ?? node.path} aria-expanded={directory ? expanded : undefined}
+      aria-description={viewed ? t(directory ? 'viewed.directory' : 'viewed.label') : undefined} data-viewed={viewed ? '' : undefined}
       aria-current={!directory && state.selected === node.path ? 'true' : undefined}
       onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}
       onKeyDown={(event) => {
@@ -82,7 +93,7 @@ function Row({ node, depth, props }: {
   )
   return <div>
     {renamed === null ? button : <Tooltip label={renamed} portal side="left" delayMs={500}>{button}</Tooltip>}
-    {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} props={props} />}
+    {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} done={done} props={props} />}
   </div>
 }
 
@@ -112,6 +123,7 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
   const tree = useMemo(() => changedFileTree(props.files), [props.files])
   const nodes = useMemo(() => filterFileTree(tree, props.state.query), [tree, props.state.query])
   const order = useMemo(() => filesInTreeOrder(tree), [tree])
+  const done = useMemo(() => viewedNodes(tree, props.viewed ?? NONE_VIEWED), [tree, props.viewed])
   const selectedIndex = order.findIndex(file => file.path === props.state.selected)
   const rows = useRef<HTMLDivElement>(null)
   const query = useRef(props.state.query)
@@ -141,7 +153,7 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
       value={props.state.query} onChange={(event) => { props.filter(event.target.value) }}
       onKeyDown={(event) => { if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation() }} /></div>
     <div ref={rows} className={css.rows}>
-      {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} props={props} />}
+      {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} done={done} props={props} />}
     </div>
   </div>
 }

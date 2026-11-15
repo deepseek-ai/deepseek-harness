@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /** Review controls of the changes view: the lens in both forms, the test file switch, viewed progress, and the commit picker. */
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeCommitList } from '@deepseek-ai/dsh-experimental-forge/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { CommitMenu, commitsLabel, type CommitMenuProps } from '../src/client/CommitMenu.tsx'
 import { en } from '../src/client/locales.ts'
-import { HideTestsSwitch, LensControl, LensMenu, ViewedProgress, type LensProps } from '../src/client/ReviewControls.tsx'
+import { HideTestsSwitch, LensControl, LensMenu, SegmentedChoice, ViewedProgress, type LensProps } from '../src/client/ReviewControls.tsx'
+import css from '../src/client/ReviewControls.module.css'
+import './fonts-dom.client.ts'
 
 const t = makeTranslate(en)
 const COUNTS = { all: 6, interface: 1, implementation: 2, test: 3 }
@@ -35,7 +37,7 @@ function lensProps(overrides: Partial<LensProps> = {}): LensProps & { readonly c
 describe('LensControl', () => {
   it('shows each lens with its count, chooses one by click, and walks enabled lenses by key', () => {
     const props = lensProps({ lens: 'interface' })
-    const view = render(<LensControl {...props} />)
+    const view = render(<LensControl {...props} need={vi.fn()} />)
     const radios = view.getAllByRole('radio')
     expect(radios.map(radio => radio.textContent)).toEqual(['All6', 'Interface1', 'Implementation2', 'Tests3'])
     expect(radios.map(radio => radio.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false', 'false'])
@@ -56,7 +58,7 @@ describe('LensControl', () => {
 
   it('moves focus with the selection and disables the test lens while test files hide', () => {
     const props = lensProps({ lens: 'implementation', hideTests: true })
-    const view = render(<LensControl {...props} />)
+    const view = render(<LensControl {...props} need={vi.fn()} />)
     const tests = view.getByRole('radio', { name: /^Tests/ })
     expect((tests as HTMLButtonElement).disabled).toBe(true)
     expect(tests.textContent).toBe('Tests')
@@ -67,6 +69,100 @@ describe('LensControl', () => {
     expect(document.activeElement).toBe(view.getByRole('radio', { name: /^All/ }))
     fireEvent.keyDown(implementation, { key: 'End' })
     expect(props.choose).toHaveBeenLastCalledWith('implementation')
+  })
+})
+
+describe('LensControl width', () => {
+  /** Render the lens in a cell with 8px padding on each side, the counted and bare forms measuring at the given widths. */
+  function fitted(widths: { cell: number; counted: number; labels: number }) {
+    let resized: () => void = () => {}
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resized = callback }
+      observe = vi.fn()
+      disconnect = vi.fn()
+    })
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const part = (element: HTMLElement): 'cell' | 'root' | 'counted' | 'labels' | null => {
+      if (element.dataset.cell !== undefined) return 'cell'
+      if (element.parentElement?.dataset.cell !== undefined) return 'root'
+      const measures = element.parentElement
+      if (measures?.getAttribute('aria-hidden') !== 'true') return null
+      return element === measures.firstElementChild ? 'counted' : 'labels'
+    }
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const role = part(this)
+      const width = role === 'cell' ? widths.cell : role === 'root' ? Math.max(0, widths.cell - 16)
+        : role === 'counted' ? widths.counted : role === 'labels' ? widths.labels : 0
+      return new DOMRect(0, 0, width, 28)
+    })
+    const need = vi.fn<(width: number) => void>()
+    const view = render(<div data-cell=""><LensControl {...lensProps({ lens: 'interface' })} need={need} /></div>)
+    const counts = (): (string | undefined)[] => view.getAllByRole('radio').map(radio => radio.lastElementChild?.className)
+    return { view, need, counts, widths, resize: (cell: number) => { widths.cell = cell; act(() => { resized() }) } }
+  }
+
+  it('shows the counts while they fit and the labels alone otherwise, keeping each count in its segment\'s name', () => {
+    const { view, need, counts, resize } = fitted({ cell: 300, counted: 280, labels: 200.25 })
+    expect(counts()).toEqual(Array(4).fill(css.count))
+    expect(need).toHaveBeenLastCalledWith(217)
+    resize(290)
+    expect(counts()).toEqual(Array(4).fill(css.hiddenCount))
+    expect(view.getByRole('radio', { name: 'Interface1' }).getAttribute('aria-checked')).toBe('true')
+    resize(296)
+    expect(counts()).toEqual(Array(4).fill(css.count))
+  })
+
+  it('keeps the focused segment mounted while its count shows or hides', () => {
+    const { view, counts, resize } = fitted({ cell: 300, counted: 280, labels: 200 })
+    const focused = view.getByRole('radio', { name: 'Interface1' })
+    focused.focus()
+    resize(290)
+    expect(counts()).toEqual(Array(4).fill(css.hiddenCount))
+    expect(document.activeElement).toBe(focused)
+    resize(300)
+    expect(counts()).toEqual(Array(4).fill(css.count))
+    expect(document.activeElement).toBe(focused)
+  })
+
+  it('measures again when fonts load, and stops once unmounted', () => {
+    const { view, need, counts, widths } = fitted({ cell: 300, counted: 280, labels: 200 })
+    widths.counted = 290
+    widths.labels = 230
+    act(() => { document.fonts.dispatchEvent(new Event('loadingdone')) })
+    expect(counts()).toEqual(Array(4).fill(css.hiddenCount))
+    expect(need).toHaveBeenLastCalledWith(246)
+    view.unmount()
+    need.mockClear()
+    document.fonts.dispatchEvent(new Event('loadingdone'))
+    expect(need).not.toHaveBeenCalled()
+  })
+
+  it('names a hidden count in the hover text of its segment, and nothing for a segment without a count', () => {
+    vi.useFakeTimers()
+    onTestFinished(() => { vi.useRealTimers() })
+    const view = render(<SegmentedChoice label="Filter" value="a" choose={vi.fn()} counted={false} segments={[
+      { value: 'a', label: 'Open', count: null, disabledTip: null },
+      { value: 'b', label: 'Done', count: 2, disabledTip: null },
+    ]} />)
+    const hover = (name: RegExp): string | null => {
+      const radio = view.getByRole('radio', { name })
+      fireEvent.pointerEnter(radio)
+      act(() => { vi.advanceTimersByTime(1000) })
+      const text = within(document.body).queryByRole('tooltip')?.textContent ?? null
+      fireEvent.pointerLeave(radio)
+      act(() => { vi.advanceTimersByTime(1000) })
+      return text
+    }
+    expect(hover(/^Done/)).toBe('Done 2')
+    expect(hover(/^Open/)).toBeNull()
+  })
+
+  it('leaves the form as it is while the cell has no width', () => {
+    const { counts, need, resize } = fitted({ cell: 0, counted: 280, labels: 200 })
+    expect(counts()).toEqual(Array(4).fill(css.count))
+    expect(need).not.toHaveBeenCalled()
+    resize(0)
+    expect(need).not.toHaveBeenCalled()
   })
 })
 
