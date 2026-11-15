@@ -2,6 +2,7 @@ import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { z } from 'zod'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { JsonlCompression } from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -11,6 +12,7 @@ import { generationLogPath } from '../../session-persistence-jsonl/src/format.ts
 import { SessionWriteLease } from '../src/lease.ts'
 import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
+import { storedEvents, storedFrames } from './fixtures/store.ts'
 
 type Fixture = Awaited<ReturnType<typeof persistenceFixture>>
 
@@ -91,7 +93,9 @@ describe('JSONL import through the SQLite provider', () => {
       expect(db.prepare('SELECT parent_segment_uuid, parent_end_seq, base_seq FROM segments').all()).toEqual([
         { parent_segment_uuid: null, parent_end_seq: null, base_seq: 0 },
       ])
-      expect(db.prepare('SELECT COUNT(*) AS count FROM events').get()?.count).toBe(events.length)
+      const segment = z.object({ segment_uuid: z.string() }).parse(db.prepare('SELECT segment_uuid FROM segments').get()).segment_uuid
+      expect(storedFrames(db, segment).map(frame => [frame.start, frame.end])).toEqual([[0, events.length]])
+      expect(storedEvents(db, segment)).toEqual(events)
     } finally { db.close() }
   })
 
