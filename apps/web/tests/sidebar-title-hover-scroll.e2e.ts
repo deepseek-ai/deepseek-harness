@@ -74,9 +74,11 @@ describe('web e2e: hovering a clipped session title marquees it to its far edge'
     // The stylesheet moves the text, so the page runs no frame callback per frame while it travels.
     await page.evaluate(() => {
       const request = window.requestAnimationFrame.bind(window)
-      const counter = window as unknown as { marqueeFrames: number }
-      counter.marqueeFrames = 0
-      window.requestAnimationFrame = (callback) => { counter.marqueeFrames += 1; return request(callback) }
+      Reflect.set(window, 'marqueeFrames', 0)
+      window.requestAnimationFrame = (callback) => {
+        Reflect.set(window, 'marqueeFrames', Number(Reflect.get(window, 'marqueeFrames')) + 1)
+        return request(callback)
+      }
     })
     await row.hover()
     // The marquee travels instead of jumping: the title is caught mid-travel,
@@ -106,7 +108,7 @@ describe('web e2e: hovering a clipped session title marquees it to its far edge'
     // characters the marquee reached.
     expect(await title.evaluate(el => getComputedStyle(el).textOverflow)).toBe('clip')
     // A frame script would have run once per frame for the whole travel; other parts of the page may ask for a frame or two.
-    expect(await page.evaluate(() => (window as unknown as { marqueeFrames: number }).marqueeFrames)).toBeLessThan(10)
+    expect(await page.evaluate(() => Number(Reflect.get(window, 'marqueeFrames')))).toBeLessThan(10)
 
     // Leaving returns in one step: a travel back would still be under way
     // inside this window, and it would carry the resting ellipsis with it.
