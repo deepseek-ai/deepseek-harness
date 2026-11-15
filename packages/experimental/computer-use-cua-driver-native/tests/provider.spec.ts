@@ -99,6 +99,39 @@ describe('Cua Driver native provider', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'Error: background_unavailable' }])
   })
 
+  it.each([new Error('native helper unavailable'), 'native helper unavailable'])('classifies a native SDK call failure: %s', async (failure) => {
+    fixture.call = async () => { throw failure }
+    await ctx.plugin(NativeProvider)
+    const result = await execute('click', { pid: 9, window_id: 7 })
+    expect(result.error?.info).toEqual({ name: 'CuaDriverError', code: 'CUA_DRIVER_FAILED' })
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: native helper unavailable' }])
+  })
+
+  it('reports cancellation instead of a native failure once the caller cancels', async () => {
+    const called: PromiseWithResolvers<void> = Promise.withResolvers()
+    fixture.call = async (_name, _args, signal) => {
+      called.resolve()
+      await new Promise(resolve => signal?.addEventListener('abort', resolve, { once: true }))
+      throw new Error('native call interrupted')
+    }
+    await ctx.plugin(NativeProvider)
+    const controller = new AbortController()
+    const result = executeToolFixture(ctx, {
+      name: 'cua_driver_native__click', callId: brandString<ToolCallId>('native-cancel'), arguments: { pid: 9, window_id: 7 }, signal: controller.signal,
+    })
+    await called.promise
+    controller.abort(new Error('Stop clicking'))
+    expect((await result).error).toEqual({ message: 'Stop clicking', info: { name: 'AbortError', code: 'ABORTED' } })
+  })
+
+  it('classifies a native result that is not JSON', async () => {
+    fixture.rawJson = '{not json'
+    await ctx.plugin(NativeProvider)
+    const result = await execute('click', { pid: 9, window_id: 7 })
+    expect(result.error?.info).toEqual({ name: 'CuaDriverError', code: 'CUA_DRIVER_INVALID_RESULT' })
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: Cua Driver tool "click" returned a result that is not JSON' }])
+  })
+
   it('leaves an unrelated tool running when the native provider unloads', async () => {
     const started = Promise.withResolvers<AbortSignal>()
     const settled = Promise.withResolvers<boolean>()

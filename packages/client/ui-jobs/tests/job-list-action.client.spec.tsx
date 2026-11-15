@@ -61,12 +61,16 @@ function props(
   observed: Readonly<Record<string, ObservedJob>> = {},
   killJob: JobListActionProps['killJob'] = async () => true,
   watchRows: JobListActionProps['watchRows'] = () => () => {},
+  mayKill = true,
 ): JobListActionProps {
   const jobsState: JobsSnapshot = { rows: jobs.length > 0 ? { [SESSION]: jobs } : {}, observed }
   function useJobs<T>(select: (value: JobsSnapshot) => T): T {
     return select(jobsState)
   }
-  return { sessionId: SESSION, useJobs, watchRows, observe, killJob, t } as JobListActionProps
+  return {
+    sessionId: SESSION, useJobs, watchRows, observe, killJob, t,
+    useAccess: () => mayKill,
+  } as JobListActionProps
 }
 
 function openList(): void {
@@ -321,6 +325,12 @@ describe('JobListAction hover', () => {
     advance(120)
     expect(screen.queryByRole('list')).toBeNull()
     expect(stop).toHaveBeenCalledTimes(2)
+  })
+
+  it('omits the stop control without job/kill access', () => {
+    const view = render(<JobListAction {...props([job({ status: 'running' })], undefined, undefined, undefined, undefined, false)} />)
+    openList()
+    expect(view.container.querySelector('[data-kill-state]')).toBeNull()
   })
 
   it('pins pointer interaction so leaving cannot interrupt stop confirmation', () => {

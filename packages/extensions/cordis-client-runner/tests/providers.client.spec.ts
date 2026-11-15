@@ -7,7 +7,7 @@ import { clientInspectProviders } from '../src/client/providers.ts'
 const Component = () => null
 
 describe('Client inspect providers', () => {
-  it('exposes Tool owner fields and phases through the live slot lookup', async () => {
+  it('exposes Tool and model-menu owner fields through the live slot lookup', async () => {
     const ctx = new Context()
     const fiber = ctx.plugin(SlotRegistry)
     try {
@@ -15,7 +15,10 @@ describe('Client inspect providers', () => {
       const slots = ctx.slots as { registerFactory(options: object, component: unknown): () => void }
       slots.registerFactory({
         name: 'provider.tool-owner', scope: 'root',
-        children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
+        children: {
+          'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+          'conversation.input.model.options': { kind: 'list', scope: 'session' },
+        },
       }, Component)
       const provider = clientInspectProviders(ctx).find(item => item.manifest.id === 'Slots')!
       const result = await provider.query('listSubTree', { root: 'tool.call.toolview' }, {} as never)
@@ -26,6 +29,10 @@ describe('Client inspect providers', () => {
       }
       for (const phase of ['preparing', 'start', 'result']) expect(owner).toContain(`phase: '${phase}'`)
       expect(owner).not.toContain('truncated')
+      const options = await provider.query('listSubTree', { root: 'conversation.input.model.options' }, {} as never)
+      const menuOwner = (options as typeof selected).selected.catalog.ownerProps.join('\n')
+      expect(menuOwner).toContain('ModelMenuOptions')
+      expect(menuOwner).toContain('openPane: (pane: ModelMenuPaneRef) => void')
     } finally {
       await fiber.dispose()
     }

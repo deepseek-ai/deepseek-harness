@@ -90,12 +90,26 @@ class _ModelServer:
                 self.request.settimeout(_WAIT_SECONDS)
                 super().setup()
 
+            def handle_one_request(self) -> None:
+                self.raw_requestline = b""
+                try:
+                    super().handle_one_request()
+                except (ConnectionAbortedError, ConnectionResetError):
+                    if self.raw_requestline:
+                        raise
+                    # A cancelled upload can close a newly opened socket before sending a request.
+                    self.close_connection = True
+
             def do_POST(self) -> None:
-                payload = self.rfile.read(int(self.headers["Content-Length"]))
                 if self.path == "/v1/files":
-                    # The model fixture accepts inline images through the provider's Files fallback.
-                    self.send_error(404, "Images are accepted inline")
+                    # The first 404 selects inline images and cancels concurrent file uploads.
+                    try:
+                        self.rfile.read(int(self.headers["Content-Length"]))
+                        self.send_error(404, "Images are accepted inline")
+                    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                        self.close_connection = True
                     return
+                payload = self.rfile.read(int(self.headers["Content-Length"]))
                 assert self.path == "/v1/messages", f"unexpected model endpoint: {self.path}"
                 body = json.loads(payload)
                 assert isinstance(body, dict) and isinstance(body.get("model"), str)
@@ -197,6 +211,20 @@ def test_model_server_only_allows_expected_connection_aborts(
     assert model.captured() == [body]
     assert model.failures == ([] if accepted else [error])
     assert not model.thread.is_alive()
+
+
+def test_model_server_accepts_cancelled_file_upload(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = _ModelServer([])
+
+    def reset(_handler: BaseHTTPRequestHandler) -> None:
+        raise ConnectionResetError("sibling upload selected inline fallback")
+
+    monkeypatch.setattr(model.server.RequestHandlerClass, "end_headers", reset)
+    with model, closing(HTTPConnection(*model.server.server_address, timeout=_WAIT_SECONDS)) as connection:
+        connection.request("POST", "/v1/files", body=b"image")
+        with pytest.raises(RemoteDisconnected):
+            connection.getresponse()
+    assert model.captured() == []
 
 
 def _dsh_bin() -> str | None:
@@ -669,3 +697,38 @@ def test_resumed_permission_survives_different_launch_defaults(tmp_path: Path) -
         _assert_request_permission(request, "read-only", "ask")
         assert resumed.harness.config.env["DSH_PERMISSION_MODE"] == "danger-full-access"
     assert _permission_facts(_read_events(resumed.logs)) == saved
+
+
+def test_resume_permission_override_applies_before_tools_and_survives_restart(tmp_path: Path) -> None:
+    with _runtime(tmp_path, [], initial_permission="workspace-write") as original:
+        session = original.harness.start_session(_SESSION_ID)
+        assert _permission_command(original, session, "workspace-write").result.kind == "success"
+    saved = _permission_facts(_read_events(original.logs))
+    target = tmp_path / "resumed-write.txt"
+    completions = [
+        _Completion("", tool_call=("write", {"file_path": str(target), "content": "resumed with full access"})),
+        _Completion("OVERRIDE_APPLIED"),
+    ]
+    with _runtime(tmp_path, completions, initial_permission="workspace-write") as resumed:
+        session = resumed.call(
+            resumed.harness.resume_session, _SESSION_ID, {"permission_mode": "danger-full-access"},
+        )
+        assert resumed.model.captured() == [], "resume must not send new model input"
+        result = resumed.call(session.run, "Write the marker, then finish.")
+        assert result.final_response == "OVERRIDE_APPLIED"
+        assert target.read_text(encoding="utf-8") == "resumed with full access"
+        for request in resumed.model.captured():
+            _assert_request_permission(request, "danger-full-access", "never")
+        assert resumed.harness.config.env["DSH_PERMISSION_MODE"] == "workspace-write"
+    facts = _permission_facts(_read_events(resumed.logs))
+    assert facts[:len(saved)] == saved
+    assert facts[len(saved):] == [
+        {"type": "permission/preset", "data": {"preset": "danger-full-access"}},
+        {"type": "sandbox/mode", "data": {"mode": "danger-full-access"}},
+        {"type": "approval/policy", "data": {"policy": "never"}},
+    ]
+    with _runtime(tmp_path, [_Completion("STILL_FULL")], initial_permission="workspace-write") as again:
+        session = again.call(again.harness.resume_session, _SESSION_ID)
+        assert again.call(session.run, "Continue without tools.").final_response == "STILL_FULL"
+        _assert_request_permission(again.model.captured()[0], "danger-full-access", "never")
+    assert _permission_facts(_read_events(again.logs)) == facts

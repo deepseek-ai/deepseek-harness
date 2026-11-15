@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Serve the built Web shell to browsers from its configured distribution directory. The root and configured index path render the bootstrapped index; existing assets are served directly, while missing or non-file paths return 404, traversal returns 403, and unsupported methods return 405. Index access requires a valid process token or browser cookie, but static assets remain public. Only one instance can handle unmatched routes at a time; a second activation fails, and unloading the active instance makes unmatched requests return 404.
+Serve the built Web shell from its configured distribution directory. Root and configured-index entries require an authenticated Peer and render its startup data; other assets need no credentials but still pass active Connection source checks. Missing or non-file paths return 404, traversal returns 403, and admitted requests with unsupported methods return 405. Only one instance can own unmatched requests; a second activation fails, and unloading it leaves unmatched requests at 404.
 
 ## Table of Contents
 
@@ -39,11 +39,11 @@ Compose this plugin in a browser-facing host that serves the built Web shell: it
 
 ### What the server enforces
 
-Requests are served from the dist root (the directory containing `distIndex`). The dist root and the configured index path render `index.html` with HTTP 200; any other existing file is served directly with its MIME type, and unknown extensions ship as `application/octet-stream`. A path that resolves outside the root is rejected with 403, so a crafted path cannot read files above the dist. An absent or non-file target inside the dist root — a missing file, a directory, or a missing configured index — returns an empty 404. Non-GET/HEAD requests without a matching named route are answered 405. The fallback is a webserver resource. Every successful index response is rendered through the webserver's `renderIndex` — for `connection.browserPeer`, the Peer Connection's browser authentication admits, over HTTP, and for `peer` in a `webServer.readResource(request, peer)` read, which skips browser authentication — so the boot manifest and that Peer's access snapshot reach the page on `/` and on the configured index path.
+Requests are served from the dist root (the directory containing `distIndex`). The root and configured index render `index.html` with 200; other existing files use their MIME type, or `application/octet-stream` for unknown extensions. Paths outside the root return 403; missing or non-file targets return empty 404 responses. After admission, non-GET/HEAD requests return 405. The fallback resource renders each index through `webServer.renderIndex` with the Peer WebServer admitted, or the explicit Peer supplied to trusted `webServer.readResource(request, peer)`. The boot manifest and that Peer's access snapshot reach both index entry paths.
 
 The served HTML carries one document base, `<base href="./">`, ahead of every injected resource row, so it freezes the entry directory the page was loaded from: the shell's own app-directory-relative references and the Host's plugin-resource rows both resolve under the mount that served the page. The same index therefore serves the origin root and whatever mount a prefix-stripping proxy owns; this plugin renders it only for the dist root and the configured index path.
 
-HTTP root and configured-index requests call `ctx.connection.authorizeIndex` before reading HTML. A valid process token receives a 303 redirect plus the persistent browser cookie; an existing valid cookie serves the index; every other index request receives the Connection-owned 401 response. Non-index files remain public static assets. Connection owns the token, cookie, expiry, and signing-record semantics.
+The fallback's synchronous `auth` selector requires `required` for root and configured-index requests and declares other files `anonymous`. WebServer centralizes admission through Connection before file serving; anonymous assets skip credential verification, not Connection's source policy. The resource receives the admitted Peer directly and captures it for index rendering without another authentication call. Token middleware handles the root Cookie exchange before routing. After reading index bytes, rendering checks that both request and Peer remain live.
 
 Browsers revalidate every served file except the index. Such a response carries `cache-control: no-cache` and a weak ETag built from a SHA-1 of the file's bytes, so a file whose content changes gets a new ETag even when its name stays the same; a request whose `If-None-Match` equals the current ETag receives an empty 304. The rendered index carries no cache headers.
 
@@ -61,7 +61,7 @@ Traversal returns 403 rather than an error page. An absent or non-file target in
 
 ### Design concept
 
-The package is one function plugin around `serveStatic`, which maps a Fetch `Request` to a `Response`: `apply` resolves the dist root from `distIndex` and registers a fallback resource under an effect scope. For each request the resource passes `serveStatic` an `authorizeIndex` closure, which runs `ctx.connection.authorizeIndex` only when no Peer came with the request, and a `renderIndex` closure that runs `ctx.webServer.renderIndex` over the raw `index.html` for that Peer or the browser Peer and splices the document base in after the opening head tag (after the raw taps, so it precedes their markup too). The seat is single-owner by the webserver's contract — a second registration throws — and effect-scoped, so disposing the fiber releases the seat.
+The function plugin wraps `serveStatic`, which maps a Fetch `Request` to a `Response`. Its fallback declares route auth and consumes the Peer WebServer supplies; in-process reads use the caller's explicit Peer. The renderer runs index transforms and inserts the document base before resource references. The plugin scope owns the fallback registration and releases its single-owner seat on disposal.
 
 ### The traversal fence
 

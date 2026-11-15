@@ -334,7 +334,7 @@ describe('web e2e: macOS window drag coverage', () => {
       const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
       await panel.waitFor()
       await settled(page)
-      const body = panel.locator('[data-dockkit-pane] > [class*="_paneBody_"]').first()
+      const body = panel.locator('[data-dockkit-pane] > [data-dockkit-pane-body]').first()
       await body.waitFor()
       // The existing pane supplies the no-drag owner; plain fixture content isolates CSS inheritance from plugin behavior.
       await body.evaluate((element) => {

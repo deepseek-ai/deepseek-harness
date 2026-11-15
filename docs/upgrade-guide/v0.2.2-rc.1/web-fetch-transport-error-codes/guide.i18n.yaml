@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/web-fetch-transport-error-codes/guide.md
+/:
+  en: 35ed3b25ea3d40d7
+  zh: 2b037f8b2ef608e7
+/local-http-fetch-transport-failures-use-classified-codes:
+  en: 3897971fd31f36fe
+  zh: a8ef921a842e618e
+/local-http-fetch-transport-failures-use-classified-codes/change:
+  en: ad6f5c7df983668c
+  zh: 43a1abab550cd7c4
+/local-http-fetch-transport-failures-use-classified-codes/migration:
+  en: ac5fd3b3b803d45a
+  zh: bef35af54771b9b7

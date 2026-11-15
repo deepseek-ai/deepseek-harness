@@ -1,0 +1,18 @@
+# Replace both native providers with the recorded desktop fixture so the profile serves on every Host.
+- id: cua-mcp-provider
+  disabled: true
+
+- id: cua-mcp-provider-windows
+  disabled: true
+
+- insert:
+    - id: cua-mcp-fixture-provider
+      name: '../../../../../snapshots/session/cua-run-code/provider.mjs'
+      config:
+        screenshotTarget:
+          longEdge: 1
+          maxBytes: 100000
+        allowedApps:
+          - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            name: Fixture
+            executablePath: /fixture/app

@@ -16,7 +16,7 @@ declare module '@deepseek-ai/dsh-llm/types' {
 
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
 import {
@@ -788,7 +788,7 @@ export function apply(ctx: Context): void {
       accepting = false
       try {
         // Root unload begins before child cleanup; only live plugin removal changes Session policy.
-        if (ctx.root.fiber.state === FiberState.ACTIVE) {
+        if (ctx[Context.root].fiber.state === FiberState.ACTIVE) {
           for (const session of ctx.sessions.list()) {
             if (permissionPresets.current(session) !== AUTO_PRESET) continue
             permissionPresets.set(session, 'danger-full-access')

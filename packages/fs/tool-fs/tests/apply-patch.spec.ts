@@ -5,7 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { expect, it, vi } from 'vitest'
 import { FsError } from '@deepseek-ai/dsh-fs'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { PtcRunRequest, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { add, move, patch, remove, setup, update } from './patch/harness.ts'
@@ -163,7 +163,9 @@ class PatchPtcRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunSpec) {
-    return { output: [{ type: 'text' as const, text: JSON.stringify(await request.bindings[0]!.functions.apply_patch!({ input: this.patch })) }] }
+    const resolved = await request.bindings[0]!.functions.apply_patch!({ input: this.patch })
+    const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
+    return { output: [{ type: 'text' as const, text: JSON.stringify(value) }] }
   }
 }
 

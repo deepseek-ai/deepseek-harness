@@ -6,5 +6,10 @@
   },
   "include": [
     "src"
+  ],
+  "references": [
+    {
+      "path": "../error"
+    }
   ]
 }

@@ -404,6 +404,9 @@ Host service backing the generated `ctx.remote.job` namespace.
  * Stream the jobs one session can see — its own plus every unowned job —
  * as whole-set frames: one on open, then one after each coalesced burst of
  * lifecycle commits. The stream has no natural end; the carrier closes it.
+ *
+ * The Gateway names this call's Session resource from `request.sessionId`
+ * through the session controller's resolver; no explicit reader is needed.
  * @param request - the session whose visible set to mirror.
  * @param signal - cancellation owned by the Remote stream carrier.
  * @returns the roster frames.

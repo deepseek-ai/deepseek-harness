@@ -29,13 +29,15 @@ This public experimental library is a dependency of the browser providers. It ha
 
 Native providers construct `SessionResources` from the package root, supplying resource acquisition and cleanup callbacks. Calls pass the exact live Agent to `run()`; stale owners and a second owner of an exclusive attachment fail before acquisition. Canceling an acquisition wait leaves initialization available to other callers in the same Session; Session disposal aborts and awaits that initialization. Providers keep their registration until `dispose()` finishes.
 
+Ownership failures throw `BrowserSessionError`, exported with its closed `BROWSER_SESSION_ERROR_CODES` list: `BROWSER_OWNER_NOT_LIVE` for a stale owner or a disposing provider, `BROWSER_LOCKED` for a second owner of an exclusive attachment, `BROWSER_CLOSED` for an operation interrupted because its Session's browser closed, `BROWSER_CLEANUP_FAILED` for a failed `dispose()` whose `cause` is an `AggregateError` of each close failure, and `BROWSER_FOREIGN_SESSION` for an MCP call from a Session without its own connection. A canceled wait whose abort reason is not an `Error` rejects with an `AbortError` that carries the `ABORTED` code.
+
 MCP providers use `mountSessionMcp` from `@deepseek-ai/dsh-experimental-browser-use-runtime/mcp`, supplying their fixed server name, executable, arguments, and ownership policy. The mounting context must provide `workingDirectory`. Acquisition uses the [working-directory service](../../session/working-directory/README.md) to validate or recover the current directory and set the MCP server process's initial directory. Retained servers keep that directory when the Session later selects another. The helper awaits one scoped client startup and discovery attempt within each future Agent's `agent/created` event. Agent creation or resume completes after discovery, before queued input runs; a successful client remains owned by that Session across turns.
 
 A busy attachment skips startup permanently for that live activation while its other work continues. Releasing the attachment does not retry skipped activations; a newly created or resumed Agent can acquire it. Startup failure or cancellation rejects Agent creation or resume and triggers creation rollback, including client cleanup. Reconnection is disabled. Loading or reloading a provider applies only to future Agent activations.
 
 Callers can inspect prompt assembly and scoped tool definitions after awaited Agent creation or resume completes.
 
-Browser tools and resource requests targeting this server use the same queue and require the calling Session's own connection. Other MCP servers remain usable. Inherited server instructions are omitted without ownership; the shared server-name inventory keeps its normal scope behavior.
+Browser tools and resource requests targeting this server use the same queue and require the calling Session's own connection; a call without a calling Agent fails with `ToolContextUnavailableError`. Other MCP servers remain usable. Inherited server instructions are omitted without ownership; the shared server-name inventory keeps its normal scope behavior.
 
 -----
 

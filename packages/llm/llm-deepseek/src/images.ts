@@ -99,12 +99,12 @@ function assertImagesFit(
 export async function prepareFileIds(
   messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>, files: RequestFiles,
 ): Promise<Map<ImageAttachmentRef['attachmentId'], DeepSeekFileId>> {
-  const ids = new Map<ImageAttachmentRef['attachmentId'], DeepSeekFileId>()
+  const ids = await files.resolveAll(versions)
   for (const [index, message] of messages.entries()) {
     let image = 0
     for (const ref of imageRefs(message.content)) {
       const version = versions.get(ref.attachmentId) as RequestImageAttachment
-      ids.set(ref.attachmentId, await files.resolve(version, { message: index + 1, image: ++image }))
+      files.record(version, ids.get(ref.attachmentId) as DeepSeekFileId, { message: index + 1, image: ++image })
     }
   }
   return ids

@@ -79,7 +79,7 @@ async function mount(options: { profile?: boolean; connection?: boolean } = {}) 
   if (options.profile === true) {
     ctx.provide('profileContext', {
       name: 'test', startedBundles: [], dir: join(home, 'profile'), patchPath: join(home, 'profile', 'cordis.patch.yml'),
-      installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+      installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
     })
   }
   const routes = new Map<string, (request: Request) => Promise<Response>>()
