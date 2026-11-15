@@ -29,7 +29,7 @@ import { decodeFrame, encodeFrame } from './frame.ts'
 import type { EncodedFrame } from './frame.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 1
 const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
