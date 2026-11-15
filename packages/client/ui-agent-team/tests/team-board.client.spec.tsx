@@ -11,6 +11,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import { TeamBoard, TeamProgress, type TeamBoardProps, type TeamProgressProps } from '../src/client/TeamBoard.tsx'
 import { createTeamBoardStore } from '../src/client/team-board-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import type { PanelDetailsProps, PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 
 afterEach(() => {
   cleanup()
@@ -51,11 +52,23 @@ function summary(id: SessionId, title?: string): SessionSummary {
 type BoardStore = ReturnType<ReturnType<typeof createTeamBoardStore>['create']>
 
 /**
- * The Session panel's fold control Factory as this suite renders it: a button with its state, name, and label.
- * ui-session-panel's own suite owns the control's markup.
+ * The Session panel's Factories as this suite renders them: the fold control as a button with its state, name, and
+ * label, and a row's details as one element per part in order. ui-session-panel's own suite owns their markup.
  */
-function renderFold(_name: string, input: { expanded: boolean; label: string; name: string; onToggle: () => void }) {
-  return <button type="button" data-fold="" aria-expanded={input.expanded} aria-label={input.name} onClick={input.onToggle}>{input.label}</button>
+function renderPanelFactory(name: string, input: object) {
+  if (name === 'conversation.session.panel.details') {
+    const { title, lines = [], status, facts = [] } = input as PanelDetailsProps
+    return (
+      <div data-session-panel-details="">
+        {title !== undefined && <div>{title}</div>}
+        {lines.map(line => <div key={line}>{line}</div>)}
+        {status !== undefined && <div data-state={status.state}>{status.label}</div>}
+        {facts.length > 0 && <div>{facts.map(fact => <span key={fact.kind} data-fact={fact.kind}>{fact.label}</span>)}</div>}
+      </div>
+    )
+  }
+  const fold = input as PanelFoldProps
+  return <button type="button" data-fold="" aria-expanded={fold.expanded} aria-label={fold.name} onClick={fold.onToggle}>{fold.label}</button>
 }
 
 function bench(options: {
@@ -80,7 +93,7 @@ function bench(options: {
   const props = {
     sessionId, useProjection,
     useSessions: bindSnapshotSelector(sessions),
-    useStore: bindSnapshotSelector(store), actions: store.actions, renderFactorySlot: renderFold,
+    useStore: bindSnapshotSelector(store), actions: store.actions, renderFactorySlot: renderPanelFactory,
     t: makeTranslate(zh, commonZh),
   } as TeamBoardProps
   return { props, sessions, store }
@@ -458,7 +471,7 @@ describe('TeamBoard', () => {
     const button = row()
     const anchor = button.parentElement as HTMLElement
     const details = (): string[] | null => {
-      const card = document.querySelector('[data-hover-details]')
+      const card = document.querySelector('[data-session-panel-details]')
       return card === null ? null : [...card.children].map(child => child.textContent ?? '')
     }
     fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })

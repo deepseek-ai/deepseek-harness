@@ -1,9 +1,9 @@
 /** Session panel section listing the current Session's subagents. */
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { HoverCardGroup } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
-import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
+import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import {
   CatalogTree, deriveCatalogs, levelPreparer, progressOf, type Catalogs, type SubagentCatalogInjected, type SubagentCatalogSnapshot,
 } from './SubagentCatalog.tsx'
@@ -100,6 +100,9 @@ export function SubagentsSection({
   const catalog = catalogs[sessionId]
   const unfolded = useStore(state => state.unfolded)
   const prepareLevel = useMemo(() => levelPreparer(prepareCatalog), [prepareCatalog])
+  const panelDetails = useCallback(
+    (details: PanelDetailsProps) => renderFactorySlot('conversation.session.panel.details', details), [renderFactorySlot],
+  )
   const ordered = useMemo(() => catalog === undefined ? NO_ENTRIES : sectionOrder(catalog.entries, summaries), [catalog, summaries])
   // Folding holds back two rows or more, since the fold control takes a row itself.
   const foldable = ordered.length > FOLD_LIMIT + 1
@@ -122,7 +125,7 @@ export function SubagentsSection({
           openChildAside={openChildAside}
           prepareLevel={prepareLevel}
           onOpened={dismissOverlay}
-          dense
+          panelDetails={panelDetails}
           t={t}
         />
       </HoverCardGroup>

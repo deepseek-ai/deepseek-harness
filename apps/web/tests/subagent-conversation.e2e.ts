@@ -498,7 +498,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
       expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
       await primary.hover()
-      const card = page.locator('[data-hover-details]')
+      const card = page.locator('[data-session-panel-details]')
       await card.waitFor()
       expect(await card.evaluate(element => [...element.children].map(child => child.textContent).slice(0, 3)))
         .toEqual([LABEL, `Owner: ${CHILD_NAME}`, 'completed · continuable'])

@@ -8,6 +8,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { JobsRunningIndicator, JobsSection, type JobsRunningIndicatorProps, type JobsSectionProps } from '../src/client/JobsSection.tsx'
 import { createJobsSectionStore } from '../src/client/jobs-store.ts'
 import { en, zh, ru } from '../src/client/locales.ts'
+import type { PanelDetailsProps, PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 
 beforeEach(() => {
   class TooltipObserver implements ResizeObserver {
@@ -61,11 +62,23 @@ function outputJob(over: Partial<JobView> = {}): JobView {
 type SectionStore = ReturnType<ReturnType<typeof createJobsSectionStore>['create']>
 
 /**
- * The Session panel's fold control Factory as this suite renders it: a button with its state, name, and label.
- * ui-session-panel's own suite owns the control's markup.
+ * The Session panel's Factories as this suite renders them: the fold control as a button with its state, name, and
+ * label, and a row's details as one element per part in order. ui-session-panel's own suite owns their markup.
  */
-function renderFold(_name: string, input: { expanded: boolean; label: string; name: string; onToggle: () => void }) {
-  return <button type="button" data-fold="" aria-expanded={input.expanded} aria-label={input.name} onClick={input.onToggle}>{input.label}</button>
+function renderPanelFactory(name: string, input: object) {
+  if (name === 'conversation.session.panel.details') {
+    const { title, lines = [], status, facts = [] } = input as PanelDetailsProps
+    return (
+      <div data-session-panel-details="">
+        {title !== undefined && <div>{title}</div>}
+        {lines.map(line => <div key={line}>{line}</div>)}
+        {status !== undefined && <div data-state={status.state}>{status.label}</div>}
+        {facts.length > 0 && <div>{facts.map(fact => <span key={fact.kind} data-fact={fact.kind}>{fact.label}</span>)}</div>}
+      </div>
+    )
+  }
+  const fold = input as PanelFoldProps
+  return <button type="button" data-fold="" aria-expanded={fold.expanded} aria-label={fold.name} onClick={fold.onToggle}>{fold.label}</button>
 }
 
 /** Test-local selector hook over a framework-neutral store instance. */
@@ -90,7 +103,7 @@ function props(
   }
   return {
     sessionId: SESSION, useJobs, watchRows, observe, killJob, useStore: hookOf(store), actions: store.actions, t,
-    useAccess: () => mayKill, renderFactorySlot: renderFold,
+    useAccess: () => mayKill, renderFactorySlot: renderPanelFactory,
   } as Pick<JobsSectionProps,
     'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't' | 'useAccess' | 'renderFactorySlot'> as JobsSectionProps
 }
@@ -683,9 +696,9 @@ describe('JobsSection hover', () => {
       const anchor = row.parentElement as HTMLElement
       fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
       act(() => { vi.advanceTimersByTime(499) })
-      expect(document.querySelector('[data-hover-details]')).toBeNull()
+      expect(document.querySelector('[data-session-panel-details]')).toBeNull()
       act(() => { vi.advanceTimersByTime(1) })
-      const card = document.querySelector('[data-hover-details]') as HTMLElement
+      const card = document.querySelector('[data-session-panel-details]') as HTMLElement
       expect([...card.children].map(child => child.textContent)).toEqual(['bash', '运行中', '10秒'])
     } finally {
       vi.useRealTimers()
@@ -703,7 +716,7 @@ describe('JobsSection hover', () => {
       fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
       fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
       act(() => { vi.advanceTimersByTime(1000) })
-      expect(document.querySelector('[data-hover-details]')).toBeNull()
+      expect(document.querySelector('[data-session-panel-details]')).toBeNull()
       expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(zh['kill.stop'])
       fireEvent.pointerLeave(stop, { pointerType: 'mouse' })
       fireEvent.pointerLeave(anchor, { pointerType: 'mouse' })
@@ -711,10 +724,10 @@ describe('JobsSection hover', () => {
       // A card the row opened closes once the pointer reaches the stop control.
       fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
       act(() => { vi.advanceTimersByTime(500) })
-      expect(document.querySelector('[data-hover-details]')).not.toBeNull()
+      expect(document.querySelector('[data-session-panel-details]')).not.toBeNull()
       fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
       act(() => { vi.advanceTimersByTime(1000) })
-      expect(document.querySelector('[data-hover-details]')).toBeNull()
+      expect(document.querySelector('[data-session-panel-details]')).toBeNull()
     } finally {
       vi.useRealTimers()
     }

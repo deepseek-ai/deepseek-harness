@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular, IconClockOutlineRegular, IconStopFillRegular, MarqueeText,
+  HoverCard, HoverCardGroup, IconChevronDownOutlineRegular, IconStopFillRegular, MarqueeText,
   StateDot, type StateDotState, TerminalBlock, type TerminalBlockLabels, Tooltip, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -190,7 +190,7 @@ function ordered(jobs: readonly JobView[]): JobView[] {
 type KillState = 'idle' | 'armed' | 'pending' | 'failed'
 
 /** One job row plus, when observable and expanded, its live output panel. */
-function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
+function JobItem({ job, view, expanded, now, onToggle, kill, renderFactorySlot, t }: Pick<JobsSectionProps, 'renderFactorySlot'> & {
   job: JobView
   view: ObservedJob | undefined
   expanded: boolean
@@ -233,13 +233,11 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
       <HoverCard
         grouped
         disabled={onStop && kill !== undefined}
-        content={(
-          <HoverDetails
-            lines={[job.kind]}
-            status={{ state: dotState(job), label: state }}
-            facts={[{ icon: <IconClockOutlineRegular />, label: duration }]}
-          />
-        )}
+        content={renderFactorySlot('conversation.session.panel.details', {
+          lines: [job.kind],
+          status: { state: dotState(job), label: state },
+          facts: [{ kind: 'duration', label: duration }],
+        })}
         anchor={(
           // A command its cell clips crawls into view while the pointer rests on the row.
           <div
@@ -449,6 +447,7 @@ export function JobsSection({
       onToggle={() => {
         setExpandedKey(current => current === String(job.id) ? undefined : String(job.id))
       }}
+      renderFactorySlot={renderFactorySlot}
       {...job.status === 'running' && mayKill
         ? {
           kill: {

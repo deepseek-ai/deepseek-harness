@@ -61,6 +61,8 @@ kind: "package-reference"
 
 列表可能很长的分栏会把它收起：只显示列表（或列表里每个分组）的前五行，然后以收起控件作为最后一行，用来显示其余的行或再次收起。只有这样做能收起两行及以上时才收起，因为控件自己也占一行；列表按顺序排列，使被收起的是最不需要看的行。插件把这个控件作为 Component Factory `conversation.session.panel.fold` 提供：`renderFactorySlot('conversation.session.panel.fold', { expanded, label, name, onToggle })` 渲染一个标记为 `data-session-panel-row="fold"` 的行，body 就是按钮，使用分栏计数的 12px 三级文字，图标列里是 14px 的箭头，还有行被收起时朝下，全部显示后朝上。`label` 是当前状态的可见文字，例如「显示其余 14 个」或「收起」；`name` 是无障碍名称，以 `label` 开头并说明列表里是什么。收起状态由分栏保存，显示哪些行也由分栏决定；在注册上声明 store 可以让这个选择在面板隐藏期间保留。
 
+单行显示会截断名称，或放不下负责人、状态、度量的行，把这些内容放进悬停卡片。插件把卡片内容作为 Component Factory `conversation.session.panel.details` 提供：用 `HoverCard` 包住行，并把 `renderFactorySlot('conversation.session.panel.details', { title, lines, status, facts })` 作为它的 `content`。所有属性都是可选的数据。`title` 是行的完整名称，可以换行；名称可能很长（例如命令）而行自己的视图会完整显示它时，不要传。`lines` 是负责人等次要文字行，每行最多显示六行。`status` 是 `StateDot` 的状态及其文字。`facts` 是排在一行里的度量，每种 `kind` 最多一个：`tokens` 前面是数据库图标，`duration` 前面是时钟图标，各带自己的 `label`。卡片内容在两种主题下都使用卡片的深色底面。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -84,6 +86,7 @@ kind: "package-reference"
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、停靠探针，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
 | [`src/client/PanelFold.tsx`](src/client/PanelFold.tsx) | 被收起列表的收起控件，以 Component Factory 提供 |
+| [`src/client/PanelDetails.tsx`](src/client/PanelDetails.tsx) | 行的悬停卡片里的详情，以 Component Factory 提供 |
 
 </details>
 

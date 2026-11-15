@@ -5,6 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -52,7 +53,38 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * decides which rows show.
      */
     'conversation.session.panel.fold': { scope: 'root'; props: PanelFoldProps }
+    /**
+     * The details of one panel row, for the content of the row's HoverCard: the
+     * row's full name, secondary lines such as its owner, its state, and its
+     * measures. A row whose single line clips or leaves these out shows them
+     * here.
+     */
+    'conversation.session.panel.details': { scope: 'root'; props: PanelDetailsProps }
   }
+}
+
+/** What a panel row's hover card says about the row. */
+export interface PanelDetailsProps {
+  /**
+   * The full name of what the row shows; it wraps instead of clipping. Omit it
+   * when the name can run long, such as a command, and the row's own view
+   * shows it in full.
+   */
+  readonly title?: string | undefined
+  /** Lines in secondary type under the title, such as the owner; each stops after six lines. */
+  readonly lines?: readonly string[] | undefined
+  /** The state, after its dot. */
+  readonly status?: { readonly state: StateDotState; readonly label: string } | undefined
+  /** Measures on one line, at most one of each kind. */
+  readonly facts?: readonly PanelDetailsFact[] | undefined
+}
+
+/** One measure in a panel row's hover card. */
+export interface PanelDetailsFact {
+  /** What the measure counts, which selects its icon: a database for `tokens`, a clock for `duration`. */
+  readonly kind: 'tokens' | 'duration'
+  /** The measure as the card shows it, such as "3.3M tok" or "6m 56s". */
+  readonly label: string
 }
 
 /** Props of the fold control that ends a folded panel list. */

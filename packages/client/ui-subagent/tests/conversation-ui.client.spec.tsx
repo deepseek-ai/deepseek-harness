@@ -18,6 +18,7 @@ import {
 import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer.tsx'
 import { createSubagentsSectionStore } from '../src/client/subagents-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import type { PanelDetailsProps, PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 
 afterEach(() => {
   cleanup()
@@ -188,7 +189,7 @@ async function hoverDetailsOf(row: HTMLElement): Promise<string[] | null> {
   const anchor = row.parentElement as HTMLElement
   fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
   await act(async () => { await vi.advanceTimersByTimeAsync(500) })
-  const card = document.querySelector('[data-hover-details]')
+  const card = document.querySelector('[data-session-panel-details]')
   const lines = card === null ? null : [...card.children].map(child => child.textContent ?? '')
   fireEvent.pointerLeave(anchor, { pointerType: 'mouse' })
   await act(async () => { await vi.advanceTimersByTimeAsync(400) })
@@ -210,11 +211,23 @@ function HeaderCatalog({ store, ...props }: HeaderCatalogProps) {
 }
 
 /**
- * The Session panel's fold control Factory as these suites render it: a button with its state, name, and label.
- * ui-session-panel's own suite owns the control's markup.
+ * The Session panel's Factories as these suites render them: the fold control as a button with its state, name, and
+ * label, and a row's details as one element per part in order. ui-session-panel's own suite owns their markup.
  */
-function renderFold(_name: string, input: { expanded: boolean; label: string; name: string; onToggle: () => void }) {
-  return <button type="button" data-fold="" aria-expanded={input.expanded} aria-label={input.name} onClick={input.onToggle}>{input.label}</button>
+function renderPanelFactory(name: string, input: object) {
+  if (name === 'conversation.session.panel.details') {
+    const { title, lines = [], status, facts = [] } = input as PanelDetailsProps
+    return (
+      <div data-session-panel-details="">
+        {title !== undefined && <div>{title}</div>}
+        {lines.map(line => <div key={line}>{line}</div>)}
+        {status !== undefined && <div data-state={status.state}>{status.label}</div>}
+        {facts.length > 0 && <div>{facts.map(fact => <span key={fact.kind} data-fact={fact.kind}>{fact.label}</span>)}</div>}
+      </div>
+    )
+  }
+  const fold = input as PanelFoldProps
+  return <button type="button" data-fold="" aria-expanded={fold.expanded} aria-label={fold.name} onClick={fold.onToggle}>{fold.label}</button>
 }
 
 /** The section with the panel owner values, its Session's store (a fresh one unless given), and the fold control. */
@@ -222,7 +235,7 @@ function Section({ store, dismissOverlay, ...props }: Omit<HeaderCatalogProps, '
   const [own] = useState(() => store ?? createSubagentsSectionStore().create())
   const [useStore] = useState(() => bindSnapshotSelector(own))
   const sectionProps = {
-    ...props, presentation: 'docked', dismissOverlay: dismissOverlay ?? vi.fn(), useStore, actions: own.actions, renderFactorySlot: renderFold,
+    ...props, presentation: 'docked', dismissOverlay: dismissOverlay ?? vi.fn(), useStore, actions: own.actions, renderFactorySlot: renderPanelFactory,
   } as SubagentsSectionProps
   return <SubagentsSection {...sectionProps} />
 }

@@ -61,6 +61,8 @@ Leave out a part the row does not have: a `<button>` body or a menu part is what
 
 A section whose list can grow long folds it. It shows the first five rows of the list, or of each group the list has, and then a fold control as the last row, which shows the rest or folds them again. A list folds only when that holds back two rows or more, since the control takes a row itself, and it orders its rows so that the ones it holds back are the least current. The plugin offers the control as the `conversation.session.panel.fold` Component Factory: `renderFactorySlot('conversation.session.panel.fold', { expanded, label, name, onToggle })` renders a row marked `data-session-panel-row="fold"` whose body is the button, in the 12px tertiary type of the section counts, with a 14px chevron in the icon column that points down while rows are held back and up once they all show. `label` is the visible text for the current state, such as “Show 14 more” or “Show less”, and `name` is the accessible name, which starts with `label` and names what the list holds. The section keeps the fold state and decides which rows show; a store declared on its registration keeps the choice while the panel is hidden.
 
+A row whose single line clips its name or leaves out its owner, state, or measures shows them in a hover card. The plugin offers the card's content as the `conversation.session.panel.details` Component Factory: wrap the row in a `HoverCard` and pass `renderFactorySlot('conversation.session.panel.details', { title, lines, status, facts })` as its `content`. Every prop is optional data. `title` is the row's full name, which wraps; leave it out when the name can run long, such as a command, and the row's own view shows it in full. `lines` are secondary lines such as the owner, each stopping after six lines. `status` is a `StateDot` state with its label. `facts` are measures on one line, at most one of each `kind`: `tokens` after a database icon and `duration` after a clock, each with its `label`. The details use the card's dark surface in both themes.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -84,6 +86,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | The panel's geometry, the dock probe, and the rules for marked rows |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
 | [`src/client/PanelFold.tsx`](src/client/PanelFold.tsx) | The fold control of a folded list, offered as a Component Factory |
+| [`src/client/PanelDetails.tsx`](src/client/PanelDetails.tsx) | The details in a row's hover card, offered as a Component Factory |
 
 </details>
 

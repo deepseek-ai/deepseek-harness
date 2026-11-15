@@ -4,7 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TeamProjection, TeamTaskView, TeamTaskId } from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular,
+  HoverCard, HoverCardGroup, IconChevronDownOutlineRegular,
   StateDot, Tooltip, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -71,7 +71,7 @@ function progressLabel(tasks: readonly VisibleTask[], t: TeamBoardProps['t']): s
   ].join('\u2002·\u2002')
 }
 
-function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, 't'> & {
+function TaskRow({ task, rootId, expanded, onToggle, renderFactorySlot, t }: Pick<TeamBoardProps, 'renderFactorySlot' | 't'> & {
   task: VisibleTask
   rootId: SessionId
   expanded: boolean
@@ -103,13 +103,11 @@ function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, '
             <span className={css.chevron} aria-hidden><IconChevronDownOutlineRegular size={14} /></span>
           </button>
         )}
-        content={(
-          <HoverDetails
-            title={task.subject}
-            lines={[t('hover.owner', { name: owner }), ...task.description ? [task.description] : []]}
-            status={{ state, label: status }}
-          />
-        )}
+        content={renderFactorySlot('conversation.session.panel.details', {
+          title: task.subject,
+          lines: [t('hover.owner', { name: owner }), ...task.description ? [task.description] : []],
+          status: { state, label: status },
+        })}
       />
       {expanded && (
         <div className={css.details} id={detailsId} data-team-task-details>
@@ -160,6 +158,7 @@ export function TeamBoard({ sessionId, useProjection, useStore, actions, renderF
                 key={task.id} task={task} rootId={sessionId}
                 expanded={expandedTaskId === task.id}
                 onToggle={() => { setExpandedTaskId(current => current === task.id ? null : task.id) }}
+                renderFactorySlot={renderFactorySlot}
                 t={t}
               />
             ))}

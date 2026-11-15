@@ -589,7 +589,7 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await row.getByText('team-panel-researcher', { exact: true }).count()).toBe(0)
       expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       await primary.hover()
-      const card = page.locator('[data-hover-details]')
+      const card = page.locator('[data-session-panel-details]')
       await card.waitFor()
       expect(await card.evaluate(element => [...element.children].slice(0, 2).map(child => child.textContent)))
         .toEqual([RESEARCHER_DESCRIPTION, 'Owner: team-panel-researcher'])

@@ -1,6 +1,7 @@
-/* A row's hover card body, on the HoverCard's dark surface in both themes: the
-   title in primary ink, lines in secondary ink, then the state and measures in
-   tertiary ink, as the sidebar's Session hover card sets them. */
+/* The details of a panel row in its HoverCard, on the card's dark surface in
+   both themes: the title in primary ink, lines in secondary ink, then the
+   state and measures in tertiary ink, as the sidebar's Session hover card sets
+   them. */
 .details {
   display: flex;
   flex-direction: column;

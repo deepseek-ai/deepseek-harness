@@ -1,5 +1,5 @@
 /** Subagent catalog tree shared by the Session panel section and the breadcrumb switcher. */
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import type {
   SessionListState, SessionProjectionMap, SessionProjectionSnapshot, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -7,9 +7,9 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-s
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  HoverCard, HoverDetails, IconCheckOutlineRegular, IconChevronRightOutlineRegular, IconClockOutlineRegular, IconDatabaseOutlineRegular,
-  IconRefreshOutlineRegular, StateDot, Tooltip,
+  HoverCard, IconCheckOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
@@ -46,8 +46,7 @@ interface CatalogRowsProps {
   refreshProjection: (parentSessionId: SessionId) => void
   toggleBranch: (childSessionId: SessionId) => void
   closeCatalog: () => void
-  /** One-line rows whose name, owner, state, and measures show in a hover card. */
-  dense: boolean
+  panelDetails: CatalogTreeProps['panelDetails']
 }
 
 /**
@@ -221,8 +220,9 @@ function catalogProgress(entries: SubagentCatalogSnapshot['entries'], summaries:
 /** Render one catalog level and recurse only through explicitly expanded rows. */
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
-  openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, dense, t,
+  openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, panelDetails, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
+  const dense = panelDetails !== undefined
   const [now, setNow] = useState(() => Date.now())
   const running = catalog.entries.some(entry => entry.activity === 'running')
   useEffect(() => {
@@ -399,17 +399,15 @@ function CatalogRows({
             </div>
           </div>
         )
-        const details = (
-          <HoverDetails
-            title={primaryLabel}
-            lines={secondaryLabel === undefined ? [] : [t('hover.owner', { name: secondaryLabel })]}
-            status={{ state: dotState, label: [activity, mode].filter(value => value !== undefined).join(' · ') }}
-            facts={[
-              ...tokenMetric === undefined ? [] : [{ icon: <IconDatabaseOutlineRegular />, label: tokenMetric }],
-              ...durationMetric === undefined ? [] : [{ icon: <IconClockOutlineRegular />, label: durationMetric.exact }],
-            ]}
-          />
-        )
+        const details = panelDetails?.({
+          title: primaryLabel,
+          lines: secondaryLabel === undefined ? [] : [t('hover.owner', { name: secondaryLabel })],
+          status: { state: dotState, label: [activity, mode].filter(value => value !== undefined).join(' · ') },
+          facts: [
+            ...tokenMetric === undefined ? [] : [{ kind: 'tokens' as const, label: tokenMetric }],
+            ...durationMetric === undefined ? [] : [{ kind: 'duration' as const, label: durationMetric.exact }],
+          ],
+        })
 
         return (
           <div key={entry.id} className={css.node}>
@@ -438,7 +436,7 @@ function CatalogRows({
                   refreshProjection={refreshProjection}
                   toggleBranch={toggleBranch}
                   closeCatalog={closeCatalog}
-                  dense={dense}
+                  panelDetails={panelDetails}
                   t={t}
                 />
               </div>
@@ -521,8 +519,12 @@ export interface CatalogTreeProps {
   onOpened: () => void
   /** Focus the first row on mount, as a keyboard-opened popover does. */
   focusFirst?: boolean
-  /** One-line rows whose name, owner, state, and measures show in a hover card, as the Session panel lists them. */
-  dense?: boolean
+  /**
+   * Renders the Session panel's row details. With it the tree lists one-line
+   * rows, as the Session panel does, and each row shows its name, owner,
+   * state, and measures in a hover card.
+   */
+  panelDetails?: ((details: PanelDetailsProps) => ReactNode) | undefined
   t: TranslateNS<typeof NS>
 }
 
@@ -535,7 +537,7 @@ export interface CatalogTreeProps {
  */
 export function CatalogTree({
   rootSessionId, currentSessionId, catalog, catalogs, summaries,
-  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, dense = false, t,
+  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, panelDetails, t,
 }: CatalogTreeProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
   const treeRef = useRef<HTMLDivElement>(null)
@@ -592,7 +594,7 @@ export function CatalogTree({
         refreshProjection={prepareLevel}
         toggleBranch={toggleBranch}
         closeCatalog={onOpened}
-        dense={dense}
+        panelDetails={panelDetails}
         t={t}
       />
     </div>
