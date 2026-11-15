@@ -24,7 +24,7 @@ API 密钥通过 `@deepseek-ai/dsh-credentials` 的 `resolveCredentialRef` 和 `
 
 `@deepseek-ai/dsh-deepseek-account` 向鉴权服务释放请求凭据。`resolveRequestCredential(url)` 返回 `x-dsh-auth-token` 请求头、`reject()` 和 `revoked` 信号；`reject()` 仅在已存储的授权记录仍一致时删除它并隔离存储失败，`revoked` 由账号服务在每次退登时、`deepseek-account/signed-out` 的监听器返回之后中止。`registerRunningTaskReport(report)` 为 `hasRunningAccountTasks()` 提供答案。账号服务不检查任何 Agent，也不依赖 `dsh-agent`、`dsh-llm` 或鉴权服务。包以不变的名字位于 `packages/account/` 组。
 
-Web 提供方声明各自的 API 接受什么。`web-deepseek-api` 以 `accepts: ['account', 'api-key']`、该能力的计费设置、会话的路由，以及路径 `/v1/tools/search` 或 `/v1/tools/fetch` 索取候选；设置了自己的 `*BaseURL` 或 `*ApiKeyEnv` 的能力以 `accepts: ['api-key']` 和自己的连接索取，因此发往该端点的只有那把密钥。`web-search-deepseek` 把搜索端点作为绝对目的地传入，把它引用的密钥作为自己的连接传入。在账号路由上的会话里，它以 `auto` 计费索取，因此当搜索端点位于账号部署的 origin 之下时先尝试账号登录；其他搜索都以 `api-key` 计费索取。字面 `apiKey` 是该提供方自己的凭据：有它时提供方只索取账号登录，服务不释放任何凭据时发送字面密钥。两个 Web 消费方都依据候选来措辞凭据缺失和设置无法解析的失败，都隔离失败的 `reject()` 以保证报告的是 HTTP 拒绝，都让请求受授权的 `revoked` 信号约束，并把被该信号结束的请求报告为带登录指引的 `WEB_PROVIDER_ERROR`，`WEB_ABORTED` 仍只表示调用方取消。两个 Web 包都不依赖 `llm-deepseek`、路由插件、Loader、`dsh-llm` 或账号服务。
+Web 提供方声明各自的 API 接受什么。`web-deepseek-api` 以 `accepts: ['account', 'api-key']`、该能力的计费设置、会话的路由，以及路径 `/v1/tools/search` 或 `/v1/tools/fetch` 索取候选；设置了自己的 `*BaseURL` 或 `*ApiKeyEnv` 的能力以 `accepts: ['api-key']` 和自己的连接索取，因此发往该端点的只有那把密钥。`web-search-deepseek` 把搜索端点作为绝对目的地传入，把它引用的密钥作为自己的连接传入。在账号路由上的会话里，它以 `auto` 计费索取，因此当搜索端点位于账号部署的 origin 之下时先尝试账号登录；其他搜索都以 `api-key` 计费索取。字面 `apiKey` 是该提供方自己的凭据：有它时提供方只索取账号登录，服务不释放任何凭据时发送字面密钥。`web-deepseek-api` 依据候选来措辞凭据缺失和设置无法解析的失败。两个 Web 消费方都隔离失败的 `reject()` 以保证报告的是 HTTP 拒绝，都让请求受授权的 `revoked` 信号约束，并把被该信号结束的请求报告为带登录指引的 `WEB_PROVIDER_ERROR`，`WEB_ABORTED` 仍只表示调用方取消。两个 Web 包都不依赖 `llm-deepseek`、路由插件、Loader、`dsh-llm` 或账号服务。
 
 ## 考虑过的替代方案
 
@@ -64,6 +64,6 @@ Web 提供方声明各自的 API 接受什么。`web-deepseek-api` 以 `accepts:
 
 其他 DeepSeek API 的消费方只声明该 API 接受的种类；它不读取凭据、不组装请求头，也不保留回退逻辑。某个 API 新增一种凭据时，它的消费方扩充 `accepts`。新增凭据种类意味着在服务里加一个来源，并为 `DeepSeekAuthKind` 加一个成员。传输层、模型服务、Web 提供方和账号服务在凭据上互不依赖，`hasRunningAccountTasks()` 依赖注册的报告而非账号服务可见的 Agent。`llm-deepseek` 的凭据辅助函数和路由插件的配置导出不复存在；[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/deepseek-request-auth/guide.zh.md)列出了替代方案。
 
-凡是挂载 DeepSeek 模型路由或 DeepSeek Web 提供方的组合都要挂载该服务；没有它时这些插件一直等待，不注册任何东西。`base` 和 `sdk-minimal` 两个组合包带有它的条目，SDK 服务端在组合里没有它时随后备路由一起挂载它。每个种类一个部署意味着对同一种类第二次 `connect()` 会抛出 `DUPLICATE_CONNECTION`，而 `auto` 计费只认识那两个固定的路由 id：经由其他提供方插件访问的 DeepSeek 模型按其他路由处理。路由的配置失败以未解析候选的形式到达消费方，Web 提供方将其报告为 `WEB_PROVIDER_MISCONFIGURED`。不可用的密钥在 Web 工具的结果里以错误名 `DeepSeekAuthError` 出现。
+凡是挂载 DeepSeek 模型路由或 DeepSeek Web 提供方的组合都要挂载该服务；没有它时这些插件一直等待，不注册任何东西。`base` 和 `sdk-minimal` 两个组合包带有它的条目，SDK 服务端在组合里没有它时随后备路由一起挂载它。每个种类一个部署意味着对同一种类第二次 `connect()` 会抛出 `DUPLICATE_CONNECTION`，而 `auto` 计费只认识那两个固定的路由 id：经由其他提供方插件访问的 DeepSeek 模型按其他路由处理。路由的配置失败以未解析候选的形式到达消费方：Search 与 Fetch API 将其报告为 `WEB_PROVIDER_MISCONFIGURED`，Messages 搜索报告为 `WEB_PROVIDER_ERROR`，二者都不再尝试后面的凭据。不可用的密钥在 Web 工具的结果里以错误名 `DeepSeekAuthError` 出现。
 
 退登会结束携带账号 token 的在途模型、Files、Search 与 Fetch 请求，包括不属于任何 Agent 回合的请求，例如回合之外的模型请求或按账号计费的 Web 搜索；账号列表请求仍只受自身期限约束。该信号是对[账号退登决策](2026-09-17-account-provider-signout.zh.md)中 Agent 取消链路的补充；那份决策以重复该链路为由否决了登录级信号，而该链路只能经由已挂载的监听和运行中的 Agent 回合到达请求。账号路由被停用期间，它此前启动且仍在运行的任务不会报告给退登确认，退登也只能通过在途的模型请求结束它。已被替换的账号服务释放的凭据不会被替换后服务的退登撤回；路由插件的监听仍会取消 Agent 回合。
