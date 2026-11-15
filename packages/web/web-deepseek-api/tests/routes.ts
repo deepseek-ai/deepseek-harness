@@ -18,11 +18,11 @@ export interface RouteRow {
   /** Route plugin config; the route package's own resolver turns it into the connected base URL and key reference. */
   config?: Record<string, unknown>
   /** Connect no deployment, as an adapter another package registers under this id does. Defaults to false. */
-  withoutCredential?: boolean
+  withoutConnection?: boolean
   /** Value the route's settings throw instead of resolving. */
   throws?: unknown
   /** Base URL connected in place of the resolved one, as route settings naming an unparsable base would. */
-  publishedBaseURL?: string
+  connectedBaseURL?: string
 }
 
 /**
@@ -32,16 +32,16 @@ export interface RouteRow {
  */
 export function provideRoutes(ctx: Context, routes: readonly RouteRow[]): void {
   for (const route of routes) {
-    if (route.withoutCredential === true) continue
+    if (route.withoutConnection === true) continue
     ctx.effect(() => ctx.deepseekAuth.connect(route.provider === 'deepseek-official' ? 'api-key' : 'account', () => {
       if (route.throws !== undefined) throw route.throws
       const environment = launchEnvironmentOf(ctx)
       if (route.provider === 'deepseek-official') {
         const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
-        return { baseURL: route.publishedBaseURL ?? resolved.baseURL, reference: resolved.apiKeyEnv, owner: 'llm-deepseek' }
+        return { baseURL: route.connectedBaseURL ?? resolved.baseURL, reference: resolved.apiKeyEnv, owner: 'llm-deepseek' }
       }
       const resolved = resolveAccountOptions(plainAccountOptions(AccountConfig(route.config ?? {})), environment)
-      return { baseURL: route.publishedBaseURL ?? resolved.protocol.baseURL }
+      return { baseURL: route.connectedBaseURL ?? resolved.protocol.baseURL }
     }))
   }
 }

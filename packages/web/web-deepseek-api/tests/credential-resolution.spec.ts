@@ -358,7 +358,7 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
   it.each<[string, readonly RouteRow[] | undefined]>([
     ['no model service is mounted', undefined],
     ['no route registers deepseek-official', [accountRoute()]],
-    ['the registered deepseek-official adapter connects no deployment', [{ provider: 'deepseek-official', config: { apiKeyEnv: 'TEAM_KEY' }, withoutCredential: true }]],
+    ['the registered deepseek-official adapter connects no deployment', [{ provider: 'deepseek-official', config: { apiKeyEnv: 'TEAM_KEY' }, withoutConnection: true }]],
   ])('sends DEEPSEEK_API_KEY to the official base when %s', async (_label, routes) => {
     const { ctx, sent } = await mount({
       ...routes === undefined ? {} : { routes },
@@ -694,7 +694,7 @@ describe('model route settings failures', () => {
 
   it('reports a route whose base URL does not parse as misconfigured, before readiness and without sending', async () => {
     const { ctx, sent } = await mount({
-      routes: [{ provider: 'deepseek-official', publishedBaseURL: 'not a url' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
+      routes: [{ provider: 'deepseek-official', connectedBaseURL: 'not a url' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
     })
     expect(await ready(ctx, 'search', 'deepseek-official')).toBe(false)
     const failure = operate(ctx, 'search', 'deepseek-official')
