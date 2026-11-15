@@ -7,7 +7,7 @@ import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-jo
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { JobsRunningIndicator, JobsSection, type JobsRunningIndicatorProps, type JobsSectionProps } from '../src/client/JobsSection.tsx'
 import { createJobsSectionStore } from '../src/client/jobs-store.ts'
-import { zh, ru } from '../src/client/locales.ts'
+import { en, zh, ru } from '../src/client/locales.ts'
 
 beforeEach(() => {
   class TooltipObserver implements ResizeObserver {
@@ -60,6 +60,14 @@ function outputJob(over: Partial<JobView> = {}): JobView {
 /** One Session's section store, as the registration mints it. */
 type SectionStore = ReturnType<ReturnType<typeof createJobsSectionStore>['create']>
 
+/**
+ * The Session panel's fold control Factory as this suite renders it: a button with its state, name, and label.
+ * ui-session-panel's own suite owns the control's markup.
+ */
+function renderFold(_name: string, input: { expanded: boolean; label: string; name: string; onToggle: () => void }) {
+  return <button type="button" data-fold="" aria-expanded={input.expanded} aria-label={input.name} onClick={input.onToggle}>{input.label}</button>
+}
+
 /** Test-local selector hook over a framework-neutral store instance. */
 function hookOf<T>(instance: { subscribe: (listener: () => void) => () => void; getSnapshot: () => T }) {
   return function useSelector<S>(select: (state: T) => S): S {
@@ -82,9 +90,9 @@ function props(
   }
   return {
     sessionId: SESSION, useJobs, watchRows, observe, killJob, useStore: hookOf(store), actions: store.actions, t,
-    useAccess: () => mayKill,
+    useAccess: () => mayKill, renderFactorySlot: renderFold,
   } as Pick<JobsSectionProps,
-    'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't' | 'useAccess'> as JobsSectionProps
+    'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't' | 'useAccess' | 'renderFactorySlot'> as JobsSectionProps
 }
 
 describe('JobsRunningIndicator', () => {
@@ -257,7 +265,7 @@ describe('JobsSection rows', () => {
     expect(items[2]?.textContent).toContain('exit code: 3')
   })
 
-  it('orders live rows first by start and settled rows newest-first with tie-breaks', () => {
+  it('orders live rows first by latest start and settled rows newest-first with tie-breaks', () => {
     const settled = (id: string, label: string, startedAt: number, finishedAt?: number): JobView =>
       job({
         id: id as JobView['id'],
@@ -281,7 +289,7 @@ describe('JobsSection rows', () => {
       .map(item => item.querySelector('[data-job-label]')?.textContent)
       .filter((label): label is string => label != null)
     expect(labels).toEqual([
-      'live-2', 'live-1', 'settled-d', 'settled-a', 'settled-c', 'settled-b', 'settled-e',
+      'live-1', 'live-2', 'settled-d', 'settled-a', 'settled-c', 'settled-b', 'settled-e',
     ])
     expect(screen.getAllByText(`bash · ${zh['status.completed']}`).length).toBeGreaterThan(0)
   })
@@ -342,6 +350,122 @@ describe('JobsSection rows', () => {
     const toggle = screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })
     expect(toggle.lastElementChild?.tagName.toLowerCase()).toBe('svg')
     expect(toggle.firstChild?.nodeType).toBe(Node.TEXT_NODE)
+  })
+})
+
+describe('JobsSection group folds', () => {
+  /** Live jobs named `live-<n>`, a higher n started later. */
+  const live = (count: number): JobView[] => Array.from({ length: count }, (_, index) =>
+    outputJob({ id: `live-${index}` as JobView['id'], label: `live-${index}`, startedAt: 1_700_000_000_000 + index }))
+  /** Settled jobs named `done-<n>`, a higher n finished later. */
+  const done = (count: number): JobView[] => Array.from({ length: count }, (_, index) =>
+    outputJob({ id: `done-${index}` as JobView['id'], label: `done-${index}`, status: 'completed', finishedAt: 1_700_000_100_000 + index }))
+  /** The list's items in order: a job's label, the settled header as `{…}`, a fold control as `[…]`. */
+  const items = (): string[] => within(screen.getByRole('list')).getAllByRole('listitem').map((item) => {
+    const control = item.querySelector('[data-fold]')
+    if (control !== null) return `[${control.textContent}]`
+    return item.querySelector('[data-job-label]')?.textContent ?? `{${item.querySelector('button')?.textContent ?? ''}}`
+  })
+  const folds = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-fold]')]
+  const settledToggle = (count: number): HTMLElement => screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', String(count)) })
+
+  it('shows six live rows in full and holds two back from seven, behind the group fold control before the settled header', () => {
+    const six = render(<JobsSection {...props([...live(6), ...done(1)])} />)
+    expect(items()).toEqual(['live-5', 'live-4', 'live-3', 'live-2', 'live-1', 'live-0', '{已结束 1}'])
+    six.unmount()
+    render(<JobsSection {...props([...live(7), ...done(1)])} />)
+    // The most recently started rows stay; the control is the group's last row, an item of the list.
+    expect(items()).toEqual(['live-6', 'live-5', 'live-4', 'live-3', 'live-2', '[显示其余 2 个运行中]', '{已结束 1}'])
+    const control = folds()[0] as HTMLElement
+    expect([control.getAttribute('aria-label'), control.getAttribute('aria-expanded')]).toEqual(['显示其余 2 个运行中（运行中的后台任务）', 'false'])
+    fireEvent.click(control)
+    expect(items()).toEqual(['live-6', 'live-5', 'live-4', 'live-3', 'live-2', 'live-1', 'live-0', '[收起]', '{已结束 1}'])
+    expect([folds()[0]?.getAttribute('aria-label'), folds()[0]?.getAttribute('aria-expanded')]).toEqual(['收起（运行中的后台任务）', 'true'])
+    fireEvent.click(folds()[0] as HTMLElement)
+    expect(items()).toHaveLength(7)
+  })
+
+  it('folds the open settled group on its own, and offers no settled control while the group is closed', () => {
+    render(<JobsSection {...props([...live(7), ...done(8)])} />)
+    // Live work keeps the settled group closed: only the live group has a control.
+    expect(folds().map(control => control.textContent)).toEqual(['显示其余 2 个运行中'])
+    fireEvent.click(settledToggle(8))
+    expect(items().slice(6)).toEqual(['{已结束 8}', 'done-7', 'done-6', 'done-5', 'done-4', 'done-3', '[显示其余 3 个已结束]'])
+    const settled = folds()[1] as HTMLElement
+    expect(settled.getAttribute('aria-label')).toBe('显示其余 3 个已结束（已结束的后台任务）')
+    fireEvent.click(settled)
+    // Each control folds only its own group.
+    expect(items()).toEqual([
+      'live-6', 'live-5', 'live-4', 'live-3', 'live-2', '[显示其余 2 个运行中]',
+      '{已结束 8}', 'done-7', 'done-6', 'done-5', 'done-4', 'done-3', 'done-2', 'done-1', 'done-0', '[收起]',
+    ])
+    expect(folds()[1]?.getAttribute('aria-label')).toBe('收起（已结束的后台任务）')
+    fireEvent.click(settledToggle(8))
+    expect(folds()).toHaveLength(1)
+  })
+
+  it('shows six settled rows in full, and folds the group to its limit again after a clear', () => {
+    const store = createJobsSectionStore().create()
+    const first = render(<JobsSection {...props(done(6), undefined, {}, undefined, undefined, store)} />)
+    expect(items()).toHaveLength(7)
+    expect(folds()).toHaveLength(0)
+    first.unmount()
+    const second = render(<JobsSection {...props(done(9), undefined, {}, undefined, undefined, store)} />)
+    fireEvent.click(folds()[0] as HTMLElement)
+    expect(store.getSnapshot().unfolded).toEqual({ live: false, settled: true })
+    fireEvent.click(screen.getByRole('button', { name: zh['section.clear'] }))
+    expect(store.getSnapshot().unfolded).toEqual({ live: false, settled: false })
+    second.unmount()
+    // Rows that settle after the clear fold at the limit again.
+    const later = Array.from({ length: 7 }, (_, index) => outputJob({
+      id: `later-${index}` as JobView['id'], label: `later-${index}`, status: 'completed', finishedAt: 1_700_000_200_000 + index,
+    }))
+    render(<JobsSection {...props([...done(9), ...later], undefined, {}, undefined, undefined, store)} />)
+    expect(items()).toEqual(['{已结束 7}', 'later-6', 'later-5', 'later-4', 'later-3', 'later-2', '[显示其余 2 个已结束]'])
+  })
+
+  it('keeps a group unfolded when the section mounts again for the same Session', () => {
+    const store = createJobsSectionStore().create()
+    const first = render(<JobsSection {...props(live(8), undefined, {}, undefined, undefined, store)} />)
+    fireEvent.click(folds()[0] as HTMLElement)
+    first.unmount()
+    render(<JobsSection {...props(live(8), undefined, {}, undefined, undefined, store)} />)
+    expect(items()).toHaveLength(9)
+    expect(folds()[0]?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('stops observing an expanded row that folds out of the list, and observes it again once it shows', () => {
+    const stop = vi.fn()
+    const observe = vi.fn(() => stop)
+    render(<JobsSection {...props(live(7), observe)} />)
+    fireEvent.click(folds()[0] as HTMLElement)
+    // live-0 started first, so the fold holds it back.
+    fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'live-0') }))
+    expect(observe).toHaveBeenCalledExactlyOnceWith(SESSION, 'live-0')
+    fireEvent.click(folds()[0] as HTMLElement)
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('live-0')).toBeNull()
+    fireEvent.click(folds()[0] as HTMLElement)
+    expect(observe).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: zh['row.collapseAria'].replace('{label}', 'live-0') })).toBeDefined()
+  })
+
+  it('stops observing an expanded settled row while its group is closed', () => {
+    const stop = vi.fn()
+    const observe = vi.fn(() => stop)
+    render(<JobsSection {...props(done(2), observe)} />)
+    fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'done-1') }))
+    expect(observe).toHaveBeenCalledExactlyOnceWith(SESSION, 'done-1')
+    fireEvent.click(settledToggle(2))
+    expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(Object.entries({ zh, en }))('names each fold control with its visible text first in %s', (_locale, copy) => {
+    for (const group of ['live', 'settled'] as const) {
+      for (const label of [copy[`${group}.more`].replace('{count}', '3'), copy['fold.less']]) {
+        expect(copy[`${group}.foldName`].replace('{label}', label).startsWith(label)).toBe(true)
+      }
+    }
   })
 })
 

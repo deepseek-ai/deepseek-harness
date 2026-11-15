@@ -16,7 +16,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
+import { foldControlLayout, newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/background-job-list', import.meta.url))
@@ -245,6 +245,60 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     await row.getByText('bash · exit code: 3', { exact: true }).waitFor({ timeout: 15_000 })
     expect(await row.locator('[data-state]').getAttribute('data-state')).toBe('warning')
   })
+
+  it('holds back the rows past five in each group behind its fold control and keeps the choice while the panel is hidden', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-folds'))
+    // Seven jobs on the suite's barrier file: they run until this case, or `afterAll`, releases it.
+    for (let index = 0; index < 7; index++) {
+      await executeToolFixture(scaffold.ctx, {
+        signal: new AbortController().signal,
+        callId: brandString<ToolCallId>(`background-job-list-fold-${String(index)}`),
+        name: 'bash',
+        arguments: { command: `: fold-${String(index)}; ${COMMAND}`, description: 'Hold a slot for the fold', run_in_background: true },
+        agent,
+      })
+    }
+    const section = (await showSessionPanel(page)).locator(SECTION)
+    const rows = section.locator('[data-job-row]')
+    const liveRows = section.locator('[data-job-row]:has([data-state="ongoing"])')
+    const folds = section.locator('[data-session-panel-row="fold"]')
+    const names = async (): Promise<(string | undefined)[]> => (await liveRows.allTextContents()).map(text => /fold-\d/.exec(text)?.[0])
+    // The five jobs started last show, the most recent first, and the group's fold control follows them.
+    await expect.poll(names, { timeout: 20_000 }).toEqual(['fold-6', 'fold-5', 'fold-4', 'fold-3', 'fold-2'])
+    expect(await folds.allTextContents()).toEqual(['Show 2 more running'])
+    expect(await section.locator('li:has([data-session-panel-row="fold"])').count()).toBe(1)
+    // The control is one more row: the row height, its chevron under the state marks, its text under the commands.
+    expect(await foldControlLayout(folds.first(), liveRows.first(), '[data-job-label]'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    const more = section.getByRole('button', { name: 'Show 2 more running (running background jobs)', exact: true })
+    await more.click()
+    await expect.poll(names).toEqual(['fold-6', 'fold-5', 'fold-4', 'fold-3', 'fold-2', 'fold-1', 'fold-0'])
+    const less = section.getByRole('button', { name: 'Show less (running background jobs)', exact: true })
+    expect([await less.textContent(), await less.getAttribute('aria-expanded')]).toEqual(['Show less', 'true'])
+    // The same button stays under the pointer's focus across the change.
+    expect(await less.evaluate(element => element === document.activeElement)).toBe(true)
+    // The choice is the Session's: hiding the panel unmounts the section, and showing it again lists every live row.
+    await sessionPanelToggle(page).click()
+    await section.getByRole('list').waitFor({ state: 'detached' })
+    await showSessionPanel(page)
+    await expect.poll(() => liveRows.count(), { timeout: 10_000 }).toBe(7)
+
+    // Released, the jobs settle. With nothing live the settled group opens, with its five latest rows and its own control.
+    await writeFile(join(scaffold.workspaceCwd, RELEASE), '')
+    await expect.poll(() => liveRows.count(), { timeout: 30_000 }).toBe(0)
+    const header = section.getByRole('button', { name: /^Finished \d+$/ })
+    await expect.poll(async () => Number(/\d+/.exec(await header.textContent() ?? '')?.[0]), { timeout: 15_000 }).toBeGreaterThanOrEqual(7)
+    const settled = Number(/\d+/.exec(await header.textContent() ?? '')?.[0])
+    expect(await header.getAttribute('aria-expanded')).toBe('true')
+    await expect.poll(() => rows.count()).toBe(5)
+    expect(await folds.allTextContents()).toEqual([`Show ${String(settled - 5)} more finished`])
+    expect(await foldControlLayout(folds.first(), rows.first(), '[data-job-label]'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    await folds.first().getByRole('button').click()
+    await expect.poll(() => rows.count()).toBe(settled)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 120_000)
 
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['running.expected.md', 'settled.expected.md'])

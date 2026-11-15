@@ -5,8 +5,8 @@ import {
   HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular, IconClockOutlineRegular, IconStopFillRegular, MarqueeText,
   StateDot, type StateDotState, TerminalBlock, type TerminalBlockLabels, Tooltip, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { createJobsSectionStore } from './jobs-store.ts'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { createJobsSectionStore, JobGroup } from './jobs-store.ts'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import css from './JobsSection.module.css'
@@ -41,6 +41,7 @@ export interface JobsSectionInjected {
 /** Full props for the Session panel's background-jobs section. */
 export type JobsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
+  & PropsRenderFactories
   & PropsLocale<typeof NS>
   & InjectFace<JobsSectionInjected>
   & PropsStore<ReturnType<typeof createJobsSectionStore>>
@@ -56,6 +57,9 @@ export type JobsRunningIndicatorProps =
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
+
+/** Rows a group shows before its fold control holds the rest back. */
+const FOLD_LIMIT = 5
 
 /** How long an armed kill waits for its confirming press before disarming. */
 const KILL_ARM_MS = 3_000
@@ -162,15 +166,16 @@ function terminalLabels(t: TranslateNS<typeof NS>): TerminalBlockLabels {
 }
 
 /**
- * Live rows first in start order, then settled rows newest-first. Two rows
- * that settled in the same millisecond fall back to start order, so the sort
- * never depends on the host's map iteration.
+ * Live rows first, the most recently started first, then settled rows
+ * newest-first, so the rows a group holds back past its limit are its oldest.
+ * Two rows that settled in the same millisecond fall back to start order, so
+ * the sort never depends on the host's map iteration.
  */
 function ordered(jobs: readonly JobView[]): JobView[] {
   return [...jobs].sort((left, right) => {
     const liveLeft = isLive(left)
     if (liveLeft !== isLive(right)) return liveLeft ? -1 : 1
-    if (liveLeft) return left.startedAt - right.startedAt
+    if (liveLeft) return right.startedAt - left.startedAt
     const finished = (right.finishedAt ?? right.startedAt) - (left.finishedAt ?? left.startedAt)
     return finished !== 0 ? finished : left.startedAt - right.startedAt
   })
@@ -320,15 +325,20 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  * the session's roster stream open; it renders nothing until the session can
  * see at least one job, so the panel hides the section with its title. Live
  * rows come first; settled rows fold under a count that expands and clears
- * client-side. Expanding an observable row (a live job, or a settled one with
- * retained output) starts its observation stream, and collapsing stops it —
- * output only flows while someone is watching. A running row carries a
- * two-press stop button that requests a human kill through the job controller.
+ * client-side. Each of the two groups shows five rows and then a fold control
+ * that shows the rest, once that holds back two rows or more; the choice is
+ * kept per Session. Expanding an observable row (a live job, or a settled one
+ * with retained output) starts its observation stream, and collapsing it or
+ * folding it out of the list stops it — output only flows while someone is
+ * watching. A running row carries a two-press stop button that requests a
+ * human kill through the job controller.
  * @param props - runtime slot currency, the jobs snapshot hook, the roster,
- *   observation, and kill controls, and the namespace translator.
+ *   observation, and kill controls, the fold store, and the namespace translator.
  * @returns the job list, or null when there is nothing to show.
  */
-export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, useStore, actions, t, useAccess }: JobsSectionProps) {
+export function JobsSection({
+  sessionId, useJobs, watchRows, observe, killJob, useStore, actions, renderFactorySlot, t, useAccess,
+}: JobsSectionProps) {
   // The stop control follows job/kill; a reader that may list a job but not stop it sees the row only.
   const mayKill = useAccess('job/kill')
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
@@ -341,6 +351,7 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
   // Rows the user cleared from the settled tail (client-side hide only; the
   // registry keeps its records and a later settlement reappears normally).
   const cleared = useStore(state => state.cleared)
+  const unfolded = useStore(state => state.unfolded)
   // One kill affordance advances at a time: arming a row disarms any other.
   const [killPhase, setKillPhase] = useState<{ key: string; state: Exclude<KillState, 'idle'> } | undefined>(undefined)
 
@@ -351,6 +362,12 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
     [rows, cleared],
   )
   const settledExpanded = settledOpen ?? liveRows.length === 0
+  // Folding holds back two rows or more, since the fold control takes a row itself.
+  const liveFoldable = liveRows.length > FOLD_LIMIT + 1
+  const shownLive = liveFoldable && !unfolded.live ? liveRows.slice(0, FOLD_LIMIT) : liveRows
+  const settledFoldable = settledRows.length > FOLD_LIMIT + 1
+  const openSettled = settledExpanded ? settledRows : NO_JOBS
+  const shownSettled = settledFoldable && !unfolded.settled ? openSettled.slice(0, FOLD_LIMIT) : openSettled
 
   // The roster follows the mounted section: one stream while it lives, released with it.
   useEffect(() => watchRows(sessionId), [sessionId, watchRows])
@@ -364,8 +381,11 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
   }, [liveRows.length])
 
   // Observation follows visibility: the stream opens when an observable panel
-  // expands and closes when it collapses or the section unmounts.
-  const expandedRow = expandedKey === undefined ? undefined : rows.find(job => String(job.id) === expandedKey)
+  // expands and closes when it collapses, its row folds out of the list, or
+  // the section unmounts.
+  const expandedRow = expandedKey === undefined
+    ? undefined
+    : [...shownLive, ...shownSettled].find(job => String(job.id) === expandedKey)
   const activeJob = expandedRow !== undefined && isObservable(expandedRow) ? expandedRow.id : undefined
   useEffect(() => {
     if (activeJob === undefined) return
@@ -441,12 +461,28 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
     />
   )
 
+  /** The fold control of one group, as the group's last row. */
+  const fold = (group: JobGroup, hidden: number) => {
+    const label = unfolded[group] ? t('fold.less') : t(`${group}.more`, { count: hidden })
+    return (
+      <li key={`fold-${group}`} className={css.item}>
+        {renderFactorySlot('conversation.session.panel.fold', {
+          expanded: unfolded[group],
+          label,
+          name: t(`${group}.foldName`, { label }),
+          onToggle: () => { actions.unfoldedSet(group, !unfolded[group]) },
+        })}
+      </li>
+    )
+  }
+
   return (
     // Moving between rows swaps their hover cards without another dwell.
     <HoverCardGroup>
       {/* The section's heading names the region; a list name would repeat it. */}
       <ul className={css.list} data-jobs-section="">
-        {liveRows.map(item)}
+        {shownLive.map(item)}
+        {liveFoldable ? fold('live', liveRows.length - FOLD_LIMIT) : null}
         {settledRows.length > 0
           ? (
             <li className={css.sectionHeader}>
@@ -465,7 +501,8 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
             </li>
           )
           : null}
-        {settledExpanded ? settledRows.map(item) : null}
+        {shownSettled.map(item)}
+        {settledExpanded && settledFoldable ? fold('settled', settledRows.length - FOLD_LIMIT) : null}
       </ul>
     </HoverCardGroup>
   )
