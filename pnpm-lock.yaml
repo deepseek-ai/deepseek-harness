@@ -19268,6 +19268,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
+      '@deepseek-ai/dsh-deepseek-auth':
+        specifier: workspace:*
+        version: link:../../account/deepseek-auth
       '@deepseek-ai/dsh-launch-environment':
         specifier: workspace:*
         version: link:../../util/launch-environment
