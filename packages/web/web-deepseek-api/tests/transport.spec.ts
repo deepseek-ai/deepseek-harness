@@ -375,6 +375,17 @@ describe('DeepSeek web account authentication', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
+  it('reports the cancellation when a credential read cancels its caller and then fails', async () => {
+    const { fetchMock } = captureFetch()
+    const controller = new AbortController()
+    const source = accountSource(() => {
+      controller.abort(new Error('caller stopped'))
+      return Promise.reject(new Error('read failed after the cancellation'))
+    })
+    await expect(search([source], controller.signal)).rejects.toMatchObject({ code: 'WEB_ABORTED' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('aborts while the account resolver remains pending', async () => {
     const { fetchMock } = captureFetch()
     const controller = new AbortController()

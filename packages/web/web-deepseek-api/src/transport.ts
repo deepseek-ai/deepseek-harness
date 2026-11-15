@@ -326,7 +326,12 @@ async function resolveCredential<T>(resolve: () => Promise<T>, signal?: AbortSig
  */
 function abortable<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (signal === undefined) return operation
-  if (signal.aborted) return Promise.reject(searchAborted(signal))
+  if (signal.aborted) {
+    // The operation began before this check and can still reject: a credential read that cancels its caller, then
+    // fails. Observing it keeps that rejection from being unhandled.
+    void operation.catch(() => {})
+    return Promise.reject(searchAborted(signal))
+  }
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => { reject(searchAborted(signal)) }
     signal.addEventListener('abort', onAbort, { once: true })
