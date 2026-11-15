@@ -167,6 +167,52 @@ watch(signal: AbortSignal, includeIdentityChanges: boolean = false): AsyncIterab
 
 Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/account/deepseek-account/src/index.ts)
 
+<a id="ctxdeepseekauth--deepseekauth"></a>
+
+### `ctx.deepseekAuth` — `DeepSeekAuth`
+
+`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.
+
+```ts cordis-catalog
+/**
+ * Connect the deployment a model route plugin's settings name for one kind. Call it from within `ctx.effect()`.
+ * @param kind - the kind the plugin's route bills.
+ * @param connection - reads the plugin's current settings; a throw marks the kind unresolved for that operation.
+ * @returns the disposer removing the connection.
+ * @throws {DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.
+ */
+connect(kind: DeepSeekAuthKind, connection: () => DeepSeekAuthConnection): () => void
+
+/**
+ * The kind that bills a conversation on one model route.
+ * @param route - provider route of a model request; undefined names none.
+ * @returns the kind, or undefined for a route that is no DeepSeek route.
+ */
+routeKind(route: string | undefined): DeepSeekAuthKind | undefined
+
+/**
+ * The kinds one request can authenticate with, in the order its billing tries them, each bound to its destination.
+ * Nothing is read from a credential store.
+ * @param request - the request.
+ * @returns candidates and unresolved kinds, first preferred; empty when the destination accepts no kind the
+ *   billing allows or no allowed kind serves an absolute destination.
+ */
+candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]
+
+/**
+ * Release the credential of the first candidate that has one. A later candidate is not read once an earlier one
+ * has a credential, fails to read, or does not resolve.
+ * @param request - the request.
+ * @param signal - cancellation for the lookups.
+ * @returns the authorization, or undefined when no candidate has a credential.
+ * @throws {DeepSeekAuthError} code `UNRESOLVED_CONNECTION` at an unresolved kind, `INVALID_CREDENTIAL` for an
+ *   unusable API key; store failures propagate.
+ */
+async authorize(request: DeepSeekAuthRequest, signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>
+```
+
+Source: [`packages/account/deepseek-auth/src/index.ts`](../../packages/account/deepseek-auth/src/index.ts)
+
 <a id="deepseek-account-events"></a>
 
 ### `deepseek-account/*` events

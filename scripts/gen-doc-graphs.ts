@@ -528,6 +528,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The Host owns browser authorization and local credentials and releases per-request credentials to the account model route and the web providers; UI consumers receive state without tokens.',
   },
   {
+    key: 'deepseekAuth',
+    pkg: 'deepseek-auth',
+    title: 'DeepSeek request authentication',
+    mode: 'service',
+    implementations: [],
+    consumers: ['llm-deepseek-account', 'llm-deepseek-api-key', 'web-deepseek-api', 'web-search-deepseek'],
+    note: 'Every DeepSeek API consumer names the credential kinds its API accepts; the service orders the API key and the account sign-in by billing, binds each to its deployment, and releases request headers.',
+  },
+  {
     key: 'authorization',
     pkg: 'authorization',
     title: 'Authorization flow registry',
