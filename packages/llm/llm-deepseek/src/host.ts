@@ -45,7 +45,7 @@ export function createModelListingCache(
  */
 export function registerDeepSeekProvider<C extends DeepSeekConnectionOptions>(
   ctx: Context, provider: string, dependencies: Pick<DeepSeekAdapterOptions<C>,
-  'options' | 'resolveAuth' | 'missingCredential' | 'credential' | 'providerName' | 'discoverModels' | 'connect' | 'admit'>): void {
+  'options' | 'resolveAuth' | 'missingCredential' | 'providerName' | 'discoverModels' | 'connect' | 'admit'>): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   let userId: AnonymousUserId | undefined
   // These conditions repeat on every request of a route; log each first occurrence only.

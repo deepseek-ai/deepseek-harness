@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-account` 注册鉴权、账号模型列表和模型门控。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包负责凭据解析、账号目录和模型准入。
 
-鉴权解析返回账号服务为目标地址释放的请求凭据，携带 `x-dsh-auth-token`，并附带使同一凭据失效的失败回调。HTTP 401 的分类由此提供方负责；被拒绝的旧请求不能清除替换后的登录。路由通过 `ctx.llm.providerCredential('deepseek-account')` 连同其基础地址发布账号凭据，使 DeepSeek Web 提供方把它发往同一部署。
+鉴权解析向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取账号服务为目标地址释放的账号登录凭据，携带 `x-dsh-auth-token`，并附加使同一凭据失效的失败回调。HTTP 401 的分类由此提供方负责；被拒绝的旧请求不能清除替换后的登录。路由把自己的基础地址登记到该服务，使 DeepSeek Web 提供方把账号登录凭据发往同一部署。
 
 ## 目录
 

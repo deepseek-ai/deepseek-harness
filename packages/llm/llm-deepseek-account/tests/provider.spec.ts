@@ -217,35 +217,19 @@ it('aborts an in-flight listing request when the plugin is disposed', async () =
   await expect(pending).resolves.toEqual(expect.any(Array))
 })
 
-it('publishes the account credential for its consumers, asking the account for each endpoint', async () => {
+it('connects its deployment, so other DeepSeek consumers send the account sign-in to its origin', async () => {
   const asked: string[] = []
-  let token: string | undefined = 'fixture-account-token'
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
-  ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return token } }))
+  ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return 'fixture-account-token' } }))
   await ctx.plugin(DeepSeekAuth)
-  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
-  const credential = ctx.llm.providerCredential('deepseek-account')
-  expect(credential).toMatchObject({ kind: 'account', baseURL: 'https://account.deepseek.test/anthropic' })
-  expect(credential).not.toHaveProperty('reference')
-  const endpoint = 'https://account.deepseek.test/v1/tools/search'
-  await expect(credential!.configured(endpoint)).resolves.toBe(true)
-  await expect(credential!.resolve(endpoint)).resolves.toMatchObject({ headers: { 'x-dsh-auth-token': 'fixture-account-token' }, value: 'fixture-account-token' })
-  token = undefined
-  await expect(credential!.configured(endpoint)).resolves.toBe(false)
-  await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
-  expect(asked).toEqual([endpoint, endpoint, endpoint, endpoint])
-  expect(ctx.llm.providerCredential('deepseek-official')).toBeUndefined()
-})
-
-it('publishes a credential nobody holds without the account service', async () => {
-  const ctx = new Context()
-  contexts.push(ctx)
-  await ctx.plugin(LlmRuntime)
-  await ctx.plugin(DeepSeekAuth)
-  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
-  const credential = ctx.llm.providerCredential('deepseek-account')!
-  await expect(credential.configured('https://account.deepseek.test/v1/tools/search')).resolves.toBe(false)
-  await expect(credential.resolve('https://account.deepseek.test/v1/tools/search')).resolves.toBeUndefined()
+  const search = { consumer: 'web-test', accepts: ['account'], billing: 'account', destination: { path: '/v1/tools/search' } } as const
+  const route = await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({
+    kind: 'account', endpoint: 'https://account.deepseek.test/v1/tools/search', headers: { 'x-dsh-auth-token': 'fixture-account-token' },
+  })
+  await route.dispose()
+  expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({ endpoint: 'https://api.deepseek.com/v1/tools/search' })
+  expect(asked).toEqual(['https://account.deepseek.test/v1/tools/search', 'https://api.deepseek.com/v1/tools/search'])
 })

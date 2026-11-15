@@ -22,7 +22,6 @@ import type {
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
-  ProviderCredential,
   StreamChunk,
   SystemPromptUpdate,
   ToolSchema,
@@ -263,19 +262,6 @@ export abstract class LlmAdapter {
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget {
     return { width: image.width, height: image.height, maxBytes: image.bytes }
-  }
-
-  /**
-   * Describe the credential one owned route currently sends, for consumers that
-   * call the same deployment outside the model request path, such as web
-   * providers that share a route's credential and endpoint. The default
-   * publishes none. Implementations answer from one configuration generation
-   * per call and may throw when that configuration does not resolve.
-   * @param _provider - a route passed to `registerAdapter()` for this instance.
-   * @returns the route's current credential, or `undefined` when the route publishes none.
-   */
-  providerCredential(_provider: string): ProviderCredential | undefined {
-    return undefined
   }
 
   /**
@@ -720,19 +706,6 @@ export class LlmRuntime extends TypertRemoteService {
    */
   imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget {
     return this.registration(provider).adapter.imageRequestTarget(provider, model, image)
-  }
-
-  /**
-   * Resolve the credential one registered route currently sends, through its
-   * owning adapter. An unregistered route answers `undefined` rather than
-   * throwing because callers ask about routes a conversation named earlier,
-   * which may no longer be mounted; a registered route whose configuration
-   * does not resolve propagates the adapter's failure.
-   * @param provider - provider route whose credential is wanted.
-   * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
-   */
-  providerCredential(provider: string): ProviderCredential | undefined {
-    return this.adapters.get(provider)?.adapter.providerCredential(provider)
   }
 
   /**
