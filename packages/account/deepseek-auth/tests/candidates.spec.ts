@@ -48,6 +48,8 @@ describe('billing order', () => {
     const { deepseekAuth } = await mount()
     expect([deepseekAuth.routeKind('deepseek-account'), deepseekAuth.routeKind('deepseek-official')]).toEqual(['account', 'api-key'])
     expect([deepseekAuth.routeKind('moonshotai'), deepseekAuth.routeKind(undefined)]).toEqual([undefined, undefined])
+    // A provider id is user configuration and may equal a name every object inherits.
+    expect(deepseekAuth.routeKind('constructor')).toBeUndefined()
   })
 })
 

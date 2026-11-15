@@ -48,10 +48,10 @@ const DEEPSEEK_BASE_URL_ENV = 'DEEPSEEK_BASE_URL'
  * Kind that bills a conversation on each DeepSeek model route. `auto` billing reads the route id of the conversation,
  * which Session logs record, so the ids are fixed here and do not depend on which route plugin is mounted.
  */
-const ROUTE_KINDS: Readonly<Record<string, DeepSeekAuthKind>> = {
-  'deepseek-account': 'account',
-  'deepseek-official': 'api-key',
-}
+const ROUTE_KINDS: ReadonlyMap<string, DeepSeekAuthKind> = new Map([
+  ['deepseek-account', 'account'],
+  ['deepseek-official', 'api-key'],
+])
 
 /** Failure codes of {@link DeepSeekAuthError}. */
 export type DeepSeekAuthErrorCode =
@@ -76,6 +76,12 @@ export class DeepSeekAuthError extends HarnessError {
     // Consumers quote this name in their own diagnostics, so it does not follow a bundler's class renaming.
     this.name = 'DeepSeekAuthError'
   }
+}
+
+/** Marks a failure of the launch-environment deployment, apart from a failure of a connected route's settings. */
+class DeploymentError extends Error {
+  /** @param cause - why the variable's value is no deployment URL. */
+  constructor(cause: unknown) { super('unresolved deployment', { cause }) }
 }
 
 /** `ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation. */
@@ -108,7 +114,7 @@ export class DeepSeekAuth extends Service {
    * @returns the kind, or undefined for a route that is no DeepSeek route.
    */
   routeKind(route: string | undefined): DeepSeekAuthKind | undefined {
-    return route === undefined ? undefined : ROUTE_KINDS[route]
+    return route === undefined ? undefined : ROUTE_KINDS.get(route)
   }
 
   /**
@@ -232,12 +238,6 @@ export class DeepSeekAuth extends Service {
       },
     }
   }
-}
-
-/** Marks a failure of the launch-environment deployment, apart from a failure of a connected route's settings. */
-class DeploymentError extends Error {
-  /** @param cause - why the variable's value is no deployment URL. */
-  constructor(cause: unknown) { super('unresolved deployment', { cause }) }
 }
 
 export default DeepSeekAuth
