@@ -502,13 +502,17 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await card.waitFor()
       expect(await card.evaluate(element => [...element.children].map(child => child.textContent).slice(0, 3)))
         .toEqual([LABEL, `Owner: ${CHILD_NAME}`, 'completed · continuable'])
-      // The panel sits at the window's end, so the card opens on the row's start side, inside the viewport.
+      // The panel sits at the window's end, so the stylesheet opens the card on the row's start side:
+      // 8px before the row, its top on the row's top, inside the viewport.
       const placement = await card.evaluate((element) => {
-        const bounds = element.getBoundingClientRect()
-        const row = document.querySelector('[data-subagents-section] [role="treeitem"]')!.getBoundingClientRect()
-        return { left: bounds.left >= 0, beforeRow: bounds.right <= row.left }
+        // The details sit inside the fixed card, and the card's anchor wraps the row.
+        let fixed = element
+        while (getComputedStyle(fixed).position !== 'fixed') fixed = fixed.parentElement!
+        const bounds = fixed.getBoundingClientRect()
+        const row = document.querySelector('[data-subagents-section] [role="treeitem"]')!.parentElement!.getBoundingClientRect()
+        return { inside: bounds.left >= 8, gap: row.left - bounds.right, top: bounds.top - row.top }
       })
-      expect(placement).toEqual({ left: true, beforeRow: true })
+      expect(placement).toEqual({ inside: true, gap: 8, top: 0 })
       expect(page.url()).toBe(originalUrl)
       expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
       await page.locator('[data-composer-input]').first().hover()

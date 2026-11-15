@@ -593,10 +593,32 @@ describe('web e2e: agent teamwork panel', () => {
       await card.waitFor()
       expect(await card.evaluate(element => [...element.children].slice(0, 2).map(child => child.textContent)))
         .toEqual([RESEARCHER_DESCRIPTION, 'Owner: team-panel-researcher'])
+      // The window has room for the card on neither side of the row, and this description fills a card too
+      // tall to open under or over the row, so the card covers the row; it stays inside the viewport.
       expect(await card.evaluate((element) => {
-        const rect = element.getBoundingClientRect()
-        return rect.left >= 0 && rect.right <= window.innerWidth
+        // The details sit inside the fixed card.
+        let fixed = element
+        while (getComputedStyle(fixed).position !== 'fixed') fixed = fixed.parentElement!
+        const rect = fixed.getBoundingClientRect()
+        return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
       })).toBe(true)
+      await page.mouse.move(20, 400)
+      await card.waitFor({ state: 'detached' })
+      // A card that fits under its row opens there, from the row's start edge and inside the viewport's
+      // margin, so the row stays clear.
+      const task = panel.locator('[data-team-task]').getByRole('button')
+      await task.hover()
+      await card.waitFor()
+      const anchor = await task.locator('xpath=..').boundingBox()
+      if (anchor === null) throw new Error('the task row has no box')
+      const placed = await card.evaluate((element) => {
+        let fixed = element
+        while (getComputedStyle(fixed).position !== 'fixed') fixed = fixed.parentElement!
+        const bounds = fixed.getBoundingClientRect()
+        return { left: bounds.left, top: bounds.top, right: bounds.right, viewport: window.innerWidth }
+      })
+      expect({ below: placed.top - (anchor.y + anchor.height), start: placed.left - anchor.x }).toEqual({ below: 8, start: 0 })
+      expect(placed.right).toBeLessThanOrEqual(placed.viewport - 8)
       const beforeClick = page.url()
       await primary.click()
       expect(page.url()).toBe(beforeClick)
