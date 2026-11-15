@@ -123,7 +123,10 @@ describe('SessionPanel.module.css row rules', () => {
   it('highlights only a row with an action or a menu that renders something, and keeps an open menu and its row shown', () => {
     const interactive = "[data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty))"
     expect(row("[data-session-panel-row] > [data-row-part='menu']:empty")).toEqual({ display: 'none' })
-    expect(row(`${interactive}:has([aria-expanded='true'])`)['background']).toBe('var(--dsw-alias-interactive-bg-hover)')
+    // Only an open control in the menu part keeps the row highlighted; an expanded body button does not.
+    expect(row("[data-session-panel-row]:has(> [data-row-part='menu'] [aria-expanded='true'])"))
+      .toEqual({ background: 'var(--dsw-alias-interactive-bg-hover)' })
+    expect(css).not.toMatch(/:has\(\[aria-expanded='true'\]\)\)\s*\{\s*background/)
     expect(row("[data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])")['opacity']).toBe('1')
     // Hover rules stay inside the hover media query, where the menu hides until the row is hovered or focused.
     const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''

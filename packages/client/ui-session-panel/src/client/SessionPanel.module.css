@@ -325,8 +325,11 @@
   }
 }
 
-/* An open menu keeps its row highlighted and its trigger visible after the pointer leaves for the menu. */
-.panel :where([data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty)):has([aria-expanded='true'])) {
+/* An open menu keeps its row highlighted and its trigger visible after the
+   pointer leaves for the menu. Only the menu part counts: a body button that
+   discloses something else carries aria-expanded too, and its row highlights
+   on hover alone. */
+.panel :where([data-session-panel-row]:has(> [data-row-part='menu'] [aria-expanded='true'])) {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
