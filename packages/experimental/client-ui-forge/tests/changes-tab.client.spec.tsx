@@ -1187,6 +1187,30 @@ describe('ChangesTab unchanged lines', () => {
     expect(m.faces.changeRequestText).not.toHaveBeenCalled()
   })
 
+  it('never draws the text of the last change when a refresh brings the same lines with other content', async () => {
+    // The same lines as APP, but line 11 of the new side reads differently, so the file is another change.
+    const changed: ForgeDiffFile = { ...APP, digest: 'changed', hunks: [APP.hunks[0]!, { ...APP.hunks[1]!, lines: [' const a10 = 110', '-const w = 12'] }] }
+    const m = mount({
+      source: { kind: 'change', url: URL7 },
+      setup: (faces) => {
+        faces.changeRequestDiff.mockResolvedValueOnce(ok(CHANGE)).mockResolvedValue(ok({ ...CHANGE, files: [changed, NOTES, GONE] }))
+      },
+    })
+    await settle()
+    const app = m.section('src/app.ts')
+    // Expanding a gap reads the file, after which the rows after collapsed lines are highlighted again in idle time.
+    fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) })
+    expect(rowTexts(app)).toContain('const a10 = 11')
+
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(rowTexts(app)).toContain('const a10 = 110')
+    expect(rowTexts(app)).not.toContain('const a10 = 11')
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
+  })
+
   it('reports a read that failed or no longer matches and keeps the lines collapsed', async () => {
     const m = mount({
       setup: (faces) => {

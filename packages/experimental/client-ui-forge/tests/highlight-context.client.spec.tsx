@@ -52,7 +52,7 @@ describe('sideRun', () => {
     expect(sideRun(hunkRows(HUNKS[0]!), 'old')).toEqual({ side: 'old', first: 3, last: 5, texts: ['a3', 'x', 'a5'] })
     expect(sideRun(hunkRows(HUNKS[0]!), 'new')).toEqual({ side: 'new', first: 3, last: 6, texts: ['a3', 'y', 'z', 'a5'] })
     expect(sideRun(hunkRows({ oldStart: 1, oldLines: 0, newStart: 1, newLines: 1, lines: ['+n'] }), 'old')).toBeUndefined()
-    expect(runKey({ side: 'new', first: 3, last: 6, texts: [] })).toBe('new:3:6')
+    expect(runKey('c1', { side: 'new', first: 3, last: 6, texts: [] })).toBe('c1:new:3:6')
   })
 })
 
@@ -105,13 +105,15 @@ describe('useContextHighlight', () => {
   interface HookProps {
     readonly runs: readonly SideRun[]
     readonly sides: FileSides | undefined
+    readonly change: string
     readonly highlighter: CodeHighlighter
     readonly selecting: boolean
   }
 
   function hook(initial: Partial<HookProps> = {}) {
-    const initialProps: HookProps = { runs: RUNS, sides: SIDES, highlighter: recorder(), selecting: false, ...initial }
-    const use = (props: HookProps) => useContextHighlight(props.runs, props.sides, props.highlighter, { current: root }, props.selecting)
+    const initialProps: HookProps = { runs: RUNS, sides: SIDES, change: 'c1', highlighter: recorder(), selecting: false, ...initial }
+    const use = (props: HookProps) =>
+      useContextHighlight(props.runs, props.sides, props.change, props.highlighter, { current: root }, props.selecting)
     return renderHook(use, { initialProps })
   }
 
@@ -121,28 +123,42 @@ describe('useContextHighlight', () => {
     act(() => { vi.advanceTimersByTime(16) })
     expect(result.current.size).toBe(0)
     act(() => { vi.advanceTimersByTime(16) })
-    expect([...result.current.keys()]).toEqual(['old:10:11'])
-    expect(result.current.get('old:10:11')?.get(11)).toEqual([{ text: 'w', style: { color: 'c10' } }])
+    expect([...result.current.keys()]).toEqual(['c1:old:10:11'])
+    expect(result.current.get('c1:old:10:11')?.get(11)).toEqual([{ text: 'w', style: { color: 'c10' } }])
+  })
+
+  it('keeps the tokens under their change, so another change of the file finds none before or after its text is read', () => {
+    const { result, rerender } = hook()
+    act(() => { vi.runAllTimers() })
+    expect(result.current.has(runKey('c1', RUNS[1]!))).toBe(true)
+    // The same lines of the next change: in the very render that names it, its key finds no tokens of the last change.
+    rerender({ runs: RUNS, sides: undefined, change: 'c2', highlighter: recorder(), selecting: false })
+    expect(result.current.get(runKey('c2', RUNS[1]!))).toBeUndefined()
+    rerender({ runs: RUNS, sides: { new: NEW_SIDE, old: ['x', ...SIDES.old] }, change: 'c2', highlighter: recorder(), selecting: false })
+    expect(result.current.size).toBe(0)
+    act(() => { vi.runAllTimers() })
+    expect([...result.current.keys()]).toEqual(['c2:old:10:11'])
+    expect(result.current.get('c2:old:10:11')?.get(10)).toEqual([{ text: 'a10', style: { color: 'c9' } }])
   })
 
   it('waits for the whole file and for a grammar, and starts over for another file', () => {
     const { result, rerender } = hook({ sides: undefined })
     act(() => { vi.runAllTimers() })
     expect(result.current.size).toBe(0)
-    rerender({ runs: RUNS, sides: SIDES, highlighter: () => undefined, selecting: false })
+    rerender({ runs: RUNS, sides: SIDES, change: 'c1', highlighter: () => undefined, selecting: false })
     act(() => { vi.runAllTimers() })
     expect(result.current.size).toBe(0)
     const highlighter = recorder()
-    rerender({ runs: RUNS, sides: SIDES, highlighter, selecting: false })
+    rerender({ runs: RUNS, sides: SIDES, change: 'c1', highlighter, selecting: false })
     act(() => { vi.runAllTimers() })
     expect(result.current.size).toBe(1)
     // The same runs keep their tokens across a new highlighter, without a second read or an update.
     const before = result.current
-    rerender({ runs: [...RUNS], sides: SIDES, highlighter: recorder(), selecting: false })
+    rerender({ runs: [...RUNS], sides: SIDES, change: 'c1', highlighter: recorder(), selecting: false })
     act(() => { vi.runAllTimers() })
     expect(result.current).toBe(before)
     expect(highlighter.calls).toHaveLength(1)
-    rerender({ runs: RUNS, sides: { ...SIDES }, highlighter, selecting: false })
+    rerender({ runs: RUNS, sides: { ...SIDES }, change: 'c1', highlighter, selecting: false })
     expect(result.current.size).toBe(0)
     act(() => { vi.runAllTimers() })
     expect(result.current.size).toBe(1)
@@ -155,7 +171,7 @@ describe('useContextHighlight', () => {
     const range = document.createRange()
     range.selectNodeContents(root)
     window.getSelection()?.addRange(range)
-    rerender({ runs: RUNS, sides: SIDES, highlighter: recorder(), selecting: false })
+    rerender({ runs: RUNS, sides: SIDES, change: 'c1', highlighter: recorder(), selecting: false })
     expect(result.current.size).toBe(0)
     act(() => { document.dispatchEvent(new Event('selectionchange')) })
     expect(result.current.size).toBe(0)

@@ -165,11 +165,11 @@ type Prepared =
 
 /**
  * Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. The tokens are kept by
- * the run's lines in `kept`, which the caller replaces with the file or the highlighter.
+ * the change and the run's lines in `kept`, which the caller replaces with the file or the highlighter.
  */
-function sideSpans(run: SideRun | undefined, highlighter: CodeHighlighter, kept: Map<string, SideSpans>): SideSpans {
+function sideSpans(run: SideRun | undefined, change: string, highlighter: CodeHighlighter, kept: Map<string, SideSpans>): SideSpans {
   if (run === undefined) return new Map()
-  const key = runKey(run)
+  const key = runKey(change, run)
   const known = kept.get(key)
   if (known !== undefined) return known
   const highlighted = highlighter(run.texts.join('\n'))
@@ -369,15 +369,19 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     if (segment.kind !== 'rows') return segment
     const oldRun = sideRun(segment.rows, 'old')
     const newRun = sideRun(segment.rows, 'new')
-    return { ...segment, old: sideSpans(oldRun, highlighter, kept), new: sideSpans(newRun, highlighter, kept), oldRun, newRun }
+    return {
+      ...segment, oldRun, newRun,
+      old: sideSpans(oldRun, file.digest, highlighter, kept), new: sideSpans(newRun, file.digest, highlighter, kept),
+    }
   }), [file, lines, open, foldHunks, highlighter, kept])
   // Rows drawn after collapsed lines take the colors of the lines before them once the whole file is known, after they draw.
   const runs = useMemo(() => prepared.flatMap(segment => segment.kind !== 'rows' ? []
     : [segment.oldRun, segment.newRun].filter((run): run is SideRun => run !== undefined)), [prepared])
   const sides = useMemo((): FileSides | undefined => lines === undefined ? undefined
     : { new: lines, old: oldSideLines(lines, file.hunks) }, [lines, file.hunks])
-  const corrected = useContextHighlight(runs, sides, highlighter, root, selecting)
-  const spansOf = (spans: SideSpans, run: SideRun | undefined): SideSpans => run === undefined ? spans : corrected.get(runKey(run)) ?? spans
+  const corrected = useContextHighlight(runs, sides, file.digest, highlighter, root, selecting)
+  const spansOf = (spans: SideSpans, run: SideRun | undefined): SideSpans => run === undefined ? spans
+    : corrected.get(runKey(file.digest, run)) ?? spans
   const collapsed = prepared.some(segment => segment.kind === 'gap')
   const grammar = languageForPath(file.path) !== undefined
   useEffect(() => {

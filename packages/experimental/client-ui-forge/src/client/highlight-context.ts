@@ -100,12 +100,14 @@ export interface FileSides {
 }
 
 /**
- * Key of one side of a run, which the corrected tokens are kept under.
+ * Key of one side of a run in one change of a file, which its tokens are kept under. Tokens carry the text of their
+ * lines, so the key names the change: the same lines of another change of the file never take these tokens.
+ * @param change - the digest of the file's change.
  * @param run - the side of the run.
  * @returns the key.
  */
-export function runKey(run: SideRun): string {
-  return `${run.side}:${String(run.first)}:${String(run.last)}`
+export function runKey(change: string, run: SideRun): string {
+  return `${change}:${run.side}:${String(run.first)}:${String(run.last)}`
 }
 
 const NO_SPANS: ReadonlyMap<string, LineSpans> = new Map()
@@ -129,17 +131,19 @@ function selectsIn(element: HTMLElement | null): boolean {
 /**
  * Highlight each side of each run again with the lines before it, one side of one run per idle period, once the whole
  * file is known. The tokens apply in one update when every run is done and only while the reader selects nothing
- * inside `root`, since redrawn tokens would drop the selection; a selection or drag defers them until it ends. A run
- * keeps its tokens while its lines stay the same, and a changed file starts over.
+ * inside `root`, since redrawn tokens would drop the selection; a selection or drag defers them until it ends. Tokens
+ * are kept under the change they were computed for, so another change of the file finds none of them, even before its
+ * text is read; a new reading of the text starts the work over.
  * @param runs - the sides of the drawn runs.
  * @param sides - the whole file, or undefined while it is unknown.
+ * @param change - the digest of the file's change, which every key names.
  * @param highlighter - the file's highlighter; a grammar that loads later resumes the work.
  * @param root - the element whose selection defers the update.
  * @param selecting - whether the reader is dragging a selection.
  * @returns the corrected tokens by {@link runKey}.
  */
 export function useContextHighlight(
-  runs: readonly SideRun[], sides: FileSides | undefined, highlighter: CodeHighlighter,
+  runs: readonly SideRun[], sides: FileSides | undefined, change: string, highlighter: CodeHighlighter,
   root: RefObject<HTMLElement | null>, selecting: boolean,
 ): ReadonlyMap<string, LineSpans> {
   const [applied, setApplied] = useState(NO_SPANS)
@@ -173,13 +177,14 @@ export function useContextHighlight(
       setApplied(NO_SPANS)
     }
     const spans = cache.current.spans
-    const waiting = runs.filter(run => !spans.has(runKey(run)))
+    const waiting = runs.filter(run => !spans.has(runKey(change, run)))
     let cancel = (): void => {}
     const finish = (): void => {
       const done = new Map<string, LineSpans>()
       for (const run of runs) {
-        const value = spans.get(runKey(run))
-        if (value !== undefined && value !== null) done.set(runKey(run), value)
+        const key = runKey(change, run)
+        const value = spans.get(key)
+        if (value !== undefined && value !== null) done.set(key, value)
       }
       // Tokens the view already shows need no update, which would redraw every row of the file.
       const current = shown.current
@@ -197,12 +202,12 @@ export function useContextHighlight(
         const value = contextSpans(run, sides[run.side], highlighter)
         // A grammar still loading leaves the rest to the highlighter that arrives with it.
         if (value === undefined) return
-        spans.set(runKey(run), value)
+        spans.set(runKey(change, run), value)
         next(at + 1)
       })
     }
     next(0)
     return () => { cancel() }
-  }, [runs, sides, highlighter, retry])
+  }, [runs, sides, change, highlighter, retry])
   return applied
 }
