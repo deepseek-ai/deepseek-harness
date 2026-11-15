@@ -33,6 +33,9 @@
       "path": "../resources"
     },
     {
+      "path": "../store"
+    },
+    {
       "path": "../ui-chat/tsconfig.client.json"
     },
     {

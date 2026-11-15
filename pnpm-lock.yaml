@@ -7012,6 +7012,9 @@ importers:
       '@deepseek-ai/dsh-client-resources':
         specifier: workspace:*
         version: link:../resources
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../store
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime

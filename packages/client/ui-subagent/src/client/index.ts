@@ -6,6 +6,7 @@ import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation
 import { SubagentHeaderLineage } from './SubagentHeaderLineage.tsx'
 import type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
 import { SubagentsProgress, SubagentsRunningIndicator, SubagentsSection } from './SubagentsSection.tsx'
+import { createSubagentsSectionStore } from './subagents-store.ts'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -104,6 +105,7 @@ export function apply(ctx: ClientContext): void {
       order: 200,
       label: () => t('section.title'),
       locale: NS,
+      store: createSubagentsSectionStore(),
       inject: catalogActions,
     }, SubagentsSection)
     yield ctx.slots.register({

@@ -2,7 +2,8 @@
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { allowAllAccess, makeTranslate, RemoteError, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
+import { useState } from 'react'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
   SessionListState, SessionSummary, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -15,6 +16,7 @@ import {
   type SubagentsProgressProps, type SubagentsRunningIndicatorProps, type SubagentsSectionProps,
 } from '../src/client/SubagentsSection.tsx'
 import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer.tsx'
+import { createSubagentsSectionStore } from '../src/client/subagents-store.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => {
@@ -29,7 +31,10 @@ const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
 const t: SubagentHeaderLineageProps['t'] = makeTranslate(zh)
 
-type HeaderCatalogProps = SubagentHeaderLineageProps & { dismissOverlay?: () => void }
+/** One Session's section store, as the registration mints it. */
+type SectionStore = ReturnType<ReturnType<typeof createSubagentsSectionStore>['create']>
+
+type HeaderCatalogProps = SubagentHeaderLineageProps & { dismissOverlay?: () => void; store?: SectionStore | undefined }
 
 type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentCatalogEntry
   ? Omit<Entry, 'createdAt'> & { activity: 'running' | 'inactive' }
@@ -195,16 +200,31 @@ async function hoverDetailsOf(row: HTMLElement): Promise<string[] | null> {
  * (child sessions, lineage slot) and the Session panel section listing the
  * Session's own subagents. The section sees the same Session the lineage renders.
  */
-function HeaderCatalog(props: HeaderCatalogProps) {
-  const sectionProps: SubagentsSectionProps = {
-    ...props, sessionId: props.lineageSessionId, presentation: 'docked', dismissOverlay: props.dismissOverlay ?? vi.fn(),
-  }
+function HeaderCatalog({ store, ...props }: HeaderCatalogProps) {
   return (
     <>
       <SubagentHeaderLineage {...props} />
-      <SubagentsSection {...sectionProps} />
+      <Section {...props} sessionId={props.lineageSessionId} store={store} />
     </>
   )
+}
+
+/**
+ * The Session panel's fold control Factory as these suites render it: a button with its state, name, and label.
+ * ui-session-panel's own suite owns the control's markup.
+ */
+function renderFold(_name: string, input: { expanded: boolean; label: string; name: string; onToggle: () => void }) {
+  return <button type="button" data-fold="" aria-expanded={input.expanded} aria-label={input.name} onClick={input.onToggle}>{input.label}</button>
+}
+
+/** The section with the panel owner values, its Session's store (a fresh one unless given), and the fold control. */
+function Section({ store, dismissOverlay, ...props }: Omit<HeaderCatalogProps, 'lineageSessionId' | 'displayTitle'>) {
+  const [own] = useState(() => store ?? createSubagentsSectionStore().create())
+  const [useStore] = useState(() => bindSnapshotSelector(own))
+  const sectionProps = {
+    ...props, presentation: 'docked', dismissOverlay: dismissOverlay ?? vi.fn(), useStore, actions: own.actions, renderFactorySlot: renderFold,
+  } as SubagentsSectionProps
+  return <SubagentsSection {...sectionProps} />
 }
 
 describe('SubagentHeaderLineage', () => {
@@ -925,6 +945,8 @@ describe('SubagentsSection', () => {
     })) as Record<SessionId, SessionSummary>
     const input = props(catalog({ entries }), {}, summaries)
     render(<HeaderCatalog {...input} />)
+    // Nine rows fold to five; this case reads every row's measures.
+    fireEvent.click(document.querySelector('[data-fold]') as HTMLElement)
 
     const runningRow = screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分10秒/ })
     // The row keeps only the compact duration; the tokens and exact duration show in its hover card.
@@ -1337,11 +1359,106 @@ describe('SubagentsSection', () => {
     expect(screen.queryByRole('treeitem', { name: /great/ })).toBeNull()
   })
 
+  /** A catalog entry named by its id. */
+  const member = (id: string, activity: 'running' | 'inactive' = 'inactive'): CatalogFixtureEntry =>
+    ({ id: id as SessionId, mode: 'continuable', label: id, activity })
+  /** Summaries that give a running subagent the start of its open turn and another one its last update. */
+  const timed = (rows: Readonly<Record<string, { running?: number; updated?: number }>>): Record<SessionId, SessionSummary> =>
+    Object.fromEntries(Object.entries(rows).map(([id, { running, updated }]) => [id, {
+      ...summary(id as SessionId, updated ?? 0),
+      running: running !== undefined,
+      ...running === undefined
+        ? {}
+        : { projectionValues: { subagentTiming: { settledMs: 0, active: { since: running, through: running } } } },
+    }]))
+  /** The rows' names in display order; a row's accessible name starts with its label. */
+  const shownRows = (): string[] => screen.getAllByRole('treeitem').map(row => (row.getAttribute('aria-label') ?? '').split(' ')[0] ?? '')
+  const fold = (): HTMLElement | null => document.querySelector('[data-fold]')
+
+  it('lists running subagents first by latest start, then the others by latest update, and a subagent without either by its creation', () => {
+    const entries = [
+      member('old-done'), member('early-run', 'running'), member('new-done'), member('late-run', 'running'), member('unlisted'), member('unknown'),
+    ]
+    render(<HeaderCatalog {...props(catalog({ entries }), {}, timed({
+      'old-done': { updated: 10 }, 'early-run': { running: 100, updated: 999 },
+      'new-done': { updated: 30 }, 'late-run': { running: 200, updated: 5 },
+      // The stand-in row of a Session outside the Host list carries no update time.
+      'unlisted': { updated: 0 },
+    }))} />)
+    // `unlisted` has no update time and `unknown` no summary: both sort by the fixture's creation time, 1, in catalog order.
+    expect(shownRows()).toEqual(['late-run', 'early-run', 'new-done', 'old-done', 'unlisted', 'unknown'])
+    expect(fold()).toBeNull()
+  })
+
+  it('sorts a running subagent whose turn timing is not read yet by its creation', () => {
+    const entries = [member('timed', 'running'), member('untimed', 'running')]
+    render(<HeaderCatalog {...props(catalog({ entries }), {}, {
+      ...timed({ timed: { running: 0 } }),
+      ['untimed' as SessionId]: { ...summary('untimed' as SessionId, 50), running: true },
+    })} />)
+    // `untimed` falls back to the fixture's creation time, 1, which is later than the other row's turn start.
+    expect(shownRows()).toEqual(['untimed', 'timed'])
+  })
+
+  it('keeps catalog order among rows that tie', () => {
+    const entries = [member('a'), member('b', 'running'), member('c'), member('d', 'running')]
+    const summaries = timed({ a: { updated: 7 }, b: { running: 3 }, c: { updated: 7 }, d: { running: 3 } })
+    render(<HeaderCatalog {...props(catalog({ entries }), {}, summaries)} />)
+    expect(shownRows()).toEqual(['b', 'd', 'a', 'c'])
+  })
+
+  it('shows six rows in full and holds two back from seven, behind a fold control that shows them and folds again', () => {
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => member(id))
+    const full = render(<HeaderCatalog {...props(catalog({ entries: six }))} />)
+    expect(shownRows()).toHaveLength(6)
+    expect(fold()).toBeNull()
+    full.unmount()
+    render(<HeaderCatalog {...props(catalog({ entries: [...six, member('g')] }))} />)
+    expect(shownRows()).toEqual(['a', 'b', 'c', 'd', 'e'])
+    const control = fold() as HTMLElement
+    expect([control.textContent, control.getAttribute('aria-label'), control.getAttribute('aria-expanded')])
+      .toEqual(['显示其余 2 个', '显示其余 2 个（子智能体）', 'false'])
+    // The control follows the tree instead of joining it, so the tree holds only its rows.
+    expect(screen.getByRole('tree').contains(control)).toBe(false)
+    fireEvent.click(control)
+    expect(shownRows()).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+    expect([fold()?.textContent, fold()?.getAttribute('aria-label'), fold()?.getAttribute('aria-expanded')])
+      .toEqual(['收起', '收起（子智能体）', 'true'])
+    fireEvent.click(fold() as HTMLElement)
+    expect(shownRows()).toHaveLength(5)
+  })
+
+  it('holds back running subagents too once more than five run, counting every row behind the control', () => {
+    const entries = [...Array.from({ length: 8 }, (_, index) => member(`run-${index}`, 'running')), member('done-0'), member('done-1')]
+    render(<HeaderCatalog {...props(catalog({ entries }), {}, timed(Object.fromEntries(entries.map((entry, index) =>
+      [entry.id, entry.activity === 'running' ? { running: index } : { updated: index }]))))} />)
+    expect(shownRows()).toEqual(['run-7', 'run-6', 'run-5', 'run-4', 'run-3'])
+    expect(fold()?.textContent).toBe('显示其余 5 个')
+  })
+
+  it('keeps the fold in the Session store while the section is unmounted', () => {
+    const store = createSubagentsSectionStore().create()
+    const entries = Array.from({ length: 9 }, (_, index) => member(`s-${index}`))
+    const first = render(<HeaderCatalog {...props(catalog({ entries }))} store={store} />)
+    fireEvent.click(fold() as HTMLElement)
+    expect(store.getSnapshot()).toEqual({ unfolded: true })
+    first.unmount()
+    render(<HeaderCatalog {...props(catalog({ entries }))} store={store} />)
+    expect(shownRows()).toHaveLength(9)
+    expect(fold()?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it.each(Object.entries({ zh, en }))('names the fold control with its visible text first in %s', (_locale, copy) => {
+    for (const label of [copy['list.more'].replace('{count}', '3'), copy['list.less']]) {
+      expect(copy['list.foldName'].replace('{label}', label).startsWith(label)).toBe(true)
+    }
+  })
+
   it('renders nothing without subagents or a failed read, and keeps a failed read reachable', () => {
     const empty = render(<HeaderCatalog {...props(catalog({ entries: [] }))} />)
     expect(document.querySelector('[data-subagents-section]')).toBeNull()
     empty.unmount()
-    const absent = render(<SubagentsSection {...{ ...props(undefined), presentation: 'docked', dismissOverlay: vi.fn() } as SubagentsSectionProps} />)
+    const absent = render(<Section {...props(undefined)} />)
     expect(absent.container.innerHTML).toBe('')
     absent.unmount()
     render(<HeaderCatalog {...props(catalog({ entries: [], state: 'error', error: new RemoteError('gateway/internal', 'read failed', {}) }))} />)

@@ -21,7 +21,7 @@ import {
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, dismissSessionPanel, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
+  connectFreshWorkspace, dismissSessionPanel, foldControlLayout, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
   sessionPanelToggle, showSessionPanel, writeComposerDraft,
 } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -1002,7 +1002,54 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.keyboard.press('Escape')
   })
 
-
+  it('holds back the subagents past five behind the fold control and keeps the choice while the panel is hidden', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-fold'))
+    const parent = scaffold.ctx.agents.get(parentId)
+    if (parent === undefined) throw new Error('fold fixture requires the live parent')
+    await page.getByRole('tree', { name: 'Sessions' })
+      .getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
+    // Six catalog-only members, each created after every row so far: the Client holds no summary for them,
+    // so they sort by when the parent created them, the latest first.
+    const createdAfter = Date.now() + 60_000
+    for (let index = 0; index < 6; index++) {
+      parent.session.append('subagent/catalog', {
+        version: 0,
+        childId: brandString<sessionId>(`fold-member-${String(index)}`),
+        childCreatedAt: createdAfter + index,
+        mode: 'one-shot',
+        label: `fold member ${String(index)}`,
+      })
+    }
+    const section = await showSubagentsSection(page)
+    const rows = section.getByRole('treeitem')
+    const fold = section.locator('[data-session-panel-row="fold"]')
+    const labels = async (): Promise<string[]> => (await rows.evaluateAll(items => items.map(item => item.getAttribute('aria-label') ?? '')))
+      .map(label => /^fold member \d/.exec(label)?.[0] ?? 'earlier')
+    // Eight members: the five created last show, the latest first, and the fold control holds back three.
+    await expect.poll(labels, { timeout: 15_000 })
+      .toEqual(['fold member 5', 'fold member 4', 'fold member 3', 'fold member 2', 'fold member 1'])
+    expect(await fold.textContent()).toBe('Show 3 more')
+    // The title counts every member, shown or held back.
+    expect(await section.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('Subagents1 completed\u2002·\u20027 not running')
+    // The control follows the tree, at the row height, with its chevron under the state marks and its text under the names.
+    expect(await section.getByRole('tree').locator('[data-session-panel-row="fold"]').count()).toBe(0)
+    expect(await foldControlLayout(fold, rows.first(), '[class*="content"] > span'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    await section.getByRole('button', { name: 'Show 3 more (subagents)', exact: true }).click()
+    await expect.poll(labels).toEqual([
+      'fold member 5', 'fold member 4', 'fold member 3', 'fold member 2', 'fold member 1', 'fold member 0', 'earlier', 'earlier',
+    ])
+    const less = section.getByRole('button', { name: 'Show less (subagents)', exact: true })
+    expect([await less.textContent(), await less.getAttribute('aria-expanded')]).toEqual(['Show less', 'true'])
+    // The choice is the Session's: it holds while the panel is hidden.
+    await dismissSessionPanel(page)
+    await showSubagentsSection(page)
+    await expect.poll(() => rows.count()).toBe(8)
+    await less.click()
+    await expect.poll(() => rows.count()).toBe(5)
+    expect(tripwire.pageErrors).toEqual([])
+    await dismissSessionPanel(page)
+  })
 })
 
 describe('web e2e: migration-required subagent catalog', () => {

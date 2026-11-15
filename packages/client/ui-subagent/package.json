@@ -58,6 +58,7 @@
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",
+    "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
