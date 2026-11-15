@@ -59,6 +59,8 @@ Rows share one look without sharing a component. A section's component, or an En
 
 Leave out a part the row does not have: a `<button>` body or a menu part is what makes the row highlight. A menu part that renders nothing, such as a shared menu button whose target has no menu entries, counts as absent: it takes no room and the row does not highlight for it. Each rule for a part has the specificity of one class, so a row's own class adjusts it.
 
+A section whose list can grow long folds it. It shows the first five rows of the list, or of each group the list has, and then a fold control as the last row, which shows the rest or folds them again. A list folds only when that holds back two rows or more, since the control takes a row itself, and it orders its rows so that the ones it holds back are the least current. The plugin offers the control as the `conversation.session.panel.fold` Component Factory: `renderFactorySlot('conversation.session.panel.fold', { expanded, label, name, onToggle })` renders a row marked `data-session-panel-row="fold"` whose body is the button, in the 12px tertiary type of the section counts, with a 14px chevron in the icon column that points down while rows are held back and up once they all show. `label` is the visible text for the current state, such as “Show 14 more” or “Show less”, and `name` is the accessible name, which starts with `label` and names what the list holds. The section keeps the fold state and decides which rows show; a store declared on its registration keeps the choice while the panel is hidden.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -81,6 +83,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | The panel's geometry, the dock probe, and the rules for marked rows |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
+| [`src/client/PanelFold.tsx`](src/client/PanelFold.tsx) | The fold control of a folded list, offered as a Component Factory |
 
 </details>
 

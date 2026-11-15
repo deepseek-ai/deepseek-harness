@@ -1,8 +1,9 @@
 /**
  * Session panel plugin, browser half: a Session header toggle and a floating
  * panel in the Chat View's aside. The panel draws the titles of the sections
- * other plugins register, lays out the rows they mark, and ships the
- * Environment section with the working folder row.
+ * other plugins register, lays out the rows they mark, offers the fold control
+ * their lists end with, and ships the Environment section with the working
+ * folder row.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -13,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { EnvironmentSection } from './EnvironmentSection.tsx'
+import { PanelFold } from './PanelFold.tsx'
 import { ProjectRow } from './ProjectRow.tsx'
 import { SessionPanel } from './SessionPanel.tsx'
 import { SessionPanelToggle } from './SessionPanelToggle.tsx'
@@ -29,17 +31,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
-  SessionPanelPresentation, SessionPanelProbes, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
-  SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
+  EnvironmentSectionProps, PanelFoldProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable, SessionPanelIndicatorOwnerProps,
+  SessionPanelInjected, SessionPanelPresentation, SessionPanelProbes, SessionPanelProps, SessionPanelSectionEntry,
+  SessionPanelSectionOwnerProps, SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
 
 /** Required services: the slot registry, dictionaries, and the Host facts of the Remote carrier. */
 export const inject = ['slots', 'locale', 'remote']
 
 /**
- * Client plugin body: register the dictionaries, the header toggle, the panel,
- * and the Environment section with its project row.
+ * Client plugin body: register the dictionaries, the fold control Factory, the
+ * header toggle, the panel, and the Environment section with its project row.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -52,6 +54,8 @@ export function apply(ctx: ClientContext): void {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
   }
+
+  ctx.slots.registerFactory({ name: 'conversation.session.panel.fold', scope: 'root' }, PanelFold)
 
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities',

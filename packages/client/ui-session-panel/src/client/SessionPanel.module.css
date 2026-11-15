@@ -344,3 +344,30 @@
 .panel :where([data-session-panel-row]:has(> button[data-row-part='body']:active)) {
   background: var(--dsw-alias-interactive-bg-active);
 }
+
+/* A list's fold control (data-session-panel-row='fold'): the last row of a
+   list or of one of its groups, which shows the rows held back or folds them
+   again. It is quieter than a data row: the type of the counts beside the
+   section titles, with a 14px chevron in the icon column and the text where
+   the row names start. These rules follow the row rules they adjust, since
+   every rule for a part has the same specificity. */
+.panel :where([data-session-panel-row='fold']) {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel :where([data-session-panel-row='fold'] [data-row-part='icon']) svg {
+  width: 14px;
+  height: 14px;
+}
+
+.panel :where([data-session-panel-row='fold']:has(> button:focus-visible)) {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .panel :where([data-session-panel-row='fold']:hover) {
+    color: var(--dsw-alias-label-secondary);
+  }
+}

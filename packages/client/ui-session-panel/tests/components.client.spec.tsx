@@ -4,8 +4,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
+import { PanelFold } from '../src/client/PanelFold.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
@@ -462,6 +464,44 @@ describe('ProjectRow', () => {
     const { props } = rowProps({})
     const view = render(<ProjectRow {...props} />)
     expect(view.container.innerHTML).toBe('')
+  })
+})
+
+describe('PanelFold', () => {
+  type FoldProps = FactoryComponentPropsOf<'conversation.session.panel.fold'>
+
+  /** Render the control with the props a list passes; the renderer's standard seats are left out, as the control reads none. */
+  function fold(expanded: boolean) {
+    const onToggle = vi.fn<() => void>()
+    const props = {
+      expanded, onToggle,
+      label: expanded ? 'Show less' : 'Show 14 more',
+      name: expanded ? 'Show less (subagents)' : 'Show 14 more (subagents)',
+    } as Pick<FoldProps, 'expanded' | 'label' | 'name' | 'onToggle'> as FoldProps
+    const view = render(<PanelFold {...props} />)
+    return { onToggle, row: view.container.firstElementChild as HTMLElement }
+  }
+
+  it('is a panel row whose body is the button, with a down chevron in the icon part while rows are held back', () => {
+    const { row, onToggle } = fold(false)
+    expect(row.getAttribute('data-session-panel-row')).toBe('fold')
+    expect([...row.children].map(part => `${part.tagName}:${part.getAttribute('data-row-part') ?? ''}`)).toEqual(['BUTTON:body'])
+    const button = screen.getByRole('button', { name: 'Show 14 more (subagents)' })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect([...button.children].map(part => part.getAttribute('data-row-part'))).toEqual(['icon', 'content'])
+    expect(button.children[0]?.getAttribute('aria-hidden')).toBe('true')
+    expect(button.querySelector('svg')?.getAttribute('data-icon')).toBe('dsw-icon-chevron-down-outline-regular')
+    expect(button.children[1]?.textContent).toBe('Show 14 more')
+    fireEvent.click(button)
+    expect(onToggle).toHaveBeenCalledOnce()
+  })
+
+  it('points the chevron up and reports expanded once the list shows every row', () => {
+    const { row } = fold(true)
+    const button = screen.getByRole('button', { name: 'Show less (subagents)' })
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(row.querySelector('svg')?.getAttribute('data-icon')).toBe('dsw-icon-chevron-up-outline-regular')
+    expect(row.querySelector('[data-row-part="content"]')?.textContent).toBe('Show less')
   })
 })
 

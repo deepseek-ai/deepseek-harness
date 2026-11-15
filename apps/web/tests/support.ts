@@ -523,6 +523,44 @@ export async function dismissSessionPanel(page: Page): Promise<void> {
 }
 
 /**
+ * Measure a Session panel fold control against a data row of its list: both
+ * heights, how far the control's chevron sits from the row's state mark and
+ * its text from the row's name, in px, and the control's type size and state.
+ * @param control - the fold control row (`[data-session-panel-row="fold"]`).
+ * @param row - a data row of the same list.
+ * @param name - selector of the row's name element inside `row`.
+ * @returns the measurements.
+ */
+export async function foldControlLayout(control: Locator, row: Locator, name: string): Promise<{
+  heights: [number, number]
+  chevronOffset: number
+  textOffset: number
+  fontSize: string
+  expanded: string | null
+}> {
+  const rowBox = await row.evaluate((element, selector) => {
+    const mark = element.querySelector('[data-state]')!.getBoundingClientRect()
+    return {
+      height: element.getBoundingClientRect().height,
+      markCenter: mark.left + mark.width / 2,
+      nameLeft: element.querySelector(selector)!.getBoundingClientRect().left,
+    }
+  }, name)
+  return control.evaluate((element, data) => {
+    const chevron = element.querySelector('svg')!.getBoundingClientRect()
+    const text = document.createRange()
+    text.selectNodeContents(element.querySelector('[data-row-part="content"]')!)
+    return {
+      heights: [element.getBoundingClientRect().height, data.height] as [number, number],
+      chevronOffset: chevron.left + chevron.width / 2 - data.markCenter,
+      textOffset: text.getBoundingClientRect().left - data.nameLeft,
+      fontSize: getComputedStyle(element).fontSize,
+      expanded: element.querySelector('button')!.getAttribute('aria-expanded'),
+    }
+  }, rowBox)
+}
+
+/**
  * Hide the Session panel unless it is already hidden.
  * @param page - the page under test.
  */

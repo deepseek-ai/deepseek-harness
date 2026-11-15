@@ -59,6 +59,8 @@ kind: "package-reference"
 
 行没有的部分就不要写：有 `<button>` body 或菜单部分的行才会高亮。没有渲染任何内容的菜单部分（例如目标没有菜单项时的共享菜单按钮）视同不存在：不占位置，行也不会因它高亮。每条针对某个部分的规则只有一个类的优先级，因此行自己的类可以调整它。
 
+列表可能很长的分栏会把它收起：只显示列表（或列表里每个分组）的前五行，然后以收起控件作为最后一行，用来显示其余的行或再次收起。只有这样做能收起两行及以上时才收起，因为控件自己也占一行；列表按顺序排列，使被收起的是最不需要看的行。插件把这个控件作为 Component Factory `conversation.session.panel.fold` 提供：`renderFactorySlot('conversation.session.panel.fold', { expanded, label, name, onToggle })` 渲染一个标记为 `data-session-panel-row="fold"` 的行，body 就是按钮，使用分栏计数的 12px 三级文字，图标列里是 14px 的箭头，还有行被收起时朝下，全部显示后朝上。`label` 是当前状态的可见文字，例如「显示其余 14 个」或「收起」；`name` 是无障碍名称，以 `label` 开头并说明列表里是什么。收起状态由分栏保存，显示哪些行也由分栏决定；在注册上声明 store 可以让这个选择在面板隐藏期间保留。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -81,6 +83,7 @@ kind: "package-reference"
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、停靠探针，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
+| [`src/client/PanelFold.tsx`](src/client/PanelFold.tsx) | 被收起列表的收起控件，以 Component Factory 提供 |
 
 </details>
 

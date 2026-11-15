@@ -134,4 +134,22 @@ describe('SessionPanel.module.css row rules', () => {
     expect(hover).toMatch(/\[data-row-part='menu'\]\) \{\s*opacity: 0;/)
     expect(css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, '')).not.toContain(':hover')
   })
+
+  it('sets a fold control in the quiet type of the section counts with a 14px chevron, darker on hover and keyboard focus', () => {
+    const fold = "[data-session-panel-row='fold']"
+    expect(row(fold)).toEqual({
+      'color': 'var(--dsw-alias-label-tertiary)', 'font': 'var(--dsw-font-xxs-12)', 'font-variant-numeric': 'tabular-nums',
+    })
+    expect(row(`${fold} [data-row-part='icon']`, ' svg')).toEqual({ width: '14px', height: '14px' })
+    expect(row(`${fold}:has(> button:focus-visible)`)).toEqual({ color: 'var(--dsw-alias-label-secondary)' })
+    expect(row(`${fold}:hover`)).toEqual({ color: 'var(--dsw-alias-label-secondary)' })
+    // The fold rules follow the row rules they adjust, since every rule for a part has the same specificity.
+    const at = (selector: string, tail = ''): number => {
+      const index = css.indexOf(`.panel :where(${selector})${tail} {`)
+      expect(index).toBeGreaterThan(-1)
+      return index
+    }
+    expect(at(fold)).toBeGreaterThan(at('[data-session-panel-row]'))
+    expect(at(`${fold} [data-row-part='icon']`, ' svg')).toBeGreaterThan(at("[data-session-panel-row] [data-row-part='icon']", ' svg'))
+  })
 })

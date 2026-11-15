@@ -43,6 +43,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Rows of the built-in Environment section in ascending `order`; they receive the section's owner values. */
     'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session'; owner: SessionPanelSectionOwnerProps }
   }
+  interface SlotFactoryMap {
+    /**
+     * The fold control of a panel list. A list shows at most five rows of a
+     * group and then this control as its last row, which shows the rest or
+     * folds them again; a list folds only when that hides two rows or more,
+     * since the control takes a row itself. The list keeps the fold state and
+     * decides which rows show.
+     */
+    'conversation.session.panel.fold': { scope: 'root'; props: PanelFoldProps }
+  }
+}
+
+/** Props of the fold control that ends a folded panel list. */
+export interface PanelFoldProps {
+  /** Whether the list shows every row; the control then folds it again. */
+  readonly expanded: boolean
+  /** Visible text for the current state, such as "Show 14 more" or "Show less". */
+  readonly label: string
+  /** Accessible name for the current state; it starts with `label` and names what the list holds. */
+  readonly name: string
+  /** Show every row, or fold the list again. */
+  readonly onToggle: () => void
 }
 
 /** How the panel currently shows. */
