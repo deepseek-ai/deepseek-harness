@@ -35,8 +35,7 @@ const APPLICATION_ID = 0x44535043
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 /**
  * Internal scheduling constant, not deployment configuration: frames decoded
- * concurrently on the thread pool between two event-loop yields of a read;
- * at most 256 events per frame bounds one group to a few thousand events.
+ * concurrently on the thread pool between two event-loop yields of a read.
  */
 const READ_DECODE_GROUP_FRAMES = 8
 /** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
@@ -45,8 +44,6 @@ const BUSY_TIMEOUT_MS = 5000
 const LIVE_WRITE_BATCH_MAX_DELAY_MS = 200
 /** Admitted live events that start a write before the delay elapses, bounding one transaction's size. */
 const LIVE_WRITE_BATCH_MAX_EVENTS = 256
-/** Events stored per frame at most, bounding what one slice read must decompress; a format constant. */
-const FRAME_MAX_EVENTS = 256
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
@@ -98,6 +95,8 @@ export interface SqliteStoreOptions {
   readonly legacyRoot: string
   /** Physical frame encoding for new writes; stored frames decode by their own codec regardless. */
   readonly compression: FrameCompression
+  /** Maximum events per new frame; stored frames keep their written size. */
+  readonly frameEvents: number
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
@@ -112,6 +111,7 @@ export class SqliteStore {
   readonly path: string
   private readonly legacyRoot: string
   private readonly compression: FrameCompression
+  private readonly frameEvents: number
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
@@ -133,6 +133,7 @@ export class SqliteStore {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
     this.compression = options.compression
+    this.frameEvents = options.frameEvents
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -409,9 +410,9 @@ export class SqliteStore {
   /** Serialize and compress a batch before its transaction: one frame per chunk, yielding between chunks of a long batch. */
   private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedFrame[]> {
     const frames: EncodedFrame[] = []
-    for (let start = 0; start < batch.length; start += FRAME_MAX_EVENTS) {
+    for (let start = 0; start < batch.length; start += this.frameEvents) {
       if (start > 0) await setImmediate()
-      frames.push(encodeFrame(batch.slice(start, start + FRAME_MAX_EVENTS).map(event => JSON.stringify(event)), this.compression))
+      frames.push(encodeFrame(batch.slice(start, start + this.frameEvents).map(event => JSON.stringify(event)), this.compression))
     }
     return frames
   }

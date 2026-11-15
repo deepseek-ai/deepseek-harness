@@ -12,6 +12,9 @@
       "path": "../session-persistence-jsonl"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
