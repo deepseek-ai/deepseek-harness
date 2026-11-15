@@ -19776,6 +19776,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-account':
         specifier: workspace:*
         version: link:../../packages/account/deepseek-account
+      '@deepseek-ai/dsh-deepseek-auth':
+        specifier: workspace:*
+        version: link:../../packages/account/deepseek-auth
       '@deepseek-ai/dsh-deepseek-llm-api-extensions':
         specifier: workspace:*
         version: link:../../packages/llm/deepseek-llm-api-extensions
