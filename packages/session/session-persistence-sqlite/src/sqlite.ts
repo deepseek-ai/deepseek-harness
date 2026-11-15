@@ -26,7 +26,7 @@ import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import { sessionDir } from './paths.ts'
 import { decodeFrame, encodeFrame } from './frame.ts'
-import type { EncodedFrame } from './frame.ts'
+import type { EncodedFrame, FrameCompression } from './frame.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
 export const SCHEMA_VERSION = 1
@@ -34,10 +34,11 @@ const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 /**
- * Internal scheduling constant, not deployment configuration: rows encoded or
- * decoded between two event-loop yields while a long batch is processed.
+ * Internal scheduling constant, not deployment configuration: frames decoded
+ * concurrently on the thread pool between two event-loop yields of a read;
+ * at most 256 events per frame bounds one group to a few thousand events.
  */
-const READ_DECODE_YIELD_EVENTS = 1024
+const READ_DECODE_GROUP_FRAMES = 8
 /** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
 const BUSY_TIMEOUT_MS = 5000
 /** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
@@ -95,6 +96,8 @@ export interface SqliteStoreOptions {
   readonly path: string
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
   readonly legacyRoot: string
+  /** Physical frame encoding for new writes; stored frames decode by their own codec regardless. */
+  readonly compression: FrameCompression
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
@@ -108,6 +111,7 @@ export class SqliteStore {
   /** Absolute database path, recorded in routing records. */
   readonly path: string
   private readonly legacyRoot: string
+  private readonly compression: FrameCompression
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
@@ -128,6 +132,7 @@ export class SqliteStore {
   constructor(options: SqliteStoreOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
+    this.compression = options.compression
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -406,7 +411,7 @@ export class SqliteStore {
     const frames: EncodedFrame[] = []
     for (let start = 0; start < batch.length; start += FRAME_MAX_EVENTS) {
       if (start > 0) await setImmediate()
-      frames.push(encodeFrame(batch.slice(start, start + FRAME_MAX_EVENTS).map(event => JSON.stringify(event))))
+      frames.push(encodeFrame(batch.slice(start, start + FRAME_MAX_EVENTS).map(event => JSON.stringify(event)), this.compression))
     }
     return frames
   }
@@ -716,24 +721,30 @@ export class SqliteStore {
       return { frames, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
     const decoded: (SessionFormatEvent & SessionEvent)[] = []
-    let decodedSince = 0
-    for (const frame of stored.frames) {
-      // One synchronous transaction fetched the frames; decoding yields so a long history does not stall the event loop.
-      if (decodedSince >= READ_DECODE_YIELD_EVENTS) { await setImmediate(); decodedSince = 0 }
-      let lines: string[]
-      try { lines = decodeFrame(frame.codec, frame.bytes) } catch (error: unknown) {
-        throw this.corruption(`session "${header.id}": stored frame holding event ${offset + decoded.length} cannot be decoded`, error)
-      }
-      if (lines.length < frame.skip + frame.take) throw new HarnessError('SQLite frame is shorter than its recorded range', 'SESSION_STORAGE_CORRUPT')
-      for (const text of lines.slice(frame.skip, frame.skip + frame.take)) {
-        try {
-          decoded.push(decodeEvent(JSON.parse(text)))
-        } catch (error: unknown) {
-          if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
-          throw this.corruption(`session "${header.id}": stored event at index ${offset + decoded.length} is invalid`, error)
+    // One synchronous transaction fetched the frames; compressed frames decode on the thread pool a group at a
+    // time, and parsing each group yields the event loop before the next, so a long history does not stall it.
+    for (let group = 0; group < stored.frames.length; group += READ_DECODE_GROUP_FRAMES) {
+      if (group > 0) await setImmediate()
+      const frames = stored.frames.slice(group, group + READ_DECODE_GROUP_FRAMES)
+      const texts = await Promise.all(frames.map(async (frame, index) => {
+        try { return await decodeFrame(frame.codec, frame.bytes) } catch (error: unknown) {
+          throw this.corruption(`session "${header.id}": stored frame holding event ${offset + decoded.length + index} cannot be decoded`, error)
+        }
+      }))
+      for (const [index, lines] of texts.entries()) {
+        const frame = frames[index]
+        /* v8 ignore next -- a frame group only holds the frames it was built from. */
+        if (frame === undefined) continue
+        if (lines.length < frame.skip + frame.take) throw new HarnessError('SQLite frame is shorter than its recorded range', 'SESSION_STORAGE_CORRUPT')
+        for (const text of lines.slice(frame.skip, frame.skip + frame.take)) {
+          try {
+            decoded.push(decodeEvent(JSON.parse(text)))
+          } catch (error: unknown) {
+            if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
+            throw this.corruption(`session "${header.id}": stored event at index ${offset + decoded.length} is invalid`, error)
+          }
         }
       }
-      decodedSince += frame.take
     }
     if (stored.complete) {
       try {

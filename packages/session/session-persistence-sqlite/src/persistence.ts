@@ -39,6 +39,7 @@ export class SqliteSessionPersistence extends SessionPersistence {
     this.sqlite = new SqliteStore({
       path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
+      compression: config.compression ?? 'zstd',
       publish: id => this.publish(id),
       acquireCreationLease: header => this.acquireCreationLease(header),
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },

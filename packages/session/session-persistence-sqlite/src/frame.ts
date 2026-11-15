@@ -1,11 +1,18 @@
 /**
  * Frame encoding for stored event batches: one durable write stores one frame
- * holding its events as JSON lines, Zstandard-compressed when that is smaller
- * than the UTF-8 text. Rows compress together, so a frame of many events
- * reaches the ratio of a compressed log file, while a frame of one event costs
- * no more than storing it raw. @module
+ * holding its events as JSON lines, Zstandard-compressed when the store's
+ * compression is `zstd` and the frame shrinks, otherwise as UTF-8 text. Rows
+ * compress together, so a frame of many events reaches the ratio of a
+ * compressed log file, while a frame of one event costs no more than storing
+ * it raw. @module
  */
-import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
+import { constants, zstdCompressSync, zstdDecompress } from 'node:zlib'
+import { promisify } from 'node:util'
+
+const decompress = promisify(zstdDecompress)
+
+/** Physical frame encoding selected by the plugin's `compression` config. */
+export type FrameCompression = 'zstd' | 'none'
 
 /** Stored `frames.codec` for UTF-8 JSON lines; a format constant, never reinterpreted. */
 export const FRAME_CODEC_UTF8 = 0
@@ -30,27 +37,31 @@ export interface EncodedFrame {
  * Encode one batch of event JSON texts as a frame. Synchronous: a batch costs
  * milliseconds at most, and callers yield between batches of a long import.
  * @param lines - the batch's events, each serialized as one JSON text without newlines.
+ * @param compression - `zstd` compresses when that is smaller; `none` stores the text.
  * @returns the frame to store.
  */
-export function encodeFrame(lines: readonly string[]): EncodedFrame {
+export function encodeFrame(lines: readonly string[], compression: FrameCompression): EncodedFrame {
   const utf8 = Buffer.from(lines.join('\n'), 'utf8')
-  const frame = zstdCompressSync(utf8, ZSTD_OPTIONS)
-  return frame.length < utf8.length
-    ? { codec: FRAME_CODEC_ZSTD, bytes: frame, count: lines.length }
-    : { codec: FRAME_CODEC_UTF8, bytes: utf8, count: lines.length }
+  if (compression === 'zstd') {
+    const frame = zstdCompressSync(utf8, ZSTD_OPTIONS)
+    if (frame.length < utf8.length) return { codec: FRAME_CODEC_ZSTD, bytes: frame, count: lines.length }
+  }
+  return { codec: FRAME_CODEC_UTF8, bytes: utf8, count: lines.length }
 }
 
 /**
- * Decode one stored frame back to its event JSON texts.
+ * Decode one stored frame back to its event JSON texts. A compressed frame
+ * decompresses on the libuv thread pool, so callers may decode several frames
+ * concurrently; a text frame decodes inline.
  * @param codec - the frame's stored codec.
  * @param bytes - the frame's stored bytes.
  * @returns the JSON text of each event, in sequence order.
- * @throws {RangeError} for an unknown codec; a corrupt frame throws the Zstandard error.
+ * @throws {RangeError} for an unknown codec; a corrupt frame rejects with the Zstandard error.
  */
-export function decodeFrame(codec: number, bytes: Uint8Array): string[] {
+export async function decodeFrame(codec: number, bytes: Uint8Array): Promise<string[]> {
   switch (codec) {
     case FRAME_CODEC_UTF8: return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').split('\n')
-    case FRAME_CODEC_ZSTD: return zstdDecompressSync(bytes).toString('utf8').split('\n')
+    case FRAME_CODEC_ZSTD: return (await decompress(bytes)).toString('utf8').split('\n')
     default: throw new RangeError(`unknown SQLite frame codec ${String(codec)}`)
   }
 }
