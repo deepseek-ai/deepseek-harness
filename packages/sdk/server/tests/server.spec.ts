@@ -1069,6 +1069,31 @@ describe('HarnessSdkJsonRpcServer', () => {
     }
   })
 
+  it.each([
+    ['a composition without DeepSeek authentication', false],
+    ['a composition that mounts DeepSeek authentication', true],
+  ] as const)('mounts the official route for %s and removes at shutdown only what it mounted', async (_composition, mounted) => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-fallback-auth-'))
+    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // A loopback endpoint keeps the fallback-mounted official route off the network; no request is sent.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
+    if (mounted) await ctx.plugin(DeepSeekAuth)
+    const officialRoute = (): boolean => ctx.get('llm')?.listProviders().some(provider => provider.id === 'deepseek-official') ?? false
+    // Reported as a boolean: a failed assertion must not print the service and its context.
+    const authentication = (): boolean => ctx.get('deepseekAuth') !== undefined
+    try {
+      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      expect([officialRoute(), authentication()]).toEqual([true, true])
+      await server.shutdown()
+      expect([officialRoute(), authentication()]).toEqual([false, mounted])
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
   it('rejects a missing non-DeepSeek provider when an LLM service already exists', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-new-llm-'))
     const ctx = await makeHarness(storageDir)
