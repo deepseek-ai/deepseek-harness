@@ -5024,9 +5024,9 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-web-deepseek-api`
 
-- `inject`: `web`
+- `inject`: `web` · `deepseekAuth`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:56`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:54`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -5102,9 +5102,9 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-web-search-deepseek`
 
-- `inject`: `web`
+- `inject`: `web` · `deepseekAuth`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-search-deepseek/src/index.ts:53`](../packages/web/web-search-deepseek/src/index.ts)
+- `source`: [`packages/web/web-search-deepseek/src/index.ts:51`](../packages/web/web-search-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `apply` fills env-var and constant defaults). */
