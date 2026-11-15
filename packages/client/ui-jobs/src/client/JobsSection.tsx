@@ -243,8 +243,7 @@ function JobItem({ job, view, expanded, now, onToggle, kill, renderFactorySlot, 
           <div
             className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine}
             data-job-row=""
-            onPointerEnter={marquee.enter}
-            onPointerLeave={marquee.leave}
+            {...marquee}
           >
             {observable
               ? (

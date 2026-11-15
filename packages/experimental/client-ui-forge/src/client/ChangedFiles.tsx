@@ -71,7 +71,7 @@ function Row({ node, depth, done, props }: {
       style={{ paddingInlineStart: `${8 + depth * 14}px` }} aria-label={renamed ?? node.path} aria-expanded={directory ? expanded : undefined}
       aria-description={viewed ? t(directory ? 'viewed.directory' : 'viewed.label') : undefined} data-viewed={viewed ? '' : undefined}
       aria-current={!directory && state.selected === node.path ? 'true' : undefined}
-      onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}
+      {...marquee}
       onKeyDown={(event) => {
         if (!directory || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return
         event.preventDefault()

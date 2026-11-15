@@ -2,7 +2,7 @@
 // on the owning row, a CSS animation carries the text to its far edge, and
 // leaving returns it to the start.
 
-import { forwardRef, useMemo } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { HTMLAttributes, PointerEvent, RefObject } from 'react'
 import clsx from 'clsx'
 import css from './Marquee.module.css'
@@ -14,12 +14,18 @@ const MIN_REVEAL_PX = 8
 /* Travel speed: slow enough to read the text as it passes. */
 const PX_PER_MS = 0.03
 
-/** Row handlers that start and stop one text's marquee. */
+/** Pointer handlers of the row whose hover marquees one text; spread them onto the row. */
 export interface HoverMarquee {
   /** Start the travel; touch pointers and text that fits do nothing. */
-  readonly enter: (event?: PointerEvent) => void
-  /** Return the text to its start in one step. */
-  readonly leave: () => void
+  readonly onPointerEnter: (event: PointerEvent) => void
+  /** Return the text to its start in one step, unless the marquee is held. */
+  readonly onPointerLeave: () => void
+}
+
+/** Options of {@link useHoverMarquee}. */
+export interface HoverMarqueeOptions {
+  /** Marquee the text while true, with or without the pointer on the row, such as while the row's menu is open. */
+  readonly hold?: boolean | undefined
 }
 
 /**
@@ -57,18 +63,33 @@ function rest(text: HTMLElement): void {
  * animates the travel and its fades, so the script only measures the overflow
  * once per entry; reduced motion shows the far edge at once.
  * @param text - ref to the clipping text element, a {@link MarqueeText}.
+ * @param options - whether the marquee is held without the pointer.
  * @returns stable pointer enter and leave handlers for the row.
  */
-export function useHoverMarquee(text: RefObject<HTMLElement | null>): HoverMarquee {
+export function useHoverMarquee(text: RefObject<HTMLElement | null>, { hold = false }: HoverMarqueeOptions = {}): HoverMarquee {
+  const hovered = useRef(false)
+  const held = useRef(hold)
+  const sync = useCallback((): void => {
+    const element = text.current
+    if (element === null) return
+    if (hovered.current || held.current) travel(element)
+    else rest(element)
+  }, [text])
+  useEffect(() => {
+    held.current = hold
+    sync()
+  }, [hold, sync])
   return useMemo(() => ({
-    enter: (event?: PointerEvent): void => {
-      if (event?.pointerType === 'touch') return
-      if (text.current !== null) travel(text.current)
+    onPointerEnter: (event: PointerEvent): void => {
+      if (event.pointerType === 'touch') return
+      hovered.current = true
+      sync()
     },
-    leave: (): void => {
-      if (text.current !== null) rest(text.current)
+    onPointerLeave: (): void => {
+      hovered.current = false
+      sync()
     },
-  }), [text])
+  }), [sync])
 }
 
 /** Props of single-line text that a {@link useHoverMarquee} can marquee. */

@@ -439,7 +439,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
     : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
-      <div className={css.changeHead} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
+      <div className={css.changeHead} {...marquee}>
         <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
         <div className={css.headText}>
           <a

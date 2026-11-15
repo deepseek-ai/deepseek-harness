@@ -125,7 +125,7 @@ function SignInRow({ need, copyText, t }: {
     </span>
   )
   return (
-    <div role="status" data-session-panel-row="" data-forge-signin={readiness.state} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
+    <div role="status" data-session-panel-row="" data-forge-signin={readiness.state} {...marquee}>
       <span data-row-part="body">
         <span data-row-part="icon" aria-hidden="true"><IconWarningTriangleOutlineRegular size={16} /></span>
         {command === undefined ? title : (

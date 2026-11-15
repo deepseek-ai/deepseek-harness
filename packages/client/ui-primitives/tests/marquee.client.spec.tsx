@@ -6,11 +6,11 @@ import { MarqueeText, useHoverMarquee } from '../src/Marquee.tsx'
 
 afterEach(cleanup)
 
-function Row({ text }: { readonly text: string }) {
+function Row({ text, hold }: { readonly text: string; readonly hold?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
-  const marquee = useHoverMarquee(ref)
+  const marquee = useHoverMarquee(ref, { hold })
   return (
-    <div role="row" onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
+    <div role="row" {...marquee}>
       <MarqueeText ref={ref} className="cell" data-cell="">{text}</MarqueeText>
     </div>
   )
@@ -65,11 +65,29 @@ describe('useHoverMarquee', () => {
     }
   })
 
+  it('marquees while held, with or without the pointer, and rests when neither remains', () => {
+    const view = render(<Row text="Held text" />)
+    const row = screen.getByRole('row')
+    const { text } = parts()
+    geometry(text, 300, 200)
+    view.rerender(<Row text="Held text" hold />)
+    expect(marquee(text)).toEqual(['', '100px', '3333ms'])
+    fireEvent.pointerEnter(row)
+    fireEvent.pointerLeave(row)
+    expect(text.hasAttribute('data-marquee')).toBe(true)
+    view.rerender(<Row text="Held text" />)
+    expect(text.hasAttribute('data-marquee')).toBe(false)
+    // The pointer keeps a marquee whose hold ends.
+    fireEvent.pointerEnter(row)
+    view.rerender(<Row text="Held text" hold />)
+    view.rerender(<Row text="Held text" />)
+    expect(text.hasAttribute('data-marquee')).toBe(true)
+  })
+
   it('ignores hover before its text element mounts', () => {
     function Detached() {
       const ref = useRef<HTMLSpanElement>(null)
-      const marquee = useHoverMarquee(ref)
-      return <div role="row" onPointerEnter={marquee.enter} onPointerLeave={marquee.leave} />
+      return <div role="row" {...useHoverMarquee(ref)} />
     }
     render(<Detached />)
     fireEvent.pointerEnter(screen.getByRole('row'))

@@ -110,8 +110,7 @@ export function CheckoutRow({
       data-session-panel-row=""
       data-forge-checkout=""
       data-missing={label.missing ? '' : undefined}
-      onPointerEnter={marquee.enter}
-      onPointerLeave={marquee.leave}
+      {...marquee}
     >
       <span data-row-part="body">
         <span data-row-part="icon" aria-hidden="true">

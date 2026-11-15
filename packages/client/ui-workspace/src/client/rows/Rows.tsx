@@ -2,7 +2,7 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only, and a session row's clipped
- * title marquees programmatically while the row is hovered. Workspace row
+ * title marquees while the row is hovered or its menu is open. Workspace row
  * menus share captured Workspace actions with right-click. Both row types
  * render the shared `contextMenu.button` factory for their menu trigger.
  * Session hover buttons use the browser's `renderSlot` for the
@@ -551,11 +551,7 @@ export function SessionNodeItem({
   // detail-1 press on this title since the window last lost focus.
   const renameArmed = useRef(false)
   const disarmRename = useRef(() => { renameArmed.current = false }).current
-  const marquee = useHoverMarquee(titleRef)
-  useEffect(() => {
-    if (menuOpen || rowRef.current?.matches(':hover')) marquee.enter()
-    else marquee.leave()
-  }, [menuOpen, marquee])
+  const marquee = useHoverMarquee(titleRef, { hold: menuOpen })
   useEffect(() => {
     if (onReveal === undefined) return
     rowRef.current?.scrollIntoView({ block: 'nearest' })
@@ -582,8 +578,8 @@ export function SessionNodeItem({
         event.preventDefault()
         onOpen(node.id)
       } })}
-      onPointerEnter={marquee.enter}
-      onPointerLeave={() => { if (!menuOpen) marquee.leave() }}
+      onPointerEnter={marquee.onPointerEnter}
+      onPointerLeave={marquee.onPointerLeave}
       draggable={draggable}
       onDragStart={!draggable
         ? undefined
