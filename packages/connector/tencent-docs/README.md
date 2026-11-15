@@ -33,7 +33,7 @@ Install the package as a bundle, for example from the Web sidebar's **Plugins** 
 dsh plugin --profile web add @deepseek-ai/dsh-tencent-docs
 ```
 
-The bundle patch inserts the `tencent-docs` row after the profile's other layers. The plugin requires the `mcpManager` and `systemPrompt` services, which the Web and Desktop compositions provide through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpManager` service.
+The bundle patch inserts the `tencent-docs` row after the profile's other layers. The plugin requires the `mcpManager` and `systemPrompt` services: the [base bundle](../../bundle/base/README.md) provides `systemPrompt`, and the Web and Desktop compositions add the MCP manager through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpManager` service.
 
 ### Authorize and sign out
 
@@ -112,11 +112,11 @@ Tools named `mcp__tencent-docs__*` come from the Tencent Docs plugin. In user-fa
 
 #### Token effect
 
-The two fixed sentences add about 80 tokens to every request while the plugin is loaded.
+The three fixed sentences add about 80 tokens to every request while the plugin is loaded.
 
 #### KV Cache effect
 
-The sentence is prefix-stable: it changes only when the plugin loads or unloads, not when authorization or the connection changes.
+The guidance is prefix-stable: it changes only when the plugin loads or unloads, not when authorization or the connection changes.
 
 ### Tencent Docs server tools and instructions
 

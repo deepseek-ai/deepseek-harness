@@ -33,7 +33,7 @@ kind: "package-bundle"
 dsh plugin --profile web add @deepseek-ai/dsh-tencent-docs
 ```
 
-bundle patch 在 profile 其他层之后插入 `tencent-docs` 行。插件需要 `mcpManager` 与 `systemPrompt` 服务，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 提供它们。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpManager` 服务。
+bundle patch 在 profile 其他层之后插入 `tencent-docs` 行。插件需要 `mcpManager` 与 `systemPrompt` 服务：[base bundle](../../bundle/base/README.zh.md) 提供 `systemPrompt`，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 补上 MCP 管理器。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpManager` 服务。
 
 ### 授权与退出登录
 
@@ -112,11 +112,11 @@ Tools named `mcp__tencent-docs__*` come from the Tencent Docs plugin. In user-fa
 
 #### Token 影响
 
-插件加载期间，这两句固定文字为每次请求增加约 80 个 token。
+插件加载期间，这三句固定文字为每次请求增加约 80 个 token。
 
 #### KV Cache 影响
 
-这句话保持前缀稳定：只在插件加载或卸载时变化，授权或连接状态变化不会改变它。
+这段指引保持前缀稳定：只在插件加载或卸载时变化，授权或连接状态变化不会改变它。
 
 ### 腾讯文档服务器工具与说明
 
