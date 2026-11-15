@@ -75,7 +75,10 @@ class BoundConversation implements ConversationBinding {
   private revision = -1
   private frame: number | undefined
   private following = false
-  /** Resuming rebuilds the whole window: set until the first fold and by registry changes while not following. */
+  /**
+   * The next window change rebuilds the whole window: set until the first fold, by registry changes while not
+   * following, and by a failed resumption, whose partial fold must not be extended incrementally.
+   */
   private stale = true
   private disposeFeed: () => void = () => {}
   private disposeRetained: () => void = () => {}
@@ -166,17 +169,14 @@ class BoundConversation implements ConversationBinding {
   /**
    * Fold the window changes received while not following and publish once synchronously: a stale
    * binding rebuilds the whole window, otherwise contiguous changes fold incrementally and a gap rebuilds.
+   * A failed fold leaves the binding stale, so the next window change rebuilds the whole window.
    */
   private resume(): void {
-    const window = this.feed.getSnapshot()
     try {
-      if (this.stale) {
-        this.stale = false
-        this.revision = window.revision
-        this.assembler.rebuildRegistry(window.entries, window.hasMore)
-      } else {
-        this.accept(window)
-      }
+      this.accept(this.feed.getSnapshot())
+    } catch (error: unknown) {
+      this.stale = true
+      throw error
     } finally {
       this.cancelFrame()
       this.publishing(() => this.assembler.flush())
@@ -188,7 +188,17 @@ class BoundConversation implements ConversationBinding {
     this.publish(this.assembler.replaceWindow(window.entries, window.hasMore))
   }
 
+  private rebuildWindow(window: SessionEventWindow): void {
+    this.revision = window.revision
+    this.publish(this.assembler.rebuildRegistry(window.entries, window.hasMore))
+    this.stale = false
+  }
+
   private accept(window: SessionEventWindow): void {
+    if (this.stale) {
+      this.rebuildWindow(window)
+      return
+    }
     if (window.revision === this.revision) return
     if (window.revision !== this.revision + 1 || window.change.kind === 'replace') {
       this.replace(window)

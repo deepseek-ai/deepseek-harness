@@ -690,6 +690,56 @@ describe('Conversation registries', () => {
     expect(conversation.openTurn.getSnapshot()).toBe(2)
   })
 
+  it('rebuilds the whole window on the next change after a resuming fold fails', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    onTestFinished(() => { errors.mockRestore() })
+    const { uiConversation, binding, retained, events, views } = await bootRegistries()
+    let failTurn: number | undefined
+    events.register({
+      kind: 'turn-probe',
+      target: 'recovery-probe',
+      match: (event) => {
+        if (event.type !== 'turn/start') return null
+        if (event.data.turn === failTurn) {
+          failTurn = undefined
+          throw new Error('one-time failure')
+        }
+        return { id: String(event.data.turn), role: 'start' }
+      },
+      start: () => null,
+      update: context => context.state,
+      buildViewNode: context => ({ key: context.key, kind: 'turn-probe', id: context.id, target: 'recovery-probe', data: null }),
+    })
+    const idsView: ConversationViewDefinition<ConversationViewNode, readonly string[]> = {
+      target: 'recovery-probe',
+      create: () => {
+        let ids: readonly string[] = []
+        return {
+          empty: [],
+          replace: ({ nodes }) => (ids = nodes.map(node => node.id)),
+          apply: ({ upserts }) => (ids = [...ids, ...upserts.map(node => node.id).filter(id => !ids.includes(id))]),
+        }
+      },
+    }
+    views.register(idsView)
+    await Promise.resolve()
+    const conversation = uiConversation.binding(binding)
+    conversation.activate('recovery-probe')
+    const source = binding.eventSource as MutableSessionEventSource
+    const start = (turn: number): void => {
+      source.append({ type: 'event', event: { type: 'turn/start', seq: SessionSeq(turn), time: turn, data: { turn } } })
+    }
+    start(1)
+    retained.set(false)
+    start(2)
+    start(3)
+    failTurn = 2
+    retained.set(true)
+    expect(errors).toHaveBeenCalled()
+    start(4)
+    expect(conversation.snapshot.getSnapshot().views.get('recovery-probe')).toEqual(['1', '2', '3', '4'])
+  })
+
   it('reaches the same views on resume as when following every event', async () => {
     const turnProbe: ConversationNodeDefinition<string> = {
       kind: 'turn-probe',

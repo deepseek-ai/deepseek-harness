@@ -186,6 +186,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param sessions - pure Session Controller.
    * @param view - the browser's viewing-store write set (one instance shared with its registration).
    * @param notify - show one notice through the Workspace notice channel.
+   * @param recentViewLimit - recently viewed Sessions needing no attention kept besides the main-view Session.
    */
   constructor(
     ctx: Context,
@@ -194,9 +195,10 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly sessions: ISessions,
     private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
     private readonly notify: (toast: RowToast) => void,
+    recentViewLimit: number,
   ) {
     super(ctx, 'uiWorkspace')
-    this.recentViews = new RecentSessionViews(sessions, workspaces, ctx.uiSession.sessionStatus)
+    this.recentViews = new RecentSessionViews(sessions, workspaces, ctx.uiSession.sessionStatus, recentViewLimit)
     ctx.effect(() => {
       const stop = this.watchNavigation()
       const stopRecentViews = this.recentViews.start()
@@ -522,7 +524,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const previous = this.mainReference
     this.mainReference = undefined
     this.selection.set({})
-    if (previous !== undefined) this.recentViews.leave(previous.sessionId)
+    this.recentViews.show(undefined)
     previous?.release()
     this.ctx.layout.selectPanel(null)
   }
@@ -555,10 +557,8 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
     const previous = this.mainReference
     this.mainReference = reference
-    // The new main reference already holds the target, so releasing its recent entry first keeps the
-    // list within its limit when the main view returns to a recent Session.
-    this.recentViews.enter(reference.sessionId)
-    if (previous !== undefined && previous.sessionId !== reference.sessionId) this.recentViews.leave(previous.sessionId)
+    // Both main references are held here, so the previous Session moves to the recent views without a gap.
+    this.recentViews.show(reference.sessionId)
     previous?.release()
     if (panel === 'reveal') this.ctx.layout.selectPanel(null)
   }

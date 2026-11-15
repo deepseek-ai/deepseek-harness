@@ -8,6 +8,7 @@ import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-clie
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { Config } from '../src/client/index.ts'
 import { RecentSessionViews } from '../src/client/recent-views.ts'
 
 const sid = (id: string): SessionId => brandString<SessionId>(id)
@@ -43,8 +44,8 @@ function bench(ids: readonly SessionId[]) {
   const sessions: Pick<ISessions, 'list' | 'retain' | 'subagentAddress'> = { list, retain, subagentAddress }
   const workspaceController: Pick<IWorkspaces, 'list'> = { list: workspaces }
   const status = createSnapshotStore<SessionStatusSnapshot>(new Map())
-  const recent = new RecentSessionViews(sessions, workspaceController, status)
-  onRetain = () => { recent.reconcile() }
+  const recent = new RecentSessionViews(sessions, workspaceController, status, 10)
+  const stop = recent.start()
   const update = (id: SessionId, patch: Partial<SessionSummary>): void => {
     const state = list.getSnapshot()
     list.set({ ...state, byId: { ...state.byId, [id]: row(id, { ...state.byId[id], ...patch }) } })
@@ -56,17 +57,24 @@ function bench(ids: readonly SessionId[]) {
     next.set(id, { running: false, pendingInteraction: undefined, completionUnread: false, completionFailed: false, ...patch })
     status.set(next)
   }
-  return { recent, list, workspaces, retain, subagentAddress, update, retained, setOnRetain, setStatus }
+  /** Show each Session in the main view in turn, then show `last`. */
+  const visit = (ids: readonly SessionId[], last?: SessionId): void => {
+    for (const id of ids) recent.show(id)
+    recent.show(last)
+  }
+  return { recent, stop, list, workspaces, retain, subagentAddress, update, retained, setOnRetain, setStatus, visit }
 }
 
 describe('recently viewed Sessions', () => {
-  it('retains a left Session without facets and releases it when the main view returns to it', () => {
-    const b = bench([sid('a')])
-    b.recent.leave(sid('a'))
+  it('holds a left Session without facets and releases it when the main view returns to it', () => {
+    const b = bench([sid('a'), sid('b')])
+    b.visit([sid('a')], sid('b'))
     expect(b.retain).toHaveBeenCalledExactlyOnceWith(sid('a'), { source: 'recentViews' })
     expect(b.retained()).toEqual([sid('a')])
-    b.recent.enter(sid('a'))
-    expect(b.retained()).toEqual([])
+    b.recent.show(sid('a'))
+    expect(b.retained()).toEqual([sid('b')])
+    b.recent.show(sid('a'))
+    expect(b.retain).toHaveBeenCalledTimes(2)
   })
 
   it('skips blank, archived, and unlisted Sessions and retains a subagent through its address', () => {
@@ -75,20 +83,10 @@ describe('recently viewed Sessions', () => {
     b.workspaces.set({ ...b.workspaces.getSnapshot(), archivedSessionIds: [sid('archived')] })
     const address = { parentSessionId: sid('parent'), childSessionId: sid('child'), mode: 'continuable' as const }
     b.subagentAddress.mockImplementation(id => id === sid('child') ? address : undefined)
-    b.recent.leave(sid('blank'))
-    b.recent.leave(sid('archived'))
-    b.recent.leave(sid('missing'))
+    b.visit([sid('blank'), sid('archived'), sid('missing')])
     expect(b.retain).not.toHaveBeenCalled()
-    b.recent.leave(sid('child'))
+    b.visit([sid('child')])
     expect(b.retain).toHaveBeenCalledExactlyOnceWith(address, { source: 'recentViews' })
-  })
-
-  it('keeps one entry per Session when it is left again', () => {
-    const b = bench([sid('a')])
-    b.recent.leave(sid('a'))
-    b.recent.leave(sid('a'))
-    expect(b.retain).toHaveBeenCalledTimes(2)
-    expect(b.retained()).toEqual([sid('a')])
   })
 
   it('keeps ten idle Sessions beyond any running ones and evicts the least recently left idle Session', () => {
@@ -96,57 +94,56 @@ describe('recently viewed Sessions', () => {
     const b = bench(ids)
     b.update(sid('s0'), { running: true })
     b.setStatus(sid('s1'), { running: true })
-    for (const id of ids.slice(0, 12)) b.recent.leave(id)
+    b.visit(ids.slice(0, 12))
     expect(b.retained()).toHaveLength(12)
-    b.recent.leave(sid('s12'))
+    b.visit([sid('s12')])
     expect(b.retained()).toHaveLength(12)
     expect(b.retained()).toEqual(expect.arrayContaining([sid('s0'), sid('s1')]))
     expect(b.retained()).not.toContain(sid('s2'))
     b.update(sid('s0'), { running: false })
-    b.recent.reconcile()
     expect(b.retained()).toHaveLength(11)
     expect(b.retained()).not.toContain(sid('s0'))
   })
 
-  it('keeps a new entry when retention reconciles a list already beyond the limit', () => {
-    const ids = Array.from({ length: 12 }, (_, index) => sid(`r${index}`))
+  it('does not bring an evicted Session back when room frees up', () => {
+    const ids = Array.from({ length: 12 }, (_, index) => sid(`e${index}`))
     const b = bench(ids)
-    for (const id of ids) b.update(id, { running: true })
-    for (const id of ids.slice(0, 11)) b.recent.leave(id)
-    b.recent.leave(ids[11]!)
-    for (const id of ids) b.update(id, { running: false })
-    b.recent.reconcile()
-    expect(b.retained()).toHaveLength(10)
-    expect(b.retained()).toContain(ids[11])
-    b.recent.dispose()
-    expect(b.retained()).toEqual([])
+    b.visit(ids.slice(0, 11))
+    expect(b.retained()).not.toContain(sid('e0'))
+    b.workspaces.set({ ...b.workspaces.getSnapshot(), archivedSessionIds: [sid('e5')] })
+    expect(b.retained()).toHaveLength(9)
+    expect(b.retained()).not.toContain(sid('e0'))
   })
 
-  it('releases a reference retained while the list is disposed and reports a failed retention', () => {
-    const b = bench([sid('a'), sid('b')])
-    b.setOnRetain(() => { b.recent.dispose() })
-    b.recent.leave(sid('a'))
-    expect(b.retained()).toEqual([])
-    b.recent.leave(sid('b'))
-    expect(b.retained()).toEqual([])
+  it('keeps the main-view Session out of the count when the list reconciles during retention', () => {
+    const ids = Array.from({ length: 12 }, (_, index) => sid(`m${index}`))
+    const b = bench(ids)
+    b.visit(ids.slice(0, 10), sid('m10'))
+    expect(b.retained()).toHaveLength(10)
+    b.setOnRetain(() => { b.update(sid('m3'), { title: 'touched' }) })
+    b.recent.show(sid('m3'))
+    expect(b.retained()).toHaveLength(10)
+    expect(b.retained()).toEqual(expect.arrayContaining([sid('m1'), sid('m10')]))
+    expect(b.retained()).not.toContain(sid('m3'))
+  })
+
+  it('retains before releasing and reports a failed retention without retrying it', () => {
+    const b = bench([sid('a'), sid('b'), sid('c')])
+    b.visit([sid('a')], sid('b'))
+    const order: string[] = []
+    b.setOnRetain(() => { order.push(`retained with ${String(b.retained().length)} held`) })
+    b.recent.show(sid('a'))
+    expect(order).toEqual(['retained with 2 held'])
+    expect(b.retained()).toEqual([sid('b')])
     const failure = new Error('retain failed')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const other = bench([sid('c')])
-    other.retain.mockImplementationOnce(() => { throw failure })
-    other.recent.leave(sid('c'))
+    b.retain.mockImplementationOnce(() => { throw failure })
+    b.recent.show(sid('c'))
+    expect(warn).toHaveBeenCalledOnce()
     expect(warn).toHaveBeenCalledWith('recent Session view retention failed:', failure)
-    expect(other.retained()).toEqual([])
+    b.update(sid('a'), { title: 'touched' })
+    expect(b.retained()).toEqual([sid('b')])
     warn.mockRestore()
-  })
-
-  it('retains a Session left again before releasing its earlier entry', () => {
-    const b = bench([sid('a')])
-    b.recent.leave(sid('a'))
-    const releaseOrder: string[] = []
-    b.setOnRetain(() => { releaseOrder.push(`retained:${String(b.retained().length)}`) })
-    b.recent.leave(sid('a'))
-    expect(releaseOrder).toEqual(['retained:1'])
-    expect(b.retained()).toEqual([sid('a')])
   })
 
   it('neither counts nor evicts Sessions awaiting the user or holding an unread completion until they are read', () => {
@@ -155,10 +152,9 @@ describe('recently viewed Sessions', () => {
     b.setStatus(sid('u0'), { pendingInteraction: { key: 'question:1', kind: 'question', sessionId: sid('u0') } as SessionPendingInteraction })
     b.setStatus(sid('u1'), { completionUnread: true })
     b.setStatus(sid('u2'), { completionUnread: true, completionFailed: true })
-    for (const id of ids) b.recent.leave(id)
+    b.visit(ids)
     expect(b.retained()).toHaveLength(13)
     b.setStatus(sid('u1'), { completionUnread: false })
-    b.recent.reconcile()
     expect(b.retained()).toHaveLength(12)
     expect(b.retained()).not.toContain(sid('u1'))
     expect(b.retained()).toEqual(expect.arrayContaining([sid('u0'), sid('u2')]))
@@ -168,23 +164,33 @@ describe('recently viewed Sessions', () => {
     const ids = Array.from({ length: 12 }, (_, index) => sid(`p${index}`))
     const b = bench(ids)
     b.workspaces.set({ ...b.workspaces.getSnapshot(), pinnedSessionIds: [sid('p0'), sid('p1')] })
-    for (const id of ids) b.recent.leave(id)
+    b.visit(ids)
     expect(b.retained()).toHaveLength(10)
     expect(b.retained()).toEqual(expect.arrayContaining([sid('p0'), sid('p1')]))
     expect(b.retained()).not.toContain(sid('p2'))
     expect(b.retained()).not.toContain(sid('p3'))
   })
 
-  it('drops removed and archived Sessions on reconcile and releases every entry on dispose', () => {
-    const b = bench([sid('a'), sid('b'), sid('c')])
-    for (const id of [sid('a'), sid('b'), sid('c')]) b.recent.leave(id)
+  it('drops removed and archived Sessions and releases everything when stopped, even during retention', () => {
+    const b = bench([sid('a'), sid('b'), sid('c'), sid('d')])
+    b.visit([sid('a'), sid('b'), sid('c')])
     const state = b.list.getSnapshot()
     const { [sid('a')]: _removed, ...byId } = state.byId
     b.list.set({ ...state, ids: state.ids.filter(id => id !== sid('a')), byId })
     b.workspaces.set({ ...b.workspaces.getSnapshot(), archivedSessionIds: [sid('b')] })
-    b.recent.reconcile()
     expect(b.retained()).toEqual([sid('c')])
-    b.recent.dispose()
+    b.recent.show(sid('d'))
+    b.setOnRetain(() => { b.stop() })
+    b.recent.show(undefined)
+    expect(b.retain).toHaveBeenLastCalledWith(sid('d'), { source: 'recentViews' })
     expect(b.retained()).toEqual([])
+  })
+})
+
+describe('recent view configuration', () => {
+  it('keeps ten recent views by default and rejects a negative limit', () => {
+    expect(Config({}).recentViewLimit).toBe(10)
+    expect(Config({ recentViewLimit: 3 }).recentViewLimit).toBe(3)
+    expect(() => Config({ recentViewLimit: -1 })).toThrow()
   })
 })

@@ -313,6 +313,7 @@ function bench(options: BenchOptions = {}) {
     sessions,
     view.actions,
     notify,
+    10,
   )
   return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify, requestDraftInitialization, status }
 }
@@ -489,7 +490,7 @@ describe('UiWorkspaceService', () => {
     const owner = runtime.ctx.isolate('uiWorkspace').isolate('uiSession')
     owner.provide('uiSession', { sessionStatus: b.status } as never)
     const uiWorkspace = new UiWorkspaceService(
-      owner, b.directoryPicker.remote, b.workspaces, sessions, b.view.actions, b.notify,
+      owner, b.directoryPicker.remote, b.workspaces, sessions, b.view.actions, b.notify, 10,
     )
     uiWorkspace.openSession(sid('a'))
     const binding = sessions.binding('a')

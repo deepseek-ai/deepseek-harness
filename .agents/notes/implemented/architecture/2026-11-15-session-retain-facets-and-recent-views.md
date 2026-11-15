@@ -56,7 +56,7 @@ export interface SessionBinding {
 `ui-conversation` declares `conversation`: Conversation assembly of the event window and materialization of its views.
 
 - `BoundConversation` remains one per binding, and its `snapshot`, `openTurn`, and `target(t)` sources keep stable identities. `UiConversation.binding()` registers the binding's disposal on the Session scope before the binding starts following, and a failed initial fold disposes the binding so the next resolution starts afresh.
-- When the facet **starts** being retained, the binding first subscribes to the event window, then resumes in one step: the first fold, or a registry change made while not following, rebuilds the current window once; otherwise contiguous changes received meanwhile apply through the incremental assembler and a revision gap rebuilds the whole window. Any pending rAF is then cancelled and the binding publishes once synchronously, also after that fold fails. A view activated while not following is built from the last folded state and catches up on resume.
+- When the facet **starts** being retained, the binding first subscribes to the event window, then resumes in one step: the first fold, or a registry change made while not following, rebuilds the current window once; otherwise contiguous changes received meanwhile apply through the incremental assembler and a revision gap rebuilds the whole window. Any pending rAF is then cancelled and the binding publishes once synchronously, also after that fold fails; a failed fold leaves the binding stale, so the next window change rebuilds the whole window instead of extending a partial fold. A view activated while not following is built from the last folded state and catches up on resume.
 - When the facet **stops** being retained, the binding unsubscribes from the event window and cancels a pending rAF. The last published snapshot remains readable but no longer updates. While old DOM is still mounted during a switch, its components read that snapshot. A feed dispatch already in progress checks whether the binding still follows, so a release during that dispatch stops folding immediately.
 - Calling `uiConversation.binding()` while the facet is not retained returns the unretained binding, which reads the last or empty snapshot without throwing.
 - Two computations follow the `conversation` facet: `BoundConversation` and the [ui-chat](../../../../packages/client/ui-chat/src/client/apply.ts) quota listener, which neither publishes nor replays notices for failures received while the facet is not retained. Other state on `binding.ctx` that events do not drive (input shell, command popups, historical image URLs, agent preset seat) keeps its existing lifetime.
@@ -74,19 +74,20 @@ export interface SessionBinding {
 
 ### Recently viewed Sessions: `recentViews`
 
-ui-workspace [navigation](../../../../packages/client/ui-workspace/src/client/navigation.ts) owns a [`RecentSessionViews`](../../../../packages/client/ui-workspace/src/client/recent-views.ts) list whose entries each hold one `recentViews` reference.
+ui-workspace [navigation](../../../../packages/client/ui-workspace/src/client/navigation.ts) owns a [`RecentSessionViews`](../../../../packages/client/ui-workspace/src/client/recent-views.ts), which holds one `recentViews` reference for each recent view.
+
+Its state records only what the user did: the order in which Sessions left the main view and the Session the main view shows now. One idempotent `sync()` derives the Sessions to hold from that state and the current Session list, Workspace list, and Session UI status, retains the missing ones, then releases the rest. Navigation calls `show(sessionId)` after retaining the new `mainView` reference and before releasing the previous one; Session list, Workspace list, and status changes call `sync()`. Retaining publishes the Session list synchronously, so a re-entrant `sync()` only marks the state dirty and the running pass repeats until the selection is stable.
 
 | Rule | Behavior |
 |---|---|
-| Order | After the new `mainView` reference exists, navigation first releases the new main Session's recent entry, then retains the previous main Session as a recent view, then releases the previous `mainView` reference; the previous Session's reference count never reaches zero, and reselecting the current Session leaves the list unchanged |
-| Entry | Leaving retains a new `recentViews` reference before releasing any earlier entry for the same Session and inserts it into the list current after retention returns, because retention publishes the Session list synchronously and may reconcile or dispose the list meanwhile |
+| Order | Both `mainView` references are held while `show()` syncs, so the previous Session moves to the recent views before its `mainView` reference is released and its reference count never reaches zero; the main-view Session is never a recent view, and reselecting it leaves the selection unchanged |
 | Blank | A Session still blank when the main view leaves it does not enter |
-| Failure | A failed retention is reported to the console and leaves the Session to be released as without recent views; navigation continues |
-| Exit | A removed or archived Session leaves when the Session or Workspace list changes |
+| Failure | A failed retention is reported to the console once and the Session leaves the order, so it is released with its `mainView` reference; navigation continues |
+| Exit | A removed, archived, or evicted Session leaves the order and returns only when the main view leaves it again |
 | Attention | A Session that is running, awaits the user, or has an unread completion, as the unified Session UI status reports, is neither counted nor evicted; once it is read and idle it counts again |
-| Limit | 10 counted Sessions, excluding the current Session; a module constant with a `TODO` until the Client supports configuration |
+| Limit | The ui-workspace `recentViewLimit` configuration, 10 by default, counted Sessions besides the main-view Session |
 | Eviction | Beyond the limit, the least recently left unpinned Session is evicted first, then the least recently left pinned one; the list is checked again whenever the Session list, Workspace list, or Session UI status changes |
-| Disposal | Plugin disposal unsubscribes from both lists and the status and releases every reference |
+| Disposal | Plugin disposal unsubscribes from both lists and the status, clears the order, and releases every reference |
 
 ## Alternatives considered
 
@@ -118,4 +119,4 @@ ui-workspace [navigation](../../../../packages/client/ui-workspace/src/client/na
 - [reference-ownership.client.spec.ts](../../../../packages/api/session-controller/tests/reference-ownership.client.spec.ts) covers per-facet counting, notifications only at zero transitions, and facets ending with the generation and root disposal.
 - [conversation-registry.client.spec.ts](../../../../packages/client/ui-conversation/tests/conversation-registry.client.spec.ts) covers zero folding while unretained, one synchronous publication on resume, equality with continuous following, activation and registry changes while not following, a release during an in-progress dispatch, an interrupted rAF publication, a failed resumption, and a failed initial fold leaving no subscription.
 - [quota-notice.client.spec.tsx](../../../../packages/client/ui-chat/tests/quota-notice.client.spec.tsx) covers quota notices publishing only while the facet is retained.
-- [recent-views.client.spec.ts](../../../../packages/client/ui-workspace/tests/recent-views.client.spec.ts) and [workspaces-service.client.spec.ts](../../../../packages/client/ui-workspace/tests/workspaces-service.client.spec.ts) cover the attention and pin rules, synchronous re-entrancy during retention, the navigation order at the limit, list-driven reconciliation, and returning to a recent view through the same generation without reopening history.
+- [recent-views.client.spec.ts](../../../../packages/client/ui-workspace/tests/recent-views.client.spec.ts) and [workspaces-service.client.spec.ts](../../../../packages/client/ui-workspace/tests/workspaces-service.client.spec.ts) cover the attention and pin rules, synchronous re-entrancy during retention, the main-view Session staying out of the count, eviction without automatic return, configuration, list-driven reconciliation, and returning to a recent view through the same generation without reopening history.

@@ -56,7 +56,7 @@ export interface SessionBinding {
 `ui-conversation` 声明 `conversation`：对事件窗口做 Conversation 折叠并物化其视图。
 
 - `BoundConversation` 仍然每个 binding 一个，其 `snapshot`、`openTurn` 和 `target(t)` 数据源保持对象标识稳定。`UiConversation.binding()` 先在 Session 作用域上登记该绑定的清理，再让绑定开始跟随；首次折叠失败时清理该绑定，下次解析重新开始。
-- 子要素**开始**被保留时，绑定先订阅事件窗口，再一步完成恢复：首次折叠或未跟随期间发生的注册表变化会按当前窗口整窗重建一次；否则期间收到的连续变化走增量 assembler，revision 出现缺口时整窗重建。随后取消待发的 rAF 并同步发布一次，这次折叠失败时也是如此。未跟随期间激活的视图基于上一次折叠结果建立，并在恢复时补齐。
+- 子要素**开始**被保留时，绑定先订阅事件窗口，再一步完成恢复：首次折叠或未跟随期间发生的注册表变化会按当前窗口整窗重建一次；否则期间收到的连续变化走增量 assembler，revision 出现缺口时整窗重建。随后取消待发的 rAF 并同步发布一次，这次折叠失败时也是如此；折叠失败会让绑定保持过期状态，下一次窗口变化整窗重建，而不是在部分折叠结果上继续增量。未跟随期间激活的视图基于上一次折叠结果建立，并在恢复时补齐。
 - 子要素**停止**被保留时，绑定退订事件窗口并取消待发的 rAF。最后一次发布的快照仍可读取，但不再更新。切换过程中旧 DOM 尚未卸载时，其组件读到的就是这份快照。正在进行的事件分发会检查绑定是否仍在跟随，因此分发中途的释放会立即停止折叠。
 - 子要素未被保留时调用 `uiConversation.binding()`，得到的是未被保留的绑定，读取上一次或空的快照，不会抛错。
 - 跟随 `conversation` 子要素的计算有两项：`BoundConversation` 与 [ui-chat](../../../../packages/client/ui-chat/src/client/apply.ts) 的 quota 监听；后者对子要素未被保留期间收到的失败既不发布也不补发提示。`binding.ctx` 上其他不由事件驱动的状态（输入 shell、命令弹层、历史图片 URL、agent preset seat）保持原有生命周期。
@@ -74,19 +74,20 @@ export interface SessionBinding {
 
 ### 最近访问会话 `recentViews`
 
-ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/client/navigation.ts) 持有一个 [`RecentSessionViews`](../../../../packages/client/ui-workspace/src/client/recent-views.ts) 列表，每一项持有一条 `recentViews` 引用。
+ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/client/navigation.ts) 持有一个 [`RecentSessionViews`](../../../../packages/client/ui-workspace/src/client/recent-views.ts)，为每个最近访问会话持有一条 `recentViews` 引用。
+
+它的状态只记录用户做过什么：Session 离开主视图的顺序，以及主视图当前显示的 Session。一个幂等的 `sync()` 根据这些状态和当前的 Session 列表、Workspace 列表与 Session UI 状态算出应持有的 Session，先 retain 缺少的，再释放其余的。导航在 retain 新的 `mainView` 引用之后、释放上一个之前调用 `show(sessionId)`；Session 列表、Workspace 列表和状态变化时调用 `sync()`。retain 会同步发布 Session 列表，因此重入的 `sync()` 只标记状态已变化，正在执行的一轮会重复，直到选择稳定。
 
 | 规则 | 行为 |
 |---|---|
-| 顺序 | 新的 `mainView` 引用就绪后，导航先释放新主 Session 的最近访问项，再把上一个主 Session 保留为最近访问会话，最后释放上一个 `mainView` 引用；上一个 Session 的引用计数不会归零，重复选中当前 Session 时列表保持不变 |
-| 入队 | 离开时先 retain 新的 `recentViews` 引用，再释放同一 Session 的旧项，并插入 retain 返回时的当前列表，因为 retain 会同步发布 Session 列表，期间可能触发对账或释放本列表 |
+| 顺序 | `show()` 同步时两个 `mainView` 引用都还在，因此上一个 Session 先成为最近访问会话、再释放其 `mainView` 引用，引用计数不会归零；主视图 Session 永远不是最近访问会话，重复选中它时选择保持不变 |
 | 空白 | 离开时仍是空白的 Session 不入队 |
-| 失败 | retain 失败时报告到控制台，该 Session 按没有最近访问时的方式释放，导航继续 |
-| 出队 | Session 或 Workspace 列表变化时，被移除或归档的 Session 出队 |
+| 失败 | retain 失败时报告到控制台一次，该 Session 离开顺序列表，随其 `mainView` 引用一起释放；导航继续 |
+| 出队 | 被移除、归档或淘汰的 Session 离开顺序列表，只有主视图再次离开它时才会回来 |
 | 关注 | 统一 Session UI 状态显示为运行中、等待用户或完成未读的 Session 既不计数也不淘汰；读过且空闲后重新计数 |
-| 上限 | 计数的 Session 最多 10 个，不含当前 Session；用模块常量加 `TODO` 写死，等 Client 支持配置后再改 |
+| 上限 | 由 ui-workspace 配置 `recentViewLimit` 决定，默认 10，计数的 Session 不含主视图 Session |
 | 淘汰 | 超出上限时先淘汰最早离开的未置顶 Session，再淘汰最早离开的置顶 Session；Session 列表、Workspace 列表或 Session UI 状态变化时都会重新检查 |
-| 卸载 | 插件卸载时退订两个列表与状态，并释放全部引用 |
+| 卸载 | 插件卸载时退订两个列表与状态，清空顺序列表，并释放全部引用 |
 
 ## 备选方案
 
@@ -118,4 +119,4 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 - [reference-ownership.client.spec.ts](../../../../packages/api/session-controller/tests/reference-ownership.client.spec.ts) 覆盖按子要素计数、只在零值变化时通知，以及子要素随 generation 退役与根释放结束。
 - [conversation-registry.client.spec.ts](../../../../packages/client/ui-conversation/tests/conversation-registry.client.spec.ts) 覆盖未被保留时零折叠、恢复时同步发布一次、与持续跟随结果一致、未跟随期间的激活与注册表变化、分发中途的释放、被打断的 rAF 发布、恢复失败，以及首次折叠失败不残留订阅。
 - [quota-notice.client.spec.tsx](../../../../packages/client/ui-chat/tests/quota-notice.client.spec.tsx) 覆盖 quota 提示只在子要素被保留时发布。
-- [recent-views.client.spec.ts](../../../../packages/client/ui-workspace/tests/recent-views.client.spec.ts) 与 [workspaces-service.client.spec.ts](../../../../packages/client/ui-workspace/tests/workspaces-service.client.spec.ts) 覆盖关注与置顶规则、retain 期间的同步重入、达到上限时的导航顺序、由列表变化驱动的对账，以及经由同一 generation 切回最近访问会话且不重新打开历史。
+- [recent-views.client.spec.ts](../../../../packages/client/ui-workspace/tests/recent-views.client.spec.ts) 与 [workspaces-service.client.spec.ts](../../../../packages/client/ui-workspace/tests/workspaces-service.client.spec.ts) 覆盖关注与置顶规则、retain 期间的同步重入、主视图 Session 不计数、淘汰后不自动回来、配置、由列表变化驱动的对账，以及经由同一 generation 切回最近访问会话且不重新打开历史。
