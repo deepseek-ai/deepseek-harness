@@ -17,7 +17,7 @@ import {
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  assertWarningDialogLayout, connectFreshWorkspace, connectFreshWorkspaceZh, dismissSessionPanel, newEnglishPage,
+  assertWarningDialogLayout, connectFreshWorkspace, connectFreshWorkspaceZh, dismissSessionPanel, foldControlLayout, newEnglishPage,
   saveFailureShot, sessionPanelToggle, showSessionPanel, writeComposerDraft,
 } from './support.ts'
 
@@ -660,7 +660,7 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await board.locator('[data-team-task-details], article').count()).toBe(0)
     expect(await board.getByRole('button', { expanded: false }).count()).toBe(4)
     expect(await board.locator('[data-team-task]').evaluateAll(elements => elements.map(element => element.getAttribute('data-status'))))
-      .toEqual(['in_progress', 'completed', 'pending', 'pending'])
+      .toEqual(['in_progress', 'pending', 'pending', 'completed'])
     const counts = section.getByText('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending', { exact: true })
     await counts.waitFor()
     expect(await counts.textContent()).toBe('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending')
@@ -766,6 +766,39 @@ describe('web e2e: agent teamwork panel', () => {
       await page.keyboard.press('Escape')
       await page.setViewportSize(viewport)
     }
+  })
+
+  it('holds back the tasks past five behind the fold control and keeps the choice while the panel is hidden', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-task-fold'))
+    const agent = scaffold.ctx.agents.list()[0]!
+    const before = scaffold.ctx.agentTeams.listTasks(agent).filter(task => task.status !== 'deleted')
+    // The tasks so far: one in progress, pending ones, and a completed one. Pending tasks bring the list to eight.
+    for (let index = before.length; index < 8; index++) {
+      await scaffold.ctx.agentTeams.createTask(agent, { subject: `Fold task ${String(index)}`, description: 'Fills the list.', writeScopes: [] })
+    }
+    const section = await showSharedTasksSection(page)
+    const tasks = section.locator('[data-team-task]')
+    const fold = section.locator('[data-session-panel-row="fold"]')
+    const statuses = (): Promise<(string | null)[]> => tasks.evaluateAll(items => items.map(item => item.getAttribute('data-status')))
+    // Five tasks show: the one in progress, then pending ones in source order. The completed task is held back.
+    await expect.poll(statuses, { timeout: 15_000 }).toEqual(['in_progress', 'pending', 'pending', 'pending', 'pending'])
+    expect(await fold.textContent()).toBe('Show 3 more')
+    // The control follows the list, at the row height, with its chevron under the state marks and its text under the subjects.
+    expect(await section.getByRole('list').locator('[data-session-panel-row="fold"]').count()).toBe(0)
+    expect(await foldControlLayout(fold, tasks.first().getByRole('button'), '[class*="subject"]'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    await section.getByRole('button', { name: 'Show 3 more (shared tasks)', exact: true }).click()
+    await expect.poll(statuses).toEqual(['in_progress', 'pending', 'pending', 'pending', 'pending', 'pending', 'pending', 'completed'])
+    const less = section.getByRole('button', { name: 'Show less (shared tasks)', exact: true })
+    expect([await less.textContent(), await less.getAttribute('aria-expanded')]).toEqual(['Show less', 'true'])
+    // The choice is the Session's: it holds while the panel is hidden.
+    await dismissSessionPanel(page)
+    await showSharedTasksSection(page)
+    await expect.poll(() => tasks.count()).toBe(8)
+    await less.click()
+    await expect.poll(() => tasks.count()).toBe(5)
+    expect(tripwire.pageErrors).toEqual([])
+    await dismissSessionPanel(page)
   })
 
   it('confirms disabling after a recorded model request and keeps cancellation side-effect free', async () => {

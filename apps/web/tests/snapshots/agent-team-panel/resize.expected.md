@@ -7,10 +7,6 @@
         - img "In progress"
         - text: Agent task
     - listitem:
-      - button "Completed Completed preparation":
-        - img "Completed"
-        - text: Completed preparation
-    - listitem:
       - button "Pending Dependency task":
         - img "Pending"
         - text: Dependency task
@@ -20,3 +16,7 @@
         - text: Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport
       - paragraph: Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work.
       - paragraph: "Owner: Unowned"
+    - listitem:
+      - button "Completed Completed preparation":
+        - img "Completed"
+        - text: Completed preparation

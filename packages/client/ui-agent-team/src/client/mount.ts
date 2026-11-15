@@ -13,6 +13,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected, type TeamDisableRequest } from './TeamDisableConfirmation.tsx'
 import { TeamModePane, TeamModeToggle, type TeamModePaneInjected } from './TeamModeToggle.tsx'
 import { TeamBoard, TeamProgress } from './TeamBoard.tsx'
+import { createTeamBoardStore } from './team-board-store.ts'
 import { TeamCommandRow } from './TeamCommandRow.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type TeamKey } from './locales.ts'
 
@@ -77,6 +78,7 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
       order: 250,
       label: () => t('tasks'),
       locale: NS,
+      store: createTeamBoardStore(),
     }, TeamBoard)
     yield ctx.slots.register({
       name: 'conversation.session.panel.section.actions',

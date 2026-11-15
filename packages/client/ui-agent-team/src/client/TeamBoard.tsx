@@ -1,5 +1,5 @@
 /** Shared tasks section of the Session panel: the task rows and the progress beside the section title. */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TeamProjection, TeamTaskView, TeamTaskId } from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -7,21 +7,30 @@ import {
   HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular,
   StateDot, Tooltip, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
+import type { createTeamBoardStore } from './team-board-store.ts'
 import css from './TeamBoard.module.css'
 
 /** Full props of the shared tasks section body. */
 export type TeamBoardProps =
-  PropsRuntime<'conversation.session.panel.section'> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.panel.section'>
+  & PropsRenderFactories
+  & PropsStore<ReturnType<typeof createTeamBoardStore>>
+  & PropsLocale<typeof NS>
+
+/** Tasks the list shows before its fold control holds the rest back. */
+const FOLD_LIMIT = 5
+
+type VisibleTask = TeamTaskView & { status: Exclude<TeamTaskView['status'], 'deleted'> }
+
+const NO_TASKS: readonly VisibleTask[] = []
 
 /** Full props of the progress beside the section title. */
 export type TeamProgressProps =
   PropsRuntime<'conversation.session.panel.section.actions'> & PropsLocale<typeof NS>
-
-type VisibleTask = TeamTaskView & { status: Exclude<TeamTaskView['status'], 'deleted'> }
 
 const statusKeys = {
   pending: 'status.pending', in_progress: 'status.in_progress', completed: 'status.completed',
@@ -33,6 +42,22 @@ const dotStates = {
 
 function visibleTasks(team: TeamProjection): VisibleTask[] {
   return team.tasks.filter((task): task is VisibleTask => task.status !== 'deleted')
+}
+
+/**
+ * Order the tasks for the list: the ones in progress, then the pending ones,
+ * each in source order, then the completed ones with the latest in source
+ * order first. A task carries no completion time, so source order stands in
+ * for it.
+ * @param tasks - the visible tasks in source order.
+ * @returns the tasks in display order.
+ */
+function listOrder(tasks: readonly VisibleTask[]): VisibleTask[] {
+  return [
+    ...tasks.filter(task => task.status === 'in_progress'),
+    ...tasks.filter(task => task.status === 'pending'),
+    ...tasks.filter(task => task.status === 'completed').reverse(),
+  ]
 }
 
 function progressLabel(tasks: readonly VisibleTask[], t: TeamBoardProps['t']): string {
@@ -102,17 +127,25 @@ function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, '
 }
 
 /**
- * Render read-only tasks in source order; the Session panel owns the title and
- * scrolling, and hides the section while this renders nothing.
- * @param props - Session values, the `agentTeam` projection, and copy.
+ * Render read-only tasks: the ones in progress first, then the pending ones,
+ * then the completed ones. The list shows five tasks and then a fold control
+ * that shows the rest, once that holds back two tasks or more; the choice is
+ * kept per Session. The Session panel owns the title and scrolling, and hides
+ * the section while this renders nothing.
+ * @param props - Session values, the `agentTeam` projection, the fold store, and copy.
  * @returns the task list with any board failure, or null with neither.
  */
-export function TeamBoard({ sessionId, useProjection, t }: TeamBoardProps) {
+export function TeamBoard({ sessionId, useProjection, useStore, actions, renderFactorySlot, t }: TeamBoardProps) {
   const team = useProjection('agentTeam')
+  const unfolded = useStore(state => state.unfolded)
   const [expandedTaskId, setExpandedTaskId] = useState<TeamTaskId | null>(null)
+  const ordered = useMemo(() => team?.enabled === true ? listOrder(visibleTasks(team)) : NO_TASKS, [team])
   if (!team?.enabled) return null
-  const tasks = visibleTasks(team)
-  if (tasks.length === 0 && team.failure === undefined) return null
+  if (ordered.length === 0 && team.failure === undefined) return null
+  // Folding holds back two tasks or more, since the fold control takes a row itself.
+  const foldable = ordered.length > FOLD_LIMIT + 1
+  const tasks = foldable && !unfolded ? ordered.slice(0, FOLD_LIMIT) : ordered
+  const label = unfolded ? t('list.less') : t('list.more', { count: ordered.length - FOLD_LIMIT })
   return (
     <div className={css.board} data-team-panel="">
       {team.failure !== undefined && (
@@ -133,6 +166,12 @@ export function TeamBoard({ sessionId, useProjection, t }: TeamBoardProps) {
           </ul>
         </HoverCardGroup>
       )}
+      {foldable && renderFactorySlot('conversation.session.panel.fold', {
+        expanded: unfolded,
+        label,
+        name: t('list.foldName', { label }),
+        onToggle: () => { actions.unfoldedSet(!unfolded) },
+      })}
     </div>
   )
 }
