@@ -30,7 +30,8 @@
 
   position: absolute;
   top: calc(var(--turn-rail-band) / 2);
-  right: 12px;
+  /* The start edge: the end gutter belongs to the Session panel. */
+  left: 12px;
   width: 28px;
   /* Fixed-pitch marks never compress: a ladder taller than the band scrolls
      inside this frame instead of pushing marks under the composer or above
@@ -97,14 +98,14 @@
 .mark::before {
   position: absolute;
   top: 50%;
-  right: 0;
+  left: 0;
   width: 20px;
   height: 2px;
   border-radius: 2px;
   background: var(--dsw-alias-border-l4);
   content: '';
   transform: translateY(-50%) scaleX(0.6);
-  transform-origin: right center;
+  transform-origin: left center;
   transition: transform 140ms ease, background-color 140ms ease;
 }
 
@@ -142,11 +143,11 @@
 
 .mark:focus-visible::after {
   position: absolute;
-  inset: 0 0 0 auto;
+  inset: 0 auto 0 0;
   width: 20px;
   border-radius: inherit;
   outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  /* The scroller clips the right edge; keep the marker's ring inside it. */
+  /* The scroller clips the left edge; keep the marker's ring inside it. */
   outline-offset: -1px;
   content: '';
 }
@@ -158,7 +159,7 @@
     calc(var(--turn-preview-center) - var(--turn-preview-height) / 2),
     calc(100% - var(--turn-preview-height))
   );
-  right: calc(100% + 10px);
+  left: calc(100% + 10px);
   box-sizing: border-box;
   width: min(300px, calc(100cqw - 120px));
   max-height: var(--turn-preview-height);
@@ -194,7 +195,7 @@
 }
 
 @keyframes dsh-turn-preview-enter {
-  from { opacity: 0; transform: translateX(4px); }
+  from { opacity: 0; transform: translateX(-4px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
