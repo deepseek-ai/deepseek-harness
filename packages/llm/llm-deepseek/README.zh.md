@@ -11,7 +11,7 @@ kind: "package-reference"
 
 提供共享的 DeepSeek Messages 传输、请求配置和模型能力。组合 [API key](../llm-deepseek-api-key/README.zh.md) 或[账号](../llm-deepseek-account/README.zh.md)插件以提供鉴权、模型发现与 provider 注册。有效的设置更改在后续请求生效，进行中的请求保留原配置。本包可与 [pi-ai 适配器](../llm-pi-ai/README.zh.md)并用。
 
-`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、裸凭据值以及可选的失败回调；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
+`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
 
 ## 目录
 

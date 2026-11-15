@@ -141,7 +141,7 @@ The service holds only the connections model route plugins registered; each disp
 - [Account package map](../README.md) — the account service and this service.
 - [DeepSeek account subsystem](../../../docs/subsystems/account.md) — the account sign-in and the request credentials this service releases.
 - [Credential-reference seam](../../credentials/credentials/README.md) — how a key reference is read and checked.
-- [DeepSeek request authentication](../../../.agents/notes/implemented/architecture/2026-11-10-llm-route-credential-seam.md) — the decision and its rejected alternatives.
+- [DeepSeek request authentication](../../../.agents/notes/implemented/architecture/2026-11-10-deepseek-request-authentication.md) — the decision and its rejected alternatives.
 
 -----
 

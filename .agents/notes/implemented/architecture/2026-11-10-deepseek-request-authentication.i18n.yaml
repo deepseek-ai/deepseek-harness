@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-10-deepseek-request-authentication.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-10-deepseek-request-authentication.md
+/agent-note-deepseek-request-authentication-one-service-releases-the-api-key-or-the-account-sign-in-to-every-deepseek-consumer:
+  en: 0ede9c11789e5fd7
+  zh: c3e552dfe6216df0
+/agent-note-deepseek-request-authentication-one-service-releases-the-api-key-or-the-account-sign-in-to-every-deepseek-consumer/problem:
+  en: 1470ef8f922d447a
+  zh: ccd66a1b897c88e2
+/agent-note-deepseek-request-authentication-one-service-releases-the-api-key-or-the-account-sign-in-to-every-deepseek-consumer/decision:
+  en: 52b1d88ed7aef38e
+  zh: b657cb3874df1ea9
+/agent-note-deepseek-request-authentication-one-service-releases-the-api-key-or-the-account-sign-in-to-every-deepseek-consumer/alternatives-considered:
+  en: 6bc3b4bc6aa523d1
+  zh: a2422ba89373a694
+/agent-note-deepseek-request-authentication-one-service-releases-the-api-key-or-the-account-sign-in-to-every-deepseek-consumer/consequences:
+  en: 367ad2e305246da9
+  zh: 1fb319878aca46ec

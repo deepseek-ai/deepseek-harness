@@ -61,9 +61,9 @@ kind: "package-reference"
 
 当发起会话最近的 `request/context` 事件指明 `deepseek-account` 模型路由，搜索端点与该路由的基础地址同源，且 `ctx.deepseekAuth` 为搜索端点释放了账号登录凭据时，搜索使用 DeepSeek 账号鉴权。只有同源时才会索取该凭据，因此它不会发往其他部署的搜索端点。账号服务仅在已登录时、且仅对部署配置的推理 origin（默认 `https://api.deepseek.com`）释放凭据。这类搜索只发送该凭据的请求头 `x-dsh-auth-token`，即使配置了 API 密钥也是如此。其余所有搜索，包括没有发起会话的调用以及端点属于其他 origin 的搜索，都把 API 密钥同时作为 `x-api-key` 与 `Authorization: Bearer` 发送。账号鉴权的搜索收到 HTTP 401 时以 `WEB_PROVIDER_ERROR` 失败，附带登录指引而非端点指引，并通过凭据自身的失效操作只作废该搜索实际发送的凭据：更新的登录不受影响，凭据删除失败或错误正文读取被取消既不会跳过作废，也不会替换所报告的失败。API 密钥请求的 401 与所有 HTTP 403 不影响账号登录状态。账号退登时仍在途的账号鉴权搜索会通过凭据的 `revoked` 信号结束，并以 `WEB_PROVIDER_ERROR` 失败，附带登录指引。
 
-提供方的 `ready()` 回答模型请求将发起的搜索是否有凭据，不论模型路由：该请求的路由为配置的搜索端点所在 origin 发布了账号凭据且该凭据报告自身已为该端点配置，或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。它按搜索解析凭据的顺序检查；路由设置无法解析或其发布的基础地址无法解析，或读取账号凭据或凭据存储失败时回答 false，因为搜索会在那里失败，而不会尝试下一种凭据。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
+提供方的 `ready()` 回答模型请求将发起的搜索是否有凭据，不论模型路由：在 `deepseek-account` 路由上账号登录凭据已为搜索端点配置（这要求该端点位于该路由基础地址的 origin 之下），或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。它按搜索解析凭据的顺序检查；路由设置无法解析，或读取账号凭据或凭据存储失败时回答 false，因为搜索会在那里失败，而不会尝试下一种凭据。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
 
-引用密钥通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取，接受与模型请求相同的首尾空白规范化和格式校验。引用密钥格式错误会在发送请求前失败；就绪判断仍只检查是否存在。
+引用密钥由 `ctx.deepseekAuth` 通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取，接受与模型请求相同的首尾空白规范化和格式校验。引用密钥格式错误会在发送请求前失败；就绪判断仍只检查是否存在。
 
 ### 搜索返回什么
 
@@ -106,7 +106,7 @@ kind: "package-reference"
 
 每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取搜索端点的凭据：账号路由上的会话取账号登录凭据，否则取经由 `ctx.credentials`（或环境）读取的引用密钥，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
-就绪判断捕获相同的选项，但不读取 API 密钥的值：路由为搜索端点所在 origin 发布账号凭据时，先询问该凭据是否已为搜索端点配置，再检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
+就绪判断捕获相同的选项，但不读取 API 密钥的值：它依次询问 `ctx.deepseekAuth` 为这次搜索返回的每个候选其凭据是否已配置，在账号路由上的会话里先是面向搜索端点的账号登录凭据，然后经由 `ctx.credentials.describe()`（或环境）询问密钥引用。字面密钥总是算作已配置。
 
 </details>
 

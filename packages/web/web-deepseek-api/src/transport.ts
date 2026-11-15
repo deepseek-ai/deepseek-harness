@@ -210,7 +210,7 @@ export async function dispatchDeepSeekWeb<T>(
 /**
  * The signal one request runs under: the caller's cancellation and the withdrawal of the credential it carries.
  * @param signal - caller cancellation, when the caller supplies one.
- * @param revoked - withdrawal of the sent credential, when its grant offers one.
+ * @param revoked - withdrawal of the sent credential, when its authorization offers one.
  * @returns the composed signal, or undefined when neither exists.
  */
 function requestSignal(signal: AbortSignal | undefined, revoked: AbortSignal | undefined): AbortSignal | undefined {

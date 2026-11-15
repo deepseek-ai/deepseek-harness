@@ -992,8 +992,8 @@ describe('web-search-deepseek search readiness', () => {
   }
 
   /**
-   * Mount the web seam with the DeepSeek provider selected for search, beside the account model route whose
-   * published credential the account route answers with.
+   * Mount the web seam with the DeepSeek provider selected for search, beside the DeepSeek authentication service and
+   * the account model route that connects the account deployment.
    * @param setup - provider config, account double, and credential store.
    * @returns the composed context.
    */

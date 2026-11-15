@@ -384,7 +384,7 @@ async function resolveCredential<T>(resolve: () => Promise<T>, signal?: AbortSig
 /**
  * The signal one search runs under: the caller's cancellation and the sign-out of the account credential it carries.
  * @param signal - caller cancellation, when the caller supplies one.
- * @param revoked - sign-out of the sent account credential, when its grant offers one.
+ * @param revoked - sign-out of the sent account credential, when its authorization offers one.
  * @returns the composed signal, or undefined when neither exists.
  */
 function requestSignal(signal: AbortSignal | undefined, revoked: AbortSignal | undefined): AbortSignal | undefined {

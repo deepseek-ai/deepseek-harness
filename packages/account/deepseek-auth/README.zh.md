@@ -141,7 +141,7 @@ ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
 - [账号包映射](../README.zh.md)——账号服务与本服务。
 - [DeepSeek 账号子系统](../../../docs/subsystems/account.zh.md)——账号登录以及本服务释放的请求凭据。
 - [凭据引用 seam](../../credentials/credentials/README.zh.md)——密钥引用如何读取与检查。
-- [DeepSeek 请求鉴权](../../../.agents/notes/implemented/architecture/2026-11-10-llm-route-credential-seam.zh.md)——决策及被否决的替代方案。
+- [DeepSeek 请求鉴权](../../../.agents/notes/implemented/architecture/2026-11-10-deepseek-request-authentication.zh.md)——决策及被否决的替代方案。
 
 -----
 

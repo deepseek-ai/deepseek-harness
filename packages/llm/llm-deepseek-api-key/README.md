@@ -25,7 +25,7 @@ Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/
 <a id="use-this-package"></a>
 ## Use this package
 
-`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request and model discovery. It reads the key through the credential reference helpers of [`dsh-credentials`](../../credentials/credentials/README.md): when the credentials service exists, its precedence applies, and only compositions without that service read the launch environment directly. Requests with missing credentials fail with `MISSING_CREDENTIAL`; malformed credentials fail with `INVALID_CREDENTIAL`, whose diagnostic names this plugin's settings namespace and the credential reference. Model discovery returns an empty catalog when the credential is missing, hiding the route from model selectors while retaining its settings entry. Malformed credentials and other lookup failures propagate. Adding or removing a key affects the next discovery call.
+`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request and model discovery. `ctx.deepseekAuth` reads the key through the credential reference helpers of [`dsh-credentials`](../../credentials/credentials/README.md): when the credentials service exists, its precedence applies, and only compositions without that service read the launch environment directly. Requests with missing credentials fail with `MISSING_CREDENTIAL`; malformed credentials fail with `INVALID_CREDENTIAL`, whose diagnostic names this plugin's settings namespace and the credential reference. Model discovery returns an empty catalog when the credential is missing, hiding the route from model selectors while retaining its settings entry. Malformed credentials and other lookup failures propagate. Adding or removing a key affects the next discovery call. The plugin starts only in a composition that mounts `@deepseek-ai/dsh-deepseek-auth`; the `base` and `sdk-minimal` bundles mount it.
 
 ```yaml
 - id: llm-deepseek
@@ -35,7 +35,7 @@ Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
-The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential. For a destination at another origin, or a URL that embeds credentials, the published credential's `configured()` answers false and its `resolve()` releases nothing, and neither reads the credential store.
+The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential. For a destination at another origin, or a URL that embeds credentials, `ctx.deepseekAuth` releases no key and does not read the credential store.
 
 `models` is an independently configurable catalog for this provider; defaults and protocol capabilities come from the shared transport. While `models` equals the built-in catalog and the Messages origin is the official API, `https://api.deepseek.com`, the route serves the official `GET https://api.deepseek.com/models` listing instead. Listing requests carry the API key in `x-api-key` and the harness `User-Agent`, and reject redirects; without an API key the route requests nothing. Any other endpoint, including one named by `baseURL` or `$DEEPSEEK_BASE_URL`, serves `models` and requests no listing. Discovery does not probe inference endpoints.
 

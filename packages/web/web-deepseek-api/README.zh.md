@@ -67,7 +67,7 @@ Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据
 
 没有凭据时，操作失败，诊断信息按计费方式点名缺少的登录或模型页面与密钥引用，以及网页搜索与获取设置页上的 `*Billing` 字段。
 
-操作自行读取的密钥——没有 API 密钥路由时的 `DEEPSEEK_API_KEY` 和单独配置的 `*ApiKeyEnv`——通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取：`ctx.credentials` 具有权威性，仅在该服务缺席时读取启动环境。路由密钥与单独配置的密钥均接受与模型请求相同的首尾空白规范化和格式校验；格式错误在发送请求前失败。
+`ctx.deepseekAuth` 读取每一把密钥——API 密钥路由的密钥、没有该路由时的 `DEEPSEEK_API_KEY` 和单独配置的 `*ApiKeyEnv`——都通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数：`ctx.credentials` 具有权威性，仅在该服务缺席时读取启动环境。每把密钥均接受与模型请求相同的首尾空白规范化和格式校验；格式错误在发送请求前失败。
 
 每个提供者的 `ready()` 按其计费方式的解析顺序回答其在该路由上的下一次操作是否有凭据：账号服务为该端点释放的账号凭据，或 `ctx.credentials.describe` 报告已配置的密钥（没有该服务时，启动环境必须包含它）。凭据或凭据存储读取失败，或所需路由的设置无法解析时，回答 false。这两个提供者被选中时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它们回答 false 的每个请求中撤下 `web_search` 与 `web_fetch` 及其提示词指引。只检查是否存在：错误的密钥仍算就绪，并使每次调用失败。
 
