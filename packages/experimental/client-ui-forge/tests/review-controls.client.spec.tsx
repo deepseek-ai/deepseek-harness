@@ -112,6 +112,18 @@ describe('LensControl width', () => {
     expect(counts()).toEqual(Array(4).fill(css.count))
   })
 
+  it('keeps the focused segment mounted while its count shows or hides', () => {
+    const { view, counts, resize } = fitted({ cell: 300, counted: 280, labels: 200 })
+    const focused = view.getByRole('radio', { name: 'Interface1' })
+    focused.focus()
+    resize(290)
+    expect(counts()).toEqual(Array(4).fill(css.hiddenCount))
+    expect(document.activeElement).toBe(focused)
+    resize(300)
+    expect(counts()).toEqual(Array(4).fill(css.count))
+    expect(document.activeElement).toBe(focused)
+  })
+
   it('measures again when fonts load, and stops once unmounted', () => {
     const { view, need, counts, widths } = fitted({ cell: 300, counted: 280, labels: 200 })
     widths.counted = 290

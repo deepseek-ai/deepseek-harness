@@ -37,9 +37,13 @@ function drawn(text: string): string {
  */
 export function oldSideLines(lines: readonly string[], hunks: readonly ForgeDiffHunk[]): string[] {
   const old: string[] = []
+  // Lines are appended one at a time: spreading a long run of unchanged lines into push would exceed the argument limit.
+  const copy = (from: number, to?: number): void => {
+    for (const line of lines.slice(from - 1, to)) old.push(line)
+  }
   let at = 1
   for (const hunk of hunks) {
-    old.push(...lines.slice(at - 1, hunk.newStart - 1))
+    copy(at, hunk.newStart - 1)
     at = Math.max(at, hunk.newStart)
     for (const line of hunk.lines) {
       const sign = line.charAt(0)
@@ -47,7 +51,7 @@ export function oldSideLines(lines: readonly string[], hunks: readonly ForgeDiff
       if (sign === ' ' || sign === '+') at++
     }
   }
-  old.push(...lines.slice(at - 1))
+  copy(at)
   return old
 }
 

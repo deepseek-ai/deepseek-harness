@@ -84,7 +84,7 @@ export function SegmentedChoice<Value extends string>({ segments, value, choose,
     <div ref={group} role="radiogroup" aria-label={label} className={css.segmented} data-sizing={sizing}>
       {segments.map((segment) => {
         const button = (
-          <button key={segment.value} type="button" role="radio" className={css.segment} aria-checked={value === segment.value}
+          <button type="button" role="radio" className={css.segment} aria-checked={value === segment.value}
             disabled={segment.disabledTip !== null} tabIndex={value === segment.value ? 0 : -1} data-segment={segment.value}
             onKeyDown={move} onClick={() => { choose(segment.value) }}>
             <span className={css.segmentLabel}>{segment.label}</span>
@@ -92,7 +92,9 @@ export function SegmentedChoice<Value extends string>({ segments, value, choose,
           </button>
         )
         const tip = segment.disabledTip ?? (counted || segment.count === null ? null : `${segment.label} ${String(segment.count)}`)
-        return tip === null ? button : <Tooltip key={segment.value} label={tip} side="bottom">{button}</Tooltip>
+        // Every segment keeps its Tooltip, disabled without hover text, so showing or hiding the counts keeps the
+        // button mounted and the focus on it.
+        return <Tooltip key={segment.value} label={tip ?? segment.label} side="bottom" disabled={tip === null}>{button}</Tooltip>
       })}
     </div>
   )

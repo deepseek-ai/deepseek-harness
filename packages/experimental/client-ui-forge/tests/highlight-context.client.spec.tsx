@@ -39,6 +39,12 @@ describe('oldSideLines', () => {
     expect(oldSideLines(['a', 'b'], [deletion])).toEqual(['a', 'gone', 'b'])
     expect(oldSideLines(['a', 'b', 'c'], [{ oldStart: 3, oldLines: 0, newStart: 3, newLines: 1, lines: ['+c'] }])).toEqual(['a', 'b'])
   })
+
+  it('rebuilds a file whose unchanged lines outnumber the arguments one call takes', () => {
+    const lines = Array.from({ length: 200_000 }, (_, at) => `l${String(at + 1)}`)
+    const old = oldSideLines(lines, [{ oldStart: 150_000, oldLines: 1, newStart: 150_000, newLines: 1, lines: ['-was', '+l150000'] }])
+    expect([old.length, old[149_998], old[149_999], old[150_000], old.at(-1)]).toEqual([200_000, 'l149999', 'was', 'l150001', 'l200000'])
+  })
 })
 
 describe('sideRun', () => {
