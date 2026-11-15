@@ -3,12 +3,14 @@ import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import { expect, it, vi } from 'vitest'
 import * as ApiKey from '../src/index.ts'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 
 it.each([undefined, ''])('hides models without an API key: %j', async (key) => {
   vi.stubEnv('DEEPSEEK_API_KEY', key)
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, {})
     expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
   } finally {
@@ -22,6 +24,7 @@ it('advertises configured models with an API key', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, { models: [{ id: 'configured-model' }] })
     expect(await ctx.llm.listModels('deepseek-official')).toEqual([
       expect.objectContaining({ provider: 'deepseek-official', id: 'configured-model' }),
@@ -37,6 +40,7 @@ it('reports malformed credentials during discovery under the settings namespace 
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, {})
     const [directory] = ctx.llm.listConfigurableProviders()
     expect(directory?.settingsNs).toBe('llm-deepseek-api-key')
@@ -54,6 +58,7 @@ it('names the Loader entry id in credential diagnostics, as product profiles mou
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin({
       name: ApiKey.name, inject: ApiKey.inject, Config: ApiKey.Config,
       apply: (inner: Context, config: ApiKey.Config) => {
@@ -77,6 +82,7 @@ it('publishes the route API key for its consumers from the credential planes it 
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
     const credential = ctx.llm.providerCredential('deepseek-official')
     expect(credential).toMatchObject({ kind: 'api-key', baseURL: 'https://route.deepseek.test/anthropic', reference: 'DEEPSEEK_API_KEY' })
@@ -108,6 +114,7 @@ it.each([
   try {
     ctx.provide('credentials', { resolve, describe } as never)
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
     const credential = ctx.llm.providerCredential('deepseek-official')
     await expect(credential!.configured(endpoint)).resolves.toBe(false)

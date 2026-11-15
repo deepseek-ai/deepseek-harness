@@ -6,6 +6,7 @@ import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionSeq, type 
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
@@ -130,6 +131,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
     { id: 'llm', name: '@deepseek-ai/dsh-llm' },
     { id: 'session', name: '@deepseek-ai/dsh-session' },
     { id: 'storage', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: storedRoot, compression: 'none' } },
+    { id: 'deepseek-auth', name: '@deepseek-ai/dsh-deepseek-auth' },
     { id: 'official-custom-id', name: options.officialName ?? '@deepseek-ai/dsh-llm-deepseek-api-key', disabled: !withNativeOwners, config: {
       baseURL, apiKeyEnv: 'PAID_TRANSLATION_FIXTURE_KEY', models: options.officialModels ?? [{ id: 'deepseek-flash', name: 'Flash version-independent name' }],
     } },
@@ -147,6 +149,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-llm', LlmRuntime], ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-persistence-jsonl', JsonlPersistence], ['@deepseek-ai/dsh-session-query-sqlite', SqliteSessionQuery],
+    ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
     [options.officialName ?? '@deepseek-ai/dsh-llm-deepseek-api-key', Official],
     ['@deepseek-ai/dsh-llm-deepseek-account', Account], ['@deepseek-ai/dsh-experimental-translator', Translator],
     ['@deepseek-ai/dsh-deepseek-llm-api-extensions', DeepSeekLlmApiExtensionRegistry],

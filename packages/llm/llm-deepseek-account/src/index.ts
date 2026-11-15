@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { Context } from '@deepseek-ai/cordis'
 import { ACCOUNT_QUOTA_EXCEEDED_CODE, APP_IDENTITY, LlmError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { AccountRequestCredential } from '@deepseek-ai/dsh-deepseek-account'
+import type {} from '@deepseek-ai/dsh-deepseek-auth'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
   catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, resolveAdapterOptions, resolveListedCatalog,
@@ -13,7 +14,7 @@ import { Config, plainAccountOptions, resolveAccountOptions } from './config.ts'
 
 export { Config } from './config.ts'
 export const name = 'llm-deepseek-account'
-export const inject = ['llm']
+export const inject = ['llm', 'deepseekAuth']
 
 const PROVIDER = 'deepseek-account'
 /** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
@@ -28,6 +29,8 @@ export function apply(ctx: Context, config: Config): void {
   const environment = launchEnvironmentOf(ctx)
   const settings = () => resolveAccountOptions(plainAccountOptions(config), environment)
   settings()
+  // Every other DeepSeek consumer billed by the account sends the sign-in to this route's deployment.
+  ctx.effect(() => ctx.deepseekAuth.connect('account', () => ({ baseURL: settings().protocol.baseURL })), 'llm-deepseek-account: account deployment')
   const supported = resolveAdapterOptions({}).models
   /** The account credential released for one destination; absent without an allowed signed-in account or without the account service. */
   const requestCredential = async (endpoint: string): Promise<AccountRequestCredential | undefined> =>

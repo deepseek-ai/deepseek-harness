@@ -14,6 +14,7 @@ import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environ
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
 import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
@@ -27,6 +28,7 @@ afterEach(async () => {
 
 const MODULES = new Map<string, unknown>([
   ['@deepseek-ai/dsh-llm', LlmRuntime],
+  ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
   ['@deepseek-ai/dsh-llm-deepseek-api-key', Official],
   ['@deepseek-ai/dsh-llm-deepseek-account', Account],
   ['@deepseek-ai/dsh-web', WebRuntime],
@@ -69,6 +71,7 @@ async function bootComposition(
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, JSON.stringify([
     { id: 'llm', name: '@deepseek-ai/dsh-llm' },
+    { id: 'deepseek-auth', name: '@deepseek-ai/dsh-deepseek-auth' },
     { id: 'llm-deepseek', name: '@deepseek-ai/dsh-llm-deepseek-api-key' },
     { id: 'llm-deepseek-account', name: '@deepseek-ai/dsh-llm-deepseek-account' },
     { id: 'web', name: '@deepseek-ai/dsh-web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } },

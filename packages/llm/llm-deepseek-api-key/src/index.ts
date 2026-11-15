@@ -4,6 +4,7 @@ import { APP_IDENTITY, assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm
 import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
+import type {} from '@deepseek-ai/dsh-deepseek-auth'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
   catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, resolveListedCatalog,
@@ -15,7 +16,7 @@ import type { ResolvedDeepSeekOptions } from './config.ts'
 export { Config } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export const name = 'llm-deepseek-api-key'
-export const inject = ['llm']
+export const inject = ['llm', 'deepseekAuth']
 
 const PROVIDER = 'deepseek-official'
 /** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
@@ -36,6 +37,11 @@ export function apply(ctx: Context, config: Config): void {
   const settingsNs = ctx.fiber.entry?.options.id ?? name
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
+  // Every other DeepSeek consumer billed by the API key sends this route's key to this route's deployment.
+  ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
+    const connection = options()
+    return { baseURL: connection.baseURL, reference: connection.apiKeyEnv, owner: settingsNs }
+  }), 'llm-deepseek-api-key: API-key deployment')
   /** The validated API key, or `undefined` when none is configured; store and format failures propagate. */
   const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
     const value = await resolveCredentialRef(ctx, connection.apiKeyEnv)

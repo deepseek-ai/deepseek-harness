@@ -14,6 +14,7 @@ import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ProviderCredential, ProviderCredentialGrant } from '@deepseek-ai/dsh-llm'
 import * as AccountRoute from '@deepseek-ai/dsh-llm-deepseek-account'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
 import {
@@ -850,6 +851,7 @@ describe('web-search-deepseek account route selection', () => {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(LlmRuntime)
+      await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(AccountRoute, { baseURL: routeBaseURL })
       ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return 'account-token' } }))
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
@@ -895,6 +897,7 @@ describe('web-search-deepseek account route selection', () => {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(LlmRuntime)
+      await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(AccountRoute, { baseURL: ACCOUNT_ROUTE_BASE })
       ctx.provide('deepseekAccount', accountStub({ token: () => current, reject: rejectToken }))
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
@@ -963,6 +966,7 @@ describe('web-search-deepseek search readiness', () => {
     mounted.push(ctx)
     await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(AccountRoute, { baseURL: ACCOUNT_ROUTE_BASE })
     if (setup.credentialsDir !== undefined) {
       await ctx.plugin(LocalCredentialProvider, { path: join(setup.credentialsDir, '.credentials.yaml'), watch: false })
