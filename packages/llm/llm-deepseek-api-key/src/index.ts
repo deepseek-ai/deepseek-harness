@@ -75,10 +75,10 @@ export function apply(ctx: Context, config: Config): void {
     return { ...connection, models: catalog.resolution, offered: catalog.offered, refusals: catalog.refusals, badges: catalog.badges }
   }
   ctx.llm.registerConfigurableProviders([
-    { provider: PROVIDER, displayName: 'DeepSeek', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] },
+    { provider: PROVIDER, displayName: 'DeepSeek API', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] },
   ])
   registerDeepSeekProvider<OfficialConnection>(ctx, PROVIDER, {
-    providerName: 'DeepSeek',
+    providerName: 'DeepSeek API',
     options: () => {
       const connection = options()
       return connectionOf(connection, connection.listing === undefined ? undefined : listings.current())
