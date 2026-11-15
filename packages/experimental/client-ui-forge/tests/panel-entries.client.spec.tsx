@@ -409,18 +409,14 @@ describe('CheckoutRow', () => {
   it('crawls a branch name the row clips while the pointer rests on the row', () => {
     const b = row(ready(), '/work')
     const element = b.element() as HTMLElement
-    const name = within(element).getByText('main')
+    // The name's text sits in the span that travels; its parent clips it.
+    const name = within(element).getByText('main').parentElement as HTMLElement
     Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
     Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-    try {
-      fireEvent.pointerEnter(element)
-      expect(name.scrollLeft).toBe(120)
-      fireEvent.pointerLeave(element)
-      expect(name.scrollLeft).toBe(0)
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    fireEvent.pointerEnter(element)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+    fireEvent.pointerLeave(element)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
   })
 
   it('names a detached HEAD with its commit and a linked worktree', () => {

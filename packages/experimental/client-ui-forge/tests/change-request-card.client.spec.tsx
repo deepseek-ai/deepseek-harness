@@ -126,15 +126,10 @@ describe('ChangeRequestCard head', () => {
       expect(text.textContent).toBe('Change 7')
       Object.defineProperty(text, 'scrollWidth', { value: 240, configurable: true })
       Object.defineProperty(text, 'clientWidth', { value: 120, configurable: true })
-      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-      try {
-        fireEvent.pointerEnter(b.head)
-        expect([text.scrollLeft, text.hasAttribute('data-scrolled')]).toEqual([120, true])
-        fireEvent.pointerLeave(b.head)
-        expect([text.scrollLeft, text.hasAttribute('data-scrolled')]).toEqual([0, false])
-      } finally {
-        vi.unstubAllGlobals()
-      }
+      fireEvent.pointerEnter(b.head)
+      expect([text.hasAttribute('data-marquee'), text.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+      fireEvent.pointerLeave(b.head)
+      expect([text.hasAttribute('data-marquee'), text.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
       cleanup()
     }
   })

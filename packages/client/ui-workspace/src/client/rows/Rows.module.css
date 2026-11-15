@@ -200,11 +200,9 @@
 }
 
 /* Hovering a session row marquees a title wider than its cell: the shared
-   hover marquee crawls it at a constant speed to its far edge while the pointer
-   rests on the row, holds it there, fades the edges that still hide text, and
-   returns it to the start in one step when the pointer leaves. The motion is
-   scripted frame by frame (reduced motion jumps), so no scroll-behavior applies
-   here. */
+   hover marquee carries it at a constant speed to its far edge while the
+   pointer rests on the row, holds it there, fades the edges that still hide
+   text, and returns it to the start in one step when the pointer leaves. */
 .sessionRow .title {
   flex: 1;
 }

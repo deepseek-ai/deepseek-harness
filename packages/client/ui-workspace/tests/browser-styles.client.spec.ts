@@ -184,11 +184,9 @@ describe('WorkspaceBrowser.module.css list', () => {
   })
 
   it('marquees a clipped session title on row hover', () => {
-    // The shared hover marquee scripts the crawl frame by frame and its
-    // MarqueeText fades the clipping edges, so the title declares no
-    // scroll-behavior; the stylesheet keeps the hovered cell unclipped.
+    // The shared MarqueeText animates the travel and fades the clipping
+    // edges; the row's stylesheet sizes the cell and keeps it unclipped on hover.
     expect(rowDeclarations('.sessionRow .title')?.get('flex')).toBe('1')
-    expect(rowDeclarations('.sessionRow .title')?.get('scroll-behavior')).toBeUndefined()
     expect(rowDeclarations('.sessionRow:hover .title')?.get('text-overflow')).toBe('clip')
   })
 

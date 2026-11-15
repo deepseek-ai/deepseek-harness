@@ -549,21 +549,16 @@ describe('ChangesTab tooltips', () => {
     expect(tooltipAfterHover(tree.getByRole('button', { name: 'src/app.ts' }))).toEqual({ early: null, at500: null })
     expect(tooltipAfterHover(tree.getByRole('button', { name: 'lib/a.txt → lib/b.txt' })))
       .toEqual({ early: null, at500: 'lib/a.txt → lib/b.txt' })
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-    try {
-      const row = tree.getByRole('button', { name: 'src/app.ts' })
-      const name = row.querySelector('[data-forge-tree-name]')
-      if (!(name instanceof HTMLElement)) throw new Error('no tree name')
-      expect(name.textContent).toBe('app.ts')
-      Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
-      Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
-      fireEvent.pointerEnter(row)
-      expect([name.scrollLeft, name.hasAttribute('data-scrolled')]).toEqual([120, true])
-      fireEvent.pointerLeave(row)
-      expect([name.scrollLeft, name.hasAttribute('data-scrolled')]).toEqual([0, false])
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    const row = tree.getByRole('button', { name: 'src/app.ts' })
+    const name = row.querySelector('[data-forge-tree-name]')
+    if (!(name instanceof HTMLElement)) throw new Error('no tree name')
+    expect(name.textContent).toBe('app.ts')
+    Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
+    Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
+    fireEvent.pointerEnter(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+    fireEvent.pointerLeave(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
   })
 
   it('shows toolbar and viewed hints after 500ms of hover and at once on keyboard focus, with no native titles', async () => {
