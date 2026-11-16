@@ -52,7 +52,11 @@ it.each(['zh', 'en'])('recovers and replaces a request from the same browser and
       await approvals.getByText(original, { exact: true }).waitFor()
       await oldRead.promise
       await applicant.locator('#auth-pair-request').click()
-      await expect.poll(() => applicant.locator('#auth-pair-code').innerText()).not.toBe(original)
+      // Cancelling the previous request briefly clears its code before the replacement arrives.
+      await expect.poll(async () => {
+        const code = await applicant.locator('#auth-pair-code').innerText()
+        return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4} [23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$/u.test(code) && code !== original
+      }).toBe(true)
       const replacement = await applicant.locator('#auth-pair-code').innerText()
       await approvals.getByText(replacement, { exact: true }).waitFor()
       await expect.poll(() => approvals.getByText(original, { exact: true }).count()).toBe(0)
@@ -83,7 +87,10 @@ it.each(['zh', 'en'])('recovers and replaces a request from the same browser and
       expect(await applicant.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await applicant.context().setOffline(false)
       await applicant.locator('#auth-pair-request').click()
-      await expect.poll(() => applicant.locator('#auth-pair-code').innerText()).not.toBe(replacement)
+      await expect.poll(async () => {
+        const code = await applicant.locator('#auth-pair-code').innerText()
+        return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4} [23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$/u.test(code) && code !== replacement
+      }).toBe(true)
       const fresh = await applicant.locator('#auth-pair-code').innerText()
       await approvals.getByText(fresh, { exact: true }).waitFor()
       await expect.poll(() => approvals.getByText(replacement, { exact: true }).count()).toBe(0)
