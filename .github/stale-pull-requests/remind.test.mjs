@@ -63,13 +63,20 @@ test('reminders and closing mention the author and skip exempt and bot-authored 
     pull(6),
     pull(5),
     pull(7, { created_at: daysAgo(30) }),
+    pull(8, { created_at: daysAgo(30) }),
   ]
   const comments = []
   const closed = []
   const timelines = []
   const github = {
     rest: {
-      pulls: { list: 'pulls', update: async params => closed.push(params) },
+      pulls: {
+        list: 'pulls',
+        update: async params => {
+          if (params.pull_number === 8) throw new Error('close failed')
+          closed.push(params)
+        },
+      },
       issues: {
         listEventsForTimeline: 'timeline',
         createComment: async params => {
@@ -81,7 +88,7 @@ test('reminders and closing mention the author and skip exempt and bot-authored 
     paginate: async (method, params) => {
       if (method === 'pulls') return pulls
       timelines.push(params.issue_number)
-      return params.issue_number === 7 ? [reminder(9, 14)] : []
+      return [7, 8].includes(params.issue_number) ? [reminder(9, 14)] : []
     },
   }
   const sleeps = []
@@ -89,14 +96,15 @@ test('reminders and closing mention the author and skip exempt and bot-authored 
   const failures = []
   const core = { info() {}, warning: message => warnings.push(message), setFailed: message => failures.push(message) }
   await processStalePullRequests({ github, context: { repo: { owner: 'o', repo: 'r' } }, core, now, sleep: async ms => sleeps.push(ms) })
-  assert.deepEqual(timelines, [1, 4, 6, 5, 7])
-  assert.deepEqual(warnings, ['#6: locked'])
+  assert.deepEqual(timelines, [1, 4, 6, 5, 7, 8])
+  // A failed close posts no closing comment, so the next run retries without repeating it.
+  assert.deepEqual(warnings, ['#6: locked', '#8: close failed'])
   assert.equal(failures.length, 1)
   assert.deepEqual(comments.map(({ issue_number }) => issue_number), [1, 4, 5, 7])
   assert.match(comments[0].body, /^<!-- stale-pr-reminder:14 -->\n@author This pull request has had no activity for 14 days\./)
   assert.match(comments[3].body, /^<!-- stale-pr-reminder:21 -->\n@author This pull request has had no activity for 21 days and is now closed\./)
   assert.deepEqual(closed, [{ owner: 'o', repo: 'r', pull_number: 7, state: 'closed' }])
-  assert.deepEqual(sleeps, [1000, 1000, 1000, 1000])
+  assert.deepEqual(sleeps, [1000, 1000, 1000, 1000, 1000])
 })
 
 test('a run posts at most 100 reminders', async () => {

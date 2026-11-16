@@ -121,14 +121,11 @@ export async function processStalePullRequests({ github, context, core, now = ne
       const days = dueStage({ createdAt: pull.created_at, timeline, now })
       if (days === undefined) continue
       if (posted > 0) await sleep(COMMENT_INTERVAL_MS)
+      // Closing first keeps a failed close from repeating the closing comment on later runs.
+      if (days === CLOSE_DAYS) await github.rest.pulls.update({ owner, repo, pull_number: pull.number, state: 'closed' })
       await github.rest.issues.createComment({ owner, repo, issue_number: pull.number, body: stageBody(pull.user.login, days) })
       posted++
-      if (days === CLOSE_DAYS) {
-        await github.rest.pulls.update({ owner, repo, pull_number: pull.number, state: 'closed' })
-        core.info(`#${pull.number}: closed after ${days} days without activity`)
-      } else {
-        core.info(`#${pull.number}: posted the ${days}-day reminder`)
-      }
+      core.info(days === CLOSE_DAYS ? `#${pull.number}: closed after ${days} days without activity` : `#${pull.number}: posted the ${days}-day reminder`)
     } catch (error) {
       failed++
       core.warning(`#${pull.number}: ${error.message}`)
