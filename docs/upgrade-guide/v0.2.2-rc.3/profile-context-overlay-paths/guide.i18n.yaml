@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/profile-context-overlay-paths/guide.md
+/:
+  en: c4ef1e7d8d298290
+  zh: 31b78ba3894af10c
+/read-command-line-overlays-from-their-files:
+  en: bfab1724009b36aa
+  zh: 103463ee47fbdafc
+/read-command-line-overlays-from-their-files/change:
+  en: 8abc69fc8b12c36e
+  zh: 89856745d785a697
+/read-command-line-overlays-from-their-files/migration:
+  en: 87ea30b7ee93ef13
+  zh: 898cfde6b53f8248

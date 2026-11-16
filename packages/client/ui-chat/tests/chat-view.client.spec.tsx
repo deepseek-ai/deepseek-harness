@@ -500,12 +500,17 @@ function makeHarness(
     return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
   const fenceCalls: { owner: MarkdownDelegateFenceInfo; entryKey: string | undefined }[] = []
+  const asideRenders = { count: 0 }
   const renderSlot = (
     key: string,
     owner: ChatFlowOwnerProps | MarkdownDelegateFenceInfo,
     opts: Parameters<FlowRenderer>[2] & { entryKey?: string; children?: React.ReactNode },
   ) => {
     if (key === 'conversation.chat.text-interaction') return null
+    if (key === 'conversation.chat.aside') {
+      asideRenders.count += 1
+      return <span data-chat-aside-probe="" />
+    }
     if (key === 'conversation.chat.markdown.fence' && 'lang' in owner) {
       fenceCalls.push({ owner, entryKey: opts.entryKey })
       return opts.children ?? null
@@ -608,7 +613,7 @@ function makeHarness(
     setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, consumeOlder, prepareOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
-    chatScroll, forkAt, toolOwners, fenceCalls,
+    chatScroll, forkAt, toolOwners, fenceCalls, asideRenders,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
@@ -763,7 +768,7 @@ describe('Chat node rendering', () => {
       const { getTriggerProps } = useMarkdownDelegate()
       return <>{targets.map((target, index) => <button key={index} {...getTriggerProps!(target)}>{index}</button>)}</>
     }
-    const view = render(<ChatView {...h.props} renderSlot={() => <References />} />)
+    const view = render(<ChatView {...h.props} renderSlot={(key: string) => key === 'conversation.chat.aside' ? null : <References />} />)
     directory = '/workspace/moved'
     for (const [index, target] of targets.entries()) {
       const button = view.getByRole('button', { name: String(index) })
@@ -863,6 +868,26 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
+  it('renders the aside once in a layer at the top of the Chat frame, which observes no sizes', () => {
+    const observed: Element[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      observe(target: Element): void { observed.push(target) }
+      unobserve(): void {}
+      disconnect(): void {}
+    })
+    const h = makeHarness({}, {}, chatSnapshotFixture({ nodes: [user(1, 'hello')] }))
+    const view = render(<h.ChatView {...h.props} />)
+    const frame = view.container.firstElementChild as HTMLElement
+    const layer = frame.querySelector('[data-chat-aside]') as HTMLElement
+    expect(layer.parentElement).toBe(frame)
+    expect(layer.querySelector('[data-chat-aside-probe]')).not.toBeNull()
+    // The layer's stylesheet publishes the gutter; the layer itself measures nothing.
+    expect(observed).not.toContain(layer)
+    // Transcript updates do not re-render the aside.
+    act(() => { h.setSession({ running: true }) })
+    expect(h.asideRenders.count).toBe(1)
+  })
+
   it('renders only referenced Nodes without deleting unreferenced Node data', () => {
     const snapshot = chatSnapshotFixture({ nodes: [user(1, 'included'), user(2, 'omitted')] })
     const h = makeHarness({}, {}, snapshot)
@@ -4922,7 +4947,7 @@ it('formats Portuguese elapsed minutes with numeric units', () => {
 it('does not infer menu targets from links or data attributes inside a plugin flow slot', () => {
   const h = makeHarness()
   const custom = vi.fn()
-  const view = render(<ChatView {...h.props} renderSlot={() => <>
+  const view = render(<ChatView {...h.props} renderSlot={(key: string) => key === 'conversation.chat.aside' ? null : <>
     <a href="https://example.com/plugin">Plugin link</a>
     <button data-file-path="/plugin/private.txt">Undeclared file</button>
     <button onContextMenu={(event) => {

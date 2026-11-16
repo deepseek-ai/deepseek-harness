@@ -2027,7 +2027,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote({ mode: \'stream\' }) list(request: JobListRequest, signal: AbortSignal): AsyncIterable<JobListFrame>',
-        description: 'Stream the jobs one session can see — its own plus every unowned job — as whole-set frames: one on open, then one after each coalesced burst of lifecycle commits. The stream has no natural end; the carrier closes it.',
+        description: 'Stream the jobs one session can see — its own plus every unowned job — as whole-set frames: one on open, then one after each coalesced burst of lifecycle commits. The stream has no natural end; the carrier closes it.\n\nThe Gateway names this call\'s Session resource from `request.sessionId` through the session controller\'s resolver; no explicit reader is needed.',
         parameters: [{ name: 'request', description: 'the session whose visible set to mirror.' }, { name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'the roster frames.',
       },
@@ -2489,6 +2489,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'every currently selectable preset in contribution order.',
       },
       {
+        signature: '@Remote({ name: \'set\' }) setPreset(request: PermissionPresetSetRequest): PermissionSelection',
+        description: 'Switch one live Session to another preset, opened as a Remote call so a caller\'s Session access is decided before any preset is resolved or any knob is written. The call\'s `session` resource is the Session named by `request.sessionId`, per PermissionPresetSetRequest; the session controller\'s resolver names it.\n\nThe switch appends `permission/preset` and the changed knob events to the Session log, so persisted-only Sessions are refused: they have no live log to append to.',
+        parameters: [{ name: 'request', description: 'live target Session and the preset name to switch to.' }],
+        returns: 'the Session\'s current selection after the switch, read the way the client reads it: the recorded preset while its bundle still matches, otherwise the first preset whose bundle matches, otherwise `custom`.',
+        throws: ['{RemoteError} `gateway/bad-request` for an unknown preset name or a Session this process does not hold live; neither call writes.'],
+      },
+      {
         signature: 'registerAuto(admit: () => void): () => Promise<void>',
         description: 'Publish the fixed current-session Auto preset for the calling integration\'s effect lifetime.',
         parameters: [{ name: 'admit', description: 'synchronous gate run before live Auto selection or restore.' }],
@@ -2760,8 +2767,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly overlays: readonly PatchOptions[]',
-        description: 'Parsed command-line overlays, applied above profile and home patches.',
+        signature: 'readonly overlayPaths: readonly string[]',
+        description: 'Absolute command-line overlay files in argv order, read on every composition and applied above profile and home patches.',
         parameters: [],
       },
       {
@@ -3471,7 +3478,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async listCandidates( agent: Agent, query: string = \'\', limit: number = this.config.candidateLimit, signal?: AbortSignal, ): Promise<SessionReferenceCandidate[]>',
-        description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.',
+        description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.\n\nThe list names every Session the session index holds, whatever identity the caller acts for; it is not narrowed to Sessions that caller else can read. A share viewer therefore learns the id, title, and working-directory path of each Session on the owner Host, and prepare reads the snapshot of a cited Session without asking who cited it. That exposure is a recorded LiveShare limitation, not a grant: narrowing the list is deferred.',
         parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional search text: label and display title match fuzzily, session id and working directory as substrings. Matches keep the working-directory affinity order; relevance breaks ties within it.' }, { name: 'limit', description: 'optional positive result cap.' }, { name: 'signal', description: 'optional cancellation boundary for host autocomplete teardown.' }],
         returns: 'candidates with canonical mention labels and presentation titles.',
       },
@@ -4643,9 +4650,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote answer(agent: Agent, callId: ToolCallId, answer: AskUserQuestionAnswer): boolean',
-        description: 'Answer a continued question. The reply is steered into the agent as a user message whose source names the call; that message is also the record that closes the question in the projection.',
+        description: 'Answer a continued question. The reply is steered into the agent as a user message whose source names the call; that message is also the record that closes the question in the projection.\n\nThe only call this method can answer is one the projection lists as `continued` on this Session, and it steers a user message into the running turn, so it speaks for the person the Session runs for. A LiveShare reader reaches it through the Session read role, which is safe only while an approval question cannot become `continued`: the projection tracks only calls made under the timed `ask_user_question` schema, and a call becomes `continued` only by returning the pending result a timed wait produces (or, for PTC, a pending dispatch) or by resume repair recording `TOOL_OUTCOME_UNKNOWN` for a call the process never finished. Plan review (`plan-review`) and the CUA approvals (`approval`) reach `ctx.userQuestions.ask` without a `wait` and without a `timeout`, so their result is a settled answer, an abort, or a failure, never a pending result, and they stay out of the projection. A future approval surface must keep asking without `wait`/`timeout`, or it must gain its own owner-only gate; giving it a timed form makes an approval answerable by a share viewer.',
         parameters: [{ name: 'agent', description: 'Live root agent for the owning Session.' }, { name: 'callId', description: 'Continued question identity.' }, { name: 'answer', description: 'Complete structured answer batch, one item per question of the call.' }],
-        returns: 'Whether the question is still continued; an accepted reply stays queued until the agent admits its user message.',
+        returns: 'Whether the question is still continued (`false` when this Session lists no such continued call, or its composition carries no Session projections); an accepted reply stays queued until the agent admits its user message.',
         throws: ['{UserQuestionError} `BAD_ANSWER` when the batch does not name each question of the call exactly once, or `REPLY_QUEUED` when a reply is already waiting for admission.'],
       },
       {
@@ -8291,6 +8298,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PermissionCatalog',
     declaration: 'export interface PermissionCatalog {\n    options: PresetOption[];\n    defaultOptions: PresetOption[];\n    defaultPreset: string;\n}',
+  },
+  {
+    name: 'PermissionPresetSetRequest',
+    declaration: 'export interface PermissionPresetSetRequest {\n    readonly sessionId: SessionId;\n    readonly preset: string;\n}',
+  },
+  {
+    name: 'PermissionSelection',
+    declaration: 'export interface PermissionSelection {\n    currentValue: string;\n}',
   },
   {
     name: 'PiAiRequestHeaderContext',

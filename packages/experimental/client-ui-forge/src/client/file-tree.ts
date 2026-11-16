@@ -70,6 +70,35 @@ export function filesInTreeOrder(nodes: readonly ChangedFileNode[]): readonly Fo
 }
 
 /**
+ * Find the viewed files and the directories whose every file is viewed, which the tree draws subdued.
+ * @param nodes - the complete directory-first tree.
+ * @param viewed - paths of the files marked viewed at their current change.
+ * @returns the paths of those files and directories.
+ */
+export function viewedNodes(nodes: readonly ChangedFileNode[], viewed: ReadonlySet<string>): ReadonlySet<string> {
+  const done = new Set<string>()
+  const visit = (node: ChangedFileNode): boolean => {
+    switch (node.kind) {
+      case 'file':
+        if (!viewed.has(node.path)) return false
+        break
+      case 'directory': {
+        // Every child is visited, so viewed files below an unviewed sibling still count.
+        const children = node.children.map(visit)
+        if (!children.every(Boolean)) return false
+        break
+      }
+      /* v8 ignore next -- closed ChangedFileNode union exhaustiveness guard */
+      default: return assertNever(node, 'ChangedFileNode')
+    }
+    done.add(node.path)
+    return true
+  }
+  for (const node of nodes) visit(node)
+  return done
+}
+
+/**
  * Keep matching files and their ancestors without changing directory identities.
  * @param nodes - the complete compacted tree.
  * @param query - case-insensitive text matched against current and previous paths.

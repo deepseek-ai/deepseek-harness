@@ -44,7 +44,7 @@
     "@types/mdast": "^4.0.4",
     "micromark-factory-space": "^2.0.1",
     "micromark-extension-math": "^3.1.0",
-    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-math": "^3.0.0",
     "micromark-extension-gfm": "^3.0.0",

@@ -712,7 +712,8 @@ describe('ChangesTab local reads', () => {
   })
 
   it('retains expanded context and the file node when an unchanged tab becomes visible again', async () => {
-    const m = mount()
+    // The read ahead for highlighting fails, so the lines after the last hunk stay of unknown length.
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
     await settle()
     const section = m.section('src/app.ts')
     fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
@@ -1066,8 +1067,10 @@ describe('ChangesTab layout', () => {
 
 describe('ChangesTab unchanged lines', () => {
   it('expands collapsed lines from the new side of the scope, reading each file once', async () => {
-    const m = mount()
+    // The read ahead for highlighting fails quietly, so the first expansion reads the file.
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
     await settle()
+    expect(m.faces.report).not.toHaveBeenCalled()
     const app = m.section('src/app.ts')
     const gaps = (): string[] => [...app.querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent ?? '')
     expect(gaps()).toEqual(['2 unchanged lines', '4 unchanged lines', en['diff.unchangedRest']])
@@ -1083,14 +1086,136 @@ describe('ChangesTab unchanged lines', () => {
     fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
     await settle()
     expect(gaps()).toEqual([])
-    expect(m.faces.localText).toHaveBeenCalledOnce()
+    expect(m.faces.localText).toHaveBeenCalledTimes(2)
     expect(rowTexts(app).slice(-2)).toEqual(['const t13 = 13', 'const t13 = 13'])
+  })
+
+  it('shows a gap over one step a step at a time from the hunk on either side, and a gap of one step at once', async () => {
+    const lines = Array.from({ length: 100 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 49, oldLines: 3, newStart: 49, newLines: 3, lines: [' line 49', '-old 50', '+line 50', ' line 51'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        faces.localText.mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    const leading = within(section).getByRole('group', { name: '48 unchanged lines' })
+    expect(within(leading).queryByRole('button', { name: 'Expand 20 lines down' })).toBeNull()
+
+    fireEvent.click(within(leading).getByRole('button', { name: 'Expand 20 lines up' }))
+    await settle()
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 29', 'line 29'])
+    const trailing = within(section).getByRole('group', { name: '49 unchanged lines' })
+    expect(within(trailing).queryByRole('button', { name: 'Expand 20 lines up' })).toBeNull()
+
+    fireEvent.click(within(trailing).getByRole('button', { name: 'Expand 20 lines down' }))
+    expect(rowTexts(section).slice(-2)).toEqual(['line 71', 'line 71'])
+    expect(within(section).getByRole('group', { name: '29 unchanged lines' })).toBeTruthy()
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Expand 20 lines up' }))
+    fireEvent.click(within(section).getByRole('button', { name: '8 unchanged lines' }))
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 1', 'line 1'])
+    expect([...section.querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent)).toEqual(['29 unchanged lines'])
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('shows the first step of the unknown lines after the last hunk once they are read', async () => {
+    const lines = Array.from({ length: 60 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 2, lines: [' line 1', '-old 2', '+line 2'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        // The read ahead for highlighting fails, so the lines after the hunk stay of unknown length.
+        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    fireEvent.click(within(section).getByRole('button', { name: en['diff.unchangedRest'] }))
+    await settle()
+    expect(rowTexts(section).slice(-2)).toEqual(['line 22', 'line 22'])
+    expect(within(section).getByRole('group', { name: '38 unchanged lines' })).toBeTruthy()
+  })
+
+  it('reads a local file ahead once per comparison, quietly, to highlight rows with the lines before them', async () => {
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
+    await settle()
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch', base: null, commits: null }, 'src/app.ts')
+    expect(m.faces.report).not.toHaveBeenCalled()
+    const app = m.section('src/app.ts')
+    fireEvent.click(within(app).getByRole('button', { name: 'Collapse app.ts' }))
+    fireEvent.click(within(app).getByRole('button', { name: 'Expand app.ts' }))
+    await settle()
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('counts the lines after the last hunk once the read ahead answers', async () => {
+    const m = mount()
+    await settle()
+    const gaps = [...m.section('src/app.ts').querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent)
+    expect(gaps).toEqual(['2 unchanged lines', '4 unchanged lines', '2 unchanged lines'])
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the lines an expansion read when the read ahead of the same file answers later', async () => {
+    const ahead = deferred<RemoteResult<string>>()
+    const m = mount({ setup: (faces) => { faces.localText.mockReturnValueOnce(ahead.promise) } })
+    await settle()
+    const app = m.section('src/app.ts')
+    fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    expect(rowTexts(app).slice(0, 2)).toEqual(['const a1 = 1', 'const a1 = 1'])
+    ahead.settle(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(app).slice(0, 2)).toEqual(['const a1 = 1', 'const a1 = 1'])
+    expect(m.faces.localText).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads no file of a change request ahead of an expansion', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    expect(m.section('src/app.ts')).toBeTruthy()
+    expect(m.faces.changeRequestText).not.toHaveBeenCalled()
+  })
+
+  it('never draws the text of the last change when a refresh brings the same lines with other content', async () => {
+    // The same lines as APP, but line 11 of the new side reads differently, so the file is another change.
+    const changed: ForgeDiffFile = { ...APP, digest: 'changed', hunks: [APP.hunks[0]!, { ...APP.hunks[1]!, lines: [' const a10 = 110', '-const w = 12'] }] }
+    const m = mount({
+      source: { kind: 'change', url: URL7 },
+      setup: (faces) => {
+        faces.changeRequestDiff.mockResolvedValueOnce(ok(CHANGE)).mockResolvedValue(ok({ ...CHANGE, files: [changed, NOTES, GONE] }))
+      },
+    })
+    await settle()
+    const app = m.section('src/app.ts')
+    // Expanding a gap reads the file, after which the rows after collapsed lines are highlighted again in idle time.
+    fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) })
+    expect(rowTexts(app)).toContain('const a10 = 11')
+
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(rowTexts(app)).toContain('const a10 = 110')
+    expect(rowTexts(app)).not.toContain('const a10 = 11')
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
   })
 
   it('reports a read that failed or no longer matches and keeps the lines collapsed', async () => {
     const m = mount({
       setup: (faces) => {
-        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(ok('changed\n'))
+        // The read ahead for highlighting fails quietly before the two reads the expansions make.
+        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(ok('changed\n'))
       },
     })
     await settle()
@@ -1105,19 +1230,21 @@ describe('ChangesTab unchanged lines', () => {
     await settle()
     expect(m.faces.report).toHaveBeenLastCalledWith('toast.expandStale')
     expect(within(app).getByRole('button', { name: '2 unchanged lines' })).toBeTruthy()
-    expect(m.faces.localText).toHaveBeenCalledTimes(2)
+    expect(m.faces.localText).toHaveBeenCalledTimes(3)
   })
 
   it('drops lines read for changes that a newer read replaced', async () => {
     const text = deferred<RemoteResult<string>>()
-    const m = mount({ setup: (faces) => { faces.localText.mockReturnValueOnce(text.promise) } })
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone).mockReturnValueOnce(text.promise) } })
     await settle()
     fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }))
     fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
     await settle()
     text.settle(ok(APP_TEXT))
     await settle()
-    expect(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
+    // The newer comparison reads the file ahead again, which also counts the lines after the last hunk.
+    const [leading] = within(m.section('src/app.ts')).getAllByRole('button', { name: '2 unchanged lines' })
+    expect(leading?.hasAttribute('disabled')).toBe(false)
     expect(m.faces.report).not.toHaveBeenCalled()
   })
 })
@@ -2082,12 +2209,18 @@ describe('ChangesTab viewed files', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     const progress = (): string | null => m.view.getByRole('progressbar').getAttribute('aria-valuetext')
+    // The file tree draws a viewed file subdued.
+    const subdued = (view: ReturnType<typeof mount>): boolean | undefined =>
+      view.view.container.querySelector('nav button[aria-label="src/app.ts"]')?.hasAttribute('data-viewed')
     expect(progress()).toBe('0 / 3 viewed')
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
     expect(progress()).toBe('1 / 3 viewed')
+    expect(subdued(m)).toBe(true)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'unviewed', 'open'])
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
 
     // A later mount reads the marks; a file whose change moved shows the change and expands again.
@@ -2099,6 +2232,8 @@ describe('ChangesTab viewed files', () => {
     await settle()
     expect(marks(again)[2]).toEqual(['src/app.ts', 'changed', 'open'])
     expect(within(again.section('src/app.ts')).getByText(en['viewed.changed'])).toBeDefined()
+    // A file changed since it was viewed needs reading again, so the tree draws it as unviewed.
+    expect(subdued(again)).toBe(false)
     cleanup()
     const same = mount({ source: { kind: 'change', url: URL7 }, viewedFiles: m.viewedFiles })
     await settle()

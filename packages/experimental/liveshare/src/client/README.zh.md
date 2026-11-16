@@ -8,4 +8,4 @@ viewer 页面只提供调用方 Peer 访问快照（`remoteAccess/follow`）包�
 
 下发的 index 携带读者自己的起始访问快照，因此页面从首次渲染起只提供该读者可调用的入口。快照流失败之后，所有访问答案均为 false，页面不提供任何写入入口；Host 无论如何都会拒绝每个调用。Connection 失去载体时，页面显示离线，直到重新连上一个 generation。
 
-持久化的 `user/message` source 带 `share-viewer` principal 时，会在 Chat 官方 user 气泡上方显示读者由 Relay 断言的主体，文案来自 `liveshare` 字典的 `inputOrigin.sharedSession`。客户端在两种页面上都向 Chat 的 `conversation.chat.user.before` chain seat 注册一个条目；条目的 selector 只选中 source 带合法 `share-viewer` principal 的 `user` 行，owner 发起、结构非法与 steering 行都保持官方行未改动。主体过长时标签省略，不撑宽气泡。
+持久化的 `user/message` source 带 `share-viewer` principal 时，会在 Chat 官方气泡上方显示读者由 Relay 断言的主体，文案来自 `liveshare` 字典的 `inputOrigin.sharedSession`。客户端在两种页面上都向 Chat 的 `conversation.chat.user.before` chain seat 注册一个条目；条目的 selector 选中 source 带合法 `share-viewer` principal 的 `user` 或 `steering` 行，因此读者的插话在 Host 把该输入记入 Inbox 后（待处理期间与落档之后）都标出来源，而 owner 发起与结构非法的行保持官方行未改动。本地提交回显（包括发送者本人的）不携带 source，在该待处理行取代它之前不显示作者行。主体过长时标签省略，不撑宽气泡。
