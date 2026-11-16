@@ -12,6 +12,7 @@ const EXPECTED = fileURLToPath(new URL('./expected/remote-connection', import.me
 const MODE = webSnapshotMode()
 const MOBILE = { width: 390, height: 844 }
 const REPLACEMENT_FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-remote-connection', import.meta.url))
+const EXTENSION_FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-remote-connection-extension', import.meta.url))
 const REPLACEMENT_OVERLAY = fileURLToPath(new URL('./remote-connection-replacement.overlay.yml', import.meta.url))
 
 async function remoteSettings(page: Page): Promise<Locator> {
@@ -676,18 +677,26 @@ describe('web e2e: one-use QR browser login', () => {
     }
   })
 
-  it('replaces only the panel content while sharing the invitation and restores the default when unloaded', async () => {
+  it('adds options alongside the panel and preserves them across content replacement', async () => {
     const scaffold = await launchWebScaffold({
       remoteAuthority: 'qr-login.test', extraOverlayPath: REPLACEMENT_OVERLAY,
-      extraInstallAnchors: [join(REPLACEMENT_FIXTURE, 'package.json')],
+      extraInstallAnchors: [join(REPLACEMENT_FIXTURE, 'package.json'), join(EXTENSION_FIXTURE, 'package.json')],
     })
     onTestFinished(() => scaffold.close())
-    const desktop = await browser.newContext({ locale: ZH_BROWSER_LOCALE })
+    const desktop = await browser.newContext({ locale: ZH_BROWSER_LOCALE, viewport: { width: 1200, height: 1200 }, colorScheme: 'light' })
     try {
       const page = await desktop.newPage()
       const console = watchConsole(page)
       await page.goto(scaffold.authenticatedUrl)
       const section = await remoteSettings(page)
+      const extension = page.getByRole('region', { name: '连接选项', exact: true })
+      const additional = await scaffold.ctx.loader.create({ name: '@fixture/remote-connection-extension' })
+      await extension.waitFor()
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) {
+        await mkdir(screenshots, { recursive: true })
+        await page.screenshot({ path: join(screenshots, 'extensions-overview-desktop-light.png') })
+      }
       const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/remoteConnection/create')
       await createCode(page, section)
       const initial = await (await created).json() as { result: { value: { id: string } } }
@@ -697,11 +706,87 @@ describe('web e2e: one-use QR browser login', () => {
       const nav = page.getByRole('dialog', { name: '设置', exact: true })
         .getByRole('button', { name: '远程连接', exact: true })
       const custom = page.getByRole('region', { name: '自定义远程连接', exact: true })
+      const linkCard = section.getByRole('region', { name: '链接登录', exact: true })
+      expect(await nav.count()).toBe(1)
+      expect(await svg.innerHTML()).toBe(initialSvg)
+      expect(await section.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
+      const details = extension.getByRole('checkbox', { name: '显示邀请详情', exact: true })
+      await extension.getByText('在此浏览器查看当前邀请的状态和编号', { exact: true }).waitFor()
+      expect(await extension.getByRole('status', { name: '附加选项中的邀请编号' }).count()).toBe(0)
+      await details.check()
+      expect(await extension.getByRole('status', { name: '附加选项中的邀请编号' }).textContent()).toBe(invitationId)
+      expect(await extension.locator('dl dt').count()).toBe(2)
+      expect(await extension.locator('dl dd').count()).toBe(2)
+      expect(await extension.locator('dl code').textContent()).toBe(invitationId)
+      const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/remoteConnection/status')
+      await extension.getByRole('button', { name: '刷新连接状态', exact: true }).click()
+      expect((await refreshed).status()).toBe(200)
+      await extension.getByRole('status').filter({ hasText: '等待扫码' }).waitFor()
+      expect(await svg.innerHTML()).toBe(initialSvg)
+      const loginUrl = await section.getByRole('region', { name: '链接登录', exact: true }).locator('code').textContent()
+      expect(loginUrl).not.toBeNull()
+      const extendedAria = await captureStableAria(page, '[data-slot="settings.section"]', scaffold.workspaceCwd, {
+        replacements: [[loginUrl!, '{{access-address}}?token={{login-token}}'], [invitationId, '{{invitation-id}}']],
+      })
+      await compareOrRefreshGolden(join(EXPECTED, 'extensions.expected.md'), extendedAria.replace(/\d+ 秒后过期/gu, '{{seconds}} 秒后过期'), MODE)
+      for (const viewport of [{ width: 1200, height: 1200 }, MOBILE]) {
+        await page.setViewportSize(viewport)
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme })
+          await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme)
+          await extension.scrollIntoViewIfNeeded()
+          const panelBox = await section.boundingBox()
+          const extensionBox = await extension.boundingBox()
+          expect(panelBox).not.toBeNull()
+          expect(extensionBox).not.toBeNull()
+          expect(Math.abs(extensionBox!.x - panelBox!.x)).toBeLessThanOrEqual(1)
+          expect(Math.abs(extensionBox!.width - panelBox!.width)).toBeLessThanOrEqual(1)
+          expect(extensionBox!.y).toBeGreaterThanOrEqual(panelBox!.y + panelBox!.height)
+          expect(extensionBox!.x).toBeGreaterThanOrEqual(0)
+          expect(extensionBox!.x + extensionBox!.width).toBeLessThanOrEqual(viewport.width)
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+          const [extensionStyle, linkStyle] = await Promise.all([extension, linkCard].map(card => card.evaluate((element) => {
+            const style = getComputedStyle(element)
+            return {
+              padding: style.padding, borderWidth: style.borderTopWidth, borderStyle: style.borderTopStyle,
+              borderColor: style.borderTopColor, borderRadius: style.borderTopLeftRadius, background: style.backgroundColor,
+            }
+          })))
+          expect(extensionStyle).toEqual(linkStyle)
+          expect(extensionStyle?.padding).toBe('16px')
+          expect(extensionStyle?.borderStyle).toBe('solid')
+          expect(Number.parseFloat(extensionStyle!.borderWidth)).toBeGreaterThan(0)
+          expect(Number.parseFloat(extensionStyle!.borderRadius)).toBeGreaterThan(0)
+          const [extensionHeading, linkHeading] = await Promise.all([extension, linkCard].map(card => card.getByRole('heading').evaluate((element) => {
+            const style = getComputedStyle(element)
+            return {
+              x: element.getBoundingClientRect().x, fontSize: style.fontSize,
+              fontWeight: style.fontWeight, lineHeight: style.lineHeight,
+            }
+          })))
+          expect(extensionHeading).toEqual(linkHeading)
+          expect(extensionHeading).toMatchObject({ fontSize: '14px', fontWeight: '500', lineHeight: '22px' })
+          const code = extension.locator('dl code')
+          expect(await code.evaluate(element => getComputedStyle(element).overflowWrap)).toBe('anywhere')
+          const codeBox = await code.boundingBox()
+          expect(codeBox).not.toBeNull()
+          expect(codeBox!.x).toBeGreaterThanOrEqual(extensionBox!.x + 16)
+          expect(codeBox!.x + codeBox!.width).toBeLessThanOrEqual(extensionBox!.x + extensionBox!.width - 16)
+          expect(await details.isChecked()).toBe(true)
+          if (screenshots !== undefined) await page.screenshot({
+            path: join(screenshots, `extensions-${viewport.width === MOBILE.width ? 'mobile' : 'desktop'}-${colorScheme}.png`),
+          })
+        }
+      }
+      await page.setViewportSize({ width: 1200, height: 1200 })
+      await page.emulateMedia({ colorScheme: 'light' })
 
       const replacement = await scaffold.ctx.loader.create({ name: '@fixture/remote-connection' })
       await custom.waitFor()
       expect(await nav.count()).toBe(1)
       expect(await section.count()).toBe(0)
+      expect(await details.isChecked()).toBe(true)
+      expect(await extension.getByRole('status', { name: '附加选项中的邀请编号' }).textContent()).toBe(invitationId)
       expect(await custom.getByRole('status', { name: '邀请编号' }).textContent()).toBe(invitationId)
       await custom.getByText('邀请状态: pending', { exact: true }).waitFor()
       await compareOrRefreshGolden(join(EXPECTED, 'replacement.expected.md'),
@@ -717,6 +802,13 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await nav.count()).toBe(1)
       expect(await custom.count()).toBe(0)
       expect(await svg.innerHTML()).toBe(initialSvg)
+      expect(await details.isChecked()).toBe(true)
+      scaffold.ctx.loader.remove(additional)
+      await extension.waitFor({ state: 'detached' })
+      await expect.poll(() => page.locator('style[data-plugin="@fixture/remote-connection-extension"]').count()).toBe(0)
+      expect(await nav.count()).toBe(1)
+      expect(await svg.innerHTML()).toBe(initialSvg)
+      expect(await section.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
 
       const nextReplacement = await scaffold.ctx.loader.create({ name: '@fixture/remote-connection' })
       await custom.waitFor()

@@ -2,7 +2,7 @@
 /** Generated Remote methods and settings registrations leave with the plugin fiber. */
 import { Context } from '@deepseek-ai/cordis'
 import { createElement, Fragment, useState } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSlotRenderer } from '@deepseek-ai/dsh-client-test-runtime'
@@ -12,7 +12,7 @@ import { resolveSlotLabel, type PropsRenderSlots, type StandardSourceBinding } f
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { apply as gatewayApply, inject as gatewayInject } from '@deepseek-ai/dsh-api-gateway/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type { RemoteConnectionContentProps } from '@deepseek-ai/dsh-client-remote-connection/client'
+import type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from '@deepseek-ai/dsh-client-remote-connection/client'
 import { zh } from '../src/client/locales.ts'
 import { apply, inject } from '../src/client/index.ts'
 
@@ -45,6 +45,30 @@ const replacementPlugin = {
       name: 'settings.remoteConnection.content', priority: -1,
     }, Replacement))
   },
+}
+
+function Extension({
+  label, useRemoteConnection, useLoginLink, create, cancel, reloadLink, close,
+}: RemoteConnectionExtensionProps & { label: string }) {
+  const { phase, ticket } = useRemoteConnection(state => state)
+  const link = useLoginLink(state => state.phase)
+  return createElement('section', { 'aria-label': label, 'data-phase': phase, 'data-ticket': ticket?.id, 'data-link': link },
+    createElement('input', { 'aria-label': 'Option value', defaultValue: '' }),
+    createElement('button', { onClick: create }, 'Create invitation'),
+    createElement('button', { onClick: cancel }, 'Cancel invitation'),
+    createElement('button', { onClick: reloadLink }, 'Reload link'),
+    createElement('button', { onClick: close }, 'Close settings'))
+}
+
+function extensionPlugin(id: string, order: number) {
+  return {
+    inject: ['slots'],
+    apply(ctx: Context) {
+      ctx.slots.inject('settings.remoteConnection.extensions', () => ctx.slots.register({
+        name: 'settings.remoteConnection.extensions', id, order, inject: () => ({ label: id }),
+      }, Extension))
+    },
+  }
 }
 
 async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: Context) => Promise<void>) {
@@ -98,6 +122,7 @@ describe('remote connection settings registration', () => {
     expect(typeof face?.copyLink).toBe('function')
     expect(typeof face?.reloadLink).toBe('function')
     expect(face?.hooks).toBeDefined()
+    expect(slots.spec('settings.remoteConnection.extensions')?.inject).toBe(face)
     for (const [language, title] of Object.entries({
       zh: '远程连接', en: 'Remote connection', ja: 'リモート接続', es: 'Conexión remota',
       fr: 'Connexion à distance', de: 'Fernverbindung', ru: 'Удалённое подключение', pt: 'Conexão remota',
@@ -114,6 +139,7 @@ describe('remote connection settings registration', () => {
     expect(slots.entries('settings.section')).toEqual([])
     expect(slots.entries('settings.remoteConnection.content')).toEqual([])
     expect(slots.spec('settings.remoteConnection.content')).toBeUndefined()
+    expect(slots.spec('settings.remoteConnection.extensions')).toBeUndefined()
     expect(ctx.get('remote.remoteConnection')).toBeUndefined()
     expect(slots.entries('shell.overlay')).toEqual([])
   })
@@ -139,6 +165,53 @@ describe('remote connection settings registration', () => {
     expect(slots.entries('settings.remoteConnection.content')).toEqual([])
   })
 
+  it('appends ordered options without replacing the cards and keeps other entries and login state when one unloads', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
+      if (endpoint === 'remoteConnection/create') {
+        return { ok: true, value: { id: 'extension-invitation', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
+      }
+      if (endpoint === 'remoteConnection/cancel') return { ok: true, value: 'cancelled' }
+      return { ok: true, value: { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 60_000 } }
+    })
+    const { ctx, slots, close } = await bench(call)
+    render(slots.renderSlot('root', {}))
+    fireEvent.click(await screen.findByRole('button', { name: zh.generate }))
+    const qr = await screen.findByRole('img', { name: zh.qr })
+    const later = ctx.plugin(extensionPlugin('Later options', 20))
+    await act(async () => { await later.await() })
+    const laterRegion = screen.getByRole('region', { name: 'Later options' })
+    fireEvent.change(within(laterRegion).getByRole('textbox'), { target: { value: 'Keep this draft' } })
+    const earlier = ctx.plugin(extensionPlugin('Earlier options', 10))
+    await act(async () => { await earlier.await() })
+    const earlierRegion = screen.getByRole('region', { name: 'Earlier options' })
+    expect(screen.getAllByRole('region').map(region => region.getAttribute('aria-label')))
+      .toEqual([zh.title, zh.qrTitle, zh.linkTitle, 'Earlier options', 'Later options'])
+    expect(screen.getByRole('img', { name: zh.qr })).toBe(qr)
+    expect(earlierRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })
+    expect(laterRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })
+    fireEvent.click(within(earlierRegion).getByRole('button', { name: 'Reload link' }))
+    await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2) })
+    fireEvent.click(within(earlierRegion).getByRole('button', { name: 'Close settings' }))
+    expect(close).toHaveBeenCalledOnce()
+
+    await act(async () => { await earlier.dispose() })
+    expect(screen.queryByRole('region', { name: 'Earlier options' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Later options' })).toBe(laterRegion)
+    expect(within(laterRegion).getByRole('textbox')).toHaveProperty('value', 'Keep this draft')
+    expect(screen.getByRole('img', { name: zh.qr })).toBe(qr)
+    fireEvent.click(within(laterRegion).getByRole('button', { name: 'Cancel invitation' }))
+    await vi.waitFor(() => { expect(laterRegion.dataset.phase).toBe('cancelled') })
+    expect(screen.queryByRole('img', { name: zh.qr })).toBeNull()
+    fireEvent.click(within(laterRegion).getByRole('button', { name: 'Create invitation' }))
+    await screen.findByRole('img', { name: zh.qr })
+    await act(async () => { await later.dispose() })
+    expect(screen.queryByRole('region', { name: 'Later options' })).toBeNull()
+    expect(screen.getByRole('img', { name: zh.qr })).toBeTruthy()
+    expect(slots.entries('settings.section')).toHaveLength(1)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/create')).toHaveLength(2)
+  })
+
   it('shares an existing invitation with replacement content and restores its remaining lifetime on unload', async () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
     onTestFinished(() => { clock.mockRestore() })
@@ -154,6 +227,10 @@ describe('remote connection settings registration', () => {
     render(createElement(Fragment, null, slots.renderSlot('root', {})))
     fireEvent.click(await screen.findByRole('button', { name: '生成二维码' }))
     await screen.findByRole('img', { name: '一次性登录二维码' })
+    const extension = ctx.plugin(extensionPlugin('Connection options', 0))
+    await act(async () => { await extension.await() })
+    const options = screen.getByRole('region', { name: 'Connection options' })
+    fireEvent.change(within(options).getByRole('textbox'), { target: { value: 'Keep this draft' } })
 
     const replacement = ctx.plugin(replacementPlugin)
     await act(async () => { await replacement.await() })
@@ -161,6 +238,8 @@ describe('remote connection settings registration', () => {
     expect(screen.queryByRole('region', { name: '远程连接' })).toBeNull()
     expect(slots.entries('settings.section')).toHaveLength(1)
     expect(custom.dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-a', seconds: '120' })
+    expect(screen.getByRole('region', { name: 'Connection options' })).toBe(options)
+    expect(options.dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-a' })
     clock.mockReturnValue(6000)
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
     await vi.waitFor(() => { expect(custom.dataset.seconds).toBe('115') })
@@ -172,6 +251,7 @@ describe('remote connection settings registration', () => {
     expect(screen.queryByRole('region', { name: 'Custom connection' })).toBeNull()
     expect(screen.getByRole('img', { name: '一次性登录二维码' })).toBeTruthy()
     expect(screen.getByRole('timer').textContent).toBe('115 秒后过期')
+    expect(within(options).getByRole('textbox')).toHaveProperty('value', 'Keep this draft')
     expect(slots.entries('settings.section')).toHaveLength(1)
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/create')).toHaveLength(1)
   })
@@ -187,13 +267,16 @@ describe('remote connection settings registration', () => {
     })
     const { ctx, slots, fiber } = await bench(call, async (ctx) => {
       await ctx.plugin(replacementPlugin).await()
+      await ctx.plugin(extensionPlugin('Connection options', 0)).await()
       expect(ctx.slots.entries('settings.remoteConnection.content')).toEqual([])
+      expect(ctx.slots.entries('settings.remoteConnection.extensions')).toEqual([])
     })
     render(createElement(Fragment, null, slots.renderSlot('root', {})))
     const custom = await screen.findByRole('region', { name: 'Custom connection' })
     await vi.waitFor(() => { expect(custom.dataset.phase).toBe('ready') })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await vi.waitFor(() => { expect(custom.dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-b' }) })
+    expect(screen.getByRole('region', { name: 'Connection options' }).dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-b' })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await vi.waitFor(() => { expect(custom.dataset.phase).toBe('cancelled') })
     expect(custom.dataset.ticket).toBeUndefined()
@@ -202,13 +285,17 @@ describe('remote connection settings registration', () => {
     await act(async () => { await fiber.dispose() })
     expect(screen.queryByRole('region')).toBeNull()
     expect(slots.entries('settings.remoteConnection.content')).toEqual([])
+    expect(slots.entries('settings.remoteConnection.extensions')).toEqual([])
+    expect(slots.spec('settings.remoteConnection.extensions')).toBeUndefined()
     await act(async () => { await ctx.plugin({ inject: [...inject], apply }).await() })
     const restored = screen.getByRole('region', { name: 'Custom connection' })
     await vi.waitFor(() => { expect(restored.dataset.phase).toBe('ready') })
     expect(restored.dataset.ticket).toBeUndefined()
+    expect(screen.getByRole('region', { name: 'Connection options' }).dataset.ticket).toBeUndefined()
     expect(slots.entries('settings.section')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await vi.waitFor(() => { expect(restored.dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-b' }) })
+    expect(screen.getByRole('region', { name: 'Connection options' }).dataset).toMatchObject({ phase: 'pending', ticket: 'invitation-b' })
   })
 
   it('keeps copy feedback in the shell after the settings panel closes and localizes failures', async () => {

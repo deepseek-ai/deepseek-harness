@@ -1,5 +1,5 @@
+.settings,
 .section {
-  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -7,6 +7,10 @@
   max-width: 720px;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
+}
+
+.section {
+  container-type: inline-size;
 }
 
 .header {

@@ -15,6 +15,7 @@ The settings panel separates QR code login and link login. A signed-in owner can
 
 - [Use this package](#use-this-package)
 - [Authentication and failures](#authentication-and-failures)
+- [Add settings options](#add-settings-options)
 - [Replace the settings panel](#replace-the-settings-panel)
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
@@ -40,9 +41,32 @@ Remote owns the persistent `client-remote-connection/browser-session` credential
 
 Remote uses one root login document for ordinary sign-in and QR exchange. A trusted but unauthenticated visit to the ordinary root receives HTTP 401; HEAD retains 401 without a body. The `login=qr` mode returns the same ordinary login document with HTTP 200 even when the browser already has a login cookie; it attempts QR exchange without replacing the page’s sign-in controls. The document exposes no Token value or private application injections; the ordinary login mode shows the Token form only when Token publishes an entry. Authenticated visits without QR mode render the application with their actual Peer and no second credential check. Source rejection remains 403; authentication failure without another successful provider remains 503.
 
+## Add settings options
+
+Register in the root-scoped list `settings.remoteConnection.extensions` to add options after the main panel. Each plugin uses a unique `id`; entries render in ascending `order`, then registration order. Extensions appear alongside either the default panel or a replacement. `RemoteConnectionExtensionProps` provides the same shared state hooks, actions, and `close()` as [panel replacements](#replace-the-settings-panel). Each extension owns its rendering and localized copy.
+
+```ts client
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { FunctionComponent } from 'react'
+import type { RemoteConnectionExtensionProps } from '@deepseek-ai/dsh-client-remote-connection/client'
+
+declare const ConnectionOptions: FunctionComponent<RemoteConnectionExtensionProps>
+
+export const inject = ['slots']
+
+export function apply(ctx: Context): void {
+  ctx.slots.inject('settings.remoteConnection.extensions', () => ctx.slots.register({
+    name: 'settings.remoteConnection.extensions',
+    id: 'example.connection-options',
+    order: 100,
+  }, ConnectionOptions))
+}
+```
+
 ## Replace the settings panel
 
-The root-scoped, single `settings.remoteConnection.content` slot replaces the whole panel while retaining its one settings navigation entry. Every occupant receives `RemoteConnectionContentProps` from this package's `/client` type exports: `useRemoteConnection(selector)`, `create()`, `cancel()`, `reload()`, `useLoginLink(selector)`, `copyLink()`, `reloadLink()`, `dismissCopyNotice(sequence)`, and the settings shell's `close()`. The plugin owns invitation and link state across replacements, so switching views preserves the current invitation, countdown, and copy feedback. Actions report their outcomes through the state hooks. A replacement owns its rendering and localized copy; it may register its own `locale` namespace.
+The root-scoped, single `settings.remoteConnection.content` slot replaces the main panel while retaining its one settings navigation entry and additive extensions. Every occupant receives `RemoteConnectionContentProps` from this package's `/client` type exports: `useRemoteConnection(selector)`, `create()`, `cancel()`, `reload()`, `useLoginLink(selector)`, `copyLink()`, `reloadLink()`, `dismissCopyNotice(sequence)`, and the settings shell's `close()`. The plugin owns invitation and link state across replacements, so switching views preserves the current invitation, countdown, and copy feedback. Actions report their outcomes through the state hooks. A replacement owns its rendering and localized copy; it may register its own `locale` namespace.
 
 Register a replacement component from your Client plugin with a lower priority than the default panel's `0`:
 
@@ -64,7 +88,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-`slots.inject` supports loading the replacement before the default plugin and re-registers it when the slot owner returns. Unloading the replacement restores the default panel and its current state; unloading the Remote connection plugin removes the content slot, stops polling, discards the link credential and copy notice immediately, and waits for outstanding reads, clipboard writes, and queued refreshes to settle. Only display `ticket.url` as a QR while `phase === 'pending'`: an uncertain operation may retain the ticket for recovery without permitting its display. Never persist or log either credential URL. Replacing this panel does not replace the anonymous login page or the Host invitation protocol.
+`slots.inject` supports loading either contribution before the Remote connection plugin and re-registers it when the slot owner returns. Unloading an extension removes only that contribution, preserving the main panel, other extensions, and shared state. Unloading a replacement restores the default panel and its current state; unloading the Remote connection plugin removes both slots, stops polling, discards the link credential and copy notice immediately, and waits for outstanding reads, clipboard writes, and queued refreshes to settle. Only display `ticket.url` as a QR while `phase === 'pending'`: an uncertain operation may retain the ticket for recovery without permitting its display. Never persist or log either credential URL. Replacing this panel does not replace the anonymous login page or the Host invitation protocol.
 
 ## Further Exploration
 

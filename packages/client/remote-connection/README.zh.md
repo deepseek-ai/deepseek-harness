@@ -15,6 +15,7 @@ kind: "package-reference"
 
 - [使用本包](#use-this-package)
 - [认证与失败处理](#authentication-and-failures)
+- [添加设置选项](#add-settings-options)
 - [替换设置面板](#replace-the-settings-panel)
 - [进一步探索](#further-exploration)
 - [模型体验](#model-experience)
@@ -42,10 +43,34 @@ Remote 拥有持久的 `client-remote-connection/browser-session` 凭据记录�
 
 Remote 在根地址使用同一份登录文档处理普通登录和二维码兑换。来源可信但尚未登录的普通根地址访问返回 HTTP 401，HEAD 保留 401 且不返回正文。`login=qr` 模式以 HTTP 200 返回同一份普通登录文档，即使浏览器已有登录 cookie；它尝试二维码兑换，保留页面上的登录控件。文档不暴露 Token 值或私有应用注入；普通登录模式仅在 Token 发布入口时显示 Token 表单。已登录且未指定二维码模式的访问使用实际 Peer 渲染应用，不再次验证凭据。来源拒绝保持 403；认证故障且没有其它成功提供者时保持 503。
 
+<a id="add-settings-options"></a>
+## 添加设置选项
+
+在根作用域的列表插槽 `settings.remoteConnection.extensions` 中注册，即可在主面板后添加选项。各插件使用唯一的 `id`；条目按 `order` 升序排列，相同值按注册顺序排列。扩展内容可与默认面板或替换面板同时显示。`RemoteConnectionExtensionProps` 提供与[面板替换组件](#replace-the-settings-panel)相同的共享状态 Hook、操作和 `close()`。各扩展组件负责自己的渲染和本地化文案。
+
+```ts client
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { FunctionComponent } from 'react'
+import type { RemoteConnectionExtensionProps } from '@deepseek-ai/dsh-client-remote-connection/client'
+
+declare const ConnectionOptions: FunctionComponent<RemoteConnectionExtensionProps>
+
+export const inject = ['slots']
+
+export function apply(ctx: Context): void {
+  ctx.slots.inject('settings.remoteConnection.extensions', () => ctx.slots.register({
+    name: 'settings.remoteConnection.extensions',
+    id: 'example.connection-options',
+    order: 100,
+  }, ConnectionOptions))
+}
+```
+
 <a id="replace-the-settings-panel"></a>
 ## 替换设置面板
 
-根作用域的单选插槽 `settings.remoteConnection.content` 支持替换整个面板，同时保留唯一的设置导航项。所有组件都获得本包 `/client` 类型入口导出的 `RemoteConnectionContentProps`：`useRemoteConnection(selector)`、`create()`、`cancel()`、`reload()`、`useLoginLink(selector)`、`copyLink()`、`reloadLink()`、`dismissCopyNotice(sequence)` 和设置外壳的 `close()`。插件在视图替换期间持有邀请和链接状态，因此切换视图会保留当前邀请、倒计时和复制反馈。操作结果通过状态 Hook 返回。替换组件负责自己的渲染和本地化文案，可以注册自己的 `locale` 命名空间。
+根作用域的单选插槽 `settings.remoteConnection.content` 支持替换主面板，同时保留唯一的设置导航项和追加的扩展内容。所有组件都获得本包 `/client` 类型入口导出的 `RemoteConnectionContentProps`：`useRemoteConnection(selector)`、`create()`、`cancel()`、`reload()`、`useLoginLink(selector)`、`copyLink()`、`reloadLink()`、`dismissCopyNotice(sequence)` 和设置外壳的 `close()`。插件在视图替换期间持有邀请和链接状态，因此切换视图会保留当前邀请、倒计时和复制反馈。操作结果通过状态 Hook 返回。替换组件负责自己的渲染和本地化文案，可以注册自己的 `locale` 命名空间。
 
 在 Client 插件中注册替换组件，优先级应低于默认面板的 `0`：
 
@@ -67,7 +92,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-`slots.inject` 支持先加载替换插件，并在插槽所有者重新出现时恢复注册。卸载替换插件会恢复默认面板及其当前状态；卸载远程连接插件则移除内容插槽、停止轮询、立即丢弃链接凭据和复制提示，并等待进行中的读取、剪贴板写入和排队刷新完成。仅在 `phase === 'pending'` 时将 `ticket.url` 显示为二维码：结果不确定的操作可能保留票据用于恢复，但不允许展示。不得持久保存或记录任一凭据 URL。替换此面板不会替换匿名登录页面或 Host 邀请协议。
+`slots.inject` 支持先于远程连接插件加载任一种贡献，并在插槽所有者重新出现时恢复注册。卸载扩展组件仅移除该贡献，保留主面板、其他扩展和共享状态。卸载替换插件会恢复默认面板及其当前状态；卸载远程连接插件则移除两个插槽、停止轮询、立即丢弃链接凭据和复制提示，并等待进行中的读取、剪贴板写入和排队刷新完成。仅在 `phase === 'pending'` 时将 `ticket.url` 显示为二维码：结果不确定的操作可能保留票据用于恢复，但不允许展示。不得持久保存或记录任一凭据 URL。替换此面板不会替换匿名登录页面或 Host 邀请协议。
 
 <a id="further-exploration"></a>
 ## 进一步探索

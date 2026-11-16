@@ -14,7 +14,7 @@ import { RemoteConnectionSection } from './RemoteConnectionSection.tsx'
 import { RemoteConnectionSettings } from './RemoteConnectionSettings.tsx'
 import { en, zh, ja, es, fr, de, ru, pt, type RemoteConnectionLocaleKey } from './locales.ts'
 
-export type { RemoteConnectionContentProps } from './slots.ts'
+export type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from './slots.ts'
 export type { RemoteConnectionState } from './remote-connection-controller.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -60,6 +60,7 @@ export async function apply(ctx: Context): Promise<void> {
       label: () => t('title'),
       children: {
         'settings.remoteConnection.content': { kind: 'single', scope: 'root', inject: face },
+        'settings.remoteConnection.extensions': { kind: 'list', scope: 'root', inject: face },
       },
     }, RemoteConnectionSettings))
     scope.slots.inject('settings.remoteConnection.content', () => scope.slots.register({
