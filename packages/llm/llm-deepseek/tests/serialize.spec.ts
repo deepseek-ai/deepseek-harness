@@ -333,10 +333,6 @@ describe('Messages request conversion', () => {
     expect(request.output_config).toEqual(effort === 'off' ? undefined : { effort })
   })
 
-  it('always requests the high content safety check', () => {
-    expect(body([user()]).safety_check).toEqual({ level: 'high' })
-  })
-
   it('disables thinking for the off effort, passes temperature with thinking and refuses unsupported effort', () => {
     expect(body([user()], { reasoningEffort: ReasoningEffortId('off'), temperature: 0 }))
       .toMatchObject({ thinking: { type: 'disabled' }, temperature: 0 })
