@@ -11,7 +11,11 @@ import type {
   SessionSnapshot, SessionSummary, SessionTarget, SubmissionHandle,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import { scopeIdentityOf } from '@deepseek-ai/dsh-api-session-controller/src/client/scope.ts'
-import { heldFacets, shiftFacetCounts } from '@deepseek-ai/dsh-api-session-controller/src/client/sessions/facets.ts'
+import {
+  EMPTY_RETAIN_INFO,
+  heldFacets,
+  shiftRetention,
+} from '@deepseek-ai/dsh-api-session-controller/src/client/sessions/facets.ts'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -217,32 +221,6 @@ interface OpeningControl {
 
 /** Fixture references default to a rendering use, so Conversation assembly runs as it does under a main view. */
 const DEFAULT_TEST_RETAIN: SessionRetainOptions = { source: 'testFixture', facets: { conversation: true } }
-
-function retentionOf(
-  referenceCount: number,
-  retainedBy: SessionRetainInfo['retainedBy'],
-  retainedFacets: SessionRetainInfo['retainedFacets'],
-  connectionCount: number,
-): SessionRetainInfo {
-  return Object.freeze({
-    referenceCount,
-    retainedBy,
-    ...(retainedFacets === undefined ? {} : { retainedFacets }),
-    ...(connectionCount === 0 ? {} : { connectionCount }),
-  })
-}
-
-function freezeRetainedBy(
-  counts: Partial<Record<SessionReferenceSource, number>>,
-): SessionRetainInfo['retainedBy'] {
-  Object.setPrototypeOf(counts, null)
-  return Object.freeze(counts)
-}
-
-const EMPTY_RETAIN_INFO: SessionRetainInfo = Object.freeze({
-  referenceCount: 0,
-  retainedBy: freezeRetainedBy({}),
-})
 
 // TestSessions implements SessionReference against its fixture-owned
 // SessionGeneration without importing the production service's private record.
@@ -742,30 +720,12 @@ export class TestSessions implements ISessions {
     facets: readonly SessionRetainFacet[],
     connected: boolean,
   ): TestSessionReference {
-    const previous = generation.retention
-    const connection = connected ? 1 : 0
-    generation.retention = retentionOf(
-      previous.referenceCount + 1,
-      freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
-      shiftFacetCounts(previous.retainedFacets, facets, 1),
-      (previous.connectionCount ?? 0) + connection,
-    )
+    const use = { source, facets, connected }
+    generation.retention = shiftRetention(generation.retention, use, 1)
     const reference = new TestSessionReference(id, generation, () => {
       if (!generation.live) return
-      const count = generation.retention.referenceCount - 1
-      const { [source]: sourceCount = 0, ...otherSources } = generation.retention.retainedBy
-      const retainedBy = sourceCount > 1
-        ? { ...otherSources, [source]: sourceCount - 1 }
-        : otherSources
-      generation.retention = count === 0
-        ? EMPTY_RETAIN_INFO
-        : retentionOf(
-          count,
-          freezeRetainedBy(retainedBy),
-          shiftFacetCounts(generation.retention.retainedFacets, facets, -1),
-          (generation.retention.connectionCount ?? 0) - connection,
-        )
-      if (count === 0) this.drop(id, generation)
+      generation.retention = shiftRetention(generation.retention, use, -1)
+      if (generation.retention.referenceCount === 0) this.drop(id, generation)
       else this.publishRetention(id)
     })
     this.publishRetention(id)

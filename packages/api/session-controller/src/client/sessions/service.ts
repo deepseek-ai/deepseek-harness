@@ -17,7 +17,7 @@ import type {
 } from '../contract/sessions.ts'
 import type { SessionReferenceSource, SessionRetainFacet } from '../index.ts'
 import { createScope, scopeIdentityOf, scopeOf as scopeTagOf } from '../scope.ts'
-import { heldFacets, shiftFacetCounts } from './facets.ts'
+import { EMPTY_RETAIN_INFO, heldFacets, shiftRetention } from './facets.ts'
 import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SessionProjectionSnapshot } from './manager.ts'
@@ -160,26 +160,6 @@ function incrementedTitle(title: string): string {
   return `${title} (1)`
 }
 
-/** Source labels are dictionary keys, including names also present on Object.prototype. */
-function freezeRetainedBy(counts: Partial<Record<SessionReferenceSource, number>>): SessionRetainInfo['retainedBy'] {
-  Object.setPrototypeOf(counts, null)
-  return Object.freeze(counts)
-}
-
-function retentionOf(
-  referenceCount: number,
-  retainedBy: SessionRetainInfo['retainedBy'],
-  retainedFacets: SessionRetainInfo['retainedFacets'],
-  connectionCount: number,
-): SessionRetainInfo {
-  return Object.freeze({
-    referenceCount,
-    retainedBy,
-    ...(retainedFacets === undefined ? {} : { retainedFacets }),
-    ...(connectionCount === 0 ? {} : { connectionCount }),
-  })
-}
-
 /**
  * Drop what no remaining reference keeps: the connection when none keeps it, otherwise the older window pages
  * when no facet computes over them any longer.
@@ -191,8 +171,6 @@ function releaseConnectionWork(session: Session, before: SessionRetainInfo, afte
   }
   if (before.retainedFacets !== undefined && after.retainedFacets === undefined) session.bufferOlder()
 }
-
-const EMPTY_RETAIN_INFO: SessionRetainInfo = Object.freeze({ referenceCount: 0, retainedBy: freezeRetainedBy({}) })
 
 interface ScopeRecord {
   fiber: Fiber
@@ -594,29 +572,13 @@ export class ClientSessions implements ISessions {
     connected: boolean,
   ): ClientSessionReference {
     const record = this.scopes.get(id) ?? this.materializeScope(id)
-    const previous = record.retention
-    const connection = connected ? 1 : 0
-    record.retention = retentionOf(
-      previous.referenceCount + 1,
-      freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
-      shiftFacetCounts(previous.retainedFacets, facets, 1),
-      (previous.connectionCount ?? 0) + connection,
-    )
+    const use = { source, facets, connected }
+    record.retention = shiftRetention(record.retention, use, 1)
     const reference = new ClientSessionReference(id, record, () => {
       if (!record.live) return
       const before = record.retention
-      const count = before.referenceCount - 1
-      const { [source]: sourceCount = 0, ...otherSources } = before.retainedBy
-      const retainedBy = sourceCount > 1 ? { ...otherSources, [source]: sourceCount - 1 } : otherSources
-      record.retention = count === 0
-        ? EMPTY_RETAIN_INFO
-        : retentionOf(
-          count,
-          freezeRetainedBy(retainedBy),
-          shiftFacetCounts(before.retainedFacets, facets, -1),
-          (before.connectionCount ?? 0) - connection,
-        )
-      if (count === 0) {
+      record.retention = shiftRetention(before, use, -1)
+      if (record.retention.referenceCount === 0) {
         this.retireScope(id, record)
         return
       }
