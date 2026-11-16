@@ -225,6 +225,15 @@ function isDirectParentInstruction(source: MessageSource, parentSession: string 
     && (source as { readonly senderSessionId?: unknown }).senderSessionId === parentSession
 }
 
+/**
+ * Whether a message after a descriptor can be that Session's creation prompt. Local delegation records the task
+ * from its parent agent; an own task must name this Session's parent, while inherited tasks are only demoted to facts.
+ */
+function isCreationPromptSource(source: MessageSource, own: boolean, parentSession: string | undefined): boolean {
+  if (source.kind === 'agent-message') return !own || isDirectParentInstruction(source, parentSession)
+  return source.kind === 'user' && !isBrowserPrompt(source)
+}
+
 interface CreationPrompts {
   readonly own: SessionEvent['seq'] | undefined
   readonly all: ReadonlySet<SessionEvent['seq']>
@@ -245,8 +254,7 @@ function creationPrompts(
     }
     if (passedCreationBoundary
       && event.type === 'user/message'
-      && event.data.source.kind === 'user'
-      && !isBrowserPrompt(event.data.source)) {
+      && isCreationPromptSource(event.data.source, session.isOwnSeq(event.seq), session.header.parentSession)) {
       all.add(event.seq)
       if (session.isOwnSeq(event.seq) && session.header.origin === 'subagent' && session.header.parentSession !== undefined) {
         return { own: event.seq, all }
