@@ -95,7 +95,7 @@ kind: "package-reference"
 
 ### 消息发送、格式化与历史
 
-所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。
+所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。显式指定 `thread` 字符串时，该线程必须属于目标聊天：发送器优先复用同聊天已存消息的匹配 `referrer`，未命中时由适配器向平台解析并校验归属（解析或归属校验失败时以 `published: 'no'` 拒绝发布）。
 
 传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容）、`partial`（多段消息仅部分发布成功）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
 
