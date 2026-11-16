@@ -444,7 +444,7 @@ describe('ImSender grants', () => {
   })
 
   it('enforces binding.thread on send and stream when all writable bindings for the chat are thread-confined', async () => {
-    const { sender, sessions, store } = await boot()
+    const { sender, sessions, store, bot } = await boot()
     const confined = sessions.add('confined', [{ chat: CHAT, writable: true, home: true, thread: 't1' }])
     const inThread = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-t1'), undefined), 'none')
     await store.put({ ...inboundDraft(ImMessageKey('fake:bot', 'm-t2'), undefined), thread: { id: 't2' } }, 'none')
@@ -478,6 +478,14 @@ describe('ImSender grants', () => {
       quote: ImMessageKey('fake:bot', 'r1'),
     })
     expect(okRootSelfQuote.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
+
+    const okRootStream = await sender.stream(CHAT, {
+      session: rootConfined.sessionId,
+      quote: ImMessageKey('fake:bot', 'r1'),
+    })
+    await okRootStream.close(h.text('stream-reply'))
+    expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
   })
 
   it('bounds a grants chain whose parent points back into it', () => {

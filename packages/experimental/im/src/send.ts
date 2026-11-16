@@ -163,8 +163,8 @@ export class ImSender {
 
   /** The body of {@link send}, async so every refusal is a rejection rather than a synchronous throw. */
   private async publishNow(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImSendResult> {
-    this.grant(chat, options.session, options)
-    const target = this.target(chat, options)
+    const confinedThread = this.grant(chat, options.session, options)
+    const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
     const quoted = withQuote(content, options.quote)
     const id = options.operationId
     if (id === undefined) {
@@ -187,8 +187,8 @@ export class ImSender {
    * @returns the stream, already gated on the grants check.
    */
   async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream> {
-    this.grant(chat, options.session, options)
-    const target = this.target(chat, options)
+    const confinedThread = this.grant(chat, options.session, options)
+    const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
     const bot = this.botOf(chat)
     const id = options.operationId
     if (id === undefined) {
@@ -464,9 +464,15 @@ export class ImSender {
   /**
    * Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat, and if all writable bindings
    * for `chat` are confined to specific threads (`binding.thread`), the publication must target one of them.
+   * @returns a thread id to forward to `target()` when a confined session quotes a thread root whose stored record
+   *   carries no `thread` field, else `undefined`.
    */
-  private grant(chat: ImChatKey, session: SessionId | undefined, options: Pick<ImSendOptions, 'thread' | 'quote'>): void {
-    if (session === undefined) return
+  private grant(
+    chat: ImChatKey,
+    session: SessionId | undefined,
+    options: Pick<ImSendOptions, 'thread' | 'quote'>,
+  ): string | undefined {
+    if (session === undefined) return undefined
     const writable = grantChain(this.deps.sessions, session)
       .flatMap(record => record.bindings)
       .filter(binding => binding.chat === chat && binding.writable)
@@ -476,7 +482,7 @@ export class ImSender {
     const confined = writable.filter(
       (binding): binding is typeof binding & { thread: string } => binding.thread !== undefined,
     )
-    if (confined.length < writable.length) return
+    if (confined.length < writable.length) return undefined
     const allowedThreads = new Set(confined.map(binding => binding.thread))
     const explicit = typeof options.thread === 'string' ? options.thread.trim() : undefined
     const quoted = options.quote === undefined ? undefined : this.deps.store.get(options.quote)
@@ -490,6 +496,10 @@ export class ImSender {
         `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
       )
     }
+    if (explicit === undefined && fromQuote !== undefined && fromQuote.thread === undefined) {
+      return splitKey(fromQuote.key).id
+    }
+    return undefined
   }
 
   /** The bot of a chat (`ImError('unavailable')` when it is not mounted). */
@@ -597,7 +607,12 @@ export function operationId(sessionId: SessionId, toolCallId: string): string {
   return createHash('sha256').update(`${sessionId}\u0000${toolCallId}`).digest('hex')
 }
 
-/** Whether `message` belongs to one of the granted `threads` (by thread id, root id, or root message id). */
+/**
+ * Whether `message` belongs to one of the granted `threads` (by thread id, root id, or root message id).
+ * @param message - stored message to test.
+ * @param threads - allowed thread ids for the target chat.
+ * @returns `true` when the message belongs to one of `threads`.
+ */
 export function messageInThreads(message: ImMessage, threads: ReadonlySet<string>): boolean {
   const threadId = message.thread?.id
   const rootId = message.thread?.root
