@@ -57,17 +57,28 @@ describe('dsh-tool-subagent model selection', () => {
     const policy = { routes: [{ provider: 'alpha', model: 'allowed-model' }] }
     const parent = { provider: 'alpha', model: 'parent-model' }
     expect(() => {
-      assertAllowedModelSelection(policy, parent, { provider: 'alpha', model: 'allowed-model' })
+      assertAllowedModelSelection(policy, parent, { provider: 'alpha', model: 'allowed-model' }, false)
     }).not.toThrow()
     expect(() => {
-      assertAllowedModelSelection(policy, parent, parent)
+      assertAllowedModelSelection(policy, parent, parent, false)
     }).toThrow('alpha/parent-model')
     expect(() => {
-      assertAllowedModelSelection(undefined, parent, parent)
+      assertAllowedModelSelection(undefined, parent, parent, false)
     }).not.toThrow()
     expect(() => {
-      assertAllowedModelSelection(undefined, parent, { provider: 'alpha', model: 'other-model' })
+      assertAllowedModelSelection(undefined, parent, { provider: 'alpha', model: 'other-model' }, false)
     }).toThrow('explicit selection is limited to the parent route')
+  })
+
+  it('points route rejections to list_subagent_models only when the caller can call it', () => {
+    const parent = { provider: 'alpha', model: 'parent-model' }
+    const other = { provider: 'openai', model: 'other-model' }
+    expect(() => { assertAllowedModelSelection(undefined, parent, other, true) })
+      .toThrow('explicit selection is limited to the parent route. Call `list_subagent_models` to see the routes you may select.')
+    expect(() => { assertAllowedModelSelection(undefined, parent, other, false) })
+      .toThrow(/limited to the parent route\.$/)
+    expect(() => { assertAllowedModelSelection(undefined, parent, other, false) })
+      .not.toThrow('list_subagent_models')
   })
 
   it('leaves deployment or parent defaults outside the allowlist usable when the call selects nothing', async () => {
@@ -203,7 +214,17 @@ describe('dsh-tool-subagent model selection', () => {
     })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('is not allowed for this Session')
+    expect(text(result)).toContain('Call `list_subagent_models` to see the routes you may select.')
     expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
+  })
+
+  it('omits the discovery hint when list_subagent_models is not visible', async () => {
+    const ctx = await setup({ provider: 'mock', modelSelection: true, parentAgentOptions: { provider: 'alpha', model: 'parent-model' } })
+    for (const selection of [{ provider: 'alpha', model: 'fast-model' }, { provider: 'alpha' }]) {
+      const result = await callSubagent(ctx, { description: 'forced route', prompt: 'do it', ...selection })
+      expect(result.isError).toBe(true)
+      expect(text(result)).not.toContain('list_subagent_models')
+    }
   })
 
   it('discovers only the parent route without a Session policy and permits its explicit route and effort', async () => {
@@ -429,21 +450,26 @@ describe('dsh-tool-subagent model selection', () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true }, { onStart: () => { starts += 1 } })
     const result = await callSubagent(ctx, { description: 'partial route', prompt: 'do it', ...route })
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('`provider` and `model` must be supplied together')
+    expect(text(result)).toContain('`provider` and `model` must be supplied together.')
+    expect(text(result)).toContain('Call `list_subagent_models` to see the routes you may select.')
     expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect(starts).toBe(0)
   })
 
-  it.each([
-    { provider: '', model: 'fast-model', expected: '`provider` must be non-empty' },
-    { provider: 'alpha', model: '', expected: '`model` must be non-empty' },
-    { reasoning_effort: '', expected: '`reasoning_effort` must be non-empty' },
-  ])('rejects empty model-facing values', async ({ expected, ...selection }) => {
-    const ctx = await setup({ provider: 'mock', withModelSelection: true })
-    const result = await callSubagent(ctx, { description: 'empty route', prompt: 'do it', ...selection })
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain(expected)
-    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  it('treats empty route fields as omitted', async () => {
+    const requests: SubagentStartRequest[] = []
+    const ctx = await setup({ provider: 'mock', withModelSelection: true }, { onStart: (request) => { requests.push(request) } })
+    const result = await callSubagent(ctx, {
+      description: 'empty route', prompt: 'do it', provider: '', model: '', reasoning_effort: '',
+    })
+    expect(result.isError, text(result)).toBe(false)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.agentOptions).toBeUndefined()
+
+    const partial = await callSubagent(ctx, { description: 'empty provider', prompt: 'do it', provider: '', model: 'fast-model' })
+    expect(partial.isError).toBe(true)
+    expect(text(partial)).toContain('`provider` and `model` must be supplied together')
+    expect(requests).toHaveLength(1)
   })
 
   it('uses the LLM runtime for provider and reasoning-effort validation before child creation', async () => {

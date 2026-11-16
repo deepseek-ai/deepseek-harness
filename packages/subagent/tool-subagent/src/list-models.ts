@@ -36,6 +36,15 @@ function modelLine(provider: string, model: { id: string; name: string; descript
   return `${provider}/${model.id} — ${model.name}${model.description === undefined ? '' : `: ${model.description}`}`
 }
 
+/** Read the query fields, treating an empty string as an omitted field. */
+function listSubagentModelsRequest(args: ListSubagentModelsRequest): ListSubagentModelsRequest {
+  const { provider, model } = args
+  return {
+    ...provider === undefined || provider === '' ? {} : { provider },
+    ...model === undefined || model === '' ? {} : { model },
+  }
+}
+
 /** Read the requested provider, allowed models, or exact-model efforts. */
 async function listSubagentModels(
   ctx: Context,
@@ -69,7 +78,6 @@ async function listSubagentModels(
       ? '(no LLM providers)'
       : providers.map(provider => `${provider.id} — ${provider.name}`).join('\n')
   }
-  if (request.provider.length === 0) throw new ToolArgsError(['`provider` must be non-empty'])
   const allowedRoutes = policy.routes.filter(route => route.provider === request.provider)
   const [firstRoute] = allowedRoutes
   if (firstRoute === undefined) {
@@ -85,7 +93,6 @@ async function listSubagentModels(
       ? `(no advertised models for ${provider.id})`
       : models.map(model => modelLine(provider.id, model)).join('\n')
   }
-  if (request.model.length === 0) throw new ToolArgsError(['`model` must be non-empty'])
   if (!allowedRoutes.some(route => route.model === request.model)) {
     throw new SubagentError(`child LLM route "${provider.id}/${request.model}" is not allowed for this Session`, 'MODEL_ROUTE_NOT_ALLOWED')
   }
@@ -130,7 +137,7 @@ export function registerListSubagentModels(
     // Route and model metadata reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     execute(args, exec) {
-      return listSubagentModels(ctx, policyHandle, args, exec)
+      return listSubagentModels(ctx, policyHandle, listSubagentModelsRequest(args), exec)
     },
   }))
 }

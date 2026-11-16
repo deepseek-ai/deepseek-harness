@@ -94,7 +94,7 @@ kind: "package-reference"
 
 ### Activation 所有权
 
-工具调用 `ctx.subagents.startActivation()`，并选择向父任务交付。运行时拥有启动取消、执行、结果汇报与清理。启动失败产生出错的工具结果。启动前的拒绝都带 code：缺少调用方 Agent、`llm` 服务或有效的父级路由时抛出 `ToolContextUnavailableError`；路由字段为空或未成对提供时抛出 `ToolArgsError`；`SubagentError` 报告选择被禁用（`MODEL_SELECTION_DISABLED`、`PRESET_SELECTION_DISABLED`）、preset 不在允许列表中（`PRESET_NOT_ALLOWED`）、会话未授权该路由（`MODEL_ROUTE_NOT_ALLOWED`）、发现查询的 LLM 提供方未注册（`LLM_PROVIDER_NOT_FOUND`），或路由预检期间提供方被替换（`PROVIDER_CHANGED`）。发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
+工具调用 `ctx.subagents.startActivation()`，并选择向父任务交付。运行时拥有启动取消、执行、结果汇报与清理。启动失败产生出错的工具结果。启动前的拒绝都带 code：缺少调用方 Agent、`llm` 服务或有效的父级路由时抛出 `ToolContextUnavailableError`；路由字段未成对提供时抛出 `ToolArgsError`，空字符串路由字段视为未提供；`SubagentError` 报告选择被禁用（`MODEL_SELECTION_DISABLED`、`PRESET_SELECTION_DISABLED`）、preset 不在允许列表中（`PRESET_NOT_ALLOWED`）、会话未授权该路由（`MODEL_ROUTE_NOT_ALLOWED`）、发现查询的 LLM 提供方未注册（`LLM_PROVIDER_NOT_FOUND`），或路由预检期间提供方被替换（`PROVIDER_CHANGED`）。调用方可以调用 `list_subagent_models` 时，未成对字段和未授权路由的拒绝会提示模型调用它。发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
 
 ### 结果确认
 
@@ -153,7 +153,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具的描述说明何时查询子级路由或强度，并要求省略可选查询字段而不是传空字符串。委派工具各自说明选择字段及其默认行为。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
+可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具的描述说明何时查询子级路由或强度，并要求省略可选查询字段而不是传空字符串；空字符串查询字段视为未提供。委派工具各自说明选择字段及其默认行为。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
 
 #### Token 影响
 
