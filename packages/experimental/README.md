@@ -54,7 +54,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`tool-ralph`](tool-ralph/README.md) | Bounded repeated delegated tasks | — |
 | [`skill-badge`](skill-badge/README.md) | The powered-by-dsh badge skill | — |
 | [`translator`](translator/README.md) | Anonymous Google and Bing text translation | `ctx.translator` |
-| [`client-ui-connectors`](client-ui-connectors/README.md) | Plugins page tab that lists, installs, and opens the official connectors | — |
+| [`client-ui-connectors`](client-ui-connectors/README.md) | Plugins page tab that lists, installs, and opens the official connectors | `ctx.connectors` |
 | [`client-ui-cot-translation`](client-ui-cot-translation/README.md) | Expanded reasoning translation and original-text controls | `ctx.cotTranslation` |
 | [`cot-translation-bundle`](cot-translation-bundle/README.md) | Default-disabled reasoning translation composition | — |
 | [`speech-to-text`](speech-to-text/README.md) | Named speech recognition providers | `ctx.speechToText` |

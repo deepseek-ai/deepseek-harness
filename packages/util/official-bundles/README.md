@@ -58,7 +58,7 @@ Repository checks read the lists in `src/bundles.ts` as TypeScript literals with
 | File | Role |
 |---|---|
 | [`src/bundles.ts`](src/bundles.ts) | Profile templates and the default, installation-owned, retired, optional, and on-demand bundle lists |
-| [`src/plugin-manager.ts`](src/plugin-manager.ts) | Protected plugin packages and the Web plugin page's hidden, ordered, and experimental bundle lists |
+| [`src/plugin-manager.ts`](src/plugin-manager.ts) | Protected plugin packages and the Web plugin page's hidden, ordered, connector, and experimental bundle lists |
 | [`src/catalog.generated.ts`](src/catalog.generated.ts) | Generated offline metadata for the on-demand bundles |
 | [`src/index.ts`](src/index.ts) | Public exports and the catalog entry type |
 

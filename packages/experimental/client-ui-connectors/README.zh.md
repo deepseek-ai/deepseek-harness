@@ -51,6 +51,8 @@ Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject
 - [“连接器”bundle](../connectors-bundle/README.zh.md) — 启用本标签的可选 bundle。
 - [插件页](../../client/ui-plugin-manager/README.zh.md) — 页面标签、安装对话框，以及把连接器留给本标签的卡片列表。
 
+-----
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -64,9 +66,11 @@ Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 名单只包含 DSH 发布的连接器；新增连接器时，要把包名加入 `CONNECTOR_BUNDLES`，在这里加上它的文案和图标，并在它的条目上声明 `inject: [connectors]`。
+- 名单只包含 DSH 发布的连接器；新增连接器时，要把包名加入 `CONNECTOR_BUNDLES`，在这里加上它的文案和图标，并在它的条目上声明 `inject: [connectors]`。每一行的名称和简介是本包的文案，须跟随连接器自身的显示名称（开关以后者命名），没有检查比对两者。
 - 每一行不显示账号连接状态，连接状态在连接器的详情页查看。
 - 安装要求连接器包已按当前 DSH 版本发布。
+
+-----
 
 <a id="dev-note"></a>
 ### 开发备注

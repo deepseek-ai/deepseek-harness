@@ -51,6 +51,8 @@ The Host entry provides the `connectors` service while the bundle is enabled. A 
 - [Connectors bundle](../connectors-bundle/README.md) — the optional bundle that enables this tab.
 - [Plugins page](../../client/ui-plugin-manager/README.md) — page tabs, the install dialog, and the card lists that leave the connectors to this tab.
 
+-----
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -64,9 +66,11 @@ The tab adds no model context. An installed or switched-on connector changes lat
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The list names only connectors that DSH releases; a new connector adds its package name to `CONNECTOR_BUNDLES`, its copy and icon here, and `inject: [connectors]` to its row.
+- The list names only connectors that DSH releases; a new connector adds its package name to `CONNECTOR_BUNDLES`, its copy and icon here, and `inject: [connectors]` to its row. A row's title and description are this package's copy and must follow the connector's own display title, which names its switch; no check compares the two.
 - Rows show no account connection state; the connector's page shows it.
 - Installing needs the connector package published at the running DSH version.
+
+-----
 
 <a id="dev-note"></a>
 ### Dev Note
