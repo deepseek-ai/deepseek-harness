@@ -391,6 +391,36 @@ describe('ImIntake admission', () => {
     expect(dispatched[0]!.command).toEqual({ name: 'stop', rawInput: ' now' })
   })
 
+  it('dispatches a newly arriving chat immediately even when another chat is blocked in the waterfall', async () => {
+    const { ctx, bot, intake } = await boot()
+    const order: string[] = []
+    const chatAStarted = Promise.withResolvers<undefined>()
+    const releaseChatA = Promise.withResolvers<undefined>()
+    const chatBEntered = Promise.withResolvers<undefined>()
+    ctx.on('im/message', async (event) => {
+      const id = event.message.key.split('|')[1]
+      order.push(`${event.message.chat.ref.id}:${id}`)
+      if (event.message.chat.ref.id === 'chat-a' && id === 'a1') {
+        chatAStarted.resolve(undefined)
+        await releaseChatA.promise
+      }
+      if (event.message.chat.ref.id === 'chat-b') chatBEntered.resolve(undefined)
+      return { kind: 'ignored' }
+    }, { prepend: true })
+
+    await deliver(bot, 'evt-a1', inbound({ id: 'a1', chat: { id: 'chat-a', type: 'group' } }))
+    await chatAStarted.promise
+    // Second message in chat-a queues behind a1; chat-b enters the waterfall immediately without waiting for a1.
+    await deliver(bot, 'evt-a2', inbound({ id: 'a2', chat: { id: 'chat-a', type: 'group' } }))
+    await deliver(bot, 'evt-b1', inbound({ id: 'b1', chat: { id: 'chat-b', type: 'group' } }))
+    await chatBEntered.promise
+    expect(order).toEqual(['chat-a:a1', 'chat-b:b1'])
+
+    releaseChatA.resolve(undefined)
+    await intake.idle()
+    expect(order).toEqual(['chat-a:a1', 'chat-b:b1', 'chat-a:a2'])
+  })
+
   it('leaves room for the delivery of a message admitted at the very edge of maxInputBytes', async () => {
     // Real Feishu identifiers, which every key, the chat header and the delivery id repeat: the intake reserves a fixed
     // envelope for the delivery intent, and this pins that the reserve covers the real `ImDispatcher.handle` intent.

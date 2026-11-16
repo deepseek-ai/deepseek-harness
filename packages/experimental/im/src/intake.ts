@@ -115,10 +115,10 @@ export class ImIntake {
   private readonly receiving = new Set<Promise<void>>()
   /** Own publications in flight, by message key, so a receipt can wait for the record one of them stores. */
   private readonly announcing = new Map<string, Promise<ImMessage | undefined>>()
-  /** The pass currently dispatching, if any. */
-  private active: Promise<void> | undefined
-  /** A pass was requested while one was running. */
-  private more = false
+  /** Per chat, the drain pass currently dispatching. */
+  private readonly draining = new Map<ImChatKey, Promise<void>>()
+  /** Chats that received a pump request while their drain was already running. */
+  private readonly more = new Set<ImChatKey>()
   private disposed = false
   /** Dispatch is held until the composition is complete ({@link hold}, {@link release}); frames are still stored. */
   private held = false
@@ -315,26 +315,36 @@ export class ImIntake {
     this.pump()
   }
 
-  /** Kick the pump (new message, startup re-dispatch, retry timer). Never throws. */
+  /** Kick the pump (new message, startup re-dispatch, retry timer). Chats drain in parallel without blocking each other. Never throws. */
   pump(): void {
     if (this.disposed || this.held) return
-    if (this.active) {
-      this.more = true
-      return
+    const pending = this.store.pending()
+    if (pending.length === 0) return
+    const chats = new Map<ImChatKey, ImDispatchState[]>()
+    for (const state of pending) {
+      const chat = state.message.chat.key
+      const group = chats.get(chat)
+      if (group) group.push(state)
+      else chats.set(chat, [state])
     }
-    const running = this.run()
-    this.active = running
-    void running.then(() => {
-      this.active = undefined
-      if (!this.more || this.disposed) return
-      this.more = false
-      this.pump()
-    })
+    for (const [chat, group] of chats) {
+      if (this.draining.has(chat)) {
+        this.more.add(chat)
+        continue
+      }
+      const running = this.drain(group)
+      this.draining.set(chat, running)
+      void running.then(() => {
+        this.draining.delete(chat)
+        if (!this.more.delete(chat) || this.disposed) return
+        this.pump()
+      })
+    }
   }
 
   /** Resolves when no dispatch is in flight (tests, shutdown). */
   async idle(): Promise<void> {
-    while (this.active) await this.active
+    while (this.draining.size > 0) await Promise.all(this.draining.values())
   }
 
   /**
@@ -358,7 +368,7 @@ export class ImIntake {
     this.disposed = true
     await Promise.allSettled([...this.receiving])
     await this.chain
-    if (this.active) await this.active
+    await Promise.all(this.draining.values())
   }
 
   /**
@@ -494,19 +504,6 @@ export class ImIntake {
     await this.store.touchChat(draft.chat)
     const stored = await this.store.put(draft, 'pending')
     await this.store.remember(key, { digest, message: stored.key, receivedAt })
-  }
-
-  /** One pump pass: dispatch every pending record, chats in parallel. */
-  private async run(): Promise<void> {
-    const pending = this.store.pending()
-    if (pending.length === 0) return
-    const chats = new Map<ImChatKey, ImDispatchState[]>()
-    for (const state of pending) {
-      const group = chats.get(state.message.chat.key)
-      if (group) group.push(state)
-      else chats.set(state.message.chat.key, [state])
-    }
-    await Promise.all([...chats.values()].map(group => this.drain(group)))
   }
 
   /**
