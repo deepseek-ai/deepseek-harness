@@ -1,21 +1,40 @@
-/** Observe step-admitted capabilities without changing either shipped tool executor. */
+/** Observe step-admitted model context without changing either shipped tool executor. */
+import { realpathSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 export const inject = ['tools', 'agents', 'loader']
 
+/** Replace each fixture-owned directory, and its resolved form, with a side-independent placeholder. */
+function placeholders(directories) {
+  const pairs = Object.entries(directories).flatMap(([placeholder, path]) => [[path, placeholder], [realpathSync(path), placeholder]])
+  pairs.sort(([left], [right]) => right.length - left.length)
+  const replace = value => {
+    if (typeof value === 'string') return pairs.reduce((text, [path, placeholder]) => text.replaceAll(path, placeholder), value)
+    if (Array.isArray(value)) return value.map(replace)
+    if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replace(item)]))
+    return value
+  }
+  return replace
+}
+
 export function apply(ctx, config) {
+  const normalize = placeholders(config.directories)
   let observed
+  // Prepended so the observation includes every other listener's contribution.
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+    const assembly = await next()
     if (context.toolSet !== undefined) {
-      observed = {
-        names: ctx.tools.definitions(context.scope, context.toolSet).map(tool => tool.name).sort(),
+      observed = normalize({
+        tools: ctx.tools.schemas(context.scope, context.toolSet).sort((left, right) => left.name.localeCompare(right.name)),
+        sections: assembly.sections.map(({ name, text }) => ({ name, text })),
+        contexts: assembly.contexts.map(({ name }) => name),
         hmr: ctx.get('hmr') !== undefined,
-      }
+      })
       await writeFile(config.output, JSON.stringify(observed))
     }
-    return next()
-  })
+    return assembly
+  }, { prepend: true })
   if (config.preset === undefined) return
   const receive = message => {
     if (message === 'stop-tool-parity') {
@@ -36,7 +55,7 @@ export function apply(ctx, config) {
   async function collect() {
     await ctx.loader.await()
     const presets = ctx.get('agentPresets')
-    if (presets === undefined) throw new Error('Web tool parity requires the shipped presets')
+    if (presets === undefined) throw new Error('Desktop context parity requires the shipped presets')
     const handle = await ctx.agents.create({
       sessionId: 'tool-parity', cwd: config.cwd,
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
@@ -45,7 +64,7 @@ export function apply(ctx, config) {
     try {
       handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect tools' }], source: { kind: 'user' } }))
       await handle.agent.whenIdle()
-      if (observed === undefined) throw new Error('Web did not assemble a model step')
+      if (observed === undefined) throw new Error('Desktop did not assemble a model step')
       return observed
     } finally {
       await handle.dispose()
