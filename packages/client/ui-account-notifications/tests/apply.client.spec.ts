@@ -23,7 +23,7 @@ function operations(c: TestClient): AccountSectionInjected {
   return injected as AccountSectionInjected
 }
 function notificationOperations(c: TestClient): AccountNotificationsInjected {
-  const injected: object = c.ctx.slots.entries('settings.launcher.notifications')[0]!.inject!()
+  const injected: object = c.ctx.slots.entries('settings.notice.notifications')[0]!.inject!()
   return injected as AccountNotificationsInjected
 }
 beforeEach(() => { vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test') })

@@ -61,8 +61,8 @@ export function apply(ctx: Context): void {
     ctaClicked: (id) => { controller.ctaClicked(id) },
     dismiss: (id) => { controller.dismiss(id) },
   }
-  ctx.slots.inject('settings.launcher.notifications', () => ctx.slots.register({
-    name: 'settings.launcher.notifications', locale: 'account.notifications',
+  ctx.slots.inject('settings.notice.notifications', () => ctx.slots.register({
+    name: 'settings.notice.notifications', locale: 'account.notifications',
     inject: () => injected,
   }, AccountNotifications))
 }
