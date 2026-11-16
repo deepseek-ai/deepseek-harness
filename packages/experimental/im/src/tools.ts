@@ -115,7 +115,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      return { message: viewOf(await messageOf(im, chat, args.message)) }
+      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal)) }
     }),
   }))
 
@@ -147,7 +147,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      return await roster(im, chat, args.query, config)
+      return await roster(im, chat, args.query, config, exec.signal)
     }),
   }))
 
@@ -254,7 +254,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const quoted = await messageOf(im, chat, args.message)
+      const quoted = await messageOf(im, chat, args.message, exec.signal)
       return sendValue(await im.send(chat, h.markdown(args.text), {
         operationId: operationId(record.sessionId, exec.callId),
         session: record.sessionId,
@@ -284,7 +284,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
           throw new ImError('capacity', `Cannot publish "${args.path}": it is not a regular file.`)
         }
         const content = await fileContent(scoped.fs, target, info, config, exec.signal)
-        const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote)).key
+        const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote, exec.signal)).key
         return sendValue(await im.send(chat, content, {
           operationId: operationId(record.sessionId, exec.callId),
           session: record.sessionId,
@@ -340,14 +340,14 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
  * key is read from the platform when this deployment never stored it — done by the same call, because a merged forward
  * the store holds as a reference needs the platform read for its entries either way.
  */
-async function messageOf(im: ImToolHost, chat: ImChatKey, value: string): Promise<ImMessage> {
+async function messageOf(im: ImToolHost, chat: ImChatKey, value: string, signal?: AbortSignal): Promise<ImMessage> {
   const trimmed = value.trim()
   const seq = SEQ.exec(trimmed)
   const key = trimmed.includes('|') ? trimmed.slice(trimmed.lastIndexOf('|') + 1) : trimmed
-  if (seq === null) return await im.readMessage(chat, key)
+  if (seq === null) return await im.readMessage(chat, key, signal)
   const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
   if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
-  return await im.readMessage(chat, splitKey(message.key).id)
+  return await im.readMessage(chat, splitKey(message.key).id, signal)
 }
 
 /** One chat member as `im_members` reports it. */
@@ -383,7 +383,7 @@ function mentionSyntax(member: { id: string; name?: string }): string {
  * @param config - operator configuration (`tools.maxMembers` and `tools.maxMemberPages`).
  * @returns the members, and whether the member bound or the page bound left some out.
  */
-async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined, config: ImConfig) {
+async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined, config: ImConfig, signal?: AbortSignal) {
   const bound = config.tools.maxMembers
   const maxPages = config.tools.maxMemberPages
   const needle = query?.trim().toLowerCase() ?? ''
@@ -392,7 +392,7 @@ async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined
   for (let pages = 0; ; pages++) {
     if (pages === maxPages) return { chat, members, total: members.length, more: true }
     const pageLimit = needle ? 100 : Math.min(bound - members.length, 100)
-    const page: MembersPage = await im.members(chat, cursor, pageLimit)
+    const page: MembersPage = await im.members(chat, cursor, pageLimit, signal)
     let full = false
     for (const member of page.data) {
       const name = member.name ?? ''

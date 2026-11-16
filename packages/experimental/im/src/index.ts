@@ -24,7 +24,7 @@ import { ImActivityTracker } from './activity.ts'
 import { ImFormatter } from './format.ts'
 import { ImAgentHost } from './hosting.ts'
 import { ImDispatcher } from './dispatcher.ts'
-import { ImIntake, admit, draftOf, hasUnreadForward } from './intake.ts'
+import { ImIntake, admit, draftOf, hasUnreadForward, readWithin } from './intake.ts'
 import { ImMediaStore } from './media.ts'
 import { ImOutputRegistry } from './outputs.ts'
 import { ImSender } from './send.ts'
@@ -332,7 +332,7 @@ export class ImService extends Service implements ImApi {
    * @param id - platform message id.
    * @returns the message as the store holds it, with a merged forward's entries filled in when the platform has them.
    */
-  async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
+  async readMessage(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMessage> {
     const bot = this.bot(chat)
     const known = this.store.get(ImMessageKey(bot.id, id))
     if (known !== undefined) {
@@ -341,12 +341,12 @@ export class ImService extends Service implements ImApi {
       if (known.chat.key !== chat) {
         throw new ImError('access', `Message ${id} belongs to chat ${known.chat.key}, not ${chat}.`)
       }
-      return await this.expanded(bot, known)
+      return await this.expanded(bot, known, signal)
     }
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
     if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
-    const message = await bot.getMessage(record.ref, id)
+    const message = await readWithin(bot.getMessage(record.ref, id), this.config.platformTimeoutMs, signal)
     // The stored branch checks the chat because a message key is per bot; a platform read needs the same check, since
     // `getMessage` is handed the chat as a routing hint and one bot serves every chat it was added to.
     if (message.chat.id !== record.ref.id) {
@@ -368,12 +368,12 @@ export class ImService extends Service implements ImApi {
    * @param limit - page-size hint; the platform bounds it.
    * @returns the page the adapter read.
    */
-  async members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage> {
+  async members(chat: ImChatKey, cursor?: string, limit?: number, signal?: AbortSignal): Promise<MembersPage> {
     const bot = this.bot(chat)
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so its members cannot be listed.`)
     if (bot.members === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot list the members of a chat.`)
-    return await bot.members(record.ref, cursor, limit)
+    return await readWithin(bot.members(record.ref, cursor, limit), this.config.platformTimeoutMs, signal)
   }
 
   /**
@@ -382,12 +382,17 @@ export class ImService extends Service implements ImApi {
    * keeps the record as it arrived.
    * @param bot - the bot serving the chat.
    * @param message - the stored message.
+   * @param signal - optional cancellation signal from the caller.
    * @returns the message itself, or a copy whose content carries the entries.
    */
-  private async expanded(bot: Bot, message: ImMessage): Promise<ImMessage> {
+  private async expanded(bot: Bot, message: ImMessage, signal?: AbortSignal): Promise<ImMessage> {
     if (!hasUnreadForward(message.content) || bot.getMessage === undefined) return message
     try {
-      const read = await bot.getMessage(message.chat.ref, splitKey(message.key).id)
+      const read = await readWithin(
+        bot.getMessage(message.chat.ref, splitKey(message.key).id),
+        this.config.platformTimeoutMs,
+        signal,
+      )
       if (hasUnreadForward(read.content)) return message
       return { ...message, content: read.content, text: toText(read.content) }
     } catch (error: unknown) {

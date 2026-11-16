@@ -333,18 +333,8 @@ export class ImIntake {
    * @param read - the platform read to run.
    * @returns what the platform answered.
    */
-  private async readWithin<T>(read: Promise<T>): Promise<T> {
-    const timeout = this.config.platformTimeoutMs
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => { reject(new Error(`the platform did not answer within ${timeout} ms`)) }, timeout)
-      timer.unref()
-    })
-    try {
-      return await Promise.race([read, deadline])
-    } finally {
-      clearTimeout(timer)
-    }
+  private readWithin<T>(read: Promise<T>): Promise<T> {
+    return readWithin(read, this.config.platformTimeoutMs)
   }
 
   /**
@@ -554,6 +544,39 @@ export class ImIntake {
       this.ctx.logger.warn('IM message %s was not dispatched and stays pending: %s', message.key, String(error))
       return false
     }
+  }
+}
+
+/**
+ * Bound one platform read by `timeout` ms and an optional caller `AbortSignal`.
+ * @param read - the platform read promise to race.
+ * @param timeout - deadline in milliseconds (`config.platformTimeoutMs`).
+ * @param signal - optional cancellation signal from a tool call.
+ * @returns what the platform answered.
+ */
+export async function readWithin<T>(read: Promise<T>, timeout: number, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) {
+    throw new ImError('unavailable', 'the platform read was aborted', { cause: signal.reason })
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
+  const bounded = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new ImError('unavailable', `the platform did not answer within ${timeout} ms`))
+    }, timeout)
+    timer.unref()
+    if (signal) {
+      onAbort = () => {
+        reject(new ImError('unavailable', 'the platform read was aborted', { cause: signal.reason }))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  })
+  try {
+    return await Promise.race([read, bounded])
+  } finally {
+    clearTimeout(timer)
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort)
   }
 }
 

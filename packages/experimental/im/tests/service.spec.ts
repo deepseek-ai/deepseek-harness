@@ -45,6 +45,7 @@ async function mount(options: {
   retryIntervalMs?: number
   compositionWarnMs?: number
   maxInputBytes?: number
+  platformTimeoutMs?: number
   beforeMount?: (ctx: Context) => Promise<void>
 } = {}): Promise<Harness> {
   const retryIntervalMs = options.retryIntervalMs ?? 60_000
@@ -53,6 +54,7 @@ async function mount(options: {
     retryIntervalMs,
     ...options.compositionWarnMs === undefined ? {} : { compositionWarnMs: options.compositionWarnMs },
     ...options.maxInputBytes === undefined ? {} : { maxInputBytes: options.maxInputBytes },
+    ...options.platformTimeoutMs === undefined ? {} : { platformTimeoutMs: options.platformTimeoutMs },
   }
   // `withoutStart` leaves the harness's own sessions host inert: this context hosts exactly one IM service.
   const base = await boot({ withoutStart: true, config: configPatch })
@@ -243,6 +245,23 @@ describe('ImService facade', () => {
     bot.getMessage = async () => inbound('m-huge', { content: h('message', h.text('x'.repeat(2_000))) })
     await expect(service.readMessage(CHAT, 'm-huge')).rejects.toMatchObject({ code: 'capacity' })
     expect(service.history.get(ImMessageKey('fake:bot', 'm-huge'))).toBeUndefined()
+  })
+
+  it('bounds platform readMessage and members by platformTimeoutMs and AbortSignal', async () => {
+    const { service, bot } = await mount({ platformTimeoutMs: 25 })
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    bot.getMessage = () => new Promise(() => {})
+    bot.members = () => new Promise(() => {})
+
+    await expect(service.readMessage(CHAT, 'm-slow')).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(service.members(CHAT)).rejects.toMatchObject({ code: 'unavailable' })
+
+    const controller = new AbortController()
+    const pendingRead = service.readMessage(CHAT, 'm-abort', controller.signal)
+    controller.abort(new Error('cancelled'))
+    await expect(pendingRead).rejects.toMatchObject({ code: 'unavailable' })
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {

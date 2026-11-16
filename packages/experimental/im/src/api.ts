@@ -587,12 +587,12 @@ export interface ImApi {
    * reference to a message that never reached this deployment still resolves. A platform read is stored like any
    * other message, which gives it a sequence number and keeps a later read of it local.
    */
-  readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
+  readMessage(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMessage>
   /**
    * One page of the people a chat lists as its members: the id a mention addresses and the name to show. The platform
    * decides the page size; `cursor` is the previous page's `next`.
    */
-  members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage>
+  members(chat: ImChatKey, cursor?: string, limit?: number, signal?: AbortSignal): Promise<MembersPage>
   /** Read-only diagnostics. */
   status(): ImStatus
 }
