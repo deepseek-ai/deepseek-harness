@@ -4,7 +4,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { registerSessionListMetadata } from '@deepseek-ai/dsh-session-query'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { listSessions, listWorkspaces } from './list.ts'
 
@@ -21,10 +20,8 @@ const pagination = {
 /**
  * Grant tools access to all Workspace and Session metadata in this runtime.
  * @param ctx - scoped context granting these tools to its callers.
- * @returns when the shared list metadata projection and tools are registered.
  */
-export async function apply(ctx: Context): Promise<void> {
-  const readMetadata = await registerSessionListMetadata(ctx)
+export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'list_workspace',
     description: 'List workspaces in registry order, including empty workspaces. Returns IDs, titles, paths, and creation and update times.',
@@ -75,7 +72,7 @@ export async function apply(ctx: Context): Promise<void> {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     isConcurrencySafe: () => true,
-    execute: (args, exec) => listSessions(ctx, readMetadata, args, exec.signal),
+    execute: (args, exec) => listSessions(ctx, args, exec.signal),
     presentCall: args => ({ card: 'generic', title: 'List sessions', kind: 'read', rawInput: args.workspace_id }),
   }))
 }

@@ -8,7 +8,7 @@ import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
-import { registerSessionListMetadata, SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
+import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 import {
@@ -52,8 +52,6 @@ export function truncateUnicodeCodePoints(value: string, maximum: number): strin
 
 /** Owns list projection registration, bounded cold summaries, and authorized search. */
 export class ApiSessionList {
-  private listMetadata!: (session: Session) => SessionListMetadata
-
   /**
    * @param ctx - Host context carrying Session, query, persistence, and projection services.
    * @param workSliceMs - Resolved positive integral list-work budget in milliseconds.
@@ -65,7 +63,6 @@ export class ApiSessionList {
    * @returns when all required registrations are ready.
    */
   async initialize(): Promise<void> {
-    this.listMetadata = await registerSessionListMetadata(this.ctx)
     await this.ctx.sessionProjections.register<'imageLimits', null>({
       key: 'imageLimits',
       stateSchema: z.null(),
@@ -82,17 +79,17 @@ export class ApiSessionList {
 
   /**
    * Build one current attached-Session summary.
-   * Blankness and recency come from the shared `sessionListMetadata` reader; projection
+   * Blankness and recency come from `sessionQuery.getListMetadata`; projection
    * hints carry every summary key computed through `snapshot`. The first call
    * for a Session computes these projections over its whole in-memory log, and
-   * later calls advance them incrementally. The handle read and the hint with
+   * later calls advance them incrementally. The metadata read and the hint with
    * the same key come from one cell; the metadata read does not depend on any
    * other unit's view.
    * @param session - attached Session to summarize.
    * @returns current list metadata and available projections.
    */
   summaryFor(session: Session): SessionSummary {
-    const metadata = this.listMetadata(session)
+    const metadata = this.ctx.sessionQuery.getListMetadata(session)
     const projections = this.projectionsFor(session.header, session)
     return {
       sessionId: session.id,

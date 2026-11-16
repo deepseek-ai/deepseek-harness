@@ -65,7 +65,7 @@ Invalid pagination and an unknown `workspace_id` fail with `ToolArgsError` (`INV
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-A Workspace selection reads `Workspace.sessionHeaders`; an unscoped call uses the existing header-only query listing. Both combine headers with projected metadata. The shared `registerSessionListMetadata` helper acquires the same projection unit used by the Session API; each consumer releases its own registration when disposed. The title projection remains owned by `dsh-session-title`. Cold rows read the projection cache without opening the underlying log, including on a cache miss. No Session Controller or Agent activation is required.
+A Workspace selection reads `Workspace.getSessionHeaders()`; an unscoped call uses the existing header-only query listing. Both combine headers with projected metadata. Live rows read blankness and prompt recency through `ctx.sessionQuery.getListMetadata`, the same projection the Session API reads. The title projection remains owned by `dsh-session-title`. Cold rows read the projection cache without opening the underlying log, including on a cache miss. No Session Controller or Agent activation is required.
 
 | File | Role |
 |---|---|

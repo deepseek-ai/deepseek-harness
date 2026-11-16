@@ -54,7 +54,7 @@ async function harness(): Promise<{ ctx: Context }> {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   return { ctx }
 }
 

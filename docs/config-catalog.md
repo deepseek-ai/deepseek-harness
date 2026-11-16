@@ -3280,7 +3280,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-session-query-sqlite`
 
-- `inject`: `sessions`
+- `inject`: `sessions` · `sessionProjections`
 - `refs`: [`SessionQueryConfig`](../packages/session-query/session-query/src/index.ts)
 - `source`: [`packages/session-query/session-query-sqlite/src/index.ts:92`](../packages/session-query/session-query-sqlite/src/index.ts)
 

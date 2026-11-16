@@ -32,6 +32,7 @@ Use `ctx.sessionQuery` from application code when you need to read or search ses
 | Operation | What you get |
 |---|---|
 | `listSessions()` | Every logical session, newest first, with `live` and `persisted` availability flags and optional `formatStatus` |
+| `getListMetadata(session)` | Whether a live or prepared Session has no turn, and its latest human-authored prompt time |
 | `readSession(id)` | The complete replay-validated raw event log, without making the session live |
 | `filterSessions(filters)` | Sessions matching ANDed metadata and availability predicates |
 | `filterEvents(id, filters)` | Semantic event documents matching metadata and literal-text predicates |
@@ -92,7 +93,7 @@ The decision history lives in the [unified service decision](../../../.agents/no
 | [`src/index.ts`](src/index.ts) | Service definition: the abstract `SessionQueryEngine`, concrete reads, config validation |
 | [`src/corpus.ts`](src/corpus.ts) | Live-preferred corpus resolution, optional persistence binding, batch projections |
 | [`src/observation.ts`](src/observation.ts) | Live-preferred point observations with a bounded revision-keyed prepared-Session cache |
-| [`src/list-metadata.ts`](src/list-metadata.ts) | Shared blankness and human-prompt recency projection registration |
+| [`src/list-metadata.ts`](src/list-metadata.ts) | Session-list blankness and human-prompt recency projection definition |
 | [`src/cold-read.ts`](src/cold-read.ts) | Handle-based cold log read with in-memory interrupted-turn closers |
 | [`src/types.ts`](src/types.ts) | Public records, filters, requests, and page types |
 | [`src/config.ts`](src/config.ts) | Inherited config and the closed `SessionQueryError` taxonomy |
@@ -106,10 +107,10 @@ The decision history lives in the [unified service decision](../../../.agents/no
 
 `SessionCorpus` binds optional `ctx.sessionPersistence` through a fiber and resolves each read live-first: a known live target is snapshotted without consulting persistence; otherwise the session is listed, read completely through a short-lived read handle, and re-checked for a live attachment before cloning. A cold log whose writer crashed mid-turn is balanced in memory with `interruptedTurnClosers` — persistence is never mutated by a read. Header compatibility is asserted between listed and loaded observations. Batch title reads run one metadata listing and bounded-concurrency reads, isolating per-session failures while cancellation rejects the whole batch.
 
-<a id="shared-list-metadata"></a>
-### Shared list metadata
+<a id="session-list-metadata"></a>
+### Session-list metadata
 
-`registerSessionListMetadata(ctx)` acquires the shared projection for Session blankness and the latest human-authored prompt time, and returns a synchronous reader for prepared live Sessions. The Session API and optional [listing tools](../tool-session-list/README.md) share one projection unit; disposing a consumer releases only its own reference. Registration requires `sessionProjections`, independently of the query service's header-only `listSessions()` operation.
+The service registers the `sessionListMetadata` projection for Session blankness and the latest human-authored prompt time when it starts, and its disposal releases that registration; it therefore requires `sessionProjections`. `getListMetadata(session)` reads the projection synchronously for a live or prepared Session. The Session API and optional [listing tools](../tool-session-list/README.md) read it through `ctx.sessionQuery`.
 
 ### Observation cache
 

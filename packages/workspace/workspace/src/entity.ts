@@ -111,7 +111,8 @@ export class WorkspaceEntity implements Workspace {
     return this.record.sessionIds.filter(id => this.host.candidateMatches(id, this.record.path))
   }
 
-  get sessionHeaders(): readonly SessionHeader[] {
+  /** Reads the registry's startup and attach-time header index without persistence I/O. */
+  getSessionHeaders(): readonly SessionHeader[] {
     return this.sessionIds.map(id => this.host.sessionHeader(id))
   }
 

@@ -86,7 +86,6 @@ function controllers(
   web: WebController
 } {
   roots.add(ctx.root)
-  installSessionReadTestServices(ctx)
   const history = new HistoryController(ctx)
   return { history, web: new WebController(ctx, history, promote) }
 }
@@ -94,7 +93,7 @@ function controllers(
 async function setup(): Promise<{ ctx: Context; history: HistoryController; web: WebController }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
   return { ctx, ...controllers(ctx) }
 }
@@ -130,7 +129,7 @@ describe('Session history and Web follow', () => {
   it('ends active followers when the owning Controller unloads', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
+    await installSessionReadTestServices(ctx)
     let web!: WebController
     const owner = ctx.plugin(Object.assign(
       (inner: Context) => {
@@ -273,7 +272,7 @@ describe('Session history and Web follow', () => {
   it('bridges the unpublished end-seed boundary when a cold source attaches', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
+    await installSessionReadTestServices(ctx)
     let web!: WebController
     let agentCtx!: Context
     await ctx.plugin(Object.assign(

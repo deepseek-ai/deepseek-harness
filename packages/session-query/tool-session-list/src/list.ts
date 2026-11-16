@@ -1,8 +1,8 @@
 /** Header-only selection and cached metadata for the read-only listing tools. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionListMetadata } from '@deepseek-ai/dsh-session-query'
+import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
@@ -76,14 +76,12 @@ export function listWorkspaces(ctx: Context, input: PageInput, signal: AbortSign
  * A Workspace selection reads only its members' indexed headers; an unscoped call enumerates
  * the corpus headers. Subagent Sessions are excluded.
  * @param ctx - context providing query, Workspace, and projection services.
- * @param readLiveMetadata - ready reader owned by this plugin's registration.
  * @param input - filters and pagination arguments.
  * @param signal - caller cancellation, forwarded to the corpus listing.
  * @returns filtered Session metadata ordered by activity, then identity.
  */
 export async function listSessions(
   ctx: Context,
-  readLiveMetadata: (session: Session) => SessionListMetadata,
   input: SessionListInput,
   signal: AbortSignal,
 ): Promise<SessionListItem[]> {
@@ -98,14 +96,14 @@ export async function listSessions(
     if (workspace === undefined) {
       throw new ToolArgsError([`workspace_id ${JSON.stringify(input.workspace_id)} is not registered; use list_workspace to find a workspace`])
     }
-    headers = workspace.sessionHeaders
+    headers = workspace.getSessionHeaders()
   }
   const archived = new Set(ctx.workspaceRegistry.archivedSessionIds)
   const items = []
   for (const header of headers) {
     if (header.origin === 'subagent') continue
     if (archived.has(header.id) !== (input.archived ?? false)) continue
-    const metadata = readListMetadata(ctx, header, readLiveMetadata)
+    const metadata = readListMetadata(ctx, header)
     items.push({
       session_id: header.id,
       title: metadata.title,
@@ -124,13 +122,12 @@ export async function listSessions(
 function readListMetadata(
   ctx: Context,
   header: SessionHeader,
-  readLiveMetadata: (session: Session) => SessionListMetadata,
 ): { title: string | null; lastPromptAt: number | null } {
   const live = ctx.sessions.get(header.id)
   if (live !== undefined) {
     return {
       title: ctx.sessionProjections.snapshot(live, ['title']).values.title ?? null,
-      lastPromptAt: readLiveMetadata(live).lastPromptAt,
+      lastPromptAt: ctx.sessionQuery.getListMetadata(live).lastPromptAt,
     }
   }
   const cache = ctx.get('sessionProjectionCache')

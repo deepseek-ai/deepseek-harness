@@ -65,7 +65,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-选定 Workspace 时读取 `Workspace.sessionHeaders`；不指定范围时使用现有的仅 header 查询列表。两者都把 header 与投影元数据结合。共享的 `registerSessionListMetadata` 辅助函数获取 Session API 使用的同一个投影单元；每个消费方在释放时只移除自己的注册。标题投影仍由 `dsh-session-title` 拥有。冷条目读取投影缓存，不打开底层日志，缓存未命中时也一样。不需要 Session 控制器，也不会激活 agent。
+选定 Workspace 时读取 `Workspace.getSessionHeaders()`；不指定范围时使用现有的仅 header 查询列表。两者都把 header 与投影元数据结合。实时条目通过 `ctx.sessionQuery.getListMetadata` 读取空白状态与提示词活动时间，与 Session API 读取同一个投影。标题投影仍由 `dsh-session-title` 拥有。冷条目读取投影缓存，不打开底层日志，缓存未命中时也一样。不需要 Session 控制器，也不会激活 agent。
 
 | 文件 | 职责 |
 |---|---|

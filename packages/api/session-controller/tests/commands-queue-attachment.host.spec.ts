@@ -42,7 +42,7 @@ async function commandHarness(
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TypertRegistry)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
   const sessionId = SessionId('commands-session')
   const ancestor = Session.create(SessionId('ancestor'))

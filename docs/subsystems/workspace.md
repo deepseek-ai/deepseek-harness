@@ -64,11 +64,10 @@ interface Workspace {
   readonly sessionIds: readonly SessionId[]
 
   /**
-   * Stored headers of {@link sessionIds}, in the same order. Read from the
-   * registry's startup and attach-time header index without persistence I/O;
-   * headers are immutable, so an indexed header never goes stale.
+   * List the stored headers of the current members.
+   * @returns a new array with one header per entry of {@link sessionIds}, in the same order.
    */
-  readonly sessionHeaders: readonly SessionHeader[]
+  getSessionHeaders(): readonly SessionHeader[]
 
   /**
    * Replace the display title durably.
