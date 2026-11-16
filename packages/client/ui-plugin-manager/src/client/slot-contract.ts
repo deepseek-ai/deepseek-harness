@@ -9,7 +9,8 @@
  * `import type` and registers through `ctx.slots`; it never imports this
  * package at runtime.
  *
- * A contributed tab, such as Discover, installs and updates through the page's own dialogs and can show the page's own switch.
+ * A contributed tab, such as Discover, installs and updates through the page's own dialogs and shows the page's own
+ * switch through the `plugins.bundle.switch` Factory.
  *
  * Entries accept `page` for the form with its own save control and `summary`
  * for an official card's one-liner or a row's missing-description fallback.
@@ -18,10 +19,11 @@
  * all. The page draws the title, icon, and crumb itself.
  */
 
-import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { PluginManagerFace } from './manager-store.ts'
+import type { createNavigationStore } from './navigation-store.ts'
 
 /** The view the page asks a configuration entry for. */
 export interface PluginConfigViewProps {
@@ -122,15 +124,25 @@ export interface PluginTabProps {
    * @param packageName - npm package name of the bundle.
    */
   readonly openPackage: (packageName: string) => void
-  /**
-   * Render the switch the Installed list shows for a bundle, with its progress, locks, and the activation guidance it
-   * opens on this tab. For a bundle the page does not list, turning the switch on installs `install` and switches the
-   * bundle on once installed.
-   * @param packageName - npm package name of the bundle.
-   * @param install - the exact version to install while the page does not list the bundle.
-   * @returns the switch; null while the page has not read its bundles, or for an unlisted bundle without `install`.
-   */
-  readonly renderEnableSwitch: (packageName: string, install?: PluginTabInstall) => ReactNode
+}
+
+/** The bundle one `plugins.bundle.switch` occurrence shows the switch of. */
+export interface PluginBundleSwitchProps {
+  /** npm package name of the bundle. */
+  readonly packageName: string
+  /** The exact version to install while the page does not list the bundle. */
+  readonly install?: PluginTabInstall
+}
+
+/** What the page supplies to its bundle switch Factory: the bundle views and the actions a switch runs. */
+export interface PluginBundleSwitchFace {
+  readonly hooks: {
+    /** The page's state, bound by the renderer as usePluginManager. */
+    readonly pluginManager: PluginManagerFace['hooks']['pluginManager']
+  }
+  readonly resolveText: PluginManagerFace['resolveText']
+  readonly installFrom: PluginManagerFace['installFrom']
+  readonly setEnabled: PluginManagerFace['setEnabled']
 }
 
 /** Add-plugin menu actions, independent of any selected bundle or Session. */
@@ -140,6 +152,22 @@ export interface PluginAddActionsProps {
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotFactoryMap {
+    /**
+     * The switch the Installed list shows for a bundle, with its progress, locks, and the activation guidance it
+     * opens on the tab that renders it. For a bundle the page does not list, turning the switch on installs
+     * `install` and switches the bundle on once installed; the occurrence renders nothing while the page has not read
+     * its bundles, or for an unlisted bundle without `install`. Registered by the Plugins page for its own lifetime.
+     */
+    'plugins.bundle.switch': {
+      scope: 'root'
+      props: PluginBundleSwitchProps
+      store: ReturnType<typeof createNavigationStore>
+      inject: PluginBundleSwitchFace
+      locale: 'pluginManager'
+    }
+  }
+
   interface SlotMap {
     /** Additional MenuItemButton rows after installation: 72px high, with a title and a description capped at two lines. */
     'plugins.add.actions': { kind: 'list'; scope: 'root'; owner: PluginAddActionsProps }

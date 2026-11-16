@@ -25,7 +25,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: the forwarded events' own declaration (`$on`'s key face resolves
 // through the owning package's client-safe types subpath).
 import type {} from '@deepseek-ai/dsh-plugin-manager/types'
-import { PluginManagerPage } from './PluginManagerPage.tsx'
+import { BundleSwitch, PluginManagerPage } from './PluginManagerPage.tsx'
 import { createPluginHeaderRef } from './header-scroll.ts'
 import { PluginRefreshToast, type PluginRefreshToastFace } from './PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from './PluginsPanelIcon.tsx'
@@ -35,7 +35,7 @@ import { tabLedgerSource } from './tab-ledger.ts'
 import { PluginManagerController } from './manager-store.ts'
 import { en, ja, es, fr, de, ru, pt, zh, type PluginManagerLocaleKey } from './locales.ts'
 import { createNavigationStore } from './navigation-store.ts'
-import type {} from './slot-contract.ts'
+import type { PluginBundleSwitchFace } from './slot-contract.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -63,13 +63,14 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export type { PluginManagerPageProps } from './PluginManagerPage.tsx'
+export type { BundleSwitchProps, PluginManagerPageProps } from './PluginManagerPage.tsx'
 export type { ConfigLedger, OfficialItem, SettingsSectionItem } from './config-ledger.ts'
 export type { PluginManagerFace } from './manager-store.ts'
 export type { PluginManagerLocaleKey } from './locales.ts'
 export type {
-  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps, PluginTabInstall, PluginTabProps, PluginTabUpdate,
-  PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
+  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps, PluginBundleSwitchFace, PluginBundleSwitchProps,
+  PluginTabInstall, PluginTabProps, PluginTabUpdate, PluginConfigViewProps, PluginDetailProps, PluginPackageRef,
+  PluginRowRef, PluginsSubject,
 } from './slot-contract.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -155,8 +156,18 @@ export function apply(ctx: ClientContext): void {
           'plugins.detail.section': { kind: 'list', scope: 'root' },
         },
       }, PluginManagerPage)
+      // The switch a contributed tab shows for a bundle, reading the page's state and the tab the store selects.
+      yield ctx.slots.registerFactory({
+        name: 'plugins.bundle.switch', scope: 'root', locale: NS, store,
+        inject: (): PluginBundleSwitchFace => ({
+          hooks: { pluginManager: face.hooks.pluginManager },
+          resolveText: face.resolveText, installFrom: face.installFrom, setEnabled: face.setEnabled,
+        }),
+      }, BundleSwitch)
       yield ctx.layout.panelInfo.subscribe(() => {
-        if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
+        if (ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL_ID) return
+        instance.actions.setView({ kind: 'list' })
+        instance.actions.setActivation(null)
       })
       const openList = (): void => {
         ctx.layout.selectPanel(PANEL_ID)

@@ -19,6 +19,7 @@ import type { PluginManagerFace } from '../src/client/manager-store.ts'
 import type { createNavigationStore } from '../src/client/navigation-store.ts'
 import type { PluginsSettingsLinkInjected } from '../src/client/PluginsSettingsLink.tsx'
 import type { ClientSyncFace } from '../src/client/PluginManagerPage.tsx'
+import type { PluginBundleSwitchFace } from '../src/client/slot-contract.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -121,22 +122,25 @@ describe('ui-plugin-manager browser plugin', () => {
     const entry = b.slots.entries('main')[0]!
     assert(entry.store && 'create' in entry.store)
     const navigation = entry.store.create()
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
     expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' }, activation: null })
     b.selectPanel(null)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     b.selectPanel(PANEL_ID)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     assert(navigation.actions.setView)
     navigation.actions.setView({ kind: 'more' })
+    // Guidance a switch opened does not outlive the page either.
+    assert(navigation.actions.setActivation)
+    navigation.actions.setActivation({ name: 'dsh-navigation-test', tab: 'installed' })
     b.selectPanel(null)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
     removeRoot()
     b.selectPanel(null)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' }, activation: null })
   })
 
   it('opens the Plugins list from another panel and resets bundle details without opening installation', async () => {
@@ -152,15 +156,15 @@ describe('ui-plugin-manager browser plugin', () => {
 
     b.ctx.pluginNavigation.openList()
     expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
 
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' }, activation: null })
     navigation.actions.setTab('fixture-discover')
     b.ctx.pluginNavigation.openList()
     expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
     expect(b.list).not.toHaveBeenCalled()
   })
@@ -185,7 +189,7 @@ describe('ui-plugin-manager browser plugin', () => {
     const linkInjected: object = link.inject!()
     ;(linkInjected as PluginsSettingsLinkInjected).openPlugins()
     expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
     // The page reads this page's client synchronization from the module system and retries through it.
     const pageInjected: object = b.slots.entries('main')[0]!.inject!()
     const sync = pageInjected as ClientSyncFace
@@ -225,7 +229,9 @@ describe('ui-plugin-manager browser plugin', () => {
     removeRoot()
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.snapshot('factory:plugins.bundle.switch')).toEqual([])
     declare(b.slots)
+    expect(b.slots.snapshot('factory:plugins.bundle.switch')).toHaveLength(1)
     const remountedInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     expect((remountedInjected as PluginRefreshToastFace).hooks.pluginManager).toBe(face.hooks.pluginManager)
     await fiber.dispose()
@@ -278,6 +284,7 @@ describe('ui-plugin-manager browser plugin', () => {
   it('registers the sidebar entry and its page, which reads the Host only once rendered and follows Host changes', async () => {
     const b = await bench()
     declare(b.slots)
+    const registerFactory = vi.spyOn(b.slots, 'registerFactory')
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
 
@@ -285,7 +292,7 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(b.selectPanel).toHaveBeenCalledWith(PANEL_ID)
     const entry = b.slots.entries('main')[0]!
     assert(entry.store && 'create' in entry.store)
-    expect(entry.store.create().getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    expect(entry.store.create().getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' }, activation: null })
     expect(entry.component).toBe(PluginManagerPage)
     expect(entry.options).toMatchObject({ key: PANEL_ID })
     expect(entry.locale).toBe(NS)
@@ -308,8 +315,19 @@ describe('ui-plugin-manager browser plugin', () => {
     for (const name of ['plugins.detail.actions', 'plugins.detail.badge', 'plugins.detail.section'] as const) {
       expect(b.slots.spec(name)).toMatchObject({ kind: 'list', scope: 'root' })
     }
+    // The switch a contributed tab shows for a bundle is the page's Factory, sharing the page's navigation store.
+    expect(b.slots.snapshot('factory:plugins.bundle.switch')).toMatchObject([{ type: 'factory', scope: 'root' }])
     const injected: object = entry.inject!()
     const face = injected as PluginManagerFace
+    const [factoryOptions] = registerFactory.mock.calls[0]!
+    expect(factoryOptions).toMatchObject({ name: 'plugins.bundle.switch', scope: 'root', locale: NS, store: entry.store })
+    const switchInjected: object = (factoryOptions as { inject: () => object }).inject()
+    const switchFace = switchInjected as PluginBundleSwitchFace
+    expect(Object.keys(switchFace).sort()).toEqual(['hooks', 'installFrom', 'resolveText', 'setEnabled'])
+    expect(switchFace.hooks.pluginManager).toBe(face.hooks.pluginManager)
+    expect(switchFace.installFrom).toBe(face.installFrom)
+    expect(switchFace.setEnabled).toBe(face.setEnabled)
+    expect(switchFace.resolveText).toBe(face.resolveText)
     const overlay = b.slots.entries('shell.overlay')[0]!
     expect(overlay.component).toBe(PluginRefreshToast)
     expect(overlay.options).toMatchObject({ id: 'plugin-manager.refresh-toast' })
@@ -361,6 +379,7 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
     expect(b.ctx.get('pluginChanges')).toBeUndefined()
     expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.snapshot('factory:plugins.bundle.switch')).toEqual([])
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
