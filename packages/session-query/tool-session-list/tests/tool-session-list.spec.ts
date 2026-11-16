@@ -325,6 +325,10 @@ describe('read-only Session list tools', () => {
       expect(tool?.isConcurrencySafe?.({})).toBe(true)
       expect(tool?.presentCall?.({})).toMatchObject({ card: 'generic', kind: 'read' })
     }
+    const page = { limit: 5, offset: 10 }
+    expect(mounted.ctx.tools.get('list_workspace')?.presentCall?.(page)).toMatchObject({ rawInput: page })
+    const filters = { workspace_id: 'w1', archived: true, limit: 5, offset: 10 }
+    expect(mounted.ctx.tools.get('list_session')?.presentCall?.(filters)).toMatchObject({ rawInput: filters })
     await mounted.fiber.dispose()
     expect(mounted.ctx.tools.get('list_workspace')).toBeUndefined()
     expect(mounted.ctx.tools.get('list_session')).toBeUndefined()

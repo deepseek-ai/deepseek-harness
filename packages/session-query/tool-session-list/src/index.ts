@@ -45,7 +45,7 @@ export function apply(ctx: Context): void {
     },
     isConcurrencySafe: () => true,
     execute: (args, exec) => Promise.resolve(listWorkspaces(ctx, args, exec.signal)),
-    presentCall: () => ({ card: 'generic', title: 'List workspaces', kind: 'read' }),
+    presentCall: args => ({ card: 'generic', title: 'List workspaces', kind: 'read', rawInput: args }),
   }))
   ctx.tools.register(defineTool({
     name: 'list_session',
@@ -73,6 +73,6 @@ export function apply(ctx: Context): void {
     },
     isConcurrencySafe: () => true,
     execute: (args, exec) => listSessions(ctx, args, exec.signal),
-    presentCall: args => ({ card: 'generic', title: 'List sessions', kind: 'read', rawInput: args.workspace_id }),
+    presentCall: args => ({ card: 'generic', title: 'List sessions', kind: 'read', rawInput: args }),
   }))
 }
