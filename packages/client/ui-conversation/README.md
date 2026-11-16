@@ -68,8 +68,6 @@ The existing semantic `DraftSnapshot` retains quote text and clipboard-coordinat
 <a id="shell-and-standard-props"></a>
 ## Shell and standard props
 
-The attachment and send controls share a 32px diameter and the toolbar center line in both the initial composer and the docked composer.
-
 The root-scoped `conversation.hero.frame` hoc Slot wraps the scroll body in every phase, so its layers never remount the composer when the home ends. Its owner props carry `hero`, true only for the blank home of a standalone Conversation. Layers keep the scroll body a direct flex item of the body, for example with `display: contents`. On the home, the Conversation root, which paints the background, isolates stacking: a layer decoration at negative `z-index` paints above that background and below all Conversation content, including composer takeovers. Other phases leave the root out of the stacking order, so unportaled Conversation popovers can still rise above AppFrame chrome that floats over the column. Layers own their own input handling. With no occupant, the body is unchanged.
 
 Below 768px, Web view tabs align with the header's 20px left inset. Desktop and wider Web windows retain the additional 8px tab inset.
@@ -102,7 +100,7 @@ The composer reads its Session's access answers through the Session-scope `useAc
 
 `SessionInputShell` owns one Lexical editor per Session through its private [DraftEditorRuntime](src/client/input/editor/runtime.ts), while retaining submission, attachment selection, and recovery decisions. [DraftEditor](src/client/input/editor/DraftEditor.tsx) renders the borrowed editor; InputBar retains its Hooks and refs and installs DOM behavior through [view-binding](src/client/input/editor/view-binding.ts). Editor-facing types live in [draft-editor.ts](src/client/contract/draft-editor.ts), with shared input and submission types in [input.ts](src/client/contract/input.ts). Background editor updates retain the draft selection without changing the document selection or reclaiming focus from another control; explicit Composer focus restores its selection. This separation does not support simultaneous editable roots for one Session; [the two-stage isolation proposal](../../../.agents/notes/proposed/architecture/2026-09-14-composer-model-and-draft-editor.md) defines the remaining work.
 
-Drafts retain plain text and file, folder, and Session reference chips across Session switching and reload. Public input methods accept text; internal restoration and Workspace transfer preserve structured references. The input model imports saved content before its first published read; React only mounts that editor and binds the existing Conversation store writer. The original storage key accepts legacy strings and writes semantic snapshots without runtime node IDs. A pending skill catalog does not block editing: slash names remain ordinary text until a matching catalog entry arrives. Arrival rematches the current text without changing chips, selection, or Undo history. Browser-owned attachment File objects are not persisted by this mechanism. The [draft initialization decision](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.md) defines ownership and restoration.
+Drafts retain plain text and file, folder, and Session reference chips across Session switching and reload. Public input methods accept text; internal restoration and Workspace transfer preserve structured references. The input model imports saved content before its first published read; React only mounts that editor and binds the existing Conversation store writer. The original storage key accepts legacy strings and writes semantic snapshots without runtime node IDs. A pending skill catalog does not block editing: slash names remain ordinary text until a matching catalog entry arrives. Arrival rematches the current text without changing chips, selection, or Undo history. Browser-owned attachment File objects are not persisted by this mechanism; the Conversation service keeps them registered across Session switches, so a returning composer re-adopts them. The [draft initialization decision](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.md) defines ownership and restoration.
 
 A claimed command is one atomic chip at the start of the draft, and the claim lasts exactly as long as that chip. Deleting the arguments and separator keeps the claim. At the chip's edge, the first Backspace or Delete selects the whole chip and the next one removes it and releases the claim, leaving the arguments as plain text; any other key, a click, or a caret move clears the selection. Text or a line break inserted before the chip turns it back into its literal token and releases the claim, and undo restores a deleted chip together with its claim. The persisted draft records the chip's token, so a reload rebuilds the chip once the command catalog resolves the claim; editing the draft first keeps the literal token, which Enter still submits as the command. The same rules apply to every command and locale, including `/goal`, `/目标`, `/plan`, and `/计划`. Command hints and ordinary placeholders remain hidden throughout IME composition and reappear only after the editor commits the final text and the corresponding input is empty.
 
@@ -147,6 +145,12 @@ File chips and editable skill references share a whole-reference hover backgroun
 When another writer owns the Session, the send-error toast asks the user to quit other running DSH instances and retry.
 
 Two independent Escape presses in the focused Chat or Composer stop its current running turn and preserve queued messages. The interval comes from the shortcuts plugin’s `stopSequenceMs` configuration (500 ms by default). A menu, approval, modal, terminal, embedded webpage, composition, repeated key, changed input region, Session or turn breaks the sequence. The shortcut uses the same scoped cancellation as the Stop button. The plugin registers Stop as a fixed action in the `input` display group. Its registration reserves plain Escape against editable shortcuts and supplies the `Esc Esc` sequence shown in the Stop button’s hover and keyboard-focus tooltip.
+
+### Control geometry
+
+The attachment and send controls share a 32px diameter and the toolbar center line in both the initial composer and the docked composer.
+
+The task panel keeps its heading and task text on one column, using equal leading slots without changing the icon artwork.
 
 <a id="temporary-composer-entries"></a>
 ## Temporary composer entries
@@ -227,6 +231,7 @@ Serialization of the empty retry message depends on the adapter. Prefix reuse de
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
 - **Manual continuation uses a fixed product allowlist** — the supported failure codes are independent of the provider's configurable `retryableCodes`; changing automatic retry policy does not expand or reduce this action. `STREAM_CLOSED` permits an explicit new user turn even when the default policy does not retry it. That code can also identify a protocol violation, so another request is not guaranteed to recover.
 - **Composer backdrop blur is verified only in Chromium** — with `will-change: transform` on the docked composer, descendant `backdrop-filter` still samples the transcript in Chromium; WebKit behavior has not been verified.
+- **A reload discards draft attachments** — only switching between Sessions keeps them; after a reload the reopened composer reports the loss and asks the user to add them again, and a crash leaves no notice. While a Session is not shown, a pasted image keeps its bytes in memory ([decision](../../../.agents/notes/implemented/bug-fix/2026-11-13-draft-attachments-across-session-switches.md)).
 - **Document file drops are not routed** — every mounted attachment view handles a document-level file drop, so with a continuable subagent chat open in the right Sidebar one drop adds the files to both composers; only window pastes pass through the single paste route.
 - **A failing Definition costs a full replay per publication** — after an incremental flush fails, the assembler replays the complete loaded window to keep the views correct. A Definition that fails on every update therefore replays the whole window on each publication until its owner fixes it ([window update paths](../../../docs/subsystems/conversation.md#window-update-paths)).
 
@@ -236,8 +241,6 @@ Serialization of the empty retry message depends on the adapter. Prefix reuse de
 
 <details>
 <summary>Working context for maintainers — click to expand</summary>
-
-The task panel keeps its heading and task text on one column, using equal leading slots without changing the icon artwork.
 
 None.
 
