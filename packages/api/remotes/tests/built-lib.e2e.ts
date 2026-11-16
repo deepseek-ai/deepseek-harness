@@ -15,17 +15,19 @@ const artifact = (path: string): string => join(root, path)
 const artifactUrl = (path: string): string => pathToFileURL(artifact(path)).href
 
 const requiredArtifacts = [
-  'packages/client/connection/lib/client.js',
+  'packages/client/connection/lib/client.browser.js',
   'packages/client/connection/lib/index.js',
+  'packages/host/authentication-token/lib/index.js',
   'packages/api/remotes/lib/client.js',
   'packages/core/agent/lib/index.js',
   'packages/core/session/lib/index.js',
+  'packages/util/brand/lib/index.js',
   'packages/goal/goal/lib/index.js',
   'packages/goal/goal/lib/typert.host.js',
-  'packages/api/gateway/lib/client.js',
+  'packages/api/gateway/lib/client.browser.js',
   'packages/api/gateway/lib/index.js',
   'packages/api/remote-access/lib/index.js',
-  'packages/typert/registry/lib/client.js',
+  'packages/typert/registry/lib/client.browser.js',
   'packages/typert/registry/lib/index.js',
   'packages/session/session-projection/lib/index.js',
 ].every(path => existsSync(artifact(path)))
@@ -34,14 +36,16 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
   it('runs root and Agent-scoped calls through generated bundles and real HTTP', async () => {
     const urls = Object.fromEntries(Object.entries({
       agent: 'packages/core/agent/lib/index.js',
-      apiGatewayClient: 'packages/api/gateway/lib/client.js',
+      brand: 'packages/util/brand/lib/index.js',
+      apiGatewayClient: 'packages/api/gateway/lib/client.browser.js',
       apiGatewayHost: 'packages/api/gateway/lib/index.js',
-      connectionClient: 'packages/client/connection/lib/client.js',
+      connectionClient: 'packages/client/connection/lib/client.browser.js',
       connectionHost: 'packages/client/connection/lib/index.js',
+      tokenProvider: 'packages/host/authentication-token/lib/index.js',
       goal: 'packages/goal/goal/lib/index.js',
       goalTypert: 'packages/goal/goal/lib/typert.host.js',
       remoteAccess: 'packages/api/remote-access/lib/index.js',
-      registryClient: 'packages/typert/registry/lib/client.js',
+      registryClient: 'packages/typert/registry/lib/client.browser.js',
       registryHost: 'packages/typert/registry/lib/index.js',
       remotesClient: 'packages/api/remotes/lib/client.js',
       session: 'packages/core/session/lib/index.js',
@@ -62,7 +66,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const { default: SessionProjectionRegistry } = await import(urls.sessionProjections)
       const { TYPERT } = await import(urls.goalTypert)
       const { default: TypertRegistry } = await import(urls.registryHost)
-      const { Session, SessionId } = await import(urls.session)
+      const { Session } = await import(urls.session)
+      const { brandString } = await import(urls.brand)
 
       const routes = []
       const credentialRecords = new Map()
@@ -84,7 +89,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           return next ?? current
         },
       })
-      await host.plugin({ inject: connectionHost.inject, apply: connectionHost.apply })
+      await host.plugin({ inject: connectionHost.inject, apply: connectionHost.apply }).await()
       await host.plugin(TypertRegistry)
       await host.plugin(SessionProjectionRegistry)
       await host.plugin(AgentRegistry)
@@ -94,7 +99,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       host.typert.register(TYPERT)
 
       const makeAgent = rawId => {
-        const session = new Session(SessionId(rawId))
+        const session = new Session(brandString(rawId))
         return {
           id: session.id,
           options: {},
@@ -123,14 +128,15 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       }
       const apiRoute = apiRoutes[0]
       const server = createServer((request, response) => {
-        if ((request.url ?? '/').startsWith('/?')) {
-          if (host.connection.authorizeIndex(request, response)) {
-            response.writeHead(200, { 'content-type': 'text/html' })
-            response.end('<body>shell</body>')
+        void host.waterfall(host.webServer, 'webserver/request', request, response, async () => {
+          const admission = host.connection.admit(request)
+          if ('rejection' in admission) {
+            response.writeHead(admission.rejection)
+            response.end()
+            return
           }
-          return
-        }
-        void apiRoute.handler(request, response)
+          await apiRoute.handler(request, response, admission.peer)
+        })
       })
       await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen))
       const address = server.address()
@@ -142,7 +148,15 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const previousFetch = globalThis.fetch
       try {
         globalThis.document = { baseURI: origin + '/' }
-        const login = await fetch(host.connection.authenticatedUrl(origin), { redirect: 'manual' })
+        await host.plugin(await import(urls.tokenProvider), { cookieMaxAgeDays: 30 }).await()
+        const entries = []
+        host.emit(host.webServer, 'webserver/entry-url', origin + '/', entries)
+        if (entries.length !== 1) throw new Error('Token did not contribute exactly one login URL')
+        const launchUrl = entries[0].url
+        const unauthorized = await fetch(origin + '/api')
+        const unauthorizedStatus = unauthorized.status
+        await unauthorized.text()
+        const login = await fetch(launchUrl, { redirect: 'manual' })
         const setCookie = login.headers.get('set-cookie')
         if (login.status !== 303 || setCookie === null) throw new Error('browser token exchange failed')
         const cookie = setCookie.split(';', 1)[0]
@@ -199,6 +213,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         const agentContext = client.extend({ builtAgentId: scopedAgent.id })
         const scopedResult = await agentContext.remote.goals.create({ objective: 'scoped goal', maxGoalRounds: 3 })
         const result = {
+          unauthorizedStatus,
           invalidResult,
           rootResult: rootResult.value,
           rootEdit: rootEdit.value,
@@ -224,8 +239,11 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
     `
 
     const result = await runPlainNode(script)
+    expect(result.killed, `stderr:\n${result.stderr}`).toBe(false)
+    expect(result.signal, `stderr:\n${result.stderr}`).toBeNull()
     expect(result.exitCode, `stderr:\n${result.stderr}`).toBe(0)
     const output = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '{}') as {
+      unauthorizedStatus: number
       invalidResult: { ok: boolean; error?: { code: string } }
       rootResult: { ref: { id: string; revision: number } }
       rootEdit: { objective: string; revision: number }
@@ -236,6 +254,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedEvents: number
     }
     expect(output).toMatchObject({
+      unauthorizedStatus: 401,
       invalidResult: { ok: false, error: { code: 'gateway/input-invalid' } },
       rootResult: { ref: { revision: 1 } },
       rootEdit: { objective: 'edited root goal', revision: 2 },
@@ -253,6 +272,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
 /** Execute one ESM script without tsx or a TypeScript loader. */
 function runPlainNode(script: string): Promise<{
   readonly exitCode: number | null
+  readonly killed: boolean
+  readonly signal: string | null
   readonly stdout: string
   readonly stderr: string
 }> {
@@ -264,6 +285,8 @@ function runPlainNode(script: string): Promise<{
     }, (error, stdout, stderr) => {
       resolveRun({
         exitCode: error === null ? 0 : typeof error.code === 'number' ? error.code : null,
+        killed: error?.killed === true,
+        signal: error?.signal ?? null,
         stdout,
         stderr,
       })

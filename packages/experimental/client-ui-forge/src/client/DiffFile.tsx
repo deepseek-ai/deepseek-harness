@@ -10,18 +10,21 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import clsx from 'clsx'
 import { flushSync } from 'react-dom'
 import {
-  FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular,
+  FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconChevronUpOutlineRegular, IconEllipsisOutlineRegular,
+  IconPlusOutlineRegular,
   Tag, Tooltip,
   languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
-import { drawnLines, segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } from './diff-rows.ts'
+import {
+  drawnLines, EXPAND_STEP, hidesLine, segmentsOf, splitRows,
+  type DiffRow, type DiffSegment, type GapExpansion, type GapReveal, type SplitCell, type SplitRow,
+} from './diff-rows.ts'
 import { codeSideAt, readCodeSelection } from './code-selection.ts'
 import { reviewMatches, selectReviewLines, type ReviewSelection } from './review.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import { OutdatedThreads, ThreadCard, type FileThreads, type LineThread, type ThreadActions } from './ReviewThreads.tsx'
-import { gapOf } from './review-threads.ts'
 import type { FileReviewState } from './review-queue.ts'
 import { ReviewComposer, type ReviewActions } from './ReviewComposer.tsx'
 import reviewCss from './ReviewComposer.module.css'
@@ -29,6 +32,8 @@ import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ViewedState } from './viewed-files.ts'
 import type { SectionReach } from './section-reach.ts'
+import type { SourcedAnnotation } from './annotations.ts'
+import { oldSideLines, runKey, sideRun, useContextHighlight, type FileSides, type SideRun } from './highlight-context.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -53,8 +58,10 @@ export interface DiffFileHandlers {
   readonly toggle: (file: ForgeDiffFile) => void
   /** Show a large file anyway. */
   readonly reveal: (path: string) => void
-  /** Expand one gap of a file. */
-  readonly expand: (file: ForgeDiffFile, index: number) => void
+  /** Show more of one gap of a file. */
+  readonly expand: (file: ForgeDiffFile, index: number, expansion: GapExpansion) => void
+  /** Read a file's new side ahead of any expansion, for highlighting rows after its collapsed lines; a source may ignore it. */
+  readonly readContext: (file: ForgeDiffFile) => void
   /** Mark a file viewed, which also collapses it, or clear the mark. */
   readonly view: (file: ForgeDiffFile, viewed: boolean) => void
   /** Rows of a file's menu, read whenever the menu draws. */
@@ -65,6 +72,12 @@ export interface DiffFileHandlers {
   readonly nextThread: (path: string) => void
   /** Tells each expanded section when it comes within reach of the scrollport, which draws its lines. */
   readonly reach: SectionReach
+  /** Draw the content of one line annotation through its source's `forge.diff.line.annotation` entry. */
+  readonly annotation: (path: string, item: SourcedAnnotation) => ReactNode
+  /** Draw the plugin rows of a file's menu through `forge.changes.file.menu`. */
+  readonly fileMenu: (file: ForgeDiffFile, dismiss: () => void) => ReactNode
+  /** Show the hunks the chosen lens folds in a file. */
+  readonly unfold: (path: string) => void
 }
 
 /** Props of one file section. */
@@ -83,8 +96,8 @@ export interface DiffFileProps {
   readonly revealed: boolean
   /** The file's new side, which supplies collapsed unchanged lines. */
   readonly text: DiffFileText
-  /** Indexes of the expanded gaps. */
-  readonly open: ReadonlySet<number>
+  /** The lines each expanded gap shows, by gap index. */
+  readonly open: ReadonlyMap<number, GapReveal>
   /** Whether deletions and additions show in two columns; a file with only additions or only deletions keeps one. */
   readonly split: boolean
   /** Whether long lines wrap. */
@@ -103,6 +116,12 @@ export interface DiffFileProps {
   readonly threads?: FileThreads | undefined
   /** Whether the section draws its lines at once, as the target of a thread jump, whose card must exist to be centered. */
   readonly drawNow?: boolean | undefined
+  /** Line annotations of the file in stacking order, or undefined for none; the view keeps their identity. */
+  readonly annotations?: readonly SourcedAnnotation[] | undefined
+  /** Most annotations the file shows, the rest counted below them, or undefined to show none while the limit is unknown. */
+  readonly annotationLimit?: number | undefined
+  /** Indexes of the hunks the chosen lens folds with the lens's title, or undefined for none; the view keeps their identity. */
+  readonly folded?: { readonly hunks: ReadonlySet<number>; readonly lens: string } | undefined
   /** Actions shared by every section of the view. */
   readonly handlers: DiffFileHandlers
   /** Forge panel copy. */
@@ -132,23 +151,33 @@ const SIGN: Record<DiffRow['kind'], string> = { add: '+', del: '-', context: '' 
 /** Highlighted tokens of one side's lines by line number, or undefined while the grammar is unavailable. */
 type SideSpans = ReadonlyMap<number, readonly HighlightSpan[]> | undefined
 
-/** A segment ready to draw: collapsed lines, or rows with the tokens of each side. */
+/** A segment ready to draw: collapsed lines, or rows with the tokens of each side and the lines each side numbers. */
 type Prepared =
-  | { readonly kind: 'gap'; readonly index: number; readonly count: number | null }
-  | { readonly kind: 'rows'; readonly rows: readonly DiffRow[]; readonly old: SideSpans; readonly new: SideSpans }
-
-/** Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. */
-function sideSpans(rows: readonly DiffRow[], side: 'old' | 'new', highlighter: CodeHighlighter): SideSpans {
-  const numbered: { readonly no: number; readonly text: string }[] = []
-  for (const row of rows) {
-    const no = row[side]
-    if (no !== null) numbered.push({ no, text: row.text })
+  | Extract<DiffSegment, { kind: 'gap' | 'folded' }>
+  | {
+    readonly kind: 'rows'
+    readonly rows: readonly DiffRow[]
+    readonly old: SideSpans
+    readonly new: SideSpans
+    readonly oldRun: SideRun | undefined
+    readonly newRun: SideRun | undefined
   }
-  if (numbered.length === 0) return new Map()
-  const highlighted = highlighter(numbered.map(line => line.text).join('\n'))
+
+/**
+ * Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. The tokens are kept by
+ * the change and the run's lines in `kept`, which the caller replaces with the file or the highlighter.
+ */
+function sideSpans(run: SideRun | undefined, change: string, highlighter: CodeHighlighter, kept: Map<string, SideSpans>): SideSpans {
+  if (run === undefined) return new Map()
+  const key = runKey(change, run)
+  const known = kept.get(key)
+  if (known !== undefined) return known
+  const highlighted = highlighter(run.texts.join('\n'))
   if (highlighted === undefined) return undefined
   // Shiki omits a final empty token row, so a final empty line gets no tokens.
-  return new Map(numbered.map((line, index) => [line.no, highlighted[index] ?? []]))
+  const spans = new Map(run.texts.map((_text, index) => [run.first + index, highlighted[index] ?? []]))
+  kept.set(key, spans)
+  return spans
 }
 
 function Code({ text, spans, old, next }: {
@@ -180,13 +209,66 @@ function rangeKey(item: ReviewSelection): string {
   return `${item.comment.side}${item.comment.startLine}-${item.comment.endLine}`
 }
 
+/** A file's annotations as it shows them: on lines, on the whole file, written on an earlier change, and how many the limit leaves out. */
+interface FileAnnotations {
+  readonly lines: readonly SourcedAnnotation[]
+  readonly file: readonly SourcedAnnotation[]
+  readonly outdated: readonly SourcedAnnotation[]
+  readonly hidden: number
+}
+
+const NO_ANNOTATIONS: FileAnnotations = { lines: [], file: [], outdated: [], hidden: 0 }
+
+/** Group the first `limit` annotations of a file by where they show; none show while the limit is unknown. */
+function groupAnnotations(
+  file: ForgeDiffFile, items: readonly SourcedAnnotation[] | undefined, limit: number | undefined,
+): FileAnnotations {
+  if (items === undefined || items.length === 0 || limit === undefined) return NO_ANNOTATIONS
+  const lines: SourcedAnnotation[] = []
+  const whole: SourcedAnnotation[] = []
+  const outdated: SourcedAnnotation[] = []
+  for (const item of items.slice(0, limit)) {
+    const { place, digest } = item.annotation
+    if (digest !== undefined && digest !== file.digest) outdated.push(item)
+    else if (place === 'file') whole.push(item)
+    else lines.push(item)
+  }
+  return { lines, file: whole, outdated, hidden: Math.max(0, items.length - limit) }
+}
+
+/** Whether a line of one side falls in one of the hunks. */
+function inHunks(file: ForgeDiffFile, hunks: readonly number[], side: 'L' | 'R', line: number): boolean {
+  return hunks.some((index) => {
+    const hunk = file.hunks[index]
+    /* v8 ignore next -- folded indexes name hunks of the file */
+    if (hunk === undefined) return false
+    const start = side === 'L' ? hunk.oldStart : hunk.newStart
+    return line >= start && line < start + (side === 'L' ? hunk.oldLines : hunk.newLines)
+  })
+}
+
+/** The saved comments and plugin annotations the lines of a file place. */
+interface LinesNotes {
+  readonly comments: FileReviewState
+  readonly annotations: readonly SourcedAnnotation[]
+}
+
+/** One annotation's frame, which holds the content its source's slot entry draws. */
+function Annotation({ path, item, handlers }: {
+  readonly path: string
+  readonly item: SourcedAnnotation
+  readonly handlers: DiffFileHandlers
+}): ReactNode {
+  return <div className={css.annotation} data-forge-annotation={`${item.source}/${item.annotation.key}`}>{handlers.annotation(path, item)}</div>
+}
+
 function pairKind(pair: SplitRow): 'context' | 'change' {
   return pair.left !== null && pair.left.kind === 'context' ? 'context' : 'change'
 }
 
 /** The hunks of one file with their collapsed and expanded unchanged lines. */
-function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, threads, t }: Pick<DiffFileProps,
-  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 't'> & { readonly comments: FileReviewState }): ReactNode {
+function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, threads, folded, annotations, t }: Pick<DiffFileProps,
+  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 'folded' | 't'> & LinesNotes): ReactNode {
   const lines = typeof text === 'object' ? text : undefined
   const columns = split && file.additions > 0 && file.deletions > 0
   const singleSide = file.status === 'added' ? 'R' : file.status === 'deleted' ? 'L' : null
@@ -194,6 +276,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   for (const hunk of file.hunks) maximum = Math.max(maximum, hunk.oldStart + hunk.oldLines - 1, hunk.newStart + hunk.newLines - 1)
   const style: CSSProperties & { '--forge-number-width': string } = { '--forge-number-width': `calc(${Math.max(2, String(maximum).length)}ch + 12px)` }
   const highlighter = useCodeHighlighter(languageForPath(file.path))
+  const foldLens = folded === undefined ? '' : folded.lens
   const [selection, setSelection] = useState<ReviewSelection | null>(null)
   // Mirrors `selection` for the release of a hover-plus drag, whose listener outlives the render that chose the range.
   const chosen = useRef<ReviewSelection | null>(null)
@@ -271,9 +354,39 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       window.removeEventListener('pointercancel', finish)
     }
   }, [selecting, nativeSelection])
-  const prepared = useMemo(() => segmentsOf(file, lines, open).map((segment): Prepared => segment.kind === 'gap'
-    ? segment
-    : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }), [file, lines, open, highlighter])
+  // A hunk that holds an open comment form or a comment saved in this browser stays drawn: folding it would move the form,
+  // which loses its text, and show the saved comment as written on lines the diff no longer has.
+  const foldHunks = useMemo(() => {
+    if (folded === undefined) return undefined
+    const holds = (index: number): boolean => editors.some(item => inHunks(file, [index], item.comment.side, item.comment.endLine))
+      || (review !== undefined && comments.threads.some(thread => reviewMatches(thread.selection, review.source, file)
+        && inHunks(file, [index], thread.selection.comment.side, thread.selection.comment.endLine)))
+    return new Set([...folded.hunks].filter(index => !holds(index)))
+  }, [folded, editors, review, comments.threads, file])
+  // Runs whose lines stay the same keep their tokens when the file's text arrives or another gap expands.
+  const kept = useMemo(() => new Map<string, SideSpans>(), [file, highlighter])
+  const prepared = useMemo(() => segmentsOf(file, lines, open, foldHunks).map((segment): Prepared => {
+    if (segment.kind !== 'rows') return segment
+    const oldRun = sideRun(segment.rows, 'old')
+    const newRun = sideRun(segment.rows, 'new')
+    return {
+      ...segment, oldRun, newRun,
+      old: sideSpans(oldRun, file.digest, highlighter, kept), new: sideSpans(newRun, file.digest, highlighter, kept),
+    }
+  }), [file, lines, open, foldHunks, highlighter, kept])
+  // Rows drawn after collapsed lines take the colors of the lines before them once the whole file is known, after they draw.
+  const runs = useMemo(() => prepared.flatMap(segment => segment.kind !== 'rows' ? []
+    : [segment.oldRun, segment.newRun].filter((run): run is SideRun => run !== undefined)), [prepared])
+  const sides = useMemo((): FileSides | undefined => lines === undefined ? undefined
+    : { new: lines, old: oldSideLines(lines, file.hunks) }, [lines, file.hunks])
+  const corrected = useContextHighlight(runs, sides, file.digest, highlighter, root, selecting)
+  const spansOf = (spans: SideSpans, run: SideRun | undefined): SideSpans => run === undefined ? spans
+    : corrected.get(runKey(file.digest, run)) ?? spans
+  const collapsed = prepared.some(segment => segment.kind === 'gap')
+  const grammar = languageForPath(file.path) !== undefined
+  useEffect(() => {
+    if (text === undefined && collapsed && grammar) handlers.readContext(file)
+  }, [text, collapsed, grammar, file, handlers])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
     /* v8 ignore next -- the line buttons and hover pluses that choose a range draw only with review actions */
@@ -326,7 +439,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
           choose(side, line, event.shiftKey)
         }}>{line}</button>
       {plus !== null && (
-        <Tooltip label={t('review.addComment')} portal>
+        <Tooltip label={t('review.addComment')} portal delayMs={500}>
           <button type="button" className={reviewCss.add} aria-label={t('review.addComment')}
             onPointerDown={(event) => { event.preventDefault() }} onClick={() => { compose(plus) }}>
             <IconPlusOutlineRegular size={14} />
@@ -366,6 +479,16 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
   const threadCard = (item: LineThread & { readonly actions: ThreadActions }): ReactNode =>
     <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} t={t} />
+  // Plugin annotations follow the host threads on the row of their last line, or the collapsed or folded lines that hold it.
+  const unplacedNotes = new Set(annotations)
+  const annotationOf = (item: SourcedAnnotation): ReactNode =>
+    <Annotation key={`annotation-${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />
+  const lastLine = (item: SourcedAnnotation): { readonly side: 'L' | 'R'; readonly line: number } => {
+    const place = item.annotation.place
+    /* v8 ignore next -- only line annotations reach the lines */
+    if (place === 'file') return { side: 'R', line: 0 }
+    return { side: place.side, line: place.endLine }
+  }
   // The editors, the saved comments, then the host threads whose ranges end on this side's line.
   const commentsAt = (side: 'L' | 'R', line: number | null): ReactNode[] => {
     const nodes: ReactNode[] = []
@@ -388,6 +511,12 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       nodes.push(threadCard(item))
       unplaced.delete(item)
     }
+    for (const item of unplacedNotes) {
+      const at = lastLine(item)
+      if (at.side !== side || at.line !== line) continue
+      nodes.push(annotationOf(item))
+      unplacedNotes.delete(item)
+    }
     return nodes
   }
   const editorOf = (item: ReviewSelection, actions: ReviewActions): ReactNode =>
@@ -406,23 +535,72 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     )
     rows.push(<div key={key} className={css.notes} data-forge-notes="">{side(pair.left, left)}{side(pair.right, right)}</div>)
   }
-  for (const [at, segment] of prepared.entries()) {
-    if (segment.kind === 'gap') {
-      rows.push(<button key={`gap-${segment.index}`} type="button" className={css.gap} disabled={text === 'loading'}
-        data-forge-diff-gap={segment.index} onClick={() => { handlers.expand(file, segment.index) }}>
+  // A gap of at most one step shows wholly on one click; a longer one shows a step down from the hunk above it or up
+  // from the hunk below it. The unknown lines after the last hunk show their first step once read.
+  const gapRow = (segment: Extract<DiffSegment, { kind: 'gap' }>): ReactNode => {
+    const loading = text === 'loading'
+    const label = segment.count === null ? t('diff.unchangedRest') : t('diff.unchanged', { count: segment.count.toLocaleString('en-US') })
+    if (segment.count === null || segment.count <= EXPAND_STEP) {
+      return <button key={`gap-${segment.index}`} type="button" className={css.gap} disabled={loading}
+        data-forge-diff-gap={segment.index} onClick={() => { handlers.expand(file, segment.index, segment.count === null ? 'down' : 'all') }}>
         <IconChevronsUpDownOutlineRegular size={12} />
-        {segment.count === null ? t('diff.unchangedRest') : t('diff.unchanged', { count: segment.count.toLocaleString('en-US') })}
-      </button>)
+        {label}
+      </button>
+    }
+    const step = (expansion: 'down' | 'up'): ReactNode => {
+      const name = t(expansion === 'down' ? 'diff.expandDown' : 'diff.expandUp', { count: String(EXPAND_STEP) })
+      return <Tooltip key={expansion} label={name} side="bottom">
+        <button type="button" className={css.gapStep} aria-label={name} disabled={loading} data-forge-gap-step={expansion}
+          onClick={() => { handlers.expand(file, segment.index, expansion) }}>
+          {expansion === 'down' ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronUpOutlineRegular size={12} />}
+        </button>
+      </Tooltip>
+    }
+    return <div key={`gap-${segment.index}`} className={css.gapSteps} role="group" aria-label={label} data-forge-diff-gap={segment.index}>
+      {segment.edge !== 'leading' && step('down')}
+      {segment.edge !== 'trailing' && step('up')}
+      <span>{label}</span>
+    </div>
+  }
+  for (const [at, segment] of prepared.entries()) {
+    const oldSpans = segment.kind === 'rows' ? spansOf(segment.old, segment.oldRun) : undefined
+    const newSpans = segment.kind === 'rows' ? spansOf(segment.new, segment.newRun) : undefined
+    if (segment.kind === 'gap') {
+      rows.push(gapRow(segment))
       for (const item of unplaced) {
-        if (gapOf(file, item.place.side, item.place.endLine) !== segment.index) continue
+        if (!hidesLine(segment, item.place.side, item.place.endLine)) continue
         rows.push(threadCard(item))
         unplaced.delete(item)
+      }
+      for (const item of unplacedNotes) {
+        const at = lastLine(item)
+        if (!hidesLine(segment, at.side, at.line)) continue
+        rows.push(annotationOf(item))
+        unplacedNotes.delete(item)
+      }
+    } else if (segment.kind === 'folded') {
+      rows.push(<button key={`folded-${segment.hunks.join(',')}`} type="button" className={clsx(css.gap, css.lensFold)}
+        data-forge-lens-fold={segment.hunks.join(',')} onClick={() => { handlers.unfold(file.path) }}>
+        <IconChevronsUpDownOutlineRegular size={12} />
+        <span className={css.lensFoldText}>{t('filterLens.folded', { count: String(segment.hunks.length), lens: foldLens })}</span>
+        <span className={css.lensFoldAction}>{t('filterLens.unfold')}</span>
+      </button>)
+      for (const item of unplaced) {
+        if (!inHunks(file, segment.hunks, item.place.side, item.place.endLine)) continue
+        rows.push(threadCard(item))
+        unplaced.delete(item)
+      }
+      for (const item of unplacedNotes) {
+        const place = lastLine(item)
+        if (!inHunks(file, segment.hunks, place.side, place.line)) continue
+        rows.push(annotationOf(item))
+        unplacedNotes.delete(item)
       }
     } else if (columns) {
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
           onPointerEnter={(event) => { extendAdd(event.buttons, pair.left?.no ?? null, pair.right?.no ?? null) }}>
-          {cell(pair.left, segment.old, 'L')}{cell(pair.right, segment.new, 'R')}
+          {cell(pair.left, oldSpans, 'L')}{cell(pair.right, newSpans, 'R')}
         </div>)
         notes(`notes-${at}-${index}`, pair)
       }
@@ -433,7 +611,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
         rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (marked('L', row.old) || marked('R', row.new)) && reviewCss.selected)} data-diff-line={row.kind}
           onPointerEnter={(event) => { extendAdd(event.buttons, row.old, row.new) }}>
           {singleSide !== 'R' && number('L', row.old, row.kind === 'del' && !labeled)}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del' && !labeled)}<span className={css.sign}>{SIGN[row.kind]}</span>
-          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
+          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? oldSpans?.get(row.old) : newSpans?.get(row.new)} />
         </div>)
         rows.push(...commentsAt('L', row.old), ...commentsAt('R', row.new))
       }
@@ -447,6 +625,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     }
   }
   for (const item of unplaced) rows.push(threadCard(item))
+  for (const item of unplacedNotes) rows.push(annotationOf(item))
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
     data-review={review === undefined ? undefined : ''}
     data-native-side={nativeSide ?? undefined}
@@ -471,13 +650,16 @@ function drawsLines(file: ForgeDiffFile, large: boolean, revealed: boolean): boo
 }
 
 /** The file's lines or the note that replaces them, with its saved comments; host threads on lines follow when no lines show. */
-function Content(props: DiffFileProps): ReactNode {
-  const { file, large, revealed, handlers, review, threads, t } = props
+function Content(props: DiffFileProps & { readonly notes: FileAnnotations }): ReactNode {
+  const { file, large, revealed, handlers, review, threads, notes, t } = props
   const comments = useFileReview(review, file.path)
   const records = review === undefined ? null : comments.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
     actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} t={t} />)
-  const lineThreads = threads?.lines.map(item => <ThreadCard key={item.thread.id} thread={item.thread} place={item.place}
-    actions={threads.actions} t={t} />)
+  const lineThreads = <>
+    {threads?.lines.map(item =>
+      <ThreadCard key={item.thread.id} thread={item.thread} place={item.place} actions={threads.actions} t={t} />)}
+    {notes.lines.map(item => <Annotation key={`${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />)}
+  </>
   if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}{lineThreads}</>
   if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}{lineThreads}</>
   if (file.hunks.length === 0) return <>{records}{lineThreads}</>
@@ -490,16 +672,27 @@ function Content(props: DiffFileProps): ReactNode {
       </button>{records}{lineThreads}</>
     )
   }
-  return <Lines {...props} comments={comments} />
+  return <Lines {...props} comments={comments} annotations={notes.lines} />
 }
 
 /** Host threads on the whole file, the lines, then the host threads that later commits made outdated. */
 function Body(props: DiffFileProps): ReactNode {
-  const { threads, t } = props
+  const { file, threads, handlers, t } = props
+  const notes = groupAnnotations(file, props.annotations, props.annotationLimit)
+  const frame = (item: SourcedAnnotation): ReactNode =>
+    <Annotation key={`${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />
   return <>
     {threads?.file.map(thread => <ThreadCard key={thread.id} thread={thread} place={{ kind: 'file' }} actions={threads.actions} t={t} />)}
-    <Content {...props} />
+    {notes.file.map(frame)}
+    <Content {...props} notes={notes} />
     {threads !== undefined && <OutdatedThreads threads={threads.outdated} actions={threads.actions} t={t} />}
+    {notes.outdated.length > 0 && (
+      <div className={css.outdatedAnnotations} data-forge-outdated-annotations="">
+        <div className={css.outdatedAnnotationsTitle}>{t('annotation.outdated', { count: String(notes.outdated.length) })}</div>
+        {notes.outdated.map(frame)}
+      </div>
+    )}
+    {notes.hidden > 0 && <p className={css.fileNote} data-forge-hidden-annotations="">{t('annotation.hidden', { count: String(notes.hidden) })}</p>}
   </>
 }
 
@@ -543,6 +736,7 @@ function FileMenu({ name, file, handlers, t }: {
           {t(action.label)}
         </MenuItemButton>
       ))}
+      {menuOpen && <div className={css.menuPlugins}>{handlers.fileMenu(file, () => { setMenuOpen(false) })}</div>}
     </Menu>
   )
 }
@@ -593,7 +787,7 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
             <Tag tone="warning" className={css.changedTag}><span className={css.changedText}>{t('viewed.changed')}</span></Tag>
           )}
           {threads !== undefined && threads.unresolved > 0 && (
-            <Tooltip label={t('thread.next')} side="bottom">
+            <Tooltip label={t('thread.next')} side="bottom" delayMs={500}>
               <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
                 onClick={() => { handlers.nextThread(file.path) }}>
                 <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
@@ -605,11 +799,13 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
           {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
         {!file.binary && <Counts file={file} t={t} />}
-        <label className={css.viewed} title={viewedNote} data-disabled={viewedDisabled ? '' : undefined}>
-          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })} disabled={viewedDisabled}
-            onChange={(event) => { handlers.view(file, event.target.checked) }} />
-          <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
-        </label>
+        <Tooltip label={viewedNote} side="bottom" align="end" portal delayMs={500}>
+          <label className={css.viewed} data-disabled={viewedDisabled ? '' : undefined}>
+            <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })} disabled={viewedDisabled}
+              onChange={(event) => { handlers.view(file, event.target.checked) }} />
+            <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
+          </label>
+        </Tooltip>
         {props.visible && <FileMenu name={name} file={file} handlers={handlers} t={t} />}
       </div>
       {expanded && (waiting ? <div className={css.unreached} style={placeholder} data-forge-diff-unreached="" /> : <Body {...props} />)}

@@ -5,7 +5,8 @@
  * The durable `user/message` source carries the share-viewer principal only
  * for a caller other than the owner. The client registers one chain entry in
  * Chat's `conversation.chat.user.before` seat; its selector elects exactly the
- * share-viewer sources and the component renders the Relay-asserted author.
+ * share-viewer sources of a user or steering row, and the component renders the
+ * Relay-asserted author.
  */
 
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -83,7 +84,7 @@ describe('shareViewerSubject', () => {
 
 /** The registered chain seat, its selector, and its component. */
 describe('shared-session origin chain', () => {
-  it('registers one chain entry whose selector elects only a share-viewer user row', async () => {
+  it('registers one chain entry whose selector elects a share-viewer row of either kind', async () => {
     const { runtime } = await renderBench()
     const entries = runtime.slots.entriesOfSlot('conversation.chat.user.before')
     expect(entries).toHaveLength(1)
@@ -93,7 +94,7 @@ describe('shared-session origin chain', () => {
     expect(select({ source: SHARED, kind: 'user' })).toEqual({ subjectId: 'subject-42' })
     expect(select({ source: SHARED_NAMED, kind: 'user' })).toEqual({ subjectId: 'subject-42', displayName: '许翰翔' })
     expect(select({ source: OWNER, kind: 'user' })).toBeNull()
-    expect(select({ source: SHARED, kind: 'steering' })).toBeNull()
+    expect(select({ source: SHARED, kind: 'steering' })).toEqual({ subjectId: 'subject-42' })
     expect(select({ source: { kind: 'user', principal: { kind: 'owner' } }, kind: 'user' })).toBeNull()
   })
 

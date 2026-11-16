@@ -16,7 +16,7 @@ Status: implemented
 
 `TimeSource` 拥有时钟生产、合并的可确认请求和分段定时器。它接受已计算的截止时间，通过共同的输出协议发出实际墙钟毫秒值。runtime 的数值输入等待事务内的到期扫描；runtime 策略拥有重复规则、最小投递间隔、批量投递与持久化。时钟生产不替换任务时间策略。
 
-本决策取代[事件触发任务提案](../../proposed/feature/2026-10-29-event-triggered-automation-tasks.zh.md)中的 provider/trigger 实现拆分，不取代其尚未实现的产品功能。该提案继续用于纯事件任务存储、受限事件轮次、观测记录和通知。已有定时任务的存储与求值独立于这些通过代码创建的 source 连接。
+本决策取代[事件触发任务提案](../../proposed/feature/2026-10-29-event-triggered-automation-tasks.zh.md)中的 provider/trigger 实现拆分，不取代其尚未实现的产品功能。该提案继续用于纯事件任务存储、外部来源集成、观测记录及其任务界面。已有定时任务的存储与求值独立于这些通过代码创建的 source 连接。
 
 ## 考虑过的替代方案
 

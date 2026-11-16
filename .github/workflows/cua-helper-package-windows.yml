@@ -100,7 +100,7 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         id: upload
         with:
-          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.metadata.outputs.build-key }}
+          name: cua-helper-windows-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.metadata.outputs.build-key }}
           path: dist/cua-helper-win-x64.zip
           if-no-files-found: error
           compression-level: 0

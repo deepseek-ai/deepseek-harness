@@ -12,12 +12,12 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { createUserMessage, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -30,6 +30,7 @@ import { z } from 'zod'
 import { createNativeFixture, png } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const programs = [
   'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })); inspect(screenshot)',
@@ -39,16 +40,19 @@ const programs = [
 
 class ProgramModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  /** Requests a test holds back until it has finished acting between two model steps. */
+  readonly gates = new Map<number, Promise<void>>()
   constructor(private readonly programs: readonly string[]) { super() }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    await this.gates.get(this.requests.length)
     const code = this.programs[this.requests.length]
     this.requests.push(options)
     if (code !== undefined) {
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId(`cua-program-${this.requests.length}`),
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>(`cua-program-${this.requests.length}`),
         name: 'cua_run_code', arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
@@ -59,7 +63,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -107,7 +111,9 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
       },
     },
   }
-  const entries = Object.keys(modules).filter(name => name !== 'native').map(name => ({
+  // The standard preset mounts the native executor in its own scope; a composition without presets mounts it on the Host.
+  const hosted = (name: string): boolean => presetFree ? name !== 'agentPresets' && name !== 'standard' : name !== 'native'
+  const entries = Object.keys(modules).filter(hosted).map(name => ({
     id: name, name: `cordis:${name}`,
     ...name === 'agentPresets' ? { config: { default: 'standard' } } : {},
     ...name === 'sandboxPolicy' ? { config: { mode: 'danger-full-access', workspaceRoot: directory } } : {},
@@ -125,9 +131,9 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
   for (const entry of ctx.loader.entries()) await entry.fiber?.await()
   const model = new ProgramModel(programs)
   ctx.llm.registerAdapter(['cua-fixture'], model)
-  const handle = await ctx.agents.create({ sessionId: SessionId('cua-standard-composition'), meta: { cwd: directory },
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-standard-composition'), meta: { cwd: directory },
     agentOptions: { provider: 'cua-fixture', model: 'vision' },
-    setup: async (owner) => { await ctx.agentPresets.mount(owner, 'standard') },
+    ...presetFree ? {} : { setup: async (owner: Context) => { await ctx.agentPresets.mount(owner, 'standard') } },
   })
   const agent = handle.agent
   const idle: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -183,6 +189,80 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(native.state).toEqual({ count: 2, openedChannels: 1, closedChannels: 1 })
   expect(() => process.kill(first.pid, 0)).toThrow()
   expect(ctx.ptcRuntime.retainsState).toBe(false)
+})
+
+it('runs cua_run_code programs for an Agent in a composition without presets', async () => {
+  const { ctx, native, model, agent, run } = await setup(programs.slice(0, 2), 'macos', undefined, true)
+  expect(ctx.get('agentPresets')).toBeUndefined()
+  expect(ctx.tools.get('cua', agent)).toBeUndefined()
+  await run()
+  expect(model.requests).toHaveLength(3)
+  expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false])
+  expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
+    .toMatchObject({ visits: 2, sameCua: true, app: 'fixture-app', window: '7' })
+  expect(native.state.count).toBe(2)
+  expect(agent.session.snapshotEvents().some(event => event.type === 'agent-preset/selected')).toBe(false)
+})
+
+it('releases one Agent program environment through ctx.cuaPrograms while keeping its application access', async () => {
+  const { ctx, native, model, agent, run } = await setup([
+    'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); inspect(process.pid)',
+    'inspect(JSON.stringify(typeof win === "undefined" ? { fresh: true, visits: globalThis.visits ?? null, pid: process.pid } : { fresh: false, pid: process.pid }))',
+  ])
+  const programs = ctx.get('cuaPrograms')
+  if (programs === undefined) throw new Error('CUA provider did not publish ctx.cuaPrograms')
+  // The caller holds the next program back until the release has settled: the second model request waits for it.
+  const firstSettled: PromiseWithResolvers<void> = Promise.withResolvers()
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  model.gates.set(1, released.promise)
+  ctx.on('session/event', (session, event) => {
+    if (session === agent.session && event.type === 'tool/result' && event.data.message.toolCallId === 'cua-program-1') firstSettled.resolve()
+  })
+  const completed = run()
+  await firstSettled.promise
+  await programs.release(agent)
+  released.resolve()
+  await completed
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError)).toEqual([false, false])
+  const text = (index: number) => JSON.parse(results[index]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')) as Record<string, unknown>
+  const firstPid = z.number().int().positive().parse(text(0))
+  const second = text(1)
+  expect(second).toMatchObject({ fresh: true, visits: null })
+  expect(second.pid).not.toBe(firstPid)
+  expect(() => process.kill(firstPid, 0)).toThrow()
+  // The native connection and its application grant survive; only the program process was replaced.
+  expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
+  await expect(programs.release(agent)).resolves.toBeUndefined()
+})
+
+it('fails a running program as aborted when its environment is released and starts the next program fresh', async () => {
+  const { ctx, native, model, agent, run } = await setup([
+    'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); await new Promise(() => {})',
+    'inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined" }))',
+  ])
+  const programs = ctx.get('cuaPrograms')
+  if (programs === undefined) throw new Error('CUA provider did not publish ctx.cuaPrograms')
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  model.gates.set(1, released.promise)
+  // The first program is running inside its environment once its application selection has settled.
+  const selected: PromiseWithResolvers<void> = Promise.withResolvers()
+  ctx.on('session/event', (session, event) => {
+    if (session === agent.session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-program-1') selected.resolve()
+  })
+  const completed = run()
+  await selected.promise
+  await programs.release(agent)
+  released.resolve()
+  await completed
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  const text = (index: number) => results[index]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+  expect(results.map(result => result.isError)).toEqual([true, false])
+  expect(text(0)).toContain('code run failed (abort)')
+  expect(JSON.parse(text(1))).toEqual({ visits: null, hasApp: false })
+  expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
 })
 
 it('recreates the automatic facade when its environment is rebuilt', async () => {

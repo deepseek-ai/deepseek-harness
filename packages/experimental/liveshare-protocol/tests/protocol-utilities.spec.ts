@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  LIVESHARE_OWNER_PLATFORMS,
   parseRelayFrame,
   parseShareAccessState,
   parseTunnelWorkerCommand,
@@ -197,6 +198,11 @@ describe('tunnel worker commands', () => {
       { ...spec(), ownerProviderId: 4 },
       { ...spec(), ownerTenantId: 4 },
       { ...spec(), dshVersion: 4 },
+      { ...spec(), platform: 4 },
+      { ...spec(), platform: 'darwin' },
+      { ...spec(), platform: 'macOS' },
+      { ...spec(), platform: null },
+      { ...spec(), platform: '' },
       { ...spec(), ownerInstanceId: 4 },
       { ...spec(), ownerCredential: 4 },
       { ...spec(), expiresAt: 4 },
@@ -220,6 +226,14 @@ describe('tunnel worker commands', () => {
     }
     expect(parseTunnelWorkerCommand(addShare(allOptional))).toBeDefined()
     expect(parseTunnelWorkerCommand(addShare({ ...spec(), accessMode: 'open' }))).toBeDefined()
+  })
+
+  it('accepts the three owner platforms and nothing else', () => {
+    for (const platform of LIVESHARE_OWNER_PLATFORMS) {
+      expect(parseTunnelWorkerCommand(addShare({ ...spec(), platform })), platform)
+        .toMatchObject({ share: { platform } })
+    }
+    expect(parseTunnelWorkerCommand(addShare(spec())), 'absent').toMatchObject({ share: {} })
   })
 })
 

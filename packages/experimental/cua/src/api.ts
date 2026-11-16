@@ -191,6 +191,9 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         const [x, y] = targetPoint
         return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
       },
+      async toggleMouse(mouseButton, direction) {
+        return base.action('toggleMouse', { mouseButton, direction })
+      },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
         const clickCount = options?.clickCount ?? 1
@@ -215,12 +218,16 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         })
       },
       async drag(from, to, options) {
-        return base.action('drag', { ...coordinateParams(appHandle, windowId),
+        const useSystemPointer = options?.useSystemPointer
+        if (useSystemPointer !== undefined && !capabilities.systemPointer) {
+          throw new Error('drag useSystemPointer: not accepted for these arguments')
+        }
+        return ActionResult.parse(await base.call('drag', { ...coordinateParams(appHandle, windowId),
           fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
           ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
-        })
+        }, { useSystemPointer }))
       },
     }
   }

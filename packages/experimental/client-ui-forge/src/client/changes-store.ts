@@ -22,6 +22,8 @@ export interface ChangesTabState {
   commits: ForgeCommitRange | null
   /** Review layer whose files show. */
   lens: ChangesLens
+  /** Identity of the Host filter lens that keeps some of the shown files, or null for none. */
+  filterLens: string | null
   /** Whether files of the `test` layer hide from the file tree and the diff. */
   hideTests: boolean
   /** Whether deletions and additions show in two columns. */
@@ -50,6 +52,7 @@ type ChangesActions = {
   based: (draft: ChangesState, tabId: string, base: ForgeBaseBranch | null) => void
   committed: (draft: ChangesState, tabId: string, commits: ForgeCommitRange | null) => void
   lensed: (draft: ChangesState, tabId: string, lens: ChangesLens) => void
+  filtered: (draft: ChangesState, tabId: string, lens: string | null) => void
   toggledTests: (draft: ChangesState, tabId: string) => void
   toggledSplit: (draft: ChangesState, tabId: string) => void
   toggledWrap: (draft: ChangesState, tabId: string) => void
@@ -67,7 +70,7 @@ export function createChangesStore(): EngineStoreHandle<ChangesState, ChangesAct
     actions: {
       /**
        * Apply a navigation; the first one seeds the `branch` scope with the automatic fork point, every commit and file,
-       * test files shown, two columns, and wrapped lines.
+       * no filter lens, test files shown, two columns, and wrapped lines.
        * @param d - draft state.
        * @param tabId - the tab being drawn.
        * @param revision - the navigation revision being applied.
@@ -75,7 +78,9 @@ export function createChangesStore(): EngineStoreHandle<ChangesState, ChangesAct
       navigated: (d, tabId: string, revision: number) => {
         const tab = d.byTab[tabId]
         if (tab === undefined) {
-          d.byTab[tabId] = { scope: 'branch', base: null, commits: null, lens: 'all', hideTests: false, split: true, wrap: true, navigated: revision }
+          d.byTab[tabId] = {
+            scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: revision,
+          }
         } else tab.navigated = revision
       },
       /**
@@ -114,6 +119,13 @@ export function createChangesStore(): EngineStoreHandle<ChangesState, ChangesAct
        * @param lens - every file, or one layer.
        */
       lensed: (d, tabId: string, lens: ChangesLens) => { bucket(d, tabId).lens = lens },
+      /**
+       * Choose the Host filter lens that keeps some of the shown files, or none.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param lens - the lens identity, or null for none.
+       */
+      filtered: (d, tabId: string, lens: string | null) => { bucket(d, tabId).filterLens = lens },
       /**
        * Hide or show the files of the `test` layer; hiding them leaves the `test` lens for every file.
        * @param d - draft state.

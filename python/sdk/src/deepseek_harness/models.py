@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Literal, TypeAlias, TypedDict
 
 from pydantic import BaseModel, Field, JsonValue as PydanticJsonValue, field_validator
 
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
+
+
+class ResumeSessionOptions(TypedDict, total=False):
+    """Options applied before a restored session resumes execution."""
+
+    permission_mode: str
 
 
 @dataclass(slots=True)

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Panel de la sesión",
+    "description": "Un panel flotante que se abre desde el encabezado de la sesión y reúne información de la sesión actual, como su carpeta de trabajo."
+  }
+}

@@ -3,7 +3,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   assertFixtureInventory,
@@ -16,6 +16,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/math-rendering', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/math-rendering/ui.expected.md', import.meta.url))
@@ -25,7 +26,7 @@ const DONE = 'MATH_RENDERING_DONE'
 
 /** Build a settled assistant reply that exercises every supported math delimiter. */
 function mathFixture(): string {
-  const session = Session.create(SessionId('math-rendering-source'))
+  const session = Session.create(brandString<SessionId>('math-rendering-source'))
   session.append('turn/start', {
     turn: 1,
   })

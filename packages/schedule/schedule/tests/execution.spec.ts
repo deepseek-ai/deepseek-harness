@@ -6,14 +6,15 @@ import GoalService from '@deepseek-ai/dsh-goal'
 import * as goalRoundDriver from '@deepseek-ai/dsh-goal-round-driver'
 import { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { expect, it, vi } from 'vitest'
-import { ScheduleId } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { createRRuleScheduleRecord } from '../src/domain.ts'
 import { MIN_DELIVERY_INTERVAL_MS, ScheduleRuntime } from '../src/runtime.ts'
 import type { ScheduleTask } from '../src/storage.ts'
 import { seededTask } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const LIMITS = { retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000 }
 
@@ -40,7 +41,7 @@ it('requeues a still-queued delivery after restart instead of enqueuing another 
   try {
     await mountAgentLoopTestDependencies(ctx)
     const loop = await mountAgentLoopTestHarness(ctx)
-    const agent = await loop.create(SessionId('delivery-owner'))
+    const agent = await loop.create(brandString<SessionId>('delivery-owner'))
     // Maintenance holds model execution while the production followup still records inbox input.
     const releaseMaintenance = Promise.withResolvers<undefined>()
     const maintenance = agent.runMaintenance(() => releaseMaintenance.promise)
@@ -48,7 +49,7 @@ it('requeues a still-queued delivery after restart instead of enqueuing another 
       const whenIdle = vi.spyOn(agent, 'whenIdle')
       ctx.provide('sessionController', { resolveAgent: async () => ({ agent }) } as never)
       const record = createRRuleScheduleRecord(
-        ScheduleId('receipt'), 'Inbox only', 'Inbox only',
+        brandString<ScheduleId>('receipt'), 'Inbox only', 'Inbox only',
         'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now() - 2000,
       )
       const tasks: ScheduleTask[] = [seededTask(record, { kind: 'session', sessionId: agent.session.id })]
@@ -134,13 +135,13 @@ it('holds every recovered batch member before the real driver claims their share
     const loop = await mountAgentLoopTestHarness(ctx)
     const adapter = new HangingAdapter()
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await loop.create(SessionId('batch-owner'), { provider: 'mock', model: 'mock' })
+    const agent = await loop.create(brandString<SessionId>('batch-owner'), { provider: 'mock', model: 'mock' })
     const message = createUserMessage({ content: [{ type: 'text', text: 'Stored reminder batch' }], source: { kind: 'schedule' } })
     agent.inject(message)
     const receipt = { scheduledAt: '2026-09-15T00:00:01.000Z', deliveredAt: '2026-09-15T00:00:01.000Z',
       messageId: message.id, targetSessionId: agent.session.id }
     const tasks = ['first', 'second'].map((id) => {
-      const record = createRRuleScheduleRecord(ScheduleId(id), id, id,
+      const record = createRRuleScheduleRecord(brandString<ScheduleId>(id), id, id,
         'DTSTART:20260915T000001Z\nRRULE:FREQ=DAILY', Date.parse('2026-09-15T00:00:02.000Z'))
       return seededTask(record, { kind: 'session', sessionId: agent.session.id }, {
         lastDelivery: receipt,
@@ -165,7 +166,7 @@ it('holds every recovered batch member before the real driver claims their share
       expect(adapter.requests).toHaveLength(1)
       expect(tasks.map(task => runtime.isExecutionActive(task.record.id))).toEqual([true, true])
       expect(commit).not.toHaveBeenCalled()
-      expect(await runtime.runNow(ScheduleId('second'))).toMatchObject({ admitted: false })
+      expect(await runtime.runNow(brandString<ScheduleId>('second'))).toMatchObject({ admitted: false })
 
       adapter.complete.resolve(undefined)
       await vi.advanceTimersByTimeAsync(0)
@@ -195,7 +196,7 @@ it('consolidates manual executions while a real Goal round is in flight', async 
     await ctx.plugin(AgentLoop, { agents: [] })
     const adapter = new HangingAdapter()
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await ctx.agentLoop.create(SessionId('goal-owner'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('goal-owner'), { provider: 'mock', model: 'mock' })
     ctx.goals.create(agent, { objective: 'Keep working while the schedule queues', maxGoalRounds: 2 })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     expect(agent.status).toBe('running')
@@ -203,7 +204,7 @@ it('consolidates manual executions while a real Goal round is in flight', async 
     ctx.provide('sessionController', { resolveAgent: async () => ({ agent }) } as never)
     ctx.on('session/flush', () => {})
     const record = createRRuleScheduleRecord(
-      ScheduleId('goal-queue'), 'Queue behind Goal', 'Scheduled follow-up',
+      brandString<ScheduleId>('goal-queue'), 'Queue behind Goal', 'Scheduled follow-up',
       'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY', Date.now(),
     )
     const tasks: ScheduleTask[] = [seededTask(record, { kind: 'session', sessionId: agent.session.id })]

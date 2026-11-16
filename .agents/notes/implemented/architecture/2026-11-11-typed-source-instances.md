@@ -16,7 +16,7 @@ Observing an event and deciding whether to emit it can require the same local st
 
 `TimeSource` owns clock production, coalesced acknowledged requests, and a segmented timer. It accepts computed deadlines and emits actual wall-clock milliseconds through the common output protocol. The runtime's numeric input awaits the transactional due scan; runtime policy owns recurrence rules, delivery floors, batching, and persistence. Clock production does not replace task timing policy.
 
-This supersedes the provider/trigger implementation split in the [event-triggered tasks proposal](../../proposed/feature/2026-10-29-event-triggered-automation-tasks.md), not its unimplemented product features. The proposal remains active for event-only task storage, restricted event turns, observation records, and notifications. Existing timed task storage and evaluation remain independent of these programmatic source connections.
+This supersedes the provider/trigger implementation split in the [event-triggered tasks proposal](../../proposed/feature/2026-10-29-event-triggered-automation-tasks.md), not its unimplemented product features. The proposal remains active for event-only task storage, external-source integrations, observation records, and their task UI. Existing timed task storage and evaluation remain independent of these programmatic source connections.
 
 ## Alternatives considered
 

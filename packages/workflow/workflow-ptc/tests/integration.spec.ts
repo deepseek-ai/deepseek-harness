@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -9,6 +9,7 @@ import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import PtcWorkflowEngine from '../src/index.ts'
 import { mountPtcRuntime } from './setup.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -22,7 +23,7 @@ async function setup(script: Script) {
   await ctx.plugin(spawn, { providerName: 'spawn' })
   await ctx.plugin(PtcWorkflowEngine, {})
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' }, { cwd })
   return { ctx, parent, adapter }
 }
 
@@ -66,7 +67,7 @@ return { prose, verdict: judged.verdict, confidence: judged.confidence }`,
     // Both children were disposed to quiescence — no live child agents remain.
     expect(childIds.length).toBe(2)
     for (const childId of childIds) {
-      expect(ctx.agents.get(SessionId(childId))).toBeUndefined()
+      expect(ctx.agents.get(brandString<SessionId>(childId))).toBeUndefined()
     }
   })
 
@@ -107,7 +108,7 @@ return { got: judged === null ? 'null' : 'value' }`,
       await expect(run.result).resolves.toMatchObject({ value: 'child complete', stopReason: 'completed', agentsStarted: 1 })
       expect(logs).toEqual(Array.from({ length: 200 }, (_, index) => String(index)))
       expect(starts).toHaveLength(1)
-      expect(ctx.agents.get(SessionId(starts[0]!))).toBeUndefined()
+      expect(ctx.agents.get(brandString<SessionId>(starts[0]!))).toBeUndefined()
     } finally {
       await run.dispose()
     }

@@ -2,11 +2,11 @@
 
 English | [中文](forge.zh.md)
 
-The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) is the Service Provider for GitHub hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all four, with the [worktree model tool](../../packages/experimental/tool-worktree/README.md) and one shared [worktree service](../../packages/experimental/worktree/README.md), from the Plugins page; otherwise they load only through explicit composition.
+The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) and [`dsh-forge-gitlab`](../../packages/experimental/forge-gitlab/README.md) are the Service Providers for GitHub and GitLab hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all five, with the [worktree model tool](../../packages/experimental/tool-worktree/README.md) and one shared [worktree service](../../packages/experimental/worktree/README.md), from the Plugins page; otherwise they load only through explicit composition.
 
 ## Providers and change requests
 
-A provider serves one forge family, such as `github`. It maps Git remote URLs to repositories and change request URLs to references, builds canonical change request URLs, finds open change requests by head branch, and reads status in batches. `changeRequestKey` derives one case-insensitive key from a reference, so watchers of differently spelled URLs share one polling loop.
+A provider serves one forge family, such as `github`, on the hosts it lists in `hosts`; no two registered providers may list the same host, so each remote and change request URL has at most one provider. It maps Git remote URLs to repositories and change request URLs to references, builds canonical change request URLs, finds open change requests by head branch, and reads status in batches. `changeRequestKey` derives one case-insensitive key from a reference, so watchers of differently spelled URLs share one polling loop.
 
 ```ts type-equiv
 /** One repository on a code host, identified the way its provider addresses it. */
@@ -40,11 +40,20 @@ type ChangeRequestKey = Branded<'ChangeRequestKey'>
 ```ts type-equiv
 /**
  * Host-specific access registered with `ctx.forge`. One provider serves one
- * forge family; methods that take a signal must stop work when it aborts.
+ * forge family on the hosts it lists; methods that take a signal must stop work when it aborts.
  */
 interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /**
+   * Lowercase host names this provider serves, such as `github.com`; `repositoryFromRemote` and `changeRequestFromUrl`
+   * return only these hosts, and no other registered provider may list one of them.
+   */
+  readonly hosts: readonly string[]
+  /** Product name readers know this provider's hosts by, such as `GitHub`. */
+  readonly label: string
+  /** What this provider's hosts call a change request. */
+  readonly changeRequestNoun: ChangeRequestNoun
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -102,6 +111,12 @@ interface ForgeProvider {
    */
   compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /**
+   * Find the merge base of commits `base` and `head` in the change request's repository, as a full object name: the
+   * commit whose files the old side of a change request's diff shows. Omission declares that the provider cannot name
+   * it, so readers of the old side get `unsupported`.
+   */
+  mergeBase?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
    * Read the signed-in user's viewed marks on the change request's files at head commit `headSha`. The marks are
    * returned only when the read names `headSha` as the head; once the head is another commit, the read resolves to a
    * `stale` failure. A provider implements `viewedFiles` and `setViewed` together; omitting either declares that the
@@ -129,8 +144,10 @@ interface ForgeProvider {
   reviewerCandidates?(ref: ChangeRequestRef, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure>
   /**
    * Bring the base branch's new commits into the head branch while its head is still `request.headSha`, resolving to
-   * undefined once the host accepted the update. Omission declares that the provider updates no branches, and its
-   * snapshots then offer no `branchUpdates`.
+   * undefined once the host accepted the update. A host whose update names the expected head checks it with the update;
+   * for one whose update cannot, the provider reads the head just before it, so a push between the read and the update
+   * is updated too. Omission declares that the provider updates no branches, and its snapshots then offer no
+   * `branchUpdates`.
    */
   updateBranch?(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
@@ -173,6 +190,27 @@ interface ForgeReadiness {
   readonly state: 'ready' | 'unauthenticated' | 'unavailable'
   /** Human-readable detail, or null when ready. */
   readonly message: string | null
+  /** Shell command the user runs on the host to sign in, while `unauthenticated`; null otherwise or when the provider names none. */
+  readonly signIn: { readonly command: string } | null
+}
+```
+
+`ctx.forge.describe(forge)` names a registered family with the `label` and `changeRequestNoun` its provider declares, so readers can call the code host and its change requests what the host calls them.
+
+```ts type-equiv
+/** What the hosts of a forge family call a change request. */
+type ChangeRequestNoun = 'pull-request' | 'merge-request'
+```
+
+```ts type-equiv
+/** How readers name a forge family and its change requests. */
+interface ForgeDescription {
+  /** Forge family name, such as `github`. */
+  readonly forge: string
+  /** Product name readers know the family's hosts by, such as `GitHub`. */
+  readonly label: string
+  /** What the family's hosts call a change request. */
+  readonly changeRequestNoun: ChangeRequestNoun
 }
 ```
 
@@ -405,7 +443,7 @@ type ForgeReviewResult =
 
 ## Review threads
 
-`ctx.forge.readReview(ref, headSha, signal)` reads the review threads of a change request at one head commit. The provider returns `ForgeReviewData` only when the read names `headSha` as the head; otherwise it returns `stale`, which polls a watched change request again at once, as a stale diff read does. For a provider without `readReview` the service returns `unsupported`, so consumers show no threads instead of a failure. A line thread has two positions: `original` on the commit it was written on, and `current` on the head of the read, which is null once the host no longer places the thread on that commit. A consumer that shows the head's diff places a thread at `current` and shows the others with their `diffHunk`; reading the file at `original.commit` through `fileText` shows the whole file the thread was written on. The [GitHub provider README](../../packages/experimental/forge-github/README.md#use-this-package) owns how GitHub's fields map onto these positions.
+`ctx.forge.readReview(ref, headSha, signal)` reads the review threads of a change request at one head commit. The provider returns `ForgeReviewData` only when the read names `headSha` as the head; otherwise it returns `stale`, which polls a watched change request again at once, as a stale diff read does. For a provider without `readReview` the service returns `unsupported`, so consumers show no threads instead of a failure. A line thread has two positions: `original` on the commit it was written on, and `current` on the head of the read, which is null once the host no longer places the thread on that commit. A consumer that shows the head's diff places a thread at `current` and shows the others with their `diffHunk`; reading the file at `original.commit` through `fileText` shows the whole file the thread was written on. The [GitHub provider README](../../packages/experimental/forge-github/README.md#use-this-package) and the [GitLab provider README](../../packages/experimental/forge-gitlab/README.md#use-this-package) own how each host's fields map onto these positions; GitLab keeps only the last position a thread's lines were unchanged at, which becomes its `original`.
 
 ```ts type-equiv
 /** Opaque host identity of one review thread. */
@@ -468,9 +506,9 @@ interface ForgeReviewComment {
 
 ```ts type-equiv
 /**
- * One review thread on a file of a change request. A line thread has two positions: `original` on the commit it was
- * written on, and `current` on the head commit of the read. `current` is null once the host no longer places the
- * thread on the head commit, as after later commits changed its lines.
+ * One review thread on a file of a change request. A line thread has two positions: `original` on a commit whose file
+ * holds the thread's lines as they were written, and `current` on the head commit of the read. `current` is null once
+ * the host no longer places the thread on the head commit, as after later commits changed its lines.
  */
 interface ForgeReviewThread {
   /** Host identity of the thread. */
@@ -483,7 +521,11 @@ interface ForgeReviewThread {
   readonly subject: 'line' | 'file'
   /** Lines in the diff that ends at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
   readonly current: ForgeAnchor | null
-  /** Lines in the diff that ended at the commit the thread was written on; null for a file thread. */
+  /**
+   * Lines in the diff that ended at a commit whose file holds the lines as the thread was written on them: the commit
+   * the thread was written on, or a later one the host carried the thread to while the lines stayed unchanged; null for
+   * a file thread.
+   */
   readonly original: ForgeAnchor | null
   /** Diff hunk the host recorded when the thread was written, ending at its last line; null when it recorded none. */
   readonly diffHunk: string | null
@@ -519,6 +561,11 @@ interface ForgeReviewData {
    * false for a provider without it.
    */
   readonly viewerCanReview: boolean
+  /**
+   * Decisions the host lets the signed-in user record in a submitted review of this change request, such as only
+   * `comment` on their own pull request on GitHub; empty when `viewerCanReview` is false.
+   */
+  readonly reviewEvents: readonly ForgeReviewEvent[]
 }
 ```
 
@@ -705,15 +752,14 @@ interface ForgeViewedRequest {
 
 ## Session bindings
 
-`ctx.forgeSession` derives each Session's bindings from its own log: `gh pr create` results bind the URLs they print, `gh pr view`, `gh pr edit`, and `gh pr checkout` calls bind the change request they act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection's client view, which the Session summary carries, lists the bindings without their status. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
+`ctx.forgeSession` derives each Session's bindings from its own log by the command rules that providers register: forge-github's `gh` rule and forge-gitlab's `glab` rule bind the URLs that `gh pr create` and `glab mr create` results print and the change request that `gh pr view`, `glab mr view`, and their sibling reference commands act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection's client view, which the Session summary carries, lists the bindings without their status. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
 
 ```ts type-equiv
 /**
- * How a change request became bound to a Session: `created` when a
- * `gh pr create` result printed its URL, `referenced` when a `gh pr view`,
- * `gh pr edit`, or `gh pr checkout` call named it or its result printed its
- * own URL, `discovered` when a lookup found it for a branch the Session pushed
- * or works on, `tracked` when a caller bound it by URL.
+ * How a change request became bound to a Session: `created` when the result of a command a registered rule names as a
+ * creation printed its URL, `referenced` when a command a rule names as a reference named it, its result printed its
+ * own URL, or a lookup for it found the URL, `discovered` when a lookup found it for a branch the Session pushed or
+ * works on, `tracked` when a caller bound it by URL.
  */
 type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 ```
@@ -723,7 +769,7 @@ type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 interface BindingRecord {
   /**
    * `track` binds or restores, `dismiss` hides, `discover` binds a branch lookup,
-   * and `reference` binds a CLI selector lookup without restoring dismissed entries.
+   * and `reference` binds a command lookup without restoring dismissed entries.
    */
   readonly action: 'track' | 'dismiss' | 'discover' | 'reference'
   /** Web URL of the change request. */
@@ -751,6 +797,84 @@ interface SessionChangeRequest {
  * @param changeRequests - every visible binding of the watched Session, in first-recorded order.
  */
 type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequest[]) => void
+```
+
+Providers register the commands of their CLI with `registerCommands`; the [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns how the projection folds with them.
+
+```ts type-equiv
+/**
+ * The shell commands of one forge family's CLI that bind change requests to the Session that ran them, registered
+ * with `ctx.forgeSession.registerCommands`. The `forgeChangeRequests` projection folds the Session log with the
+ * recognized rules and folds it again when a registration changes them, so a rule must classify the same input the
+ * same way every time: its members are fixed, and `select` reads only its arguments.
+ */
+interface ForgeCommandRule {
+  /** Stable name of the rule, such as `gh`; no two registered rules share one. */
+  readonly id: string
+  /** Positive integer the registrant raises whenever the rule classifies some command or output differently. */
+  readonly version: number
+  /** Executable word the rule classifies, such as `gh`; no two registered rules share one. */
+  readonly executable: string
+  /** Subcommand word sequences that create a change request and print its URL, such as `['pr', 'create']`. */
+  readonly creates: readonly (readonly string[])[]
+  /** Subcommands that act on one change request, which their words or their output name, such as `['pr', 'view']`. */
+  readonly references: ForgeCommandGroup
+  /**
+   * Subcommands that send a raw API request, such as `['api']`, whose words can name one change request. Their output
+   * is not read, since one request can list many change requests.
+   */
+  readonly apiRequests: ForgeCommandGroup
+  /** Regular expression source matching a change request page path after the repository path, such as `\/pull\/\d+`. */
+  readonly changeRequestPath: string
+  /** JSON member names whose value is the URL of the change request a reference command prints, such as `url`. */
+  readonly urlMembers: readonly string[]
+  /**
+   * Find the change request that one literal reference or API request command names.
+   * @param command - the command's kind, subcommand, operands, and option values.
+   * @param environment - the variables the command assigns before the executable, the last assignment of a name winning.
+   * @returns the change request's URL when the command names its host; a lookup when it names the change request
+   * without one; undefined when it names no change request.
+   */
+  select(command: ForgeCommandArguments, environment: Readonly<Record<string, string>>): ForgeCommandSelection | undefined
+}
+```
+
+```ts type-equiv
+/** Subcommands of one kind and the options they accept. */
+interface ForgeCommandGroup {
+  /** Subcommand word sequences, such as `['pr', 'view']`; may be empty. */
+  readonly subcommands: readonly (readonly string[])[]
+  /**
+   * Options that take a value: the next word, the text after `=`, or for a one-letter option such as `-R`, the rest of
+   * the word.
+   */
+  readonly valueOptions: readonly string[]
+  /** Options that take no value; a command with any other option names nothing. */
+  readonly flagOptions: readonly string[]
+}
+```
+
+```ts type-equiv
+/** The parsed words of one reference or API request command after its executable. */
+interface ForgeCommandArguments {
+  /** Which group of the rule the subcommand belongs to. */
+  readonly kind: 'reference' | 'api-request'
+  /** The subcommand words, such as `['pr', 'view']`. */
+  readonly subcommand: readonly string[]
+  /** Words after the subcommand that are neither options nor option values. */
+  readonly operands: readonly string[]
+  /** Each value option as written, with its value, in command order. */
+  readonly values: readonly (readonly [option: string, value: string])[]
+}
+```
+
+```ts type-equiv
+/**
+ * The change request one command names: its URL, or a read-only command, starting with the executable, that prints
+ * exactly that URL. forge-session runs a lookup in the shell of the command that named it, with that command's
+ * variable assignments, and only while the command runs; replaying the Session log runs none.
+ */
+type ForgeCommandSelection = { readonly url: string } | { readonly lookup: readonly string[] }
 ```
 
 ## Panel
@@ -926,8 +1050,15 @@ interface ForgePanelWorktree {
 ```ts type-equiv
 /** One bound change request in the panel state. */
 interface ForgePanelChangeRequest extends SessionChangeRequest {
+  /** How readers name the change request's code host and its change requests, or null when no provider serves its URL. */
+  readonly forge: ForgeDescription | null
   /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
   readonly snapshot: ChangeRequestSnapshot | null
+  /**
+   * Number of review changes `forge/review-changed` announced for the change request since the panel host started; it
+   * grows when any plugin's write is accepted, so a reader shows threads and viewed marks read after it.
+   */
+  readonly reviewRevision: number
 }
 ```
 
@@ -990,7 +1121,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the Session panel's local changes row, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
 
 `changeRequestReview(session, url, headSha, fresh)` reads the threads of a bound change request at the head of the diff the view shows and refuses another head with `forgePanel/stale-head`, `forgePanel/review-unsupported` for a provider without review reads, and `forgePanel/review-failed` otherwise. It keeps one read per change request in memory, keyed by head commit and the status's update time and bounded by `maxCachedReviewBytes`, and reads again once the kept read is `reviewRefreshMs` old or when `fresh` asks for it, as the first read after the reader refreshes the view does: on GitHub a new comment or reply changes a pull request's update time, but resolving a thread does not. The changes view asks again at every status it receives while visible, and overlays the threads on the files the [panel README](../../packages/experimental/client-ui-forge/README.md#use-this-package) describes.
 
@@ -1178,12 +1309,126 @@ interface ForgeChangedFile {
 ```
 
 ```ts type-equiv
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string
   /** Changed files in Git's path order, untracked files last, at most `maxUntrackedFiles` of those. */
   readonly files: readonly ForgeChangedFile[]
+}
+```
+
+<a id="extension-api"></a>
+
+## Extension API
+
+Other plugins extend change request review through the services above and five more extension points; each registration returns its disposer and ends with the plugin that made it. The surface is experimental and pre-stable like the rest of this capability. Adding an optional field, method, slot, event, error code, or defaulted Config key is compatible; removing or renaming a type, method, slot, owner prop, event, Config key, or the `dsh-resource://forge-changes/` address, or narrowing what one means, needs an [upgrade guide](../../.agents/skills/dsh-create-upgrade-guide/SKILL.md). None of these extension points sends anything to a model: a plugin that shows forge data, lens results, or annotations to a model does so through its own tool results or `agent.inject()`, which the Session log records.
+
+| Extension point | Service Definition | Service Provider | Consumer |
+|---|---|---|---|
+| Review data | `ctx.forge` and the `forge/review-changed` event | The forge providers | The panel host and other Host plugins |
+| Filter lenses | `ctx.forgePanel.registerLens` | Host plugins | The changes view through `changesLens` |
+| Changes view face | `ctx.forgeChanges` | The forge panel's Client plugin | Client plugins that open views, name lenses, and add annotations |
+| Slots | `forge.changes.toolbar`, `forge.changes.file.menu`, `forge.diff.line.annotation`, `forge.diff.comment.actions`, `forge.change-request.card.actions` | Client plugins | The changes view and the change request card |
+| Session data | The `forgeChangeRequests` and `forgeWorktree` projections | forge-session and the forge panel | Client plugins through `useProjection`, Host plugins through `ctx.forgeSession.changeRequests` or `ctx.sessionProjections.snapshot` |
+
+`ctx.forge` announces `forge/review-changed` after a review write, a submitted review, or a viewed mark the host accepted, whichever plugin made it; an outcome that is unknown, refused, stale, or unsupported is not announced. The panel host then drops the threads it keeps for the change request and raises `reviewRevision` on its entries, so an open changes view reads the threads and the viewed marks again without a refresh.
+
+```ts type-equiv
+/**
+ * One review change the host accepted, which `forge/review-changed` announces: a write to the threads or the pending
+ * review, a submitted review, or a viewed mark. Each names the head commit the change was made against.
+ */
+type ForgeReviewChange =
+  | { readonly kind: 'write'; readonly write: ForgeReviewWrite['kind']; readonly headSha: string }
+  | { readonly kind: 'submit'; readonly headSha: string }
+  | { readonly kind: 'viewed'; readonly path: string; readonly viewed: boolean; readonly headSha: string }
+```
+
+A Host plugin registers a filter lens with `ctx.forgePanel.registerLens(lens)`, and a Client plugin names it with `ctx.forgeChanges.describeLens({ id, title })`; a lens without a description shows its identity. A lens filters the shown files and does not place them in layers: the changes view shows the files that both the chosen layer and the chosen lens keep, the test switch still hides test files, and a lens cannot move a file to another layer. Hunks that meet none of a kept file's `ranges` fold into one row the reader can expand. The view asks for the chosen lens only, through the streaming Remote `changesLens`, which reads the same files as the view, refuses other files with `forgePanel/lens-stale`, and runs `classify` within `lensTimeoutMs` and `maxLensReadBytes`; results are kept up to `maxCachedLensBytes`. `text` reads a local old side at the fork point, HEAD, the index, or the parent of the first chosen commit, and a change request's old side at the chosen commits' parent or at the merge base its provider names through the optional `mergeBase`.
+
+```ts type-equiv
+/** A filter over the files of a changes view, which a plugin registers with `ctx.forgePanel.registerLens()`. */
+interface ForgeLens {
+  /** Identity the plugin chooses; one registration holds an id at a time. */
+  readonly id: ForgeLensId
+  /** Changes whenever `classify` may answer differently for the same input, which drops results kept under another version. */
+  readonly version: string
+  /**
+   * Decide which files the lens keeps and which lines it is about. The signal aborts when the reader stops waiting, the
+   * registration ends, or `lensTimeoutMs` passes; a rejection fails the request without a partial result.
+   */
+  classify(input: ForgeLensInput, signal: AbortSignal): Promise<ForgeLensResult>
+}
+```
+
+```ts type-equiv
+/** What one `classify` call receives. */
+interface ForgeLensInput {
+  /** What the view shows. */
+  readonly source: ForgeLensSource
+  /** Every file of the diff in display order, with the layer the panel gave it. */
+  readonly files: readonly ForgeLensFile[]
+  /**
+   * Read one side of a file of `files`, by its `path`: the old side reads `previousPath` for a renamed file. Resolves to
+   * null when the side does not exist, as the old side of an added file, or holds binary content. Rejects for a path not
+   * in `files`, once the reads of one call exceed the panel's `maxLensReadBytes`, for an old side the provider cannot
+   * locate, and when the read fails.
+   */
+  text(side: 'old' | 'new', path: string, signal: AbortSignal): Promise<string | null>
+  /** Report how many of `total` units the lens finished; the changes view shows it while the lens runs. */
+  progress(done: number, total: number): void
+}
+```
+
+```ts type-equiv
+/** The files a lens keeps, by path; a file the result does not name is filtered out. */
+interface ForgeLensResult {
+  readonly files: Readonly<Record<string, ForgeLensKeep>>
+}
+```
+
+```ts type-equiv
+/** What a lens keeps of one file. */
+interface ForgeLensKeep {
+  /**
+   * Lines the lens is about on each side; hunks that touch none of them fold into one row the reader can expand.
+   * Omitted: every hunk of the file shows.
+   */
+  readonly ranges?: { readonly old: readonly ForgeLineRange[]; readonly new: readonly ForgeLineRange[] }
+}
+```
+
+`ctx.forgeChanges` also mints and reads changes addresses, names the tab `kinds`, and opens a view with `open(target, { path, lens })` in the Session the sidebar shows. `registerAnnotations(source)` adds line annotations: the source observes each view's annotations by path, and its `forge.diff.line.annotation` entry, keyed by the source's identity, draws each one inside a frame the view draws. Annotations stack on the row of their last line after the comment form, the browser drafts, and the host threads, in the column of their side; whole-file annotations come first, and those written on another `digest` follow the file in their own section. A file shows at most `maxAnnotationsPerFile`, and a file that draws its lines draws no annotation before its section comes within reach of the scrollport. The owner props of every slot live in [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts).
+
+```ts type-equiv
+/** Where one line annotation sits in a file of a changes view. */
+interface ForgeLineAnnotation {
+  /** Identity within its source, stable across updates; it keys the drawn entry. */
+  readonly key: string
+  /** Inclusive 1-based lines on the old (`L`) or new (`R`) side, or `file` for the whole file. */
+  readonly place: { readonly side: 'L' | 'R'; readonly startLine: number; readonly endLine: number } | 'file'
+  /** Digest of the file change it was written on; a file whose `digest` differs shows it in its outdated section. */
+  readonly digest?: string
+  /** Changes whenever the entry should draw again; equal keys and versions keep the drawn entry's props. */
+  readonly version: string | number
+}
+```
+
+```ts type-equiv
+/** A Client plugin's line annotations, drawn through its `forge.diff.line.annotation` entry. */
+interface ForgeAnnotationSource {
+  /** Unique source identity, also the key of its `forge.diff.line.annotation` entry. */
+  readonly id: string
+  /** Position among sources in one stack, lower first; equal positions keep registration order. Default 0. */
+  readonly order?: number
+  /**
+   * Observe the annotations of one view, by path. The changes view calls it once per view and source registration;
+   * the source republishes through the same observable whenever the annotations change.
+   * @param target - the view's Session and source.
+   * @returns annotations by repository-relative path.
+   */
+  observe(target: ChangesTarget): HostObservable<ReadonlyMap<string, readonly ForgeLineAnnotation[]>>
 }
 ```
 
@@ -1207,21 +1452,28 @@ Registry of forge providers. Watchers of one change request share a single polli
  * fiber. Watches of that forge receive an `unavailable` failure when the
  * registration ends. Unregistering cancels and awaits its in-flight calls;
  * results from the withdrawn registration are discarded.
- * @param provider - provider to serve `provider.forge`.
+ * @param provider - provider to serve `provider.forge` on `provider.hosts`.
  * @returns the disposer that unregisters the provider and waits for its calls to finish.
- * @throws when another provider already serves the same forge.
+ * @throws when another provider already serves the same forge or one of the same hosts, compared without case.
  */
 register(provider: ForgeProvider): () => Promise<void>
 
 /**
- * Map a Git remote URL to a repository through the first provider that serves it.
+ * Name a forge family and its change requests for readers.
+ * @param forge - forge family name, such as `github`.
+ * @returns the registered provider's description, or undefined when no provider serves the family.
+ */
+describe(forge: string): ForgeDescription | undefined
+
+/**
+ * Map a Git remote URL to a repository through the provider that serves its host.
  * @param url - fetch or push URL as Git reports it.
  * @returns the repository, or undefined when no provider serves the URL.
  */
 repositoryFromRemote(url: string): ForgeRepository | undefined
 
 /**
- * Map a change request web URL through the first provider that serves it.
+ * Map a change request web URL through the provider that serves its host.
  * @param url - web URL of a pull or merge request.
  * @returns the change request, or undefined when no provider serves the URL.
  */
@@ -1355,7 +1607,7 @@ async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): P
 /**
  * Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then
  * poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls
- * it as a stale read does.
+ * it as a stale read does; a write the host took is announced with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
  * @param write - the write and the head commit the user saw.
  * @param signal - cancellation of the write.
@@ -1379,7 +1631,8 @@ async viewedFiles(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): 
 
 /**
  * Set or clear the signed-in user's viewed mark on one file of a change request while its head is still
- * `request.headSha`. A `stale` failure polls a watched change request again as {@link ForgeService.diff} does.
+ * `request.headSha`. A `stale` failure polls a watched change request again as {@link ForgeService.diff} does; a saved
+ * mark is announced with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
  * @param request - the file, its mark, and the head commit the user saw.
  * @param signal - cancellation of the request.
@@ -1410,7 +1663,21 @@ async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitLi
 async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
- * Publish one comment or a completed review, then refresh the watched status.
+ * Find the merge base of two commits of a change request's repository: the commit whose files the old side of the
+ * change request's diff shows when `base` is the snapshot's `baseSha` and `head` its `headSha`.
+ * @param ref - change request served by a registered provider.
+ * @param base - full object name of the base commit.
+ * @param head - full object name of the head commit.
+ * @param signal - cancellation of the read.
+ * @returns the merge base's full object name, or why the host did not provide it; `unsupported` when the provider
+ * cannot name merge bases.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async mergeBase(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
+
+/**
+ * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
+ * with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
  * @param request - explicitly selected commit, comments, and review decision.
  * @param signal - request cancellation.
@@ -1659,6 +1926,40 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
 
 /**
+ * Register a filter lens as an effect on the calling fiber. The changes views list it while it is registered; ending
+ * the registration aborts its running classifications and waits for them.
+ * @param lens - the lens.
+ * @returns the disposer that unregisters the lens and waits for its classifications to stop.
+ * @throws when another registration holds `lens.id`.
+ */
+registerLens(lens: ForgeLens): () => Promise<void>
+
+/**
+ * Stream the facts every changes view reads about the panel's extensions: the current facts first, then the facts
+ * after each lens registration or withdrawal. The stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns the registered lenses and the annotation limit, in publication order.
+ */
+@Remote({ mode: 'stream' }) async *extensions(signal: AbortSignal): AsyncIterable<ForgeExtensionState>
+
+/**
+ * Classify the files a changes view of a Session shows with one registered lens: progress frames while the lens
+ * runs, then the files it keeps. Results for the same files, lens, and lens version are reused from memory until
+ * `maxCachedLensBytes` evicts them. Local changes are read with the Session's permissions; a change request's files
+ * are those `changeRequestDiff` reads.
+ * @param session - Session whose checkout or binding the view shows.
+ * @param request - the view's source, the version of the files it shows, and the lens.
+ * @param signal - ends the classification.
+ * @returns progress frames, then one result frame.
+ * @throws `forgePanel/lens-missing` while no lens holds the identity or once its registration ends;
+ * `forgePanel/lens-stale` before a change request's status was read, when the files differ from `request.version`, and
+ * when local files changed while the lens ran;
+ * `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers
+ * over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.
+ */
+@Remote({ mode: 'stream' }) async *changesLens(session: Session, request: ForgeLensRequest, signal: AbortSignal): AsyncIterable<ForgeLensFrame>
+
+/**
  * Read the signed-in user's viewed marks on the files of a change request of a Session, which the host keeps for the
  * whole change request.
  * @param session - Session the change request is bound to.
@@ -1892,9 +2193,28 @@ Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/ex
 
 ### `ctx.forgeSession` — `ForgeSessionService`
 
-Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.
+Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from the results of the creation and reference commands that forge providers register through `registerCommands`, from `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.
 
 ```ts cordis-catalog
+/**
+ * Register the commands of one forge CLI as an effect on the calling fiber.
+ * A rule that changes the recognized rule set re-registers the
+ * `forgeChangeRequests` projection at the new set's state version, so every
+ * Session refolds its log with the new rules when next read, including
+ * commands that ran before the registration, and watchers receive the
+ * refolded bindings. Disposal does not change the recognized set: the rule
+ * keeps recognizing commands until the service restarts or another rule
+ * replaces its id or executable, so unloading a provider, including at
+ * shutdown, leaves the checkpointed state version unchanged. Only live
+ * registrations run reference lookups, so a disposed rule starts no CLI
+ * process; lookups that started before a change finish with the rules they
+ * started with.
+ * @param rule - the CLI's executable, subcommands, change request page path, and selection.
+ * @returns the disposer that ends the registration.
+ * @throws when the rule is malformed, or a live registration has its id or executable.
+ */
+registerCommands(rule: ForgeCommandRule): () => void
+
 /**
  * List the change requests bound to a Session and not dismissed.
  * @param session - Session whose bindings are read.
@@ -1969,6 +2289,26 @@ Announces a provider registration or withdrawal after the registry changes. List
  * @mode parallel
  */
 'forge/providers-changed'(forge: string): void | Promise<void>
+```
+
+Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental/forge/src/index.ts)
+
+<a id="forgereview-changed--parallel"></a>
+
+#### `forge/review-changed` — parallel
+
+Announces a review change the host accepted through this service: a thread or pending-review write, a submitted review, or a viewed mark. Changes whose outcome is unknown, refused, stale, or unsupported are not announced. Listener failures are logged without preventing other listeners from running.
+
+```ts cordis-catalog
+/**
+ * Announces a review change the host accepted through this service: a thread or pending-review write, a submitted
+ * review, or a viewed mark. Changes whose outcome is unknown, refused, stale, or unsupported are not announced.
+ * Listener failures are logged without preventing other listeners from running.
+ * @param ref - change request the change went to.
+ * @param change - what changed and the head commit it was made against.
+ * @mode parallel
+ */
+'forge/review-changed'(ref: ChangeRequestRef, change: ForgeReviewChange): void | Promise<void>
 ```
 
 Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental/forge/src/index.ts)

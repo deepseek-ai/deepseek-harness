@@ -13,9 +13,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { FsTargetKey, FsVersion, type FsEditOutcome, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import type { FsTargetKey, FsVersion, FsEditOutcome, FsTarget, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { PreToolDecision, ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   installForkEnforcement,
   installForkEnforcementForAgent,
@@ -29,6 +30,8 @@ import {
 import { ForkRegistry } from '../src/host/fork-registry.ts'
 import { SHARED_TOOL_PROFILES } from '../src/host/shared-tools.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
+import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 const child = 'child-1'
 /** The viewer identity the registry recorded for this child. */
@@ -54,14 +57,14 @@ const readDefinition: ToolDefinition = {
 /** One child context capturing what the wiring registers on it. */
 function childContext() {
   const captured: {
-    guard?: (execution: ForkToolExecution) => string | undefined
+    guard?: (execution: ForkToolExecution) => ForkToolDenial | undefined
     preExecute?: (execution: ForkToolExecution, next: () => Promise<PreToolDecision>) => Promise<PreToolDecision>
     result?: (execution: ForkToolExecution) => void
     readonly definitions: Map<string, ToolDefinition>
   } = { definitions: new Map() }
   const ctx = Object.assign(new Context(), {
     tools: {
-      guard: (guard: (execution: ForkToolExecution) => string | undefined) => {
+      guard: (guard: (execution: ForkToolExecution) => ForkToolDenial | undefined) => {
         captured.guard = guard
         return () => { delete captured.guard }
       },
@@ -115,19 +118,19 @@ const pathOf = (target: FsTarget): string => target.displayPath
 
 /** A host filesystem whose resolution knows one granted root. */
 const fs: ForkEnforcementFs = {
-  resolve: (path: string): Promise<FsTarget> => Promise.resolve({ targetKey: FsTargetKey(path), displayPath: path }),
+  resolve: (path: string): Promise<FsTarget> => Promise.resolve({ targetKey: brandString<FsTargetKey>(path), displayPath: path }),
   contains: (parent: FsTarget, candidate: FsTarget): boolean => pathOf(candidate).startsWith(pathOf(parent)),
   processPath: (target: FsTarget): string => pathOf(target),
   // The write the bounded write tool delegates to once containment holds; the fake writes the candidate itself.
   writeText: (): Promise<FsWriteOutcome> => Promise.resolve({
     operation: 'update' as const,
-    version: FsVersion('fake-next'),
+    version: brandString<FsVersion>('fake-next'),
     before: null,
     after: '',
   }),
   // The edit the bounded edit tool delegates to once containment holds.
   editText: (): Promise<FsEditOutcome> => Promise.resolve({
-    version: FsVersion('fake-edited'),
+    version: brandString<FsVersion>('fake-edited'),
     before: 'old',
     after: 'new',
   }),
@@ -304,9 +307,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks,
@@ -336,12 +339,12 @@ describe('fork enforcement wiring', () => {
       agent: { id: child },
       token: Symbol('another-execution'),
     }
-    expect(captured.guard?.(other)).toMatch(/workspace/u)
+    expect(captured.guard?.(other)).toEqual(outsideDenial(/workspace/u))
 
     // A path the resolution did not confirm is refused for that same execution.
     const outside: ForkToolExecution = { ...inside, arguments: { file_path: '/etc/passwd' } }
     await captured.preExecute?.(outside, () => Promise.resolve({ kind: 'allow' }))
-    expect(captured.guard?.(outside)).toMatch(/workspace/u)
+    expect(captured.guard?.(outside)).toEqual(outsideDenial(/workspace/u))
   })
 
   it('refuses a child whose scope cannot register the confined read, and keeps the prompt gate closed', async () => {
@@ -416,9 +419,9 @@ describe('fork enforcement wiring', () => {
       sessionId: 'session-shared',
       context: ctx,
       scope: childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId('session-shared') }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>('session-shared') }),
       fs,
       tools: { get: () => undefined },
       describe: describeTool,
@@ -433,8 +436,8 @@ describe('fork enforcement wiring', () => {
     // definitions...
     const call = (name: string) =>
       ({ name, arguments: {}, agent: { id: child }, token: Symbol(name) }) as never
-    expect(captured.guard?.(call('read'))).toMatch(/may not use/u)
-    expect(captured.guard?.(call('bash'))).toMatch(/may not use/u)
+    expect(captured.guard?.(call('read'))).toEqual(denial(/may not use/u, 'FORK_TOOL_NOT_PERMITTED'))
+    expect(captured.guard?.(call('bash'))).toEqual(denial(/may not use/u, 'FORK_TOOL_NOT_PERMITTED'))
     // ...and a released layer stops refusing anything.
     installation.dispose()
     expect(captured.guard).toBeUndefined()
@@ -447,9 +450,9 @@ describe('fork enforcement wiring', () => {
       sessionId: 'session-shared',
       context: ctx,
       scope: childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId('session-shared') }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>('session-shared') }),
       fs,
       tools: { get: () => readDefinition },
       describe: describeTool,
@@ -469,9 +472,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks: await registry(),
@@ -529,9 +532,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks,
@@ -546,7 +549,7 @@ describe('fork enforcement wiring', () => {
     // the child running with no limit at all.
     expect(captured.guard).toBeDefined()
     expect(captured.guard?.({ name: 'read', arguments: {}, agent: { id: child } }))
-      .toMatch(/limits are not installed/u)
+      .toEqual(denial(/limits are not installed/u, 'FORK_LIMITS_UNINSTALLED'))
     expect(captured.preExecute).toBeUndefined()
     expect(captured.result).toBeUndefined()
     expect(forks.enforcementInstalled(child)).toBe(false)

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-windows",
   "description": "Windows C# computer use through shared application and window objects",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -40,6 +40,7 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",

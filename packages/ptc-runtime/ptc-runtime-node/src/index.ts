@@ -1,6 +1,6 @@
 /** Node PTC provider with uniform admission and configurable evaluation and process ownership. */
 import { Context } from '@deepseek-ai/cordis'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntime, PtcRuntimeError } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -105,7 +105,7 @@ export class NodePtcRuntime extends PtcRuntime {
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) {
       const source = this.retainsState ? 'persistent PTC' : 'ptc-runtime-node'
-      throw new Error(`${source}: resolve after disposal`)
+      throw new PtcRuntimeError(`${source}: resolve after disposal`, 'PTC_RUNTIME_UNAVAILABLE')
     }
     return this.execution.resolve(request)
   }
@@ -117,8 +117,10 @@ export class NodePtcRuntime extends PtcRuntime {
    * @returns Logs, JSON completion or failure; retained processes remain until release or invalidation.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
-    if (this.disposed) throw new Error('ptc-runtime-node: run after disposal')
-    if (this.initializer?.removing) throw new Error('ptc-runtime-node: environment initialization cleanup is incomplete')
+    if (this.disposed) throw new PtcRuntimeError('ptc-runtime-node: run after disposal', 'PTC_RUNTIME_UNAVAILABLE')
+    if (this.initializer?.removing) {
+      throw new PtcRuntimeError('ptc-runtime-node: environment initialization cleanup is incomplete', 'PTC_RUNTIME_UNAVAILABLE')
+    }
     this.admitted = true
     const initialization = this.initializer?.program
     const controller = new AbortController()
@@ -133,7 +135,7 @@ export class NodePtcRuntime extends PtcRuntime {
       await this.processes.wait(spec.sandboxPolicy?.sessionId)
       // Disposal can begin while a previous policy's process cleanup is pending.
       // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (this.disposed) throw new Error(`${this.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: run after disposal`)
+      if (this.disposed) throw new PtcRuntimeError(`${this.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: run after disposal`, 'PTC_RUNTIME_UNAVAILABLE')
       const signal = spec.signal === undefined ? controller.signal : AbortSignal.any([spec.signal, controller.signal])
       return await this.execution.run({ ...spec, signal }, initialization)
     } finally {

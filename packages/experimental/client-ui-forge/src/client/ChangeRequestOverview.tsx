@@ -23,7 +23,7 @@ import { CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { checkCounts, checkDuration } from './status.ts'
 import { searchFieldKeyDown } from './menu-search.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 import overview from './ChangeRequestOverview.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -598,7 +598,7 @@ export function IssuesRow({ snapshot, openLink, t }: {
     return (
       <span key={issue.url}>
         {index > 0 && t('issues.separator')}
-        <Tooltip label={issue.title} side="top">
+        <Tooltip label={issue.title} side="top" delayMs={500}>
           <a className={overview.issue} href={issue.url} target="_blank" rel="noreferrer" data-state={issue.state}
             aria-label={t('issues.aria', { label, title: issue.title })}
             onClick={(event) => {

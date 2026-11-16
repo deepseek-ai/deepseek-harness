@@ -13,13 +13,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceFiles, type Config, type WorkspaceFileScope } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Build the header-derived scope that direct service calls receive after Typert lookup. */
 function fileScope(workspaceRoot: string): WorkspaceFileScope {
-  return { sessionId: SessionId('s-test'), workspaceRoot }
+  return { sessionId: brandString<SessionId>('s-test'), workspaceRoot }
 }
 
 export const signal = (): AbortSignal => new AbortController().signal

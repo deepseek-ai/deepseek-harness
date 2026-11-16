@@ -1,9 +1,11 @@
 import { getEventListeners } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import { WorkflowRunId } from '@deepseek-ai/dsh-workflow'
+import { createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -31,9 +33,9 @@ async function harness(direct = false) {
   const fiber = ctx.plugin(fixture, { ...config, ...direct ? { direct: { prompt: config.prompt, callId: 'direct-child' } } : {} })
   await fiber
   cleanups.push(() => fiber.dispose())
-  const parent = ctx.sessions.create(SessionId(config.parentSessionId))
-  const other = ctx.sessions.create(SessionId('other-parent'))
-  const session = ctx.sessions.create(SessionId('workflow-child'), { meta: { parentSession: parent.id } })
+  const parent = ctx.sessions.create(brandString<SessionId>(config.parentSessionId))
+  const other = ctx.sessions.create(brandString<SessionId>('other-parent'))
+  const session = ctx.sessions.create(brandString<SessionId>('workflow-child'), { meta: { parentSession: parent.id } })
   // The dispatcher needs only the subject identity; the fixture reads its Session.
   const agent = { id: session.id, session } as Agent
   const controller = new AbortController()
@@ -41,7 +43,7 @@ async function harness(direct = false) {
   const decision: PreStepDecision = { kind: 'enter', messages }
   const next = vi.fn(async () => decision)
   const start = (owner = parent, childId = agent.id) => owner.append('tool-workflow/agent-start', {
-    runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId,
+    runId: brandString<WorkflowRunId>('run'), seq: 1, label: 'workflow-child', childId,
   })
   const step = (overrides = {}) => agentEvents(ctx, agent).waterfall('agent/pre-step', {
     modelSelection: { provider: 'mock', model: 'mock' },
@@ -76,7 +78,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     cleanups.push(() => assembly.dispose())
     await assembly
     ctx.llm.registerAdapter(['mock'], adapter)
-    const parent = await ctx.agentLoop.create(SessionId(config.parentSessionId), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>(config.parentSessionId), { provider: 'mock', model: 'mock' })
     const run = await ctx.subagents.startActivation({
       provider: 'spawn', label: 'workflow-child', delivery: 'caller',
       parent, prompt: [{ type: 'text', text: config.prompt }], signal: new AbortController().signal,
@@ -87,7 +89,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     expect(adapter.requests).toHaveLength(0)
     expect(child.session.snapshotEvents().some(event => event.type === 'subagent/descriptor')).toBe(true)
     parent.session.append('tool-workflow/agent-start', {
-      runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId: child.id,
+      runId: brandString<WorkflowRunId>('run'), seq: 1, label: 'workflow-child', childId: child.id,
     })
     expect((await run.result).output).toEqual([{ type: 'text', text: 'child complete' }])
     expect(adapter.requests).toHaveLength(1)
@@ -100,8 +102,8 @@ describe('advanced Python snapshot workflow ordering', () => {
     expect(h.next).not.toHaveBeenCalled()
     expect(getEventListeners(h.controller.signal, 'abort')).toHaveLength(1)
     h.start(h.other)
-    h.start(h.parent, SessionId('other-child'))
-    h.parent.append('tool-workflow/run-start', { runId: WorkflowRunId('run'), name: 'workflow' })
+    h.start(h.parent, brandString<SessionId>('other-child'))
+    h.parent.append('tool-workflow/run-start', { runId: brandString<WorkflowRunId>('run'), name: 'workflow' })
     await Promise.resolve()
     expect(h.next).not.toHaveBeenCalled()
     h.start()
@@ -115,7 +117,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     const pending = h.step()
     h.parent.append('turn/start', { turn: 1 })
     h.parent.append('step/start', { turn: 1, step: 1 })
-    const callId = ToolCallId('direct-child')
+    const callId = brandString<ToolCallId>('direct-child')
     h.parent.append('tool/call', { turn: 1, step: 1, callId, name: 'subagent', arguments: '{}' })
     const result = h.parent.append('tool/result', {
       turn: 1, step: 1,
@@ -145,7 +147,7 @@ describe('advanced Python snapshot workflow ordering', () => {
       : difference === 'turn' ? { turn: 2 }
         : difference === 'step' ? { step: 2 } : {}
     if (difference === 'parent') {
-      const session = h.ctx.sessions.create(SessionId('unrelated-child'), { meta: { parentSession: h.other.id } })
+      const session = h.ctx.sessions.create(brandString<SessionId>('unrelated-child'), { meta: { parentSession: h.other.id } })
       Object.assign(h.agent, { session })
     }
     expect(await h.step(overrides)).toBe(h.decision)

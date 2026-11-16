@@ -3,10 +3,11 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as timeContext from '@deepseek-ai/dsh-time-context'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 describe('time-context activation', () => {
   it.each(['ready', 'cancelled', 'disposed', 'failed'] as const)('handles a %s registration before the first request', async (outcome) => {
@@ -21,7 +22,7 @@ describe('time-context activation', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     const adapter = new MockAdapter([textResponse('ready')])
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await ctx.agentLoop.create(SessionId('initial-time'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('initial-time'), { provider: 'mock', model: 'mock' })
     const register = ctx.sessionProjections.register.bind(ctx.sessionProjections)
     const spy = vi.spyOn(ctx.sessionProjections, 'register').mockImplementation(async (definition) => {
       const handle = await register(definition)

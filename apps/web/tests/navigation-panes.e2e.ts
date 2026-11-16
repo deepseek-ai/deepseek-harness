@@ -13,11 +13,12 @@ import type { Browser, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
-import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type SessionToolResults from '@deepseek-ai/dsh-client-ui-trajectory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -500,7 +501,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
     expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
 
-    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(SessionId(SEED_ID)))?.location?.path
+    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID)))?.location?.path
     if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
     expect((await stat(sourcePath)).isFile()).toBe(true)
     expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
@@ -564,7 +565,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // The card's own controls are outside the summary row and must not expand
     // the right column either — the expanded terminal card is read in place.
-    await page.locator('[data-sample="bash"] ~ div [data-terminal] [class*="_copyButton_"]').first().click()
+    await page.locator('[data-sample="bash"] ~ div [data-terminal]').first().getByRole('button', { name: 'Copy', exact: true }).click()
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // Opening a file into the empty column creates only its preview tab.
     const fileLink = page.locator('[data-variant="read"] button').first()
@@ -597,9 +598,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // squeeze the output pane below its content width and the line must keep
     // its single row and overflow sideways instead of folding. Soft-wrapping
     // here shreds the column alignment this card exists to hold.
-    const layout = await card.locator('[class*="_output_"]').first().evaluate((node) => {
+    const layout = await card.locator('[data-terminal-output]').evaluate((node) => {
       const pane = node as HTMLElement
-      const row = pane.querySelector<HTMLElement>('[class*="_line_"]')
+      const row = pane.querySelector<HTMLElement>(':scope > div')
       if (row === null) throw new Error('output pane has no line')
       const before = row.offsetHeight
       const restore = pane.style.width
@@ -613,7 +614,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // jsdom cannot report: --dsw-* tokens resolve only against the real theme
     // stylesheet. This command settled cleanly, so the dot must be the green
     // success token — a red one here would read as a failed command.
-    const dot = await card.locator('[class*="_runState_"][data-state]').first().evaluate((node) => {
+    const dot = await card.locator('[data-terminal-banner] [data-state]').evaluate((node) => {
+      const banner = node.closest('[data-terminal-banner]')
+      const prompt = banner?.querySelector('[data-terminal-prompt]') ?? null
+      if (banner === null || prompt === null) throw new Error('terminal status dot has no prompt banner')
       // The token lives on body, so the probe must sit in the same cascade.
       const probe = document.createElement('span')
       probe.style.color = 'var(--dsw-alias-state-success-primary)'
@@ -626,10 +630,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         success,
         // One label per card (the state is the call's), so it hangs off the
         // prompt column rather than the row the dot sits in.
-        label: node.closest('[class*="_prompt_"]')?.querySelector('[class*="_runStateLabel_"]')?.textContent ?? null,
+        label: banner.querySelector('[data-terminal-state-label]')?.textContent ?? null,
         // The dot precedes the prompt label in document order, which is what
         // puts it to the left of the `$`.
-        beforePrompt: node.compareDocumentPosition(node.parentElement!.querySelector('[class*="_cwd_"]')!)
+        beforePrompt: node.compareDocumentPosition(prompt)
           === Node.DOCUMENT_POSITION_FOLLOWING,
         // The dot lives in the card's OWN left padding, so it sits inside the
         // card box yet left of the prompt text. Owning the reservation as padding
@@ -639,9 +643,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         insideCard: (node as HTMLElement).getBoundingClientRect().left
           >= (node.closest('[data-terminal]')?.getBoundingClientRect().left ?? Infinity),
         leftOfPrompt: (node as HTMLElement).getBoundingClientRect().right
-          <= (node.closest('[class*="_promptLine_"]')
-            ?.querySelector('[class*="_cwd_"]')
-            ?.getBoundingClientRect().left ?? -Infinity),
+          <= prompt.getBoundingClientRect().left,
       }
     })
     expect(dot.state).toBe('done')
@@ -660,9 +662,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // Copy writes the raw output through the browser's own clipboard, which in
     // a real page is the async Clipboard API rather than the jsdom fallback.
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-    await card.locator('[class*="_copyButton_"]').first().click()
-    await expect.poll(() => card.locator('[class*="_copyButton_"]').first().textContent(), { timeout: 5_000 })
-      .toBe('Copied')
+    await card.getByRole('button', { name: 'Copy', exact: true }).click()
+    await expect.poll(() => card.getByRole('button', { name: 'Copied', exact: true }).count(), { timeout: 5_000 })
+      .toBe(1)
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('NAVIGATION_OK')
   }, 60_000)
 
@@ -678,15 +680,15 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   })
   it.skipIf(MODE === 'record')('inspects a live tool value without adding it to the Session journal', async () => {
     await ensureSeedOpen(page)
-    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
     const unregister = scaffold.ctx.tools.register(defineTool({
       name: 'live_result_probe', description: 'Live result inspection fixture.', parameters: {},
       output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'LIVE_RESULT_RENDERED' }] },
       execute: async () => ({ answer: 42 }),
     }))
     onTestFinished(unregister)
-    const callId = ToolCallId('live-result-probe')
+    const callId = brandString<ToolCallId>('live-result-probe')
     let resultEvent: SessionEvent | undefined
     const off = scaffold.ctx.on('session/event', (_session, event) => {
       if (event.type === 'tool/result' && event.data.message.toolCallId === callId) resultEvent = event
@@ -728,7 +730,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     onTestFinished(unregisterJson)
     const jsonBatch = await scaffold.ctx.tools.execute({
       agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
-      calls: [{ type: 'tool-call', id: ToolCallId('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
+      calls: [{ type: 'tool-call', id: brandString<ToolCallId>('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
     })
     expect(jsonBatch.results[0]?.result.isError).toBe(false)
     await page.locator('tr[data-kind="tool"]').filter({ hasText: 'json_result_probe' }).click()
@@ -767,7 +769,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     const newer = await scaffold.ctx.tools.execute({
       agent, signal: new AbortController().signal,
       calls: Array.from({ length: 1000 }, (_, index) => ({
-        type: 'tool-call' as const, id: ToolCallId(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
+        type: 'tool-call' as const, id: brandString<ToolCallId>(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
       })),
     })
     expect(newer.results).toHaveLength(1000)
@@ -785,15 +787,15 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   it.skipIf(MODE === 'record')('keeps long raw strings and PTC output readable in one result scroller', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-long-tool-results'))
     await ensureSeedOpen(page)
-    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
     agent.session.append('turn/start', { turn: 3 })
     onTestFinished(() => {
       agent.session.append('step/end', { turn: 3, step: 1 })
       agent.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
     })
     agent.session.append('step/start', { turn: 3, step: 1 })
-    const callId = ToolCallId('long-ptc-result')
+    const callId = brandString<ToolCallId>('long-ptc-result')
     const call = agent.session.append('tool/call', {
       turn: 3, step: 1, callId, name: 'run_code',
       arguments: JSON.stringify({ code: 'inspect("PTC output")', description: 'Long program output' }),
@@ -831,7 +833,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       onTestFinished(unregister)
       const batch = await scaffold.ctx.tools.execute({
         agent, signal: new AbortController().signal, log: { turn: 3, step: 1 },
-        calls: [{ type: 'tool-call', id: ToolCallId(probe.name), name: probe.name, arguments: '{}' }],
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>(probe.name), name: probe.name, arguments: '{}' }],
       })
       expect(batch.results[0]?.result.isError).toBe(false)
     }

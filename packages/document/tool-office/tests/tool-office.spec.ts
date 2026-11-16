@@ -15,7 +15,8 @@ import { crc32, deflateSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import { LlmAdapter, LlmRuntime, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, LlmRuntime, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
@@ -23,7 +24,7 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import OfficeKit, { OfficeKitError, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import * as ToolOffice from '../src/index.ts'
 import { renderImagesContent } from '../src/content.ts'
@@ -163,7 +164,7 @@ async function setup(options: SetupOptions = {}) {
 
 let sessions = 0
 function agentOn(model: string | undefined, options: { provider?: string; model?: string } = {}) {
-  const id = SessionId(`office-session-${++sessions}`)
+  const id = brandString<SessionId>(`office-session-${++sessions}`)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd: dir, isSeeded: false })
   vi.spyOn(session, 'requestHeader').mockReturnValue(model === undefined ? undefined : { config: { provider: 'visual', model } })
   return { options, session }
@@ -177,7 +178,7 @@ async function loadOffice(ctx: Context, agent: object): Promise<void> {
     execute: async () => 'Office instructions',
   }))
   try {
-    await executeToolFixture(ctx, { signal, name: 'skill', callId: ToolCallId(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
+    await executeToolFixture(ctx, { signal, name: 'skill', callId: brandString<ToolCallId>(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
   } finally { dispose() }
 }
 
@@ -188,7 +189,7 @@ async function office(ctx: Context, args: Record<string, unknown>, agent: object
     modelSelection: { provider: 'visual', model: 'vision' }, signal: callSignal })
   try {
     return await executeToolFixture(ctx, {
-      signal: callSignal, callId: ToolCallId(`office-${++calls}`), name: `office_${String(operation)}`, arguments: parameters,
+      signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `office_${String(operation)}`, arguments: parameters,
       ...agent === null ? {} : { agent: agent as never }, ...toolSet === undefined ? {} : { toolSet },
     })
   } finally { toolSet?.dispose() }
@@ -197,6 +198,17 @@ async function office(ctx: Context, args: Record<string, unknown>, agent: object
 function text(result: { content: readonly { type: string; text?: string }[] }): string {
   return result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
 }
+
+/** Structured `name` and `code` the registry records for a failed call; undefined for a success or an unclassified failure. */
+function errorInfo(result: Awaited<ReturnType<typeof office>>): { name: string; code: string } | undefined {
+  if (!result.isError || result.error.info === undefined) return undefined
+  const { name, code } = result.error.info
+  return { name, code }
+}
+
+const contextUnavailable = { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
+const invalidArgs = { name: 'ToolArgsError', code: 'INVALID_ARGS' }
+const officeToolError = (code: string) => ({ name: 'OfficeToolError', code })
 
 describe('office schema', () => {
   it('declares the model-facing description and parameters', async () => {
@@ -234,8 +246,9 @@ describe('office schema', () => {
   ])('refuses a direct %s body call without an Agent', async (name, args) => {
     const { ctx, kit } = await setup()
     const definition = ctx.tools.get(name)!
-    const call = { signal, callId: ToolCallId(`agentless-${name}`), name, arguments: args, deferContext: vi.fn(), concludeTurn: vi.fn() }
-    await expect(definition.execute(args as never, call as never)).rejects.toThrow('Office tools run only in an Agent step')
+    const call = { signal, callId: brandString<ToolCallId>(`agentless-${name}`), name, arguments: args, deferContext: vi.fn(), concludeTurn: vi.fn() }
+    await expect(definition.execute(args as never, call as never)).rejects
+      .toMatchObject({ message: expect.stringContaining('Office tools run only in an Agent step') as string, ...contextUnavailable })
     expect(kit.renderImages).not.toHaveBeenCalled()
     expect(kit.convertTo).not.toHaveBeenCalled()
     expect(kit.recalculate).not.toHaveBeenCalled()
@@ -294,26 +307,30 @@ describe('render', () => {
       + 'Fonts not installed and substituted: Aptos.\nSheet "Data" A1:B2: 1x1 px\nSheet "Data": 1x1 px')
   })
 
+  const noImages = officeToolError('MODEL_DOES_NOT_SUPPORT_IMAGES')
+
   it.each([
-    ['a text-only model', { model: 'text' }, 'model "text" does not accept images'],
-    ['a model without declared input modalities', { model: 'legacy' }, 'model "legacy" does not accept images'],
-    ['an unresolved route', { model: undefined }, 'the current model route could not be resolved'],
-    ['no attachment service', { attachments: false }, 'no attachment service is mounted'],
-    ['no model runtime', { llm: false }, 'the current model route could not be resolved'],
-  ])('refuses %s before rendering', async (_label, options, message) => {
+    ['a text-only model', { model: 'text' }, 'model "text" does not accept images', noImages],
+    ['a model without declared input modalities', { model: 'legacy' }, 'model "legacy" does not accept images', noImages],
+    ['an unresolved route', { model: undefined }, 'the current model route could not be resolved', contextUnavailable],
+    ['no attachment service', { attachments: false }, 'no attachment service is mounted', contextUnavailable],
+    ['no model runtime', { llm: false }, 'the current model route could not be resolved', contextUnavailable],
+  ])('refuses %s before rendering', async (_label, options, message, info) => {
     const { model, ...setupOptions } = { model: 'vision' as string | undefined, ...options }
     const { ctx, kit } = await setup(setupOptions)
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(model))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
+    expect(errorInfo(result)).toEqual(info)
     expect(kit.renderImages).not.toHaveBeenCalled()
   })
 
   it('falls back to the agent route when the Session has no request header', async () => {
     const { ctx, kit } = await setup()
     expect((await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, { provider: 'visual', model: 'vision' }))).isError).toBe(false)
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, { provider: 'visual', model: 'text' }))))
-      .toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": model "text" does not accept images`)
+    const refused = await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, { provider: 'visual', model: 'text' }))
+    expect(text(refused)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": model "text" does not accept images`)
+    expect(errorInfo(refused)).toEqual(noImages)
     expect(kit.renderImages).toHaveBeenCalledOnce()
   })
 
@@ -324,6 +341,7 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, route))
     expect(text(result)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": the current model route could not be resolved`)
+    expect(errorInfo(result)).toEqual(contextUnavailable)
     expect(kit.renderImages).not.toHaveBeenCalled()
   })
 
@@ -332,16 +350,22 @@ describe('render', () => {
     const limit = ctx.get('attachments')!.imageLimits.maxImageBytes
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: new Uint8Array(limit + 1), width: 1, height: 1, page: 1 }],
       pageCount: 1, dpi: 144, missingFonts: [] })
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain(`exceeds the ${limit}-byte image limit`)
+    const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(result)).toContain(`exceeds the ${limit}-byte image limit`)
+    expect(errorInfo(result)).toEqual(officeToolError('OFFICE_OUTPUT_TOO_LARGE'))
   })
 
   it('reports attachment refusals and passes other storage failures through', async () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: Buffer.from('not a png'), width: 1, height: 1, page: 1 }],
       pageCount: 1, dpi: 144, missingFonts: [] })
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain(`cannot render "${join(dir, 'deck.pptx')}": `)
+    const refused = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(refused)).toContain(`cannot render "${join(dir, 'deck.pptx')}": `)
+    expect(errorInfo(refused)).toEqual({ name: 'AttachmentError', code: 'INVALID_IMAGE' })
     vi.spyOn(ctx.get('attachments')!, 'saveImages').mockRejectedValueOnce(new Error('disk failure'))
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain('disk failure')
+    const failed = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(failed)).toContain('disk failure')
+    expect(errorInfo(failed)).toBeUndefined()
   })
 
   it('projects written files and their presentation metadata', async () => {
@@ -424,7 +448,14 @@ describe('Office service failures', () => {
       const result = await office(ctx, args)
       expect(result.isError).toBe(true)
       expect(text(result)).toBe(`Error: cannot ${verb} "${args.input}": The document converter is unavailable.${unavailableHint}`)
+      expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNAVAILABLE'))
     }
+    const definition = ctx.tools.get('office_render')!
+    const call = { signal, callId: brandString<ToolCallId>('missing-service'), name: 'office_render', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
+    await expect(definition.execute({ input: 'deck.pptx' }, call as never)).rejects.toMatchObject({
+      ...officeToolError('OFFICE_UNAVAILABLE'),
+      cause: expect.objectContaining({ name: 'OfficeKitError', code: 'unavailable', message: 'The document converter is unavailable.' }) as Error,
+    })
     expect(kit.renderImages).not.toHaveBeenCalled()
     const missing = await office(ctx, { operation: 'convert', input: 'missing.pptx', format: 'pdf' })
     expect(text(missing)).toBe(`Error: cannot convert "missing.pptx": The document converter is unavailable.${unavailableHint}`)
@@ -436,26 +467,49 @@ describe('Office service failures', () => {
 
   const officeError = (code: OfficeKitErrorCode, message: string) => new OfficeKitError(code, message)
 
-  it.each<[OfficeKitErrorCode, string, string]>([
-    ['unavailable', 'LibreOffice Kit is not installed.', `deck.pptx": LibreOffice Kit is not installed.${unavailableHint}`],
-    ['busy', 'The document converter has reached its admission limit.', 'Retry after other document operations finish.'],
-    ['output-too-large', 'Selected page count exceeds maxPages.', 'Select fewer pages, a smaller range, or a lower dpi.'],
-    ['invalid-request', 'Selected page lies outside the 3-page document.', 'deck.pptx": Selected page lies outside the 3-page document.'],
-  ])('reports a %s render failure', async (code, message, expected) => {
+  it.each<[OfficeKitErrorCode, string, string, string]>([
+    ['unavailable', 'LibreOffice Kit is not installed.', `deck.pptx": LibreOffice Kit is not installed.${unavailableHint}`, 'OFFICE_UNAVAILABLE'],
+    ['busy', 'The document converter has reached its admission limit.', 'Retry after other document operations finish.', 'OFFICE_BUSY'],
+    ['output-too-large', 'Selected page count exceeds maxPages.', 'Select fewer pages, a smaller range, or a lower dpi.', 'OFFICE_OUTPUT_TOO_LARGE'],
+    ['invalid-request', 'Selected page lies outside the 3-page document.', 'deck.pptx": Selected page lies outside the 3-page document.', 'OFFICE_INVALID_REQUEST'],
+  ])('reports a %s render failure', async (code, message, expected, toolCode) => {
     const { ctx, kit } = await setup()
-    kit.renderImages.mockRejectedValueOnce(officeError(code, message))
+    const cause = officeError(code, message)
+    kit.renderImages.mockRejectedValueOnce(cause)
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(expected)
+    expect(errorInfo(result)).toEqual(officeToolError(toolCode))
+  })
+
+  it.each<[OfficeKitErrorCode, string]>([
+    ['unavailable', 'OFFICE_UNAVAILABLE'], ['busy', 'OFFICE_BUSY'], ['input-too-large', 'OFFICE_INPUT_TOO_LARGE'],
+    ['output-too-large', 'OFFICE_OUTPUT_TOO_LARGE'], ['invalid-document', 'OFFICE_INVALID_DOCUMENT'],
+    ['unsupported-format', 'OFFICE_UNSUPPORTED_FORMAT'], ['invalid-request', 'OFFICE_INVALID_REQUEST'],
+    ['invalid-output', 'OFFICE_INVALID_OUTPUT'], ['timeout', 'OFFICE_TIMEOUT'], ['source-changed', 'OFFICE_SOURCE_CHANGED'],
+    ['failed', 'OFFICE_CONVERSION_FAILED'],
+  ])('classifies a %s conversion failure as %s and keeps the Office service error as its cause', async (code, toolCode) => {
+    const { ctx, kit } = await setup()
+    const cause = officeError(code, 'Conversion stopped.')
+    kit.convertTo.mockRejectedValueOnce(cause)
+    const definition = ctx.tools.get('office_convert')!
+    const result = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
+    expect(errorInfo(result)).toEqual(officeToolError(toolCode))
+    kit.convertTo.mockRejectedValueOnce(cause)
+    const call = { signal, callId: brandString<ToolCallId>(`cause-${code}`), name: 'office_convert', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
+    await expect(definition.execute({ input: 'deck.pptx', format: 'pdf' }, call as never)).rejects.toMatchObject({ cause })
   })
 
   it('reports conversion failures without a render hint and passes unclassified failures through', async () => {
     const { ctx, kit } = await setup()
     kit.convertTo.mockRejectedValueOnce(officeError('output-too-large', 'The converter output exceeds its byte limit.'))
-    expect(text(await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })))
-      .toBe(`Error: cannot convert "${join(dir, 'deck.pptx')}": The converter output exceeds its byte limit.`)
+    const converted = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
+    expect(text(converted)).toBe(`Error: cannot convert "${join(dir, 'deck.pptx')}": The converter output exceeds its byte limit.`)
+    expect(errorInfo(converted)).toEqual(officeToolError('OFFICE_OUTPUT_TOO_LARGE'))
     kit.recalculate.mockRejectedValueOnce(new TypeError('unexpected'))
-    expect(text(await office(ctx, { operation: 'recalculate', input: 'book.xlsx', format: 'xlsx' }))).toContain('unexpected')
+    const unclassified = await office(ctx, { operation: 'recalculate', input: 'book.xlsx', format: 'xlsx' })
+    expect(text(unclassified)).toContain('unexpected')
+    expect(errorInfo(unclassified)).toBeUndefined()
     kit.renderImages.mockRejectedValueOnce('engine string')
     expect((await office(ctx, { operation: 'render', input: 'deck.pptx' })).isError).toBe(true)
   })
@@ -467,14 +521,15 @@ describe('Office service failures', () => {
       await readSource(request.source)
       throw new Error('unreachable')
     })
-    expect(await office(ctx, { operation: 'render', input: 'deck.pptx' })).toMatchObject({ isError: true })
+    expect(errorInfo(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toEqual(officeToolError('OFFICE_SOURCE_CHANGED'))
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain('Rendered 1 image')
     kit.renderImages.mockImplementationOnce(async (request) => {
       await request.source.read(signal, 1)
       throw new Error('unreachable')
     })
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' })))
-      .toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source exceeds the reserved byte capacity.`)
+    const grown = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(grown)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source exceeds the reserved byte capacity.`)
+    expect(errorInfo(grown)).toEqual(officeToolError('OFFICE_INPUT_TOO_LARGE'))
     kit.renderImages.mockImplementationOnce(async (request) => {
       vi.spyOn(ctx.fs, 'readBytes').mockImplementationOnce(async () => {
         await writeFile(join(dir, 'deck.pptx'), 'pptx bytes, then more')
@@ -483,7 +538,9 @@ describe('Office service failures', () => {
       await readSource(request.source)
       throw new Error('unreachable')
     })
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source changed.`)
+    const changed = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(changed)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source changed.`)
+    expect(errorInfo(changed)).toEqual(officeToolError('OFFICE_SOURCE_CHANGED'))
     kit.renderImages.mockImplementationOnce(async (request) => {
       vi.spyOn(ctx.fs, 'readBytes').mockRejectedValueOnce(new Error('read failure'))
       await readSource(request.source)
@@ -509,8 +566,10 @@ describe('Office service failures', () => {
 })
 
 describe('arguments and paths', () => {
-  /** Refuse `args` with `message` after exactly `resolveCalls` filesystem resolutions. */
-  async function expectRefusal(args: Record<string, unknown>, message: string, resolveCalls: number): Promise<void> {
+  /** Refuse `args` with `message` and `info` after exactly `resolveCalls` filesystem resolutions. */
+  async function expectRefusal(
+    args: Record<string, unknown>, message: string, info: { name: string; code: string }, resolveCalls: number,
+  ): Promise<void> {
     await mkdir(join(dir, 'folder.pptx'))
     const { ctx, kit } = await setup()
     const resolve = vi.spyOn(ctx.fs, 'resolve')
@@ -518,6 +577,7 @@ describe('arguments and paths', () => {
     expect(resolve).toHaveBeenCalledTimes(resolveCalls)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
+    expect(errorInfo(result)).toEqual(info)
     expect(kit.renderImages).not.toHaveBeenCalled()
     expect(kit.convertTo).not.toHaveBeenCalled()
     expect(kit.recalculate).not.toHaveBeenCalled()
@@ -560,14 +620,22 @@ describe('arguments and paths', () => {
     [{ operation: 'convert', input: 'deck.pptx', format: 'xlsx' }, 'deck.pptx" to xlsx: this file converts to pdf, pptx, odp'],
     [{ operation: 'recalculate', input: 'book.xlsx', format: 'pdf' }, 'format'],
   ])('refuses %j before reading the filesystem', async (args, message) => {
-    await expectRefusal(args, message, 0)
+    await expectRefusal(args, message, invalidArgs, 0)
+  })
+
+  it('prefixes argument refusals with the argument error label', async () => {
+    const { ctx } = await setup()
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', output: 'deck.pdf' })))
+      .toBe('Error: invalid arguments: office_render does not accept output')
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', dpi: 23 })))
+      .toBe('Error: invalid arguments: dpi must be an integer from 24 to 600')
   })
 
   it.each([
-    [{ operation: 'render', input: 'missing.pptx' }, 'missing.pptx": not found'],
-    [{ operation: 'render', input: 'folder.pptx' }, 'folder.pptx": not a regular file'],
-  ])('refuses %j after resolving the input path', async (args, message) => {
-    await expectRefusal(args, message, 1)
+    [{ operation: 'render', input: 'missing.pptx' }, 'missing.pptx": not found', 'FS_NOT_FOUND'],
+    [{ operation: 'render', input: 'folder.pptx' }, 'folder.pptx": not a regular file', 'FS_NOT_REGULAR_FILE'],
+  ])('refuses %j after resolving the input path', async (args, message, code) => {
+    await expectRefusal(args, message, { name: 'FsError', code }, 1)
   })
 
   it('returns the temporary file and the copy instruction for conversions and recalculations', async () => {
@@ -606,6 +674,7 @@ describe('arguments and paths', () => {
     const result = await office(ctx, { operation: 'convert', input: 'locked.docx', format: 'pdf' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('permission denied')
+    expect(errorInfo(result)).toEqual({ name: 'FsError', code: 'FS_PERMISSION_DENIED' })
     expect(kit.convertTo).not.toHaveBeenCalled()
   })
 
@@ -617,8 +686,9 @@ describe('arguments and paths', () => {
       await writeFile(join(dir, 'deck.pptx'), 'replaced pptx bytes')
       return bytes
     })
-    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' })))
-      .toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source changed.`)
+    const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    expect(text(result)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source changed.`)
+    expect(errorInfo(result)).toEqual(officeToolError('OFFICE_SOURCE_CHANGED'))
     expect(kit.renderImages).not.toHaveBeenCalled()
   })
 
@@ -640,8 +710,9 @@ describe('arguments and paths', () => {
   it('refuses conversions when the execution world cannot read Host files', async () => {
     const { ctx, kit } = await setup()
     vi.spyOn(ctx.fs, 'processPathFromHostPath').mockReturnValue(undefined)
-    expect(text(await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })))
-      .toContain('converted files are not available when the workspace is on a remote host')
+    const result = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
+    expect(text(result)).toContain('converted files are not available when the workspace is on a remote host')
+    expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNSUPPORTED_REMOTE_WORKSPACE'))
     expect(kit.convertTo).not.toHaveBeenCalled()
     expect((await office(ctx, { operation: 'render', input: 'deck.pptx' })).isError).toBe(false)
   })
@@ -660,7 +731,7 @@ describe('PTC dispatch', () => {
     const toolSet = await ctx.tools.resolve({ agent: agent as never, modelSelection: { provider: 'visual', model: 'vision' }, signal })
     onTestFinished(() => { toolSet.dispose() })
     const run = (args: Record<string, unknown>) => executeModelToolFixture(ctx, {
-      signal, callId: ToolCallId(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
+      signal, callId: brandString<ToolCallId>(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
       toolSet,
     })
     const result = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
@@ -724,5 +795,6 @@ describe('output lifetime', () => {
     const converted = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
     expect(converted.isError).toBe(true)
     expect(text(converted)).toContain('subagent tree is unavailable')
+    expect(errorInfo(converted)).toEqual({ name: 'SubagentError', code: 'UNSUPPORTED_CAPABILITY' })
   })
 })

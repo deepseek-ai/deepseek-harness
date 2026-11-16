@@ -7,7 +7,7 @@ import './fonts-dom.client.ts'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { CHANGES_KIND, changesAddress, type ChangesParams, type ChangesSource } from '../src/client/changes-address.ts'
@@ -18,20 +18,30 @@ import { ViewedFiles } from '../src/client/viewed-files.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../src/client/ChangesTab.tsx'
 import { en, zh } from '../src/client/locales.ts'
-import type { PanelSnapshot } from '../src/client/source.ts'
+import type { HostStream, PanelSnapshot, StreamSnapshot } from '../src/client/source.ts'
+import type { ForgeLensDescription } from '../src/client/changes-service.ts'
+import type { ViewAnnotations } from '../src/client/annotations.ts'
+import type { ForgeChangesToolbarProps } from '../src/client/slots.ts'
+import { lensVersion } from '../src/lens-version.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
+import treeCss from '../src/client/ChangedFiles.module.css'
+import threadCss from '../src/client/ReviewThreads.module.css'
 import type {
-  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeLensId, ForgeLocalDiff,
+  ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import type {
   ChangeRequestKey, ForgeCommitList, ForgeReviewData, ForgeReviewId, ForgeReviewThread, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { entry, ready, snapshot } from './client-fixtures.client.ts'
+import { entry, hostCopy, ready, snapshot } from './client-fixtures.client.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const english = makeTranslate(en)
+/** Copy of a view of a GitHub pull request, which names the code host and the noun. */
+const t = (key: string, params?: Record<string, unknown>): string => english(key, { forge: 'GitHub', noun: 'PR', ...params })
+const SESSION = brandString<SessionId>('s1')
 const TAB = 'tab-changes' as TabId
 const URL7 = 'https://github.com/octo/demo/pull/7'
 const HEAD = 'a'.repeat(40)
@@ -62,6 +72,21 @@ function hoverPath(section: HTMLElement): string | null {
     return within(document.body).getByRole('tooltip').textContent
   } finally {
     fireEvent.pointerLeave(label)
+    vi.useRealTimers()
+  }
+}
+
+/** Hover an anchor and read the tooltip 1ms before and at the 500ms hover delay, then leave it. */
+function tooltipAfterHover(anchor: Element): { readonly early: string | null; readonly at500: string | null } {
+  vi.useFakeTimers()
+  try {
+    fireEvent.pointerEnter(anchor)
+    act(() => { vi.advanceTimersByTime(499) })
+    const early = within(document.body).queryByRole('tooltip')?.textContent ?? null
+    act(() => { vi.advanceTimersByTime(1) })
+    return { early, at500: within(document.body).queryByRole('tooltip')?.textContent ?? null }
+  } finally {
+    fireEvent.pointerLeave(anchor)
     vi.useRealTimers()
   }
 }
@@ -133,7 +158,9 @@ function ok<T>(value: T): RemoteResult<T> {
 
 /** Threads of #7 at its head, none of them yet, read for `lin`, who may review the change request `octo` opened. */
 function reviewData(overrides: Partial<ForgeReviewData> = {}): ForgeReviewData {
-  return { headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, ...overrides }
+  return {
+    headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, reviewEvents: ['comment', 'approve', 'request-changes'], ...overrides,
+  }
 }
 
 /** The pending review of `octo` on #7. */
@@ -186,12 +213,23 @@ function hookOf<T>(instance: { subscribe: (listener: () => void) => () => void; 
   }
 }
 
+/** A Host stream that yields `frames`, then fails with `failure` when one is given. */
+function hostStream<F>(frames: readonly F[], failure?: unknown): HostStream<F> {
+  return {
+    dispose: vi.fn(),
+    async *[Symbol.asyncIterator]() {
+      for (const frame of frames) yield frame
+      if (failure !== undefined) throw failure
+    },
+  }
+}
+
 /** Let the Remote reads the view awaits settle. */
 async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 }
 
-type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks' | 'viewedFiles'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
+type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks' | 'hooks' | 'viewedFiles'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
   readonly translate?: typeof t
@@ -204,6 +242,19 @@ interface MountOptions {
   readonly setup?: (faces: Faces) => void
   /** Viewed marks; each mount otherwise reads the Session's marks from browser storage. */
   readonly viewedFiles?: ViewedFiles
+  /** The Host's lenses and annotation limit; null stands for facts not reported yet. */
+  readonly extensions?: ForgeExtensionState | null
+  /** Lens titles Client plugins describe. */
+  readonly lenses?: readonly ForgeLensDescription[]
+  /** Plugin annotations of the view by path, or null while the renderer has no source for the view. */
+  readonly annotations?: ViewAnnotations | null
+}
+
+/** One plugin slot the view drew: its name, the owner props, and the dispatch options. */
+interface SlotCall {
+  readonly key: string
+  readonly owner: unknown
+  readonly options: unknown
 }
 
 function mount(options: MountOptions = {}) {
@@ -270,8 +321,27 @@ function mount(options: MountOptions = {}) {
     changeRequestReviewWrite: vi.fn<ChangesTabInjected['changeRequestReviewWrite']>(async () => ok<ForgeReviewWriteResult>({ ok: true })),
     createChangeRequest: vi.fn<ChangesTabInjected['createChangeRequest']>(),
     report: vi.fn<ChangesTabInjected['report']>(),
+    changesLens: vi.fn<ChangesTabInjected['changesLens']>(() => hostStream([])),
   }
   options.setup?.(faces)
+  const extensions = createSnapshotStore<StreamSnapshot<ForgeExtensionState | null>>({
+    state: options.extensions === undefined ? { lenses: [], maxAnnotationsPerFile: 100 } : options.extensions, disconnected: false,
+  })
+  const lenses = createSnapshotStore<readonly ForgeLensDescription[]>(options.lenses ?? [])
+  const annotations = createSnapshotStore<ViewAnnotations | undefined>(
+    options.annotations === null ? undefined : options.annotations ?? new Map())
+  const useAnnotationsOf = bindSnapshotSelector(annotations)
+  function useAnnotations(key: string): ViewAnnotations | undefined
+  function useAnnotations<S>(key: string, select: (value: ViewAnnotations | undefined) => S): S
+  function useAnnotations<S>(_key: string, select?: (value: ViewAnnotations | undefined) => S): S | ViewAnnotations | undefined {
+    return select === undefined ? useAnnotationsOf(value => value) : useAnnotationsOf(select)
+  }
+  const slotCalls: SlotCall[] = []
+  // Records each plugin slot the view draws and draws nothing for it.
+  const renderSlot = ((key: string, owner: unknown, slotOptions?: unknown) => {
+    slotCalls.push({ key, owner, options: slotOptions })
+    return null
+  }) as ChangesTabProps['renderSlot']
   const viewedFiles = options.viewedFiles ?? new ViewedFiles(SESSION)
   const props: ChangesTabProps = {
     useTabInfo: () => ({
@@ -286,6 +356,10 @@ function mount(options: MountOptions = {}) {
     useStore: hookOf(store),
     actions: store.actions,
     usePanel,
+    useExtensions: bindSnapshotSelector(extensions),
+    useLenses: bindSnapshotSelector(lenses),
+    useAnnotations,
+    renderSlot,
     ...faces,
     viewedFiles,
     t: options.translate ?? t,
@@ -298,7 +372,10 @@ function mount(options: MountOptions = {}) {
     return element
   }
   const paths = (): (string | null)[] => [...view.container.querySelectorAll('[data-forge-diff-file]')].map(element => element.getAttribute('data-forge-diff-file'))
-  return { view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, viewedFiles, section, paths }
+  return {
+    view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, viewedFiles, section, paths, extensions, lenses,
+    annotations, slotCalls,
+  }
 }
 
 /** Visible texts of the rows a section draws, in order. */
@@ -461,6 +538,40 @@ describe('ChangesTab keyboard file navigation', () => {
     } finally {
       selection.removeAllRanges()
     }
+  })
+})
+
+describe('ChangesTab tooltips', () => {
+  it('names only a renamed tree row in a tooltip after 500ms and crawls a name the row clips', async () => {
+    const m = mount()
+    await settle()
+    const tree = within(m.view.getByRole('navigation'))
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'src/app.ts' }))).toEqual({ early: null, at500: null })
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'lib/a.txt → lib/b.txt' })))
+      .toEqual({ early: null, at500: 'lib/a.txt → lib/b.txt' })
+    const row = tree.getByRole('button', { name: 'src/app.ts' })
+    const name = row.querySelector('[data-forge-tree-name]')
+    if (!(name instanceof HTMLElement)) throw new Error('no tree name')
+    expect(name.textContent).toBe('app.ts')
+    Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
+    Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
+    fireEvent.pointerEnter(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+    fireEvent.pointerLeave(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
+  })
+
+  it('shows toolbar and viewed hints after 500ms of hover and at once on keyboard focus, with no native titles', async () => {
+    const m = mount()
+    await settle()
+    const refresh = m.view.getByRole('button', { name: en['diff.refresh'] })
+    expect(tooltipAfterHover(refresh)).toEqual({ early: null, at500: en['diff.refresh'] })
+    fireEvent.focus(refresh)
+    expect(within(document.body).getByRole('tooltip').textContent).toBe(en['diff.refresh'])
+    fireEvent.blur(refresh)
+    const viewed = within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }).closest('label')!
+    expect(tooltipAfterHover(viewed)).toEqual({ early: null, at500: en['viewed.hint'] })
+    expect(m.view.container.querySelector('[title]')).toBeNull()
   })
 })
 
@@ -652,7 +763,8 @@ describe('ChangesTab local reads', () => {
   })
 
   it('retains expanded context and the file node when an unchanged tab becomes visible again', async () => {
-    const m = mount()
+    // The read ahead for highlighting fails, so the lines after the last hunk stay of unknown length.
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
     await settle()
     const section = m.section('src/app.ts')
     fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
@@ -1006,8 +1118,10 @@ describe('ChangesTab layout', () => {
 
 describe('ChangesTab unchanged lines', () => {
   it('expands collapsed lines from the new side of the scope, reading each file once', async () => {
-    const m = mount()
+    // The read ahead for highlighting fails quietly, so the first expansion reads the file.
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
     await settle()
+    expect(m.faces.report).not.toHaveBeenCalled()
     const app = m.section('src/app.ts')
     const gaps = (): string[] => [...app.querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent ?? '')
     expect(gaps()).toEqual(['2 unchanged lines', '4 unchanged lines', en['diff.unchangedRest']])
@@ -1023,14 +1137,136 @@ describe('ChangesTab unchanged lines', () => {
     fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
     await settle()
     expect(gaps()).toEqual([])
-    expect(m.faces.localText).toHaveBeenCalledOnce()
+    expect(m.faces.localText).toHaveBeenCalledTimes(2)
     expect(rowTexts(app).slice(-2)).toEqual(['const t13 = 13', 'const t13 = 13'])
+  })
+
+  it('shows a gap over one step a step at a time from the hunk on either side, and a gap of one step at once', async () => {
+    const lines = Array.from({ length: 100 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 49, oldLines: 3, newStart: 49, newLines: 3, lines: [' line 49', '-old 50', '+line 50', ' line 51'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        faces.localText.mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    const leading = within(section).getByRole('group', { name: '48 unchanged lines' })
+    expect(within(leading).queryByRole('button', { name: 'Expand 20 lines down' })).toBeNull()
+
+    fireEvent.click(within(leading).getByRole('button', { name: 'Expand 20 lines up' }))
+    await settle()
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 29', 'line 29'])
+    const trailing = within(section).getByRole('group', { name: '49 unchanged lines' })
+    expect(within(trailing).queryByRole('button', { name: 'Expand 20 lines up' })).toBeNull()
+
+    fireEvent.click(within(trailing).getByRole('button', { name: 'Expand 20 lines down' }))
+    expect(rowTexts(section).slice(-2)).toEqual(['line 71', 'line 71'])
+    expect(within(section).getByRole('group', { name: '29 unchanged lines' })).toBeTruthy()
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Expand 20 lines up' }))
+    fireEvent.click(within(section).getByRole('button', { name: '8 unchanged lines' }))
+    expect(rowTexts(section).slice(0, 2)).toEqual(['line 1', 'line 1'])
+    expect([...section.querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent)).toEqual(['29 unchanged lines'])
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('shows the first step of the unknown lines after the last hunk once they are read', async () => {
+    const lines = Array.from({ length: 60 }, (_, at) => `line ${String(at + 1)}`)
+    const long = file('src/long.ts', {
+      additions: 1, deletions: 1,
+      hunks: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 2, lines: [' line 1', '-old 2', '+line 2'] }],
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [long], omitted: 0 }))
+        // The read ahead for highlighting fails, so the lines after the hunk stay of unknown length.
+        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValue(ok(`${lines.join('\n')}\n`))
+      },
+    })
+    await settle()
+    const section = m.section('src/long.ts')
+    fireEvent.click(within(section).getByRole('button', { name: en['diff.unchangedRest'] }))
+    await settle()
+    expect(rowTexts(section).slice(-2)).toEqual(['line 22', 'line 22'])
+    expect(within(section).getByRole('group', { name: '38 unchanged lines' })).toBeTruthy()
+  })
+
+  it('reads a local file ahead once per comparison, quietly, to highlight rows with the lines before them', async () => {
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone) } })
+    await settle()
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch', base: null, commits: null }, 'src/app.ts')
+    expect(m.faces.report).not.toHaveBeenCalled()
+    const app = m.section('src/app.ts')
+    fireEvent.click(within(app).getByRole('button', { name: 'Collapse app.ts' }))
+    fireEvent.click(within(app).getByRole('button', { name: 'Expand app.ts' }))
+    await settle()
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('counts the lines after the last hunk once the read ahead answers', async () => {
+    const m = mount()
+    await settle()
+    const gaps = [...m.section('src/app.ts').querySelectorAll('[data-forge-diff-gap]')].map(gap => gap.textContent)
+    expect(gaps).toEqual(['2 unchanged lines', '4 unchanged lines', '2 unchanged lines'])
+    expect(m.faces.localText).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the lines an expansion read when the read ahead of the same file answers later', async () => {
+    const ahead = deferred<RemoteResult<string>>()
+    const m = mount({ setup: (faces) => { faces.localText.mockReturnValueOnce(ahead.promise) } })
+    await settle()
+    const app = m.section('src/app.ts')
+    fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    expect(rowTexts(app).slice(0, 2)).toEqual(['const a1 = 1', 'const a1 = 1'])
+    ahead.settle(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(app).slice(0, 2)).toEqual(['const a1 = 1', 'const a1 = 1'])
+    expect(m.faces.localText).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads no file of a change request ahead of an expansion', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    expect(m.section('src/app.ts')).toBeTruthy()
+    expect(m.faces.changeRequestText).not.toHaveBeenCalled()
+  })
+
+  it('never draws the text of the last change when a refresh brings the same lines with other content', async () => {
+    // The same lines as APP, but line 11 of the new side reads differently, so the file is another change.
+    const changed: ForgeDiffFile = { ...APP, digest: 'changed', hunks: [APP.hunks[0]!, { ...APP.hunks[1]!, lines: [' const a10 = 110', '-const w = 12'] }] }
+    const m = mount({
+      source: { kind: 'change', url: URL7 },
+      setup: (faces) => {
+        faces.changeRequestDiff.mockResolvedValueOnce(ok(CHANGE)).mockResolvedValue(ok({ ...CHANGE, files: [changed, NOTES, GONE] }))
+      },
+    })
+    await settle()
+    const app = m.section('src/app.ts')
+    // Expanding a gap reads the file, after which the rows after collapsed lines are highlighted again in idle time.
+    fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) })
+    expect(rowTexts(app)).toContain('const a10 = 11')
+
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(rowTexts(app)).toContain('const a10 = 110')
+    expect(rowTexts(app)).not.toContain('const a10 = 11')
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
   })
 
   it('reports a read that failed or no longer matches and keeps the lines collapsed', async () => {
     const m = mount({
       setup: (faces) => {
-        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(ok('changed\n'))
+        // The read ahead for highlighting fails quietly before the two reads the expansions make.
+        faces.localText.mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(REFUSED.gone).mockResolvedValueOnce(ok('changed\n'))
       },
     })
     await settle()
@@ -1045,19 +1281,21 @@ describe('ChangesTab unchanged lines', () => {
     await settle()
     expect(m.faces.report).toHaveBeenLastCalledWith('toast.expandStale')
     expect(within(app).getByRole('button', { name: '2 unchanged lines' })).toBeTruthy()
-    expect(m.faces.localText).toHaveBeenCalledTimes(2)
+    expect(m.faces.localText).toHaveBeenCalledTimes(3)
   })
 
   it('drops lines read for changes that a newer read replaced', async () => {
     const text = deferred<RemoteResult<string>>()
-    const m = mount({ setup: (faces) => { faces.localText.mockReturnValueOnce(text.promise) } })
+    const m = mount({ setup: (faces) => { faces.localText.mockResolvedValueOnce(REFUSED.gone).mockReturnValueOnce(text.promise) } })
     await settle()
     fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }))
     fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
     await settle()
     text.settle(ok(APP_TEXT))
     await settle()
-    expect(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
+    // The newer comparison reads the file ahead again, which also counts the lines after the last hunk.
+    const [leading] = within(m.section('src/app.ts')).getAllByRole('button', { name: '2 unchanged lines' })
+    expect(leading?.hasAttribute('disabled')).toBe(false)
     expect(m.faces.report).not.toHaveBeenCalled()
   })
 })
@@ -1341,7 +1579,7 @@ describe('line review actions', () => {
     m.publish()
     await settle()
     expect(m.sectionQueries.queryByRole('textbox')).toBeNull()
-    expect(m.faces.report).toHaveBeenCalledWith('review.published')
+    expect(m.faces.report).toHaveBeenCalledWith('review.published', { forge: 'GitHub', noun: 'PR' })
     expect(m.section('src/app.ts').querySelector('[data-forge-review-thread="published"]')).not.toBeNull()
   })
   it.each(['rejected', 'remote-error', 'receipt-storage'] as const)('holds an uncertain %s result for explicit reconciliation', async (kind) => {
@@ -1354,12 +1592,12 @@ describe('line review actions', () => {
     m.publish()
     await settle()
     expect(records.getSnapshot().uncertain).not.toBeNull()
-    fireEvent.click(m.view.getByRole('button', { name: en['review.recheck'] }))
+    fireEvent.click(m.view.getByRole('button', { name: hostCopy('review.recheck') }))
     expect(m.faces.openLink).toHaveBeenCalledWith(URL7)
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review' }))
     const dialog = within(m.view.getByRole('dialog'))
     expect(dialog.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
-    fireEvent.click(dialog.getByRole('button', { name: en['review.recheck'] }))
+    fireEvent.click(dialog.getByRole('button', { name: hostCopy('review.recheck') }))
     fireEvent.click(dialog.getByRole('button', { name: 'Checked; allow resubmission' }))
     expect(records.getSnapshot().uncertain).toBeNull()
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }))
@@ -1427,7 +1665,7 @@ describe('line review actions', () => {
     expect(publish).toBeDefined()
     expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
-    } })).toBe(en['review.stale'])
+    } })).toBe(hostCopy('review.stale'))
     expect(m.faces.submitReview).not.toHaveBeenCalled()
   })
   it('extends a range on one side and adds successive frozen references without submitting a message', async () => {
@@ -1505,7 +1743,7 @@ describe('line review actions', () => {
     fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
     await settle()
     expect(m.faces.changeRequestReviewWrite).toHaveBeenLastCalledWith(URL7, { kind: 'discard-pending', headSha: HEAD, review: 'review-1' })
-    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeStale'])
+    expect(dialog.getByRole('alert').textContent).toBe(hostCopy('thread.writeStale'))
     expect(m.faces.report).not.toHaveBeenCalled()
     fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
     await settle()
@@ -1535,7 +1773,7 @@ describe('line review actions', () => {
     expect(queue).toBeDefined()
     expect(await queue!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
-    } })).toBe(en['review.stale'])
+    } })).toBe(hostCopy('review.stale'))
     expect(m.faces.changeRequestReviewWrite).not.toHaveBeenCalled()
   })
   it('keeps a pending review submission whose outcome is unknown blocked until the reader checks GitHub', async () => {
@@ -1553,7 +1791,7 @@ describe('line review actions', () => {
     await settle()
     const records = m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal })
     expect(records.getSnapshot().uncertain).toEqual({ kind: 'review', headSha: HEAD, event: 'comment', body: 'Looks good', comments: [] })
-    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeUnknown'])
+    expect(dialog.getByRole('alert').textContent).toBe(hostCopy('thread.writeUnknown'))
     expect(dialog.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
     expect(m.faces.submitReview).not.toHaveBeenCalled()
     fireEvent.click(dialog.getByRole('button', { name: 'Checked; allow resubmission' }))
@@ -1585,10 +1823,10 @@ describe('line review actions', () => {
   it.each([
     ['an unsupported write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unsupported', message: 'no writes' }), en['thread.writeUnsupported'], 1],
     ['a refused write', ok<ForgeReviewWriteResult>({ ok: false, code: 'failed', message: 'Locked' }), t('thread.writeFailed', { message: 'Locked' }), 2],
-    ['a stale write', ok<ForgeReviewWriteResult>({ ok: false, code: 'stale', message: 'moved' }), en['thread.writeStale'], 1],
-    ['an unknown write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unknown', message: 'timeout' }), en['thread.writeUnknown'], 2],
+    ['a stale write', ok<ForgeReviewWriteResult>({ ok: false, code: 'stale', message: 'moved' }), hostCopy('thread.writeStale'), 1],
+    ['an unknown write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unknown', message: 'timeout' }), hostCopy('thread.writeUnknown'), 2],
     ['an unbound change request', REFUSED.notBound, t('thread.writeFailed', { message: 'not bound' }), 1],
-    ['a lost connection', REFUSED.failed, en['thread.writeUnknown'], 2],
+    ['a lost connection', REFUSED.failed, hostCopy('thread.writeUnknown'), 2],
   ] as const)('keeps the comment after %s, reading the threads again only when they may have changed', async (_label, answer, message, reads) => {
     const m = await comment({ setup: (faces) => { faces.changeRequestReviewWrite.mockResolvedValueOnce(answer) } })
     fireEvent.click(m.sectionQueries.getByRole('button', { name: 'Start review' }))
@@ -1626,27 +1864,25 @@ describe('line review actions', () => {
     expect(section.getByRole('button', { name: 'Add to review' })).toBeTruthy()
     expect(section.queryByRole('button', { name: 'GitHub comment options' })).toBeNull()
   })
-  it('lets the author of the change request only comment in the review dialog', async () => {
+  it('offers only the decisions the code host allows in the review dialog', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
-      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'OCTO', pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'octo', pendingReview: PENDING_REVIEW, reviewEvents: ['comment'] })))
     } })
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
     const dialog = within(m.view.getByRole('dialog'))
-    expect(dialog.getByText(en['review.ownChangeRequest'])).toBeTruthy()
+    expect(dialog.getByText('GitHub lets you comment on this PR, but not approve it or request changes.')).toBeTruthy()
     expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', true)
+    expect(dialog.getByRole('radio', { name: 'Request changes' })).toHaveProperty('disabled', true)
   })
-  it.each([
-    ['another reviewer', 'reviewer'],
-    ['an unnamed viewer', null],
-  ] as const)('lets %s choose every review decision', async (_label, viewer) => {
+  it('lets the reader choose every review decision the code host allows', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
-      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer, pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'octo', pendingReview: PENDING_REVIEW })))
     } })
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
     const dialog = within(m.view.getByRole('dialog'))
-    expect(dialog.queryByText(en['review.ownChangeRequest'])).toBeNull()
+    expect(dialog.queryByText('GitHub lets you comment on this PR, but not approve it or request changes.')).toBeNull()
     expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', false)
   })
   it('offers no pending review action while the threads are unread, the user may not review, or chosen commits show', async () => {
@@ -1800,6 +2036,21 @@ describe('ChangesTab viewed marks the host keeps', () => {
   const marks = (m: ReturnType<typeof mount>): (string | null)[][] => [...m.view.container.querySelectorAll('[data-forge-diff-file]')]
     .map(element => [element.getAttribute('data-forge-diff-file'), element.getAttribute('data-viewed'), element.hasAttribute('data-expanded') ? 'open' : 'closed'])
   const hosted = (files: Record<string, 'viewed' | 'unviewed' | 'dismissed'>, headSha = HEAD) => ok({ headSha, files, truncated: false })
+  /** The hint a viewed checkbox's label shows after the hover delay: where its mark is kept, or why it is locked. */
+  const hint = (input: HTMLInputElement): string | null => {
+    const label = input.closest('label')!
+    // Another control's tooltip may still show; the hint is the one the hover adds.
+    const before = new Set(within(document.body).queryAllByRole('tooltip'))
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerEnter(label)
+      act(() => { vi.advanceTimersByTime(500) })
+      return within(document.body).queryAllByRole('tooltip').find(tip => !before.has(tip))?.textContent ?? null
+    } finally {
+      fireEvent.pointerLeave(label)
+      vi.useRealTimers()
+    }
+  }
   const box = (m: ReturnType<typeof mount>, path: string, name: string): HTMLInputElement =>
     within(m.section(path)).getByRole('checkbox', { name: `Mark ${name} as viewed` })
 
@@ -1815,13 +2066,13 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.view.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('1 / 3 viewed')
 
     const gone = box(m, 'docs/gone.txt', 'gone.txt')
-    expect(gone.closest('label')?.title).toBe(en['viewed.hintHost'])
+    expect(hint(gone)).toBe(hostCopy('viewed.hintHost'))
     fireEvent.click(gone)
     expect(m.faces.setFileViewed).toHaveBeenCalledWith(URL7, { path: 'docs/gone.txt', viewed: true, headSha: HEAD })
     expect(marks(m)[0]).toEqual(['docs/gone.txt', 'viewed', 'closed'])
     // While its write is in flight the mark stays put, also for V.
     expect(gone.disabled).toBe(true)
-    expect(gone.closest('label')?.title).toBe(en['viewed.saving'])
+    expect(hint(gone)).toBe(hostCopy('viewed.saving'))
     fireEvent.keyDown(m.section('docs/gone.txt'), { key: 'v' })
     expect(m.faces.setFileViewed).toHaveBeenCalledOnce()
     await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
@@ -1832,8 +2083,8 @@ describe('ChangesTab viewed marks the host keeps', () => {
   })
 
   it.each([
-    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { message: 'Resource not accessible' }]],
-    ['stale', REFUSED.staleHead, ['viewed.syncStale']],
+    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'Resource not accessible' }]],
+    ['stale', REFUSED.staleHead, ['viewed.syncStale', { forge: 'GitHub', noun: 'PR' }]],
   ] as const)('returns a %s mark to what the host keeps and says why', async (_label, result, report) => {
     const m = mount({ source, setup: (faces) => {
       faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' }))
@@ -1866,7 +2117,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     const notice = m.view.getByText('Could not read viewed files from GitHub, so files cannot be marked: API rate limit exceeded')
     const app = box(m, 'src/app.ts', 'app.ts')
     expect(app.disabled).toBe(true)
-    expect(app.closest('label')?.title).toBe(en['viewed.unavailable'])
+    expect(hint(app)).toBe(hostCopy('viewed.unavailable'))
     fireEvent.click(app)
     fireEvent.keyDown(m.section('src/app.ts'), { key: 'v' })
     expect(m.faces.setFileViewed).not.toHaveBeenCalled()
@@ -1903,7 +2154,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.faces.changeRequestViewed).not.toHaveBeenCalled()
     fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
     expect(m.faces.setFileViewed).not.toHaveBeenCalled()
-    expect(box(m, 'src/app.ts', 'app.ts').closest('label')?.title).toBe(en['viewed.hint'])
+    expect(hint(box(m, 'src/app.ts', 'app.ts'))).toBe(en['viewed.hint'])
   })
 
   it('keeps a write in flight and its lock across a read at the same head, and the saved choice until the next read', async () => {
@@ -1948,7 +2199,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(marks(m).map(row => row[1])).toEqual(['viewed', 'viewed', 'unviewed'])
     expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(true)
-    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { message: 'late' })
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'late' })
     await act(async () => { next.resolve(ok(undefined)); await Promise.resolve() })
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(false)
   })
@@ -2024,12 +2275,18 @@ describe('ChangesTab viewed files', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     const progress = (): string | null => m.view.getByRole('progressbar').getAttribute('aria-valuetext')
+    // The file tree draws a viewed file subdued.
+    const subdued = (view: ReturnType<typeof mount>): boolean | undefined =>
+      view.view.container.querySelector('nav button[aria-label="src/app.ts"]')?.hasAttribute('data-viewed')
     expect(progress()).toBe('0 / 3 viewed')
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
     expect(progress()).toBe('1 / 3 viewed')
+    expect(subdued(m)).toBe(true)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
     expect(marks(m)[2]).toEqual(['src/app.ts', 'unviewed', 'open'])
+    expect(subdued(m)).toBe(false)
     fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
 
     // A later mount reads the marks; a file whose change moved shows the change and expands again.
@@ -2041,6 +2298,8 @@ describe('ChangesTab viewed files', () => {
     await settle()
     expect(marks(again)[2]).toEqual(['src/app.ts', 'changed', 'open'])
     expect(within(again.section('src/app.ts')).getByText(en['viewed.changed'])).toBeDefined()
+    // A file changed since it was viewed needs reading again, so the tree draws it as unviewed.
+    expect(subdued(again)).toBe(false)
     cleanup()
     const same = mount({ source: { kind: 'change', url: URL7 }, viewedFiles: m.viewedFiles })
     await settle()
@@ -2185,7 +2444,7 @@ describe('ChangesTab review threads', () => {
     line('missing', 'src/missing.ts', 'R', 1),
     line('missing-no-url', 'src/missing.ts', 'R', 2, { comments: [reviewComment({ url: null })] }),
   ]
-  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false, pendingReview: null, viewerCanReview: false }
+  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false, pendingReview: null, viewerCanReview: false, reviewEvents: [] }
   const reviewed = (review: ForgeReviewData = REVIEW) => (faces: Faces): void => {
     faces.changeRequestDiff.mockImplementation(async () => ok({ ...CHANGE, files: FILES }))
     faces.changeRequestReview.mockImplementation(async () => ok(review))
@@ -2241,7 +2500,12 @@ describe('ChangesTab review threads', () => {
     expect(m.section('docs/notes.txt').firstElementChild?.nextElementSibling?.getAttribute('data-forge-thread')).toBe('file-thread')
     expect(m.section('docs/gone.txt').querySelector(`.${css.code}`)?.lastElementChild?.getAttribute('data-forge-thread')).toBe('beyond')
     for (const id of ['binary', 'oversized', 'renamed', 'large']) expect(card(m, id)).not.toBeNull()
-    expect(within(m.view.getByRole('navigation')).getByTitle('4 unresolved threads').textContent).toBe('4')
+    const chip = within(m.view.getByRole('navigation')).getByRole('button', { name: 'src/app.ts' }).querySelector(`.${treeCss.threads}`)!
+    expect([chip.textContent, chip.hasAttribute('title')]).toEqual(['4', false])
+    expect(tooltipAfterHover(chip)).toEqual({ early: null, at500: '4 unresolved threads' })
+    const time = card(m, 'on-row')!.querySelector(`.${threadCss.time}`)!
+    expect(time.hasAttribute('title')).toBe(false)
+    expect(tooltipAfterHover(time)).toEqual({ early: null, at500: '2026-11-05T08:00:00Z' })
     fireEvent.click(within(app).getByRole('button', { name: '4 unchanged lines' }))
     await settle()
     expect(following(m, 'in-gap')).toBe('const a7 = 8')
@@ -2279,7 +2543,7 @@ describe('ChangesTab review threads', () => {
     m.faces.openLink.mockClear()
     fireEvent.click(list.querySelector('[data-forge-thread-item="missing-no-url"]')!)
     expect(m.faces.openLink).not.toHaveBeenCalled()
-    fireEvent.click(within(list).getByRole('button', { name: en['thread.openAll'] }))
+    fireEvent.click(within(list).getByRole('button', { name: hostCopy('thread.openAll') }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     fireEvent.keyDown(list, { key: 'Enter' })
     expect(list.isConnected).toBe(true)
@@ -2372,6 +2636,73 @@ describe('ChangesTab review threads', () => {
     scrolled.mockClear()
     await settle()
     expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
+  })
+
+  it.each(['before', 'after'] as const)('keeps context arriving %s a review refresh of the same diff', async (order) => {
+    const m = mount({ source, setup: reviewed() })
+    await settle()
+    const reviews = m.faces.changeRequestReview.mock.calls.length
+    const marks = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestViewed>>>()
+    const text = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestText>>>()
+    m.faces.changeRequestViewed.mockReturnValueOnce(marks.promise)
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const current = m.panel.getSnapshot()
+    const state = current?.state
+    if (current === undefined || state === undefined || state === null) throw new Error('the panel has no state')
+    const announced = state.changeRequests.map(item => ({ ...item, reviewRevision: 1 }))
+    act(() => { m.panel.set({ ...current, state: { ...state, changeRequests: announced } }) })
+    await settle()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(reviews + 1)
+    expect(m.faces.changeRequestViewed.mock.results.at(-1)?.value).toBe(marks.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    if (order === 'before') {
+      text.resolve(ok(APP_TEXT))
+      await settle()
+      expect(rowTexts(section)).toContain(APP_LINES[0])
+    }
+    marks.resolve(ok(null))
+    await settle()
+    if (order === 'after') text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).toContain(APP_LINES[0])
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
+  })
+
+  it.each(['head', 'patch'] as const)('drops pending context when the change request %s changes', async (changed) => {
+    const m = mount({ source })
+    await settle()
+    const text = Promise.withResolvers<RemoteResult<string>>()
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    const next = changed === 'head' ? { ...CHANGE, headSha: OLD } : {
+      ...CHANGE, files: CHANGE.files.map(file => file.path === APP.path
+        ? { ...file, digest: 'changed-base-patch', hunks: file.hunks.slice(0, 1) } : file),
+    }
+    m.faces.changeRequestDiff.mockResolvedValueOnce(ok(next))
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).not.toContain(APP_LINES[0])
+    expect(within(section).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('clears a filter lens that hides the file of a thread the reader opens from the thread list', async () => {
+    const lens = 'fixture/exports'
+    const m = mount({ source, extensions: { lenses: [{ id: lens, version: '1' }], maxAnnotationsPerFile: 5 }, params: { lens }, setup: (faces) => {
+      reviewed()(faces)
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: { 'docs/notes.txt': {} } }]))
+    } })
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-diff-file="src/app.ts"]')).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: /^Review threads, / }))
+    scrolled.mockClear()
+    fireEvent.click(m.view.getByRole('complementary').querySelector('[data-forge-thread-item="on-row"]')!)
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    await settle()
+    expect(scrolled.mock.contexts).toContain(card(m, 'on-row'))
   })
 
   it('draws a file a thread jump targets before its section comes within reach, and keeps it drawn', async () => {
@@ -2475,5 +2806,145 @@ describe('ChangesTab review threads', () => {
     act(() => { m.visibility.set(true) })
     await settle()
     expect(card(m, 'on-row')).toBeNull()
+  })
+})
+
+describe('ChangesTab extensions', () => {
+  const EXPORTS = 'fixture/exports'
+  const KEPT = { 'src/app.ts': { ranges: { old: [], new: [{ start: 3, end: 3 }] } }, 'src/new.ts': {}, 'docs/gone.txt': { ranges: { old: [], new: [] } } }
+  const describedLenses: readonly ForgeLensDescription[] = [{ id: EXPORTS as ForgeLensId, title: () => 'Exports' }]
+  const UNUSED = { id: 'lint/unused', version: '1' }
+  const hosted: ForgeExtensionState = { lenses: [UNUSED, { id: EXPORTS, version: '1' }], maxAnnotationsPerFile: 5 }
+
+  it('offers the Host lenses by their descriptions and filters the files to those a chosen lens keeps, folding the hunks it is not about', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, setup: (faces) => {
+      faces.changesLens.mockReturnValueOnce(hostStream([{ kind: 'progress', done: 1, total: 6 }, { kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    const trigger = m.view.getByRole('button', { name: 'Filter lens' })
+    act(() => { trigger.click() })
+    expect(within(document.body).getAllByRole('menuitem').map(row => row.textContent)).toEqual(['No lens', 'Exports—', 'lint/unused—'])
+    act(() => { within(document.body).getByRole('menuitem', { name: 'Exports—' }).click() })
+    await settle()
+    expect(m.faces.changesLens.mock.calls[0]?.[0]).toEqual({
+      source: { kind: 'local', scope: { kind: 'branch', base: null, commits: null } }, version: lensVersion(LOCAL.files), lens: EXPORTS,
+    })
+    expect(m.paths()).toEqual(['docs/gone.txt', 'src/app.ts', 'src/new.ts'])
+    const chosen = m.view.getByRole('button', { name: 'Filter lens: Exports' })
+    expect(chosen.textContent).toBe('Exports3')
+    expect(chosen.closest(`.${css.lensSlot}`)).not.toBeNull()
+    expect(m.view.getByRole('radiogroup', { name: 'Review layer' }).textContent).toBe('All3Interface0Implementation3Tests0')
+    const fold = m.section('src/app.ts').querySelector<HTMLElement>('[data-forge-lens-fold]')
+    expect(fold?.textContent).toBe('1 changes unrelated to “Exports” foldedShow')
+    act(() => { fold?.click() })
+    expect(m.section('src/app.ts').querySelector('[data-forge-lens-fold]')).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-old-line="11"]')).not.toBeNull()
+    act(() => { m.section('docs/gone.txt').querySelector<HTMLElement>('[data-forge-lens-fold]')?.click() })
+    expect(m.section('docs/gone.txt').querySelector('[data-old-line="1"]')).not.toBeNull()
+
+    act(() => { chosen.click() })
+    act(() => { within(document.body).getByRole('menuitem', { name: 'No lens' }).click() })
+    expect(m.paths()).toHaveLength(6)
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+  })
+
+  it('chooses the lens a navigation names, and stops filtering with a notice once the Host withdraws it', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens.mockReturnValue(hostStream([{ kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    expect(m.paths()).toEqual(['docs/gone.txt', 'src/app.ts', 'src/new.ts'])
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED] }, disconnected: false }) })
+    expect(m.paths()).toHaveLength(6)
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    expect(m.faces.report).toHaveBeenCalledWith('filterLens.removed', { lens: 'Exports' })
+  })
+
+  it('asks again for a lens registered at another version and for equal files of another scope', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    // The same registrations published again reuse the result.
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [{ ...UNUSED }, { id: EXPORTS, version: '1' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED, { id: EXPORTS, version: '2' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(2)
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Unstaged' }))
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(3)
+    expect(m.faces.changesLens.mock.calls[2]?.[0])
+      .toEqual({ source: { kind: 'local', scope: { kind: 'unstaged' } }, version: lensVersion(LOCAL.files), lens: EXPORTS })
+  })
+
+  it('reports a failed lens with a retry and a clear, and a lens refused for files read again with a refresh', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens
+        .mockReturnValueOnce(hostStream([], new RemoteError('forgePanel/lens-failed', 'the lens failed: parser crashed', {})))
+        .mockReturnValueOnce(hostStream([], new RemoteError('forgePanel/lens-stale', 'read again', {})))
+        .mockReturnValueOnce(hostStream([]))
+    } })
+    await settle()
+    expect(m.view.getByText('The lens “Exports” did not finish: the lens failed: parser crashed')).toBeTruthy()
+    act(() => { m.view.getByRole('button', { name: 'Retry' }).click() })
+    await settle()
+    expect(m.view.getByText('The changes were read again; refresh to filter them by “Exports”')).toBeTruthy()
+    const reads = m.faces.localDiff.mock.calls.length
+    act(() => { m.view.getAllByRole('button', { name: 'Refresh changes' }).at(-1)?.click() })
+    await settle()
+    expect(m.faces.localDiff.mock.calls.length).toBeGreaterThan(reads)
+    expect(m.view.getByText('The lens “Exports” stopped before it finished')).toBeTruthy()
+    act(() => { m.view.getByRole('button', { name: 'Clear lens' }).click() })
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    expect(m.view.queryByRole('button', { name: 'Clear lens' })).toBeNull()
+  })
+
+  it('draws the plugin slots of the toolbar, the More menu, the line annotations, the file menu, and the comment form', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ extensions: hosted, lenses: describedLenses, annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]) })
+    await settle()
+    const target = { sessionId: SESSION, source: { kind: 'local' } }
+    const calls = (name: string): readonly SlotCall[] => m.slotCalls.filter(call => call.key === name)
+    const bar = calls('forge.changes.toolbar')[0]?.owner as ForgeChangesToolbarProps | undefined
+    expect(bar).toMatchObject({ target, form: 'bar' })
+    // The row has no menu to close.
+    expect(() => { bar?.close() }).not.toThrow()
+    expect(calls('forge.diff.line.annotation')[0]).toEqual({ key: 'forge.diff.line.annotation', owner: { target, path: 'src/app.ts', annotation }, options: { entryKey: 'notes' } })
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation="notes/n1"]')).not.toBeNull()
+
+    act(() => { m.view.getByRole('button', { name: 'More view options' }).click() })
+    expect(within(document.body).getAllByRole('menuitem').map(row => row.textContent)).toContain('Exports—')
+    expect(calls('forge.changes.toolbar').at(-1)?.owner).toMatchObject({ target, form: 'menu' })
+    act(() => { within(document.body).getByRole('menuitem', { name: 'Exports—' }).click() })
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBe(EXPORTS)
+
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }).click() })
+    expect(calls('forge.changes.file.menu')).toHaveLength(1)
+    expect(calls('forge.changes.file.menu')[0]?.owner).toMatchObject({ target, file: { path: 'src/app.ts' } })
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'Select line R4' }).click() })
+    act(() => { within(m.section('src/app.ts')).getByRole('button', { name: 'Add comment' }).click() })
+    expect(calls('forge.diff.comment.actions')[0]?.owner).toMatchObject({ target, selection: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4 } })
+  })
+})
+
+describe('ChangesTab extensions before the Host reports them', () => {
+  it('offers no lens and draws no annotations until the Host names its lenses and annotation limit', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ extensions: null, annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]) })
+    await settle()
+    expect(m.view.queryByRole('button', { name: 'Filter lens' })).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).toBeNull()
+    expect(m.section('src/app.ts').querySelector('[data-forge-hidden-annotations]')).toBeNull()
+  })
+
+  it('draws no annotations while the renderer has no source for the view', async () => {
+    const m = mount({ annotations: null })
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+    expect(m.view.container.querySelector('[data-forge-annotation]')).toBeNull()
   })
 })

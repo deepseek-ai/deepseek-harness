@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个新会话选项、一张位于输入框上方的创建卡片、一个 toast，以及[会话列表中的图标与悬浮卡片部分](2026-10-20-forge-session-list.zh.md)。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务、工作树模型工具与面板使用的一个隔离 worktree 服务作为插件页中默认禁用的一个条目发布。
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括[会话面板](2026-11-05-session-panel.zh.md)中的“变更请求”分栏、检出行与本地变更行和提醒标记，以及一个变更视图、一个新会话选项、一张位于输入框上方的创建卡片、一个 toast，以及[会话列表中的图标与悬浮卡片部分](2026-10-20-forge-session-list.zh.md)。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务、工作树模型工具与面板使用的一个隔离 worktree 服务作为插件页中默认禁用的一个条目发布。
 
 评审与工作树控件服务于同一个代码修改流程。统一插件入口让用户可以一次启用这些能力，无需根据底层包的拆分判断应该开启哪张卡片。包与两套工作树服务仍保持独立，分别负责会话开始前和对话中创建工作树的流程。
 

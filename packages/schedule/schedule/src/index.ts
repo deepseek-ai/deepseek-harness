@@ -12,7 +12,8 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
-import { SessionId as toSessionId, type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { ScheduleRuntime, type ScheduleRuntimeLimits } from './runtime.ts'
@@ -20,11 +21,11 @@ import { scheduleDomain, scheduleTaskSchema, type ScheduleTask } from './storage
 import { deliveryHistoryPage } from './delivery-history.ts'
 import { createScheduleRecord, updateScheduleRecord } from './update.ts'
 import {
-  ScheduleInputError, ScheduleId as toScheduleId, MIN_EVERY_INTERVAL_SECONDS,
+  ScheduleInputError, MIN_EVERY_INTERVAL_SECONDS,
 } from './domain.ts'
 import type {
-  ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteInactiveResult, ScheduleDeliveryHistoryRequest,
-  ScheduleDeliveryHistoryResult, ScheduleEditRequest, ScheduleEditResult, ScheduleId, ScheduleListRequest,
+  ScheduleId, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteInactiveResult, ScheduleDeliveryHistoryRequest,
+  ScheduleDeliveryHistoryResult, ScheduleEditRequest, ScheduleEditResult, ScheduleListRequest,
   ScheduleListResult, SchedulePatch, ScheduleRecord, ScheduleRunRequest, ScheduleRunResult, ScheduleSessionCreateSpec,
   ScheduleTarget, ScheduleTargetRequest, ScheduleViewRequest, ScheduleViewResult,
 } from './types.ts'
@@ -430,7 +431,7 @@ export class ScheduleService extends TypertRemoteService {
     actorSessionId?: SessionId,
     signal?: AbortSignal,
   ): Promise<ScheduleCatalogEntry> {
-    const id = toScheduleId(`schedule-${randomUUID()}`)
+    const id = brandString<ScheduleId>(`schedule-${randomUUID()}`)
     const now = Date.now()
     const record = createScheduleRecord(id, request.title, request.prompt, request.timing, now)
     const target = await this.resolveTarget(request.target ?? { kind: 'new_once' }, signal)
@@ -679,7 +680,7 @@ export class ScheduleService extends TypertRemoteService {
       }
       case 'new_once':
         this.requireSessionCreation()
-        return { kind: 'new_once', sessionId: toSessionId(`session-${randomUUID()}`), create: createSpec(request.create) }
+        return { kind: 'new_once', sessionId: brandString<SessionId>(`session-${randomUUID()}`), create: createSpec(request.create) }
       case 'new':
         this.requireSessionCreation()
         return { kind: 'new', create: createSpec(request.create) }

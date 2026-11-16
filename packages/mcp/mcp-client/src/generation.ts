@@ -57,7 +57,7 @@ export class McpGeneration {
   /** Reject when this generation was cancelled or its transport reported closure. */
   assertOpen(): void {
     this.lifetime.signal.throwIfAborted()
-    if (this.closeObserved) throw new McpLocalError('MCP transport closed')
+    if (this.closeObserved) throw new McpLocalError('MCP transport closed', 'MCP_CONNECTION_CLOSED')
   }
 
   /**
@@ -92,7 +92,7 @@ export class McpGeneration {
   }
 
   private async finish(): Promise<McpCloseResult> {
-    this.lifetime.abort(new McpLocalError('MCP connection closed'))
+    this.lifetime.abort(new McpLocalError('MCP connection closed', 'MCP_CONNECTION_CLOSED'))
     let cleanupError: string | undefined
     const work = async (): Promise<void> => {
       try {

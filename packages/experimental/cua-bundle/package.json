@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-bundle",
   "description": "Optional Computer Use for macOS and Windows",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -55,11 +55,10 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "js-yaml": "^4.2.0",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~"
   },
   "optionalDependencies": {
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
+    "@deepseek-ai/dsh-cua-macos": "workspace:*",
     "@deepseek-ai/dsh-cua-windows": "workspace:*"
   }
 }

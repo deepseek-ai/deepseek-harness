@@ -308,14 +308,14 @@ export function probeFreePort(): Promise<number> {
  * @param page - browser page with the mounted sidebar.
  * @param locale - current UI language.
  */
-export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja' | 'de'): Promise<void> {
   const drawer = await page.evaluate(() => window.innerWidth < 768
     && !document.documentElement.hasAttribute('data-windows-titlebar'))
   await page.waitForFunction(expected => Boolean(document.querySelector('[data-sidebar-drawer]')) === expected, drawer)
   const closed = page.locator('[data-sidebar-drawer][data-sidebar-collapsed]')
   if (await closed.count() === 0) return
   await page.locator('[data-shell-leading]').getByRole('button', {
-    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true,
+    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く', de: 'Seitenleiste öffnen' }[locale], exact: true,
   }).click()
   await closed.waitFor({ state: 'detached' })
 }
@@ -419,8 +419,8 @@ export async function saveFailureShot(page: Page, name: string): Promise<void> {
   mkdirSync(dir, { recursive: true })
   try {
     await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
-  } catch {
-    // Best-effort evidence: a dead page/browser at failure time must not mask the real assertion error.
+  } catch (_screenshotFailed) {
+    // Screenshot evidence is optional: a dead page/browser at failure time must not mask the real assertion error.
   }
 }
 
@@ -478,4 +478,104 @@ export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Prom
   }
   await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
+}
+
+/** The Session panel toggle in the Session header. */
+export function sessionPanelToggle(page: Page): Locator {
+  return page.locator('[data-session-panel-toggle]')
+}
+
+/**
+ * Show the Session panel unless it already shows, and wait for its entrance
+ * animation so geometry reads see the final position. A panel over the
+ * conversation closes on presses outside it and a narrower window can hide
+ * it, so each step that reads the panel shows it first. While the layout
+ * settles after a resize the gutter can briefly read wide enough to dock, so
+ * the toggle is pressed again until the panel stays visible.
+ * @param page - the page under test.
+ * @returns the panel.
+ */
+export async function showSessionPanel(page: Page): Promise<Locator> {
+  const toggle = sessionPanelToggle(page)
+  const panel = page.locator('[data-session-panel]')
+  await toggle.waitFor({ timeout: 20_000 })
+  // A plain loop, not expect.poll, so suite setup can call it too.
+  const deadline = Date.now() + 20_000
+  while (true) {
+    if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+    if (await panel.isVisible()) break
+    if (Date.now() >= deadline) throw new Error('the Session panel did not show')
+    await page.waitForTimeout(250)
+  }
+  await panel.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished))
+  })
+  return panel
+}
+
+/**
+ * Close the Session panel shown over the conversation with Escape.
+ * @param page - the page under test.
+ */
+export async function dismissSessionPanel(page: Page): Promise<void> {
+  await page.keyboard.press('Escape')
+  await page.locator('[data-session-panel]').waitFor({ state: 'detached' })
+}
+
+/**
+ * Measure a Session panel fold control against a data row of its list: both
+ * heights, how far the control's chevron sits from the row's state mark and
+ * its text from the row's name, in px, and the control's type size and state.
+ * @param control - the fold control row (`[data-session-panel-row="fold"]`).
+ * @param row - a data row of the same list.
+ * @param name - selector of the row's name element inside `row`.
+ * @returns the measurements.
+ */
+export async function foldControlLayout(control: Locator, row: Locator, name: string): Promise<{
+  heights: [number, number]
+  chevronOffset: number
+  textOffset: number
+  fontSize: string
+  expanded: string | null
+}> {
+  const rowBox = await row.evaluate((element, selector) => {
+    const mark = element.querySelector('[data-state]')!.getBoundingClientRect()
+    return {
+      height: element.getBoundingClientRect().height,
+      markCenter: mark.left + mark.width / 2,
+      nameLeft: element.querySelector(selector)!.getBoundingClientRect().left,
+    }
+  }, name)
+  return control.evaluate((element, data) => {
+    const chevron = element.querySelector('svg')!.getBoundingClientRect()
+    const text = document.createRange()
+    text.selectNodeContents(element.querySelector('[data-row-part="content"]')!)
+    return {
+      heights: [element.getBoundingClientRect().height, data.height] as [number, number],
+      chevronOffset: chevron.left + chevron.width / 2 - data.markCenter,
+      textOffset: text.getBoundingClientRect().left - data.nameLeft,
+      fontSize: getComputedStyle(element).fontSize,
+      expanded: element.querySelector('button')!.getAttribute('aria-expanded'),
+    }
+  }, rowBox)
+}
+
+/**
+ * Hide the Session panel unless it is already hidden.
+ * @param page - the page under test.
+ */
+export async function hideSessionPanel(page: Page): Promise<void> {
+  const toggle = sessionPanelToggle(page)
+  if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+  await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+}
+
+/**
+ * The right Sidebar's fullscreen panel box: 1px wider than the viewport, so the
+ * first column's divider sits past the window's left edge where the frame clips it.
+ * @param viewport - the page viewport size.
+ * @returns the panel's expected bounding box.
+ */
+export function fullscreenBox(viewport: { width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  return { x: -1, y: 0, width: viewport.width + 1, height: viewport.height }
 }

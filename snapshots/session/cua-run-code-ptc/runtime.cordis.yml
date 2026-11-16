@@ -1,0 +1,11 @@
+# Computer Use with the provider's default preset selection under the PTC tool executor, on a profile that composes no presets.
+- insert:
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: cua-run-code-fixture
+      name: '../cua-run-code/provider.mjs'
+      config:
+        allowedApps:
+          - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            name: Fixture
+            executablePath: /fixture/app

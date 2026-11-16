@@ -8,7 +8,8 @@ declare module '@deepseek-ai/dsh-llm' {
     'schedule': { kind: 'schedule' } & ContextFormed
   }
 }
-import { SessionId, type SessionId as SessionIdType } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId as SessionIdType } from '@deepseek-ai/dsh-session/types'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
@@ -466,7 +467,7 @@ export class ScheduleRuntime {
       sessionId = target.sessionId
       agent = await this.reservedAgent(sessionId)
     } else if (task.pendingDelivery === undefined) {
-      sessionId = SessionId(`session-${randomUUID()}`)
+      sessionId = brandString<SessionIdType>(`session-${randomUUID()}`)
       await this.commit({ ...task, pendingDelivery: { targetSessionId: sessionId } })
     } else {
       sessionId = task.pendingDelivery.targetSessionId

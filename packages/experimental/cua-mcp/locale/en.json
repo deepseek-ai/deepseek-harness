@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer use MCP server",
+    "description": "Serve Computer Use to Codex, Claude Code, and other MCP clients from the cua-mcp profile: cua_run_code runs persistent programs against desktop applications, and cua_reset clears them."
+  }
+}

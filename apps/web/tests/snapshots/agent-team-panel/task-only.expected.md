@@ -1,11 +1,8 @@
-- dialog "Subagent sessions":
-  - heading "Subagents" [level=3]
-  - paragraph: No subagents
-  - tree "Subagent sessions"
-  - region "Task board":
-    - heading "Shared tasks 1 pending" [level=3]
-    - list:
-      - listitem:
-        - button "Pending Plan before delegation":
-          - img "Pending"
-          - text: Plan before delegation
+- region "Shared tasks":
+  - heading "Shared tasks" [level=2]
+  - text: 1 pending
+  - list:
+    - listitem:
+      - button "Pending Plan before delegation":
+        - img "Pending"
+        - text: Plan before delegation

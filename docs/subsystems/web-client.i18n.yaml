@@ -9,8 +9,8 @@
   en: c0454bca818f86ee
   zh: 427582150fd3b976
 /web-client-architecture/browser-boot:
-  en: cd68c46a3f365235
-  zh: 9ac2f7c65cabb144
+  en: ad100df8a00bd7bd
+  zh: b160c24ca1d835ab
 /web-client-architecture/remote-communication:
   en: 426b09164210b77a
   zh: ce576099ee668984
@@ -24,14 +24,26 @@
   en: c063711f8247c240
   zh: 5e54758bbaf1670c
 /web-client-architecture/conversation-and-presentation:
-  en: 9a22492f0d4359c6
-  zh: 55d449e383e88f62
+  en: 1283921eb19b9be3
+  zh: bc42b48592d50f3a
 /web-client-architecture/data-paths:
   en: a254278432416473
   zh: 567c2d3c6a20b304
 /web-client-architecture/reconnection:
   en: 478f461e261b1ca5
   zh: 626791d04656faee
+/web-client-architecture/reading-reminders:
+  en: 59427b3b5d8d633c
+  zh: 864e0ea121534aa3
+/web-client-architecture/reading-reminders/sessionreadstate:
+  en: 62e6bfae05af614a
+  zh: cbd33ee7b57ac723
+/web-client-architecture/reading-reminders/sessionreadaction:
+  en: 7ed7e42b233ee2c0
+  zh: fd4e5b67f3358059
+/web-client-architecture/reading-reminders/sessionreadframe:
+  en: 993e0b409439b15c
+  zh: f7785bea2e8f5b00
 /web-client-architecture/package-boundaries:
-  en: 3e64e8c28f0c4cb1
-  zh: 47aa81c2ace5ba89
+  en: 085622c76f4d5b06
+  zh: 12ef92771b4d9a4a

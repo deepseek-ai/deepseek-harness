@@ -1,7 +1,7 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-cua-macos",
+  "name": "@deepseek-ai/dsh-cua-macos",
   "description": "macOS native provider for shared Computer Use application and window objects",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -61,6 +61,7 @@
     "@deepseek-ai/dsh-cua": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "ajv": "^8.20.0",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",

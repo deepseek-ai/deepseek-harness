@@ -21,7 +21,7 @@ import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-uti
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { withDeadline } from './deadline.ts'
-import { McpLocalError } from './diagnostic.ts'
+import { McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
 import type { McpStatusCell } from './status.ts'
 import type { McpCloseResult } from './types.ts'
 import { McpGeneration } from './generation.ts'
@@ -316,7 +316,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       const text = client.getInstructions()?.trimEnd() ?? ''
       const instructions = text ? `### MCP server: ${config.serverName}\n\n${text}` : ''
       const maxInstructionBytes = config.maxInstructionBytes ?? DEFAULT_MAX_INSTRUCTION_BYTES
-      if (Buffer.byteLength(instructions) > maxInstructionBytes) throw new McpLocalError(`${label}: server instructions exceed maxInstructionBytes (${maxInstructionBytes})`)
+      if (Buffer.byteLength(instructions) > maxInstructionBytes) throw new McpLocalError(`${label}: server instructions exceed maxInstructionBytes (${maxInstructionBytes})`, 'MCP_INSTRUCTIONS_TOO_LARGE')
       const sync = enqueueSync(record)
       const budget = remaining()
       await (budget === undefined ? sync : withDeadline(sync, budget, `${label}: startup timed out`))
@@ -351,7 +351,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     resources: {
       async request(request, exec): Promise<JsonValue> {
         const record = current
-        if (record?.connectedAt === undefined) throw new Error(`${label}: server is disconnected`)
+        if (record?.connectedAt === undefined) throw new McpToolError(`${label}: server is disconnected`, 'MCP_SERVER_UNAVAILABLE')
         try {
           return await record.wire.run(async (signal) => {
             const options = { signal: AbortSignal.any([signal, exec.signal]), timeout: config.toolCallTimeoutMs }
@@ -378,8 +378,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
             }
           })
         } catch (error) {
-          if (config.expandTemplates) throw new Error(diagnostic(error, request.method))
-          throw error
+          exec.signal.throwIfAborted()
+          throw mcpRequestError(error, request.method, config.expandTemplates ? text => binding.redact(text) : undefined)
         }
       },
     },

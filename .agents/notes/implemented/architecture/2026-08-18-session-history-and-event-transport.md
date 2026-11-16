@@ -101,7 +101,7 @@ Domain Controllers use them through composition or thin adapters; Session and Wo
 
 Each item carries a monotonic generation, that generation's `AbortSignal`, and `accept()`. A domain consumer calls `accept()` only after validating the opening cursor or baseline.
 
-Only `RemoteStreamCarrierError` permits retry. When the Host remains available, one independent reopen is allowed; otherwise the stream waits for a new Connection generation. Business errors, protocol errors, and opening failures terminate immediately.
+Only a failure whose `code` is `gateway/carrier-lost` permits retry; `RemoteStreamCarrierError` carries that code, and a domain `ended` callback may return a plain `Error` with it. When the Host remains available, one independent reopen is allowed; otherwise the stream waits for a new Connection generation. Business errors, protocol errors, and opening failures terminate immediately.
 
 `restart()` replaces only the current physical generation and preserves the logical stream. `dispose()` permanently ends the logical stream, pending retry, and iterator, then waits for quiescence.
 
