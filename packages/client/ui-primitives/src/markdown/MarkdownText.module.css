@@ -439,6 +439,11 @@
   padding-left: 0;
 }
 
+/* A hosting layout may place a spacer before a wide table. */
+.markdown.compact .tableScroll::before {
+  content: none;
+}
+
 .markdown.compact .tableScroll > table {
   z-index: auto;
 }
