@@ -748,14 +748,26 @@ describe('lifecycle', () => {
 
     const sub = ctx.plugin(sessionCommandsPlugin, Config({}))
     await pruneEntered
-    const earlyEvent = {
+    const earlyEvent: ImMessageEvent = {
       message: {
         key: ImMessageKey('fake:bot', 'early-close-err'),
+        seq: 1,
+        chat: { key: CHAT_KEY, bot: 'fake:bot', ref: CHAT, source: ImSourceId('team') },
+        sender: { id: 'user-1', name: 'User', self: false },
+        content: h('message', h.text('/help')),
+        text: '/help',
+        mentions: { self: true, all: false, users: [] },
         addressed: true,
-        command: { name: 'help', args: '' },
+        command: { name: 'help', rawInput: '' },
+        time: 1000,
+        via: 'platform',
       },
+      source: { id: 'team', bot: 'fake:bot', writable: true, store: 'all' },
+      bot: {} as ImMessageEvent['bot'],
       reply: async () => ({ status: 'confirmed' }),
-    } as never
+      send: async () => ({ status: 'confirmed' }),
+      deliver: async () => {},
+    }
     const earlyDispatch = ctx.waterfall('im/message', earlyEvent, async () => ({ kind: 'ignored' }))
     releasePrune()
 
