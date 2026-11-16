@@ -12,7 +12,7 @@ import Http from '@deepseek-ai/cordis-plugin-http'
 import {
   normalize, PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import LarkBot, { Config, LarkApiError, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
+import LarkBot, { Config, LarkApiError, type LarkConfig, type LarkReferrer } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
 import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import {
   deleteSentPart, editMessagePayload, partKindOf, receiveIdTypeOf, replyPlan, sendMessagePayload, type LarkPayload,
@@ -373,7 +373,7 @@ describe('sendPayload: reply and thread', () => {
       chatId: 'oc_chat',
       chatType: 'group',
       messageId: 'om_root',
-      seenAt: 1,
+      receivedAt: 1,
     }
     await bot.sendPayload(post, { ...group, thread: 'omt_1', referrer: staleReferrer }, send(0, {}, 'om_root'))
     expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
