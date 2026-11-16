@@ -44,7 +44,7 @@ export function apply(ctx: Context): void {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     isConcurrencySafe: () => true,
-    execute: async (args, exec) => listWorkspaces(ctx, args, exec.signal),
+    execute: (args, exec) => Promise.resolve(listWorkspaces(ctx, args, exec.signal)),
     presentCall: args => ({ card: 'generic', title: 'List workspaces', kind: 'read', rawInput: args }),
   }))
   ctx.tools.register(defineTool({
