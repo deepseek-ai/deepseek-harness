@@ -108,7 +108,7 @@ export class InspectorRealmRegistry {
     for (const listener of [...this.listeners]) {
       try {
         listener(event)
-      } catch {
+      } catch (_listenerFailed) {
         // One DevTools connection cannot disrupt realm delivery to sibling connections.
       }
     }

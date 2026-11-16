@@ -264,8 +264,8 @@ async function withScrollWorld(
     runFailure = error
     try {
       await saveFailureShot(world.page, options.failureShot)
-    } catch {
-      // Best-effort evidence must never prevent cleanup of the owned world.
+    } catch (_failureShotFailed) {
+      // A missing screenshot loses evidence only; cleanup of the owned world and the rethrown run failure still follow.
     }
   }
   let cleanupFailure: unknown
@@ -1305,7 +1305,7 @@ describe('web e2e: long Chat scroll contract', () => {
           const top = viewport.top + element.clientTop
           return Math.max(
             Math.abs((railBox.top + railBox.bottom) / 2 - (top + composerBox.top) / 2),
-            Math.abs(viewport.left + element.clientLeft + element.clientWidth - railBox.right - 12),
+            Math.abs(railBox.left - viewport.left - element.clientLeft - 12),
             Math.abs(composerBox.top - buttonBox.bottom - 16),
           )
         }), { timeout: 10_000 }).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)

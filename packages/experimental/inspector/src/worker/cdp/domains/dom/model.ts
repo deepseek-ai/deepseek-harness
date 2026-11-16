@@ -240,7 +240,7 @@ export class CordisDomBackend {
     for (const listener of [...this.listeners]) {
       try {
         listener(change)
-      } catch {
+      } catch (_listenerFailed) {
         // One closed CDP connection cannot prevent sibling sessions from receiving the document mutation.
       }
     }

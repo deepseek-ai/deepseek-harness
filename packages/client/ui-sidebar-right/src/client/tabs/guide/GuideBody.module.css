@@ -2,23 +2,26 @@
    stylesheet does not carry them. Tokens only. */
 
 /* The capsules form one centred column at the column's own 14px gap, lifted
-   above the body's middle by the spacer below. The minimum height centres a
-   short guide while allowing a tall guide to grow into the pane's scroller. */
+   above the body's middle by the spacer below. The guide fills the tab body,
+   which clips, and scrolls itself; `safe` centring starts a guide taller than
+   the pane at its top so every capsule stays reachable. The block padding
+   keeps a scrolled-to-end capsule's focus ring off the pane's edge. */
 .guide {
   --dsl-guide-entry-radius: var(--dsw-radius-xl);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 14px;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   box-sizing: border-box;
-  min-height: 100%;
-  padding: 0 24px;
+  padding: 14px 24px;
+  overflow-y: auto;
 }
 
 /* The lift, as a share of the pane's height (a column flex basis resolves
    against it): the centred column rises 5% of the pane, and a short pane
-   gives it up before the capsules clip. */
+   gives it up before the column overflows. */
 .guide::after {
   content: '';
   flex: 0 1 10%;
