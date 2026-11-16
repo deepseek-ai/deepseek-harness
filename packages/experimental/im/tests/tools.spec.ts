@@ -941,6 +941,14 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
 
     const okRead = value(await mounted.call('im_read', { message: 'm-t1' }, { agent: fakeAgent(confined.sessionId) })) as { message: { key: string } }
     expect(okRead.message.key).toBe('fake:bot|m-t1')
+
+    const rootConfined = mounted.im.sessions.add('root-confined', [{ chat: CHAT, writable: true, home: true, thread: 'om_root' }])
+    mounted.im.history.messages.push(
+      message(6, { key: ImMessageKey('fake:bot', 'om_root'), text: 'root' }),
+      message(7, { key: ImMessageKey('fake:bot', 'm-in-root'), thread: { id: 'omt_x', root: 'om_root' }, text: 'in root' }),
+    )
+    const rootHist = value(await mounted.call('im_history', {}, { agent: fakeAgent(rootConfined.sessionId) })) as { messages: Array<{ key: string }> }
+    expect(rootHist.messages.map(m => m.key)).toEqual(['fake:bot|om_root', 'fake:bot|m-in-root'])
   })
 
   it('derives distinct operationIds for sibling subagents sharing one hosted ancestor', async () => {

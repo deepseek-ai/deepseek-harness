@@ -448,7 +448,7 @@ describe('ImSender grants', () => {
     const confined = sessions.add('confined', [{ chat: CHAT, writable: true, home: true, thread: 't1' }])
     const inThread = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-t1'), undefined), 'none')
     await store.put({ ...inboundDraft(ImMessageKey('fake:bot', 'm-t2'), undefined), thread: { id: 't2' } }, 'none')
-    await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'm-t1-msg'), thread: { id: 't1' } }, 'none')
+    await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'm-t1-msg'), thread: { id: 't1', root: 'r1' } }, 'none')
 
     await expect(sender.send(CHAT, h.text('main'), { session: confined.sessionId }))
       .rejects.toMatchObject({ code: 'access' })
@@ -464,6 +464,13 @@ describe('ImSender grants', () => {
       quote: ImMessageKey('fake:bot', 'm-t1-msg'),
     })
     expect(okQuote.status).toBe('confirmed')
+
+    const rootConfined = sessions.add('root-confined', [{ chat: CHAT, writable: true, home: true, thread: 'r1' }])
+    const okRootQuote = await sender.send(CHAT, h.text('reply-root'), {
+      session: rootConfined.sessionId,
+      quote: ImMessageKey('fake:bot', 'm-t1-msg'),
+    })
+    expect(okRootQuote.status).toBe('confirmed')
   })
 
   it('bounds a grants chain whose parent points back into it', () => {

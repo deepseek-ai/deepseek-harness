@@ -753,6 +753,13 @@ describe('ImIntake outbound', () => {
     const ownReply = await intake.outbound(bot, replyResult)
     expect(ownReply?.thread).toEqual({ id: 'omt_1', root: 'om_root' })
     expect(ownReply?.referrer).toEqual({ threadId: 'omt_1', messageId: 'm-threaded' })
+
+    const explicitReply = await bot.send(
+      { ...target, thread: 'omt_1', referrer: parent.referrer },
+      h('message', h('quote', { id: 'm-threaded' }), h.text('explicit')),
+    )
+    const ownExplicit = await intake.outbound(bot, explicitReply)
+    expect(ownExplicit?.thread).toEqual({ id: 'omt_1', root: 'om_root' })
   })
 
   it('falls back to the local clock when the platform does not stamp the part', async () => {

@@ -567,9 +567,8 @@ async function fileContent(
     data.byteLength)
 }
 
-/** Truncate one UTF-8 string so its byte length is at most `maxBytes`. */
+/** Truncate one UTF-8 string so its byte length is at most `maxBytes` (`maxBytes > 0`). */
 function truncateUtf8(text: string, maxBytes: number): string {
-  if (maxBytes <= 0) return ''
   let used = 0
   let end = 0
   for (const character of text) {

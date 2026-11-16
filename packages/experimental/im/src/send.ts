@@ -473,13 +473,15 @@ export class ImSender {
     if (writable.length === 0) {
       throw new ImError('access', `Chat ${chat} is not writable for session ${session}.`)
     }
-    if (writable.some(binding => binding.thread === undefined)) return
+    const confined = writable.filter(
+      (binding): binding is typeof binding & { thread: string } => binding.thread !== undefined,
+    )
+    if (confined.length < writable.length) return
     const explicit = typeof options.thread === 'string' ? options.thread.trim() : undefined
     const quoted = options.quote === undefined ? undefined : this.deps.store.get(options.quote)
     const fromQuote = quoted?.chat.key === chat ? quoted : undefined
-    const allowed = writable.some((binding) => {
+    const allowed = confined.some((binding) => {
       const thread = binding.thread
-      if (thread === undefined) return true
       if (explicit !== undefined) return explicit === thread
       if (fromQuote === undefined) return false
       return fromQuote.thread?.id === thread || fromQuote.thread?.root === thread
