@@ -295,9 +295,9 @@ export class SessionPanel {
     }
     let missing: ForgeMissingWorktree | null = null
     try {
-      const state = this.worktreeStates.stateOf(this.session)
-      missing = await missingWorktree(this.ctx, this.config, this.session, state, directory, this.lifetime.signal)
-    } catch (_error) {
+      missing = await missingWorktree(
+        this.ctx, this.config, this.session, this.worktreeStates.stateOf(this.session), directory, this.lifetime.signal)
+    } catch (_worktreeUnreadable) {
       // Without an answer from the filesystem or Git the panel offers no restoration.
     }
     if (this.lifetime.signal.aborted || this.current.directory !== directory) return
@@ -334,7 +334,7 @@ export class SessionPanel {
     return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
   }
 
-  /** Measure the `branch` scope; a failed measurement only hides the local changes card. */
+  /** Measure the `branch` scope; a failed measurement only hides the local changes row. */
   private async localOf(inspection: Inspection): Promise<ForgeLocalChanges | null> {
     try {
       return await localChanges(this.ctx, this.config, this.session, inspection, this.worktree().created, this.lifetime.signal)

@@ -127,13 +127,13 @@ export function needsAttention(entry: ForgePanelChangeRequest): boolean {
 
 /**
  * Pick the cards a Session's panel opens before the user expands or collapses
- * one: the only open change request, drafts included, when exactly one is open.
+ * one: the card of the only bound change request, whatever its state; none
+ * while the Session binds several.
  * @param entries - bound change requests.
  * @returns the URLs of the cards that start expanded.
  */
 export function defaultExpanded(entries: readonly ForgePanelChangeRequest[]): ReadonlySet<string> {
-  const open = entries.filter(entry => entry.snapshot?.state === 'open')
-  return new Set(open.length === 1 ? open.map(entry => entry.url) : [])
+  return new Set(entries.length === 1 ? entries.map(entry => entry.url) : [])
 }
 
 /**

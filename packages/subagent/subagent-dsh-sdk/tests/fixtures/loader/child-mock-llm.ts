@@ -25,9 +25,10 @@ class RouteEchoAdapter extends LlmAdapter {
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const failure = process.env.DSH_TEST_CHILD_FAILURE === '1'
+    // An explicit route carries `max`; the default route leaves the effort to the model.
     const dynamicRoute = options.provider === 'mock'
       && options.model === 'mock-routed'
-      && options.reasoningEffort === 'max'
+      && (options.reasoningEffort === 'max' || options.reasoningEffort === undefined)
       && options.maxTokens === 777
     const diagnosticRoute = failure
       && options.provider === 'mock'
@@ -52,7 +53,7 @@ class RouteEchoAdapter extends LlmAdapter {
     }
     const reply = failure
       ? 'partial child loader answer'
-      : `child route: mock/mock-routed/max/777; cwd: ${process.cwd()}`
+      : `child route: mock/mock-routed/${options.reasoningEffort ?? 'default'}/777; cwd: ${process.cwd()}`
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: reply }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }

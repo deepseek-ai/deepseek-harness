@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, RefObject, SyntheticEvent } from 'react'
 import clsx from 'clsx'
 import { createPortal } from 'react-dom'
@@ -16,14 +16,18 @@ const INLINE_PREVIEW_WIDTH = 300
 const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
+/** Where the script places a card; a compact card has no coordinates, since the stylesheet anchors it. */
 interface CardPosition {
-  left: number
-  top: number
+  left?: number
+  top?: number
   width?: number
   maxWidth?: number
   maxHeight?: number
   bridge?: { left: number; top: number; width: number; height: number }
 }
+
+/** The position of every compact card: one value, so placing it again renders nothing. */
+const ANCHORED: CardPosition = {}
 
 /**
  * Render an anchor with a hover-triggered preview card independently of nested tooltips.
@@ -32,9 +36,11 @@ interface CardPosition {
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
- * @param props.variant - compact card beside the anchor, or a preview above/below it
- * with 24px side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip),
- * and 100ms opacity transitions.
+ * @param props.variant - compact card beside the anchor's end edge, or its start edge when only that side fits, or
+ * below the anchor, else above it, when neither side fits, or in the viewport's bottom end corner when it is too
+ * tall for those, which the stylesheet decides by CSS anchor positioning; or a preview above/below it with 24px
+ * side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip), and 100ms
+ * opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * Its hover region connects the anchor and preview across the visual gap.
@@ -67,6 +73,8 @@ export function HoverCard({
   copyLabel?: string
   copiedLabel?: string
 })) {
+  const compact = variant !== 'preview' && !inline
+  const anchorName = `--dsh-hover-card-${useId().replaceAll(':', '')}`
   const rootRef = useRef<HTMLSpanElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const portalRef = useRef<HTMLSpanElement>(null)
@@ -168,6 +176,8 @@ export function HoverCard({
 
   // Fixed-position from the anchor rect before paint; track the anchor while
   // open (capture-phase scroll catches nested panes), as in Menu portal mode.
+  // The stylesheet anchors a compact card, so it needs neither the rect nor
+  // the tracking.
   useLayoutEffect(() => {
     if (!open) { setPos(null); return }
     const place = () => {
@@ -176,6 +186,10 @@ export function HoverCard({
       if (wrapper === null) return
       if (wrapper.closest('[inert], [hidden]') !== null) {
         dismissImmediately()
+        return
+      }
+      if (compact) {
+        setPos(ANCHORED)
         return
       }
       const r = wrapper.getBoundingClientRect()
@@ -196,32 +210,27 @@ export function HoverCard({
         })
         return
       }
-      if (inline) {
-        const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
-        const maxWidth = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
-        const width = fitContent ? Math.min(cardRef.current?.offsetWidth ?? maxWidth, maxWidth) : maxWidth
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
-        const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
-        const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
-        const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
-        const onTop = height > below && above > below
-        const maxHeight = onTop ? above : below
-        const left = Math.max(VIEWPORT_MARGIN, Math.min(r.left, window.innerWidth - width - VIEWPORT_MARGIN))
-        const top = onTop ? r.top - ANCHOR_GAP - Math.min(height, maxHeight) : belowTop
-        const bridgeTop = onTop ? top + Math.min(height, maxHeight) : r.bottom
-        const bridgeLeft = Math.min(r.left, left)
-        setPos({
-          left, top, ...fitContent ? {} : { width }, maxWidth, maxHeight,
-          bridge: {
-            left: bridgeLeft, top: bridgeTop,
-            width: Math.max(r.right, left + width) - bridgeLeft,
-            height: Math.max(0, (onTop ? r.top : top) - bridgeTop),
-          },
-        })
-        return
-      }
-      const top = r.top + h > window.innerHeight - VIEWPORT_MARGIN ? window.innerHeight - h - VIEWPORT_MARGIN : r.top
-      setPos({ left: r.right + ANCHOR_GAP, top })
+      const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
+      const maxWidth = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
+      const width = fitContent ? Math.min(cardRef.current?.offsetWidth ?? maxWidth, maxWidth) : maxWidth
+      const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
+      const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
+      const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
+      const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
+      const onTop = height > below && above > below
+      const maxHeight = onTop ? above : below
+      const left = Math.max(VIEWPORT_MARGIN, Math.min(r.left, window.innerWidth - width - VIEWPORT_MARGIN))
+      const top = onTop ? r.top - ANCHOR_GAP - Math.min(height, maxHeight) : belowTop
+      const bridgeTop = onTop ? top + Math.min(height, maxHeight) : r.bottom
+      const bridgeLeft = Math.min(r.left, left)
+      setPos({
+        left, top, ...fitContent ? {} : { width }, maxWidth, maxHeight,
+        bridge: {
+          left: bridgeLeft, top: bridgeTop,
+          width: Math.max(r.right, left + width) - bridgeLeft,
+          height: Math.max(0, (onTop ? r.top : top) - bridgeTop),
+        },
+      })
     }
     place()
     // Observe only the anchor's ancestors: an offscreen drawer can hide without resizing its retained row.
@@ -229,31 +238,21 @@ export function HoverCard({
     for (let ancestor = rootRef.current?.parentElement; ancestor != null; ancestor = ancestor.parentElement) {
       visibility.observe(ancestor, { attributes: true, attributeFilter: ['inert', 'hidden'] })
     }
-    const observer = (variant === 'preview' || inline) && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    const observer = !compact && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
     for (const element of [cardRef.current, rootRef.current, widthAnchorRef?.current]) {
       if (element !== null && element !== undefined) observer?.observe(element)
     }
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
+    if (!compact) {
+      window.addEventListener('scroll', place, true)
+      window.addEventListener('resize', place)
+    }
     return () => {
       observer?.disconnect()
       visibility.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, variant, widthAnchorRef, positioned, inline, fitContent, dismissImmediately])
-
-  // The first placement ran before the card mounted (height read 0): once the
-  // card's real height is measurable, correct the bottom-edge clamp. The
-  // correction converges — a clamped top satisfies the guard, so it runs once.
-  useLayoutEffect(() => {
-    if (!open || pos === null || variant === 'preview' || inline) return
-    /* v8 ignore next -- the card is mounted whenever pos is set, so the ref is attached here. */
-    const h = cardRef.current?.offsetHeight ?? 0
-    if (pos.top + h > window.innerHeight - VIEWPORT_MARGIN) {
-      setPos({ left: pos.left, top: window.innerHeight - h - VIEWPORT_MARGIN })
-    }
-  }, [open, pos, variant, inline])
+  }, [open, compact, variant, widthAnchorRef, positioned, fitContent, dismissImmediately])
 
   const copy = async (text: string): Promise<void> => {
     if (copied || copyingRef.current) return
@@ -280,9 +279,13 @@ export function HoverCard({
   const card = open && pos !== null && (
     <div
       ref={cardRef}
-      className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, inline && fitContent && css.fitContent, copyable && css.copyable, copied && css.feedback)}
+      className={clsx(
+        css.card, compact && css.compact, variant === 'preview' && css.preview, inline && css.media, inline && fitContent && css.fitContent,
+        copyable && css.copyable, copied && css.feedback,
+      )}
       data-closing={closing || undefined}
       style={{
+        positionAnchor: compact ? anchorName : undefined,
         left: pos.left, top: pos.top, width: pos.width, maxWidth: pos.maxWidth, maxHeight: pos.maxHeight,
         minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
         '--dsh-hover-preview-fade': `${PREVIEW_FADE_MS}ms`,
@@ -317,6 +320,7 @@ export function HoverCard({
     <span
       ref={rootRef}
       className={clsx(css.root, inline && css.inline)}
+      style={compact && open ? { anchorName } : undefined}
       onFocus={inline ? (event) => {
         if (!disabled && event.target.matches(':focus-visible')) { cancelClose(); setPhase('open') }
       } : undefined}
