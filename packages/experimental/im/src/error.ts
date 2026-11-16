@@ -6,6 +6,7 @@ export interface ImErrorOptions extends ErrorOptions {
 
 /** Typed failures that stop the affected IM operation without claiming delivery. */
 export class ImError extends Error {
+  /** Whether the failure is unrecoverable on retry (for example, an oversized delivery). */
   readonly permanent: boolean
 
   constructor(
