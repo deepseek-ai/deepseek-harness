@@ -195,6 +195,13 @@ export interface SessionInput extends InputTarget {
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
   addAttachments(ids: readonly DraftAttachmentId[]): boolean
+  /**
+   * Insert file references after the retained selection without replacing text, and append attachment ids.
+   * @param references - validated reference chips in source order.
+   * @param ids - browser-owned attachment ids; empty for reference-only insertion.
+   * @returns false after disposal, while submission is locked, or when insertion is refused.
+   */
+  addFiles(references: readonly ReferenceInsert[], ids: readonly DraftAttachmentId[]): boolean
   /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
   removeAttachment(id: DraftAttachmentId): boolean
   /** Drop ids whose browser-owned objects no longer exist. */

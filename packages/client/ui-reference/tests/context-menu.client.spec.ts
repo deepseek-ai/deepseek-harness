@@ -1,0 +1,167 @@
+// @vitest-environment jsdom
+/** Shared file menus insert references through the Session's real draft editor. */
+import { expect, it, onTestFinished, vi } from 'vitest'
+import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
+import { SessionInputShell } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/facade.ts'
+import { ComposerBlockRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/blocks.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import { registerReferenceMenu } from '../src/client/context-menu.ts'
+import { en, zh } from '../src/client/locales.ts'
+
+const id = 'target' as SessionId
+const actionId = 'reference.file/addToChat'
+
+async function bench() {
+  const runtime = await SlotTestRuntime.create()
+  onTestFinished(() => runtime.dispose())
+  await runtime.declare({ 'contextMenu.icon': { kind: 'keyed', scope: 'root', inline: true } })
+  await runtime.sessions.add({ id, summary: { cwd: '/workspace' } })
+  const owner = runtime.sessions.retain(id)
+  onTestFinished(() => { owner.release() })
+  const binding = runtime.sessions.binding(id)!
+  const sink = vi.fn(async () => ({ kind: 'success' as const }))
+  const shell = new SessionInputShell({
+    actx: binding.ctx, defaultSink: sink,
+    commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
+  })
+  onTestFinished(() => { shell.dispose() })
+  const focus = vi.spyOn(shell, 'focus').mockImplementation(() => {})
+  const blocks = new ComposerBlockRegistry()
+  const resolveInput = vi.fn(() => shell)
+  runtime.ctx.provide('conversation', { input: { for: resolveInput }, blocks })
+  const failed = vi.fn()
+  const menus = new MenuRegistry(failed)
+  onTestFinished(() => { menus.dispose() })
+  runtime.ctx.provide('contextMenus', { register: menus.register.bind(menus) })
+  const fiber = runtime.ctx.plugin({
+    inject: ['slots', 'sessions', 'conversation', 'contextMenus'],
+    apply: (ctx) => { registerReferenceMenu(ctx, key => en[key]) },
+  })
+  await fiber.await()
+  const menu = async (value: Partial<ContextMenuTargetMap['file']> = {}) => {
+    const result = menus.resolve({ kind: 'file', value: { sessionId: id, path: 'docs/a b.md', ...value } })
+    onTestFinished(() => { result.dispose() })
+    await result.ready
+    return result
+  }
+  return { runtime, owner, binding, shell, sink, focus, blocks, resolveInput, failed, menus, fiber, menu }
+}
+
+it('appends the final action after other providers and inserts the captured file without sending', async () => {
+  const b = await bench()
+  const ready = Promise.withResolvers<undefined>()
+  b.menus.register({ id: 'open', target: 'file', order: 100, resolve: async () => {
+    await ready.promise
+    return [{ id: 'preview', label: 'Preview' }]
+  } })
+  b.menus.register({ id: 'save', target: 'file', order: 200, resolve: () => [{ id: 'download', label: 'Download' }] })
+  b.shell.setDraft('Review this')
+  const pending = b.menu({ line: 24 })
+  ready.resolve(undefined)
+  const menu = await pending
+  expect(menu.source.getSnapshot().map(row => row.label)).toEqual(['Preview', 'Download', en['menu.addToChat']])
+  expect(menu.source.getSnapshot().at(-1)).toMatchObject({ separatorBefore: true, disabled: false })
+  menu.select(actionId)
+  expect(b.resolveInput).toHaveBeenCalledWith(b.binding.ctx)
+  expect(b.shell.snapshot.draft).toBe('Review this @"/workspace/docs/a b.md" ')
+  expect(b.shell.snapshot.occurrences).toMatchObject([{
+    source: 'reference', ref: '@"/workspace/docs/a b.md"', label: 'a b.md', appearance: 'file',
+  }])
+  expect(b.shell.snapshot.attachmentIds).toEqual([])
+  expect(b.focus).toHaveBeenCalledOnce()
+  expect(b.sink).not.toHaveBeenCalled()
+  expect(b.failed).not.toHaveBeenCalled()
+})
+
+it.each(['bad"name.txt', 'bad\nname.txt'])('disables paths outside the mention grammar: %j', async (path) => {
+  const b = await bench()
+  const menu = await b.menu({ path })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  menu.select(actionId)
+  expect(b.shell.snapshot.draft).toBe('')
+  expect(b.focus).not.toHaveBeenCalled()
+})
+
+it('disables an unretained Session and never opens it or targets another draft', async () => {
+  const b = await bench()
+  const menu = await b.menu({ sessionId: 'absent' as SessionId })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect(b.resolveInput).not.toHaveBeenCalled()
+  menu.select(actionId)
+  expect(b.shell.snapshot.draft).toBe('')
+})
+
+it('tracks composer blocks and rejects a stale Session binding at execution', async () => {
+  const b = await bench()
+  const menu = await b.menu()
+  b.blocks.set(id, { reason: 'Unavailable' })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  b.blocks.set(id, undefined)
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  b.owner.release()
+  menu.select(actionId)
+  expect(b.failed).toHaveBeenCalledWith(en['menu.addToChatFailed'])
+  expect(b.focus).not.toHaveBeenCalled()
+})
+
+it('disables removed and one-shot Sessions but permits continuable Sessions', async () => {
+  const b = await bench()
+  const menu = await b.menu()
+  await b.runtime.sessions.updateSessionSnapshot(id, (state) => { state.removed = true })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  await b.runtime.sessions.updateSessionSnapshot(id, (state) => {
+    state.removed = false
+    state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'one-shot' } }
+  })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  await b.runtime.sessions.updateSessionSnapshot(id, (state) => {
+    state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'continuable' } }
+  })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+})
+
+it('tracks submission locks without treating a running turn as an editing lock', async () => {
+  const b = await bench()
+  const pending = Promise.withResolvers<{ kind: 'success' }>()
+  b.sink.mockImplementation(() => pending.promise)
+  const menu = await b.menu()
+  await b.runtime.sessions.updateSessionSnapshot(id, (state) => { state.running = true })
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  b.shell.setDraft('Sending')
+  b.shell.submit()
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  pending.resolve({ kind: 'success' })
+  await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]?.disabled).toBe(false) })
+})
+
+it('reports insertion refusal without focusing or sending', async () => {
+  const b = await bench()
+  vi.spyOn(b.shell, 'addFiles').mockReturnValue(false)
+  const menu = await b.menu()
+  menu.select(actionId)
+  expect(b.failed).toHaveBeenCalledWith(en['menu.addToChatFailed'])
+  expect(b.focus).not.toHaveBeenCalled()
+  expect(b.sink).not.toHaveBeenCalled()
+})
+
+it('withdraws open menu actions and their icon on plugin disposal', async () => {
+  const b = await bench()
+  const menu = await b.menu()
+  expect(b.runtime.ctx.slots.entries('contextMenu.icon').map(row => row.options.key)).toEqual(['reference.addToChat'])
+  await b.fiber.dispose()
+  expect(menu.source.getSnapshot()).toEqual([])
+  expect(b.runtime.ctx.slots.entries('contextMenu.icon')).toEqual([])
+  menu.select(actionId)
+  expect(b.focus).not.toHaveBeenCalled()
+  expect(zh['menu.addToChat']).toBe('添加到对话')
+})
+
+it('refuses direct file insertion after the draft editor is disposed', async () => {
+  const b = await bench()
+  b.shell.setDraft('Keep this')
+  b.shell.dispose()
+  expect(b.shell.addFiles([{ source: 'reference', ref: '@file.txt', label: 'file.txt', clipboardText: '@file.txt' }], [])).toBe(false)
+  expect(b.shell.snapshot.draft).toBe('Keep this')
+})

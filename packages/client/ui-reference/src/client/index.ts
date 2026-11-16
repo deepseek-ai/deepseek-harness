@@ -34,6 +34,7 @@ import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/typ
 import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
 import { abbreviateHomePath, fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type ReferenceKey } from './locales.ts'
+import { registerReferenceMenu } from './context-menu.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -55,6 +56,7 @@ export const inject = [
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
+  ctx.inject(['contextMenus', 'conversation'], (menuCtx) => { registerReferenceMenu(menuCtx, t) })
   const sessions = ctx.get('sessions') as ISessions
   ctx.uiConversation.userText.register(fileReferenceRule)
   ctx.uiConversation.userText.register(folderReferenceRule)

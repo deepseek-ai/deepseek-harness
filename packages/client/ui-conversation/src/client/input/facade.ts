@@ -344,10 +344,10 @@ export class SessionInputShell implements SessionInput {
    * Add validated file references and attachment ids while admission is editable.
    * @param references - reference chips in source order.
    * @param ids - newly allocated attachment ids.
-   * @returns false when admission is locked or the editor refuses the insertion.
+   * @returns false after disposal, when admission is locked, or when the editor refuses insertion.
    */
   addFiles(references: readonly ReferenceInsert[], ids: readonly DraftAttachmentId[]): boolean {
-    if (frozen(this.snapshot.phase)) return false
+    if (this.disposed || frozen(this.snapshot.phase)) return false
     if (!this.draftEditor.insertFileReferences(references)) return false
     this.attachmentIds = [...this.attachmentIds, ...ids]
     this.publish()
