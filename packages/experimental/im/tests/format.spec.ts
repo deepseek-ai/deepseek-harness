@@ -265,6 +265,17 @@ describe('ImFormatter.format', () => {
       .toMatchObject({ text: '#12 14:07 张三(u_张三) ↩lark:cli_a|m_10: 你好' })
   })
 
+  it('collapses and escapes sender and quote fields in line style', async () => {
+    const msg = message({
+      sender: { id: 'u\n<1>', name: '张\n<三>' },
+      quote: { key: 'lark:cli_a|m\n<10>' as never, sender: { id: 'u_2', name: '李\n<四>' }, text: '原文' },
+      body: content(h('p', '正文')),
+    })
+    expect(await formatter().format([msg], { style: 'line' })).toEqual([
+      { type: 'text', text: '#12 14:07 张 &lt;三>(u &lt;1>) ↩lark:cli_a|m &lt;10> 李 &lt;四>: 原文: 正文' },
+    ])
+  })
+
   it('attaches admitted images after the text', async () => {
     const body = content(h('p', '两张 ', h('img', { src: 'https://cdn/1.png' })), h('p', h('img', { src: 'https://cdn/2.png' })))
     const media = mediaStore(refs => refs.map(ref => ({

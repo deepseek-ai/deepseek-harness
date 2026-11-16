@@ -113,15 +113,17 @@ function xmlText(message: ImMessage, body: string, quote: ImQuoteRef | undefined
 
 /** `↩#10 李四: 原文` — the reply marker of one line. */
 function quoteSegment(quote: ImQuoteRef): string {
-  let segment = `↩${quote.id}`
-  if (quote.sender) segment += ` ${senderName(quote.sender)}`
+  let segment = `↩${escapeText(oneLine(quote.id))}`
+  if (quote.sender) segment += ` ${escapeText(oneLine(senderName(quote.sender)))}`
   if (quote.text) segment += `: ${escapeText(oneLine(quote.text, PREVIEW_LIMIT))}`
   return segment
 }
 
 /** `#12 14:07 张三(u_1) …: body`. */
 function lineText(message: ImMessage, body: string, quote: ImQuoteRef | undefined): string {
-  const identity = `${senderName(message.sender)}${message.sender.self ? '(你)' : ''}(${message.sender.id})`
+  const name = escapeText(oneLine(senderName(message.sender)))
+  const id = escapeText(oneLine(message.sender.id))
+  const identity = `${name}${message.sender.self ? '(你)' : ''}(${id})`
   const head = [`#${message.seq}`, clock(message.time), identity]
   if (quote) head.push(quoteSegment(quote))
   const text = escapeText(oneLine(body))

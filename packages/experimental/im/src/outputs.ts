@@ -255,6 +255,8 @@ export class ImOutputRegistry implements ImOutputs {
     if (entry === undefined) {
       // A change of a turn this process never started has nothing to drive.
       if (change !== 'start') return
+      const id = activity.session.output
+      if (id === undefined || id === NO_OUTPUT) return
       this.open.set(sessionId, { turn: activity.turn, activity, output: this.begin(activity) })
       return
     }

@@ -551,4 +551,15 @@ describe('ImOutputRegistry referrers', () => {
     expect(bot.operations.at(-1)?.target?.referrer).toEqual(REFERRER)
     await registry.dispose()
   })
+
+  it('logs no missing-renderer warning when output is none', async () => {
+    const harness = booted()
+    const warn = vi.spyOn(harness.ctx.logger, 'warn')
+    const hosted = harness.host({ output: 'none' })
+    harness.ctx.emit('im/activity', activity(hosted), 'start')
+    harness.ctx.emit('im/activity', activity(hosted), 'end')
+    await flush()
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
 })
