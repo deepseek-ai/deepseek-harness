@@ -3,13 +3,14 @@ import { useId, type ReactNode } from 'react'
 import { Button, IconClockOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import {
-  BranchGlyph, CloudSunGlyph, DumbbellGlyph, IssueGlyph, NewspaperGlyph, PluginCheckGlyph,
+  BranchGlyph, CalendarCheckGlyph, CloudSunGlyph, DumbbellGlyph, IssueGlyph, NewspaperGlyph, PluginCheckGlyph,
   SunriseGlyph, type TileGlyphProps,
 } from './RecommendationArtwork.tsx'
 import css from './TaskManagerPage.module.css'
 
 const RECOMMENDATIONS = [
   { id: 'dailyBrief', Glyph: SunriseGlyph },
+  { id: 'weeklyReview', Glyph: CalendarCheckGlyph },
   { id: 'issueScan', Glyph: IssueGlyph },
   { id: 'pluginCompat', Glyph: PluginCheckGlyph },
   { id: 'topicTracking', Glyph: NewspaperGlyph },
