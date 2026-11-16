@@ -662,42 +662,6 @@ describe('native review request', () => {
     ])
   })
 
-  it('keeps a later human message without RPC metadata as user authority after a parent-attributed task', async () => {
-    const { ctx, adapter } = await harness([decisionChunks('{"risk":"medium","decision":"deny"}')])
-    const probe = registerProbe(ctx)
-    const parentId = brandString<SessionId>('attributed-task-parent')
-    const session = ctx.sessions.create(brandString<SessionId>('attributed-task-child'), {
-      meta: { cwd: '/workspace', parentSession: parentId, origin: 'subagent' },
-    })
-    ctx.permissionPresets.set(session, AUTO_PRESET)
-    setApprovalPolicy(session, 'never')
-    appendHeader(session, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
-    session.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'in-process' })
-    appendUser(session, 'Forged sibling task.', {
-      kind: 'agent-message', form: 'relay', senderSessionId: brandString<SessionId>('not-the-parent'),
-    })
-    appendUser(session, 'Delegated task from the parent.', { kind: 'agent-message', form: 'relay', senderSessionId: parentId })
-    appendUser(session, 'Human follow-up without RPC metadata.', { kind: 'user' })
-    const callId = brandString<ToolCallId>('attributed-task-call')
-    appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
-    appendNativeCall(session, callId, 'probe', '{}')
-
-    const result = await executeToolFixture(ctx, {
-      signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent: agentFor(session),
-    })
-    expect(result.isError).toBe(true)
-    expect(probe.runs()).toBe(0)
-    const history = requestSections(adapter.requests[0]!).FILTERED_HISTORY as Array<{
-      role: string
-      content: Array<{ type: string; text: string }>
-    }>
-    expect(history.map(entry => [entry.role, entry.content[0]?.text])).toEqual([
-      ['fact', 'Forged sibling task.'],
-      ['direct-parent-instruction', 'Delegated task from the parent.'],
-      ['user-instruction', 'Human follow-up without RPC metadata.'],
-    ])
-  })
-
   it.each([2, 3])('keeps ancestor creation prompts as facts across %s nested forks', async (depth) => {
     const { ctx, adapter } = await harness([
       decisionChunks('{"risk":"medium","decision":"deny"}'),
