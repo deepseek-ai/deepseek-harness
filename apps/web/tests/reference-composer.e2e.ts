@@ -483,10 +483,16 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     await row.waitFor()
     const draft = 'Review selected, then finish.'
     await writeComposerDraft(page, input, draft)
-    await page.keyboard.press('ControlOrMeta+A')
-    await page.keyboard.press('ArrowLeft')
-    for (let i = 0; i < 'Review '.length; i++) await page.keyboard.press('ArrowRight')
-    for (let i = 0; i < 'selected'.length; i++) await page.keyboard.press('Shift+ArrowRight')
+    const word = await input.evaluate((node) => {
+      const text = document.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode()
+      if (text === null) throw new Error('Composer draft has no text')
+      const range = document.createRange()
+      range.setStart(text, 'Review '.length)
+      range.setEnd(text, 'Review selected'.length)
+      const rect = range.getBoundingClientRect()
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    })
+    await page.mouse.dblclick(word.x, word.y)
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('selected')
     // Copy observes the editor's committed selection, not only the native range.
     await expect.poll(() => input.evaluate((node) => {
