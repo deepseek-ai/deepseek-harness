@@ -4,7 +4,7 @@
     - listitem:
       - button "Daily brief": Daily brief Recent changes in the workspace and what needs follow-up, with what to do first today. Weekdays at 9:00
     - listitem:
-      - button "Weekly review": Weekly review This week's changes in the workspace, with loose ends and what to do first next week. Fridays at {{clock}}
+      - button "Weekly review": Weekly review Your work in the workspace this week, with loose ends and what to do first next week. Fridays at {{clock}}
     - listitem:
       - button "Issue scan": Issue scan Sort new issues into bugs, requests, and questions, and flag duplicates and ones that need a reply. Weekdays at {{clock}}
     - listitem:
