@@ -50,74 +50,54 @@ async function fixture() {
 }
 
 describe('stored working-directory/change events', () => {
-  it('keeps a stored directory inside the original project, so relative paths resolve where they did', async () => {
+  it('ignores a stored directory change, inside or outside the original project', async () => {
     await using f = await fixture()
-    const session = f.stored()
-    session.append('working-directory/change', { cwd: f.worktree })
-    expect(f.directories(session)).toEqual([f.worktree, f.worktree, f.worktree])
-    session.append('working-directory/change', { cwd: f.inside })
-    expect(f.directories(session)).toEqual([f.inside, f.inside, f.inside])
-    session.append('working-directory/change', { cwd: f.project })
-    expect(f.directories(session)).toEqual([f.project, f.project, f.project])
-  })
-
-  it('returns the Session to its original project for a stored directory outside it', async () => {
-    await using f = await fixture()
-    const agent = await f.harness.create(brandString<SessionId>('left-project'), {}, { cwd: f.project })
-    agent.session.append('working-directory/change', { cwd: f.inside })
-    for (const left of [f.outside, dirname(f.project), `${f.project}-sibling`]) {
-      agent.session.append('working-directory/change', { cwd: left })
+    const agent = await f.harness.create(brandString<SessionId>('stored-changes'), {}, { cwd: f.project })
+    for (const stored of [f.worktree, f.inside, f.outside, dirname(f.project)]) {
+      agent.session.append('working-directory/change', { cwd: stored })
       expect(f.directories(agent.session)).toEqual([f.project, f.project, f.project])
     }
     // The next request tells the model, whose history still names the stored directory.
     expect(renderContextSnapshot(await f.ctx.systemPrompt.assemble({ agent, scope: agent })))
       .toContain(`Current working directory: ${JSON.stringify(f.project)}.`)
-    agent.session.append('working-directory/change', { cwd: f.inside })
-    expect(f.directories(agent.session)).toEqual([f.inside, f.inside, f.inside])
   })
 
-  it('lets a Host move leave the project, and reads stored changes against the project afterwards', async () => {
+  it('follows Host moves in a log that also holds stored changes', async () => {
     await using f = await fixture()
     const agent = await f.harness.create(brandString<SessionId>('host-moved'), {}, { cwd: f.project })
     agent.session.append('working-directory/change', { cwd: f.inside })
-    // The stored directory is already the Session's directory: the Host move records nothing.
+    // The stored change moved nothing, so a Host move to the same directory is a change of its own.
     await expect(f.ctx.workingDirectory.set(agent, f.inside)).resolves.toBe(f.inside)
-    expect(agent.session.snapshotEvents().some(event => event.type === 'workspace-root/change')).toBe(false)
-    expect(f.harness.claim(agent, 'next-step', 1)).toEqual([])
-
+    expect(f.harness.claim(agent, 'next-step', 1)).toHaveLength(1)
     await expect(f.ctx.workingDirectory.set(agent, f.outside)).resolves.toBe(f.outside)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change').map(event => event.data))
+      .toEqual([{ cwd: f.inside }, { cwd: f.outside }])
+    agent.session.append('working-directory/change', { cwd: f.project })
     expect(f.directories(agent.session)).toEqual([f.outside, f.outside, f.outside])
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change').map(event => event.data)).toEqual([{ cwd: f.outside }])
-    agent.session.append('working-directory/change', { cwd: f.outside })
-    expect(f.directories(agent.session)).toEqual([f.project, f.project, f.project])
   })
 
-  it('bounds a Session without origin metadata by its first recorded directory', async () => {
+  it('leaves a Session without origin metadata on the deployment default until a Host operation records a directory', async () => {
     await using f = await fixture()
     const stored = f.stored({})
-    expect(f.ctx.sessionProjections.snapshot(stored).values.workingDirectory).toBeNull()
-    stored.append('working-directory/change', { cwd: f.project })
     stored.append('working-directory/change', { cwd: f.inside })
-    expect(f.directories(stored)).toEqual([f.inside, f.inside, f.inside])
-    stored.append('working-directory/change', { cwd: f.outside })
-    expect(f.directories(stored)).toEqual([f.project, f.project, f.project])
+    expect(f.ctx.sessionProjections.snapshot(stored).values.workingDirectory).toBeNull()
+    expect(f.ctx.workingDirectory.get(stored)).toBe(f.ctx.workingDirectory.defaultDirectory)
 
     const agent = await f.harness.create(brandString<SessionId>('without-origin'))
+    agent.session.append('working-directory/change', { cwd: f.inside })
     const fallback = await f.ctx.workingDirectory.ensure(agent)
-    agent.session.append('working-directory/change', { cwd: f.outside })
+    expect(fallback).toBe(f.ctx.workingDirectory.defaultDirectory)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'workspace-root/change').map(event => event.data))
+      .toEqual([{ cwd: fallback }])
     expect(f.directories(agent.session)).toEqual([fallback, fallback, fallback])
   })
 
-  it('compares a stored directory with the header as recorded, and records the canonical project on return', async () => {
+  it('records the canonical project when a Host move or a recovery returns to a symlinked header directory', async () => {
     await using f = await fixture()
     const link = join(dirname(f.project), 'link')
     await symlink(f.project, link)
     const agent = await f.harness.create(brandString<SessionId>('linked-origin'), {}, { cwd: link })
-    // The canonical spelling of a directory inside the project is outside the header's symlinked spelling.
-    agent.session.append('working-directory/change', { cwd: f.inside })
     expect(f.ctx.workingDirectory.get(agent.session)).toBe(link)
-    agent.session.append('working-directory/change', { cwd: join(link, 'packages', 'foo') })
-    expect(f.ctx.workingDirectory.get(agent.session)).toBe(join(link, 'packages', 'foo'))
 
     await f.ctx.workingDirectory.set(agent, f.outside)
     await expect(f.ctx.workingDirectory.set(agent, link)).resolves.toBe(f.project)

@@ -8,7 +8,7 @@ Session 的当前目录由 [`dsh-working-directory`](../../packages/session/work
 
 `ctx.workingDirectory.get(session)` 读取日志中的值。`ensure(agent)` 验证它，并在目录消失时恢复原始项目。`set(agent, path)` 验证并记录由 Host 操作选定的移动，例如创建工作树、forge 面板或 SDK 请求；模型没有可以移动目录的工具。header 没有目录的 Session 使用配置的运行时回退目录；回退目录不可用时返回错误。
 
-`get` 是读取 Session 目录的唯一接口：相对路径从它解析，跟随 Session 检出的一切也以它为工作区根。服务记录的每次变更都是 `workspace-root/change`。写于模型还能移动目录时期的日志含有 `working-directory/change` 事件，现在没有写入方。服务只在这类目录位于 Session 的原始项目之内时保留它，因此曾在工作树或项目子目录中工作的 Session 会在原处恢复。位于项目之外的已存储目录让 Session 回到项目，下一次请求的上下文会报告该目录。
+`get` 是读取 Session 目录的唯一接口：相对路径从它解析，跟随 Session 检出的一切也以它为工作区根。服务记录的每次变更都是 `workspace-root/change`。写于模型还能移动目录时期的日志含有 `working-directory/change` 事件，现在没有写入方。服务忽略它们：这样的 Session 在原始项目中恢复，或在最近一条 `workspace-root/change` 的目录中恢复，下一次请求的上下文会报告该目录。
 
 变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。已有终端和持久 shell 保留自己的目录。沙箱可写根目录与项目归属继续绑定原始项目。
 
@@ -30,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 One owner for each Session's directory and its model-visible changes.
 
-A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. A log written while the model could move the directory is read under the rule the `working-directory/change` event documents.
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.
 
 ```ts cordis-catalog
 /**

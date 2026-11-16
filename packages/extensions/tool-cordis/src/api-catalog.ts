@@ -4843,7 +4843,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'workingDirectory',
     summary: 'One owner for each Session\'s directory and its model-visible changes.',
-    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. A log written while the model could move the directory is read under the rule the `working-directory/change` event documents.',
+    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',

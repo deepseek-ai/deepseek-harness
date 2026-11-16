@@ -1326,9 +1326,10 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Directory change recorded by releases whose model could move the directory. A reader keeps `cwd` only
- * when it lies inside the Session's original project; otherwise the Session returns to that project.
- * @deprecated Read only: no writer records this event. `WorkingDirectoryService.set` records
+ * Directory change recorded by releases whose model could move the directory. Readers ignore it: a
+ * Session that holds one resumes in its original project, or in the directory of its last
+ * `workspace-root/change`.
+ * @deprecated No writer records this event. `WorkingDirectoryService.set` records
  * `workspace-root/change`.
  */
 'working-directory/change': {
@@ -1337,7 +1338,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/session/working-directory/src/index.ts:61`](../packages/session/working-directory/src/index.ts)
+来源：[`packages/session/working-directory/src/index.ts:62`](../packages/session/working-directory/src/index.ts)
 
 ### `workspace/*`
 
@@ -1370,7 +1371,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/session/working-directory/src/index.ts:66`](../packages/session/working-directory/src/index.ts)
+来源：[`packages/session/working-directory/src/index.ts:67`](../packages/session/working-directory/src/index.ts)
 
 ## 已解析的持久化类型
 
@@ -6248,7 +6249,7 @@ SHA-256: `3e4e7683b0192c9f0e6a75c59076108f017892cdb302a98032c2632fd79c356f`
 
 SHA-256: `da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582`
 
-来源：[`packages/session/working-directory/src/index.ts:61`](../packages/session/working-directory/src/index.ts) · [`packages/session/working-directory/src/index.ts:66`](../packages/session/working-directory/src/index.ts)
+来源：[`packages/session/working-directory/src/index.ts:62`](../packages/session/working-directory/src/index.ts) · [`packages/session/working-directory/src/index.ts:67`](../packages/session/working-directory/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
