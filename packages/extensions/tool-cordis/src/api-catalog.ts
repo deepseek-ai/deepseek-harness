@@ -1491,11 +1491,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
       },
       {
-        signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
-        description: 'List the local branches that can start a worktree of the Session\'s current checkout.',
-        parameters: [{ name: 'session', description: 'Session whose current directory is listed.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the checked-out branch and at most `maxBranches` local branches, the checked-out one first.',
-        throws: ['when the current directory is not inside a checkout or Git fails.'],
+        signature: '@Remote async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases>',
+        description: 'List the branches that can start a worktree of the Session\'s current checkout: the checked-out branch, each remote\'s default branch, other local branches, and each remote\'s other remote-tracking branches, remotes in the order the panel recognizes code hosts.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the branches, at most `maxBranches` local branches and `maxBranches` per remote, most recently committed first.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
@@ -1661,10 +1661,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not confirm whether it started the update.'],
       },
       {
-        signature: '@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>',
-        description: 'Ask for a new worktree before the Session\'s first turn, replacing an open request and forgetting a failed attempt. While the next message waits in the inbox, or else at the first step proposal, the panel creates a branch from `from`, or from HEAD of the current checkout when it is null, and enters its checkout. A message that already waits after a failed or stopped attempt keeps waiting for ForgePanelController.retryWorktree.',
-        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'from', description: 'local base branch, or null for HEAD.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
+        signature: '@Remote async requestWorktree(session: Session, from: string | null, name: string | null, signal: AbortSignal): Promise<void>',
+        description: 'Ask for a new worktree before the Session\'s first turn, replacing an open request and forgetting a failed attempt. While the next message waits in the inbox, or else at the first step proposal, the panel creates the branch `name`, or a generated branch per attempt when it is null, from `from`, or from HEAD of the current checkout when it is null, and enters its checkout; a remote-tracking `from` is fetched first. A message that already waits after a failed or stopped attempt keeps waiting for ForgePanelController.retryWorktree.',
+        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'from', description: 'full name of a local or remote-tracking base branch, or null for HEAD.' }, { name: 'name', description: 'new branch name, or null to generate one per attempt.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/invalid-branch` when `from` is empty; `forgePanel/invalid-name` when `name` breaks a branch-name rule; `forgePanel/branch-exists` when the checkout has a local branch named `name`; `forgePanel/not-a-checkout` when a name is checked outside a checkout; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
       },
       {
         signature: '@Remote async cancelWorktree(session: Session, signal: AbortSignal): Promise<void>',
@@ -1678,9 +1678,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'session', description: 'Session whose creation stops.' }, { name: 'signal', description: 'request cancellation.' }],
       },
       {
-        signature: '@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>',
-        description: 'Make another attempt, with a new branch name, at the worktree a message of the Session waits for after a failed or stopped attempt.',
-        parameters: [{ name: 'session', description: 'Session whose message waits.' }, { name: 'signal', description: 'request cancellation.' }],
+        signature: '@Remote async retryWorktree(session: Session, fetch: boolean, signal: AbortSignal): Promise<void>',
+        description: 'Make another attempt, on the requested branch name or a new generated one, at the worktree a message of the Session waits for after a failed or stopped attempt.',
+        parameters: [{ name: 'session', description: 'Session whose message waits.' }, { name: 'fetch', description: 'false skips fetching a remote-tracking base branch for this attempt, which then starts from the commit last fetched.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/not-waiting` when no message waits or an attempt is running.'],
       },
       {
@@ -5090,15 +5090,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
-        description: 'Create a fresh branch and checkout at a pinned local revision, then enter it. Existing branches or checkout paths fail. Uncommitted files stay in the source checkout. Checkout disables configured clean, smudge, and process filters without changing Git config. Repository-local replacement refs still apply; baseCommit reports the resolved object name. The new checkout becomes current only after Git setup succeeds. Failures may retain newly allocated Git/filesystem artifacts; no branch or checkout is removed automatically.',
-        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name and local revision; defaults are generated name and HEAD.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
+        description: 'Create a fresh branch and checkout at a pinned local revision, then enter it. A request that asks to fetch first fetches its remote-tracking branch, only that branch and without tags, then pins the fetched commit. Existing branches or checkout paths fail. Uncommitted files stay in the source checkout. Checkout disables configured clean, smudge, and process filters without changing Git config. Repository-local replacement refs still apply; baseCommit reports the resolved object name. The new checkout becomes current only after Git setup succeeds. Failures may retain newly allocated Git/filesystem artifacts; no branch or checkout is removed automatically.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name, local revision, and fetch switch; defaults are generated name, HEAD, and no fetch.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'canonical checkout path, branch name, pinned commit, and source repository root.',
-        throws: ['{WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
+        throws: ['{WorktreeError} for an invalid request, a fetch request whose `from` is not a remote-tracking branch of a configured remote, an existing branch or path, or a failed, oversized, or timed-out command, including the fetch; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
       },
       {
-        signature: 'async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>',
+        signature: 'async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: Exclude<CreateWorktreePhase, \'fetch\'>) => void, ): Promise<RestoredWorktree>',
         description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
-        parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
+        parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins, never `fetch`; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
       },
@@ -6740,11 +6740,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateWorktreePhase',
-    declaration: 'export type CreateWorktreePhase = \'prepare\' | \'checkout\';',
+    declaration: 'export type CreateWorktreePhase = \'fetch\' | \'prepare\' | \'checkout\';',
   },
   {
     name: 'CreateWorktreeRequest',
-    declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n}',
+    declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n    fetch?: boolean;\n}',
   },
   {
     name: 'CredentialInfo',
@@ -7035,10 +7035,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeBaseBranches {\n    readonly automatic: ForgeAutomaticBase | null;\n    readonly remote: readonly ForgeBaseBranch[];\n    readonly local: readonly ForgeBaseBranch[];\n}',
   },
   {
-    name: 'ForgeBranches',
-    declaration: 'export interface ForgeBranches {\n    readonly current: string | null;\n    readonly branches: readonly string[];\n}',
-  },
-  {
     name: 'ForgeChangedFile',
     declaration: 'export interface ForgeChangedFile {\n    readonly path: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly binary: boolean;\n}',
   },
@@ -7204,7 +7200,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePanelWorktree',
-    declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
+    declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly namePrefix: string;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
   },
   {
     name: 'ForgePendingReview',
@@ -7221,6 +7217,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRegisteredLens',
     declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'ForgeRemoteBranches',
+    declaration: 'export interface ForgeRemoteBranches {\n    readonly name: string;\n    readonly repository: string | null;\n    readonly branches: readonly ForgeBaseBranch[];\n}',
+  },
+  {
+    name: 'ForgeRemoteDefault',
+    declaration: 'export interface ForgeRemoteDefault extends ForgeBaseBranch {\n    readonly remote: string;\n}',
   },
   {
     name: 'ForgeRepository',
@@ -7299,20 +7303,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeViewedState = \'viewed\' | \'unviewed\' | \'dismissed\';',
   },
   {
+    name: 'ForgeWorktreeBases',
+    declaration: 'export interface ForgeWorktreeBases {\n    readonly current: ForgeBaseBranch | null;\n    readonly defaults: readonly ForgeRemoteDefault[];\n    readonly local: readonly ForgeBaseBranch[];\n    readonly remotes: readonly ForgeRemoteBranches[];\n}',
+  },
+  {
     name: 'ForgeWorktreeBlocker',
     declaration: 'export type ForgeWorktreeBlocker = \'not-git\' | \'outside-writable-root\' | \'read-only\';',
   },
   {
     name: 'ForgeWorktreeCreation',
-    declaration: 'export interface ForgeWorktreeCreation {\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly branch: string;\n    readonly from: string | null;\n    readonly held: boolean;\n}',
+    declaration: 'export interface ForgeWorktreeCreation {\n    readonly phase: \'fetch\' | \'prepare\' | \'checkout\';\n    readonly branch: string;\n    readonly from: string | null;\n    readonly fetch: boolean;\n    readonly held: boolean;\n}',
   },
   {
     name: 'ForgeWorktreeFailure',
-    declaration: 'export interface ForgeWorktreeFailure {\n    readonly branch: string | null;\n    readonly from: string | null;\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeWorktreeFailure {\n    readonly branch: string | null;\n    readonly from: string | null;\n    readonly fetch: boolean;\n    readonly phase: \'fetch\' | \'prepare\' | \'checkout\';\n    readonly message: string;\n    readonly exists: boolean;\n}',
   },
   {
     name: 'ForgeWorktreeRequest',
-    declaration: 'export interface ForgeWorktreeRequest {\n    readonly from: string | null;\n}',
+    declaration: 'export interface ForgeWorktreeRequest {\n    readonly from: string | null;\n    readonly name: string | null;\n}',
   },
   {
     name: 'ForgeWorktreeRestoration',
