@@ -39,12 +39,13 @@ function directSpawnFailure(argv: readonly string[]): Promise<SpawnFailure> {
 async function waitForPid(path: string): Promise<number> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
+    let pid = Number.NaN
     try {
-      const pid = Number(readFileSync(path, 'utf8').trim())
-      if (Number.isSafeInteger(pid) && pid > 0) return pid
-    } catch {
+      pid = Number(readFileSync(path, 'utf8').trim())
+    } catch (_pidFileMissing) {
       // The target has not written the file yet.
     }
+    if (Number.isSafeInteger(pid) && pid > 0) return pid
     await new Promise(resolve => setTimeout(resolve, 20))
   }
   throw new Error(`pid file ${path} was not written`)
@@ -187,7 +188,7 @@ describe.skipIf(literalArgv === undefined)('Linux user-systemd native containmen
       handle.terminate()
       await Promise.allSettled([handle.done, handle.waitForExit()])
       if (descendant !== undefined) {
-        try { process.kill(descendant, 'SIGKILL') } catch { /* already contained */ }
+        try { process.kill(descendant, 'SIGKILL') } catch (_descendantGone) { /* Containment already killed the descendant. */ }
       }
     }
   })
@@ -290,7 +291,7 @@ while :; do sleep 60; done
     } finally {
       if (handle !== undefined) await handle.terminate().catch(() => {})
       if (descendant !== undefined) {
-        try { process.kill(descendant, 'SIGKILL') } catch { /* already contained */ }
+        try { process.kill(descendant, 'SIGKILL') } catch (_descendantGone) { /* Containment already killed the descendant. */ }
       }
       await fiber.dispose()
     }

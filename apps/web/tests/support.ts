@@ -419,8 +419,8 @@ export async function saveFailureShot(page: Page, name: string): Promise<void> {
   mkdirSync(dir, { recursive: true })
   try {
     await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
-  } catch {
-    // Best-effort evidence: a dead page/browser at failure time must not mask the real assertion error.
+  } catch (_screenshotFailed) {
+    // Screenshot evidence is optional: a dead page/browser at failure time must not mask the real assertion error.
   }
 }
 
