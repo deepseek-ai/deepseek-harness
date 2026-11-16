@@ -1,7 +1,7 @@
-/** The card frame below a completed answer (title, folded brief, the kind's body or a dismiss-only fallback) and the hidden card block. */
+/** The card frame below a completed answer (title, folded brief, the kind's body or a dismiss-only fallback) and the card block layer. */
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HocShare, HostObservable, InjectFace, PropsLocale, PropsRuntime, SlotMap, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ActionCardDecision, ActionCardFence, ActionCardFields, ActionCardId, ActionCardProposal, ActionCardResult, ActionCardView,
@@ -79,14 +79,27 @@ function decisionOf(view: ActionCardView | undefined, cardId: string): ActionCar
 }
 
 /** Language of the answer blocks that offer cards; the Host reads each card from its block. */
-export const CARD_FENCE: ActionCardFence = 'action-card'
+export const ACTION_CARD_FENCE: ActionCardFence = 'action-card'
+
+/** Props of the card block layer: the fence and the plain code block it can show instead. */
+type CardBlockProps = PropsRuntime<'conversation.chat.markdown.fence'> & HocShare<SlotMap['conversation.chat.markdown.fence']>
+
+/** Whether model-written block content is JSON. */
+function parses(code: string): boolean {
+  try { JSON.parse(code) }
+  catch { return false } // Text that is not JSON offers no card.
+  return true
+}
 
 /**
- * Hide an `action-card` block wherever the Chat flow renders Markdown: its card appears below the turn's final answer.
- * @returns nothing, so the block's JSON is never shown.
+ * Show an `action-card` block wherever the Chat flow renders Markdown. While the answer streams and once its content
+ * parses as JSON, the block renders nothing: a card it offers appears below the turn's final answer. A settled block
+ * that is not JSON offers no card, so it shows as plain code.
+ * @param props - the fence and the plain code block.
+ * @returns nothing, or the plain code block.
  */
-export function HiddenCardBlock(): null {
-  return null
+export function CardBlock({ code, streaming, children }: CardBlockProps): ReactNode {
+  return streaming || parses(code) ? null : children
 }
 
 /**

@@ -17,6 +17,7 @@
     { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
     { "path": "../../client/ui-primitives" },
+    { "path": "../../client/ui-tool" },
     { "path": "../../core/session" },
     { "path": "../action-cards" },
     { "path": "../../typert/protocol" },

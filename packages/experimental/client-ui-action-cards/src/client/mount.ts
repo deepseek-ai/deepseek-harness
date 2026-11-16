@@ -1,4 +1,4 @@
-/** Register the card frame, the hidden answer block, their copy and the body registry. */
+/** Register the card frame, the answer block layer, the tool row of older Sessions, their copy and the body registry. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -6,9 +6,11 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-action-cards/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import { ActionCardTail, CARD_FENCE, HiddenCardBlock, type TailInjected } from './Card.tsx'
+import { ACTION_CARD_FENCE, ActionCardTail, CardBlock, type TailInjected } from './Card.tsx'
+import { ProposeRow } from './ProposeRow.tsx'
 import { ActionCardRegistry } from './registry.ts'
 import { de, en, es, fr, ja, pt, ru, zh, type ActionCardKey } from './locales.ts'
 
@@ -57,6 +59,10 @@ function registerUi(ctx: Context, registry: ActionCardRegistry): void {
     }),
   }, ActionCardTail))
   ctx.slots.inject('conversation.chat.markdown.fence', () => ctx.slots.register(
-    { name: 'conversation.chat.markdown.fence', key: CARD_FENCE, id: '@deepseek-ai/dsh-client-ui-action-cards/block' }, HiddenCardBlock,
+    { name: 'conversation.chat.markdown.fence', key: ACTION_CARD_FENCE, id: '@deepseek-ai/dsh-client-ui-action-cards/block' }, CardBlock,
+  ))
+  // Sessions recorded before cards moved into answers offered them through `propose_action` calls.
+  ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
+    { name: 'tool.call.toolview', key: 'propose_action', locale: 'actionCards' }, ProposeRow,
   ))
 }

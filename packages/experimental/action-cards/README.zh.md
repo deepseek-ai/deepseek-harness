@@ -33,8 +33,8 @@ kind: "package-reference"
 
 ### 卡片规则
 
-- 卡片是语言为 `action-card` 的围栏代码块，内容是一个 JSON 对象，包含 `action`、`title`、`brief` 和对象类型的 `details`。一轮中第一个能解析的这种代码块成为卡片，以所在助手消息的 id 作为卡片 id。同一轮之后的代码块、思考内容里的代码块、被打断的回答里的代码块、标题或说明为空的代码块，以及 subagent 会话里的所有代码块都不会产生卡片，也不会告知模型。
-- 收下卡片时不检查种类：动作没有种类注册、或 `details` 未通过种类校验的卡片照样出现，除“暂不需要”外的操作一律以 unavailable 拒绝。
+- 卡片是语言为 `action-card` 的围栏代码块，内容是一个 JSON 对象，包含 `action`、`title`、`brief` 和对象类型的 `details`。代码块在任意层级都算，例如列表项或引用块中，与 Chat 客户端把它当作 `action-card` 代码块渲染的位置完全一致。一轮中第一个能解析的这种代码块成为卡片，以所在助手消息的 id 作为卡片 id。同一轮之后的代码块、思考内容里的代码块、被打断的回答里的代码块、标题或说明为空的代码块，以及 subagent 会话里的所有代码块都不会产生卡片，也不会告知模型。
+- 收下卡片时不检查种类：动作没有种类注册、或 `details` 未通过种类校验的卡片照样出现，并替换此前所有尚未开始的卡片，除“暂不需要”外的操作一律以 unavailable 拒绝。
 - 卡片改为写在回答里之前录下的会话，卡片照常保留：成功的 `propose_action` 调用仍成为卡片，以调用 id 作为卡片 id；用 `callId` 指代卡片的旧决定记录也照常读取。
 - 任何种类的新卡片都会替换此前所有尚未开始的卡片。替换从日志推导，从不单独记录。
 - fork 出的会话从父会话继承的事件不会产生卡片。
@@ -49,7 +49,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包默认导出 `actionCards` Remote 服务，不注册任何工具。日志里的回答就是持久的提议：`actionCards` 会话投影（状态版本 3）用 [`src/fence.ts`](src/fence.ts) 读取每条 `assistant/message` 的文字块，按 CommonMark 规则找出顶层围栏代码块，并按 Chat 客户端分派代码块的方式匹配语言，收下本轮第一个合格的代码块。投影还把旧会话里每个 `propose_action` 调用与其成功结果配对，从 `plugin:action-cards/decision` 读取决定，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。会话头的 `origin` 标出 subagent 会话，其投影不收任何卡片。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
+本包默认导出 `actionCards` Remote 服务，不注册任何工具。日志里的回答就是持久的提议：`actionCards` 会话投影（状态版本 3）用 [`src/fence.ts`](src/fence.ts) 读取每条 `assistant/message` 的文字块：含有可能以 `action-card` 语言开头的围栏起始行的文字按 Chat 客户端回答落定后的 GFM 与数学语法解析（`mdast-util-from-markdown` 及其扩展），保留客户端分派到该语言的代码块，收下本轮第一个合格的代码块。投影还把旧会话里每个 `propose_action` 调用与其成功结果配对，从 `plugin:action-cards/decision` 读取决定，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。会话头的 `origin` 标出 subagent 会话，其投影不收任何卡片。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
 
 Remote `act(sessionId, cardId, verb, payload?)` 先检查服务所有者、在线根 Agent 和卡片；“暂不需要”在种类未注册时也继续处理，其他操作还需要种类、操作和 Remote 权限。然后同一张卡片共用一次处理。种类的 `reconcile` 先运行，之后再次检查在线根 Agent；已忽略或已替换的卡片原样返回，“暂不需要”被记录，写入类操作在只读会话中被拒绝，其余操作在该 Agent 的发起方作用域内交给种类处理器。`record()` 也接受种类已注销的动作，因为 Cordis 并发释放插件的各个 effect，卸载中的种类仍要记录已开始工作的结果。一个 `agent/pre-step` 监听器在后续监听器准备好本步之后追加状态通知。
 
@@ -114,8 +114,8 @@ Latest status of action cards from user actions and background work. These are s
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 代码块没有产生卡片时模型不会知道：格式错误的代码块、同一轮的第二个代码块或 subagent 的代码块都不显示任何东西，而回答里可能已经邀请用户点卡片。
-- 只读取顶层代码块；列表或引用块里的代码块不会产生卡片，但浏览器端仍会把它隐藏。
+- 代码块没有产生卡片时模型不会知道，而回答里可能已经邀请用户点卡片。浏览器端会把回答落定后内容不是 JSON 的代码块按普通代码显示；能解析但缺字段的代码块、同一轮的第二个代码块和 subagent 的代码块仍然隐藏。
+- 未通过种类校验或动作没有注册的卡片仍会替换此前尚未开始的卡片，被替换的卡片不再提供任何操作。
 - 卡片只在主对话中提供。subagent 会话（包括 Creator 子 Agent 的会话）不收任何卡片，因为只有在线的根 Agent 才能对卡片进行操作。
 - 所有种类合计每轮只展示一张卡片。任何种类的新卡片都会替换此前所有尚未开始的卡片，因此第二个种类的卡片会替换第一个种类尚未开始的卡片。
 - 用户操作的拒绝原因有意设计为普通字符串：服务定义 `closing`、`not-live-root`、`unknown`、`unavailable`、`access-denied` 和 `read-only`，各种类可以添加自己的原因，浏览器端正文为已知原因显示文案，其余按 unavailable 处理。

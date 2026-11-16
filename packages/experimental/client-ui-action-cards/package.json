@@ -8,7 +8,7 @@
   "types": "lib/types/index.d.ts",
   "license": "MIT",
   "name": "@deepseek-ai/dsh-client-ui-action-cards",
-  "description": "Action cards below completed answers: the shared card frame, kind bodies and the compact tool row",
+  "description": "Action cards below completed answers: the shared card frame, kind bodies, the layer for the answer blocks that offer them, and the tool row of older Sessions",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
@@ -35,7 +35,8 @@
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-chat",
-        "@deepseek-ai/dsh-client-ui-session"
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-tool"
       ]
     }
   },
@@ -54,6 +55,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-tool": "workspace:*",
     "react": "^18.2.0",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
