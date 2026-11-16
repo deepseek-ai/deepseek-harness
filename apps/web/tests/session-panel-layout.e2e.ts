@@ -248,6 +248,15 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     })
     await other.mouse.move(5, 5)
     await expect.poll(async () => (await rowLayout(other)).highlighted).toBe(false)
+    // The row's open menu keeps the row highlighted and the More button shown after the pointer leaves for the menu.
+    await row.locator('[data-row-part="menu"] button').click()
+    await other.getByRole('menu').waitFor()
+    await other.mouse.move(5, 5)
+    expect(await rowLayout(other)).toEqual({
+      ...resting, menu: { center: 14, target: [24, 24], opacity: '1' }, hovered: false, highlighted: true,
+    })
+    await other.keyboard.press('Escape')
+    await expect.poll(async () => (await rowLayout(other)).highlighted).toBe(false)
     expect(errors.pageErrors).toEqual([])
   })
 })
