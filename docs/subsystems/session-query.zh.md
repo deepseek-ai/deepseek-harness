@@ -382,6 +382,13 @@ Exact reads, filters, and traces are backend-independent concrete behavior. A ba
 
 ```ts cordis-catalog
 /**
+ * Read the metadata that summarizes one live or prepared Session in a Session list.
+ * @param session - live or prepared Session to summarize.
+ * @returns whether the Session has no turn, and its latest human-authored prompt time.
+ */
+getListMetadata(session: Session): SessionListMetadata
+
+/**
  * Observe one exact live or prepared Session without a persistence listing preflight.
  * @param sessionId - logical Session identity.
  * @param options - cancellation and projection selection for this read.
