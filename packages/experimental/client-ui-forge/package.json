@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-forge",
-  "description": "Sidebar panel for a Session's change requests, with a worktree option for new Sessions and its Host Remote",
+  "description": "Session panel entries for a Session's change requests, with a worktree option for new Sessions and its Host Remote",
   "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
@@ -45,6 +45,7 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-session-panel",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-workspace"
@@ -75,21 +76,24 @@
     "picomatch": "^4.0.7"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
     "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-session-panel": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
@@ -106,21 +110,19 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
+    "@deepseek-ai/dsh-session-query": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@testing-library/react": "^16.3.3",
+    "@types/picomatch": "^4.0.3",
     "clsx": "^2.1.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-timeout": "workspace:*",
-    "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
-    "@deepseek-ai/dsh-session-query": "workspace:*",
-    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
-    "@types/picomatch": "^4.0.3",
-    "@deepseek-ai/dsh-brand": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "files": [
     "locale/*.json",

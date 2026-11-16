@@ -1,0 +1,47 @@
+/* Single-line text that clips with an ellipsis at rest. While it marquees
+   (data-marquee), the ellipsis drops, the inner span travels to the far edge
+   over the distance and time the hook measured, and both clipping edges fade
+   in over 12px instead of hard-cutting a character. */
+.text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* At the far edge the end fade lifts so the final character reads at full
+   strength: a zero-length animation, delayed by the travel's duration, swaps
+   the mask and holds it. */
+.text[data-marquee] {
+  text-overflow: clip;
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+  animation: dsh-marquee-arrive 0s var(--dsh-marquee-duration) forwards;
+}
+
+@keyframes dsh-marquee-arrive {
+  to { mask-image: linear-gradient(to right, transparent, #000 12px); }
+}
+
+/* Inline at rest, so the ellipsis cuts between characters; a transform needs a box. */
+.text[data-marquee] > .travel {
+  display: inline-block;
+  animation: dsh-marquee-travel var(--dsh-marquee-duration) linear forwards;
+}
+
+@keyframes dsh-marquee-travel {
+  to { transform: translateX(calc(-1 * var(--dsh-marquee-range))); }
+}
+
+/* Reduced motion shows the far edge at once, so only the start edge hides text. */
+@media (prefers-reduced-motion: reduce) {
+  .text[data-marquee] {
+    mask-image: linear-gradient(to right, transparent, #000 12px);
+    animation: none;
+  }
+
+  .text[data-marquee] > .travel {
+    animation: none;
+    transform: translateX(calc(-1 * var(--dsh-marquee-range)));
+  }
+}

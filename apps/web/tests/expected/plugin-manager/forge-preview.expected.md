@@ -43,7 +43,7 @@
     - code: "@deepseek-ai/dsh-experimental-forge-session"
     - text: 已关闭
   - listitem:
-    - text: 变更请求面板 在侧栏标签页中显示会话的变更请求，并让新会话可以在工作树中开始。
+    - text: 变更请求面板 在会话面板中显示会话的变更请求，并让新会话可以在工作树中开始。
     - code: forge-panel
     - code: "@deepseek-ai/dsh-experimental-client-ui-forge"
     - text: 已关闭
