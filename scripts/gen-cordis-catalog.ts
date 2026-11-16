@@ -64,6 +64,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   actionCards: 'boot.md',
   pluginRecommendations: 'boot.md',
   pluginMarket: 'boot.md',
+  connectorAccounts: 'boot.md',
   pluginRegistryProbe: 'boot.md',
   configEditor: 'boot.md',
   profileContext: 'boot.md',
@@ -1058,6 +1059,10 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  AnyConnectorAccountView: 'generic connector account view is owned by packages/client/ui-connector-account/README.md',
+  ConnectorAccountRegistration: 'Plugins page account registration is owned by packages/client/ui-connector-account/README.md',
+  ConnectorAccountsView: 'registered account stream item is owned by packages/client/ui-connector-account/README.md',
+  ConnectorOperationId: 'account operation id is owned by packages/client/ui-connector-account/README.md',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

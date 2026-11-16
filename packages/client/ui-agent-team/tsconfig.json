@@ -13,7 +13,7 @@
     { "path": "../ui-model-selection" },
     { "path": "../ui-layout" },
     { "path": "../../core/agent" },
-    { "path": "../ui-subagent" },
+    { "path": "../ui-session-panel" },
     { "path": "../locale/tsconfig.client.json" },
     { "path": "../store" },
     { "path": "../ui-conversation/tsconfig.client.json" },

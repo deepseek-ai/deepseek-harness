@@ -541,6 +541,15 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     // crossing ground that belongs to neither. Hovering it must not dismiss
     // it — the hazard this scenario pins.
     const card = page.getByRole('button', { name: `Copy: ${rowTitle}` })
+    // The stylesheet anchors the card: beside the row's end edge, its top on the row's top.
+    const beside = async (): Promise<{ gap: number; top: number; bottomMargin: number }> => {
+      const row = await sessionRow.boundingBox()
+      const box = await card.boundingBox()
+      if (row === null || box === null) throw new Error('the row or its hover card has no box')
+      const height = await page.evaluate(() => window.innerHeight)
+      return { gap: box.x - (row.x + row.width), top: box.y - row.y, bottomMargin: height - (box.y + box.height) }
+    }
+    expect(await beside()).toMatchObject({ gap: 8, top: 0 })
     await card.hover()
     await page.waitForTimeout(POINTER_HOLD_MS)
     expect(await page.getByText('Idle', { exact: true }).count()).toBeGreaterThanOrEqual(1)
@@ -559,6 +568,23 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     // Leaving anchor and card together closes it after the grace.
     await page.getByRole('button', { name: 'Account menu', exact: true }).hover()
     await expect.poll(() => card.count(), { timeout: 5_000 }).toBe(0)
+    // In a window too short for the card below the row's top, the card keeps
+    // its side and holds its bottom at the viewport's 8px margin.
+    const viewport = page.viewportSize()
+    const row = await sessionRow.boundingBox()
+    if (viewport === null || row === null) throw new Error('no viewport or row box')
+    await page.setViewportSize({ width: viewport.width, height: Math.ceil(row.y + row.height + 24) })
+    try {
+      await sessionRow.hover()
+      await card.waitFor({ timeout: 5_000 })
+      const held = await beside()
+      expect(held).toMatchObject({ gap: 8, bottomMargin: 8 })
+      expect(held.top).toBeLessThan(0)
+      await page.mouse.move(viewport.width - 20, 4)
+      await expect.poll(() => card.count(), { timeout: 5_000 }).toBe(0)
+    } finally {
+      await page.setViewportSize(viewport)
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

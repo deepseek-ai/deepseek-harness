@@ -8,7 +8,7 @@
 // Replay-binding note: only the PRIMARY script can hang, and scripts bind by
 // first-call order, so the child issues the composition's first model call
 // (claiming the overridden primary) and the parent's one UI prompt — needed
-// so the non-blank parent renders its header catalog — binds to a derived
+// so the non-blank parent lists its subagents in the Session panel — binds to a derived
 // child fixture afterwards.
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -25,7 +25,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, readPersistedEvents, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, showSessionPanel } from './support.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 
@@ -171,7 +171,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-    await page.getByRole('button', { name: /1 subagent/ }).waitFor({ timeout: 15_000 })
+    await (await showSessionPanel(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).waitFor({ timeout: 15_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     expect(scaffold.ctx.agents.get(childId)?.status).toBe('running')
   }, 120_000)
@@ -209,8 +209,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       await page.reload({ waitUntil: 'load' })
       await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
-      await page.getByRole('button', { name: /1 subagent/ }).click()
-      await page.getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
+      await (await showSessionPanel(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
       const input = page.locator('[data-composer-input]').first()
       await input.waitFor({ timeout: 15_000 })
       await page.getByText(/^Explain event sourcing in one sentence\./)
@@ -269,8 +268,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await page.getByRole('navigation', { name: 'Session hierarchy' })
       .getByRole('button').first().click()
-    await page.getByRole('button', { name: /1 subagent/ }).click()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
+    await (await showSessionPanel(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
     // A live continuable child advertises the ordinary steer-all gesture, so
     // that placeholder is the composer's accessible name in this window. It
     // changes back as the queue drains, so later interactions address the

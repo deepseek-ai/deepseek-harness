@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`@deepseek-ai/dsh-web-app` 套件默认加载本包。开关是会话标题栏的第一个工具按钮，位于变更请求、共享和计划任务目录之前。它是图标按钮：无障碍名称由面板名称和其角标组成，提示文字说明按下后是显示还是隐藏面板（悬停 500ms 后显示，键盘聚焦时立即显示），`aria-expanded` 表示面板当前是否显示。
+`@deepseek-ai/dsh-web-app` 套件默认加载本包。开关是会话标题栏的第一个工具按钮，位于共享和计划任务目录之前。它是图标按钮：无障碍名称由面板名称和其角标组成，提示文字说明按下后是显示还是隐藏面板（悬停 500ms 后显示，键盘聚焦时立即显示），`aria-expanded` /var/folders/_g/59jgff8x2gqd39f5vy1wnbfc0000gn/T/tmpkeajpmxo/theirs 表示面板当前是否显示。
 
 ### 停靠与浮层
 
@@ -38,24 +38,30 @@ kind: "package-reference"
 <a id="contribute-a-section"></a>
 ### 贡献分栏
 
-一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。
+一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
 
-多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。拥有共享分栏的插件用同样方式声明自己的行 slot。
+多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`，其中的行与分栏收到相同的 owner props；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。forge 套件在 order 20 与 30 处添加检出行与本地变更行。拥有共享分栏的插件用同样方式声明自己的行 slot。
 
-面板隐藏时也要可见的标记（例如需要处理的红点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。
+面板隐藏时也要可见的标记（例如提示需要处理的圆点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。「子智能体」与「后台任务」在任务运行且面板未显示时显示蓝点（order 10 和 20）；forge 套件的红色提醒点（order 100）画在它们上方，面板显示时也保留。
 
 各行共享同一外观，但不共享组件。分栏的组件或「环境」分栏的行条目自己写行的标记并标出各个部分，由面板的样式表统一排版，因此不同包的图标、文字与尾部区域对齐，而行里放什么由各包自己决定。
 
 | 标记 | 部分 |
 |---|---|
 | `data-session-panel-row` | 行：占 28px 一行。带操作或菜单的行在悬停时以及其菜单打开期间整行高亮。 |
-| `data-row-part="body"` | 图标与文字。用 `<button>` 作为 body 时，它就是这一行的操作，点击区域覆盖整行；尾部区域与菜单仍是位于其上的独立控件。 |
+| `data-row-part="body"` | 图标与文字。用 `<button>` 作为 body 时，它就是这一行的操作，点击区域覆盖整行；尾部区域与菜单仍是位于其上的独立控件。可见文字不足以说明操作时，给按钮一个以可见文字开头的 `aria-label`。 |
 | `data-row-part="icon"` | body 内的 16px 装饰图标，沿用行文字颜色；需标记 `aria-hidden`。 |
 | `data-row-part="content"` | body 内的单行文字，溢出时以省略号截断。 |
+| `data-row-part="lines"` | 两行的行里，body 内包住 content 与 detail 的容器。 |
+| `data-row-part="detail"` | content 下方的第二行，使用较小的三级文字并以省略号截断，例如某个状态的后果或要运行的命令。行变为两行：图标留在第一行旁，尾部区域与菜单在整行上居中。 |
 | `data-row-part="trailing"` | body 之后的数值或控件。 |
 | `data-row-part="menu"` | 行操作（例如「更多」按钮），位于 16px 宽的一列，中心距行末端 14px。其中的普通 `button` 有 24px 点击区和三级文字色图标，悬停时图标变深、没有底色，因此不需要自己的 tooltip。鼠标悬停在行上、焦点在行内或其菜单打开时显示，没有悬停能力的设备上始终显示。 |
 
 行没有的部分就不要写：有 `<button>` body 或菜单部分的行才会高亮。没有渲染任何内容的菜单部分（例如目标没有菜单项时的共享菜单按钮）视同不存在：不占位置，行也不会因它高亮。每条针对某个部分的规则只有一个类的优先级，因此行自己的类可以调整它。
+
+列表可能很长的分栏会把它收起：只显示列表（或列表里每个分组）的前五行，然后以收起控件作为最后一行，用来显示其余的行或再次收起。只有这样做能收起两行及以上时才收起，因为控件自己也占一行；列表按顺序排列，使被收起的是最不需要看的行。插件把这个控件作为 Component Factory `conversation.session.panel.fold` 提供：`renderFactorySlot('conversation.session.panel.fold', { expanded, label, name, onToggle })` 渲染一个标记为 `data-session-panel-row="fold"` 的行，body 就是按钮，使用分栏计数的 12px 三级文字，图标列里是 14px 的箭头，还有行被收起时朝下，全部显示后朝上。`label` 是当前状态的可见文字，例如「显示其余 14 个」或「收起」；`name` 是无障碍名称，以 `label` 开头并说明列表里是什么。收起状态由分栏保存，显示哪些行也由分栏决定；在注册上声明 store 可以让这个选择在面板隐藏期间保留。
+
+单行显示会截断名称，或放不下负责人、状态、度量的行，把这些内容放进悬停卡片。插件把卡片内容作为 Component Factory `conversation.session.panel.details` 提供：用 `HoverCard` 包住行，并把 `renderFactorySlot('conversation.session.panel.details', { title, lines, status, facts })` 作为它的 `content`。所有属性都是可选的数据。`title` 是行的完整名称，可以换行；名称可能很长（例如命令）而行自己的视图会完整显示它时，不要传。`lines` 是负责人等次要文字行，每行最多显示六行。`status` 是 `StateDot` 的状态及其文字。`facts` 是排在一行里的度量，每种 `kind` 最多一个：`tokens` 前面是数据库图标，`duration` 前面是时钟图标，各带自己的 `label`。卡片内容在两种主题下都使用卡片的深色底面。
 
 -----
 
@@ -79,6 +85,8 @@ kind: "package-reference"
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、停靠探针，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
+| [`src/client/PanelFold.tsx`](src/client/PanelFold.tsx) | 被收起列表的收起控件，以 Component Factory 提供 |
+| [`src/client/PanelDetails.tsx`](src/client/PanelDetails.tsx) | 行的悬停卡片里的详情，以 Component Factory 提供 |
 
 </details>
 

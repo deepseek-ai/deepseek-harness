@@ -334,7 +334,7 @@ export class SessionPanel {
     return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
   }
 
-  /** Measure the `branch` scope; a failed measurement only hides the local changes card. */
+  /** Measure the `branch` scope; a failed measurement only hides the local changes row. */
   private async localOf(inspection: Inspection): Promise<ForgeLocalChanges | null> {
     try {
       return await localChanges(this.ctx, this.config, this.session, inspection, this.worktree().created, this.lifetime.signal)

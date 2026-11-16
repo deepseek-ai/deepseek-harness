@@ -16,6 +16,7 @@ import {
 } from './scaffold.ts'
 import {
   connectFreshWorkspace, expandOwningTurnProcess, expandTurnProcesses, newEnglishPage, REPO_ROOT, saveFailureShot,
+  showSessionPanel,
 } from './support.ts'
 
 const MODE = webSnapshotMode()
@@ -218,8 +219,7 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     await page.getByText(CHILD_PROMPT, { exact: false }).waitFor()
     expect(await page.getByRole('button', { name: /^Open Reply with exactly the word/ }).count()).toBe(0)
 
-    await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
-    const catalog = page.getByRole('tree', { name: 'Subagent sessions' })
+    const catalog = (await showSessionPanel(page)).getByRole('tree', { name: 'Subagent sessions' })
     await catalog.getByRole('treeitem', { name: /snapshot-flow child 1/ }).press('Enter')
     await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
     expect(await page.locator('[data-composer-input][contenteditable="true"]').count()).toBe(1)
