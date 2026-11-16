@@ -337,7 +337,7 @@ export class ApiSessionAgentController {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     if (live !== undefined) {
-      if (live.session.header.cwd !== request.cwd) {
+      if (!await this.namesDirectory(live.session.header.cwd, request.cwd)) {
         throw new ApiSessionCwdConflict(live.id, request.cwd, live.session.header.cwd)
       }
       const composition = await this.composeAgent(request.agentPreset)
@@ -356,7 +356,7 @@ export class ApiSessionAgentController {
       if (hasApiSessionSubagentOwner({ header: observed.header })) {
         throw new ApiSessionSubagentOwnership(sessionId)
       }
-      if (observed.header.cwd !== request.cwd) {
+      if (!await this.namesDirectory(observed.header.cwd, request.cwd)) {
         throw new ApiSessionCwdConflict(sessionId, request.cwd, observed.header.cwd)
       }
       reusable = request.reusable(sessionId) && !observed.events.some(event => event.type === 'turn/start')
@@ -440,18 +440,29 @@ export class ApiSessionAgentController {
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }
-    // The header records the canonical spelling of the project directory; see SessionHeader.cwd.
-    const fs = this.ctx.get('fs')
-    const canonical = fs === undefined ? cwd : fs.processPath(await fs.resolve(cwd))
     return (await this.ctx.agents.create({
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
-        cwd: canonical,
+        cwd: await this.canonical(cwd),
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       setup: composition.setup,
     })).agent
+  }
+
+  /** The canonical spelling of a project directory, which new headers record; see SessionHeader.cwd. */
+  private async canonical(cwd: string): Promise<string> {
+    const fs = this.ctx.get('fs')
+    return fs === undefined ? cwd : fs.processPath(await fs.resolve(cwd))
+  }
+
+  /**
+   * Whether a request names the directory a Session header records: by the recorded spelling, or by a
+   * spelling such as a symlink whose canonical form the header records.
+   */
+  private async namesDirectory(recorded: string | undefined, requested: string): Promise<boolean> {
+    return recorded === requested || (recorded !== undefined && recorded === await this.canonical(requested))
   }
 
   private agentOptions(): AgentOptions {
