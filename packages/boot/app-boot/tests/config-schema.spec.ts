@@ -467,6 +467,16 @@ describe('collectConfigSchemas', () => {
     }
   })
 
+  it('requires an entry-list config on every group: true entry, as the Loader does', async () => {
+    const result = await collectConfigSchemas(profile, [row('noop')], resolution)
+    expect(validates(result, [{ name: 'noop', group: true, config: [] }])).toBe(true)
+    expect(validates(result, [{ name: 'noop', group: false }])).toBe(true)
+    for (const value of [{ name: 'noop', group: true }, { name: 'noop', group: true, config: {} }, { name: 'noop', group: true, disabled: true }]) {
+      expect(validates(result, [value])).toBe(false)
+    }
+    expect(validates(result, [{ id: 'g', config: [] }], 'patchList')).toBe(true)
+  })
+
   it('allows disabled config omission without disabling group:true or supplied-config validation', async () => {
     modules.set('required', { Config: Schema.string().required() })
     const result = await collectConfigSchemas(profile, [row('required')], resolution)

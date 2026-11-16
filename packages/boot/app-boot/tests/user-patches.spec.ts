@@ -18,6 +18,7 @@ import {
   loadOverlayPatches,
   PROFILE_PATCH_FILENAME,
   reconcileProfilePatches,
+  StartupError,
 } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
@@ -346,6 +347,25 @@ describe('profile reconciliation settlement', () => {
     const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: ModuleNotFoundError'
     const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs'$`, 'u')
     expect(await reconcileProfilePatches(ctx, patches, NAME)).toEqual([expect.stringMatching(diagnostic)])
+  })
+
+  it('fails startup for a required row whose options the Loader rejects, at its source position', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'cordis.yml'), '- id: webserver\n  name: ./webserver.mjs\n  disabled: maybe\n')
+    const error = await boot(NAME, join(dir, 'cordis.yml')).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(StartupError)
+    expect((error as Error).message).toContain('  webserver (required)\n    Package: ./webserver.mjs')
+    expect((error as Error).message).toContain(`disabled must be a boolean (at disabled, ${join(dir, 'cordis.yml')}:3:13)`)
+  })
+
+  it('rejects a recomposition that introduces rows the Loader rejects', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'cordis.yml'), '[]\n')
+    const ctx = await boot(NAME, join(dir, 'cordis.yml'))
+    onTestFinished(() => ctx.fiber.dispose())
+    const patches = [{ insert: [{ id: 'bad-group', name: 'cordis:group', group: true }] }]
+    await expect(reconcileProfilePatches(ctx, patches, NAME)).rejects
+      .toThrow('bad-group (cordis:group): invalid entry options: EntryValidationError: invalid entry options:\n  - config is required (at config)')
   })
 
   it('rejects a context without the launcher root Include', async () => {

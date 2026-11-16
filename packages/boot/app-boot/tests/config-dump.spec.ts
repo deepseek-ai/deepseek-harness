@@ -157,6 +157,19 @@ describe('renderConfigDump', () => {
     expect(patches).toEqual([{ id: 'g', config: [{ name: './noop.mjs' }] }])
   })
 
+  it('keeps each layer\'s snapshot when a later layer inserts into a config array an earlier layer supplied', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: x\n  name: ./group.mjs\n')
+    const dump = renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches: [{ id: 'x', config: [] }] },
+      { label: 'b.yml', patches: [{ id: 'x', group: true }] },
+      { label: 'c.yml', patches: [{ id: 'x', insert: [{ id: 'child', name: './noop.mjs' }] }] },
+    ], () => {})
+    expect((parseEntryYaml(dump) as { config: unknown[] }[])[0]!.config).toEqual([{ id: 'child', name: './noop.mjs' }])
+    expect(dump).toContain('# == base.yml, patched by a.yml, b.yml, c.yml\n- id: x')
+  })
+
   it('drops the children of a replaced group config from the patch index', () => {
     const dir = tmp()
     const base = join(dir, 'base.yml')
