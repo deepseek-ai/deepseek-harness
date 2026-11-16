@@ -1071,5 +1071,11 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
     mounted.im.botSelfId = undefined
     const readNoBot = value(await mounted.call('im_read', { message: 'm-self-mention' })) as { message: { mentions: Array<{ id: string }> } }
     expect(readNoBot.message.mentions).toEqual([{ id: 'ou_bot', name: 'Bot' }, { id: 'ou_alice', name: 'Alice' }])
+
+    vi.spyOn(mounted.im, 'bot').mockImplementationOnce(() => { throw new TypeError('unexpected bot failure') })
+    expect(await mounted.call('im_read', { message: 'm-self-mention' })).toMatchObject({
+      isError: true,
+      error: { message: 'unexpected bot failure' },
+    })
   })
 })

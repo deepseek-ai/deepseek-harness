@@ -366,8 +366,9 @@ function threadAllow(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey): 
 function selfIdOf(im: ImToolHost, chat: ImChatKey): string | undefined {
   try {
     return im.bot(chat).selfId
-  } catch {
-    return undefined
+  } catch (error) {
+    if (error instanceof ImError && error.code === 'unavailable') return undefined
+    throw error
   }
 }
 
