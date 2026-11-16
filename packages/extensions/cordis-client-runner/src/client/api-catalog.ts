@@ -965,11 +965,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionRetainInfo',
-    declaration: 'export interface SessionRetainInfo {\n    readonly referenceCount: number;\n    readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>;\n    readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>;\n}',
+    declaration: 'export interface SessionRetainInfo {\n    readonly referenceCount: number;\n    readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>;\n    readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>;\n    readonly connectionCount?: number;\n}',
   },
   {
     name: 'SessionRetainOptions',
-    declaration: 'export interface SessionRetainOptions {\n    readonly source: SessionReferenceSource;\n    readonly facets?: Readonly<Partial<Record<SessionRetainFacet, boolean>>> | undefined;\n    readonly signal?: AbortSignal | undefined;\n}',
+    declaration: 'export interface SessionRetainOptions {\n    readonly source: SessionReferenceSource;\n    readonly connection?: boolean | undefined;\n    readonly facets?: Readonly<Partial<Record<SessionRetainFacet, true>>> | undefined;\n    readonly signal?: AbortSignal | undefined;\n}',
   },
   {
     name: 'SessionSearchResultItem',

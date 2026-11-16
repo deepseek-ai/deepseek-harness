@@ -30,9 +30,9 @@ import { UserTextRegistry } from './user-text-registry.ts'
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionRetainFacetMap {
     /**
-     * Conversation assembly of the Session's event window. While no reference retains it, the
-     * Session still receives events but its Conversation binding neither folds nor publishes;
-     * readers see the last published snapshot until retention resumes and folds the window once.
+     * Conversation assembly of the Session's event window. While a reference retains it, the binding folds the
+     * window and follows its changes; when the last such reference is released, the binding drops the fold and
+     * publishes the empty result, and retaining it again folds the current window once.
      */
     conversation: unknown
   }
@@ -51,7 +51,7 @@ export interface ConversationBinding {
   readonly openTurn: ObservableSnapshot<number | undefined>
   /**
    * Add one selected target to the Session's monotonic active set; while the facet is not retained,
-   * the target's view is built from the last folded state and catches up when retention resumes.
+   * the target's view stays empty until retention folds the window.
    * @param target - registered or subsequently registered Conversation target.
    */
   activate(target: string): void
@@ -75,11 +75,8 @@ class BoundConversation implements ConversationBinding {
   private revision = -1
   private frame: number | undefined
   private following = false
-  /**
-   * The next window change rebuilds the whole window: set until the first fold, by registry changes while not
-   * following, and by a failed resumption, whose partial fold must not be extended incrementally.
-   */
-  private stale = true
+  /** Whether the assembler holds the window at `revision`; a failed fold leaves nothing to extend incrementally. */
+  private folded = false
   private disposeFeed: () => void = () => {}
   private disposeRetained: () => void = () => {}
 
@@ -131,10 +128,8 @@ class BoundConversation implements ConversationBinding {
   }
 
   rebuild(): void {
-    if (!this.following) {
-      this.stale = true
-      return
-    }
+    // A binding that does not follow holds no fold; following again rebuilds against the current registry.
+    if (!this.following) return
     this.publish(this.assembler.rebuildRegistry())
   }
 
@@ -146,16 +141,21 @@ class BoundConversation implements ConversationBinding {
   }
 
   /**
-   * Start or stop following the feed. Stopping keeps the last published snapshot readable.
-   * Resuming subscribes first, so a failed catch-up is repaired by the next window change.
+   * Start or stop following the feed. Starting folds the whole current window and publishes it at once;
+   * stopping drops the fold and publishes the empty result.
    */
   private follow(retained: boolean): void {
     if (retained === this.following) return
     this.following = retained
+    this.cancelFrame()
     if (!retained) {
       this.disposeFeed()
       this.disposeFeed = () => {}
-      this.cancelFrame()
+      this.folded = false
+      this.publishing(() => {
+        this.assembler.rebuildRegistry([], false)
+        return this.assembler.flush()
+      })
       return
     }
     // A dispatch already in progress keeps a copy of its listeners, so the callback checks
@@ -163,24 +163,20 @@ class BoundConversation implements ConversationBinding {
     this.disposeFeed = this.feed.subscribe(() => {
       if (this.following) this.accept(this.feed.getSnapshot())
     })
-    this.resume()
+    this.foldWindow()
   }
 
-  /**
-   * Fold the window changes received while not following and publish once synchronously: a stale
-   * binding rebuilds the whole window, otherwise contiguous changes fold incrementally and a gap rebuilds.
-   * A failed fold leaves the binding stale, so the next window change rebuilds the whole window.
-   */
-  private resume(): void {
-    try {
-      this.accept(this.feed.getSnapshot())
-    } catch (error: unknown) {
-      this.stale = true
-      throw error
-    } finally {
-      this.cancelFrame()
-      this.publishing(() => this.assembler.flush())
-    }
+  /** Fold the whole current window against the current registry and publish it synchronously. */
+  private foldWindow(): void {
+    const window = this.feed.getSnapshot()
+    this.folded = false
+    this.cancelFrame()
+    this.publishing(() => {
+      this.assembler.rebuildRegistry(window.entries, window.hasMore)
+      this.revision = window.revision
+      this.folded = true
+      return this.assembler.flush()
+    })
   }
 
   private replace(window: SessionEventWindow): void {
@@ -188,15 +184,9 @@ class BoundConversation implements ConversationBinding {
     this.publish(this.assembler.replaceWindow(window.entries, window.hasMore))
   }
 
-  private rebuildWindow(window: SessionEventWindow): void {
-    this.revision = window.revision
-    this.publish(this.assembler.rebuildRegistry(window.entries, window.hasMore))
-    this.stale = false
-  }
-
   private accept(window: SessionEventWindow): void {
-    if (this.stale) {
-      this.rebuildWindow(window)
+    if (!this.folded) {
+      this.foldWindow()
       return
     }
     if (window.revision === this.revision) return

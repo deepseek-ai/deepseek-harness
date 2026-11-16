@@ -222,8 +222,14 @@ function retentionOf(
   referenceCount: number,
   retainedBy: SessionRetainInfo['retainedBy'],
   retainedFacets: SessionRetainInfo['retainedFacets'],
+  connectionCount: number,
 ): SessionRetainInfo {
-  return Object.freeze({ referenceCount, retainedBy, ...(retainedFacets === undefined ? {} : { retainedFacets }) })
+  return Object.freeze({
+    referenceCount,
+    retainedBy,
+    ...(retainedFacets === undefined ? {} : { retainedFacets }),
+    ...(connectionCount === 0 ? {} : { connectionCount }),
+  })
 }
 
 function freezeRetainedBy(
@@ -545,9 +551,10 @@ export class TestSessions implements ISessions {
     if (this.closed) throw new Error('test Session Controller is disposed')
     const id = this.resolveTarget(target)
     const generation = this.generations.get(id) ?? this.materialize(id, this.require(id))
-    const reference = this.retainGeneration(id, generation, source, heldFacets(facets))
+    const connected = options.connection !== false
+    const reference = this.retainGeneration(id, generation, source, heldFacets(facets), connected)
     try {
-      reference.attachOpening(generation.opening, signal)
+      reference.attachOpening(connected ? generation.opening : Promise.resolve(), signal)
       return reference
     } catch (error: unknown) {
       reference.release()
@@ -733,12 +740,15 @@ export class TestSessions implements ISessions {
     generation: SessionGeneration,
     source: SessionReferenceSource,
     facets: readonly SessionRetainFacet[],
+    connected: boolean,
   ): TestSessionReference {
     const previous = generation.retention
+    const connection = connected ? 1 : 0
     generation.retention = retentionOf(
       previous.referenceCount + 1,
       freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
       shiftFacetCounts(previous.retainedFacets, facets, 1),
+      (previous.connectionCount ?? 0) + connection,
     )
     const reference = new TestSessionReference(id, generation, () => {
       if (!generation.live) return
@@ -749,7 +759,12 @@ export class TestSessions implements ISessions {
         : otherSources
       generation.retention = count === 0
         ? EMPTY_RETAIN_INFO
-        : retentionOf(count, freezeRetainedBy(retainedBy), shiftFacetCounts(generation.retention.retainedFacets, facets, -1))
+        : retentionOf(
+          count,
+          freezeRetainedBy(retainedBy),
+          shiftFacetCounts(generation.retention.retainedFacets, facets, -1),
+          (generation.retention.connectionCount ?? 0) - connection,
+        )
       if (count === 0) this.drop(id, generation)
       else this.publishRetention(id)
     })

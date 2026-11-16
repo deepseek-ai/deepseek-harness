@@ -170,8 +170,26 @@ function retentionOf(
   referenceCount: number,
   retainedBy: SessionRetainInfo['retainedBy'],
   retainedFacets: SessionRetainInfo['retainedFacets'],
+  connectionCount: number,
 ): SessionRetainInfo {
-  return Object.freeze({ referenceCount, retainedBy, ...(retainedFacets === undefined ? {} : { retainedFacets }) })
+  return Object.freeze({
+    referenceCount,
+    retainedBy,
+    ...(retainedFacets === undefined ? {} : { retainedFacets }),
+    ...(connectionCount === 0 ? {} : { connectionCount }),
+  })
+}
+
+/**
+ * Drop what no remaining reference keeps: the connection when none keeps it, otherwise the older window pages
+ * when no facet computes over them any longer.
+ */
+function releaseConnectionWork(session: Session, before: SessionRetainInfo, after: SessionRetainInfo): void {
+  if ((before.connectionCount ?? 0) > 0 && after.connectionCount === undefined) {
+    void session.disconnect()
+    return
+  }
+  if (before.retainedFacets !== undefined && after.retainedFacets === undefined) session.bufferOlder()
 }
 
 const EMPTY_RETAIN_INFO: SessionRetainInfo = Object.freeze({ referenceCount: 0, retainedBy: freezeRetainedBy({}) })
@@ -309,12 +327,13 @@ export class ClientSessions implements ISessions {
 
   retain(target: SessionTarget, options: SessionRetainOptions): SessionReference {
     const { source, signal, facets } = options
+    const connected = options.connection !== false
     signal?.throwIfAborted()
     if (this.closed) throw new Error('Session Controller is disposed')
     const id = this.manager.resolveTarget(target)
-    const reference = this.retainScope(id, source, heldFacets(facets))
+    const reference = this.retainScope(id, source, heldFacets(facets), connected)
     try {
-      reference.attachOpening(this.manager.get(id).open(), signal)
+      reference.attachOpening(connected ? this.manager.get(id).open() : Promise.resolve(), signal)
       return reference
     } catch (error) {
       reference.release()
@@ -526,7 +545,7 @@ export class ClientSessions implements ISessions {
    */
   retainAgentScope(id: SessionId): SessionReference {
     if (this.closed) throw new Error('Session Controller is disposed')
-    return this.retainScope(id, 'gateway', [])
+    return this.retainScope(id, 'gateway', [], false)
   }
 
   /**
@@ -572,24 +591,37 @@ export class ClientSessions implements ISessions {
     id: SessionId,
     source: SessionReferenceSource,
     facets: readonly SessionRetainFacet[],
+    connected: boolean,
   ): ClientSessionReference {
     const record = this.scopes.get(id) ?? this.materializeScope(id)
     const previous = record.retention
+    const connection = connected ? 1 : 0
     record.retention = retentionOf(
       previous.referenceCount + 1,
       freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
       shiftFacetCounts(previous.retainedFacets, facets, 1),
+      (previous.connectionCount ?? 0) + connection,
     )
     const reference = new ClientSessionReference(id, record, () => {
       if (!record.live) return
-      const count = record.retention.referenceCount - 1
-      const { [source]: sourceCount = 0, ...otherSources } = record.retention.retainedBy
+      const before = record.retention
+      const count = before.referenceCount - 1
+      const { [source]: sourceCount = 0, ...otherSources } = before.retainedBy
       const retainedBy = sourceCount > 1 ? { ...otherSources, [source]: sourceCount - 1 } : otherSources
       record.retention = count === 0
         ? EMPTY_RETAIN_INFO
-        : retentionOf(count, freezeRetainedBy(retainedBy), shiftFacetCounts(record.retention.retainedFacets, facets, -1))
-      if (count === 0) this.retireScope(id, record)
-      else this.publishRetention(id)
+        : retentionOf(
+          count,
+          freezeRetainedBy(retainedBy),
+          shiftFacetCounts(before.retainedFacets, facets, -1),
+          (before.connectionCount ?? 0) - connection,
+        )
+      if (count === 0) {
+        this.retireScope(id, record)
+        return
+      }
+      this.publishRetention(id)
+      releaseConnectionWork(record.session, before, record.retention)
     })
     if (this.list.getSnapshot().byId[id] === undefined && this.manager.subagentAddress(id) !== undefined) {
       this.projectList()

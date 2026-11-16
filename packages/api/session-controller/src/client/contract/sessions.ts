@@ -36,10 +36,16 @@ export interface SessionReference extends Disposable {
 export interface SessionRetainOptions {
   readonly source: SessionReferenceSource
   /**
-   * Facets this reference keeps alive beyond the history stream every reference retains.
-   * A facet is retained only when its key is `true`; the set is fixed for the reference's lifetime.
+   * Whether this reference keeps the Session's own event connection and the event window it keeps current, so a
+   * return shows the data at once. Defaults to `true`; `false` keeps only the Session object and its local state,
+   * such as the composer draft. This is not the page's transport connection.
    */
-  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, boolean>>> | undefined
+  readonly connection?: boolean | undefined
+  /**
+   * Owner-declared facets this reference keeps computing over the Session's data; an absent key is not computed.
+   * The set is fixed for the reference's lifetime.
+   */
+  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, true>>> | undefined
   readonly signal?: AbortSignal | undefined
 }
 
@@ -53,6 +59,8 @@ export interface SessionRetainInfo {
    * Owners read their facet here, for example `(info.retainedFacets?.conversation ?? 0) > 0`.
    */
   readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
+  /** Positive count of references keeping the event connection; absent while none does. */
+  readonly connectionCount?: number
 }
 
 /** The sessions-service face injected as `ctx.sessions`. */

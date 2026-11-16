@@ -14,23 +14,19 @@ retain 接口只能表达保住或释放整个 Session，无法表达「只收�
 
 ## 决策
 
-本决策扩展 [Client Session 引用](2026-09-15-client-session-references.zh.md)，但不取代它：引用、来源计数和 `ready` 语义不变，`SessionRetainOptions` 携带子要素。
+本决策扩展 [Client Session 引用](2026-09-15-client-session-references.zh.md)，但不取代它：引用与来源计数不变；`SessionRetainOptions` 携带 `connection` 与子要素，不保留连接的引用在 binding 建好时即就绪。它以 `draft` 引用取代 [跨会话切换保留草稿附件](../bug-fix/2026-11-13-draft-attachments-across-session-switches.zh.md) 中的草稿附件归属机制。
 
-### Session retain 与子要素
+### 连接与子要素
 
-Session retain 始终保活 binding、作用域、历史连接和事件窗口。连接是强制的，不作为子要素。
-
-子要素（facet）是在此基础上另外保留的部分，每个子要素单独计数。引用在创建时通过 options 声明要保留哪些子要素：
+Session 引用始终保活 Session 对象及其作用域，作用域上保存草稿、发送回显等本地状态。两个选项决定在此之外还保留什么：
 
 ```ts ignore-check
-// session-controller/client: declares no facets
-export interface SessionRetainFacetMap {}
-export type SessionRetainFacet = Extract<keyof SessionRetainFacetMap, string>
-
 export interface SessionRetainOptions {
   readonly source: SessionReferenceSource
-  /** Parts kept alive beyond the Session's history stream; an absent key is not retained. */
-  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, boolean>>>
+  /** Keeps the Session's own event connection and the event window it keeps current; defaults to `true`. */
+  readonly connection?: boolean
+  /** Owner-declared facets this reference keeps computing over the Session's data; an absent key is not computed. */
+  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, true>>>
   readonly signal?: AbortSignal | undefined
 }
 
@@ -38,38 +34,45 @@ export interface SessionRetainInfo {
   // existing members unchanged
   /** Positive counts of references retaining each facet; absent while no reference retains any facet. */
   readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
+  /** Positive count of references keeping the event connection; absent while none does. */
+  readonly connectionCount?: number
 }
 ```
 
 | 规则 | 行为 |
 |---|---|
-| 声明方式 | 子要素由其 owner 包通过声明合并加入 `SessionRetainFacetMap`；Controller 不赋予任何子要素含义 |
-| 缺省 | 未写的键不保留；子要素没有默认值 |
-| 不可变 | 一条引用的子要素集合在创建时固定；更换集合时先 retain 新引用，再 release 旧引用 |
-| 计数 | [`shiftFacetCounts`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) 在 generation 的 `SessionRetainInfo` 中为每个子要素记一个计数，与按来源的 `retainedBy` 并列，`retainInfo(id)` 发布每次变化；owner 根据该快照与当前 binding 推导自己的子要素是否被保留，因此 `SessionBinding` 不变；generation 退役时清空全部计数 |
-| 依赖 | Controller 不校验子要素之间的依赖，由调用方负责 |
-| `using()` | 签名不变；借出的引用只服务一次操作，调用方不写 `facets` |
-| `retainAgentScope` | 不保留任何子要素 |
+| 连接 | 连接指 Session 自己的 follow 流及其维持最新的事件窗口，不是页面传输连接。第一个保留连接的引用出现时建立；作用域仍在而最后一个保留连接的引用被释放时，`Session.disconnect()` 关闭连接、清空窗口，并让 Session 回到 cold 状态，发送回显保留；下一个保留连接的引用按首次打开的流程重新连接 |
+| 子要素 | owner 包通过声明合并把子要素加入 `SessionRetainFacetMap`；Controller 不赋予任何子要素含义。未写的键不计算；子要素基于连接保有的数据计算，没有数据就无从计算 |
+| 缓冲的更早页 | 连接仍在而最后一个子要素被释放时，`Session.bufferOlder()` 只让按 Turn 对齐的最后一页可见，并把更早的条目交给它的 `SessionEventStream`。Session 的翻页逻辑不变；stream 读页时先按请求的 Turn 窗口从这些缓冲记录中切一页返回，不发请求，用完后再读 Host 分页。窗口被整体替换时丢弃缓冲，resync、断开或销毁时随 stream 一起丢弃。[`buffered-pages.ts`](../../../../packages/api/session-controller/src/client/sessions/buffered-pages.ts) 负责分页切点 |
+| 计数 | [`shiftFacetCounts`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) 在 generation 的 `SessionRetainInfo` 中为每个子要素记一个计数，与 `connectionCount` 和按来源的 `retainedBy` 并列；`retainInfo(id)` 发布每次变化，owner 根据该快照与当前 binding 推导自己的子要素，因此 `SessionBinding` 不变 |
+| 不可变 | 一条引用的选项在创建时固定；更改时先 retain 新引用，再 release 旧引用 |
+| `using()` | 签名不变；借出的引用默认保留连接，不请求子要素 |
+| `retainAgentScope` | 既不保留连接，也不保留子要素 |
 
 ### `conversation` 子要素
 
 `ui-conversation` 声明 `conversation`：对事件窗口做 Conversation 折叠并物化其视图。
 
 - `BoundConversation` 仍然每个 binding 一个，其 `snapshot`、`openTurn` 和 `target(t)` 数据源保持对象标识稳定。`UiConversation.binding()` 先在 Session 作用域上登记该绑定的清理，再让绑定开始跟随；首次折叠失败时清理该绑定，下次解析重新开始。
-- 子要素**开始**被保留时，绑定先订阅事件窗口，再一步完成恢复：首次折叠或未跟随期间发生的注册表变化会按当前窗口整窗重建一次；否则期间收到的连续变化走增量 assembler，revision 出现缺口时整窗重建。随后取消待发的 rAF 并同步发布一次，这次折叠失败时也是如此；折叠失败会让绑定保持过期状态，下一次窗口变化整窗重建，而不是在部分折叠结果上继续增量。未跟随期间激活的视图基于上一次折叠结果建立，并在恢复时补齐。
-- 子要素**停止**被保留时，绑定退订事件窗口并取消待发的 rAF。最后一次发布的快照仍可读取，但不再更新。切换过程中旧 DOM 尚未卸载时，其组件读到的就是这份快照。正在进行的事件分发会检查绑定是否仍在跟随，因此分发中途的释放会立即停止折叠。
-- 子要素未被保留时调用 `uiConversation.binding()`，得到的是未被保留的绑定，读取上一次或空的快照，不会抛错。
-- 跟随 `conversation` 子要素的计算有两项：`BoundConversation` 与 [ui-chat](../../../../packages/client/ui-chat/src/client/apply.ts) 的 quota 监听；后者对子要素未被保留期间收到的失败既不发布也不补发提示。`binding.ctx` 上其他不由事件驱动的状态（输入 shell、命令弹层、历史图片 URL、agent preset seat）保持原有生命周期。
+- 子要素被保留期间，绑定对当前整个窗口折叠一次、同步发布，并跟随窗口变化；折叠失败时绑定保持未折叠，下一次窗口变化重新整窗折叠。
+- 子要素被释放时，绑定退订、取消待发的 rAF、丢弃折叠结果，并发布一次空结果；释放期间的注册表变化要等再次保留时才生效。正在进行的事件分发会检查绑定是否仍在跟随，因此分发中途的释放会立即停止折叠。
+- 跟随 `conversation` 子要素的计算有两项：`BoundConversation` 与 [ui-chat](../../../../packages/client/ui-chat/src/client/apply.ts) 的 quota 监听；后者对子要素未被保留期间收到的失败既不发布也不补发提示。
+
+### `draft` 引用
+
+[输入 hub](../../../../packages/client/ui-conversation/src/client/input/hub.ts) 在某个 Session 的输入框草稿有附件且该 Session 未被移除时，以 `{ source: 'draft', connection: false }` 持有它。因此所有视图都释放该 Session 后，作用域以及同一个输入框 shell 和其中的浏览器侧附件仍然保留；切回时重新连接并重新折叠，输入框保留附件、上传进度和失败上传的重试。移除最后一个附件、发送它或移除 Session 会释放这条引用，随后作用域销毁时释放全部草稿附件。页面卸载时仍为草稿有附件的 Session 写标记，下一个页面提示这些附件已失效。
 
 ### 引用来源与子要素
 
-| 来源 | 所属包 | `facets` |
+| 来源 | 所属包 | 选项 |
 |---|---|---|
 | `mainView` | ui-session 声明，ui-workspace 调用 | `{ conversation: true }` |
 | `sidebarView` | ui-sidebar-right | `{ conversation: true }` |
 | `sidebarChat` | ui-subagent | `{ conversation: true }` |
-| `recentViews` | ui-workspace | 不写 |
-| `using()` 调用方与 `gateway` | 各自的包 | 不写 |
+| `recentViews` | ui-workspace | 不写：只保连接 |
+| `draft` | ui-conversation | `{ connection: false }` |
+| `using()` 调用方 | 各自的包 | 不写 |
+| `gateway` | session-controller | 不保留连接的内部入口 |
 | 测试替身默认值 | test-support/client-runtime | `{ source: 'testFixture', facets: { conversation: true } }` |
 
 ### 最近访问会话 `recentViews`
@@ -99,26 +102,30 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 
 **在 `SessionBinding` 上暴露子要素 observable。** `SessionBinding` 新增必需成员会让所有手写 binding（包括第三方测试替身）失效，而子要素计数本就是本地引用计数，`retainInfo` 已在按来源计数旁发布它们。
 
-**把 `events` 也作为子要素。** 没有连接的 Session 什么也做不了；唯一不需要连接的 Gateway 已经有独立的内部入口。
+**用固定级别代替子要素。** 固定的 `state`、`cache`、`live` 枚举无法随后续 owner 诉求扩展，而默认开启的 `connection` 加上 owner 子要素就能表达这三种状态。
+
+**释放子要素后保留最后一次折叠结果。** 无主的陈旧结果会多出一个隐含状态；窗口仍在，切回时只折叠最后一页的代价很小。
+
+**在根级维护草稿附件归属。** 在 Conversation 服务中记录归属并在新输入框中重新接回，等于用会话目录监听重复跟踪 Session 生命周期；保住作用域就能保住输入框本身。
 
 **保留后台 Session 的 DOM。** React 18 没有 `<Activity>`；K 个隐藏子树要付出布局、内存和订阅成本，还与 `session-maybe` 只绑定一个 Session 的设计冲突。
 
 **未被保留时继续折叠，只推迟发布。** 流式块的 `match`/`update` 成本仍然存在。
 
-**自行计算已折叠输入与窗口之间的差集。** 未被保留期间，一次 attempt 可能从开始、流式到 settle 全部完成，这类差集逻辑容易出错；恢复改为复用 assembler 现有的连续变化路径与缺口重建路径。
+**自行计算已折叠输入与窗口之间的差集。** 未被保留期间，一次 attempt 可能从开始、流式到 settle 全部完成，这类差集逻辑容易出错；切回时改为从头折叠最后一页。
 
 ## 后果
 
-- 后台 Session 切回时无需历史请求，而在再次显示之前不做任何 Conversation 折叠。
-- 未被保留的 Session 保留其最后一次折叠的内存，直到再次显示或其 binding 退役。
+- 最近访问会话切回时无需历史请求，只折叠最后一页；往上翻阅已加载的页不发请求。
+- 最近访问会话在内存中保留其完整的已加载窗口，但不保留 Conversation 折叠结果。
+- 带草稿附件被淘汰出最近访问会话的 Session 保留输入框，但不保留窗口，切回时要重新请求历史。
 - 受关注保护的最近访问会话没有总量上限：完成未读会一直受保护直到用户读过，因此用户不在时每个以未读状态完成的 Session 都会保留其 generation、已加载的事件窗口和历史跟随流，直到被读过、标为已读、被移除或归档。
-- 切回在后台运行过的 Session 要付出一次补折，最多等同于新打开时的一次打开后折叠，但不走网络。
 - 漏写 `conversation: true` 的渲染方会看到未被保留的陈旧或空快照，不会报错。
-- `SessionRetainOptions` 与 `SessionRetainInfo` 只新增可选字段；以自己的来源 retain 并渲染 Session 的第三方 Client 插件需加上 `facets: { conversation: true }`，见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/session-retain-conversation-facet/guide.zh.md)。
+- `SessionRetainOptions` 与 `SessionRetainInfo` 只新增可选字段；以自己的来源 retain 并渲染 Session 的第三方 Client 插件需加上 `facets: { conversation: true }`，只需本地状态的插件可写 `connection: false`，见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/session-retain-conversation-facet/guide.zh.md)。
 
 ## 测试
 
-- [reference-ownership.client.spec.ts](../../../../packages/api/session-controller/tests/reference-ownership.client.spec.ts) 覆盖按子要素计数、只在零值变化时通知，以及子要素随 generation 退役与根释放结束。
-- [conversation-registry.client.spec.ts](../../../../packages/client/ui-conversation/tests/conversation-registry.client.spec.ts) 覆盖未被保留时零折叠、恢复时同步发布一次、与持续跟随结果一致、未跟随期间的激活与注册表变化、分发中途的释放、被打断的 rAF 发布、恢复失败，以及首次折叠失败不残留订阅。
+- [reference-ownership.client.spec.ts](../../../../packages/api/session-controller/tests/reference-ownership.client.spec.ts) 覆盖按子要素与连接计数、不建立连接地持有 Session、最后一个保留连接的引用释放后断开、最后一个子要素释放后缓冲更早页，以及计数随 generation 退役与根释放结束；[session.client.spec.ts](../../../../packages/api/session-controller/tests/session.client.spec.ts) 覆盖缓冲页翻页、Turn 跳转、缓冲页用完后的 Host 分页、实时增长后再次缓冲，以及断开后重新连接。
+- [conversation-registry.client.spec.ts](../../../../packages/client/ui-conversation/tests/conversation-registry.client.spec.ts) 覆盖释放时丢弃折叠、保留时同步折叠一次、与持续跟随结果一致、未跟随期间的激活与注册表变化、分发中途的释放、被取消的 rAF 发布、折叠失败，以及首次折叠失败不残留订阅；[draft-attachment-retention.client.spec.ts](../../../../packages/client/ui-conversation/tests/draft-attachment-retention.client.spec.ts) 覆盖 `draft` 引用、其释放、被移除的 Session 与卸载标记。
 - [quota-notice.client.spec.tsx](../../../../packages/client/ui-chat/tests/quota-notice.client.spec.tsx) 覆盖 quota 提示只在子要素被保留时发布。
 - [recent-views.client.spec.ts](../../../../packages/client/ui-workspace/tests/recent-views.client.spec.ts) 与 [workspaces-service.client.spec.ts](../../../../packages/client/ui-workspace/tests/workspaces-service.client.spec.ts) 覆盖关注与置顶规则、retain 期间的同步重入、主视图 Session 不计数、淘汰后不自动回来、配置、由列表变化驱动的对账，以及经由同一 generation 切回最近访问会话且不重新打开历史。

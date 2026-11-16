@@ -453,7 +453,7 @@ describe('Conversation registries', () => {
     await binding.ctx.fiber.dispose()
   })
 
-  it('folds nothing while the conversation facet is released and publishes the received window once on resume', async () => {
+  it('drops the fold when the conversation facet is released and folds the received window once on resume', async () => {
     const { uiConversation, binding, retained, events, views } = await bootRegistries()
     const match = vi.fn((event: SessionEventLike) => event.type === 'turn/start'
       ? { id: String(event.data.turn), role: 'start' as const }
@@ -488,7 +488,11 @@ describe('Conversation registries', () => {
     const listener = vi.fn()
     const unsubscribe = conversation.snapshot.subscribe(listener)
     retained.set(false)
-    const cold = conversation.snapshot.getSnapshot()
+    // Releasing the facet drops the fold and publishes the empty result once.
+    expect(listener).toHaveBeenCalledOnce()
+    expect(conversation.openTurn.getSnapshot()).toBeUndefined()
+    const released = conversation.snapshot.getSnapshot()
+    listener.mockClear()
     match.mockClear()
     source.append({ type: 'event', event: {
       type: 'turn/end', seq: SessionSeq(2), time: 2, data: { turn: 1, reason: { kind: 'completed' } },
@@ -496,8 +500,7 @@ describe('Conversation registries', () => {
     source.append({ type: 'event', event: { type: 'turn/start', seq: SessionSeq(3), time: 3, data: { turn: 2 } } })
     expect(match).not.toHaveBeenCalled()
     expect(listener).not.toHaveBeenCalled()
-    expect(conversation.snapshot.getSnapshot()).toBe(cold)
-    expect(conversation.openTurn.getSnapshot()).toBe(1)
+    expect(conversation.snapshot.getSnapshot()).toBe(released)
     built.length = 0
     retained.set(true)
     expect(listener).toHaveBeenCalledOnce()
@@ -527,7 +530,7 @@ describe('Conversation registries', () => {
     expect(conversation.snapshot.getSnapshot().views.get('chat')).toBeNull()
   })
 
-  it('publishes a frame-paced update that a facet release interrupted when retention resumes', async () => {
+  it('cancels a frame-paced update on release and publishes synchronously when retention resumes', async () => {
     const frames = new Map<number, FrameRequestCallback>()
     let nextFrame = 0
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -559,9 +562,10 @@ describe('Conversation registries', () => {
     expect(frames.size).toBe(1)
     retained.set(false)
     expect(frames.size).toBe(0)
-    expect(listener).not.toHaveBeenCalled()
+    listener.mockClear()
     retained.set(true)
     expect(listener).toHaveBeenCalledOnce()
+    expect(frames.size).toBe(0)
     unsubscribe()
   })
 
