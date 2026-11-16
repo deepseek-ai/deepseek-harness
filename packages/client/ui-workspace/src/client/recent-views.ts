@@ -110,7 +110,8 @@ export class RecentSessionViews {
     const workspaces = this.workspaces.list.getSnapshot()
     const status = this.status.getSnapshot()
     const eligible = this.order.filter(id => id !== this.current && isEligible(id, byId, workspaces))
-    const counted = eligible.filter(id => !needsAttention(id, byId, status))
+    // A Session the main view already retains, but has not shown yet, takes no recent-view slot.
+    const counted = eligible.filter(id => !needsAttention(id, byId, status) && (byId[id]?.retainedBy.mainView ?? 0) === 0)
     const countedIds = new Set(counted)
     const pinned = new Set(workspaces.pinnedSessionIds)
     // Pinned Sessions take the limit first, so eviction reaches them only after every unpinned Session.

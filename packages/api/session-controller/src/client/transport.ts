@@ -261,7 +261,8 @@ export class SessionEventStream extends RemoteJournalStream<
     signal: AbortSignal,
   ): Promise<SessionJournalPage> {
     const buffered = this.buffered.records
-    if (buffered.length > 0) {
+    // Only a page before the window reads the buffer; a gap repair without beforeSeq reads the Host.
+    if (request.beforeSeq !== undefined && buffered.length > 0) {
       const start = tailPageStart(buffered, request.turnWindow)
       this.buffered.records = buffered.slice(0, start)
       return { records: buffered.slice(start), hasMore: start > 0 || this.buffered.hostHasMore }

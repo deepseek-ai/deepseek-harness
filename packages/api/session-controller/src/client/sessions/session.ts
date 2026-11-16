@@ -585,11 +585,13 @@ export class Session implements SessionFace {
    *  reconnecting control stream and remains untouched. */
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
-    this.openGeneration++
+    const generation = ++this.openGeneration
     this.clearOlderHistory()
     const events = this.events
     this.events = undefined
     await events?.dispose()
+    // A disconnect during teardown ends this rebuild; the Session stays cold.
+    if (generation !== this.openGeneration) return
     this.openPromise = null
     this.openState = 'cold'
     this.openError = null
@@ -696,6 +698,7 @@ export class Session implements SessionFace {
     events.bufferOlder(older, first.event.seq, this.hasMore)
     this.baseSeq = SessionLogOffset(first.event.seq)
     this.hasMore = true
+    this.historyWasPartial = true
     this.eventSource.replace(entries.slice(start), true)
     this.notifier.markDirty()
   }

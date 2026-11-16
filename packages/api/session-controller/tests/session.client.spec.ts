@@ -270,6 +270,42 @@ describe('buffered older pages', () => {
     expect(mock.log.requests(PAGE)).toHaveLength(1)
   })
 
+  it('repairs a live seq gap from the Host while older entries are buffered', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    mock.remote.session.page.mockImplementation(pageRule(history(turns(61))))
+    await session.open()
+    session.bufferOlder()
+    await pushEvent(mock, ev.assistant(SessionSeq(363), 60, 'late'))
+    await vi.waitFor(() => { expect(eventSeqs(session).at(-1)).toBe(363) })
+    expect(session.getSnapshot().openError).toBeNull()
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+  })
+
+  it('stays cold when a disconnect lands while a resync tears down its stream', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(turns(2))))
+    await session.open()
+    const resynced = session.resync()
+    await session.disconnect()
+    await resynced
+    expect(session.getSnapshot().openState).toBe('cold')
+    expect(mock.log.requests(FOLLOW)).toHaveLength(1)
+  })
+
+  it('keeps the start-of-history marker after a short window grows live and its buffer runs out', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(turns(2))))
+    await session.open()
+    // 30 Turns exceed one page by a few Turns, so the buffer holds a single page.
+    for (const event of turns(30).slice(12)) await pushEvent(mock, event)
+    session.bufferOlder()
+    expect(session.getSnapshot().hasMore).toBe(true)
+    await session.loadOlder()
+    expect(session.getSnapshot()).toMatchObject({ hasMore: false, historyWasPartial: true })
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+  })
+
   it('buffers nothing for a short, closed, or paging window', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.bufferOlder()

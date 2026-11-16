@@ -127,6 +127,23 @@ describe('recently viewed Sessions', () => {
     expect(b.retained()).not.toContain(sid('m3'))
   })
 
+  it('keeps a Session the main view retains out of the count before it is shown', () => {
+    const ids = Array.from({ length: 13 }, (_, index) => sid(`n${index}`))
+    const b = bench(ids)
+    b.setStatus(sid('n0'), { completionUnread: true })
+    b.visit(ids.slice(0, 11), sid('n11'))
+    expect(b.retained()).toHaveLength(11)
+    // Retaining n0 for the main view publishes the list; the status then stops protecting it before show().
+    b.update(sid('n0'), { retainedBy: { mainView: 1 } })
+    b.setStatus(sid('n0'), { completionUnread: false })
+    expect(b.retained()).toHaveLength(11)
+    expect(b.retained()).toContain(sid('n1'))
+    // Showing n0 moves n11 into the recent views; only that one extra Session evicts the oldest.
+    b.recent.show(sid('n0'))
+    expect(b.retained()).toEqual(expect.arrayContaining(ids.slice(2, 12)))
+    expect(b.retained()).toHaveLength(10)
+  })
+
   it('retains before releasing and reports a failed retention without retrying it', () => {
     const b = bench([sid('a'), sid('b'), sid('c')])
     b.visit([sid('a')], sid('b'))
