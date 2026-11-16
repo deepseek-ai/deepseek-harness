@@ -27,7 +27,7 @@ Review each Session's change requests, checks, and diffs, start a new Session in
 
 Open Plugins and enable Change requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the header button opens the panel. GitHub pull requests that the Session creates with `gh pr create`, opens with `gh pr view`, `gh pr edit`, or `gh pr checkout`, or works on as its branch or updates with a later `git push`, appear as change requests without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
 
-The same switch enables the model's [worktree tools](../tool-worktree/README.md): `create_worktree`, `enter_worktree`, and `exit_worktree`. Turning it off removes both the panel and the tools while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
+The same switch enables the model's [worktree tools](../tool-worktree/README.md): `enter_worktree` and `exit_worktree`. Turning it off removes both the panel and the tools while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
 
 -----
 

@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/tool-worktree/README.md
 /:
-  en: 09a4b4d95b664d1c
-  zh: c229106b16e9ecd9
+  en: be8ddda9a016791f
+  zh: 0bad4fc0c3ce0988
 /deepseek-ai-dsh-experimental-tool-worktree:
   en: db61f6b6ad671f45
   zh: 9f3083d7f5605cbb
 /deepseek-ai-dsh-experimental-tool-worktree/summary:
-  en: c978e8e0be90d5f8
-  zh: 75c20376f2e9d45f
+  en: ad053750132f42c3
+  zh: 14e72801140ff7ac
 /deepseek-ai-dsh-experimental-tool-worktree/table-of-contents:
   en: d152484eb41ac6b4
   zh: 2f8a621b991260a1
 /deepseek-ai-dsh-experimental-tool-worktree/use-this-package:
-  en: 59068f72c326c780
-  zh: 0c0f3687d971063c
+  en: a5d25494fde4f73d
+  zh: e99a6f7a485d56f5
 /deepseek-ai-dsh-experimental-tool-worktree/understand-the-implementation:
-  en: 20d2b29ce103e6f0
-  zh: 4e705758734ddb97
+  en: 01d5f02b2b840cf0
+  zh: db3c4f57ce636b34
 /deepseek-ai-dsh-experimental-tool-worktree/further-exploration:
   en: 6ec5bb0f5bfbbaa4
   zh: 45009dd139621d0e
 /deepseek-ai-dsh-experimental-tool-worktree/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool:
-  en: 4062fcaa4794bed7
-  zh: b56d35fc675fc430
-/deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool/what-the-model-sees:
-  en: 6e1fdb5ed5494542
-  zh: 2ed8dcf7777f9ee9
-/deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool/token-effect:
+/deepseek-ai-dsh-experimental-tool-worktree/model-experience/worktree-tools:
+  en: 079a9a4d389cc1e4
+  zh: c61df4be4bc259e5
+/deepseek-ai-dsh-experimental-tool-worktree/model-experience/worktree-tools/what-the-model-sees:
+  en: a93746dd90abe4b6
+  zh: 77a218bd6f9eec1b
+/deepseek-ai-dsh-experimental-tool-worktree/model-experience/worktree-tools/token-effect:
   en: 6c3f73ba01233a36
   zh: d64d87a425db4fbd
-/deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool/kv-cache-effect:
+/deepseek-ai-dsh-experimental-tool-worktree/model-experience/worktree-tools/kv-cache-effect:
   en: 365f8ccedfa61bbb
   zh: aa328044ba2528b8
 /deepseek-ai-dsh-experimental-tool-worktree/known-limitations-and-deferred-work:
-  en: f0e0c0f36b6252a2
-  zh: b2cd1fdcad570ce9
+  en: 34a1eea5a4fb5cd0
+  zh: ab445f8a2d43b22f
 /deepseek-ai-dsh-experimental-tool-worktree/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

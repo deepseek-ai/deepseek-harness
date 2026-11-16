@@ -710,7 +710,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
       await ctx.plugin(ToolWorktree)
     },
-    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. `enter_worktree` moves the Session into an existing worktree in the pool of the checkout it works in; `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.',
+    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',
