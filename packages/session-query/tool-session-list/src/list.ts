@@ -35,16 +35,21 @@ interface SessionListItem {
   updated_at: string
 }
 
+/** Entries per page when the model passes no `limit`; part of the model-visible schema. */
+export const DEFAULT_PAGE_LIMIT = 20
+/** Largest accepted `limit`; part of the model-visible schema. */
+export const MAX_PAGE_LIMIT = 100
+
 /**
  * Resolve pagination before reading any registry or persistence data.
  * @param input - model pagination arguments.
  * @returns the validated count and starting index.
  */
 export function resolvePage(input: PageInput): { limit: number; offset: number } {
-  const limit = input.limit ?? 20
+  const limit = input.limit ?? DEFAULT_PAGE_LIMIT
   const offset = input.offset ?? 0
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
-    throw new ToolArgsError(['limit must be an integer from 1 to 100'])
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
+    throw new ToolArgsError([`limit must be an integer from 1 to ${String(MAX_PAGE_LIMIT)}`])
   }
   if (!Number.isSafeInteger(offset) || offset < 0) {
     throw new ToolArgsError(['offset must be a non-negative safe integer'])
@@ -99,7 +104,7 @@ export async function listSessions(
     headers = workspace.getSessionHeaders()
   }
   const archived = new Set(ctx.workspaceRegistry.archivedSessionIds)
-  const items = []
+  const items: Array<Omit<SessionListItem, 'updated_at'> & { updatedAt: number }> = []
   for (const header of headers) {
     if (header.origin === 'subagent') continue
     if (archived.has(header.id) !== (input.archived ?? false)) continue

@@ -5,7 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { listSessions, listWorkspaces } from './list.ts'
+import { DEFAULT_PAGE_LIMIT, listSessions, listWorkspaces, MAX_PAGE_LIMIT } from './list.ts'
 
 /** Cordis plugin identity. */
 export const name = 'tool-session-list'
@@ -13,7 +13,7 @@ export const name = 'tool-session-list'
 export const inject = ['tools', 'sessions', 'sessionQuery', 'workspaceRegistry', 'sessionProjections']
 
 const pagination = {
-  limit: { type: 'integer', description: 'Maximum entries to return, from 1 to 100. Defaults to 20.' },
+  limit: { type: 'integer', description: `Maximum entries to return, from 1 to ${String(MAX_PAGE_LIMIT)}. Defaults to ${String(DEFAULT_PAGE_LIMIT)}.` },
   offset: { type: 'integer', description: 'Number of matching entries to skip. Defaults to 0.' },
 } as const
 
@@ -44,7 +44,7 @@ export function apply(ctx: Context): void {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     isConcurrencySafe: () => true,
-    execute: (args, exec) => Promise.resolve(listWorkspaces(ctx, args, exec.signal)),
+    execute: async (args, exec) => listWorkspaces(ctx, args, exec.signal),
     presentCall: args => ({ card: 'generic', title: 'List workspaces', kind: 'read', rawInput: args }),
   }))
   ctx.tools.register(defineTool({

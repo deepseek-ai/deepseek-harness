@@ -111,6 +111,8 @@ kind: "package-reference"
 
 - **冷元数据可能缺失或过期**——列表不会通过读取完整日志重建它。标题为 `null` 可能表示没有标题，也可能表示标题元数据不可用。
 - **分页不是稳定快照**——并发的注册表或 Session 变化可能让条目在多次调用间移动。会话列表先读取全部候选项，再选取一页，因此每页大小不限制总工作量；不指定范围的调用随 Session 总数增长。
+- **空白会话也会列出**——还没有 turn 的 Session（例如 Workspace 中未使用的新 Session）是普通结果；它的 `updated_at` 等于 `created_at`，标题通常为 `null`。
+- **不指定范围的列表只有单测覆盖**——录制的 headless 回放中每次 `list_session` 调用都带 `workspace_id`，因此不指定 Workspace 的枚举只在单元测试中运行。
 - **元数据访问覆盖整个运行时**——需要逐 agent Workspace 授权的调用者，必须先定义独立的访问策略，再为其启用这些工具。
 
 <a id="dev-note"></a>

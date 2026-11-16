@@ -111,6 +111,8 @@ These constraints affect consumers of the lists.
 
 - **Cold metadata can be missing or stale** — listing never rebuilds it by reading the full log. A `null` title can mean either no title or unavailable title metadata.
 - **Pagination is not a stable snapshot** — concurrent registry or Session changes can move entries between calls. Session listing reads every candidate before selecting a page, so the page size does not bound total work; an unscoped call scales with the Session count.
+- **Blank sessions are listed** — a Session without a turn, such as a Workspace's unused new Session, is a regular result; its `updated_at` equals `created_at` and its title is usually `null`.
+- **Unscoped listing has unit coverage only** — the recorded headless replay passes `workspace_id` on every `list_session` call, so enumeration without a Workspace runs only in unit tests.
 - **Metadata access is runtime-wide** — callers needing per-agent Workspace authorization require a separately defined access policy before these tools are enabled for them.
 
 <a id="dev-note"></a>
