@@ -75,7 +75,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'forge.diff.line.annotation': { kind: 'keyed'; scope: 'session'; owner: ForgeLineAnnotationProps }
     /** Buttons a plugin adds to the line comment form, between Add to input and the code host actions. */
     'forge.diff.comment.actions': { kind: 'list'; scope: 'session'; owner: ForgeCommentActionsProps }
-    /** Icon buttons a plugin adds to a change request card's head, before Open in browser. */
+    /** Icon buttons a plugin adds to a change request card's head, before the card's actions menu. */
     'forge.change-request.card.actions': { kind: 'list'; scope: 'session'; owner: ForgeChangeRequestCardActionsProps }
   }
 }

@@ -1,4 +1,4 @@
-/** Background-job menu geometry over the normal Browser dock in the shipped Web composition. */
+/** Session panel geometry with an expanded background job beside the normal Browser dock in the shipped Web composition. */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -15,55 +15,50 @@ import {
   assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, seedSession,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
-const EXPECTED_DIR = fileURLToPath(new URL('./expected/jobs-menu-layering', import.meta.url))
+const EXPECTED_DIR = fileURLToPath(new URL('./expected/jobs-panel-layering', import.meta.url))
 const MODE = webSnapshotMode()
-const SEED_ID = brandString<SessionId>('jobs-menu-layering-web-e2e')
+const SEED_ID = brandString<SessionId>('jobs-panel-layering-web-e2e')
 // The private scaffold cwd owns the barrier; the loop bounds an orphan's lifetime.
-const RELEASE = '.jobs-menu-layering.release'
-const COMMAND = `printf 'jobs-menu-%s\\n' output; for _ in $(seq 1 3000); do [ -e ${RELEASE} ] && break; sleep 0.2; done`
+const RELEASE = '.jobs-panel-layering.release'
+const COMMAND = `printf 'jobs-panel-%s\\n' output; for _ in $(seq 1 3000); do [ -e ${RELEASE} ] && break; sleep 0.2; done`
 
 /** Measure actual overlap and hit testing; ARIA alone cannot expose clipping or stacking. */
 function placement(page: Page) {
   return page.evaluate(() => {
-    const list = document.querySelector<HTMLElement>('ul[aria-label="Background jobs"]')
-    const anchor = document.querySelector<HTMLElement>('button[aria-label="1 background job"]')
+    const panel = document.querySelector<HTMLElement>('[data-session-panel]')
+    const section = document.querySelector<HTMLElement>('[data-session-panel-section="background-jobs"]')
     const frame = document.querySelector<HTMLElement>('[data-sidebar-browser-frame]')
     const dock = document.querySelector<HTMLElement>('[data-sidebar-right-panel][data-sidebar-right-open]')
-    if (list === null || anchor === null || frame === null || dock === null) {
-      throw new Error('job menu, trigger, or Browser dock is missing')
+    if (panel === null || section === null || frame === null || dock === null) {
+      throw new Error('Session panel, jobs section, or Browser dock is missing')
     }
-    const menu = list.closest<HTMLElement>('[data-menu-material]') ?? list
-    const box = menu.getBoundingClientRect()
-    const trigger = anchor.getBoundingClientRect()
+    const body = panel.closest<HTMLElement>('[data-conversation-content]')
+    const seat = body?.querySelector<HTMLElement>('[data-composer-seat]') ?? null
+    if (body === null || seat === null) throw new Error('conversation body or composer seat is missing')
+    const box = panel.getBoundingClientRect()
+    const host = body.getBoundingClientRect()
     const browser = frame.getBoundingClientRect()
-    const left = Math.max(box.left, browser.left)
-    const right = Math.min(box.right, browser.right)
-    const top = Math.max(box.top, browser.top)
-    const bottom = Math.min(box.bottom, browser.bottom)
-    const overlapsBrowser = right - left > 8 && bottom - top > 8
-    const aboveBrowser = overlapsBrowser && [0.25, 0.5, 0.75].every(x =>
-      [0.25, 0.5, 0.75].every(y => menu.contains(document.elementFromPoint(
-        left + (right - left) * x, top + (bottom - top) * y,
-      ))))
-    const verticalGap = Math.min(Math.abs(box.top - trigger.bottom - 5), Math.abs(trigger.top - box.bottom - 5))
-    const horizontalAlignment = Math.min(Math.abs(box.left - trigger.left), Math.abs(box.right - trigger.right))
+    const composer = seat.getBoundingClientRect()
+    const sectionBox = section.getBoundingClientRect()
     return {
       dockMode: dock.dataset.sidebarRightPanel,
-      bodyMounted: menu.parentElement === document.body,
-      fixed: getComputedStyle(menu).position === 'fixed',
-      anchored: verticalGap <= 1 && horizontalAlignment <= 1,
-      viewportBounded: box.left >= 11 && box.top >= 11
-        && box.right <= innerWidth - 11 && box.bottom <= innerHeight - 11,
-      overlapsBrowser,
-      aboveBrowser,
+      presentation: panel.dataset.sessionPanel,
+      insideBody: box.left >= host.left && box.right <= host.right && box.top >= host.top,
+      clearOfBrowser: box.right <= browser.left,
+      clearOfComposer: box.bottom <= composer.top,
+      viewportBounded: box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight,
+      sectionShown: sectionBox.height > 0,
+      onTop: [0.25, 0.5, 0.75].every(x => [0.25, 0.5, 0.75].every(y => panel.contains(document.elementFromPoint(
+        box.left + box.width * x, box.top + box.height * y,
+      )))),
     }
   })
 }
 
-describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
+describe.skipIf(MODE === 'record')('web e2e: jobs panel layering', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -80,7 +75,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     page = await newEnglishPage(browser)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.route('https://browser.test/**', async route => route.fulfill({
-      contentType: 'text/html', body: '<h1>Jobs menu browser fixture</h1>',
+      contentType: 'text/html', body: '<h1>Jobs panel browser fixture</h1>',
     }))
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -94,18 +89,18 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
         if (jobId !== undefined) {
           const settled = await scaffold.ctx.jobs.wait(jobId, 15_000, agent.id)
           if (settled.status === 'running' || settled.status === 'stopping') {
-            throw new Error('jobs menu fixture did not settle after releasing its barrier')
+            throw new Error('jobs panel fixture did not settle after releasing its barrier')
           }
         }
       } catch (error) { failures.push(error) }
     }
     try { await browser?.close() } catch (error) { failures.push(error) }
     try { await scaffold?.close() } catch (error) { failures.push(error) }
-    if (failures.length > 0) throw new AggregateError(failures, 'jobs menu layering teardown failed')
+    if (failures.length > 0) throw new AggregateError(failures, 'jobs panel layering teardown failed')
   })
 
-  it('keeps the list and live output above the Browser dock while anchored and dismissable', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-jobs-menu-layering'))
+  it('keeps the section and its live output in the conversation body beside the Browser dock and dismissable', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-jobs-panel-layering'))
     const initialViewport = page.viewportSize()!
     const session = page.locator(`[data-row-key="session:${SEED_ID}"]`)
     await expect.poll(async () => {
@@ -121,9 +116,9 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     agent = opened
     const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
-      callId: brandString<ToolCallId>('jobs-menu-layering-e2e'),
+      callId: brandString<ToolCallId>('jobs-panel-layering-e2e'),
       name: 'bash',
-      arguments: { command: COMMAND, description: 'Emit output and hold the jobs menu fixture', run_in_background: true },
+      arguments: { command: COMMAND, description: 'Emit output and hold the jobs panel fixture', run_in_background: true },
       agent,
     })
     const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
@@ -135,7 +130,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     await expect.poll(() => {
       const job = scaffold.ctx.jobs.get(startedJobId, agent.id)
       const output = scaffold.ctx.jobs.readAt(startedJobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
-      return job.status !== 'running' || output.includes('jobs-menu-output')
+      return job.status !== 'running' || output.includes('jobs-panel-output')
     }, { timeout: 15_000 }).toBe(true)
     const readyJob = scaffold.ctx.jobs.get(startedJobId, agent.id)
     const readyOutput = scaffold.ctx.jobs.readAt(startedJobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
@@ -145,61 +140,54 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     const column = page.locator('[data-rightbar-col]')
     await column.locator('[data-sidebar-right-guide-entry="browser"]').click()
     const address = column.getByRole('textbox', { name: 'Enter an HTTP(S) address' })
-    await address.fill('https://browser.test/jobs-menu')
+    await address.fill('https://browser.test/jobs-panel')
     await address.press('Enter')
     await page.frameLocator('[data-sidebar-browser-frame]')
-      .getByRole('heading', { name: 'Jobs menu browser fixture' }).waitFor()
+      .getByRole('heading', { name: 'Jobs panel browser fixture' }).waitFor()
 
-    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
-    await trigger.waitFor({ timeout: 15_000 })
-    await trigger.focus()
+    const toggle = sessionPanelToggle(page)
+    await toggle.focus()
     await page.keyboard.press('Enter')
-    const list = page.getByRole('list', { name: 'Background jobs' })
-    await list.waitFor()
-    await page.keyboard.press('Tab')
-    expect(await list.getByRole('button', { name: /Show live output/ })
-      .evaluate(element => element === document.activeElement)).toBe(true)
+    const panel = page.locator('[data-session-panel]')
+    await panel.waitFor()
+    const list = panel.locator('[data-session-panel-section="background-jobs"]').getByRole('list')
+    await list.getByRole('button', { name: /Show live output/ }).waitFor({ timeout: 15_000 })
     const expectedPlacement = {
-      dockMode: 'push', bodyMounted: true, fixed: true, anchored: true,
-      viewportBounded: true, overlapsBrowser: true, aboveBrowser: true,
+      dockMode: 'push', presentation: 'overlay', insideBody: true, clearOfBrowser: true,
+      clearOfComposer: true, viewportBounded: true, sectionShown: true, onTop: true,
     }
     await expect.poll(() => placement(page)).toEqual(expectedPlacement)
     const collapsed = await placement(page)
 
     await list.getByRole('button', { name: /Show live output/ }).click()
-    await list.getByText('jobs-menu-output', { exact: true }).waitFor({ timeout: 15_000 })
+    await list.getByText('jobs-panel-output', { exact: true }).waitFor({ timeout: 15_000 })
     await expect.poll(() => placement(page)).toEqual(expectedPlacement)
     const expanded = await placement(page)
 
     await page.setViewportSize({ width: 1280, height: 760 })
+    await showSessionPanel(page)
     await expect.poll(() => placement(page)).toEqual(expectedPlacement)
     const resized = await placement(page)
     await list.getByRole('button', { name: /Hide live output/ }).focus()
     await page.keyboard.press('Escape')
-    await list.waitFor({ state: 'detached' })
-    const escapeRestoresFocus = await trigger.evaluate(node => node === document.activeElement)
+    await panel.waitFor({ state: 'detached' })
+    const escapeRestoresFocus = await toggle.evaluate(node => node === document.activeElement)
     expect(escapeRestoresFocus).toBe(true)
 
-    await trigger.click()
-    await list.waitFor()
+    await showSessionPanel(page)
     await address.click()
-    await list.waitFor({ state: 'detached' })
-    const outsideDismisses = await trigger.getAttribute('aria-expanded') === 'false'
+    await panel.waitFor({ state: 'detached' })
+    const outsideDismisses = await toggle.getAttribute('aria-expanded') === 'false'
     expect(outsideDismisses).toBe(true)
+    expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
     await page.setViewportSize(initialViewport)
-    await trigger.hover()
-    await list.waitFor()
-    expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
-    await page.keyboard.press('Escape')
-    await list.waitFor({ state: 'detached' })
-    expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('running')
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
 
     await mkdir(EXPECTED_DIR, { recursive: true })
     await compareOrRefreshGolden(join(EXPECTED_DIR, 'geometry.expected.md'), [
-      '# Background jobs above the Browser dock', '',
+      '# Background jobs beside the Browser dock', '',
       '```json',
       JSON.stringify({ collapsed, expanded, resized, escapeRestoresFocus, outsideDismisses }, null, 2),
       '```',

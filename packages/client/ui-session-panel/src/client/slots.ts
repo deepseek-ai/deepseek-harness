@@ -5,6 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -40,9 +41,62 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       inline: true
       owner: SessionPanelIndicatorOwnerProps
     }
-    /** Rows of the built-in Environment section in ascending `order`. */
-    'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session' }
+    /** Rows of the built-in Environment section in ascending `order`; they receive the section's owner values. */
+    'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session'; owner: SessionPanelSectionOwnerProps }
   }
+  interface SlotFactoryMap {
+    /**
+     * The fold control of a panel list. A list shows at most five rows of a
+     * group and then this control as its last row, which shows the rest or
+     * folds them again; a list folds only when that hides two rows or more,
+     * since the control takes a row itself. The list keeps the fold state and
+     * decides which rows show.
+     */
+    'conversation.session.panel.fold': { scope: 'root'; props: PanelFoldProps }
+    /**
+     * The details of one panel row, for the content of the row's HoverCard: the
+     * row's full name, secondary lines such as its owner, its state, and its
+     * measures. A row whose single line clips or leaves these out shows them
+     * here.
+     */
+    'conversation.session.panel.details': { scope: 'root'; props: PanelDetailsProps }
+  }
+}
+
+/** What a panel row's hover card says about the row. */
+export interface PanelDetailsProps {
+  /**
+   * The full name of what the row shows; it wraps instead of clipping. Omit it
+   * when the name can run long, such as a command, and the row's own view
+   * shows it in full.
+   */
+  readonly title?: string | undefined
+  /** Lines in secondary type under the title, such as the owner; each stops after six lines. */
+  readonly lines?: readonly string[] | undefined
+  /** The state, after its dot. */
+  readonly status?: { readonly state: StateDotState; readonly label: string } | undefined
+  /** Measures on one line, at most one of each kind. */
+  readonly facts?: readonly PanelDetailsFact[] | undefined
+}
+
+/** One measure in a panel row's hover card. */
+export interface PanelDetailsFact {
+  /** What the measure counts, which selects its icon: a database for `tokens`, a clock for `duration`. */
+  readonly kind: 'tokens' | 'duration'
+  /** The measure as the card shows it, such as "3.3M tok" or "6m 56s". */
+  readonly label: string
+}
+
+/** Props of the fold control that ends a folded panel list. */
+export interface PanelFoldProps {
+  /** Whether the list shows every row; the control then folds it again. */
+  readonly expanded: boolean
+  /** Visible text for the current state, such as "Show 14 more" or "Show less". */
+  readonly label: string
+  /** Accessible name for the current state; it starts with `label` and names what the list holds. */
+  readonly name: string
+  /** Show every row, or fold the list again. */
+  readonly onToggle: () => void
 }
 
 /** How the panel currently shows. */

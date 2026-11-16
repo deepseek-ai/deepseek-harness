@@ -1,127 +1,13 @@
-/* Forge tab body: one scrolling column with the checkout row on top and the
-   Session's change request cards below, at the sidebar's 13px row size. */
-.root {
+/* Change request cards in the Session panel section, at the panel's 13px row size. */
+.cards {
   --forge-fill: var(--dsw-alias-card-fill);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: 12px;
-  overflow-y: auto;
+  gap: 8px;
+  min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 20px;
-}
-
-
-/* Loading and disconnected states of a panel without state yet. */
-.centered {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 24px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  text-align: center;
-}
-
-.disconnected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.checkout {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--forge-fill);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.checkout:focus-visible {
-  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
-}
-
-/* The worktree the Session works in is gone. */
-.checkout[data-missing],
-.checkout[data-missing] .checkoutBranch {
-  color: var(--dsw-alias-state-warn-primary);
-}
-
-.checkoutName {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  border-radius: var(--dsw-radius-sm);
-}
-
-.checkoutIcon {
-  flex: none;
-}
-
-.checkoutBranch {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-primary);
-  font-family: var(--ds-font-family-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.checkoutNote {
-  flex: none;
-  margin-left: auto;
-}
-
-/* Smaller than the card actions, with negative block margins, so the row keeps the height of its text;
-   the descendant selector outranks `.iconButton`, which this button also carries. */
-.checkout .checkoutCopy {
-  width: 24px;
-  height: 24px;
-  margin: -3px -4px -3px 0;
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.sectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 2px 0;
-}
-
-.sectionTitle {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .iconButton {
@@ -151,52 +37,15 @@
   }
 }
 
-.banner {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--forge-fill);
-  color: var(--dsw-alias-label-primary);
+/* A More button shares its surface: the glyph darkens without a fill, as on Session panel rows. */
+.iconButton.moreButton:focus-visible {
+  background: transparent;
 }
 
-.bannerDetail {
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
-
-.bannerCommand {
-  max-width: 100%;
-  color: var(--dsw-alias-label-secondary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
-
-.bannerAction {
-  flex: none;
-}
-
-.empty {
-  padding: 32px 16px;
-  text-align: center;
-}
-
-.emptyTitle {
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-}
-
-.emptyHint {
-  margin: 4px 0 0;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+@media (hover: hover) {
+  .iconButton.moreButton:hover {
+    background: transparent;
+  }
 }
 
 .list {
@@ -215,8 +64,8 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
-/* Glyph, title link with the number line below it, then the expanded card's
-   open, copy, and remove buttons and the expansion toggle. */
+/* Glyph, title link with the number line below it, then the actions menu
+   and the expansion toggle. */
 .changeHead {
   display: flex;
   align-items: flex-start;
@@ -244,19 +93,12 @@
 }
 
 .changeTitle {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
+  min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-weight: 500;
   line-height: 20px;
   text-decoration: none;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.change:not([data-expanded]) .changeTitle {
-  -webkit-line-clamp: 1;
 }
 
 @media (hover: hover) {
@@ -268,8 +110,7 @@
 }
 
 .changeTitle:focus-visible,
-.rowButton:focus-visible,
-.checkoutName:focus-visible {
+.rowButton:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
@@ -280,6 +121,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
   padding: 1px 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -373,6 +215,12 @@
 
 .flag {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Only the branch names shorten; the number, checks, and flags keep whole words on one line. */
+.meta > :not(.ellipsis) {
+  flex: none;
+  white-space: nowrap;
 }
 
 .finished {
@@ -608,6 +456,89 @@
   white-space: nowrap;
 }
 
+/* Change request count beside the Session panel section title. */
+.count {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Environment rows: the kind or size trails the name; the Session panel's row rules reveal the More button. */
+.envName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envName:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.envNote {
+  max-width: 120px;
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envRow[data-missing] .envName,
+.envRow[data-missing] .envNote,
+.envRow[data-failed] .envName {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The title of a status row: what failed or needs the user, in the warning color the checkout row's failure uses. */
+.statusTitle {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The command a sign-in row asks the user to run, in code type on its detail line. */
+.signinCommand {
+  font-family: var(--ds-font-family-code);
+}
+
+/* A failure's info button: a 24px target in the trailing area whose 16px glyph darkens on hover, focus, or while its
+   reason shows, without a fill; it stays visible so touch screens can press it. */
+.reason {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.reason[aria-describedby],
+.reason:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .reason:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* Attention mark over the Session panel toggle; the toggle sizes and places it. */
+.attention {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
 /* The unresolved review thread count at the end of the changes row. */
 .threads {
   display: inline-flex;
@@ -616,7 +547,7 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* The name of a fact row, read by assistive technology before its value. */
+/* Text read only by assistive technology: a fact row's name and the attention mark's description. */
 .visuallyHidden {
   position: absolute;
   width: 1px;

@@ -505,6 +505,16 @@ describe('LocalJobRegistry.kill', () => {
     expect(ctx.jobs.get(outranId).detail).toBe('exit code: 0')
   })
 
+  it('reports the producer exit code on the view only once settled', async () => {
+    const ctx = await harness()
+    const p = producer()
+    const id = ctx.jobs.start(p.spec)
+    expect(ctx.jobs.get(id)).not.toHaveProperty('exitCode')
+    p.settle({ status: 'completed', detail: 'exit code: 71', exitCode: 71 })
+    await tick()
+    expect(ctx.jobs.get(id)).toMatchObject({ status: 'completed', detail: 'exit code: 71', exitCode: 71 })
+  })
+
   it('reports an already-finished job instead of failing', async () => {
     const ctx = await harness()
     const p = producer()

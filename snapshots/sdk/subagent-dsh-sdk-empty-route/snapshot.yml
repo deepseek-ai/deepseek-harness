@@ -1,0 +1,9 @@
+version: 1
+scenario: subagent-dsh-sdk-empty-route
+profile: sdk
+composition: sdk-dsh-sdk-dynamic-route
+recording: authored
+header:
+  class: sdk-dsh-sdk-dynamic-route
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

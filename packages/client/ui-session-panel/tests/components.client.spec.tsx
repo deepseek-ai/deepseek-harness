@@ -4,14 +4,17 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
+import { PanelDetails } from '../src/client/PanelDetails.tsx'
+import { PanelFold } from '../src/client/PanelFold.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
 import type {
-  EnvironmentSectionProps, ProjectRowProps, SessionPanelDockable, SessionPanelProbes, SessionPanelProps, SessionPanelSectionEntry,
-  SessionPanelSectionOwnerProps, SessionPanelToggleProps, SessionPanelVisibility,
+  EnvironmentSectionProps, PanelDetailsProps, ProjectRowProps, SessionPanelDockable, SessionPanelProbes, SessionPanelProps,
+  SessionPanelSectionEntry, SessionPanelSectionOwnerProps, SessionPanelToggleProps, SessionPanelVisibility,
 } from '../src/client/slots.ts'
 import { SessionPanelState } from '../src/client/visibility.ts'
 import { en, zh } from '../src/client/locales.ts'
@@ -367,10 +370,12 @@ describe('SessionPanel', () => {
 })
 
 describe('EnvironmentSection', () => {
-  it('renders its rows straight into the section body', () => {
+  it('renders its rows straight into the section body with the section owner values', () => {
     const renderSlot = vi.fn(() => <span>row</span>)
-    render(<>{EnvironmentSection({ renderSlot } as EnvironmentSectionProps)}</>)
-    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.environment.row', {})
+    const dismissOverlay = vi.fn<() => void>()
+    render(<>{EnvironmentSection({ presentation: 'overlay', dismissOverlay, renderSlot } as Pick<EnvironmentSectionProps,
+      'presentation' | 'dismissOverlay' | 'renderSlot'> as EnvironmentSectionProps)}</>)
+    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.environment.row', { presentation: 'overlay', dismissOverlay })
     expect(screen.getByText('row')).toBeTruthy()
   })
 })
@@ -460,6 +465,79 @@ describe('ProjectRow', () => {
     const { props } = rowProps({})
     const view = render(<ProjectRow {...props} />)
     expect(view.container.innerHTML).toBe('')
+  })
+})
+
+describe('PanelFold', () => {
+  type FoldProps = FactoryComponentPropsOf<'conversation.session.panel.fold'>
+
+  /** Render the control with the props a list passes; the renderer's standard seats are left out, as the control reads none. */
+  function fold(expanded: boolean) {
+    const onToggle = vi.fn<() => void>()
+    const props = {
+      expanded, onToggle,
+      label: expanded ? 'Show less' : 'Show 14 more',
+      name: expanded ? 'Show less (subagents)' : 'Show 14 more (subagents)',
+    } as Pick<FoldProps, 'expanded' | 'label' | 'name' | 'onToggle'> as FoldProps
+    const view = render(<PanelFold {...props} />)
+    return { onToggle, row: view.container.firstElementChild as HTMLElement }
+  }
+
+  it('is a panel row whose body is the button, with a down chevron in the icon part while rows are held back', () => {
+    const { row, onToggle } = fold(false)
+    expect(row.getAttribute('data-session-panel-row')).toBe('fold')
+    expect([...row.children].map(part => `${part.tagName}:${part.getAttribute('data-row-part') ?? ''}`)).toEqual(['BUTTON:body'])
+    const button = screen.getByRole('button', { name: 'Show 14 more (subagents)' })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect([...button.children].map(part => part.getAttribute('data-row-part'))).toEqual(['icon', 'content'])
+    expect(button.children[0]?.getAttribute('aria-hidden')).toBe('true')
+    expect(button.querySelector('svg')?.getAttribute('data-icon')).toBe('dsw-icon-chevron-down-outline-regular')
+    expect(button.children[1]?.textContent).toBe('Show 14 more')
+    fireEvent.click(button)
+    expect(onToggle).toHaveBeenCalledOnce()
+  })
+
+  it('points the chevron up and reports expanded once the list shows every row', () => {
+    const { row } = fold(true)
+    const button = screen.getByRole('button', { name: 'Show less (subagents)' })
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(row.querySelector('svg')?.getAttribute('data-icon')).toBe('dsw-icon-chevron-up-outline-regular')
+    expect(row.querySelector('[data-row-part="content"]')?.textContent).toBe('Show less')
+  })
+})
+
+describe('PanelDetails', () => {
+  /** Render the details with the props a row passes; the renderer's standard seats are left out, as the details read none. */
+  function details(input: PanelDetailsProps): HTMLElement {
+    const view = render(<PanelDetails {...input as FactoryComponentPropsOf<'conversation.session.panel.details'>} />)
+    return view.container.querySelector('[data-session-panel-details]') as HTMLElement
+  }
+
+  it('stacks the title, lines, state, and measures in order, each measure after the icon of its kind', () => {
+    const root = details({
+      title: 'Survey open-source harnesses',
+      lines: ['Owner: open-source-arch'],
+      status: { state: 'done', label: 'Completed' },
+      facts: [{ kind: 'tokens', label: '3.3M tok' }, { kind: 'duration', label: '6m 56s' }],
+    })
+    expect([...root.children].map(child => child.textContent))
+      .toEqual(['Survey open-source harnesses', 'Owner: open-source-arch', 'Completed', '3.3M tok6m 56s'])
+    expect(root.children[2]?.querySelector('[data-state="done"]')).not.toBeNull()
+    const facts = [...(root.children[3] as HTMLElement).children]
+    expect(facts.map(fact => [fact.getAttribute('data-fact'), fact.querySelector('svg')?.getAttribute('data-icon')])).toEqual([
+      ['tokens', 'dsw-icon-database-outline-regular'],
+      ['duration', 'dsw-icon-clock-outline-regular'],
+    ])
+    expect(facts.every(fact => fact.firstElementChild?.getAttribute('aria-hidden') === 'true')).toBe(true)
+  })
+
+  it('renders only the title when nothing else is given', () => {
+    expect(details({ title: 'sleep 30' }).children).toHaveLength(1)
+  })
+
+  it('starts with the lines when the title is omitted', () => {
+    const root = details({ lines: ['bash'], status: { state: 'ongoing', label: 'running' } })
+    expect([...root.children].map(child => child.textContent)).toEqual(['bash', 'running'])
   })
 })
 
