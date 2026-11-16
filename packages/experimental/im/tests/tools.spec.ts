@@ -947,8 +947,8 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
     const mounted = await mount()
     mounted.im.sessions.add('sub-a', [], 'im-session')
     mounted.im.sessions.add('sub-b', [], 'im-session')
-    const subA = fakeAgent(SessionId('sub-a'), SessionId('im-session'))
-    const subB = fakeAgent(SessionId('sub-b'), SessionId('im-session'))
+    const subA = { ...fakeAgent(SessionId('sub-a')), parentSession: SessionId('im-session') }
+    const subB = { ...fakeAgent(SessionId('sub-b')), parentSession: SessionId('im-session') }
     await executeToolFixture(mounted.ctx, {
       name: 'im_send',
       arguments: { text: 'from A' },

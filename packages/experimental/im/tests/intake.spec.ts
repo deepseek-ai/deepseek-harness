@@ -734,11 +734,14 @@ describe('ImIntake outbound', () => {
     expect(chained?.sender.name).toBeUndefined()
 
     const parent = await store.put({
-      ...inbound({ id: 'm-threaded' }),
       key: ImMessageKey('fake:bot', 'm-threaded'),
       chat: { key: CHAT, bot: 'fake:bot', ref: target.chat, source: ImSourceId('team') },
       sender: { id: 'u1', self: false },
+      content: h('message', h.text('hi')),
       text: 'hi',
+      mentions: { self: false, all: false, users: [] },
+      addressed: true,
+      time: 1000,
       via: 'platform',
       thread: { id: 'omt_1', root: 'om_root' },
       referrer: { threadId: 'omt_1', messageId: 'm-threaded' },
