@@ -348,6 +348,11 @@
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
 
+    # Connector account sections on the Plugins page; CLI app plugins and MCP
+    # connectors register their accounts with `ctx.connectorAccounts`.
+    - id: ui-connector-account
+      name: '@deepseek-ai/dsh-client-ui-connector-account'
+
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
 
@@ -434,6 +439,11 @@
     # service mounted above.
     - id: ui-schedule
       name: '@deepseek-ai/dsh-client-ui-schedule'
+
+    # Session panel: the header toggle and the floating panel over the main
+    # Conversation body, with the Environment section other plugins extend.
+    - id: ui-session-panel
+      name: '@deepseek-ai/dsh-client-ui-session-panel'
 
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal

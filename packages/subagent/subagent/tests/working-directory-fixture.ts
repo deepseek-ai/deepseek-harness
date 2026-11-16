@@ -15,14 +15,6 @@ class FixtureWorkingDirectory extends Service {
     return this.directories.get(session) ?? session?.header.cwd ?? process.cwd()
   }
 
-  rootOf(session: Session): string {
-    return this.get(session)
-  }
-
-  recordedRootOf(session: Session): string | undefined {
-    return this.directories.get(session) ?? session?.header.cwd
-  }
-
   async ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted()
     return this.get(agent.session)

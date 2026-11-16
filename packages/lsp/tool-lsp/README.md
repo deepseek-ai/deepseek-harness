@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Queries use the Session's workspace root. Entering another checkout affects subsequent queries without changing an already running server's root.
+Queries use the Session's current working directory as their workspace root. Changing directory affects subsequent queries without changing an already running server's root.
 
 An agent uses `lsp` when textual matches are ambiguous or before a change that needs precise definitions, implementations, or references; the tool's prompt guidance tells it to prefer `search`/`read` for ordinary navigation.
 

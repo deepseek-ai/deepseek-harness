@@ -63,8 +63,8 @@ it.each(['write', 'edit', 'str_replace_editor'] as const)('captures the resolved
   const announcement = events.findLast(event => event.type === 'workspace/changes')
   expect(announcement).toBeDefined()
   const summary = ctx.workspaceChanges.summary(agent.id, announcement!.seq)
-  // The turn started with the workspace in `current`; its summary keeps that root after the move back.
-  expect(summary).toMatchObject({ root: current, total: 1, files: [{ path: 'witness.txt', added: 1, deleted: 1 }] })
+  // The turn started in `current`; its summary keeps that directory after the move back.
+  expect(summary).toMatchObject({ cwd: current, total: 1, files: [{ path: 'witness.txt', added: 1, deleted: 1 }] })
   expect(summary!.snapshot).toBeUndefined()
   expect(await ctx.workspaceChanges.diff(agent.id, announcement!.seq, 0, new AbortController().signal)).toMatchObject({ kind: 'text', hunks: [{ lines: ['-before', '+after'] }] })
 })

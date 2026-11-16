@@ -126,7 +126,7 @@ async function handlePresentOpen(ctx: Context, request: Request): Promise<Respon
   }
 }
 
-/** The summary one `workspace/changes` event announced, without the Host workspace root; 404 once the Host no longer serves it. */
+/** The summary one `workspace/changes` event announced, without the Host working directory; 404 once the Host no longer serves it. */
 function handleChangesSummary(ctx: Context, request: Request): Response {
   const query = new URL(request.url).searchParams
   const id = query.get('sessionId')
@@ -174,7 +174,7 @@ async function handleChangesOpen(ctx: Context, request: Request): Promise<Respon
     if (!ctx.sessionController.workspaceDesktop().available) return new Response('Host desktop unavailable.', { status: 409 })
     const changes = ctx.workspaceChanges.summary(id, seq)
     if (changes === undefined) return new Response('Change summary unavailable.', { status: 404 })
-    const workspaceRoot = changes.root
+    const workspaceRoot = changes.cwd
     const file = changes.files[index]
     if (file === undefined) return new Response('Changed file not found in this summary.', { status: 404 })
     const { absolutePath: path } = await ctx.workspaceFiles.stat({ sessionId: id, workspaceRoot }, file.path, request.signal)

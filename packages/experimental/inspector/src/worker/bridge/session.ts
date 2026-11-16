@@ -20,7 +20,7 @@ export function sendClientSessionClosed(
 ): void {
   try {
     sources.send(source, frame)
-  } catch {
+  } catch (_sourceClosed) {
     // Source removal already invalidates every session owned by this generation.
   }
 }

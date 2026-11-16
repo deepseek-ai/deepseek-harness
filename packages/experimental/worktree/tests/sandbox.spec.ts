@@ -107,7 +107,6 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(await git(checkout, 'branch', '--show-current')).toBe('shared-admin')
     expect(await git(root, 'worktree', 'list', '--porcelain')).toContain(`worktree ${checkout}`)
     expect(ctx.workingDirectory.get(agent.session)).toBe(checkout)
-    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(checkout)
     expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === linked)).toBe(true)
     // The registration write lands in the shared Git directory outside the linked root; only the derived grant admits it.
     expect(confine.mock.calls.some(call => call[1].additionalWritableRoots?.includes(administration))).toBe(true)
@@ -118,7 +117,7 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     ctx = await harness(root, {}, 'workspace-write')
     const agent = testAgent(ctx, root)
     const created = await ctx.worktrees.create(agent, { name: 'restored' })
-    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(created.path)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
     await rm(created.path, { recursive: true, force: true })
     const confine = vi.spyOn(ctx.sandbox, 'confine')
 

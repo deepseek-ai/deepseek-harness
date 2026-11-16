@@ -194,8 +194,8 @@ export interface FilesInjected {
    * such text, a change to those preferences searches again. Blank text ends
    * the search, aborting a running one, and the pane draws its tree again.
    * @param paneId - the pane being drawn.
-   * @param cwd - the Session's workspace root, which the search and its result tree are rooted at; a
-   *   `hold` with another root searches the held text again there.
+   * @param cwd - the Session's working directory, which the search and its result tree are rooted at; a
+   *   `hold` with another directory searches the held text again there.
    * @param query - the text as typed.
    */
   readonly setQuery: (paneId: PaneId, cwd: string, query: string) => void
@@ -216,7 +216,7 @@ export interface FilesInjected {
    * Change the search preferences of a workspace for every Session and pane
    * rooted there. Only the fields the patch names change; the others keep
    * their value at the time of the call, not at the time the caller read them.
-   * @param cwd - the workspace root.
+   * @param cwd - the Session's working directory.
    * @param patch - any of the exclusion rules, the hidden-entry choice, and the `.gitignore` choice.
    */
   readonly setSearchPreferences: (cwd: string, patch: Partial<WorkspaceSearchPreferences>) => void
@@ -275,7 +275,7 @@ export interface FilesInjected {
   readonly keyedHooks: {
     /** The measured width of the row a pane's navigator is laid out in, in CSS pixels, keyed by pane id; `undefined` until measured. */
     readonly rowWidth: (paneId: string) => HostObservable<number | undefined>
-    /** A workspace's search preferences, keyed by the workspace root; shared by every Session rooted there. */
+    /** A workspace's search preferences, keyed by the Session's working directory; shared by every Session rooted there. */
     readonly searchPreferences: (cwd: string) => HostObservable<WorkspaceSearchPreferences>
   }
 }

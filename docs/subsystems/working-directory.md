@@ -8,9 +8,9 @@ A Session's active directory is owned by [`dsh-working-directory`](../../package
 
 `ctx.workingDirectory.get(session)` reads the logged value. `ensure(agent)` validates it and restores the original project when the directory disappeared. `set(agent, path)` validates and records a move that a Host operation chose, such as worktree creation, the forge panel, or an SDK request; the model has no tool that moves the directory. Sessions without a header directory use the configured runtime fallback; an unavailable fallback produces an error.
 
-`rootOf(session)` reads the workspace root. Every change the service records is a `workspace-root/change`, which moves the root with the directory, so the two are equal. They differ only in a Session whose log holds a `working-directory/change`, recorded while the model could move the directory: that deprecated event has no writer, moves the directory, and leaves the root at the original project until the next recorded change.
+`get` is the one read of a Session's directory: relative paths resolve from it, and it is the workspace root for everything that follows the Session's checkout. Every change the service records is a `workspace-root/change`. A log written while the model could move the directory holds `working-directory/change` events, which have no writer now. The service keeps such a directory only when it lies inside the Session's original project, so a Session that worked in a worktree or a subdirectory of its project resumes there. A stored directory outside the project returns the Session to the project, and the next request's context reports the directory.
 
-Changes are local to one Session. The model's relative filesystem operations and the processes its tools start use the current directory. What the user sees follows the workspace root: the sandbox `workspace-write` boundary, the Files tree and directory listings, the change summaries, new sidebar terminals, `@` file completion, the skill catalog, project-instruction discovery, and the LSP workspace. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
+Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. The sandbox `workspace-write` boundary, the Files tree and directory listings, and the change summaries follow it too. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
 
 ## Model context
 
@@ -28,49 +28,35 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.workingDirectory` — `WorkingDirectoryService`
 
-One owner for each Session's directory, its workspace root, and their model-visible changes.
+One owner for each Session's directory and its model-visible changes.
 
-A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a `working-directory/change`.
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. A log written while the model could move the directory is read under the rule the `working-directory/change` event documents.
 
 ```ts cordis-catalog
 /**
- * Read the committed directory without filesystem I/O.
+ * Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace
+ * root of everything that follows the Session's checkout.
  * @param session - Session whose directory is requested.
- * @returns its effective absolute directory.
+ * @returns the directory of the last Host move, the original project before any, or the deployment
+ * default when none is recorded.
  */
 get(session: Session): string
-
-/**
- * Read the committed workspace root without filesystem I/O.
- * @param session - Session whose root is requested.
- * @returns the directory of the last `workspace-root/change`, the original project before any,
- * or the deployment default when none is recorded.
- */
-rootOf(session: Session): string
-
-/**
- * Read the recorded workspace root without the deployment fallback and without filesystem I/O.
- * @param session - Session whose root is requested.
- * @returns the directory of the last `workspace-root/change`, the original project before any,
- * or undefined while the log records neither; consumers apply their own fallback.
- */
-recordedRootOf(session: Session): string | undefined
 
 /**
  * Validate the current directory and restore the original project when it disappeared.
  * @param agent - live or unpublished Agent owning the Session.
  * @param signal - cancellation for filesystem inspection.
- * @returns the existing directory; recovery is committed before fulfillment and moves the workspace
- * root with the directory. A notice failure is warned without reverting the committed state.
+ * @returns the existing directory; recovery is committed before fulfillment. A notice failure is
+ * warned without reverting the committed state.
  * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
  *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
  */
 ensure(agent: Agent, signal?: AbortSignal): Promise<string>
 
 /**
- * Move one Session's workspace: its current directory and its workspace root become `path`.
- * Existing processes keep their directories. Callers are Host operations that chose the
- * directory; a model-supplied path would move the workspace-write boundary with it.
+ * Move one Session's directory to `path`. Existing processes keep their directories. Callers are
+ * Host operations that chose the directory; a model-supplied path would move the workspace-write
+ * boundary with it.
  * @param agent - live or unpublished Agent owning the Session.
  * @param path - absolute path or a path relative to its current directory.
  * @param signal - cancellation before the durable change.

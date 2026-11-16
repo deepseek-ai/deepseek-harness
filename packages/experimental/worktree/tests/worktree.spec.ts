@@ -40,7 +40,6 @@ describe('creating and entering retained worktrees', () => {
     const result = await ctx.worktrees.create(agent, { name: 'topic' })
     expect(result).toEqual({ path: join(root, '.agents/worktrees/topic'), branch: 'topic', baseCommit, repositoryRoot: root })
     expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
-    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(result.path)
     const events = agent.session.snapshotEvents()
     const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
     expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'workspace-root/change'))
@@ -55,7 +54,6 @@ describe('creating and entering retained worktrees', () => {
 
     await expect(ctx.worktrees.exit(agent)).resolves.toEqual(result)
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
-    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(root)
     expect(await git(root, 'rev-parse', 'topic')).toBe(baseCommit)
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
   })
@@ -103,7 +101,6 @@ describe('creating and entering retained worktrees', () => {
     const entered = await ctx.worktrees.enter(agent, { name: 'other' }, new AbortController().signal)
     expect(entered).toEqual({ path, branch: 'other', repositoryRoot: root })
     expect(ctx.workingDirectory.get(agent.session)).toBe(path)
-    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(path)
     const events = agent.session.snapshotEvents()
     const record = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/entered')
     expect(record).toBeGreaterThan(events.findIndex(event => event.type === 'workspace-root/change'))

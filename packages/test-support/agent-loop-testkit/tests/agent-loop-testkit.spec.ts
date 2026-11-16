@@ -6,13 +6,12 @@ import { Context } from '@deepseek-ai/cordis'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
   createInboxStub,
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
-  provideWorkingDirectoryFixture,
   unsupportedInbox,
   unsupportedModel,
 } from '../src/index.ts'
@@ -101,29 +100,6 @@ describe('dsh-agent-loop-testkit', () => {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('supplies fixed directories whose root is the recorded directory', async () => {
-    const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx, '/fallback')
-    const id = brandString<SessionId>('fixture-recorded')
-    const recorded = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd: '/project' })
-    const unrecorded = Session.create(brandString<SessionId>('fixture-unrecorded'))
-    const directories = ctx.workingDirectory
-    expect(directories.defaultDirectory).toBe('/fallback')
-    expect(directories.get(recorded)).toBe('/project')
-    expect(directories.rootOf(recorded)).toBe('/project')
-    expect(directories.recordedRootOf(recorded)).toBe('/project')
-    await expect(directories.ensure({ session: recorded } as never)).resolves.toBe('/project')
-    expect(directories.get(unrecorded)).toBe('/fallback')
-    expect(directories.rootOf(unrecorded)).toBe('/fallback')
-    expect(directories.recordedRootOf(unrecorded)).toBeUndefined()
-    await ctx.fiber.dispose()
-
-    const defaulted = new Context()
-    provideWorkingDirectoryFixture(defaulted)
-    expect(defaulted.workingDirectory.defaultDirectory).toBe(process.cwd())
-    await defaulted.fiber.dispose()
   })
 
   it('provides a mutable in-memory Inbox stub for structural Agent tests', () => {

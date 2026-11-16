@@ -85,8 +85,8 @@ it('snapshots the worktree the Session entered, lists paths relative to it, and 
 
   const snapshot = { before: expect.stringMatching(/^[0-9a-f]+$/) as string, after: expect.stringMatching(/^[0-9a-f]+$/) as string }
   expect(changes(ctx, session)).toEqual([
-    { turn: 1, root: worktree, total: 1, added: 1, deleted: 1, files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 1 }], snapshot },
-    { turn: 2, root: worktree, total: 1, added: 1, deleted: 0, files: [{ path: 'b.txt', display: 'b.txt', added: 1, deleted: 0 }], snapshot },
-    { turn: 3, root: main, total: 1, added: 1, deleted: 1, files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 1 }], snapshot },
+    { turn: 1, cwd: worktree, total: 1, added: 1, deleted: 1, files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 1 }], snapshot },
+    { turn: 2, cwd: worktree, total: 1, added: 1, deleted: 0, files: [{ path: 'b.txt', display: 'b.txt', added: 1, deleted: 0 }], snapshot },
+    { turn: 3, cwd: main, total: 1, added: 1, deleted: 1, files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 1 }], snapshot },
   ])
 })

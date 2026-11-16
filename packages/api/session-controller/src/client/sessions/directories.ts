@@ -1,24 +1,13 @@
 /**
- * The directories of one Session as the Client knows them: the projected
- * workspace root and current directory. Pure reads with type-only imports, so
- * client plugins inline this module instead of requesting a module-table row
- * this package does not publish.
+ * The directory one Session works in, as the Client knows it: the projected
+ * `workingDirectory`. Pure reads with type-only imports, so client plugins
+ * inline this module instead of requesting a module-table row this package
+ * does not publish.
  * @module @deepseek-ai/dsh-api-session-controller/client/directories
  */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ISessions } from '../contract/sessions.ts'
 import type { SessionListState } from './service.ts'
-
-/** Which checkout a Session works in and where its relative paths resolve. */
-export interface SessionDirectories {
-  /**
-   * The workspace root: the checkout the Session works in, which file views and address bases use;
-   * the original project before any relocation.
-   */
-  readonly root: string | undefined
-  /** The current directory the model's relative paths resolve from; the root while the Session reports none. */
-  readonly cwd: string | undefined
-}
 
 /** A projected string value by key, from a values object whose keys the Client compilation does not declare. */
 function projectedString(values: object | undefined, key: string): string | undefined {
@@ -28,28 +17,25 @@ function projectedString(values: object | undefined, key: string): string | unde
 }
 
 /**
- * Select a Session's workspace root from a list snapshot, for `useSessions` selectors.
+ * Select a Session's directory from a list snapshot, for `useSessions` selectors. File views, address
+ * bases, and relative paths all use it; the header directory stays the original project.
  * @param state - the sessions list snapshot.
- * @param sessionId - the Session whose root is selected.
- * @returns the projected `workspaceRoot`, else the header directory, else undefined for an unknown row.
+ * @param sessionId - the Session whose directory is selected.
+ * @returns the projected `workingDirectory`, else the header directory, else undefined for an unknown row.
  */
-export function selectSessionRoot(state: SessionListState, sessionId: SessionId): string | undefined {
-  return projectedString(state.projectionsBySession[sessionId]?.values, 'workspaceRoot')
-    ?? projectedString(state.byId[sessionId]?.projectionValues, 'workspaceRoot')
+export function selectSessionDirectory(state: SessionListState, sessionId: SessionId): string | undefined {
+  return projectedString(state.projectionsBySession[sessionId]?.values, 'workingDirectory')
+    ?? projectedString(state.byId[sessionId]?.projectionValues, 'workingDirectory')
     ?? state.byId[sessionId]?.cwd
 }
 
 /**
- * Read a Session's directories at gesture time: the connected Session's projection faces first, then the list snapshot.
+ * Read a Session's directory at gesture time: the connected Session's projection face first, then the list snapshot.
  * @param sessions - the sessions service.
- * @param sessionId - the Session whose directories are read.
- * @returns the workspace root and the current directory, each undefined when unknown.
+ * @param sessionId - the Session whose directory is read.
+ * @returns the directory, or undefined when unknown.
  */
-export function sessionDirectories(sessions: ISessions, sessionId: SessionId): SessionDirectories {
-  const projections = sessions.binding(sessionId)?.session.projections
-  const liveRoot: unknown = projections?.faceOf('workspaceRoot').getSnapshot()
-  const root = (typeof liveRoot === 'string' ? liveRoot : undefined) ?? selectSessionRoot(sessions.list.getSnapshot(), sessionId)
-  const liveCwd: unknown = projections?.faceOf('workingDirectory').getSnapshot()
-  const cwd = (typeof liveCwd === 'string' ? liveCwd : undefined) ?? root
-  return { root, cwd }
+export function sessionDirectory(sessions: ISessions, sessionId: SessionId): string | undefined {
+  const live: unknown = sessions.binding(sessionId)?.session.projections.faceOf('workingDirectory').getSnapshot()
+  return (typeof live === 'string' ? live : undefined) ?? selectSessionDirectory(sessions.list.getSnapshot(), sessionId)
 }

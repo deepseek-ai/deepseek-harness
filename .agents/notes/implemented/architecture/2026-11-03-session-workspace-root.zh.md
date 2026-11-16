@@ -10,13 +10,13 @@ Status: implemented
 
 ## Decision
 
-一个 Session 在一个目录中工作，只有 Host 操作移动它。面向模型的 `working_directory` 工具与委派工具的 `cwd` 参数被移除；模型通过路径和 shell 的单次调用参数 `workdir` 到达子目录。`header.cwd` 仍是不可变的原始项目：Session 身份、工作区归属和恢复目的地。`dsh-working-directory` 拥有该目录。它通过 `set` 或 `ensure` 的恢复记录的每次变更都是 `workspace-root/change`，`workspaceRoot` 投影是最近一条这类事件的目录，在此之前是原始项目。因此从这个版本起启动的每个 Session 中，`rootOf` 都等于 `get`。
+一个 Session 在一个目录中工作，只有 Host 操作移动它。面向模型的 `working_directory` 工具与委派工具的 `cwd` 参数被移除；模型通过路径和 shell 的单次调用参数 `workdir` 到达子目录。`header.cwd` 仍是不可变的原始项目：Session 身份、工作区归属和恢复目的地。`dsh-working-directory` 拥有该目录，只有一个读取接口 `get`：相对路径从该目录解析，消费方也以它作为工作区根来限定写入、文件视图和发现。服务通过 `set` 或 `ensure` 的恢复记录的每次变更都是 `workspace-root/change`。
 
-`workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。已存储的这类事件写于模型还能移动目录的时期，它只移动当前目录，因此已存储的 Session 保持原有的根。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
+`workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。已存储的这类事件的目录可能由模型选择，因此折叠只在它位于 Session 的原始项目之内时保留它：曾在工作树或项目子目录中工作的 Session 会在原处恢复，历史中使用的相对路径照常解析。位于项目之外的已存储目录让 Session 回到项目，下一次请求的上下文会报告该目录。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
 
-工作树创建通过 `set` 进入检出目录。模型只有一个进入检出的工具 `enter_worktree`：名称在 Session 所在检出的池中选中一个工作树。已有的工作树通过 `ctx.worktrees.enter` 进入，没有同名工作树时通过 `ctx.worktrees.create` 新建。名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的工作区根或 Host 选定的目录启动。
+工作树创建通过 `set` 进入检出目录。模型只有一个进入检出的工具 `enter_worktree`：名称在 Session 所在检出的池中选中一个工作树。已有的工作树通过 `ctx.worktrees.enter` 进入，没有同名工作树时通过 `ctx.worktrees.create` 新建。名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的目录或 Host 选定的目录启动。
 
-消费方按感知目录的对象划分。模型的文件、搜索与进程工具从当前目录解析相对路径。用户看到的、以及描述项目的一切都读取工作区根：沙箱 `workspace-write` 边界、工作区文件服务与桌面文件拖拽、变更记录器、文件树、交付物、在应用中打开操作与 Session 行、新开的侧栏终端、`@` 文件候选、技能目录、项目指令发现和 LSP 工作区。两者是同一个目录，只有含有 `working-directory/change` 事件的 Session 例外。
+每个消费方都读取这个目录。模型的文件、搜索与进程工具从它解析相对路径，用户看到的、以及描述项目的一切都以它为界：沙箱 `workspace-write` 边界、工作区文件服务与桌面文件拖拽、变更记录器、文件树、交付物、在应用中打开操作与 Session 行、新开的侧栏终端、`@` 文件候选、技能目录、项目指令发现和 LSP 工作区。
 
 沙箱策略通过执行环境的文件系统，从根的 `.git` 指针推导出链接检出目录的公共目录并加入解析出的额外可写根，只接受 Git 写出的布局：`<common>/worktrees/<name>`，其 `commondir` 指向 `<common>`、`gitdir` 指回检出目录的 `.git`，因为检出目录自己的指针在 `workspace-write` 下可写。根的结果读取后即保留，在 Host 操作把某个 Session 的工作区移到该根、或已推导目录消失时刷新；工具执行等待该推导完成，会话创建与目录变更提前启动它，推导出的目录不进入模型可见的策略文本。在 Windows 上，推导出的目录遵循[文件工具授权决策](2026-10-29-windows-file-tool-directory-grants.zh.md)：`write` 与 `edit` 执行它们，进程限制保留工作区与私有临时目录授权。移入工作树之后，原始项目只能通过 Git 管理目录写入，不再整体可写。Host 对 Session 并不在其中工作的检出目录做维护时保留原来的边界：归档时移除 worktree、恢复被删除的 worktree、在源仓库中读取其分支，都在 Session 的策略下以记录中的源检出目录为根运行，通过 `resolve({ session, root })` 请求；Session 自身的根可能正是被删除的目录，而进程沙箱无法绑定缺失或正在消失的根。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 **在 `working-directory/change` 上增加可选的 `workspace` 标记。** 旧读者忽略该属性，仍能读取所有日志。但服务记录的每次变更都要带一个恒定值，缺少属性成为识别已存储变更的唯一依据；单独的事件为工作区移动命名，并让已存储的事件保持不变。
 
-**通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类，而已存储的模型 `cd` 仍需要一种只移动目录的记录。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
+**通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类。包含规则按原样读取已存储的事件。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
 
 **按路径进入工作树。** 模型提供的路径会把写边界移到任意已登记的工作树，除非用户逐次批准，否则这正是移除目录工具所排除的。`tools/pre-execute` 监听器可以通过审批服务请求这一批准；本决定把路径形式，以及随之而来的“从工作树内进入同级工作树”，留给之后的变更。池内的名称把边界留在检出之内。
 
@@ -38,8 +38,10 @@ Status: implemented
 
 **在调用之间保留 shell 的 `cd`。** 这是一个隐式的光标。在该开发者的 Session 中，68% 的 `cd` 前缀指向 Session 目录之外，30% 指向 Session 目录本身，限制在工作区内的保留只对约 2% 生效。
 
-**把已存储的变更读作工作区移动。** 已存储的模型 `cd` 会收窄或移动现有 Session 的写边界；缺少某项特性的日志保持旧行为。
+**两个公开读取接口。** 用 `get` 读相对路径的基准、用 `rootOf` 读工作区根，可以保留每个已存储的目录，但每个消费方都要在两个值之间做选择，而这两个值在从这个版本起启动的每个 Session 中都相等。只保留一个读取接口、把差异收进折叠，就不需要这种选择。
+
+**保留每个已存储的目录。** 把每条已存储的 `working-directory/change` 都读作目录不需要任何规则，但消费方跟随目录，已存储的模型 `cd` 所到的项目之外的目录（例如用户主目录）会因此成为写边界。
 
 ## Consequences
 
-消费方读取一个目录：相对路径用 `get`，属于工作区的一切用 `rootOf`。两者只在含有 `working-directory/change` 事件的 Session 中不同，下一次 Host 移动会让它们重新一致。读者继续把该事件折叠为只移动目录的变更，因此以后增加光标不需要改格式。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。在链接工作树内打开的 Session 可以在 `workspace-write` 下运行 `git commit`，共享的 `.git`（包括其钩子与配置）对该 Session 可写，正如它对主检出目录中的 Session 一样。SDK 的 `setWorkingDirectory` 调用以及在 Host 选定目录启动的子代理，会让 `workspace-write` 边界随目录一起移动。工作树快照夹具覆盖进入、离开和失去工作树。
+消费方通过 `get` 读取一个目录。曾在项目之内工作的已存储 Session 会在原处恢复，并像其他 Session 一样跟随之后的 Host 移动；模型曾移入项目子目录的 Session，在 Host 操作移动它之前，以该子目录作为写边界和文件视图的根。日志曾离开项目的已存储 Session 会在项目中恢复；这包括在仓库子目录中打开、随后进入仓库根下工作树的 Session，`enter_worktree` 或其他 Host 移动可以让它回到工作树。以后若要增加面向模型的光标，需要它自己的事件，因为已存储的 `working-directory/change` 事件被读作 Session 的目录。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。在链接工作树内打开的 Session 可以在 `workspace-write` 下运行 `git commit`，共享的 `.git`（包括其钩子与配置）对该 Session 可写，正如它对主检出目录中的 Session 一样。SDK 的 `setWorkingDirectory` 调用以及在 Host 选定目录启动的子代理，会让 `workspace-write` 边界随目录一起移动。工作树快照夹具覆盖进入、离开和失去工作树。

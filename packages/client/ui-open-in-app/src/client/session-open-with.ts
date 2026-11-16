@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ContextMenuTargetMap, MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { OPEN_IN_APP_ICON_PREFIX_ROUTE } from '@deepseek-ai/dsh-host-open-in-app/shared'
 import { APP_LABEL_KEY } from './applications.ts'
 import type { OpenInAppController } from './controller.ts'
@@ -23,7 +23,7 @@ export function registerSessionOpenWith(
 ): void {
   const resolve = ({ sessionId }: ContextMenuTargetMap['sessionHeader']): readonly MenuAction[] => {
     // The Session menu opens the checkout the Session works in, not the directory it was created in.
-    const directory = selectSessionRoot(ctx.sessions.list.getSnapshot(), sessionId)
+    const directory = selectSessionDirectory(ctx.sessions.list.getSnapshot(), sessionId)
     const applications = (controller.apps.getSnapshot() ?? []).flatMap((id) => {
       const key = APP_LABEL_KEY[id]
       return key === undefined ? [] : [{ id, name: t(key) }]

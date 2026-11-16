@@ -25,7 +25,7 @@ agent 可以在会话期间发现并加载 skill。当 `skill` 工具可见时�
 <a id="use-this-package"></a>
 ## 使用本包
 
-技能发现、目录更新与显式技能调用均使用 Session 的工作区根；根内部的目录切换保持同一份目录。
+技能发现、目录更新与显式技能调用均使用 Session 的当前工作目录。
 
 与 skill 注册表一起挂载该插件，即可让 agent 拥有会话 skill 目录和 `skill` 加载工具。它需要 `ctx.agents`、`ctx.tools` 与 `ctx.skills`。
 

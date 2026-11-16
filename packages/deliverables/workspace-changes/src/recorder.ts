@@ -27,20 +27,10 @@ export interface RecorderEnvironment {
   warn: (message: string) => void
 }
 
-/** The directories a turn starts from, read when the turn opens. */
-export interface TurnDirectories {
-  /** The Session's current directory, which locates the repository the turn is snapshotted in. */
-  cwd: string
-  /** The Session's workspace root, which listed paths are relative to. */
-  root: string
-}
-
 /** Canonical paths every comparison and display uses, resolved when a turn opens. */
 interface Paths {
-  /** Canonical current directory for repository discovery. */
+  /** Canonical Session directory for repository discovery and display paths. */
   cwd: string
-  /** Canonical workspace root that listed paths are relative to. */
-  root: string
   /** Canonical home directory abbreviated as `~` in display paths. */
   home: string
   /** Temporary roots whose files outside the workspace never enter a summary. */
@@ -79,8 +69,8 @@ interface TurnRecord {
 /** Everything one turn accumulates; a new turn gets a new object so queued work for an older turn keeps its own. */
 interface TurnState {
   readonly turn: number
-  /** The workspace root recorded for the turn, as the directory service spells it. */
-  readonly root: string
+  /** The Session directory the turn started in, as the directory service spells it. */
+  readonly cwd: string
   /**
    * The turn-start snapshot once it exists. `null` means no repository or no git, so the turn summarizes file-tool
    * captures only; `'failed'` means the repository exists but its snapshot failed, so the turn records nothing.
@@ -95,8 +85,8 @@ interface TurnState {
   recordedAfterSeq: number
 }
 
-function freshState(turn: number, root: string): TurnState {
-  return { turn, root, baseline: null, captures: new Map(), lastToolResultSeq: -1, attemptedAfterSeq: -1, recordedAfterSeq: -1 }
+function freshState(turn: number, cwd: string): TurnState {
+  return { turn, cwd, baseline: null, captures: new Map(), lastToolResultSeq: -1, attemptedAfterSeq: -1, recordedAfterSeq: -1 }
 }
 
 /** A listed file with the sources of its two sides. */
@@ -112,11 +102,11 @@ const OVERSIZED = Symbol('oversized')
  * comparisons this recorder keeps. Snapshot objects and captured copies live in
  * a temporary directory owned by the recorder; disposal removes it together
  * with the summaries. Tool execution waits for pending work so a snapshot or
- * capture never races a mutation. A current directory outside any repository,
+ * capture never races a mutation. A working directory outside any repository,
  * or a Host without git, gets no snapshot; its summary lists the files the file
- * tools changed. Each turn reads the Session's directories again, so a turn
+ * tools changed. Each turn reads the Session's directory again, so a turn
  * that starts in another checkout is snapshotted there and lists paths
- * relative to that workspace root.
+ * relative to that directory.
  */
 export class TurnRecorder {
   private chain: Promise<void> = Promise.resolve()
@@ -126,7 +116,7 @@ export class TurnRecorder {
   private paths: Paths | undefined
   /** Host facts shared by every turn, resolved by the first. */
   private host: Pick<Paths, 'home' | 'temporaryRoots'> | undefined
-  /** Located repositories by canonical current directory, reused across turns; an absent entry keeps retrying each turn. */
+  /** Located repositories by canonical Session directory, reused across turns; an absent entry keeps retrying each turn. */
   private readonly repositories = new Map<string, Repository>()
   /** Temporary directory holding this Session's snapshot objects, scratch indexes, and captured copies. */
   private scratch: Promise<string> | undefined
@@ -136,7 +126,7 @@ export class TurnRecorder {
 
   constructor(
     private readonly session: Session,
-    private readonly directories: () => TurnDirectories,
+    private readonly directory: () => string,
     private readonly env: RecorderEnvironment,
   ) {}
 
@@ -145,13 +135,13 @@ export class TurnRecorder {
    * @param turn - the turn number from `turn/start`.
    */
   start(turn: number): void {
-    const { cwd, root } = this.directories()
-    const state = freshState(turn, root)
+    const cwd = this.directory()
+    const state = freshState(turn, cwd)
     this.state = state
     void this.enqueue(async (signal) => {
       try {
         this.host ??= { home: await canonicalPath(homedir()), temporaryRoots: await temporaryRoots() }
-        this.paths = { cwd: await realpath(cwd), root: await realpath(root), ...this.host }
+        this.paths = { cwd: await realpath(cwd), ...this.host }
         const repository = await this.locate(this.paths.cwd, signal)
         if (repository === null) return
         const tree = await snapshotTree(repository.git, repository.workspace, signal)
@@ -289,7 +279,7 @@ export class TurnRecorder {
     return this.scratch
   }
 
-  /** The repository enclosing one current directory, located once per directory; null keeps retrying each turn. */
+  /** The repository enclosing one Session directory, located once per directory; null keeps retrying each turn. */
   private async locate(cwd: string, signal: AbortSignal): Promise<Repository | null> {
     const located = this.repositories.get(cwd)
     if (located !== undefined) return located
@@ -322,7 +312,7 @@ export class TurnRecorder {
     const { baseline } = state
     if (paths === undefined || baseline === 'failed' || state.lastToolResultSeq < 0) return
     state.attemptedAfterSeq = state.lastToolResultSeq
-    // Without a snapshot the current directory itself bounds the workspace.
+    // Without a snapshot the working directory itself bounds the workspace.
     const root = baseline?.workspace.root ?? paths.cwd
     const listed = new Map<string, Listed>()
     let snapshot: WorkspaceChangesSummary['snapshot']
@@ -373,7 +363,7 @@ export class TurnRecorder {
     this.records.set(event.seq, {
       summary: {
         turn: state.turn,
-        root: state.root,
+        cwd: state.cwd,
         files: kept.map(entry => entry.file),
         total: sorted.length,
         added: sorted.reduce((sum, entry) => sum + entry.file.added, 0),
@@ -409,10 +399,10 @@ function isBinary(capture: Capture): boolean {
 
 interface Counts { added: number; deleted: number; binary: boolean; oversized?: boolean }
 
-function changedFile({ root: workspaceRoot, home }: Paths, root: string, absolute: string, counts: Counts): WorkspaceChangedFile {
+function changedFile({ cwd, home }: Paths, root: string, absolute: string, counts: Counts): WorkspaceChangedFile {
   return {
-    path: durablePathOf(absolute, workspaceRoot),
-    display: displayPathOf(absolute, workspaceRoot, root, home),
+    path: durablePathOf(absolute, cwd),
+    display: displayPathOf(absolute, cwd, root, home),
     added: counts.added,
     deleted: counts.deleted,
     ...counts.binary ? { binary: true as const } : {},

@@ -140,7 +140,7 @@ describe('archive-triggered worktree cleanup', () => {
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
     // The creator's root is the checkout being removed; its commands are bounded by the source checkout instead.
-    expect(f.ctx.workingDirectory.rootOf(f.session)).toBe(f.worktree.path)
+    expect(f.ctx.workingDirectory.get(f.session)).toBe(f.worktree.path)
     const roots = resolve.mock.calls.filter(([request]) => request?.session === f.session).map(([request]) => request?.root)
     expect(roots).toEqual([undefined, f.root])
   })

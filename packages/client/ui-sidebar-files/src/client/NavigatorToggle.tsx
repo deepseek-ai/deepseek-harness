@@ -5,7 +5,7 @@
  * the pane reads, and registers itself with the face, which hands it the
  * keyboard when Escape closes the navigator.
  */
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback } from 'react'
 import type { ReactNode } from 'react'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
@@ -43,11 +43,11 @@ export function NavigatorToggle(
   { useTabInfo, sessionId, useSessions, useStore, actions, toggleDrawn, t }: FactoryComponentPropsOf<'sidebar.files.navigator.toggle'>,
 ): ReactNode {
   const { panel } = useTabInfo()
-  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   const open = useStore(store => store.byPane[panel.id]?.open) === true
   // Stable, so the control registers once per drawing rather than on every render.
   const toggleRef = useCallback((button: HTMLElement | null) => { toggleDrawn(panel.id, button) }, [toggleDrawn, panel.id])
-  if (workspaceRoot === undefined) return null
+  if (cwd === undefined) return null
   const label = t(open ? 'navigator.hide' : 'navigator.show')
   return (
     <Tooltip label={label} side="bottom" delayMs={500}>

@@ -28,6 +28,7 @@ kind: "package-group"
 |---|---|---|
 | [`session-query/`](session-query/README.zh.md) | 统一的会话历史查询服务：精确读取、关系追踪与过滤 | `ctx.sessionQuery` |
 | [`session-query-sqlite/`](session-query-sqlite/README.zh.md) | 基于 SQLite FTS5 索引的会话历史全文搜索 | 注册到 `ctx.sessionQuery` |
+| [`tool-session-list/`](tool-session-list/README.zh.md) | 可选的只读 Workspace 和 Session 元数据工具 | — |
 | [`session-log-export/`](session-log-export/README.zh.md) | Web `/export` 命令与浏览器下载会话 ZIP | `ctx.sessionLogDownload`（浏览器） |
 
 -----

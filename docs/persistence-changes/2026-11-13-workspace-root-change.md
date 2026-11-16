@@ -9,7 +9,7 @@ English | [中文](2026-11-13-workspace-root-change.zh.md)
 
 ## Summary
 
-Adds the workspace-root/change event, which moves a Session's current directory and its workspace root together. working-directory/change keeps its payload and has no writer.
+Adds the workspace-root/change event, which records a Host move of a Session's directory. working-directory/change keeps its payload and has no writer.
 
 ## Table of Contents
 
@@ -35,12 +35,12 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-New readers fold both events: workspace-root/change sets the current directory and the workspace root, and working-directory/change sets only the current directory, so a stored Session keeps its original project as its root. A Session that never moves its workspace holds neither event and older readers read it as before. Older readers do not know workspace-root/change, which carries no ignorable marker, so they refuse a log that holds it when they decode the row; they never reconstruct a directory that misses the move.
+New readers fold both events into one directory. workspace-root/change sets it. A stored working-directory/change sets it only when its directory lies inside the Session's original project, which keeps the directory and the relative paths of a Session that worked in a worktree or a subdirectory of its project. This narrows the meaning of a stored working-directory/change whose directory lies outside the original project: earlier readers kept it as the current directory, and this reader returns the Session to the project, because the model could choose that directory and consumers bound writes by the Session's directory. The next request's context reports the directory to the model. A Session that never moves holds neither event and older readers read it as before. Older readers do not know workspace-root/change, which carries no ignorable marker, so they refuse a log that holds it when they decode the row; they never reconstruct a directory that misses the move.
 
 <a id="verification"></a>
 ## Verification
 
-pnpm exec vitest run packages/session/working-directory/tests: 33 tests passed, including replay of a log holding workspace-root/change, a stored working-directory/change that leaves the root at the original project, and a Host move onto a directory that a working-directory/change recorded. pnpm exec vitest run packages/session/session-format-catalog/tests/catalog.spec.ts: 23 tests passed, including refusal of a required event type outside the reader's vocabulary.
+pnpm exec vitest run packages/session/working-directory/tests: 30 tests passed, including replay of stored working-directory/change events inside the project, outside it, after a Host move, in a Session without origin metadata, and under a symlinked header. pnpm exec vitest run packages/session/session-format-catalog/tests/catalog.spec.ts: refusal of a required event type outside the reader's vocabulary.
 
 <a id="dev-note"></a>
 ## Dev Note

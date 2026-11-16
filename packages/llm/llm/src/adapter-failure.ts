@@ -93,12 +93,13 @@ function failureSnapshot(value: unknown): LlmFailure | undefined {
 
 /** Read an SDK error message without letting an accessor replace the primary failure. */
 function errorMessage(error: Error): string {
+  let message: unknown
   try {
-    const message: unknown = error.message
-    if (typeof message === 'string' && message.length > 0) return message
+    message = error.message
   } catch (_sdkMessageGetter) {
     // The fallback below preserves a serializable failure beside the original Error.
   }
+  if (typeof message === 'string' && message.length > 0) return message
   return 'LLM adapter failed'
 }
 

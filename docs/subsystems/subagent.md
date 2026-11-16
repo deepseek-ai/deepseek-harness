@@ -8,7 +8,7 @@ The unified activation API manages local conversations and external executions. 
 
 Every backend uses startActivation. Capability flags validate request options; prepareContinuable selects local Agent creation, while start selects one external execution. The model-facing tool uses parent delivery. Workflow and code mode consumers can await caller results without injecting another parent message. Historical children with unavailable descriptors remain discoverable as `mode: 'unknown'` without granting continuation capabilities; the [package README](../../packages/subagent/subagent/README.md) defines catalog persistence.
 
-Optional Host-chosen `cwd` selects the child's initial directory, which becomes its workspace; a relative path resolves against the parent's workspace root. Omitting it captures that root at admission. The model-facing delegation tools pass no directory. Local child Sessions retain the parent's original project, and cold resume retains their logged directory state.
+Optional Host-chosen `cwd` selects the child's initial directory; a relative path resolves against the parent's current directory. Omitting it captures that directory at admission. The model-facing delegation tools pass no directory. Local child Sessions retain the parent's original project, and cold resume retains their logged directory state.
 
 ```ts type-equiv
 /**
@@ -76,10 +76,7 @@ interface SubagentActivation {
  * shares these task options and defines its own label and cancellation policy.
  */
 interface SubagentStartRequest {
-  /**
-   * Host-chosen initial child directory, which becomes the child's workspace; a relative path resolves
-   * against the parent's workspace root. Omitted starts the child in that root.
-   */
+  /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
   readonly cwd?: string
   /**
    * Independent preset id; omission joins the parent's current generation.
@@ -92,7 +89,7 @@ interface SubagentStartRequest {
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
-   * The spawning agent. Its workspace root supplies the default cwd;
+   * The spawning agent. Its effective directory supplies the default cwd;
    * in-process children retain its origin, lineage, and delegation depth.
    */
   readonly parent: Agent

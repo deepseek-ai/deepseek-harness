@@ -42,15 +42,12 @@ export class SessionSkillCatalog extends TypertRemoteService {
       if (observation.projections === undefined) {
         throw new Error('skill catalog requires a projected Session observation')
       }
-      cwd = observation.projections.values.workspaceRoot
+      cwd = observation.projections.values.workingDirectory
         ?? observation.header.cwd
         ?? this.ctx.workingDirectory.defaultDirectory
       agentPreset = observation.projections.values.agentPreset ?? undefined
       const live = this.ctx.agents.get(sessionId)
-      if (live !== undefined) {
-        await this.ctx.workingDirectory.ensure(live, signal)
-        cwd = this.ctx.workingDirectory.rootOf(live.session)
-      }
+      if (live !== undefined) cwd = await this.ctx.workingDirectory.ensure(live, signal)
     } catch (error: unknown) {
       if (error instanceof SessionQueryError
         && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {

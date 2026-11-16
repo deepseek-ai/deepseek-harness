@@ -953,6 +953,38 @@ describe('input actions', () => {
     expect(windowFixture.dispatch).not.toHaveBeenCalled()
   })
 
+  it.each(['left', 'right', 'middle'] as const)('dispatches one %s mouse-button event without an observation', async (mouseButton) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    expect(app).not.toHaveProperty('toggleMouse')
+    expectTypeOf<CuaApp>().not.toHaveProperty('toggleMouse')
+    expectTypeOf<CuaWindow['toggleMouse']>().parameters.toEqualTypeOf<[
+      mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up',
+    ]>()
+    for (const direction of ['down', 'up'] as const) {
+      f.dispatch.mockClear()
+      await expect(window.toggleMouse(mouseButton, direction)).resolves.toEqual(delivered)
+      expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'toggleMouse', params: {
+        appHandle: 'app-17', windowId: '23', mouseButton, direction,
+      } })
+    }
+  })
+
+  it('preserves mouse-button dispatch failures without retries or an opposite event', async () => {
+    const f = fixture()
+    const window = await (await f.api.getApp('Editor')).getWindow('23')
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce({ dispatched: false })
+    await expect(window.toggleMouse('left', 'down')).resolves.toEqual({ dispatched: false })
+    const failure = new Error('Mouse-button input is not supported')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(window.toggleMouse('left', 'up')).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
+    await expect(window.toggleMouse('right', 'up')).rejects.toThrow()
+    expect(f.dispatch).toHaveBeenCalledTimes(3)
+  })
+
   it('retains the snapshot identity for element right and double clicks', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

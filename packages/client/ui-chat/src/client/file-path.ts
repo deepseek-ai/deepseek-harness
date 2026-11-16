@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
-import { sessionDirectories } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 
 /**
  * Bind path resolution to the originating Session without capturing its current directory.
@@ -11,5 +11,5 @@ import { sessionDirectories } from '@deepseek-ai/dsh-api-session-controller/clie
  * @returns Resolver using the live working directory, falling back to the workspace root.
  */
 export function sessionFilePath(ctx: Context, sessionId: SessionId): (path: string) => string {
-  return path => resolveWorkspacePath(sessionDirectories(ctx.sessions, sessionId).cwd, path)
+  return path => resolveWorkspacePath(sessionDirectory(ctx.sessions, sessionId), path)
 }

@@ -49,6 +49,7 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.permissionParameters('requestPermission', 'accessibility', 'en')).toEqual({ permission: 'accessibility' })
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
+  expect(backend.capabilities.methods).toContain('toggleMouse')
   expect(backend.sendKeyEvent).toBeUndefined()
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)

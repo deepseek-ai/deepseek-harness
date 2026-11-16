@@ -18,7 +18,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { GitRunner } from './git.ts'
-import { TurnRecorder, type TurnDirectories } from './recorder.ts'
+import { TurnRecorder } from './recorder.ts'
 import type { WorkspaceChanges } from './types.ts'
 
 export type {
@@ -63,17 +63,9 @@ function eligible(session: Session): string | undefined {
   return origin === 'subagent' || (delegationDepth ?? 0) > 0 ? undefined : cwd
 }
 
-/**
- * The directories a turn starts from: the Session's current directory, which
- * locates the repository, and its workspace root, which listed paths are
- * relative to. Without the working-directory service both are the original
- * project.
- */
-function directoriesOf(ctx: Context, session: Session, original: string): TurnDirectories {
-  const directories = ctx.get('workingDirectory')
-  return directories === undefined
-    ? { cwd: original, root: original }
-    : { cwd: directories.get(session), root: directories.rootOf(session) }
+/** The directory a turn starts in: the Session's directory, or the original project without the working-directory service. */
+function directoryOf(ctx: Context, session: Session, original: string): string {
+  return ctx.get('workingDirectory')?.get(session) ?? original
 }
 
 /**
@@ -147,7 +139,7 @@ export function apply(ctx: Context, config: Config): void {
   const recorderFor = (session: Session, original: string): TurnRecorder => {
     let recorder = recorders.get(session)
     if (recorder === undefined) {
-      recorder = new TurnRecorder(session, () => directoriesOf(ctx, session, original), {
+      recorder = new TurnRecorder(session, () => directoryOf(ctx, session, original), {
         git: gitRunner(), tempRoot: tmpdir(), maxFiles: config.maxFiles,
         maxFileBytes: config.maxFileBytes, diffTimeoutMs: config.diffTimeoutMs,
         warn: (message) => { ctx.logger.warn(message) },

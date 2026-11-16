@@ -178,6 +178,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
+    key: 'connectorAccounts',
+    pkg: 'client-ui-connector-account',
+    title: 'Connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation.',
+  },
+  {
     key: 'pluginMarket',
     pkg: 'plugin-market',
     title: 'Plugin market index reader',
@@ -250,7 +257,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['working-directory'],
     consumers: ['tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server', 'sandbox-policy', 'api-workspace-files', 'api-terminal-controller', 'workspace-changes', 'file-reference-local', 'tool-skill', 'agent-instructions', 'tool-lsp'],
-    note: 'Two Session projections own the effective execution directory and the workspace root; Host operations move both together. The filesystem validates changes and user context reports them; model tools resolve paths from the directory while the sandbox boundary, file views, and discovery follow the root, and original metadata stays fixed.',
+    note: 'One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes and user context reports them; model tools resolve paths from the directory, the sandbox boundary, file views, and discovery follow it, and original metadata stays fixed.',
   },
   {
     key: 'mcpResources',

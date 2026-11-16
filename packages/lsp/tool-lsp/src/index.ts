@@ -12,7 +12,6 @@
 
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { LspError } from '@deepseek-ai/dsh-lsp'
@@ -88,15 +87,6 @@ const LSP_RANGE_OUTPUT_SCHEMA = {
     end: { ...LSP_POSITION_OUTPUT_SCHEMA, required: true },
   },
 } as const
-
-/**
- * The workspace root after the directory service validated the Session's current directory, so a
- * vanished checkout is recovered before the query, as the other root consumers do.
- */
-async function validatedRoot(ctx: Context, agent: Agent, signal: AbortSignal): Promise<string> {
-  await ctx.workingDirectory.ensure(agent, signal)
-  return ctx.workingDirectory.rootOf(agent.session)
-}
 
 /**
  * Register the `lsp` tool and its system-prompt guidance.
@@ -191,7 +181,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: resolved.timeoutMs,
     async execute(args, exec) {
       const input = parseLspArgs(args)
-      const workspaceRoot = exec.agent === undefined ? undefined : await validatedRoot(ctx, exec.agent, exec.signal)
+      const workspaceRoot = exec.agent === undefined ? undefined : await ctx.workingDirectory.ensure(exec.agent, exec.signal)
       if (workspaceRoot === undefined) {
         throw new LspError('the lsp tool requires a session workspace cwd', 'LSP_WORKSPACE_REQUIRED')
       }

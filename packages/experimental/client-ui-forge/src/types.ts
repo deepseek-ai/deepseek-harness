@@ -71,7 +71,9 @@ export interface ForgeWorktreeState {
   readonly locked: boolean
   /** Whether a step has started; no worktree is created afterwards. */
   readonly stepped: boolean
-  /** The Session's working directory as its log last recorded it, or null when none is recorded. */
+  /** The Session's original project, or its first recorded directory without one; null before either. */
+  readonly project: string | null
+  /** The Session's working directory as the working-directory service reads its log, or null when none is recorded. */
   readonly cwd: string | null
   /** Whether a restoration started without a successful completion, including across reloads. */
   readonly restoring: boolean
@@ -473,7 +475,7 @@ export interface ForgeChangedFile {
   readonly binary: boolean
 }
 
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 export interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string
@@ -502,7 +504,7 @@ export interface Config {
   worktreePrefix?: string
   /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
-  /** Most untracked files a local diff or the local changes card includes. */
+  /** Most untracked files a local diff or the local changes row includes. */
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number

@@ -71,6 +71,28 @@ it('admits arbitrary key names with an explicit key-event direction', () => {
   expect(Request.parse(request)).toEqual(request)
 })
 
+it.each(['left', 'right', 'middle'])('admits explicit %s mouse-button events without coordinates', (mouseButton) => {
+  for (const schema of [Request, SystemPointerRequest]) {
+    for (const direction of ['down', 'up']) {
+      const request = { method: 'toggleMouse', params: { appHandle: 'app', windowId: '23', mouseButton, direction } }
+      expect(schema.parse(request)).toEqual(request)
+    }
+  }
+})
+
+it.each([
+  { mouseButton: undefined }, { mouseButton: 'back' },
+  { direction: undefined }, { direction: 'press' },
+  { appHandle: undefined }, { windowId: undefined },
+  { x: 1 }, { y: 2 }, { relative: true }, { elementId: '0' }, { snapshotId: 'snapshot' },
+  { modifiers: [] }, { useSystemPointer: true },
+])('rejects invalid mouse-button event parameters %j', (invalid) => {
+  const params = { appHandle: 'app', windowId: '23', mouseButton: 'left', direction: 'down', ...invalid }
+  for (const schema of [Request, SystemPointerRequest]) {
+    expect(schema.safeParse({ method: 'toggleMouse', params }).success).toBe(false)
+  }
+})
+
 it.each([
   { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
   { appHandle: 'app', windowId: '23', x: 1, y: 2 },

@@ -110,9 +110,7 @@ export class LocalFileReferenceService extends FileReferenceService {
     query: string,
     signal: AbortSignal,
   ): Promise<FileReferenceCandidate[]> {
-    // Candidates are listed from the workspace root the user sees, after the current directory was validated.
-    await this.ctx.workingDirectory.ensure(agent, signal)
-    const cwd = this.ctx.workingDirectory.rootOf(agent.session)
+    const cwd = await this.ctx.workingDirectory.ensure(agent, signal)
     let cached = this.searches.get(agent)
     if (cached?.cwd !== cwd) {
       cached?.search.dispose()

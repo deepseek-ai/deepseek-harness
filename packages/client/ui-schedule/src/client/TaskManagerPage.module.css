@@ -1365,8 +1365,18 @@
   --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
+/* The instruction only identifies the task here, so a long one stays a
+   three-line excerpt instead of growing the dialog. */
 .confirmPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

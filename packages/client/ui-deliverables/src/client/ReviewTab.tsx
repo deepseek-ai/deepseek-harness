@@ -3,7 +3,7 @@
  * selected file's turn-start and turn-end comparison drawn unified or side by
  * side, wrapped or scrolling, and controls to open the file itself.
  */
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -75,7 +75,7 @@ export function ReviewTab({
   const coordinates = useMemo(() => parseChangesReviewAddress(tab.contentId), [tab.contentId])
   if (coordinates === undefined) throw new Error(`ui-deliverables: not a review address "${tab.contentId}"`)
   const { seq } = coordinates
-  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   const summary = useChangesSummary(value => value[changesSummaryUrl(sessionId, seq)])
   const state = useStore(store => store.byTab[tab.id])
   const host = usePresentedHost(value => value)
@@ -143,8 +143,7 @@ export function ReviewTab({
           </Tooltip>
           {file !== undefined && <Tooltip label={t('review.openFile')} side="bottom" delayMs={500}>
             <button type="button" className={css.tool} aria-label={t('review.openFileAria', { name: file.display })} data-review-tool="open-file"
-              onClick={() => { tab.actions.openResource(fileAddressFor(sessionId, workspaceRoot, file.path)) }}>
-              <IconInspectOutlineRegular /></button>
+              onClick={() => { tab.actions.openResource(fileAddressFor(sessionId, cwd, file.path)) }}><IconInspectOutlineRegular /></button>
           </Tooltip>}
           {file !== undefined && renderSlot('deliverables.review.file.actions', {
             actionUrl: changedFileUrl(sessionId, seq, index), available: native,

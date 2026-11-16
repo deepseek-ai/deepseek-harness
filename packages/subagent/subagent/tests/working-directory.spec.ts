@@ -61,21 +61,8 @@ describe('subagent working directories', () => {
     const child = run.localAgent
     expect(child.session.header.cwd).toBe(origin)
     expect(ctx.workingDirectory.get(child.session)).toBe(selected)
-    expect(ctx.workingDirectory.rootOf(child.session)).toBe(selected)
     await ctx.workingDirectory.set(parent, first)
     expect(ctx.workingDirectory.get(child.session)).toBe(selected)
-    await run.dispose()
-  })
-
-  it('starts a child in the parent workspace root, not in a directory a working-directory/change recorded', async () => {
-    const { ctx, parent, origin, first } = await fixture()
-    parent.session.append('working-directory/change', { cwd: await realpath(first) })
-    const run = await startTestActivation(ctx, 'spawn', {
-      parent, prompt: [{ type: 'text', text: 'child' }], signal: new AbortController().signal,
-    })
-    await run.result
-    expect(ctx.workingDirectory.get(run.localAgent.session)).toBe(await realpath(origin))
-    expect(ctx.workingDirectory.rootOf(run.localAgent.session)).toBe(await realpath(origin))
     await run.dispose()
   })
 
@@ -97,7 +84,7 @@ describe('subagent working directories', () => {
     using observed = await ctx.sessionQuery.observeSession(started.childId)
     expect(observed.header.cwd).toBe(origin)
     const last = observed.events.findLast(event => event.type === 'workspace-root/change')
-    expect(last?.data).toEqual({ cwd: selected })
+    expect(last?.data).toMatchObject({ cwd: selected })
   })
 
   it('rolls back a local child whose setup realm has no directory service', async () => {

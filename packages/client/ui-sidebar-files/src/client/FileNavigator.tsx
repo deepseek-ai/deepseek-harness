@@ -7,7 +7,7 @@
  * follows `PUSH_FROM`, `FILL_BELOW`, and `FULLSCREEN_QUERY`; the package
  * README describes its behavior, search included.
  */
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import clsx from 'clsx'
@@ -174,18 +174,18 @@ export function FileNavigator({
   const { tab, panel } = useTabInfo()
   const { getTriggerProps } = useContextMenu()
   const paneId = panel.id
-  // The root is the checkout the Session works in; the face searches again when it changes.
-  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
+  // The tree is rooted at the directory the Session works in; the face searches again when it changes.
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   const state = useStore(store => store.byPane[paneId])
   const rowWidth = useRowWidth(paneId)
   const canOpen = useCanOpen(check => check)
   const open = page || state?.open === true
   // Measured by the face; the viewport rule is CSS's, read again when a file opens.
   const mode = navigatorMode(rowWidth)
-  const tree = state?.tree?.root === workspaceRoot ? state?.tree : undefined
+  const tree = state?.tree?.root === cwd ? state?.tree : undefined
   // The face resolves every key to a source, so the renderer never reports one unavailable.
   /* v8 ignore next -- the fallback only satisfies the keyed hook's optional snapshot type. */
-  const preferences: WorkspaceSearchPreferences = useSearchPreferences(workspaceRoot ?? '') ?? defaultSearchPreferences()
+  const preferences: WorkspaceSearchPreferences = useSearchPreferences(cwd ?? '') ?? defaultSearchPreferences()
   const { showHidden } = preferences
   const query = state?.query ?? ''
   const searchBarOpen = !page || state?.searchBarOpen === true
@@ -219,8 +219,8 @@ export function FileNavigator({
 
   useEffect(() => attach(paneId, tab.id, tab.signal), [attach, paneId, tab.id, tab.signal])
   // Only a navigator that can draw a tree keeps the workspace command on its tab.
-  useEffect(() => page || workspaceRoot === undefined ? undefined : placeBeside(tab.id), [page, workspaceRoot, placeBeside, tab.id])
-  useEffect(() => workspaceRoot === undefined || !open ? undefined : hold(paneId, workspaceRoot), [workspaceRoot, open, paneId, hold])
+  useEffect(() => page || cwd === undefined ? undefined : placeBeside(tab.id), [page, cwd, placeBeside, tab.id])
+  useEffect(() => cwd === undefined || !open ? undefined : hold(paneId, cwd), [cwd, open, paneId, hold])
 
   const relativePath = tree === undefined ? undefined : relativeFileOf(tab.contentId, sessionId, tree.root)
   const location = useMemo(
@@ -271,16 +271,16 @@ export function FileNavigator({
   const closeSettings = useCallback((rules: readonly ExclusionRule[], refocus: boolean) => {
     setDraft(undefined)
     if (refocus) trigger.current?.focus()
-    if (workspaceRoot !== undefined && rules !== preferences.rules) setSearchPreferences(workspaceRoot, { rules })
-  }, [workspaceRoot, preferences.rules, setSearchPreferences])
+    if (cwd !== undefined && rules !== preferences.rules) setSearchPreferences(cwd, { rules })
+  }, [cwd, preferences.rules, setSearchPreferences])
 
-  if (workspaceRoot === undefined || !open) return null
+  if (cwd === undefined || !open) return null
   const geometry = navigatorGeometry(rowWidth, state?.width ?? DEFAULT_NAVIGATOR_WIDTH)
   // The page's tree always fills the page; a preview's follows its row.
   const shown = page ? undefined : mode
   const clamp = (next: number): number => Math.min(Math.max(next, geometry.minimum), geometry.maximum)
   const clear = (): void => {
-    setQuery(paneId, workspaceRoot, '')
+    setQuery(paneId, cwd, '')
     input.current?.focus()
   }
   return (
@@ -292,7 +292,7 @@ export function FileNavigator({
       data-files-navigator={paneId}
       data-files-navigator-mode={shown}
       data-files-state="tree"
-      data-files-root={workspaceRoot}
+      data-files-root={cwd}
       onKeyDown={(event) => {
         moveAlongRows(event)
         // A settings panel keeps its own Escape; a menu or anything else that prevented it keeps it too.
@@ -370,12 +370,12 @@ export function FileNavigator({
             autoComplete="off"
             spellCheck={false}
             data-files-search
-            onChange={(event) => { setQuery(paneId, workspaceRoot, event.target.value) }}
+            onChange={(event) => { setQuery(paneId, cwd, event.target.value) }}
           />
           <Tooltip label={t('search.showHidden')} side="bottom" portal>
             <button type="button" className={clsx(css.tool, css.searchTool)} aria-pressed={preferences.showHidden}
               aria-label={t('search.showHidden')} data-files-show-hidden
-              onClick={() => { setSearchPreferences(workspaceRoot, { showHidden: !preferences.showHidden }) }}>
+              onClick={() => { setSearchPreferences(cwd, { showHidden: !preferences.showHidden }) }}>
               {preferences.showHidden ? <IconEyeOutlineRegular /> : <IconEyeOffOutlineRegular />}
             </button>
           </Tooltip>
@@ -423,7 +423,7 @@ export function FileNavigator({
       {searchBarOpen && draft !== undefined && (
         <SearchSettings rules={draft} trigger={trigger} onChange={setDraft}
           respectGitignore={preferences.respectGitignore}
-          onRespectGitignore={(respectGitignore) => { setSearchPreferences(workspaceRoot, { respectGitignore }) }}
+          onRespectGitignore={(respectGitignore) => { setSearchPreferences(cwd, { respectGitignore }) }}
           onClose={(refocus) => { closeSettings(draft, refocus) }} t={t} />
       )}
     </aside>

@@ -87,9 +87,9 @@ export function getOrCreateAnonymousUserId(options: AnonymousUserIdOptions = {})
       if (id === undefined) {
         try {
           writeFileSync(file, `${created}\n`, 'utf8')
-        } catch {
-          // Best-effort persistence: keep the fresh id in memory even when the
-          // home is unwritable, so this run still reports a consistent id.
+        } catch (_homeUnwritable) {
+          // An unwritable home only loses persistence: the fresh id stays in
+          // memory, so this run still reports a consistent id.
         }
         id = created
       }

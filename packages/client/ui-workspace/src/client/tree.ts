@@ -6,7 +6,7 @@
 import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionStatusSnapshot,
@@ -401,7 +401,7 @@ function sessionNode(
   const status = statuses.get(s.id)
   const pendingInteraction = visiblePendingKind(status?.pendingInteraction?.kind)
   // Rows show the checkout the Session works in; grouping stays with the header's original project.
-  const root = selectSessionRoot(list, s.id)
+  const root = selectSessionDirectory(list, s.id)
   return {
     id: s.id,
     title: sessionTitle(s),

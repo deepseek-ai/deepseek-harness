@@ -62,9 +62,9 @@ export interface WorkspaceFileScope {
   /** Session identity received on the wire. */
   readonly sessionId: SessionId
   /**
-   * Session workspace root: the checkout the Session works in, read from the
+   * Session workspace root: the directory the Session works in, read from the
    * working-directory service for a live Session and from the projection cache
-   * for a stored one; its header directory when neither records a root, and
+   * for a stored one; its header directory when neither is available, and
    * the deployment fallback when the header has no directory.
    */
   readonly workspaceRoot: string
@@ -84,12 +84,12 @@ async function workspaceFileScopeOf(
 ): Promise<WorkspaceFileScope | undefined> {
   const live = ctx.get('sessions')?.get(sessionId)
   if (live !== undefined) {
-    const root = ctx.get('workingDirectory')?.recordedRootOf(live) ?? live.header.cwd
+    const root = ctx.get('workingDirectory')?.get(live) ?? live.header.cwd
     return { sessionId, workspaceRoot: root ?? ctx.sandboxPolicy.workspaceRoot }
   }
   const stored = await ctx.get('sessionPersistence')?.stat(sessionId, signal === undefined ? undefined : { signal })
   if (stored === undefined) return undefined
-  const cached = ctx.get('sessionProjectionCache')?.cachedSnapshot(stored.header, ['workspaceRoot'])?.values.workspaceRoot
+  const cached = ctx.get('sessionProjectionCache')?.cachedSnapshot(stored.header, ['workingDirectory'])?.values.workingDirectory
   return { sessionId, workspaceRoot: cached ?? stored.header.cwd ?? ctx.sandboxPolicy.workspaceRoot }
 }
 
@@ -256,7 +256,7 @@ export class WorkspaceFiles extends TypertRemoteService {
 
   /**
    * Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses:
-   * a live Session's workspace root, else a stored Session's recorded root, else its header directory.
+   * a live Session's directory, else a stored Session's cached directory, else its header directory.
    * @param sessionId - Session identity received on the wire.
    * @param signal - cancellation for the persistence read of a stored Session.
    * @returns the scope, or undefined when no live or stored Session has that identity.

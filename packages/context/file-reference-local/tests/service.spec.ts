@@ -71,7 +71,7 @@ describe('LocalFileReferenceService', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    ctx.provide('workingDirectory', { ensure: vi.fn<WorkingDirectory['ensure']>(), rootOf: vi.fn<WorkingDirectory['rootOf']>() })
+    ctx.provide('workingDirectory', { ensure: vi.fn<WorkingDirectory['ensure']>() })
     await ctx.plugin(LocalFileReferenceService)
     try {
       expect(ctx.fileReferences).toBeInstanceOf(LocalFileReferenceService)
@@ -113,7 +113,7 @@ describe('LocalFileReferenceService', () => {
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain(FILE_REFERENCE_PROMPT)
   })
 
-  it('rebuilds completion from the workspace root after the Session enters another checkout', async () => {
+  it('rebuilds completion from the current directory after a Session directory change', async () => {
     const ctx = await harness()
     try {
       const { agent } = await stubAgent(ctx)

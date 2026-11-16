@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open the execution environment's default shell in the Session's workspace root from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Agent tools can also open terminals here: they appear as sidebar tabs, start under the Session sandbox policy and pass to the person on the person's first typed input. The controller adds no model input; a tool package decides what an Agent reads. Keeping a terminal open retains its process and a bounded screen buffer.
+Open the execution environment's default shell in the Session's current working directory from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Agent tools can also open terminals here: they appear as sidebar tabs, start under the Session sandbox policy and pass to the person on the person's first typed input. The controller adds no model input; a tool package decides what an Agent reads. Keeping a terminal open retains its process and a bounded screen buffer.
 
 ## Table of Contents
 

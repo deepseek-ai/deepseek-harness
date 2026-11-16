@@ -219,11 +219,12 @@ A session's workspace root comes from the working-directory service when it is m
  * deployment default. A session's workspace root is its workspace-write
  * boundary, and the Git administration directories {@link prepare} derived
  * for that root join the configured extra writable directories; the
- * configured root is the fallback for agentless calls and sessions without a
- * recorded directory, and a requested `root` replaces the session's root for the
- * call. Configured extra roots, this Session's active registrations,
- * and the derived Git directories are snapshotted together; existing operations
- * and processes keep their policy.
+ * configured root is the fallback for agentless calls and, without the
+ * working-directory service, sessions without a header directory, and a
+ * requested `root` replaces the session's root for the call. Configured extra
+ * roots, this Session's active registrations, and the derived Git directories
+ * are snapshotted together; existing operations and processes keep their
+ * policy.
  * @param request - optional session, approved mode override, and root override.
  * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
  * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the selected root is relative or

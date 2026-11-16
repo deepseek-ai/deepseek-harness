@@ -53,14 +53,16 @@ async function scratch(): Promise<{ base: string; repo: string }> {
   return { base, repo }
 }
 
-async function mounted(base: string, config: { mode?: 'workspace-write'; additionalWritableRoots?: string[] } = {}) {
+async function mounted(
+  base: string, config: { mode?: 'workspace-write'; additionalWritableRoots?: string[] } = {}, defaultDirectory?: string,
+) {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(LocalFileSystem, { cwd: base })
-  await ctx.plugin(WorkingDirectoryService, {})
+  await ctx.plugin(WorkingDirectoryService, defaultDirectory === undefined ? {} : { defaultDirectory })
   const fiber = await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: base, ...config })
   return { ctx, fiber }
 }
@@ -92,9 +94,11 @@ describe('workspace root as the write boundary', () => {
     const agent = agentFor(ctx, session)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 
-    // A working-directory/change, as earlier logs hold, moves the directory and keeps the boundary.
+    // A working-directory/change, as earlier logs hold, moves the boundary only to a directory inside the project.
     session.append('working-directory/change', { cwd: join(repo, '.agents') })
-    expect(ctx.workingDirectory.get(session)).toBe(join(repo, '.agents'))
+    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(join(repo, '.agents'))
+    session.append('working-directory/change', { cwd: base })
+    expect(ctx.workingDirectory.get(session)).toBe(repo)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 
     await ctx.workingDirectory.set(agent, worktree)
@@ -133,11 +137,14 @@ describe('workspace root as the write boundary', () => {
     await expect(ctx.sandboxPolicy.prepare({ session, root: 'relative' })).rejects.toThrow('absolute execution-world path')
   })
 
-  it('falls back to the configured root for a Session without a recorded directory while the directory service is mounted', async () => {
-    const { base } = await scratch()
-    const { ctx } = await mounted(base)
+  it('bounds a Session without a recorded directory by the directory service\'s default directory', async () => {
+    const { base, repo } = await scratch()
+    const { ctx } = await mounted(base, {}, repo)
     const session = ctx.sessions.create(brandString<SessionId>('no-directory'))
-    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(base)
+    // Relative paths of such a Session resolve from that default, so it is the boundary; the policy's
+    // configured root serves agentless calls.
+    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
+    expect(ctx.sandboxPolicy.resolve().workspaceRoot).toBe(base)
     expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([])
   })
 })

@@ -172,9 +172,9 @@ export interface Config {
   /** File-sandbox mode a session starts from (default: `read-only`). */
   mode?: SandboxMode
   /**
-   * Absolute fallback root for agentless calls and sessions without a recorded
-   * directory (default: `process.cwd()`). Normal agent calls use their
-   * session's workspace root instead.
+   * Absolute fallback root for agentless calls and, without the working-directory
+   * service, sessions without a header directory (default: `process.cwd()`).
+   * Normal agent calls use their session's working directory instead.
    */
   workspaceRoot?: string
   /**
@@ -314,11 +314,12 @@ export class SandboxPolicyService extends Service {
    * deployment default. A session's workspace root is its workspace-write
    * boundary, and the Git administration directories {@link prepare} derived
    * for that root join the configured extra writable directories; the
-   * configured root is the fallback for agentless calls and sessions without a
-   * recorded directory, and a requested `root` replaces the session's root for the
-   * call. Configured extra roots, this Session's active registrations,
-   * and the derived Git directories are snapshotted together; existing operations
-   * and processes keep their policy.
+   * configured root is the fallback for agentless calls and, without the
+   * working-directory service, sessions without a header directory, and a
+   * requested `root` replaces the session's root for the call. Configured extra
+   * roots, this Session's active registrations, and the derived Git directories
+   * are snapshotted together; existing operations and processes keep their
+   * policy.
    * @param request - optional session, approved mode override, and root override.
    * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
    * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the selected root is relative or
@@ -476,12 +477,12 @@ export class SandboxPolicyService extends Service {
   }
 
   /**
-   * The session's workspace root: the root the working-directory service recorded, else the header directory,
-   * else the deployment fallback.
+   * The session's workspace root: its directory from the working-directory service; without that service
+   * the header directory, else the deployment fallback.
    */
   private rootOf(session: Session | undefined): string {
     if (session === undefined) return this.workspaceRoot
-    return this.ctx.get('workingDirectory')?.recordedRootOf(session) ?? session.header.cwd ?? this.workspaceRoot
+    return this.ctx.get('workingDirectory')?.get(session) ?? session.header.cwd ?? this.workspaceRoot
   }
 
 }

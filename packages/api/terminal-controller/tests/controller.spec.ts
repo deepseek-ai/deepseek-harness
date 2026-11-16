@@ -46,7 +46,6 @@ function fixture(overrides: Partial<Config> = {}) {
   const sandboxPolicy = { defaultMode: 'danger-full-access', workspaceRoot: '/workspace', resolve: vi.fn((): SandboxExecutionPolicy => ({ mode: 'danger-full-access', workspaceRoot: '/workspace' })) }
   const workingDirectory = {
     get: vi.fn<(session: Agent['session']) => string>(session => session.header.cwd ?? '/workspace'),
-    rootOf: vi.fn<(session: Agent['session']) => string>(session => session.header.cwd ?? '/workspace'),
     ensure: vi.fn<(agent: Agent, signal?: AbortSignal) => Promise<string>>(async agent => agent.session.header.cwd ?? '/workspace'),
   }
   ctx.provide('sandboxPolicy', sandboxPolicy as never)
@@ -119,17 +118,15 @@ describe('TerminalController', () => {
     expect(sandboxPolicy.resolve).not.toHaveBeenCalled()
   })
 
-  it('uses the workspace root for new user terminals while retaining earlier directories and permissions', async () => {
+  it('uses the current directory for new user terminals while retaining earlier directories and permissions', async () => {
     const { ctx, controller, agent, subprocess, sandboxPolicy, workingDirectory } = fixture()
     const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/workspace', sessionId: agent.id }
     sandboxPolicy.resolve.mockReturnValue(policy)
     const confine = vi.fn(async (argv: readonly string[], _policy: SandboxExecutionPolicy) => ({ argv: [...argv] }))
     ctx.provide('sandbox', { confine } as never)
     const first = await controller.create(agent, request, signal())
-    // The Session relocates into a worktree: its root moves while the model's cursor may sit deeper inside it.
-    workingDirectory.rootOf.mockReturnValue('/workspace/selected')
-    workingDirectory.get.mockReturnValue('/workspace/selected/packages')
-    workingDirectory.ensure.mockResolvedValue('/workspace/selected/packages')
+    workingDirectory.get.mockReturnValue('/workspace/selected')
+    workingDirectory.ensure.mockResolvedValue('/workspace/selected')
 
     expect(controller.environment(agent, signal()).cwd).toBe('/workspace/selected')
     expect(workingDirectory.ensure).toHaveBeenCalledOnce()
@@ -145,9 +142,8 @@ describe('TerminalController', () => {
     expect(controller.list(agent.id).map(terminal => terminal.cwd)).toEqual(['/workspace', '/workspace/selected'])
   })
 
-  it('captures the validated root before a delayed shell lookup', async () => {
+  it('captures the validated directory before a delayed shell lookup', async () => {
     const { controller, agent, subprocess, workingDirectory } = fixture()
-    workingDirectory.rootOf.mockReturnValue('/workspace/starting')
     workingDirectory.ensure.mockResolvedValue('/workspace/starting')
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -159,7 +155,7 @@ describe('TerminalController', () => {
     const creating = controller.create(agent, request, signal())
     try {
       await entered.promise
-      workingDirectory.rootOf.mockReturnValue('/workspace/later')
+      workingDirectory.get.mockReturnValue('/workspace/later')
       workingDirectory.ensure.mockResolvedValue('/workspace/later')
       release.resolve(undefined)
       expect((await creating).cwd).toBe('/workspace/starting')
@@ -173,12 +169,8 @@ describe('TerminalController', () => {
 
   it('uses recovered directory values for new creation and leaves environment reads unvalidated', async () => {
     const { controller, agent, subprocess, workingDirectory } = fixture()
-    workingDirectory.rootOf.mockReturnValue('/missing')
-    // Recovery commits the original project as the root again before the directory is handed back.
-    workingDirectory.ensure.mockImplementation(async () => {
-      workingDirectory.rootOf.mockReturnValue('/workspace/recovered')
-      return '/workspace/recovered'
-    })
+    workingDirectory.get.mockReturnValue('/missing')
+    workingDirectory.ensure.mockResolvedValue('/workspace/recovered')
     expect(controller.environment(agent, signal()).cwd).toBe('/missing')
     expect(workingDirectory.ensure).not.toHaveBeenCalled()
 
@@ -188,7 +180,7 @@ describe('TerminalController', () => {
     expect(workingDirectory.ensure).toHaveBeenCalledWith(agent, expect.any(AbortSignal))
     expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/workspace/recovered' }))
     workingDirectory.ensure.mockRejectedValue(new Error('original directory is unavailable'))
-    expect(controller.environment(agent, signal()).cwd).toBe('/workspace/recovered')
+    expect(controller.environment(agent, signal()).cwd).toBe('/missing')
     expect(await controller.create(agent, request, signal())).toBe(created)
     await expect(controller.create(agent, { ...request, id: 'unavailable' as WebTerminalId }, signal()))
       .rejects.toThrow('original directory is unavailable')

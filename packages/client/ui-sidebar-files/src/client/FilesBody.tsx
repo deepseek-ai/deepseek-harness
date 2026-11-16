@@ -7,7 +7,7 @@
  * it is and opens the file where the right Sidebar places it by default
  * (`FileNavigator`).
  */
-import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -52,16 +52,16 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
     () => tab.actions.bindCommands({ refresh: () => { refresh(panel.id) } }),
     [tab.actions, panel.id, refresh],
   )
-  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   // The setting belongs to a listed tree, so there is nothing to set before one.
   const autoRefresh = useStore((store) => {
     const tree = store.byPane[panel.id]?.tree
-    return tree?.root === workspaceRoot ? tree?.autoRefresh : undefined
+    return tree?.root === cwd ? tree?.autoRefresh : undefined
   })
   const searchBarOpen = useStore(store => store.byPane[panel.id]?.searchBarOpen) === true
-  useEffect(() => workspaceRoot === undefined ? undefined : placeBeside(tab.id), [workspaceRoot, placeBeside, tab.id])
+  useEffect(() => cwd === undefined ? undefined : placeBeside(tab.id), [cwd, placeBeside, tab.id])
 
-  if (workspaceRoot === undefined) {
+  if (cwd === undefined) {
     return (
       <div className={css.status} data-files-state="no-workspace">
         <p className={css.statusLine}>{t('noWorkspace')}</p>
@@ -73,8 +73,8 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
   return (
     <div className={css.page} data-files-page>
       <div className={css.header}>
-        <PathLabel path={workspaceRoot} className={css.path} data-files-path
-          {...getTriggerProps({ kind: 'directory', value: { sessionId, path: workspaceRoot } })} />
+        <PathLabel path={cwd} className={css.path} data-files-path
+          {...getTriggerProps({ kind: 'directory', value: { sessionId, path: cwd } })} />
         <span hidden>
           <button type="button" className={css.tool} aria-label={t('autoRefresh')}
             aria-pressed={automatic} disabled={autoRefresh === undefined} data-files-auto-refresh
@@ -112,7 +112,7 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
             <IconSearchOutlineRegular />
           </button>
         </Tooltip>
-        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: workspaceRoot })}
+        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
       </div>
       <div className={css.content} data-files-content data-files-navigator-row>{navigator}</div>
     </div>

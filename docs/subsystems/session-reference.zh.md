@@ -184,6 +184,13 @@ Exact-read consumer that prepares immutable cross-session message context.
  *
  * Discovery runs at keystroke rate, so titles and subagent labels only ever
  * come from projection reads; sessions without either fall back to their id.
+ *
+ * The list names every Session the session index holds, whatever identity the
+ * caller acts for; it is not narrowed to Sessions that caller else can read.
+ * A share viewer therefore learns the id, title, and working-directory path of
+ * each Session on the owner Host, and {@link prepare} reads the snapshot of a
+ * cited Session without asking who cited it. That exposure is a recorded
+ * LiveShare limitation, not a grant: narrowing the list is deferred.
  * @param agent - target agent; self is excluded and its cwd drives ranking.
  * @param query - optional search text: label and display title match
  * fuzzily, session id and working directory as substrings. Matches keep the

@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Entering another checkout reloads the applicable project instruction chain before the next request; a directory change inside the workspace root keeps the baseline.
+Changing the Session's working directory reloads the applicable project instruction chain before the next request.
 
 Mount this plugin when agents should work from the workspace's own instruction files. `dsh-base` already includes it with a 65,536-byte budget for each instruction chain, so base-backed profiles only need to replace the row when they want another `maxBytes`; providerless trees load nothing until a filesystem provider is present.
 

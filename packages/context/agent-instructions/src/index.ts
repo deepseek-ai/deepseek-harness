@@ -123,9 +123,7 @@ export function apply(ctx: Context, config: Config): void {
     const changes: AgentInstructionChange[] = []
     let desiredBaseline = false
     const authorityMessages = [...claimed]
-    // The baseline describes the checkout the Session works in; a cd inside it keeps the same baseline.
-    await ctx.workingDirectory.ensure(agent, signal)
-    const cwd = ctx.workingDirectory.rootOf(agent.session)
+    const cwd = await ctx.workingDirectory.ensure(agent, signal)
     const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers, fileSystem, signal)
     const identity = workspaceBaselineIdentity(resolved, cwd, projectRoot)
     if (touchedPaths.length === 0 && pending.length > 0

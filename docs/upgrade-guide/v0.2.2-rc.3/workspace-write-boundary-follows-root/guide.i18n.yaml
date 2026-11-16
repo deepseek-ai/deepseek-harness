@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/workspace-write-boundary-follows-root/guide.md
 /:
-  en: f131cda0e3227062
-  zh: 5572dc4578fee32c
-/the-workspace-write-boundary-follows-the-session-s-workspace-root:
-  en: f107f8a828cf5629
-  zh: dfa17af46af54be9
-/the-workspace-write-boundary-follows-the-session-s-workspace-root/change:
-  en: bde0e26be6af8f4d
-  zh: c4af22acfd86eb44
-/the-workspace-write-boundary-follows-the-session-s-workspace-root/migration:
-  en: 77c0fbe8d821e5cf
-  zh: 036cb39067fe4ab7
+  en: e2b7f9676fd16434
+  zh: 3bef7d3d4af02d01
+/the-workspace-write-boundary-follows-the-session-s-working-directory:
+  en: 0bb89d78c6080f49
+  zh: 1f850e8fca4ab4b4
+/the-workspace-write-boundary-follows-the-session-s-working-directory/change:
+  en: fa943d6163d0e04a
+  zh: e45f6b221bea44f2
+/the-workspace-write-boundary-follows-the-session-s-working-directory/migration:
+  en: 2f82bcb66512a300
+  zh: 647fb9c98a3f7573

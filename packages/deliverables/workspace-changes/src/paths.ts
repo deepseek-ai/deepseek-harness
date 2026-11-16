@@ -76,7 +76,7 @@ export function isTemporaryPath(path: string, roots: readonly string[]): boolean
 /**
  * Sort key and label of a changed file; see `WorkspaceChangedFile.display`.
  * @param absolute - canonical absolute file path.
- * @param cwd - canonical Session workspace root.
+ * @param cwd - canonical Session working directory.
  * @param root - repository top-level directory.
  * @param home - canonical home directory, or empty to skip the `~` form.
  * @returns the slash-separated display path.
@@ -88,9 +88,9 @@ export function displayPathOf(absolute: string, cwd: string, root: string, home:
 }
 
 /**
- * The durable `path` field: relative inside the workspace root, absolute elsewhere.
+ * The durable `path` field: relative inside the working directory, absolute elsewhere.
  * @param absolute - canonical absolute file path.
- * @param cwd - canonical Session workspace root.
+ * @param cwd - canonical Session working directory.
  * @returns the path the Web client opens the file through.
  */
 export function durablePathOf(absolute: string, cwd: string): string {

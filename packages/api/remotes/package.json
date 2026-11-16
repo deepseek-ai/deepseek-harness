@@ -98,6 +98,7 @@
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-mcp-manager": "workspace:*",
     "@deepseek-ai/dsh-plugin-market": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-connector-account": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-office-kit": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",

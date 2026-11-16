@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
-import { sessionDirectories } from '@deepseek-ai/dsh-api-session-controller/client/directories'
+import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { GroupKey } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -246,6 +246,7 @@ export function apply(ctx: Context): void {
         'conversation.chat.flow': { kind: 'single', scope: 'session', inject: CHAT_FLOW_INJECT },
         'conversation.chat.text-interaction': { kind: 'keyed', scope: 'session' },
         'conversation.chat.markdown.fence': { kind: 'hoc', scope: 'session' },
+        'conversation.chat.aside': { kind: 'single', scope: 'session' },
       },
       store: chatStore,
       inject: (sessionId: SessionId): ChatViewInjected => {
@@ -273,8 +274,8 @@ export function apply(ctx: Context): void {
           // its top or at line 400, so the same tab is revealed and told where
           // to land.
           openFile: async (path, options) => {
-            const directories = sessionDirectories(ctx.sessions, sessionId)
-            const url = fileAddressFor(sessionId, directories.root, resolveWorkspacePath(directories.cwd, path))
+            const directory = sessionDirectory(ctx.sessions, sessionId)
+            const url = fileAddressFor(sessionId, directory, resolveWorkspacePath(directory, path))
             if (options?.line === undefined) ctx.sidebarRight.openResource(url)
             else ctx.sidebarRight.openResource(url, { params: { line: options.line } })
             await Promise.resolve()

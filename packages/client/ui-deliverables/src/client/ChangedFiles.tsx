@@ -34,10 +34,10 @@ function Counts({ added, deleted, t }: { added: number; deleted: number } & Prop
  * @param props - the recorded summary, the review opener, and localized copy.
  * @returns the card.
  */
-export function ChangedFiles({ changes, workspaceRoot, openReview, t, sessionId, useChangesDiff, loadChangesDiff }: {
+export function ChangedFiles({ changes, cwd, openReview, t, sessionId, useChangesDiff, loadChangesDiff }: {
   /** The served summary with the sequence of the event that announced it. */
   changes: Pick<ChangesSummary, 'files' | 'total' | 'added' | 'deleted'> & { seq: number }
-  workspaceRoot: string | undefined
+  cwd: string | undefined
   /** Open the turn's review on the file at an original summary index. */
   openReview: (index: number) => void
 } & PropsLocale<typeof NS> & PreviewProps) {
@@ -70,17 +70,16 @@ export function ChangedFiles({ changes, workspaceRoot, openReview, t, sessionId,
     {singleFile === undefined ? header : <>
       <HoverCard variant="preview" widthAnchorRef={cardRef} openDelayMs={500} anchor={header}
         content={<ChangedFilePreview sessionId={sessionId} seq={changes.seq} index={0}
-          display={resolveWorkspacePath(workspaceRoot, singleFile.path)} useChangesDiff={useChangesDiff}
+          display={resolveWorkspacePath(cwd, singleFile.path)} useChangesDiff={useChangesDiff}
           loadChangesDiff={loadChangesDiff} t={t} />} />
-      <span id={pathDescriptionId} hidden>{resolveWorkspacePath(workspaceRoot, singleFile.path)}</span>
+      <span id={pathDescriptionId} hidden>{resolveWorkspacePath(cwd, singleFile.path)}</span>
     </>}
     {singleFile === undefined && <ul className={css.list}>
       {rows.map((file, index) => (
         <li key={file.display}>
           <HoverCard variant="preview" widthAnchorRef={cardRef} openDelayMs={500}
             content={<ChangedFilePreview sessionId={sessionId} seq={changes.seq} index={index}
-              display={resolveWorkspacePath(workspaceRoot, file.path)} useChangesDiff={useChangesDiff}
-              loadChangesDiff={loadChangesDiff} t={t} />}
+              display={resolveWorkspacePath(cwd, file.path)} useChangesDiff={useChangesDiff} loadChangesDiff={loadChangesDiff} t={t} />}
             anchor={<button type="button" className={css.row}
               aria-label={t('changes.viewDiff', { name: file.display })}
               aria-describedby={`${pathDescriptionId}-${index}`}
@@ -92,7 +91,7 @@ export function ChangedFiles({ changes, workspaceRoot, openReview, t, sessionId,
                     : <Counts t={t} added={file.added} deleted={file.deleted} />}
               </span>
             </button>} />
-          <span id={`${pathDescriptionId}-${index}`} hidden>{resolveWorkspacePath(workspaceRoot, file.path)}</span>
+          <span id={`${pathDescriptionId}-${index}`} hidden>{resolveWorkspacePath(cwd, file.path)}</span>
         </li>
       ))}
     </ul>}
