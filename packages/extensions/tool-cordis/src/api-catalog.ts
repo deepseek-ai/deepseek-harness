@@ -2063,15 +2063,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the chat record, or undefined when the chat was never admitted.',
       },
       {
-        signature: 'async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>',
+        signature: 'async readMessage(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMessage>',
         description: 'One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a reference to a message that never reached this deployment still resolves. A platform read is admitted and stored like any other message, which gives it a sequence number and keeps later reads of it local.',
-        parameters: [{ name: 'chat', description: 'chat to read in; its bot serves the platform request.' }, { name: 'id', description: 'platform message id.' }],
+        parameters: [{ name: 'chat', description: 'chat to read in; its bot serves the platform request.' }, { name: 'id', description: 'platform message id.' }, { name: 'signal', description: 'optional cancellation signal from the caller.' }],
         returns: 'the message as the store holds it, with a merged forward\'s entries filled in when the platform has them.',
       },
       {
-        signature: 'async members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage>',
+        signature: 'async members(chat: ImChatKey, cursor?: string, limit?: number, signal?: AbortSignal): Promise<MembersPage>',
         description: 'One page of the people a chat lists as its members: the id a mention addresses and the name to show.',
-        parameters: [{ name: 'chat', description: 'chat whose members are listed; its bot answers the platform request.' }, { name: 'cursor', description: '`page_token` of the previous page.' }, { name: 'limit', description: 'page-size hint; the platform bounds it.' }],
+        parameters: [{ name: 'chat', description: 'chat whose members are listed; its bot answers the platform request.' }, { name: 'cursor', description: '`page_token` of the previous page.' }, { name: 'limit', description: 'page-size hint; the platform bounds it.' }, { name: 'signal', description: 'optional cancellation signal from the caller.' }],
         returns: 'the page the adapter read.',
       },
       {
