@@ -245,11 +245,11 @@ export class ImIntake {
     const source = this.config.sources.find(candidate => admitsChat(candidate, bot.id, target.chat))
     if (source === undefined) return undefined
     const quoteNode = result.handle.content.children.find(
-      child => child.type === 'quote' && typeof child.attrs.id === 'string',
+      (child): child is Element<'quote'> => child.type === 'quote',
     )
     const quoted = quoteNode === undefined
       ? undefined
-      : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id as string))
+      : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id))
     const resolvedThread = typeof target.thread === 'string'
       ? { id: target.thread, ...quoted?.thread?.root === undefined ? {} : { root: quoted.thread.root } }
       : quoted?.thread === undefined
