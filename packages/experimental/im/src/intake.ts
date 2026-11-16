@@ -332,14 +332,23 @@ export class ImIntake {
         this.more.add(chat)
         continue
       }
-      const running = this.drain(group)
-      this.draining.set(chat, running)
-      void running.then(() => {
-        this.draining.delete(chat)
-        if (!this.more.delete(chat) || this.disposed) return
-        this.pump()
-      })
+      this.startDrain(chat, group)
     }
+  }
+
+  /**
+   * Drain one chat's pending records and, if more work arrived for that same chat while draining, continue only that
+   * chat without re-pumping unrelated chats (which would otherwise cross-trigger failing chats past `retryIntervalMs`).
+   */
+  private startDrain(chat: ImChatKey, group: readonly ImDispatchState[]): void {
+    const running = this.drain(group)
+    this.draining.set(chat, running)
+    void running.then(() => {
+      this.draining.delete(chat)
+      if (!this.more.delete(chat) || this.disposed) return
+      const next = this.store.pending().filter(state => state.message.chat.key === chat)
+      this.startDrain(chat, next)
+    })
   }
 
   /** Resolves when no dispatch is in flight (tests, shutdown). */

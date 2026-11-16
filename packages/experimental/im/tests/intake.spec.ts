@@ -421,6 +421,29 @@ describe('ImIntake admission', () => {
     expect(order).toEqual(['chat-a:a1', 'chat-b:b1', 'chat-a:a2'])
   })
 
+  it('does not cross-trigger an unbounded retry loop when two failing chats are pumped twice', async () => {
+    const { ctx, bot, intake } = await boot()
+    let calls = 0
+    const bothStarted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    ctx.on('im/message', async () => {
+      calls += 1
+      if (calls === 2) bothStarted.resolve(undefined)
+      await release.promise
+      throw new Error('transient failure')
+    }, { prepend: true })
+
+    await deliver(bot, 'evt-a1', inbound({ id: 'a1', chat: { id: 'chat-a', type: 'group' } }))
+    await deliver(bot, 'evt-b1', inbound({ id: 'b1', chat: { id: 'chat-b', type: 'group' } }))
+    await bothStarted.promise
+    // A second external pump marks both active chats as `more` while both are in flight.
+    intake.pump()
+    release.resolve(undefined)
+    await intake.idle()
+    // Each chat runs its initial pass + at most one `more` continuation (4 total), never ping-ponging.
+    expect(calls).toBe(4)
+  })
+
   it('leaves room for the delivery of a message admitted at the very edge of maxInputBytes', async () => {
     // Real Feishu identifiers, which every key, the chat header and the delivery id repeat: the intake reserves a fixed
     // envelope for the delivery intent, and this pins that the reserve covers the real `ImDispatcher.handle` intent.
