@@ -853,7 +853,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 function toError(error: unknown): Error {
   try {
     if (error instanceof Error) return error
-  } catch {
+  } catch (_instanceofTrap) {
     // A hostile proxy may throw during instanceof; fall through to the total renderer.
   }
   return new Error(errorMessage(error))

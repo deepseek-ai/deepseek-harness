@@ -463,7 +463,10 @@ describe('tool execution', () => {
     expect(JSON.stringify(result.content)).not.toContain('AQ==')
     expect(JSON.stringify(result.content)).not.toContain('Ag==')
     if (result.isError) throw new Error('expected MCP success')
-    expect(result.value).toEqual({ content: blocks })
+    expect(result.value).toEqual({ content: [
+      blocks[0], { ...blocks[1], attachment: firstImage.attachment },
+      blocks[2], { ...blocks[3], attachment: secondImage.attachment }, blocks[4],
+    ] })
   })
 
   it('keeps a valid raw image result while explicitly refusing it without a durable route', async () => {
@@ -707,7 +710,9 @@ describe('tool execution', () => {
       expect(result.content.map(block => block.type)).toEqual(['text', 'image'])
       expect(textAt(result.content)).toBe('long text'.repeat(1000).slice(0, 20))
       if (result.isError) throw new Error('expected MCP success')
-      expect(result.value).toEqual({ content: blocks })
+      const image = result.content[1]
+      if (image?.type !== 'image') throw new Error('expected the admitted image')
+      expect(result.value).toEqual({ content: [blocks[0], { ...blocks[1], attachment: image.attachment }] })
     } finally {
       await rich.ctx.fiber.dispose()
     }

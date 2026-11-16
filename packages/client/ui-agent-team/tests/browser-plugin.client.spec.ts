@@ -5,9 +5,10 @@ import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { TeamModePane, TeamModeToggle, type TeamModePaneInjected } from '../src/client/TeamModeToggle.tsx'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { TeamBoard } from '../src/client/TeamBoard.tsx'
+import { TeamBoard, TeamProgress } from '../src/client/TeamBoard.tsx'
 import { TeamCommandRow } from '../src/client/TeamCommandRow.tsx'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected } from '../src/client/TeamDisableConfirmation.tsx'
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -20,43 +21,52 @@ async function bench() {
   const collapseHeader = ctx.slots.register({
     name: 'root',
     children: {
-      'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.section': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
       'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  const entry = () => ctx.slots.entries('conversation.session.header.actions.subagent.footer')
+  const entry = () => ctx.slots.entries('conversation.session.panel.section')
     .find(candidate => candidate.component === TeamBoard)
-  return { ctx, fiber, entry, collapseHeader }
+  const progress = () => ctx.slots.entries('conversation.session.panel.section.actions')
+    .find(candidate => candidate.component === TeamProgress)
+  return { ctx, fiber, entry, progress, collapseHeader }
 }
 
 describe('task-board browser plugin', () => {
-  it('registers a disposable root task-board section without navigation or Team Remote services', async () => {
+  it('registers a disposable shared tasks section with its progress, without navigation or Team Remote services', async () => {
     const b = await bench()
     expect(inject).toEqual(['slots', 'locale'])
     expect(b.entry()).toMatchObject({
-      options: { id: 'agent-team' },
+      options: { id: 'shared-tasks', order: 250 },
       locale: 'agent-team',
     })
     expect(b.entry()!.inject).toBeUndefined()
+    expect(resolveSlotLabel(b.entry()!.options.label)).toBe('Shared tasks')
+    expect(b.progress()).toMatchObject({ options: { key: 'shared-tasks' }, locale: 'agent-team' })
     expect(b.ctx.slots.entries('conversation.session.header.actions')).toHaveLength(0)
     const t = b.ctx.locale.bind('agent-team')
-    expect(t('trigger')).toBe('Task board')
+    expect(t('tasks')).toBe('Shared tasks')
     await b.fiber.dispose()
     expect(b.entry()).toBeUndefined()
+    expect(b.progress()).toBeUndefined()
     expect(t('empty')).toBe('empty')
   })
 
-  it('re-registers when the conversation header slot is declared again', async () => {
+  it('re-registers when the section slot is declared again', async () => {
     const b = await bench()
     expect(b.entry()).toBeDefined()
     b.collapseHeader()
     expect(b.entry()).toBeUndefined()
     b.ctx.slots.register({
       name: 'root',
-      children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
+      children: {
+        'conversation.session.panel.section': { kind: 'list', scope: 'session' },
+        'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
+      },
     } as never, () => null)
     await Promise.resolve()
     expect(b.entry()).toBeDefined()

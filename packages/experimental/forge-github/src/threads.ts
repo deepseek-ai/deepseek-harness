@@ -2,8 +2,8 @@
 
 import { Buffer } from 'node:buffer'
 import type {
-  ChangeRequestRef, ForgeAnchor, ForgeCommentId, ForgeFailure, ForgeReviewComment, ForgeReviewData, ForgeReviewId, ForgeReviewThread,
-  ForgeThreadId,
+  ChangeRequestRef, ForgeAnchor, ForgeCommentId, ForgeFailure, ForgeReviewComment, ForgeReviewData, ForgeReviewEvent, ForgeReviewId,
+  ForgeReviewThread, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GraphqlReader } from './commits.ts'
@@ -39,7 +39,7 @@ export const REVIEW_QUERY = `query($owner: String!, $name: String!, $number: Int
   repository(owner: $owner, name: $name) {
     isArchived viewerPermission
     pullRequest(number: $number) {
-      id headRefOid locked
+      id headRefOid locked viewerDidAuthor
       reviews(states: PENDING, first: 100) { nodes { id viewerDidAuthor comments { totalCount } } }
       reviewThreads(first: $first) { ${THREAD_PAGE} }
     }
@@ -115,6 +115,7 @@ const pullRequestSchema = z.object({
   id: z.string(),
   headRefOid: z.string(),
   locked: z.boolean(),
+  viewerDidAuthor: z.boolean(),
   reviews: z.object({ nodes: z.array(pendingSchema) }),
   reviewThreads: threadPageSchema,
 })
@@ -179,7 +180,11 @@ export async function readReviewThreads(
   const pendingReview = pending === undefined ? null : { id: pending.id as ForgeReviewId, comments: pending.comments.totalCount }
   // GitHub refuses every write to an archived repository, and comments on a locked conversation from anyone without write access.
   const viewerCanReview = !repository.isArchived && (!pull.locked || WRITERS.has(repository.viewerPermission ?? ''))
-  const result = (truncated: boolean): ForgeReviewData => ({ headSha, viewer, threads, truncated, pendingReview, viewerCanReview })
+  // GitHub lets the author of a pull request comment on it but not approve it or request changes.
+  const reviewEvents: readonly ForgeReviewEvent[] = !viewerCanReview ? [] : pull.viewerDidAuthor ? ['comment'] : ['comment', 'approve', 'request-changes']
+  const result = (truncated: boolean): ForgeReviewData => ({
+    headSha, viewer, threads, truncated, pendingReview, viewerCanReview, reviewEvents,
+  })
   const cursors = new Set<string>()
   for (;;) {
     for (const node of page.nodes.slice(0, limits.maxReviewThreads - threads.length)) {

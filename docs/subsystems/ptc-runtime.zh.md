@@ -115,7 +115,7 @@ type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 
 ## 绑定：宿主函数作为程序全局变量
 
-每个 `PtcBindingNamespace` 成为一个异步可调用函数的全局对象；PTC 传入 `tools`。参数与返回值必须是无损 JSON。提供方强制各自的传输上限；seam 不设统一的绑定字节上限。可选错误类描述符创建程序可见的类型化拒绝，无需在运行时内点名消费方。绑定名是自有属性，因此 `__proto__` 不能遍历原型：
+每个 `PtcBindingNamespace` 成为一个异步可调用函数的全局对象；PTC 传入 `tools`。参数与返回值必须是无损 JSON，宿主签发的 `PtcImage` 和 `PtcInspectableValue` 描述符由提供方适配。提供方强制各自的传输上限；seam 不设统一的绑定字节上限。可选错误类描述符创建程序可见的类型化拒绝，无需在运行时内点名消费方。绑定名是自有属性，因此 `__proto__` 不能遍历原型：
 
 ```ts type-equiv
 /**
@@ -168,13 +168,36 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
- * lossy or non-cloneable value with a descriptive error rather than corrupting
- * the run. No seam-level byte cap applies to a binding resolution. A rejection
- * of this function surfaces inside the program as a rejection of the
- * corresponding call.
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage and
+ * PtcInspectableValue values. An inspectable resolution delivers its JSON object
+ * or array to the program and uses its text only when that unchanged value is
+ * inspected directly. A runtime rejects a lossy or non-cloneable value with a
+ * descriptive error rather than corrupting the run. No seam-level byte cap
+ * applies to a binding resolution. A rejection of this function surfaces inside
+ * the program as a rejection of the corresponding call.
  */
 type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
+```
+
+`@deepseek-ai/dsh-ptc-runtime` 导出的 `PtcInspectableValue` 通过 `new PtcInspectableValue(value, text)`，为无损 JSON 对象或数组关联宿主提供的文本。提供方向程序交付数据本身，不暴露描述符，也不添加程序可见属性。只有直接 `inspect` 原结果，且其数据仍与初始快照一致时，才使用附带文本；空文本不产生输出。拷贝、字段选择、修改后的结果和嵌套值使用普通格式。该关联由 Node 进程拥有，不序列化到 Session 日志，复制程序值也不会传递该关联。参见 [`src/inspectable-value.ts`](../../packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts)。
+
+数据中可以包含宿主提供的 `PtcImage` 描述符。提供方在展示快照中保留对应程序 `Image` 的身份。直接展示未修改的容器时输出附带文本；展示 Image 字段时输出该图片。
+
+```ts public-api
+/** A binding result whose unchanged object or array displays the supplied text when inspected directly. */
+declare class PtcInspectableValue {
+  readonly [key: string]: PtcJsonValue;
+  /** The JSON object or array delivered unchanged to the program. */
+  readonly value: PtcJsonValue[] | { [key: string]: PtcJsonValue };
+  /** Text shown by a direct inspection of the unchanged value; empty text emits nothing. */
+  readonly text: string;
+  /**
+   * Associate an object or array with its host-authored inspection text.
+   * @param value - Lossless JSON data retained for programmatic access.
+   * @param text - Text to display instead of generic object formatting.
+   */
+  constructor(value: PtcJsonValue[] | { [key: string]: PtcJsonValue }, text: string);
+}
 ```
 
 ## 捕获的输出与失败分类体系

@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import { IconCheckCircleFillRegular, IconCloseCircleFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CheckState, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ChangeRequestTone } from './status.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 
 const BRANCH_ENDS = (
   <>

@@ -348,6 +348,25 @@ The shipped provider implements the abstract `SessionPersistence` contract (`cre
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxdeepseekchatimport--deepseekchatimportservice"></a>
+
+### `ctx.deepseekChatImport` — `DeepseekChatImportService`
+
+Serves the owner-only export upload route and the limits the browser checks first.
+
+```ts cordis-catalog
+/**
+ * Report the limits the browser checks before uploading. Only the owner may
+ * import, so every other principal is refused.
+ * @param signal - Client cancellation or Remote withdrawal.
+ * @returns the largest accepted archive size.
+ * @throws {RemoteError} `deepseekChatImport/owner-only` for a caller that is not the owner.
+ */
+@Remote limits(signal: AbortSignal): DeepseekChatImportLimits
+```
+
+Source: [`packages/experimental/deepseek-chat-import/src/index.ts`](../../packages/experimental/deepseek-chat-import/src/index.ts)
+
 <a id="ctxsessionpersistence--sessionpersistence-abstract-seam"></a>
 
 ### `ctx.sessionPersistence` — `SessionPersistence` (abstract seam)

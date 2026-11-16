@@ -15,7 +15,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -233,10 +233,10 @@ export function apply(ctx: Context, config: Config): void {
       await opening
     }, 'web-app: startup handoff')
     const announceReady = (): void => {
-      if (lifetime.signal.aborted || ctx.get('webServer') === undefined || ANNOUNCED_ROOTS.has(ctx.root)) return
+      if (lifetime.signal.aborted || ctx.get('webServer') === undefined || ANNOUNCED_ROOTS.has(ctx[Context.root])) return
       const entries: WebEntryUrl[] = []
       ctx.emit(ctx.webServer, 'webserver/entry-url', appRootUrl(), entries)
-      ANNOUNCED_ROOTS.add(ctx.root)
+      ANNOUNCED_ROOTS.add(ctx[Context.root])
       if (config.printUrl) {
         for (const entry of entries) console.log(`${entry.label}: ${entry.url}`)
       }
@@ -255,7 +255,7 @@ export function apply(ctx: Context, config: Config): void {
     else {
       void settled.then(async () => {
         if (lifetime.signal.aborted) return
-        await auditStartupEntries(ctx.root, 'dsh web', () => {})
+        await auditStartupEntries(ctx[Context.root], 'dsh web', () => {})
         announceReady()
       }).catch(() => {
         // The Loader/startup audit owns failure diagnostics; failed startup remains unpublished.

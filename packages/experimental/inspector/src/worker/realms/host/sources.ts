@@ -87,7 +87,7 @@ export class HostSourceBackend implements SourceBackend {
     for (const listener of [...this.listeners]) {
       try {
         listener(descriptor)
-      } catch {
+      } catch (_listenerFailed) {
         // One source consumer cannot prevent delivery to sibling consumers.
       }
     }

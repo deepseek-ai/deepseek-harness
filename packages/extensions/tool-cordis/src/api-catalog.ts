@@ -813,6 +813,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'connectorAccounts',
+    summary: 'Holds the registered accounts and serves them to the Plugins page.',
+    description: 'Holds the registered accounts and serves them to the Plugins page.',
+    methods: [
+      {
+        signature: 'register<View extends AnyConnectorAccountView>(registration: ConnectorAccountRegistration<View>): () => void',
+        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        parameters: [{ name: 'registration', description: 'the account key, its bundle package, the account source, the page operations, and the presentation.' }],
+        returns: 'an idempotent disposer that withdraws the account.',
+        throws: ['when another account already uses the key or the package.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>',
+        description: 'Follow every registered account; each new subscriber starts a check of each account that runs no operation.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
+        returns: 'the current accounts, then each changed set, coalescing changes that arrive before the next read.',
+      },
+      {
+        signature: '@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>',
+        description: 'Start one of the operations the account registered as page actions.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'operation', description: 'the operation kind.' }],
+        returns: 'the operation identity once the account\'s source has started it.',
+        throws: ['for an unknown account or operation, or whatever the account\'s source refuses, such as a second operation.'],
+      },
+      {
+        signature: '@Remote cancel(key: string, id: ConnectorOperationId): Promise<void>',
+        description: 'Cancel one operation while its phase is cancellable, and wait for it to settle.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'id', description: 'the operation to cancel; a finished one or a phase that is not cancellable is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+        throws: ['for an unknown account.'],
+      },
+    ],
+  },
+  {
     key: 'cotTranslation',
     summary: 'Optional reasoning translation delegates Session-bound storage to the translator.',
     description: 'Optional reasoning translation delegates Session-bound storage to the translator.',
@@ -1106,6 +1140,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'deepseekChatImport',
+    summary: 'Serves the owner-only export upload route and the limits the browser checks first.',
+    description: 'Serves the owner-only export upload route and the limits the browser checks first.',
+    methods: [
+      {
+        signature: '@Remote limits(signal: AbortSignal): DeepseekChatImportLimits',
+        description: 'Report the limits the browser checks before uploading. Only the owner may import, so every other principal is refused.',
+        parameters: [{ name: 'signal', description: 'Client cancellation or Remote withdrawal.' }],
+        returns: 'the largest accepted archive size.',
+        throws: ['{RemoteError} `deepseekChatImport/owner-only` for a caller that is not the owner.'],
+      },
+    ],
+  },
+  {
     key: 'deepseekLlmApiExtensions',
     summary: 'Registry of independently owned top-level fields for official DeepSeek requests.',
     description: 'Registry of independently owned top-level fields for official DeepSeek requests.',
@@ -1231,19 +1279,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'register(provider: ForgeProvider): () => Promise<void>',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
-        parameters: [{ name: 'provider', description: 'provider to serve `provider.forge`.' }],
+        parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
         returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
-        throws: ['when another provider already serves the same forge.'],
+        throws: ['when another provider already serves the same forge or one of the same hosts, compared without case.'],
+      },
+      {
+        signature: 'describe(forge: string): ForgeDescription | undefined',
+        description: 'Name a forge family and its change requests for readers.',
+        parameters: [{ name: 'forge', description: 'forge family name, such as `github`.' }],
+        returns: 'the registered provider\'s description, or undefined when no provider serves the family.',
       },
       {
         signature: 'repositoryFromRemote(url: string): ForgeRepository | undefined',
-        description: 'Map a Git remote URL to a repository through the first provider that serves it.',
+        description: 'Map a Git remote URL to a repository through the provider that serves its host.',
         parameters: [{ name: 'url', description: 'fetch or push URL as Git reports it.' }],
         returns: 'the repository, or undefined when no provider serves the URL.',
       },
       {
         signature: 'changeRequestFromUrl(url: string): ChangeRequestRef | undefined',
-        description: 'Map a change request web URL through the first provider that serves it.',
+        description: 'Map a change request web URL through the provider that serves its host.',
         parameters: [{ name: 'url', description: 'web URL of a pull or merge request.' }],
         returns: 'the change request, or undefined when no provider serves the URL.',
       },
@@ -1646,8 +1700,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forgeSession',
     summary: 'Session-scoped change request bindings.',
-    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from the results of the creation and reference commands that forge providers register through `registerCommands`, from `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
     methods: [
+      {
+        signature: 'registerCommands(rule: ForgeCommandRule): () => void',
+        description: 'Register the commands of one forge CLI as an effect on the calling fiber. A rule that changes the recognized rule set re-registers the `forgeChangeRequests` projection at the new set\'s state version, so every Session refolds its log with the new rules when next read, including commands that ran before the registration, and watchers receive the refolded bindings. Disposal does not change the recognized set: the rule keeps recognizing commands until the service restarts or another rule replaces its id or executable, so unloading a provider, including at shutdown, leaves the checkpointed state version unchanged. Only live registrations run reference lookups, so a disposed rule starts no CLI process; lookups that started before a change finish with the rules they started with.',
+        parameters: [{ name: 'rule', description: 'the CLI\'s executable, subcommands, change request page path, and selection.' }],
+        returns: 'the disposer that ends the registration.',
+        throws: ['when the rule is malformed, or a live registration has its id or executable.'],
+      },
       {
         signature: 'changeRequests(session: Session): SessionChangeRequest[]',
         description: 'List the change requests bound to a Session and not dismissed.',
@@ -1967,7 +2028,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote({ mode: \'stream\' }) list(request: JobListRequest, signal: AbortSignal): AsyncIterable<JobListFrame>',
-        description: 'Stream the jobs one session can see — its own plus every unowned job — as whole-set frames: one on open, then one after each coalesced burst of lifecycle commits. The stream has no natural end; the carrier closes it.',
+        description: 'Stream the jobs one session can see — its own plus every unowned job — as whole-set frames: one on open, then one after each coalesced burst of lifecycle commits. The stream has no natural end; the carrier closes it.\n\nThe Gateway names this call\'s Session resource from `request.sessionId` through the session controller\'s resolver; no explicit reader is needed.',
         parameters: [{ name: 'request', description: 'the session whose visible set to mirror.' }, { name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'the roster frames.',
       },
@@ -2429,6 +2490,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'every currently selectable preset in contribution order.',
       },
       {
+        signature: '@Remote({ name: \'set\' }) setPreset(request: PermissionPresetSetRequest): PermissionSelection',
+        description: 'Switch one live Session to another preset, opened as a Remote call so a caller\'s Session access is decided before any preset is resolved or any knob is written. The call\'s `session` resource is the Session named by `request.sessionId`, per PermissionPresetSetRequest; the session controller\'s resolver names it.\n\nThe switch appends `permission/preset` and the changed knob events to the Session log, so persisted-only Sessions are refused: they have no live log to append to.',
+        parameters: [{ name: 'request', description: 'live target Session and the preset name to switch to.' }],
+        returns: 'the Session\'s current selection after the switch, read the way the client reads it: the recorded preset while its bundle still matches, otherwise the first preset whose bundle matches, otherwise `custom`.',
+        throws: ['{RemoteError} `gateway/bad-request` for an unknown preset name or a Session this process does not hold live; neither call writes.'],
+      },
+      {
         signature: 'registerAuto(admit: () => void): () => Promise<void>',
         description: 'Publish the fixed current-session Auto preset for the calling integration\'s effect lifetime.',
         parameters: [{ name: 'admit', description: 'synchronous gate run before live Auto selection or restore.' }],
@@ -2700,8 +2768,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly overlays: readonly PatchOptions[]',
-        description: 'Parsed command-line overlays, applied above profile and home patches.',
+        signature: 'readonly overlayPaths: readonly string[]',
+        description: 'Absolute command-line overlay files in argv order, read on every composition and applied above profile and home patches.',
         parameters: [],
       },
       {
@@ -3303,6 +3371,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Unified live-preferred session query service.\n\nExact reads, filters, and traces are backend-independent concrete behavior. A backend implements full-text observation, reconciliation, ranking, cursor generations, and query execution on the same `ctx.sessionQuery` service.',
     methods: [
       {
+        signature: 'getListMetadata(session: Session): SessionListMetadata',
+        description: 'Read the metadata that summarizes one live or prepared Session in a Session list.',
+        parameters: [{ name: 'session', description: 'live or prepared Session to summarize.' }],
+        returns: 'whether the Session has no turn, and its latest human-authored prompt time.',
+      },
+      {
         signature: 'observeSession( sessionId: SessionId, options: SessionObservationOptions = {}, ): Promise<SessionObservation>',
         description: 'Observe one exact live or prepared Session without a persistence listing preflight.',
         parameters: [{ name: 'sessionId', description: 'logical Session identity.' }, { name: 'options', description: 'cancellation and projection selection for this read.' }],
@@ -3411,7 +3485,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async listCandidates( agent: Agent, query: string = \'\', limit: number = this.config.candidateLimit, signal?: AbortSignal, ): Promise<SessionReferenceCandidate[]>',
-        description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.',
+        description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.\n\nThe list names every Session the session index holds, whatever identity the caller acts for; it is not narrowed to Sessions that caller else can read. A share viewer therefore learns the id, title, and working-directory path of each Session on the owner Host, and prepare reads the snapshot of a cited Session without asking who cited it. That exposure is a recorded LiveShare limitation, not a grant: narrowing the list is deferred.',
         parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional search text: label and display title match fuzzily, session id and working directory as substrings. Matches keep the working-directory affinity order; relevance breaks ties within it.' }, { name: 'limit', description: 'optional positive result cap.' }, { name: 'signal', description: 'optional cancellation boundary for host autocomplete teardown.' }],
         returns: 'candidates with canonical mention labels and presentation titles.',
       },
@@ -4583,9 +4657,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote answer(agent: Agent, callId: ToolCallId, answer: AskUserQuestionAnswer): boolean',
-        description: 'Answer a continued question. The reply is steered into the agent as a user message whose source names the call; that message is also the record that closes the question in the projection.',
+        description: 'Answer a continued question. The reply is steered into the agent as a user message whose source names the call; that message is also the record that closes the question in the projection.\n\nThe only call this method can answer is one the projection lists as `continued` on this Session, and it steers a user message into the running turn, so it speaks for the person the Session runs for. A LiveShare reader reaches it through the Session read role, which is safe only while an approval question cannot become `continued`: the projection tracks only calls made under the timed `ask_user_question` schema, and a call becomes `continued` only by returning the pending result a timed wait produces (or, for PTC, a pending dispatch) or by resume repair recording `TOOL_OUTCOME_UNKNOWN` for a call the process never finished. Plan review (`plan-review`) and the CUA approvals (`approval`) reach `ctx.userQuestions.ask` without a `wait` and without a `timeout`, so their result is a settled answer, an abort, or a failure, never a pending result, and they stay out of the projection. A future approval surface must keep asking without `wait`/`timeout`, or it must gain its own owner-only gate; giving it a timed form makes an approval answerable by a share viewer.',
         parameters: [{ name: 'agent', description: 'Live root agent for the owning Session.' }, { name: 'callId', description: 'Continued question identity.' }, { name: 'answer', description: 'Complete structured answer batch, one item per question of the call.' }],
-        returns: 'Whether the question is still continued; an accepted reply stays queued until the agent admits its user message.',
+        returns: 'Whether the question is still continued (`false` when this Session lists no such continued call, or its composition carries no Session projections); an accepted reply stays queued until the agent admits its user message.',
         throws: ['{UserQuestionError} `BAD_ANSWER` when the batch does not name each question of the call exactly once, or `REPLY_QUEUED` when a reply is already waiting for admission.'],
       },
       {
@@ -6025,6 +6099,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AnonymousTranslationSpec extends TranslationSpecFields {\n    readonly provider: AnonymousTranslationProvider;\n}',
   },
   {
+    name: 'AnyConnectorAccountView',
+    declaration: 'export type AnyConnectorAccountView = ConnectorAccountView<unknown, string, string>;',
+  },
+  {
     name: 'AnyHook',
     declaration: 'export type AnyHook = ModHook<unknown, unknown>;',
   },
@@ -6273,6 +6351,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ChangeRequestListener = (update: ChangeRequestUpdate) => void;',
   },
   {
+    name: 'ChangeRequestNoun',
+    declaration: 'export type ChangeRequestNoun = \'pull-request\' | \'merge-request\';',
+  },
+  {
     name: 'ChangeRequestRef',
     declaration: 'export interface ChangeRequestRef {\n    readonly repository: ForgeRepository;\n    readonly number: number;\n}',
   },
@@ -6455,6 +6537,78 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConnectionTrustRequest',
     declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    readonly signal?: AbortSignal | undefined;\n    readonly socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
+  },
+  {
+    name: 'ConnectorAccountButton',
+    declaration: 'export interface ConnectorAccountButton {\n    readonly label: LocalizedText;\n    readonly command: ConnectorAccountCommand;\n    readonly variant?: \'primary\' | \'ghost\';\n    readonly confirm?: ConnectorAccountConfirmation;\n}',
+  },
+  {
+    name: 'ConnectorAccountCommand',
+    declaration: 'export type ConnectorAccountCommand = {\n    readonly kind: \'start\';\n    readonly operation: string;\n} | {\n    readonly kind: \'cancel\';\n} | {\n    readonly kind: \'open\';\n};',
+  },
+  {
+    name: 'ConnectorAccountConfirmation',
+    declaration: 'export interface ConnectorAccountConfirmation {\n    readonly title: LocalizedText;\n    readonly body: LocalizedText;\n    readonly label: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountCopy',
+    declaration: 'export interface ConnectorAccountCopy {\n    readonly title: LocalizedText;\n    readonly hint: LocalizedText;\n    readonly activation: {\n        readonly title: LocalizedText;\n        readonly body: LocalizedText;\n        readonly connect: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountDisplay',
+    declaration: 'export interface ConnectorAccountDisplay {\n    readonly phase: ConnectorAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly ConnectorAccountButton[];\n    readonly connect?: Extract<ConnectorAccountCommand, {\n        readonly kind: \'start\';\n    }>;\n    readonly detail?: LocalizedText;\n    readonly notes: readonly ConnectorAccountNote[];\n    readonly failure?: ConnectorAccountFailure;\n}',
+  },
+  {
+    name: 'ConnectorAccountEntry',
+    declaration: 'export interface ConnectorAccountEntry {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly copy: ConnectorAccountCopy;\n    readonly display: ConnectorAccountDisplay;\n    readonly operation?: {\n        readonly id: ConnectorOperationId;\n        readonly authorizationUrl?: string;\n    };\n    readonly result?: {\n        readonly id: ConnectorOperationId;\n        readonly notice?: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountFailure',
+    declaration: 'export interface ConnectorAccountFailure {\n    readonly text: LocalizedText;\n    readonly details?: readonly string[];\n}',
+  },
+  {
+    name: 'ConnectorAccountNote',
+    declaration: 'export interface ConnectorAccountNote {\n    readonly text: LocalizedText;\n    readonly button?: ConnectorAccountButton;\n}',
+  },
+  {
+    name: 'ConnectorAccountOperation',
+    declaration: 'export interface ConnectorAccountOperation<Kind extends string> {\n    readonly kind: Kind;\n    readonly notice?: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountPhase',
+    declaration: 'export type ConnectorAccountPhase = \'checking\' | \'connecting\' | \'connected\' | \'disconnected\' | \'unavailable\';',
+  },
+  {
+    name: 'ConnectorAccountRegistration',
+    declaration: 'export interface ConnectorAccountRegistration<View extends AnyConnectorAccountView> {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly source: ConnectorAccountSource<View>;\n    readonly operations: readonly ConnectorAccountOperation<ConnectorOperationKindOf<View>>[];\n    readonly copy: ConnectorAccountCopy;\n    readonly present: (view: View) => ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'ConnectorAccountSource',
+    declaration: 'export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId | Promise<ConnectorOperationId>;\n    cancel(id: ConnectorOperationId): Promise<void>;\n}',
+  },
+  {
+    name: 'ConnectorAccountsView',
+    declaration: 'export interface ConnectorAccountsView {\n    readonly accounts: readonly ConnectorAccountEntry[];\n}',
+  },
+  {
+    name: 'ConnectorAccountView',
+    declaration: 'export interface ConnectorAccountView<Account, Kind extends string, Phase extends string, Failure = unknown> {\n    readonly account: Account;\n    readonly operation?: ConnectorOperation<Kind, Phase>;\n    readonly result?: ConnectorOperationResult<Kind, Failure>;\n}',
+  },
+  {
+    name: 'ConnectorOperation',
+    declaration: 'export interface ConnectorOperation<Kind extends string, Phase extends string> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase;\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'ConnectorOperationId',
+    declaration: 'export type ConnectorOperationId = Branded<\'ConnectorOperationId\'>;',
+  },
+  {
+    name: 'ConnectorOperationKindOf',
+    declaration: 'export type ConnectorOperationKindOf<View extends AnyConnectorAccountView> = NonNullable<View[\'result\']>[\'kind\'];',
+  },
+  {
+    name: 'ConnectorOperationResult',
+    declaration: 'export interface ConnectorOperationResult<Kind extends string, Failure = unknown> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'ContentBlockMap',
@@ -6913,6 +7067,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeCheckoutState = {\n    readonly state: \'pending\';\n} | {\n    readonly state: \'none\';\n} | {\n    readonly state: \'failed\';\n    readonly message: string;\n} | {\n    readonly state: \'ready\';\n    readonly checkout: ForgeCheckout;\n};',
   },
   {
+    name: 'ForgeCommandArguments',
+    declaration: 'export interface ForgeCommandArguments {\n    readonly kind: \'reference\' | \'api-request\';\n    readonly subcommand: readonly string[];\n    readonly operands: readonly string[];\n    readonly values: readonly (readonly [\n        option: string,\n        value: string\n    ])[];\n}',
+  },
+  {
+    name: 'ForgeCommandGroup',
+    declaration: 'export interface ForgeCommandGroup {\n    readonly subcommands: readonly (readonly string[])[];\n    readonly valueOptions: readonly string[];\n    readonly flagOptions: readonly string[];\n}',
+  },
+  {
+    name: 'ForgeCommandRule',
+    declaration: 'export interface ForgeCommandRule {\n    readonly id: string;\n    readonly version: number;\n    readonly executable: string;\n    readonly creates: readonly (readonly string[])[];\n    readonly references: ForgeCommandGroup;\n    readonly apiRequests: ForgeCommandGroup;\n    readonly changeRequestPath: string;\n    readonly urlMembers: readonly string[];\n    select(command: ForgeCommandArguments, environment: Readonly<Record<string, string>>): ForgeCommandSelection | undefined;\n}',
+  },
+  {
+    name: 'ForgeCommandSelection',
+    declaration: 'export type ForgeCommandSelection = {\n    readonly url: string;\n} | {\n    readonly lookup: readonly string[];\n};',
+  },
+  {
     name: 'ForgeCommentAuthor',
     declaration: 'export interface ForgeCommentAuthor {\n    readonly login: string;\n    readonly avatarUrl: string | null;\n    readonly bot: boolean;\n}',
   },
@@ -6931,6 +7101,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeCommitRange',
     declaration: 'export interface ForgeCommitRange {\n    readonly from: string;\n    readonly to: string;\n}',
+  },
+  {
+    name: 'ForgeDescription',
+    declaration: 'export interface ForgeDescription {\n    readonly forge: string;\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n}',
   },
   {
     name: 'ForgeDiffFile',
@@ -7022,7 +7196,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePanelChangeRequest',
-    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
+    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly forge: ForgeDescription | null;\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
   },
   {
     name: 'ForgePanelState',
@@ -7038,11 +7212,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | F /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
-    declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n}',
+    declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n    readonly signIn: {\n        readonly command: string;\n    } | null;\n}',
   },
   {
     name: 'ForgeRegisteredLens',
@@ -7066,7 +7240,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeReviewData',
-    declaration: 'export interface ForgeReviewData {\n    readonly headSha: string;\n    readonly viewer: string | null;\n    readonly threads: readonly ForgeReviewThread[];\n    readonly truncated: boolean;\n    readonly pendingReview: ForgePendingReview | null;\n    readonly viewerCanReview: boolean;\n}',
+    declaration: 'export interface ForgeReviewData {\n    readonly headSha: string;\n    readonly viewer: string | null;\n    readonly threads: readonly ForgeReviewThread[];\n    readonly truncated: boolean;\n    readonly pendingReview: ForgePendingReview | null;\n    readonly viewerCanReview: boolean;\n    readonly reviewEvents: readonly ForgeReviewEvent[];\n}',
   },
   {
     name: 'ForgeReviewerCandidate',
@@ -7458,7 +7632,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'JobOutcome',
-    declaration: 'export interface JobOutcome {\n    status: \'completed\' | \'killed\' | \'failed\';\n    detail?: string;\n    result?: string;\n}',
+    declaration: 'export interface JobOutcome {\n    status: \'completed\' | \'killed\' | \'failed\';\n    detail?: string;\n    exitCode?: number;\n    result?: string;\n}',
   },
   {
     name: 'JobOutputRead',
@@ -7494,7 +7668,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'JobView',
-    declaration: 'export interface JobView {\n    readonly id: JobId;\n    readonly kind: string;\n    readonly label: string;\n    readonly owner?: SessionId;\n    readonly outputLimitBytes?: number;\n    readonly status: JobStatus;\n    readonly progress?: string;\n    readonly detail?: string;\n    readonly startedAt: number;\n    readonly finishedAt?: number;\n    readonly output: {\n        readonly total: number;\n        readonly earliest: number;\n        readonly spillPaths?: readonly string[];\n    };\n}',
+    declaration: 'export interface JobView {\n    readonly id: JobId;\n    readonly kind: string;\n    readonly label: string;\n    readonly owner?: SessionId;\n    readonly outputLimitBytes?: number;\n    readonly status: JobStatus;\n    readonly progress?: string;\n    readonly detail?: string;\n    readonly exitCode?: number;\n    readonly startedAt: number;\n    readonly finishedAt?: number;\n    readonly output: {\n        readonly total: number;\n        readonly earliest: number;\n        readonly spillPaths?: readonly string[];\n    };\n}',
   },
   {
     name: 'JsonSchemaNode',
@@ -8167,6 +8341,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PermissionCatalog',
     declaration: 'export interface PermissionCatalog {\n    options: PresetOption[];\n    defaultOptions: PresetOption[];\n    defaultPreset: string;\n}',
+  },
+  {
+    name: 'PermissionPresetSetRequest',
+    declaration: 'export interface PermissionPresetSetRequest {\n    readonly sessionId: SessionId;\n    readonly preset: string;\n}',
+  },
+  {
+    name: 'PermissionSelection',
+    declaration: 'export interface PermissionSelection {\n    currentValue: string;\n}',
   },
   {
     name: 'PiAiRequestHeaderContext',
@@ -9175,6 +9357,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionLineageTrace',
     declaration: 'export type SessionLineageTrace = {\n    target: SessionRecord;\n    ancestors: SessionRecord[];\n    descendants: SessionLineageNode[];\n} & ({\n    complete: true;\n    root: SessionRecord;\n} | {\n    complete: false;\n    unresolvedParentId: SessionId;\n});',
+  },
+  {
+    name: 'SessionListMetadata',
+    declaration: 'export interface SessionListMetadata {\n    readonly blank: boolean;\n    readonly lastPromptAt: number | null;\n}',
   },
   {
     name: 'SessionListRequest',
@@ -10890,7 +11076,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Workspace',
-    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
+    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    getSessionHeaders(): readonly SessionHeader[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
   },
   {
     name: 'WorkspaceArchiveSessionRequest',
@@ -11054,7 +11240,7 @@ export const INHERITED_CTX_API: readonly InheritedApiEntry[] = [
   { name: 'ctx.effect', summary: 'Register a disposable side effect tied to the fiber.' },
   { name: 'ctx.get / ctx.set / ctx.provide / ctx.accessor / ctx.mixin', summary: 'Low-level service-store access and binding.' },
   { name: 'ctx.extend / ctx.isolate / ctx.intercept', summary: 'Derive a child context (scoped services / isolation / interception).' },
-  { name: 'ctx.root / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger', summary: 'Ambient handles onto the running context graph.' },
+  { name: 'ctx[Context.root] / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger', summary: 'Ambient handles onto the running context graph.' },
   { name: 'ctx.timer (+ interval / timeout / throttle / debounce)', summary: 'Disposable timer helpers. The `timer` key is provided at runtime; the four supported helpers are mixed onto ctx directly (declared via Pick).' },
   { name: 'ctx.loader', summary: 'The config Loader that booted the app (present under the loader).' },
 ]

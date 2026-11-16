@@ -52,6 +52,8 @@ print(result.final_response)
 
 `harness.resume_session(saved_session_id)` restores persisted history and returns a `Session` ready for `run()`. Save the original session id and reuse its `dsh_home` and workspace. Restoration preserves the stored directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions raise without creating a replacement. `start_session(id)` only opens a lazy handle; it does not request persisted restoration. This API does not restore shell, browser, or other external processes.
 
+Call `harness.resume_session(saved_session_id, {"permission_mode": "danger-full-access"})` to replace the saved permission preset before resumed execution. Omitting options or passing an empty dict preserves saved permissions. Unknown keys and options other than a dict or `None` raise `TypeError` before the resume request is sent. The selected preset updates both sandbox and approval policy and persists for later resumes; it must exist in the profile’s permission service. The standard `sdk` profile offers `read-only`, `workspace-write`, and `danger-full-access`. Profiles without that service, such as `sdk-minimal`, reject explicit overrides. A session already restored by a reminder also rejects overrides; use `/permission` for that live session.
+
 ```py
 with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     session = harness.resume_session(saved_session_id)

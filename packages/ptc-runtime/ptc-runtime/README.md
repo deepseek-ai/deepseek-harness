@@ -35,6 +35,8 @@ Set `discardCompletion: true` to omit the successful completion without JSON val
 
 Host bindings can return `new PtcImage(path, attachment)` to expose a stored image in Node programs. Explicit inspection appends `{ type: 'image', attachment }` entries to `result.output`, alongside `{ type: 'text', text }` entries in emission order. Text entries retain emitted newline characters; concatenate adjacent text without separators.
 
+Host bindings can return `new PtcInspectableValue(value, text)` to attach inspection text to a JSON object or array. The Node provider exposes the original data to the program and uses the supplied text only when that unchanged result is passed directly to `inspect`. The descriptor is host-only; copies, selected fields, modified results, and nested values use ordinary formatting. The [runtime reference](../../../docs/subsystems/ptc-runtime.md) defines the provider obligations.
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',

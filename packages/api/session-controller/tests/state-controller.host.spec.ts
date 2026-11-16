@@ -47,7 +47,7 @@ async function fixture() {
   const ctx = new Context()
   roots.push(ctx)
   await ctx.plugin(SessionStore)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   const session = ctx.sessions.create(brandString<SessionId>('state-target'), { meta: { cwd: '/state-test' } })
   let agent: Agent | undefined
   const get = vi.fn(() => agent)
