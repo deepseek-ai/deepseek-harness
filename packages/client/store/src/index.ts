@@ -239,7 +239,7 @@ export function defineStore<T, A extends ActionsDecl<T>>(
           if (persistKey === undefined || typeof localStorage === 'undefined') return
           try {
             localStorage.removeItem(persistKey)
-          } catch {
+          } catch (_storageUnavailable) {
             // Storage failures (private mode, quota teardown races) only skip
             // cleanup — the same non-fatal contract as attachPersistence.
           }

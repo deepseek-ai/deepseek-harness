@@ -1284,6 +1284,12 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcInspectableValue",
+      "source": "packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts",
+      "projection": "public-api"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcOutput",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },

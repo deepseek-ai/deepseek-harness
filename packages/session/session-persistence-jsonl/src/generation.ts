@@ -809,7 +809,7 @@ async function removeCommittedTemporary(
 ): Promise<void> {
   try {
     await internals.fs.rm(path)
-  } catch {
+  } catch (_redundantStageRemoveFailed) {
     // The validated target owns the committed bytes; a redundant link cannot turn success into failure.
   }
 }

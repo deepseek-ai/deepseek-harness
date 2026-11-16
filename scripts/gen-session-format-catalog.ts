@@ -245,7 +245,7 @@ function main(): void {
   const target = resolve(root, OUT)
   if (process.argv.includes('--check')) {
     let current = ''
-    try { current = readFileSync(target, 'utf8') } catch { /* missing is stale */ }
+    try { current = readFileSync(target, 'utf8') } catch (_catalogUnreadable) { /* A missing or unreadable catalog compares unequal and reports stale. */ }
     if (current !== output) {
       console.error(`gen-session-format-catalog: ${OUT} is stale; run pnpm run gen-session-format-catalog`)
       process.exitCode = 1

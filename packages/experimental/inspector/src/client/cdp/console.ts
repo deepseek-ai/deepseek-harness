@@ -140,9 +140,8 @@ export class ClientConsoleObserver {
     queueMicrotask(() => {
       for (const sessionId of [...this.sessions]) {
         try {
-          const event = this.runtime.consoleEvent(sessionId, type, values, timestamp, stackTrace)
-          if (event !== undefined) this.sink(sessionId, event)
-        } catch {
+          this.deliver(sessionId, this.runtime.consoleEvent(sessionId, type, values, timestamp, stackTrace))
+        } catch (_observationFailed) {
           // Console observation must not affect the page's original console call.
         }
       }
@@ -155,13 +154,16 @@ export class ClientConsoleObserver {
     queueMicrotask(() => {
       for (const sessionId of [...this.sessions]) {
         try {
-          const event = this.runtime.exceptionEvent(sessionId, error, timestamp, stackTrace)
-          if (event !== undefined) this.sink(sessionId, event)
-        } catch {
+          this.deliver(sessionId, this.runtime.exceptionEvent(sessionId, error, timestamp, stackTrace))
+        } catch (_observationFailed) {
           // Exception observation must not affect browser error dispatch.
         }
       }
     })
+  }
+
+  private deliver(sessionId: ClientRuntimeSessionId, event: RuntimeConsoleBackendEvent<ClientRemoteObjectHandle> | undefined): void {
+    if (event !== undefined) this.sink(sessionId, event)
   }
 }
 

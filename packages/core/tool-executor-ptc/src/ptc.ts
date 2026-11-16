@@ -13,8 +13,8 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcJsonValue, PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
@@ -31,6 +31,7 @@ import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { PtcCalls } from './ptc-calls.ts'
 import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
+import { substituteProgramImages } from './program-images.ts'
 import type { Config } from './config.ts'
 import type { RunCodeToolOptions } from './run-code.ts'
 import type { ToolDefinition, ToolExecution, ToolExecutionFailure, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -244,13 +245,17 @@ export function createRunCodeTransport(
     failure?: Pick<ToolExecutionFailure, 'error' | 'content'>
     output: PtcOutput[]
   }>()
-  const programImage = (ref: ImageRef): PtcImage => {
+  const readableImage = (ref: ImageRef): PtcImage | undefined => {
     const attachments = ctx.get('attachments')
     const fs = ctx.get('fs')
     const access = attachments === undefined || fs === undefined ? undefined
       : resolveImageAttachmentAccess(attachments, path => fs.processPathFromHostPath(path), ref)
-    if (access === undefined) throw new Error('Image storage must expose a readable path in the program filesystem')
-    return new PtcImage(access.readonlyPath, ref)
+    return access === undefined ? undefined : new PtcImage(access.readonlyPath, ref)
+  }
+  const programImage = (ref: ImageRef): PtcImage => {
+    const image = readableImage(ref)
+    if (image === undefined) throw new Error('Image storage must expose a readable path in the program filesystem')
+    return image
   }
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const definition = defineTool({
@@ -452,7 +457,7 @@ export function createRunCodeTransport(
         // would be narrowed away by control flow analysis.
         const runOver = (): boolean => runController.signal.aborted
 
-        const binding = (schema: ToolSchema): PtcBindingFunction => async (rawArgs: unknown): Promise<JsonValue> => {
+        const binding = (schema: ToolSchema): PtcBindingFunction => async (rawArgs: unknown): Promise<PtcJsonValue> => {
           const { name } = schema
           // FIXME: Let image-producing tools declare their program result adaptation.
           const usesProgramImage = name === 'read_image' || name === 'cua'
@@ -480,13 +485,13 @@ export function createRunCodeTransport(
             signal: runController.signal,
           }
           type DispatchOutcome = { isError: true; message: string }
-            | { isError: false; value: JsonValue; content: ContentBlock[]; imageRemoved: boolean }
+            | { isError: false; value: PtcJsonValue; content: ContentBlock[]; imageRemoved: boolean }
           const outcome = await new Promise<DispatchOutcome>((resolve, reject) => {
             // Set by the dispatch stage (or start() for a pre-settled result): what commit() finalizes in submission order.
             let parked:
               | { kind: 'post-result' | 'final-result'; exec: ToolRunContext; result: ToolExecutionResult }
               | undefined
-            const settle = (result: ToolExecutionResult, imageRemoved: boolean): void => {
+            const settle = (result: ToolExecutionResult, imageRemoved: boolean, programValue?: PtcJsonValue): void => {
               // The program gets its value NOW: the log-content listener (for
               // example, a spill backend) must never delay the binding or occupy
               // a dispatch slot. The event append is tracked side work; the run's
@@ -495,7 +500,7 @@ export function createRunCodeTransport(
               // chain cannot reject).
               resolve(result.isError
                 ? { isError: true, message: result.error.message }
-                : { isError: false, value: result.value, content: result.content, imageRemoved })
+                : { isError: false, value: programValue ?? result.value, content: result.content, imageRemoved })
               const agent = exec.agent
               if (agent === undefined) return
               const task: Promise<void> = (async () => {
@@ -561,7 +566,18 @@ export function createRunCodeTransport(
                 /* v8 ignore next -- commit() runs only after `settled` flipped, which set parked. */
                 if (parked === undefined) return
                 const result = await executor.complete(parked.exec, parked)
-                if (!usesProgramImage && !result.isError && result.content.some(block => block.type === 'image')) {
+                const images = result.content.filter(block => block.type === 'image')
+                // A value carrying every result image goes to the program; otherwise the content reaches the model directly.
+                let programValue: PtcJsonValue | undefined
+                if (!usesProgramImage && !result.isError && images.length > 0) {
+                  // The ordered lane must not reject: a failed substitution keeps the content in model context.
+                  try {
+                    programValue = substituteProgramImages(result.value, images, readableImage)
+                  } catch (error: unknown) {
+                    logger.warn(`tools: ${name} result images stay in model context: ${toolErrorMessage(error)}`)
+                  }
+                }
+                if (!usesProgramImage && !result.isError && images.length > 0 && programValue === undefined) {
                   exec.deferContext(createUserMessage({
                     content: result.content,
                     source: { kind: 'ptc-mode' },
@@ -577,7 +593,7 @@ export function createRunCodeTransport(
                 // failure cannot stop the turn through a recovering program.
                 if (result.concludesTurn) exec.concludeTurn()
                 settle(result, parked.result.content.some(block => block.type === 'image')
-                  && !result.content.some(block => block.type === 'image'))
+                  && images.length === 0, programValue)
                 // Backpressure on pending event-append tasks: each task retains
                 // a full result while a slow backend stores it, so the pool cap
                 // bounds their count. Beyond the cap, the
@@ -608,6 +624,10 @@ export function createRunCodeTransport(
                 + outcome.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
             }
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
+          }
+          if (outcome.value !== null && typeof outcome.value === 'object'
+            && outcome.content.every(block => block.type === 'text')) {
+            return new PtcInspectableValue(outcome.value, outcome.content.map(block => block.text).join('\n'))
           }
           return outcome.value
         }

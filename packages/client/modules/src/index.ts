@@ -469,7 +469,7 @@ function buildComboSourceMap(
     if (sourceMap !== undefined) {
       try {
         section = comboSectionMap(resource, sourceMap)
-      } catch {
+      } catch (_malformedSourceMap) {
         // An invalid authored source URL is a malformed map, so the generated
         // bundle remains debuggable through the same identity fallback.
       }
@@ -974,14 +974,15 @@ export class ClientModuleRegistry extends Service {
     while (true) {
       const candidate = join(dir, 'package.json')
       if (existsSync(candidate)) {
+        let name: unknown
         try {
-          const name = (JSON.parse(readFileSync(candidate, 'utf8')) as { name?: unknown }).name
-          if (typeof name === 'string' && (expectedPackageName === undefined || name === expectedPackageName)) {
-            return { path: candidate, packageName: name }
-          }
-        } catch {
+          name = (JSON.parse(readFileSync(candidate, 'utf8')) as { name?: unknown }).name
+        } catch (_unreadableManifest) {
           // An unreadable or malformed intermediate manifest cannot own the
           // module; keep walking toward the declaring package root.
+        }
+        if (typeof name === 'string' && (expectedPackageName === undefined || name === expectedPackageName)) {
+          return { path: candidate, packageName: name }
         }
       }
       const parent = dirname(dir)

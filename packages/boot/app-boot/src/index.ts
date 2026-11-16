@@ -918,7 +918,7 @@ export function installFailLoud(
             timer = setTimeout(resolve, FAIL_LOUD_RELEASE_TIMEOUT_MS)
           }),
         ])
-      } catch {
+      } catch (_releaseFailed) {
         // The terminal release failed; the fatal exit below is the outcome that
         // matters, and no reporter runs after it.
       }

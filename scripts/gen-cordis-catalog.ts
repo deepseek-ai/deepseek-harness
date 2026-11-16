@@ -957,6 +957,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   VerifiedWebhookDelivery: 'webhook.md',
   WebhookRule: 'webhook.md',
   PermissionCatalog: 'permission-presets.md',
+  PermissionPresetSetRequest: 'permission-presets.md',
+  PermissionSelection: 'permission-presets.md',
   PresetOption: 'permission-presets.md',
   PresetSpec: 'permission-presets.md',
   WebEntryUrl: 'web-server.md',
