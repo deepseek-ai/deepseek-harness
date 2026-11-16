@@ -58,7 +58,7 @@ const account = new Account({
 })
 ```
 
-`account.start(kind)` returns the operation id and throws while another operation runs. `account.snapshot()` returns the current `CliAccountView`, `account.observe(listener)` calls the listener after each change, and `account.refresh()` starts a check unless an operation runs. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts), [`src/executor.ts`](src/executor.ts), and [`src/context.ts`](src/context.ts) are authoritative.
+`account.start(kind)` returns the operation id and throws while another operation runs. `account.snapshot()` returns the current `CliAccountView`, `account.observe(listener)` calls the listener after each change, and `account.refresh()` starts a check unless an operation runs. An exception a listener throws is logged and stops neither the other listeners nor the operation. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts), [`src/executor.ts`](src/executor.ts), and [`src/context.ts`](src/context.ts) are authoritative.
 
 ### Runtime context
 

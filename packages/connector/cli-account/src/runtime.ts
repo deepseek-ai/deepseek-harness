@@ -185,7 +185,8 @@ export abstract class CliAccountRuntime<
   }
 
   /**
-   * Call `listener` after each change of the view, without starting a check.
+   * Call `listener` after each change of the view, without starting a check. An exception a listener throws is logged
+   * and stops neither the other listeners nor the operation or call that changed the view.
    * @param listener - called synchronously after the account, operation, or result changes.
    * @returns a disposer that stops the calls.
    */
@@ -212,7 +213,13 @@ export abstract class CliAccountRuntime<
   }
 
   private changed(): void {
-    for (const notify of this.listeners) notify()
+    for (const notify of this.listeners) {
+      try {
+        notify()
+      } catch (error) {
+        this.options.logger.error(`${this.options.name}: account observer failed: %o`, error)
+      }
+    }
   }
 
   private interrupt(operation: Operation<Kind, Phase, Failure>): void {

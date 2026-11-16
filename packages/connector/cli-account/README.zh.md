@@ -58,7 +58,7 @@ const account = new Account({
 })
 ```
 
-`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.snapshot()` 返回当前的 `CliAccountView`，`account.observe(listener)` 在每次变化后调用 listener，`account.refresh()` 在没有操作运行时启动一次检查。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts)、[`src/executor.ts`](src/executor.ts) 和 [`src/context.ts`](src/context.ts) 中的契约为准。
+`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.snapshot()` 返回当前的 `CliAccountView`，`account.observe(listener)` 在每次变化后调用 listener，`account.refresh()` 在没有操作运行时启动一次检查。listener 抛出的异常会写入日志，不会中断其他 listener 和进行中的操作。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts)、[`src/executor.ts`](src/executor.ts) 和 [`src/context.ts`](src/context.ts) 中的契约为准。
 
 ### 运行时上下文
 

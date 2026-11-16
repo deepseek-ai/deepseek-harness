@@ -91,6 +91,22 @@ describe('CliAccountRuntime', () => {
     expect(changes).toHaveLength(seen)
   })
 
+  it('logs what an observer throws and still notifies the other observers and finishes the operation', async () => {
+    account.script = checkScript
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const thrown = new Error('observer failed')
+    account.observe(() => { throw thrown })
+    const changes: View[] = []
+    account.observe(() => { changes.push(account.snapshot()) })
+
+    const id = account.start('check')
+
+    const view = await settled(id)
+    expect(view).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(changes.at(-1)).toEqual(view)
+    expect(errors()).toEqual(changes.map(() => ['fixture: account observer failed: %o', thrown]))
+  })
+
   it('offers only trusted HTTPS authorization links, reports which it accepted, and clears them on the next stage', async () => {
     let login!: ScriptedProcess
     const offers: boolean[] = []
