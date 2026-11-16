@@ -156,7 +156,13 @@ class FakeIm {
   /** What the host read answers for a message the platform fills in (a merged forward's entries), by platform id. */
   readonly expansions = new Map<string, ImMessage>()
   readonly sends: { chat: ImChatKey; content: Fragment; options: ImSendOptions }[] = []
+  botSelfId: string | undefined = 'fake:bot'
   answer: () => Promise<ImSendResult> = async () => ({ status: 'confirmed' })
+
+  bot(chat: ImChatKey): { selfId: string } {
+    if (this.botSelfId === undefined) throw new ImError('unavailable', `No bot for ${chat}`)
+    return { selfId: this.botSelfId }
+  }
 
   send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult> {
     this.sends.push({ chat, content, options })
@@ -955,7 +961,13 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
 
     const okRead = value(await mounted.call('im_read', { message: 'm-t1' }, { agent: fakeAgent(confined.sessionId) })) as { message: { key: string } }
     expect(okRead.message.key).toBe('fake:bot|m-t1')
-    expect(await mounted.prompt(fakeAgent(confined.sessionId))).toContain('Thread-confined bindings')
+    expect(await mounted.prompt(fakeAgent(confined.sessionId))).toContain('Thread-confined publishing chats')
+
+    const mixed = mounted.im.sessions.add('mixed', [
+      { chat: CHAT, writable: true, home: true, thread: 't1' },
+      { chat: CHAT, writable: true },
+    ])
+    expect(await mounted.prompt(fakeAgent(mixed.sessionId))).not.toContain('Thread-confined publishing chats')
 
     const refT2 = { message: ImMessageKey('fake:bot', 'm-t2'), chat: CHAT, seq: 5, index: 1, kind: 'image' as const, src: 'x' }
     mounted.im.media.items.set('5.1', {
@@ -1030,16 +1042,23 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
       file: { type: 'file', attachment: { attachmentId: 'att-long-noext', name: 'b'.repeat(250), bytes: 3 } as never },
       data: new Uint8Array([1, 2, 3]),
     })
+    mounted.im.media.items.set('1.3', {
+      ref: { ...refLong, index: 3 },
+      file: { type: 'file', attachment: { attachmentId: 'att-long-ext2', name: `c.${'d'.repeat(200)}`, bytes: 3 } as never },
+      data: new Uint8Array([1, 2, 3]),
+    })
     const withExt = value(await mounted.call('im_read_file', { id: '1.1' })) as { path: string }
     const noExt = value(await mounted.call('im_read_file', { id: '1.2' })) as { path: string }
+    const hugeExt = value(await mounted.call('im_read_file', { id: '1.3' })) as { path: string }
     expect(Buffer.byteLength(withExt.path.split('/').at(-1)!)).toBeLessThanOrEqual(160)
     expect(withExt.path.endsWith('.pdf')).toBe(true)
     expect(Buffer.byteLength(noExt.path.split('/').at(-1)!)).toBeLessThanOrEqual(160)
+    expect(Buffer.byteLength(hugeExt.path.split('/').at(-1)!)).toBeLessThanOrEqual(160)
   })
 
-  it('filters bot selfId mentions in im_read and im_history when satori bot selfId is present', async () => {
+  it('filters bot selfId mentions in im_read and im_history using im.bot(chat).selfId', async () => {
     const mounted = await mount()
-    mounted.ctx.provide('satori', { bots: [{ id: 'fake:bot', selfId: 'ou_bot' }] } as never)
+    mounted.im.botSelfId = 'ou_bot'
     mounted.im.history.messages.push(message(4, {
       key: ImMessageKey('fake:bot', 'm-self-mention'),
       mentions: { self: true, all: false, users: [{ id: 'ou_bot', name: 'Bot' }, { id: 'ou_alice', name: 'Alice' }] },
@@ -1048,5 +1067,9 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
     expect(read.message.mentions).toEqual([{ id: 'ou_alice', name: 'Alice' }])
     const hist = value(await mounted.call('im_history', { after: 3 })) as { messages: Array<{ mentions: Array<{ id: string }> }> }
     expect(hist.messages[0]?.mentions).toEqual([{ id: 'ou_alice', name: 'Alice' }])
+
+    mounted.im.botSelfId = undefined
+    const readNoBot = value(await mounted.call('im_read', { message: 'm-self-mention' })) as { message: { mentions: Array<{ id: string }> } }
+    expect(readNoBot.message.mentions).toEqual([{ id: 'ou_bot', name: 'Bot' }, { id: 'ou_alice', name: 'Alice' }])
   })
 })

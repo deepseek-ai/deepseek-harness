@@ -47,7 +47,7 @@ export const IM_TOOLS = [
 export type ImToolName = typeof IM_TOOLS[number]
 
 /** What the tools need from the service. */
-export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members'> {
+export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members' | 'bot'> {
   /** The two session lookups of the caller guard and the grant chain. */
   readonly sessions: Pick<ImSessions, 'of' | 'get'>
   readonly history: ImHistory
@@ -118,8 +118,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
       const allowed = allowedThreadsOf(im, record, chat)
-      const selfId = ctx.get('satori')?.bots.find(candidate => candidate.id === splitKey(chat).bot)?.selfId
-      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal, allowed), selfId) }
+      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal, allowed), selfIdOf(im, chat)) }
     }),
   }))
 
@@ -133,13 +132,12 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(() => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const allowed = allowedThreadsOf(im, record, chat)
-      const keep = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
+      const keep = threadAllow(im, record, chat)
       const limit = Math.max(1, Math.min(args.limit ?? config.tools.maxHistoryItems, config.tools.maxHistoryItems))
       const messages = args.after === undefined
         ? im.history.before(chat, args.before ?? Number.MAX_SAFE_INTEGER, limit, keep)
         : im.history.after(chat, args.after, limit, keep)
-      const selfId = ctx.get('satori')?.bots.find(candidate => candidate.id === splitKey(chat).bot)?.selfId
+      const selfId = selfIdOf(im, chat)
       return Promise.resolve({ chat, messages: messages.map(msg => viewOf(msg, selfId)), total: messages.length })
     }),
   }))
@@ -181,9 +179,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const allowed = allowedThreadsOf(im, record, chat)
-      const allow = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
-      const item = await im.media.read(chat, args.id, exec.signal, allow)
+      const item = await im.media.read(chat, args.id, exec.signal, threadAllow(im, record, chat))
       const image = item.image
       return image === undefined
         ? { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
@@ -210,9 +206,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       execute: (args, exec) => run(async () => {
         const { record, agent } = caller(im, exec)
         const chat = chatOf(im, record, args.chat)
-        const allowed = allowedThreadsOf(im, record, chat)
-        const allow = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
-        const item = await im.media.readFile(chat, args.id, exec.signal, allow)
+        const item = await im.media.readFile(chat, args.id, exec.signal, threadAllow(im, record, chat))
         const attachment = item.file?.attachment
         const data = item.data
         if (attachment === undefined || data === undefined) {
@@ -348,16 +342,31 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
 }
 
 /** Thread restriction for `chat` across `record`'s grant chain; `undefined` means any thread/main timeline. */
-function allowedThreadsOf(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey): Set<string> | undefined {
+function allowedThreadsOf(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey, writableOnly = false): Set<string> | undefined {
   const bindings = grantChain(im.sessions, record.sessionId)
     .flatMap(entry => entry.bindings)
-    .filter(binding => binding.chat === chat)
+    .filter(binding => binding.chat === chat && (!writableOnly || binding.writable))
   const threads = new Set<string>()
   for (const binding of bindings) {
     if (binding.thread === undefined) return undefined
     threads.add(binding.thread)
   }
   return threads
+}
+
+/** Message predicate enforcing `allowedThreadsOf`, or `undefined` when unrestricted. */
+function threadAllow(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey): ((message: ImMessage) => boolean) | undefined {
+  const allowed = allowedThreadsOf(im, record, chat)
+  return allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
+}
+
+/** Platform `selfId` of the bot serving `chat`, or `undefined` when unmounted. */
+function selfIdOf(im: ImToolHost, chat: ImChatKey): string | undefined {
+  try {
+    return im.bot(chat).selfId
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -615,10 +624,13 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
     parts.push(`Your chats: ${chats.join(', ')}. Publishing chats: `
       + `${writable.length === 0 ? 'none (read-only)' : writable.join(', ')}. Name a chat with chat when a message `
       + 'arrived in another one.')
-    const confined = bindings.filter((binding): binding is typeof binding & { thread: string } => binding.thread !== undefined)
+    const confined = writable.flatMap((chat) => {
+      const threads = allowedThreadsOf(im, record, chat, true)
+      return threads === undefined ? [] : [`${chat} (${[...threads].join(', ')})`]
+    })
     if (confined.length > 0) {
-      parts.push(`Thread-confined bindings (${confined.map(b => `${b.chat} thread ${b.thread}`).join(', ')}): `
-        + 'pass an allowed thread when publishing with im_send.')
+      parts.push(`Thread-confined publishing chats (${confined.join('; ')}): `
+        + 'pass an allowed thread in im_send, or quote a message in that thread with im_reply or im_send_file.')
     }
   }
   if (config.tools.readOnly) {
