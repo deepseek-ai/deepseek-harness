@@ -257,7 +257,7 @@ export class ImOutputRegistry implements ImOutputs {
       if (change !== 'start') return
       const id = activity.session.output
       if (id === undefined || id === NO_OUTPUT) return
-      this.open.set(sessionId, { turn: activity.turn, activity, output: this.begin(activity) })
+      this.open.set(sessionId, { turn: activity.turn, activity, output: this.begin(activity, id) })
       return
     }
     entry.activity = activity
@@ -270,10 +270,8 @@ export class ImOutputRegistry implements ImOutputs {
   }
 
   /** Resolve the renderer and the home chat and start one turn; undefined when ineligible. */
-  private begin(activity: ImActivity): ImTurnOutput | undefined {
+  private begin(activity: ImActivity, id: string): ImTurnOutput | undefined {
     const record = activity.session
-    const id = record.output
-    if (id === undefined || id === NO_OUTPUT) return undefined
     const renderer = this.renderers.get(id)
     if (renderer === undefined) {
       this.ctx.logger.warn('IM session %s names the unknown output renderer %s', record.sessionId, id)
