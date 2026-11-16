@@ -2145,8 +2145,11 @@ describe('Task manager deletion', () => {
     expect(getComputedStyle(content).overflowY).toBe('auto')
     // The instruction is a three-line excerpt, so a long one cannot stretch the dialog.
     const prompt = within(content).getByText(/^Review release/)
-    expect(getComputedStyle(prompt).overflow).toBe('hidden')
-    expect(getComputedStyle(prompt).getPropertyValue('-webkit-line-clamp')).toBe('3')
+    const clamp = getComputedStyle(prompt)
+    expect(clamp.display).toBe('-webkit-box')
+    expect(clamp.getPropertyValue('-webkit-box-orient')).toBe('vertical')
+    expect(clamp.overflow).toBe('hidden')
+    expect(clamp.getPropertyValue('-webkit-line-clamp')).toBe('3')
     const footer = dialog.lastElementChild as HTMLElement
     expect(getComputedStyle(footer).flexShrink).toBe('0')
     fireEvent.click(confirm)
