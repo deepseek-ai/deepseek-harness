@@ -473,7 +473,7 @@ export interface ForgeChangedFile {
   readonly binary: boolean
 }
 
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 export interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string
@@ -502,7 +502,7 @@ export interface Config {
   worktreePrefix?: string
   /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
-  /** Most untracked files a local diff or the local changes card includes. */
+  /** Most untracked files a local diff or the local changes row includes. */
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number

@@ -262,7 +262,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:111`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:83`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -1206,7 +1206,7 @@ export interface Config {
   worktreePrefix?: string
   /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
-  /** Most untracked files a local diff or the local changes card includes. */
+  /** Most untracked files a local diff or the local changes row includes. */
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
@@ -2740,7 +2740,7 @@ export interface Config {
 
 - `inject`: `shell` · `approval` · `sessions` · `agents` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:154`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:161`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -3327,7 +3327,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-session-query-sqlite`
 
-- `inject`: `sessions`
+- `inject`: `sessions` · `sessionProjections`
 - `refs`: [`SessionQueryConfig`](../packages/session-query/session-query/src/index.ts)
 - `source`: [`packages/session-query/session-query-sqlite/src/index.ts:92`](../packages/session-query/session-query-sqlite/src/index.ts)
 
@@ -3375,7 +3375,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 ## `@deepseek-ai/dsh-session-reference`
 
-- `inject`: `sessionQuery`
+- `inject`: `sessionQuery` · `sessions` · `sessionProjections`
 - `source`: [`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
 
 ```ts config-catalog
@@ -4717,7 +4717,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:46`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:47`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -4774,7 +4774,7 @@ export interface PresetSelectionConfig {
 ## `@deepseek-ai/dsh-tool-subagent-control`
 
 - `inject`: `tools` · `subagents` · `agents` · `systemPrompt`
-- `source`: [`packages/subagent/tool-subagent-control/src/index.ts:24`](../packages/subagent/tool-subagent-control/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent-control/src/index.ts:25`](../packages/subagent/tool-subagent-control/src/index.ts)
 
 ```ts config-catalog
 /** Optional subagent control tools. */
@@ -5179,7 +5179,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-working-directory`
 
 - `inject`: `fs` · `sessionProjections` · `systemPrompt`
-- `source`: [`packages/session/working-directory/src/index.ts:82`](../packages/session/working-directory/src/index.ts)
+- `source`: [`packages/session/working-directory/src/index.ts:74`](../packages/session/working-directory/src/index.ts)
 
 ```ts config-catalog
 /** Deployment default for Sessions without an original project directory. */
@@ -5245,6 +5245,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-brand-official` | — | [`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-connector-account` | — | [`packages/client/ui-connector-account/src/index.ts`](../packages/client/ui-connector-account/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-context-menu` | — | [`packages/client/ui-context-menu/src/index.ts`](../packages/client/ui-context-menu/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
@@ -5271,6 +5272,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | — | [`packages/client/ui-secret-mask/src/index.ts`](../packages/client/ui-secret-mask/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session` | — | [`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-session-panel` | — | [`packages/client/ui-session-panel/src/index.ts`](../packages/client/ui-session-panel/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session-status` | `remoteAccess` · `sessions` · `sessionPersistence` · `typert` | [`packages/client/ui-session-status/src/index.ts`](../packages/client/ui-session-status/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings` | — | [`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | — | [`packages/client/ui-settings-agent-loop/src/index.ts`](../packages/client/ui-settings-agent-loop/src/index.ts) |
@@ -5339,6 +5341,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` · `systemPrompt` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
+| `@deepseek-ai/dsh-tool-session-list` | `tools` · `sessions` · `sessionQuery` · `workspaceRegistry` · `sessionProjections` | [`packages/session-query/tool-session-list/src/index.ts`](../packages/session-query/tool-session-list/src/index.ts) |
 | `@deepseek-ai/dsh-tools` | `systemPrompt` | [`packages/core/tools/src/index.ts`](../packages/core/tools/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |

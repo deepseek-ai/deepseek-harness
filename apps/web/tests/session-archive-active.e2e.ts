@@ -170,8 +170,7 @@ describe.skipIf(MODE === 'record')('web e2e: archiving a running Session stops i
     expect(scaffold.ctx.agents.get(sessionId)?.status).toBe('running')
     expect(await childAlive(cwd)).toBe(true)
     await expect.poll(() => sessionRow().count()).toBe(1)
-    // The Bash command is a running job while the dialog is open, by design.
-    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, { runningJobs: 'keep' })
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DIALOG_EXPECTED, snapshot, MODE)
 
     // Cancel keeps everything as it was.

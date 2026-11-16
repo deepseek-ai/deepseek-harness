@@ -187,7 +187,7 @@ describe('background pwsh output', () => {
     proc.exitCode = 0
     resolveDone()
     await until(() => jobs.get(job!.id).status !== 'running' ? true : undefined)
-    expect(jobs.get(job!.id)).toMatchObject({ status: 'completed', detail: 'exit code: 0' })
+    expect(jobs.get(job!.id)).toMatchObject({ status: 'completed', detail: 'exit code: 0', exitCode: 0 })
   })
 
   it('a silent process settles with an empty ring', async () => {

@@ -32,6 +32,23 @@ const shellParserOnlyPlugin = {
 }
 
 /**
+ * The `buffer` package this package declares. Bundled CommonJS that names the
+ * `buffer` builtin without declaring the npm package, such as `safe-buffer` under
+ * `string_decoder`, resolves here instead of through whatever the installer
+ * hoists; pnpm's global virtual store hoists nothing above a stored package.
+ * The trailing slash skips Node's `buffer` builtin and resolves the npm package.
+ */
+const BUFFER_ENTRY = resolveFrom.resolve('buffer/')
+
+/** Redirects every bare `buffer` specifier onto {@link BUFFER_ENTRY}. */
+const bufferPackagePlugin = {
+  name: 'dsh-buffer-package',
+  resolveId(source: string): string | null {
+    return source === 'buffer' ? BUFFER_ENTRY : null
+  },
+}
+
+/**
  * Resolve the module proxy table at bundle time: every Node builtin or
  * replaced external the worker graph imports lands on its `./node/` proxy,
  * so `lib/worker.js` is one self-contained ES module a deployment serves and
@@ -77,7 +94,7 @@ export default defineConfig([{
   dts: false,
   clean: false,
   noExternal: [/.*/],
-  plugins: [moduleProxyPlugin, shellParserOnlyPlugin],
+  plugins: [moduleProxyPlugin, shellParserOnlyPlugin, bufferPackagePlugin],
   outputOptions: { inlineDynamicImports: true },
 }, {
   // Page half: an ordinary browser ES module the deployment's page imports. It

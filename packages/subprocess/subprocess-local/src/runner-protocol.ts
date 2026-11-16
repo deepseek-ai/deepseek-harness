@@ -262,20 +262,25 @@ export function deserializeRunnerError(serialized: SerializedRunnerError): Error
  */
 export function cleanupLinuxLaunchFiles(files: LinuxLaunchFiles): void {
   try {
-    if (lstatSync(files.directory).isSymbolicLink()) {
-      unlinkSync(files.directory)
-      return
-    }
-    for (const path of [
-      files.requestPath,
-      files.startupErrorPath,
-    ]) {
-      try { unlinkSync(path) } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      }
-    }
-    rmdirSync(files.directory)
-  } catch {
+    removeLinuxLaunchFiles(files)
+  } catch (_residueRetained) {
     // Crash residue remains private and no later spawn reuses this directory.
   }
+}
+
+/** Remove the private launch directory and its known files; throws on the first failed removal. */
+function removeLinuxLaunchFiles(files: LinuxLaunchFiles): void {
+  if (lstatSync(files.directory).isSymbolicLink()) {
+    unlinkSync(files.directory)
+    return
+  }
+  for (const path of [
+    files.requestPath,
+    files.startupErrorPath,
+  ]) {
+    try { unlinkSync(path) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  rmdirSync(files.directory)
 }

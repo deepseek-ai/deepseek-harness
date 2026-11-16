@@ -70,7 +70,7 @@ PTC 执行器公开保留的 `run_code` 传输，以及确定性的 TypeScript S
 
 新子调用使用 `<parent>:ptc:<n>` 标识。消费方将这些标识视为不透明值，并通过精确相等关联事件；恢复的历史标识保留原始字节。[PTC mode 决策](../../../.agents/notes/implemented/feature/2026-06-15-ptc.zh.md) 负责持久化命名与恢复规则。
 
-TypeScript 中的 `read_image` 与 CUA 截图操作返回 `Image`，其中包含可读取的 `path`、`width` 和 `height`。将其传给 `inspect` 后，持久附件会按顺序与文本一起进入 `run_code` 结果。数组和对象内嵌的图片会随所在值一起展示。程序失败时，已 inspect 的输出随原始诊断一起呈现；外层替换的结果保持生效。输出策略移除截图或 read_image 图片时，绑定以 ToolCallError 拒绝，并包含保留的文本提示。额外上下文保留生成工具的归属。
+TypeScript 中的 `read_image` 与 CUA 截图操作返回 `Image`，其中包含可读取的 `path`、`width` 和 `height`。其他工具的返回值按全有或全无的方式替换：当 `{ type: 'image', attachment }` 条目引用了最终结果中的每张图片且程序能读取每张图片时，这些条目会变为 `Image`，与已接受的 MCP 图片块相同，结果的文本与图片仅通过 `inspect` 进入模型；否则返回值保持原样，完整的结果内容作为额外上下文进入模型。将其传给 `inspect` 后，持久附件会按顺序与文本一起进入 `run_code` 结果。数组和对象内嵌的图片会随所在值一起展示。程序失败时，已 inspect 的输出随原始诊断一起呈现；外层替换的结果保持生效。输出策略移除截图或 read_image 图片时，绑定以 ToolCallError 拒绝，并包含保留的文本提示。额外上下文保留生成工具的归属。
 
 调用方取消且运行时报告 `abort` 时，`run_code` 等待清理完成，并返回原生工具的取消结果：`AbortError` / `ABORTED`，内容为 `Error: tool call aborted`。保留状态的运行时会附加取消诊断，包括变量被保留还是清空。Agent 在 `turn/end` 中记录具体取消原因，包括 hook 的理由。其他运行时失败保留 `CODE_RUN_FAILED` 及其诊断，即使调用方同时取消。运行时拒绝保留 `PtcRuntimeError` 的 code，否则变为 `CODE_RUN_FAILED` 并以该拒绝为 `cause`。`description` 为空白、`timeoutMs` 无效，或运行时不支持却传入 `timeoutMs` 或 `sandbox_permissions` 时，以带 `INVALID_ARGS` 的 `ToolArgsError` 失败；执行器释放后的调用以 `CODE_RUN_UNAVAILABLE` 失败；缺少运行时、`workingDirectory` 或 `sandboxPolicy` 时以 `ToolContextUnavailableError` 失败。取消可能丢弃保留的运行时状态，也不会撤销已完成的工具操作。
 
@@ -156,8 +156,8 @@ Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (
 
 以下约束适用于宿主集成及已开始的调用。
 
-- **程序 Image 仅覆盖 read_image 与 CUA 截图**：其他图片工具保留其声明的返回值，并将图片自动附加到模型的额外上下文。
-- **程序 Image 要求附件路径映射**：文件系统必须将宿主存储的附件映射为程序可读的路径。`fs-ssh` 没有这项映射，因此该组合中的图片适配会拒绝。
+- **程序 Image 需要返回值引用**：read_image、CUA 截图以及其 `{ type: 'image', attachment }` 条目引用了每张结果图片的返回值会产生 `Image`；其他图片工具保留其声明的返回值，并将图片自动附加到模型的额外上下文。
+- **程序 Image 要求附件路径映射**：文件系统必须将宿主存储的附件映射为程序可读的路径。`fs-ssh` 没有这项映射，因此该组合中的 read_image 与 CUA 图片适配会拒绝，而返回值引用的图片保持原始 JSON，并作为额外上下文进入模型。
 - **没有内置重置控件**：自带的 Loader 插件不通过服务、GUI 控件或 SDK 端点暴露执行器实例。需要重置的宿主必须在自己的组合中挂载并保留 `PtcExecutor`，该集成负责失败后的重试。
 - **PTC mode 使用 TypeScript，且呈现方式按 agent 而非按工具**：PTC 执行要求 `ctx.ptcRuntime.language === 'typescript'`；同一个 agent 内不能让一个工具仅使用 Native，而另一个仅使用 PTC。
 - **PTC mode 中间值只存在于执行局部，且没有字节上限**：它们无法从会话回放重建，并可能耗尽进程或 worker 内存；只有外层 `run_code` 输出受 worker 可配置的硬上限约束。

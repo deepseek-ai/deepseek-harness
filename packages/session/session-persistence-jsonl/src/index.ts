@@ -1374,7 +1374,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     // append. Swallow only the rm failure; nothing else of consequence runs here.
     try {
       await rm(tmp, { force: true })
-    } catch {
+    } catch (_redundantTempRemoveFailed) {
       /* v8 ignore next -- redundant temp link; publish already durable, rm failure is an unreachable IO edge */
     }
   }

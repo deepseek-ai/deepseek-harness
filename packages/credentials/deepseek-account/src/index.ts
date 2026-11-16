@@ -757,7 +757,7 @@ export class DeepSeekAccount extends TypertRemoteService {
       signal.throwIfAborted()
       if (result.data.user != null) {
         try { attempt.initialProfile = { token: result.data.token, value: { status: 'ready', value: profile(result.data.user) } } }
-        catch {
+        catch (_invalidUser) {
           // Invalid optional user data falls back to current without discarding a valid authorization.
         }
       }
