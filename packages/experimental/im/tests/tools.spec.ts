@@ -112,17 +112,31 @@ class FakeHistory implements ImHistory {
 class FakeMedia {
   readonly items = new Map<string, ImMediaFileItem>()
   failure: Error | undefined
+  constructor(private readonly history?: FakeHistory) {}
 
-  async read(chat: ImChatKey, id: string): Promise<ImMediaItem> {
-    void chat
+  async read(
+    chat: ImChatKey,
+    id: string,
+    _signal?: AbortSignal,
+    allow?: (message: ImMessage) => boolean,
+  ): Promise<ImMediaItem> {
     if (this.failure !== undefined) throw this.failure
     const item = this.items.get(id)
     if (item === undefined) throw new ImError('access', `no media ${id}`)
+    const owner = this.history?.messages.find(msg => msg.chat.key === chat && msg.seq === item.ref.seq)
+    if (allow !== undefined && owner !== undefined && !allow(owner)) {
+      throw new ImError('access', `Message #${item.ref.seq} is outside the threads granted to this session.`)
+    }
     return item
   }
 
-  async readFile(chat: ImChatKey, id: string): Promise<ImMediaFileItem> {
-    return await this.read(chat, id)
+  async readFile(
+    chat: ImChatKey,
+    id: string,
+    signal?: AbortSignal,
+    allow?: (message: ImMessage) => boolean,
+  ): Promise<ImMediaFileItem> {
+    return await this.read(chat, id, signal, allow)
   }
 }
 
@@ -130,7 +144,7 @@ class FakeMedia {
 class FakeIm {
   readonly sessions = new FakeSessions()
   readonly history = new FakeHistory([message(1), message(2), message(3)])
-  readonly media = new FakeMedia()
+  readonly media = new FakeMedia(this.history)
   /** Output renderer ids this host has registered; a session naming one renders its turn text into the chat. */
   readonly renderers = new Set<string>()
   readonly outputs = {
@@ -941,6 +955,19 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
 
     const okRead = value(await mounted.call('im_read', { message: 'm-t1' }, { agent: fakeAgent(confined.sessionId) })) as { message: { key: string } }
     expect(okRead.message.key).toBe('fake:bot|m-t1')
+    expect(await mounted.prompt(fakeAgent(confined.sessionId))).toContain('Thread-confined bindings')
+
+    const refT2 = { message: ImMessageKey('fake:bot', 'm-t2'), chat: CHAT, seq: 5, index: 1, kind: 'image' as const, src: 'x' }
+    mounted.im.media.items.set('5.1', {
+      ref: refT2,
+      image: { type: 'image', attachment: { attachmentId: 'att-t2', mediaType: 'image/png', bytes: 4, width: 1, height: 1 } as never },
+      file: { type: 'file', attachment: { attachmentId: 'att-t2', name: 'secret.png', bytes: 4 } as never },
+      data: new Uint8Array([1, 2, 3, 4]),
+    })
+    expect(value(await mounted.call('im_read_image', { id: '5.1' }, { agent: fakeAgent(confined.sessionId) })))
+      .toMatchObject({ status: 'error', code: 'access' })
+    expect(value(await mounted.call('im_read_file', { id: '5.1' }, { agent: fakeAgent(confined.sessionId) })))
+      .toMatchObject({ status: 'error', code: 'access' })
 
     const rootConfined = mounted.im.sessions.add('root-confined', [{ chat: CHAT, writable: true, home: true, thread: 'om_root' }])
     mounted.im.history.messages.push(
@@ -988,5 +1015,38 @@ describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () =
     )
     const result = await mounted.call('im_read', { message: 'm-long' })
     expect(Buffer.byteLength(textOf(result))).toBeLessThanOrEqual(10)
+  })
+
+  it('bounds staged filenames under tools.fileDir so long attachment names do not trigger ENAMETOOLONG', async () => {
+    const mounted = await mount()
+    const refLong = { message: ImMessageKey('fake:bot', 'm1'), chat: CHAT, seq: 1, index: 1, kind: 'file' as const, src: 'x' }
+    mounted.im.media.items.set('1.1', {
+      ref: refLong,
+      file: { type: 'file', attachment: { attachmentId: 'att-long-ext', name: `${'a'.repeat(245)}.pdf`, bytes: 3 } as never },
+      data: new Uint8Array([1, 2, 3]),
+    })
+    mounted.im.media.items.set('1.2', {
+      ref: { ...refLong, index: 2 },
+      file: { type: 'file', attachment: { attachmentId: 'att-long-noext', name: 'b'.repeat(250), bytes: 3 } as never },
+      data: new Uint8Array([1, 2, 3]),
+    })
+    const withExt = value(await mounted.call('im_read_file', { id: '1.1' })) as { path: string }
+    const noExt = value(await mounted.call('im_read_file', { id: '1.2' })) as { path: string }
+    expect(Buffer.byteLength(withExt.path.split('/').at(-1)!)).toBeLessThanOrEqual(160)
+    expect(withExt.path.endsWith('.pdf')).toBe(true)
+    expect(Buffer.byteLength(noExt.path.split('/').at(-1)!)).toBeLessThanOrEqual(160)
+  })
+
+  it('filters bot selfId mentions in im_read and im_history when satori bot selfId is present', async () => {
+    const mounted = await mount()
+    mounted.ctx.provide('satori', { bots: [{ id: 'fake:bot', selfId: 'ou_bot' }] } as never)
+    mounted.im.history.messages.push(message(4, {
+      key: ImMessageKey('fake:bot', 'm-self-mention'),
+      mentions: { self: true, all: false, users: [{ id: 'ou_bot', name: 'Bot' }, { id: 'ou_alice', name: 'Alice' }] },
+    }))
+    const read = value(await mounted.call('im_read', { message: 'm-self-mention' })) as { message: { mentions: Array<{ id: string }> } }
+    expect(read.message.mentions).toEqual([{ id: 'ou_alice', name: 'Alice' }])
+    const hist = value(await mounted.call('im_history', { after: 3 })) as { messages: Array<{ mentions: Array<{ id: string }> }> }
+    expect(hist.messages[0]?.mentions).toEqual([{ id: 'ou_alice', name: 'Alice' }])
   })
 })

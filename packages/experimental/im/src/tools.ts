@@ -15,7 +15,7 @@
  *   and a publication result carries `report.summary()`. `config.tools.readOnly` registers no publishing tool.
  */
 import { createHash } from 'node:crypto'
-import { basename } from 'node:path'
+import { basename, extname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { h, type Element, type MembersPage } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -37,7 +37,7 @@ import {
   imReadImageOutput, imReadImageParameters, imReadOutput, imReadParameters, imReplyParameters, imSendFileParameters,
   imSendOutput, imSendParameters,
 } from './schema.ts'
-import { grantChain, operationId } from './send.ts'
+import { grantChain, messageInThreads, operationId } from './send.ts'
 
 /** Names of the IM tools the service registers (`config.tools.readOnly` drops the publishing ones). */
 export const IM_TOOLS = [
@@ -67,6 +67,8 @@ export interface ImToolError {
 /** Placement of the `tool:im` prompt section (before the per-tool guidance of other tool plugins). */
 const SECTION_ORDER = 80
 
+/** Maximum UTF-8 byte length of a staged filename (`seq.index-name`), leaving room for atomic-write `.tmpdir`. */
+const MAX_STAGE_NAME_BYTES = 160
 /** Bound applied to one model-facing read, matching `config.tools.maxReadBytes`. */
 const TRUNCATED = '\n… (truncated: the result exceeded the configured read limit)'
 
@@ -116,7 +118,8 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
       const allowed = allowedThreadsOf(im, record, chat)
-      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal, allowed)) }
+      const selfId = ctx.get('satori')?.bots.find(candidate => candidate.id === splitKey(chat).bot)?.selfId
+      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal, allowed), selfId) }
     }),
   }))
 
@@ -136,7 +139,8 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       const messages = args.after === undefined
         ? im.history.before(chat, args.before ?? Number.MAX_SAFE_INTEGER, limit, keep)
         : im.history.after(chat, args.after, limit, keep)
-      return Promise.resolve({ chat, messages: messages.map(viewOf), total: messages.length })
+      const selfId = ctx.get('satori')?.bots.find(candidate => candidate.id === splitKey(chat).bot)?.selfId
+      return Promise.resolve({ chat, messages: messages.map(msg => viewOf(msg, selfId)), total: messages.length })
     }),
   }))
 
@@ -177,7 +181,9 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const item = await im.media.read(chat, args.id, exec.signal)
+      const allowed = allowedThreadsOf(im, record, chat)
+      const allow = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
+      const item = await im.media.read(chat, args.id, exec.signal, allow)
       const image = item.image
       return image === undefined
         ? { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
@@ -204,7 +210,9 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       execute: (args, exec) => run(async () => {
         const { record, agent } = caller(im, exec)
         const chat = chatOf(im, record, args.chat)
-        const item = await im.media.readFile(chat, args.id, exec.signal)
+        const allowed = allowedThreadsOf(im, record, chat)
+        const allow = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
+        const item = await im.media.readFile(chat, args.id, exec.signal, allow)
         const attachment = item.file?.attachment
         const data = item.data
         if (attachment === undefined || data === undefined) {
@@ -214,7 +222,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         // A relative POSIX-shaped path: the execution world may not be this host, so no host separator is baked in.
         // The chat names a directory of its own: `seq` and the media index are unique inside one chat only, and every
         // chat of a shared session stages into the same working directory.
-        const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${item.ref.seq}.${item.ref.index}-${attachment.name}`
+        const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${stageName(item.ref.seq, item.ref.index, attachment.name)}`
         const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
         const policy = policyService?.resolve({ session: agent.session })
         await scoped.fs.writeBytes(target, data, undefined, exec.signal, policy)
@@ -339,12 +347,6 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
   return binding.chat
 }
 
-/**
- * One message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. Both forms read through
- * {@link ImApi.readMessage}: a seq is local because a sequence number only exists for what the store received, and a
- * key is read from the platform when this deployment never stored it — done by the same call, because a merged forward
- * the store holds as a reference needs the platform read for its entries either way.
- */
 /** Thread restriction for `chat` across `record`'s grant chain; `undefined` means any thread/main timeline. */
 function allowedThreadsOf(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey): Set<string> | undefined {
   const bindings = grantChain(im.sessions, record.sessionId)
@@ -358,16 +360,18 @@ function allowedThreadsOf(im: ImToolHost, record: ImSessionRecord, chat: ImChatK
   return threads
 }
 
-/** Whether `message` belongs to one of the granted `threads`. */
-function messageInThreads(message: ImMessage, threads: ReadonlySet<string>): boolean {
-  const threadId = message.thread?.id
-  const rootId = message.thread?.root
-  const msgId = splitKey(message.key).id
-  return (threadId !== undefined && threads.has(threadId))
-    || (rootId !== undefined && threads.has(rootId))
-    || threads.has(msgId)
-}
-
+/**
+ * One message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. Both forms read through
+ * {@link ImApi.readMessage}: a seq is local because a sequence number only exists for what the store received, and a
+ * key is read from the platform when this deployment never stored it — done by the same call, because a merged forward
+ * the store holds as a reference needs the platform read for its entries either way.
+ * @param im - IM host.
+ * @param chat - admitted chat key.
+ * @param value - seq or key reference.
+ * @param signal - optional cancellation signal.
+ * @param allowedThreads - optional thread restriction for the calling session.
+ * @returns the resolved message.
+ */
 async function messageOf(
   im: ImToolHost,
   chat: ImChatKey,
@@ -478,7 +482,7 @@ interface SendView {
 }
 
 /** One stored message in the tool-facing form. */
-function viewOf(message: ImMessage): MessageView {
+function viewOf(message: ImMessage, selfId?: string): MessageView {
   const { bot } = splitKey(message.chat.key)
   return {
     key: message.key,
@@ -491,7 +495,7 @@ function viewOf(message: ImMessage): MessageView {
     text: message.text,
     // The bot's own mention is how the message addressed it, not a person a reply can address.
     mentions: message.mentions.users
-      .filter(user => user.id !== bot)
+      .filter(user => user.id !== bot && user.id !== selfId)
       .map(user => ({ id: user.id, ...user.name === undefined ? {} : { name: user.name } })),
     ...message.quote === undefined ? {} : { quote: message.quote.key },
     ...message.thread === undefined ? {} : { thread: message.thread.id },
@@ -518,6 +522,17 @@ function sendValue(result: ImSendResult): SendView {
  */
 function chatDirectory(chat: ImChatKey): string {
   return createHash('sha256').update(chat).digest('hex').slice(0, 8)
+}
+
+/** Staged filename (`seq.index-name`) bounded to `MAX_STAGE_NAME_BYTES` so atomic-write `.tmpdir` never hits ENAMETOOLONG. */
+function stageName(seq: number, index: number, name: string): string {
+  const prefix = `${seq}.${index}-`
+  if (Buffer.byteLength(prefix + name) <= MAX_STAGE_NAME_BYTES) return prefix + name
+  const budget = MAX_STAGE_NAME_BYTES - Buffer.byteLength(prefix)
+  const ext = extname(name)
+  const suffix = ext.length > 0 && Buffer.byteLength(ext) < budget ? ext : ''
+  const stem = suffix ? name.slice(0, -suffix.length) : name
+  return `${prefix}${truncateUtf8(stem, budget - Buffer.byteLength(suffix))}${suffix}`
 }
 
 /** Extension of one file name, lower-cased. */
@@ -600,6 +615,11 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
     parts.push(`Your chats: ${chats.join(', ')}. Publishing chats: `
       + `${writable.length === 0 ? 'none (read-only)' : writable.join(', ')}. Name a chat with chat when a message `
       + 'arrived in another one.')
+    const confined = bindings.filter((binding): binding is typeof binding & { thread: string } => binding.thread !== undefined)
+    if (confined.length > 0) {
+      parts.push(`Thread-confined bindings (${confined.map(b => `${b.chat} thread ${b.thread}`).join(', ')}): `
+        + 'pass an allowed thread when publishing with im_send.')
+    }
   }
   if (config.tools.readOnly) {
     parts.push('Read with im_read, im_history, im_read_image and im_read_file; this preset publishes nothing.')
