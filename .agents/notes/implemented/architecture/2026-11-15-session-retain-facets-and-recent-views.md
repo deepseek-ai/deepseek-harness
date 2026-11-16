@@ -34,10 +34,10 @@ export interface SessionRetainOptions {
   readonly signal?: AbortSignal | undefined
 }
 
-export interface SessionBinding {
+export interface SessionRetainInfo {
   // existing members unchanged
-  /** Whether any live reference retains `facet`; identity-stable per binding and facet. */
-  facet(facet: SessionRetainFacet): ObservableSnapshot<boolean>
+  /** Positive counts of references retaining each facet; absent while no reference retains any facet. */
+  readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
 }
 ```
 
@@ -46,7 +46,7 @@ export interface SessionBinding {
 | Declaration | The owning package adds a facet to `SessionRetainFacetMap` through declaration merging; the Controller assigns no meaning to any facet |
 | Omission | An absent key is not retained; facets have no default |
 | Immutability | A reference's facet set is fixed at creation; changing the set retains a new reference before releasing the old one |
-| Counting | [`RetainedFacets`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) keeps one count per facet for each generation; a change between zero and nonzero notifies `binding.facet(name)` observers synchronously, before `retainInfo` and list observers hear the same change; retiring the generation ends every facet |
+| Counting | [`shiftFacetCounts`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) keeps one count per facet in the generation's `SessionRetainInfo`, beside the per-source `retainedBy` counts, and `retainInfo(id)` publishes every change; owners derive whether their facet is retained from that snapshot and the current binding, so `SessionBinding` is unchanged; retiring the generation clears every count |
 | Dependencies | The Controller does not validate dependencies between facets; callers are responsible |
 | `using()` | Signature unchanged; a borrowed reference serves one operation, and callers omit `facets` |
 | `retainAgentScope` | Retains no facets |
@@ -97,6 +97,8 @@ Its state records only what the user did: the order in which Sessions left the m
 
 **Owner-declared facet defaults at runtime.** This requires a Controller runtime registry plus recounting across load order and HMR, while the rule that an omitted facet is not retained suffices.
 
+**Expose a facet observable on `SessionBinding`.** A new required `SessionBinding` member breaks every hand-built binding, including third-party test fakes, while facet counts are local reference counts that `retainInfo` already publishes beside the per-source counts.
+
 **Make `events` a facet.** A Session without its connection can do nothing, and the only connection-free use, the Gateway, already has its own internal entry.
 
 **Keep background Session DOM.** React 18 has no `<Activity>`; K hidden subtrees pay layout, memory, and subscription costs and conflict with the single-Session `session-maybe` binding.
@@ -112,7 +114,7 @@ Its state records only what the user did: the order in which Sessions left the m
 - The attention-protected recent views have no upper bound: an unread completion stays protected until the user reads it, so each Session that finishes unread while the user is elsewhere keeps its generation, loaded event window, and history follow stream until it is read, marked read, removed, or archived.
 - Returning to a Session that ran in the background pays one catch-up fold, at most equal to the post-open fold of a fresh opening, without a network request.
 - A rendering owner that omits `conversation: true` sees an unretained stale or empty snapshot without an error.
-- `SessionRetainOptions` and `SessionBinding` are pre-stable public interfaces; every consumer and the test fixture changed together.
+- `SessionRetainOptions` and `SessionRetainInfo` gain optional fields only; a third-party Client plugin that renders a Session it retains under its own source must add `facets: { conversation: true }`, which the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.3/session-retain-conversation-facet/guide.md) describes.
 
 ## Testing
 

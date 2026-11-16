@@ -48,6 +48,11 @@ export interface SessionRetainInfo {
   readonly referenceCount: number
   /** Positive source counts only; a source without references is absent. */
   readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>
+  /**
+   * Positive counts of references retaining each facet; absent while no reference retains any facet.
+   * Owners read their facet here, for example `(info.retainedFacets?.conversation ?? 0) > 0`.
+   */
+  readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
 }
 
 /** The sessions-service face injected as `ctx.sessions`. */

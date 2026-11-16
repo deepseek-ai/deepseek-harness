@@ -358,7 +358,7 @@ export class UiConversation extends Service {
     const binding = new BoundConversation(
       owner.eventSource,
       new ConversationNodeAssembler(this.events, this.views, this.groups),
-      owner.facet('conversation'),
+      this.retainedConversation(owner),
     )
     const record: BindingRecord = { source: owner, binding, disposeScope: () => {} }
     this.bindings.set(owner, record)
@@ -375,6 +375,19 @@ export class UiConversation extends Service {
       throw error
     }
     return binding
+  }
+
+  /**
+   * Whether a reference retains the `conversation` facet of this exact binding; a same-id
+   * replacement generation's counts do not apply to a binding that is no longer current.
+   */
+  private retainedConversation(owner: SessionBinding): ObservableSnapshot<boolean> {
+    const info = this.sessions.retainInfo(owner.sessionId)
+    return {
+      getSnapshot: () => this.sessions.binding(owner.sessionId) === owner
+        && (info.getSnapshot().retainedFacets?.conversation ?? 0) > 0,
+      subscribe: listener => info.subscribe(listener),
+    }
   }
 
   /**

@@ -34,10 +34,10 @@ export interface SessionRetainOptions {
   readonly signal?: AbortSignal | undefined
 }
 
-export interface SessionBinding {
+export interface SessionRetainInfo {
   // existing members unchanged
-  /** Whether any live reference retains `facet`; identity-stable per binding and facet. */
-  facet(facet: SessionRetainFacet): ObservableSnapshot<boolean>
+  /** Positive counts of references retaining each facet; absent while no reference retains any facet. */
+  readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
 }
 ```
 
@@ -46,7 +46,7 @@ export interface SessionBinding {
 | 声明方式 | 子要素由其 owner 包通过声明合并加入 `SessionRetainFacetMap`；Controller 不赋予任何子要素含义 |
 | 缺省 | 未写的键不保留；子要素没有默认值 |
 | 不可变 | 一条引用的子要素集合在创建时固定；更换集合时先 retain 新引用，再 release 旧引用 |
-| 计数 | [`RetainedFacets`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) 为每个 generation 的每个子要素各记一个计数；计数在零与非零之间变化时同步通知 `binding.facet(name)` 的观察者，早于 `retainInfo` 与列表观察者收到同一变化；generation 退役时结束全部子要素 |
+| 计数 | [`shiftFacetCounts`](../../../../packages/api/session-controller/src/client/sessions/facets.ts) 在 generation 的 `SessionRetainInfo` 中为每个子要素记一个计数，与按来源的 `retainedBy` 并列，`retainInfo(id)` 发布每次变化；owner 根据该快照与当前 binding 推导自己的子要素是否被保留，因此 `SessionBinding` 不变；generation 退役时清空全部计数 |
 | 依赖 | Controller 不校验子要素之间的依赖，由调用方负责 |
 | `using()` | 签名不变；借出的引用只服务一次操作，调用方不写 `facets` |
 | `retainAgentScope` | 不保留任何子要素 |
@@ -97,6 +97,8 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 
 **由子要素 owner 在运行时声明默认值。** 这需要 Controller 维护运行时注册表，并在加载顺序与 HMR 下重新计数；而「未写即不保留」的规则已经足够。
 
+**在 `SessionBinding` 上暴露子要素 observable。** `SessionBinding` 新增必需成员会让所有手写 binding（包括第三方测试替身）失效，而子要素计数本就是本地引用计数，`retainInfo` 已在按来源计数旁发布它们。
+
 **把 `events` 也作为子要素。** 没有连接的 Session 什么也做不了；唯一不需要连接的 Gateway 已经有独立的内部入口。
 
 **保留后台 Session 的 DOM。** React 18 没有 `<Activity>`；K 个隐藏子树要付出布局、内存和订阅成本，还与 `session-maybe` 只绑定一个 Session 的设计冲突。
@@ -112,7 +114,7 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 - 受关注保护的最近访问会话没有总量上限：完成未读会一直受保护直到用户读过，因此用户不在时每个以未读状态完成的 Session 都会保留其 generation、已加载的事件窗口和历史跟随流，直到被读过、标为已读、被移除或归档。
 - 切回在后台运行过的 Session 要付出一次补折，最多等同于新打开时的一次打开后折叠，但不走网络。
 - 漏写 `conversation: true` 的渲染方会看到未被保留的陈旧或空快照，不会报错。
-- `SessionRetainOptions` 与 `SessionBinding` 是 pre-stable 公开接口；所有消费方和测试替身已一同修改。
+- `SessionRetainOptions` 与 `SessionRetainInfo` 只新增可选字段；以自己的来源 retain 并渲染 Session 的第三方 Client 插件需加上 `facets: { conversation: true }`，见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/session-retain-conversation-facet/guide.zh.md)。
 
 ## 测试
 

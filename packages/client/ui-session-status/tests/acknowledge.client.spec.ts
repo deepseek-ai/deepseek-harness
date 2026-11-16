@@ -51,10 +51,7 @@ function harness({ manual = false, completedTurn = 1, selected = true, ready = t
   const list = createSnapshotStore<SessionListState>({
     ids: [id], phase: 'ready', projectionsBySession: {}, byId: { [id]: row(selected) },
   }, { flush: 'sync' })
-  const retainedFacet = createSnapshotStore(true)
-  const bind = (): SessionBinding => ({
-    sessionId: id, session, eventSource: session.eventSource, ctx: ctx as AgentContext, facet: () => retainedFacet,
-  })
+  const bind = (): SessionBinding => ({ sessionId: id, session, eventSource: session.eventSource, ctx: ctx as AgentContext })
   let binding = bind()
   const mark = vi.fn(async (_id: typeof id, _throughTurn: number, _clearManual: boolean) => {})
   let frame: FrameRequestCallback | undefined

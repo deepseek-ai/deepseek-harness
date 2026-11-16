@@ -106,15 +106,19 @@ export function apply(ctx: Context): void {
       // back into view is not news.
       const dispose = binding.ctx.effect(() => {
         // Live quota failures are reported only while a rendering reference retains the Session's Conversation.
-        const retained = binding.facet('conversation')
-        let stopEvents = (): void => {}
+        const retainInfo = ctx.sessions.retainInfo(binding.sessionId)
+        const retained = (): boolean => ctx.sessions.binding(binding.sessionId) === binding
+          && (retainInfo.getSnapshot().retainedFacets?.conversation ?? 0) > 0
+        let stopEvents: (() => void) | undefined
         const follow = (): void => {
-          stopEvents()
-          stopEvents = () => {}
-          if (!retained.getSnapshot()) return
-          stopEvents = binding.eventSource.subscribe(() => {
+          if (!retained()) {
+            stopEvents?.()
+            stopEvents = undefined
+            return
+          }
+          stopEvents ??= binding.eventSource.subscribe(() => {
             // A dispatch in progress keeps calling copied listeners after unsubscription.
-            if (!retained.getSnapshot()) return
+            if (!retained()) return
             const { change } = binding.eventSource.getSnapshot()
             if (change.kind !== 'append') return
             for (const { event } of change.entries) {
@@ -125,11 +129,11 @@ export function apply(ctx: Context): void {
             }
           })
         }
-        const stopRetained = retained.subscribe(follow)
+        const stopRetained = retainInfo.subscribe(follow)
         follow()
         return () => {
           stopRetained()
-          stopEvents()
+          stopEvents?.()
           chatSources.delete(binding)
           quotaSubscriptions.delete(dispose)
         }

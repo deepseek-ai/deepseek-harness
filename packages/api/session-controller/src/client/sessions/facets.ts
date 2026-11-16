@@ -1,13 +1,8 @@
 /** Per-generation reference counts of owner-declared retained facets. */
-import { notifySubscribers, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { SessionRetainOptions } from '../contract/sessions.ts'
+import type { SessionRetainInfo, SessionRetainOptions } from '../contract/sessions.ts'
 import type { SessionRetainFacet } from '../index.ts'
 
-interface FacetCount {
-  count: number
-  readonly listeners: Set<() => void>
-  readonly source: ObservableSnapshot<boolean>
-}
+type FacetCounts = NonNullable<SessionRetainInfo['retainedFacets']>
 
 /**
  * The facet keys a retain request sets to `true`.
@@ -19,67 +14,25 @@ export function heldFacets(facets: SessionRetainOptions['facets']): readonly Ses
   return (Object.keys(facets) as SessionRetainFacet[]).filter(facet => facets[facet] === true)
 }
 
-/** Facet counts of one live Client generation; observers are notified only when a facet starts or stops being retained. */
-export class RetainedFacets {
-  private readonly counts = new Map<SessionRetainFacet, FacetCount>()
-
-  /**
-   * Observe one facet of this generation.
-   * @param facet - owner-declared facet name.
-   * @returns the identity-stable source reading whether any live reference retains `facet`.
-   */
-  source(facet: SessionRetainFacet): ObservableSnapshot<boolean> {
-    return this.entry(facet).source
-  }
-
-  /**
-   * Count one new reference for each of its facets.
-   * @param facets - facets one new reference retains.
-   */
-  retain(facets: readonly SessionRetainFacet[]): void {
-    for (const facet of facets) this.shift(facet, 1)
-  }
-
-  /**
-   * Uncount one released reference from each of its facets.
-   * @param facets - facets of one released reference.
-   */
-  release(facets: readonly SessionRetainFacet[]): void {
-    for (const facet of facets) this.shift(facet, -1)
-  }
-
-  /** End every facet when the generation retires. */
-  releaseAll(): void {
-    for (const entry of this.counts.values()) {
-      if (entry.count === 0) continue
-      entry.count = 0
-      notifySubscribers(entry.listeners, '[session-controller] retained facet')
-    }
-  }
-
-  private shift(facet: SessionRetainFacet, delta: 1 | -1): void {
-    const entry = this.entry(facet)
-    const wasHeld = entry.count > 0
-    entry.count += delta
-    if (wasHeld !== entry.count > 0) notifySubscribers(entry.listeners, '[session-controller] retained facet')
-  }
-
-  private entry(facet: SessionRetainFacet): FacetCount {
-    const existing = this.counts.get(facet)
-    if (existing !== undefined) return existing
-    const listeners = new Set<() => void>()
-    const created: FacetCount = {
-      count: 0,
-      listeners,
-      source: {
-        getSnapshot: () => created.count > 0,
-        subscribe: (listener) => {
-          listeners.add(listener)
-          return () => { listeners.delete(listener) }
-        },
-      },
-    }
-    this.counts.set(facet, created)
-    return created
-  }
+/**
+ * Count one reference's facets in or out of a retain-info snapshot.
+ * @param counts - the previous positive facet counts, absent when none.
+ * @param facets - the facets of the retained or released reference.
+ * @param delta - `1` when the reference is retained, `-1` when it is released.
+ * @returns the frozen positive counts, or undefined when no facet remains retained.
+ */
+export function shiftFacetCounts(
+  counts: FacetCounts | undefined,
+  facets: readonly SessionRetainFacet[],
+  delta: 1 | -1,
+): FacetCounts | undefined {
+  if (facets.length === 0) return counts
+  // The facet key type is empty in programs where no owner has declared a facet, so counts are built over strings.
+  const next = new Map<string, number>(Object.entries(counts ?? {}))
+  for (const facet of facets) next.set(facet, (next.get(facet) ?? 0) + delta)
+  const positive = [...next].filter(([, count]) => count > 0)
+  if (positive.length === 0) return undefined
+  // Facet names are dictionary keys, including names also present on Object.prototype.
+  const record: FacetCounts = Object.assign(Object.create(null) as object, Object.fromEntries(positive))
+  return Object.freeze(record)
 }

@@ -17,7 +17,7 @@ import type {
 } from '../contract/sessions.ts'
 import type { SessionReferenceSource, SessionRetainFacet } from '../index.ts'
 import { createScope, scopeIdentityOf, scopeOf as scopeTagOf } from '../scope.ts'
-import { heldFacets, RetainedFacets } from './facets.ts'
+import { heldFacets, shiftFacetCounts } from './facets.ts'
 import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SessionProjectionSnapshot } from './manager.ts'
@@ -110,14 +110,6 @@ export interface SessionBinding {
   /** Contiguous event window reserved for Conversation assembly. */
   readonly eventSource: SessionEventSource
   readonly ctx: AgentContext
-  /**
-   * Observe whether any live reference retains one facet of this generation.
-   * @param facet - owner-declared facet name.
-   * @returns an identity-stable source per binding and facet; it reads false once the generation ends.
-   * Observers run synchronously inside `retain()` and `release()`, before `retainInfo` and list
-   * observers hear the same change, and must not release the Session's last reference from that callback.
-   */
-  facet(facet: SessionRetainFacet): ObservableSnapshot<boolean>
 }
 
 // Scope primitives live in ../scope.ts (the client mirror of host
@@ -174,6 +166,14 @@ function freezeRetainedBy(counts: Partial<Record<SessionReferenceSource, number>
   return Object.freeze(counts)
 }
 
+function retentionOf(
+  referenceCount: number,
+  retainedBy: SessionRetainInfo['retainedBy'],
+  retainedFacets: SessionRetainInfo['retainedFacets'],
+): SessionRetainInfo {
+  return Object.freeze({ referenceCount, retainedBy, ...(retainedFacets === undefined ? {} : { retainedFacets }) })
+}
+
 const EMPTY_RETAIN_INFO: SessionRetainInfo = Object.freeze({ referenceCount: 0, retainedBy: freezeRetainedBy({}) })
 
 interface ScopeRecord {
@@ -182,7 +182,6 @@ interface ScopeRecord {
   binding: SessionBinding
   session: Session
   retention: SessionRetainInfo
-  readonly facets: RetainedFacets
   live: boolean
 }
 
@@ -296,7 +295,6 @@ export class ClientSessions implements ISessions {
       for (const [, record] of scopes) {
         record.live = false
         record.session.unbindScope()
-        record.facets.releaseAll()
       }
       const managerDisposal = this.manager.dispose()
       for (const [id, record] of scopes) {
@@ -577,20 +575,19 @@ export class ClientSessions implements ISessions {
   ): ClientSessionReference {
     const record = this.scopes.get(id) ?? this.materializeScope(id)
     const previous = record.retention
-    record.retention = Object.freeze({
-      referenceCount: previous.referenceCount + 1,
-      retainedBy: freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
-    })
-    record.facets.retain(facets)
+    record.retention = retentionOf(
+      previous.referenceCount + 1,
+      freezeRetainedBy({ ...previous.retainedBy, [source]: (previous.retainedBy[source] ?? 0) + 1 }),
+      shiftFacetCounts(previous.retainedFacets, facets, 1),
+    )
     const reference = new ClientSessionReference(id, record, () => {
       if (!record.live) return
-      record.facets.release(facets)
       const count = record.retention.referenceCount - 1
       const { [source]: sourceCount = 0, ...otherSources } = record.retention.retainedBy
       const retainedBy = sourceCount > 1 ? { ...otherSources, [source]: sourceCount - 1 } : otherSources
       record.retention = count === 0
         ? EMPTY_RETAIN_INFO
-        : Object.freeze({ referenceCount: count, retainedBy: freezeRetainedBy(retainedBy) })
+        : retentionOf(count, freezeRetainedBy(retainedBy), shiftFacetCounts(record.retention.retainedFacets, facets, -1))
       if (count === 0) this.retireScope(id, record)
       else this.publishRetention(id)
     })
@@ -624,7 +621,6 @@ export class ClientSessions implements ISessions {
     record.live = false
     if (this.scopes.get(id) === record) this.scopes.delete(id)
     record.session.unbindScope()
-    record.facets.releaseAll()
     const sessionDisposal = this.manager.drop(id, record.session)
     this.projectList()
     this.publishRetention(id)
@@ -638,21 +634,13 @@ export class ClientSessions implements ISessions {
     // The Session owns its scoped dispatch point (host Agent.loopCtx mirror);
     // mint and bind are one step so a live scope record implies a bound actx.
     session.bindScope(ctx)
-    const facets = new RetainedFacets()
-    const binding: SessionBinding = {
-      sessionId: id,
-      session,
-      eventSource: session.eventSource,
-      ctx,
-      facet: facet => facets.source(facet),
-    }
+    const binding: SessionBinding = { sessionId: id, session, eventSource: session.eventSource, ctx }
     const record: ScopeRecord = {
       fiber,
       ctx,
       binding,
       session,
       retention: EMPTY_RETAIN_INFO,
-      facets,
       live: true,
     }
     this.scopes.set(id, record)

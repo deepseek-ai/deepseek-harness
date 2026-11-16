@@ -81,7 +81,6 @@ function fakeSessions(ctx: Context): {
     session: fakeSession(),
     eventSource: new MutableSessionEventSource(),
     ctx: scope.ctx,
-    facet: () => retained,
   }
   const list = createSnapshotStore<SessionListState>({
     ids: [],
@@ -102,7 +101,12 @@ function fakeSessions(ctx: Context): {
     create: () => Promise.reject(new Error('unused fake Sessions operation')),
     retain: () => reference,
     using: async (_target, _options, operation) => await operation(reference),
-    retainInfo: () => createSnapshotStore({ referenceCount: 1, retainedBy: {} }),
+    retainInfo: () => ({
+      getSnapshot: () => ({
+        referenceCount: 1, retainedBy: {}, ...(retained.getSnapshot() ? { retainedFacets: { conversation: 1 } } : {}),
+      }),
+      subscribe: listener => retained.subscribe(listener),
+    }),
     subagentAddress: () => undefined,
     refreshProjections: () => Promise.reject(new Error('unused fake Sessions operation')),
     refresh: () => Promise.reject(new Error('unused fake Sessions operation')),
