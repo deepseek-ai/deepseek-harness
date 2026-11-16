@@ -28,6 +28,16 @@
   --dsh-assistant-block-gap: 4px;
 }
 
+/* The spare width as a length computed on the wrapper, so the spacer below
+   receives the wrapper's value instead of resolving percentages against
+   itself. An axis with percentages, such as the embedded Conversation's,
+   leaves it 0px: the table then starts at its normal x and scrolls. */
+@property --dsh-table-spare-length {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) span
    the whole transcript width instead of clipping at the 748px message
    column — deepsuite chat TableWrapper parity, with 100cqw (the ChatView
@@ -47,18 +57,20 @@
      is exactly the case that must exceed it. */
   max-width: none;
   margin-left: calc(-1 * var(--dsh-table-lead));
+  --dsh-table-spare-length: var(--dsh-table-spare);
   /* A list's indentation: zero for a top-level table. */
-  padding-left: calc(var(--dsh-table-lead) - var(--dsh-table-spare));
+  padding-left: calc(var(--dsh-table-lead) - var(--dsh-table-spare-length));
 }
 
 /* The spare width left of the message column shrinks before the table
    overflows: a table that fits right of it starts at its normal x, a wider
    one moves left only as far as it needs, and only a table wider than the
-   transcript scrolls. The spacer resolves the spare width itself because it
-   depends only on 100cqw, which still names ChatView here. */
+   transcript scrolls. The spacer keeps 16px so the table stops right of
+   TurnNavigator's rail, which ends 8px inside the transcript padding. */
 .body :global(.md-table-wide)::before {
   content: '';
-  flex: 0 1 var(--dsh-table-spare);
+  flex: 0 1 var(--dsh-table-spare-length);
+  min-width: min(var(--dsh-table-spare-length), 16px);
 }
 
 /* Only the painted table outranks Conversation's z-index 0 width handle. The

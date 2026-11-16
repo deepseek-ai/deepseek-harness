@@ -357,11 +357,11 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       expect(longCell!.wideHook).toBe(false)
       if (stop.width > 748) {
         // Breakout: the wide wrapper spans past the message column, and a
-        // table wider than the transcript gives up the whole lead before it
-        // scrolls.
+        // table wider than the transcript gives up the lead, except the 16px
+        // that keeps it clear of the turn rail, before it scrolls.
         expect(wide!.clientWidth, `wide breakout at ${String(stop.width)}`).toBeGreaterThan(columnWidth + 8)
-        expect(wide!.wrapperLeft, `breakout lead at ${String(stop.width)}`).toBeLessThan(fill!.tableLeft - 8)
-        expect(Math.abs(wide!.tableLeft - wide!.wrapperLeft), `lead consumed at ${String(stop.width)}`).toBeLessThan(1.5)
+        expect(wide!.wrapperLeft, `breakout lead at ${String(stop.width)}`).toBeLessThan(fill!.tableLeft - 24)
+        expect(Math.abs(wide!.tableLeft - wide!.wrapperLeft - 16), `lead consumed at ${String(stop.width)}`).toBeLessThan(1.5)
       } else {
         // Below the message column there is no spare width: the breakout
         // clamps to neutral and the wrapper stays the column's width.
