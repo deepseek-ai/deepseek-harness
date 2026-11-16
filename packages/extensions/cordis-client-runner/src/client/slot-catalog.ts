@@ -4283,8 +4283,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'settings.notice',
     kind: 'single',
     scope: 'root',
-    summary: 'Optional content anchored above the launcher row at its full width.',
-    doc: 'Optional content anchored above the launcher row at its full width. The\nrow takes no height, so the content floats over the sidebar list; the\nshell hides it in the rail without unmounting it.',
+    summary: 'Optional content anchored above the launcher row at the launcher row\'s full width.',
+    doc: 'Optional content anchored above the launcher row at the launcher row\'s\nfull width. The row takes no height, so the content floats over the\nsidebar list; the shell hides it in the rail without unmounting it.',
     registerOptions: [],
     ownerProps: [
       '/** Settings navigation for the row above the launcher row. */\nexport interface SettingsNoticeOwnerProps {\n  /** @param sectionId - section to open; absent uses the shell\'s default section. */\n  openSettings: (sectionId?: string) => void\n}',
