@@ -44,6 +44,6 @@ declare module '@deepseek-ai/cordis' {
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Notifications in the row above the account launcher; the contribution owns its markup and lifecycle. */
-    'settings.notice.notifications': { kind: 'single'; scope: 'root'; owner: AccountNotificationsOwnerProps }
+    'settings.launcher.notifications': { kind: 'single'; scope: 'root'; owner: AccountNotificationsOwnerProps }
   }
 }

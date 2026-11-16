@@ -6,7 +6,7 @@ import css from './AccountNotices.module.css'
 
 /** Notice row composed by the settings shell. */
 export type AccountNoticesProps = PropsRuntime<'settings.notice'>
-  & PropsRenderSlots<'settings.notice.notifications'> & InjectFace<AccountSectionInjected>
+  & PropsRenderSlots<'settings.launcher.notifications'> & InjectFace<AccountSectionInjected>
 
 /**
  * @param props - settings navigation and account state.
@@ -15,7 +15,7 @@ export type AccountNoticesProps = PropsRuntime<'settings.notice'>
 export function AccountNotices({ openSettings, useAccount, renderSlot }: AccountNoticesProps) {
   const account = useAccount(state => state)
   const active = account.view?.status === 'credential-stored' && !account.desktopOnboardingVisible && !account.onboarding
-  return <div className={css.root}>{renderSlot('settings.notice.notifications', {
+  return <div className={css.root}>{renderSlot('settings.launcher.notifications', {
     active, openAccount: () => { openSettings('account') },
   })}</div>
 }

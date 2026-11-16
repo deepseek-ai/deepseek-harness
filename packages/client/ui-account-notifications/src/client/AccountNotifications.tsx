@@ -20,7 +20,7 @@ export interface AccountNotificationsInjected {
 }
 
 /** Notification component props derived from its parent-owned slot. */
-export type AccountNotificationsProps = PropsRuntime<'settings.notice.notifications'>
+export type AccountNotificationsProps = PropsRuntime<'settings.launcher.notifications'>
   & InjectFace<AccountNotificationsInjected> & PropsLocale<'account.notifications'>
 
 /** @param props - account availability and notification content. @returns the notification stack. */

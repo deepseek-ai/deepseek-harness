@@ -726,7 +726,7 @@ it.each(['desktopOnboardingVisible', 'onboarding'] as const)('hides the notifica
   let openAccount: (() => void) | undefined
   const openSettings = vi.fn()
   const renderSlot: AccountNoticesProps['renderSlot'] = (name, owner) => {
-    expect(name).toBe('settings.notice.notifications')
+    expect(name).toBe('settings.launcher.notifications')
     const value: object = owner
     const props = value as AccountNotificationsOwnerProps
     active = props.active

@@ -42,6 +42,7 @@ stack.resized sidebar=280 card=260 left-inset=10
 stack.rail cards=3 visible=false dismissed=0
 stack.expanded cards=3 duplicate-acks=0 dismissed=0
 stack.promoted cards=2 acks=stack-first,stack-second width=260 same-node=true
+stack.short-window account-row-visible=true card-above-account-row=true copy-scrolls=true
 stack.dismissed cards=0 acks=stack-first,stack-second,stack-third
 refresh.retained cards=3 acks=refresh-first same-node=true
 refresh.localized locale=en_US content-reads=3 list-reads=0 acks=1 same-node=true

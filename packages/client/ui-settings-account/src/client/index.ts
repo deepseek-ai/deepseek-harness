@@ -317,7 +317,7 @@ export function apply(ctx: Context): void {
   }, AccountMenu)))
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.notice', () => ctx.slots.register({
     name: 'settings.notice', inject: () => operations,
-    children: { 'settings.notice.notifications': { kind: 'single', scope: 'root' } },
+    children: { 'settings.launcher.notifications': { kind: 'single', scope: 'root' } },
   }, AccountNotices)))
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.section', () => {
     let unregister: (() => void) | undefined
