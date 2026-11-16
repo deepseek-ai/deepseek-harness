@@ -133,6 +133,39 @@ export interface Impl {
 }
 
 /**
+ * Resolve an access to service `name` from the def site `ctx` by walking up its fibers.
+ *
+ * - `{ impl }`: a fiber provides the impl itself in the same isolation.
+ * - `{ fiber, impl }`: the impl comes from the committed view of `fiber`.
+ * - `{ fiber }`: `fiber` declares the service but is inactive.
+ * - `undefined`: no fiber declares the service, or the walk reaches a context that isolates `name` again.
+ *
+ * @param ctx — the def-site context of the access.
+ * @param name — the service name being accessed.
+ * @returns the fiber whose `inject` admits the access and the impl the access reaches, or `undefined`.
+ */
+export function locate(ctx: Context, name: string): { fiber?: Fiber; impl?: Impl } | undefined {
+  const key = ctx[symbols.isolate][name]
+  let table = ctx[symbols.isolate]
+  let fiber = ctx.fiber
+  while (true) {
+    let impl: Impl | undefined
+    for (const provision of fiber.provisions) {
+      if (provision.name === name && provision.ctx[symbols.isolate][name] === key) impl = provision
+    }
+    if (impl) return { impl }
+    while (table !== fiber.ctx[symbols.isolate]) {
+      if (!table || Object.hasOwn(table, name)) return
+      table = Object.getPrototypeOf(table)
+    }
+    impl = fiber.committed?.[name]
+    if (impl || name in fiber.inject) return { fiber, impl }
+    if (!fiber.runtime) return
+    fiber = fiber.parent.fiber
+  }
+}
+
+/**
  * Reflection and service-resolution layer installed as `ctx.reflect`.
  *
  * This service powers the context proxy, service registration, accessors, and
@@ -161,22 +194,11 @@ export class ReflectService {
         const defSite = (ctx[symbols.shadow] as Context | undefined) ?? ctx
         if (!defSite.fiber.runtime) return ctx.reflect.get(prop, false)
         return ctx.events.waterfall('internal/get', ctx, prop, error, () => {
-          const key = defSite[symbols.isolate][prop]
-          let fiber = defSite.fiber
-          while (true) {
-            let impl = fiber.committed?.[prop]
-            for (const provision of fiber.provisions) {
-              if (provision.name === prop && provision.ctx[symbols.isolate][prop] === key) impl = provision
-            }
-            if (impl) return getTraceable(ctx, impl.value)
-            if (prop in fiber.inject) {
-              error.message = `cannot get required service "${prop}" in inactive context`
-              throw error
-            }
-            if (!fiber.runtime) throw error
-            if (fiber.parent[symbols.isolate][prop] !== key) throw error
-            fiber = fiber.parent.fiber
-          }
+          const result = locate(defSite, prop)
+          if (!result) throw error
+          if (result.impl) return getTraceable(ctx, result.impl.value)
+          error.message = `cannot get required service "${prop}" in inactive context`
+          throw error
         })
       } catch (e: any) {
         throw e === error ? enhanceError(e) : e
@@ -297,7 +319,7 @@ export class ReflectService {
       }
       this.props[name] = { type: 'service' }
 
-      this.ctx.root[symbols.isolate][name] ??= Symbol(name)
+      this.ctx[symbols.root][symbols.isolate][name] ??= Symbol(name)
       const key = this.ctx[symbols.isolate][name]
       const impl: Impl = { uid: ++this._implCounter, name, value, ctx: this.ctx, check, isolate: key, dependents: new Set() }
       if (this.store[key]) {

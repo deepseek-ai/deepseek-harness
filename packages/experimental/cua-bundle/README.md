@@ -24,7 +24,7 @@ Enable Computer Use from Plugins on macOS and Windows for existing and new sessi
 <a id="use-this-package"></a>
 ## Use this package
 
-On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only.
+On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. Once enabled, the details show usage guidance below the preview and above the settings. On Windows they also explain how to configure the helper.
 
 On macOS, the bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Grant Accessibility and Screen Recording to `DSH Computer Use.app`.
 

@@ -21,6 +21,9 @@
       "path": "../forge"
     },
     {
+      "path": "../forge-session"
+    },
+    {
       "path": "../../subprocess/subprocess"
     },
     {

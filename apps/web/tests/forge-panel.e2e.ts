@@ -77,9 +77,9 @@ const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')
 const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
 if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
   const fields = args[args.indexOf('--json') + 1]
-  process.stdout.write(JSON.stringify(fields === 'url'
-    ? { url: 'https://github.com/octo/demo/pull/7' }
-    : { number: 7, title: 'Add the pull request panel' }))
+  const url = 'https://github.com/octo/demo/pull/7'
+  process.stdout.write(fields !== 'url' ? JSON.stringify({ number: 7, title: 'Add the pull request panel' })
+    : args.includes('--jq') ? url + '\\n' : JSON.stringify({ url }))
   process.exit(0)
 }
 if (args[0] === 'pr' && args[1] === 'ready' && args[2] === '9') {
@@ -319,7 +319,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     }).filter(thread => thread.comments.nodes.length > 0)
     const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
     process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
-      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
+      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false, viewerDidAuthor: false,
         reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
         reviewThreads: page(threads) } } } }))
     process.exit(0)
@@ -733,7 +733,7 @@ async function expectNumberedReference({ scaffold, page, project, tripwire }: Pa
     })
   }).toEqual([{ action: 'reference', url: PULL }])
   const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
-  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
+  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url', '--jq', '.url'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 }
@@ -2022,9 +2022,11 @@ it.skipIf(MODE === 'record')('reviews a change request by layer, hides test file
   const lens = view.getByRole('radiogroup', { name: '分层透镜', exact: true })
   const tree = view.getByRole('navigation')
   await expect.poll(() => lens.getByRole('radio').allTextContents()).toEqual(['全部6', '接口1', '实现2', '测试3'])
-  // The lens spans the file tree with the filter field's insets, and its divider continues the tree's border.
+  // The lens spans the file tree with the filter field's insets, and its divider continues the tree's border. The radio group
+  // sits in the element that measures it, inside the toolbar cell above the tree.
   const [lensBox, fieldBox, cellBox, treeBox] = await Promise.all([
-    lens.boundingBox(), tree.locator('input').locator('xpath=..').boundingBox(), lens.locator('xpath=..').boundingBox(), tree.locator('xpath=..').boundingBox(),
+    lens.boundingBox(), tree.locator('input').locator('xpath=..').boundingBox(), lens.locator('xpath=../..').boundingBox(),
+    tree.locator('xpath=..').boundingBox(),
   ])
   if (lensBox === null || fieldBox === null || cellBox === null || treeBox === null) throw new Error('Lens and tree must be visible')
   expect([lensBox.x, lensBox.x + lensBox.width]).toEqual([fieldBox.x, fieldBox.x + fieldBox.width])

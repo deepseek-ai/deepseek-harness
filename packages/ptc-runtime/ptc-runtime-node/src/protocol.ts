@@ -5,6 +5,14 @@ import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 /** Wire revision required before the host dispatches program code. */
 export const PROGRAM_PROTOCOL_VERSION = 4
 
+/** One binding's JSON value and optional host-authored inspection text. */
+export interface BindingResult {
+  /** Flat lossless JSON data returned to the program. */
+  value: PtcJsonWire
+  /** Direct inspection text for an unchanged object or array. */
+  inspection?: string
+}
+
 /** Inputs for one program; host functions remain in the parent process. */
 export interface ProgramBootData {
   /** Type-stripped JavaScript source. */
@@ -52,9 +60,9 @@ export interface HostMethods {
    * @param global - Namespace global.
    * @param name - Function name within the namespace.
    * @param args - Flat lossless JSON arguments.
-   * @returns Flat lossless JSON result; binding failures and cancellation reject.
+   * @returns JSON data with optional inspection text; binding failures and cancellation reject.
    */
-  invoke(global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
+  invoke(global: string, name: string, args: PtcJsonWire): Promise<BindingResult>
   /**
    * Admit captured output before completion or interruption.
    * @param text - Captured text.

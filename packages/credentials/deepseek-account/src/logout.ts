@@ -29,9 +29,10 @@ export async function revokeAccount(origin: string, token: string, policy: Logou
     try {
       await logoutAccount(origin, token,
         AbortSignal.any([signal, AbortSignal.timeout(policy.requestTimeoutMs)]), headers)
-      return
-    } catch {
+    } catch (_revokeFailed) {
       // HTTP, business, and transport failures consume one attempt without restoring credentials.
+      continue
     }
+    return
   }
 }

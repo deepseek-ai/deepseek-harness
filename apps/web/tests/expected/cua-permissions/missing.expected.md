@@ -1,4 +1,5 @@
 - region "Authorize computer use":
+  - paragraph: Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.
   - heading "Authorize computer use" [level=3]
   - group "Default mode for new sessions":
     - strong: Default mode for new sessions

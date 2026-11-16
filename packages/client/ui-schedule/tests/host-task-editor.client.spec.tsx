@@ -67,7 +67,7 @@ function mount(rows: readonly ScheduleCatalogEntry[] = [task], overrides: Partia
     useSessionStatus: select => select(new Map()), useSessionRetainInfo: () => undefined,
     useResource: () => { throw new Error('Task editor loads no document resources') },
     useContextMenu: contextMenuHook(),
-    onNewTask: vi.fn(), onClearEnded: vi.fn(async () => {}),
+    onNewTask: vi.fn(), onUseRecommendation: vi.fn(), onClearEnded: vi.fn(async () => {}),
     onCreateTask: vi.fn<TaskManagerPageProps['onCreateTask']>(async () => ({ created: task })),
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'), onRetry: vi.fn(async () => {}), onOpenSession: vi.fn(),
     hostActions: hostActions(),

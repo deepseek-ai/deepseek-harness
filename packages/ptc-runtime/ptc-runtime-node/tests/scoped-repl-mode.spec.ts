@@ -23,6 +23,8 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. '
     + 'Top-level declarations and await are supported; top-level return is not supported. '
     + 'Use inspect(...values) to display output. Do not use console. '
+    + 'Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. '
+    + 'Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. '
     + 'The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. '
     + 'Variables, functions, and imported modules remain in memory for this Agent across calls. '
     + 'Each call runs one program in its own top-level scope. '

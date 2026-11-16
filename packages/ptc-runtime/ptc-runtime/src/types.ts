@@ -18,11 +18,13 @@ export type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-rep
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
- * lossy or non-cloneable value with a descriptive error rather than corrupting
- * the run. No seam-level byte cap applies to a binding resolution. A rejection
- * of this function surfaces inside the program as a rejection of the
- * corresponding call.
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage and
+ * PtcInspectableValue values. An inspectable resolution delivers its JSON object
+ * or array to the program and uses its text only when that unchanged value is
+ * inspected directly. A runtime rejects a lossy or non-cloneable value with a
+ * descriptive error rather than corrupting the run. No seam-level byte cap
+ * applies to a binding resolution. A rejection of this function surfaces inside
+ * the program as a rejection of the corresponding call.
  */
 export type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
