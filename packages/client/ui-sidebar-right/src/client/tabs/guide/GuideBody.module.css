@@ -4,7 +4,8 @@
 /* The capsules form one centred column at the column's own 14px gap, lifted
    above the body's middle by the spacer below. The guide fills the tab body,
    which clips, and scrolls itself; `safe` centring starts a guide taller than
-   the pane at its top so every capsule stays reachable. */
+   the pane at its top so every capsule stays reachable. The block padding
+   keeps a scrolled-to-end capsule's focus ring off the pane's edge. */
 .guide {
   --dsl-guide-entry-radius: var(--dsw-radius-xl);
   display: flex;
@@ -14,14 +15,13 @@
   align-items: center;
   justify-content: safe center;
   box-sizing: border-box;
-  min-height: 0;
-  padding: 0 24px;
+  padding: 14px 24px;
   overflow-y: auto;
 }
 
 /* The lift, as a share of the pane's height (a column flex basis resolves
    against it): the centred column rises 5% of the pane, and a short pane
-   gives it up before the capsules clip. */
+   gives it up before the column overflows. */
 .guide::after {
   content: '';
   flex: 0 1 10%;
