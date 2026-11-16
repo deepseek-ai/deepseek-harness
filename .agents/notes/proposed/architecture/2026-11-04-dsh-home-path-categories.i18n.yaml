@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-04-dsh-home-path-categories.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-11-04-dsh-home-path-categories.md
+/agent-note-harness-home-path-categories:
+  en: 007593701a0d6bf5
+  zh: 3bf266378e3bba08
+/agent-note-harness-home-path-categories/problem:
+  en: 3e98d90944daeb05
+  zh: 596f750e878f3e69
+/agent-note-harness-home-path-categories/proposal:
+  en: 76abf280dfdba9bc
+  zh: 0ad29c3c67208086
+/agent-note-harness-home-path-categories/proposal/path-helper:
+  en: 6f34630c5b05b0d7
+  zh: 2106fdbf4f5ca852
+/agent-note-harness-home-path-categories/proposal/conventional-top-level-entries:
+  en: 940f404152322a33
+  zh: 5668927394d05723
+/agent-note-harness-home-path-categories/proposal/other-existing-entries:
+  en: a8242fc3bbe3fe7a
+  zh: b90f9e9deda18e78
+/agent-note-harness-home-path-categories/proposal/outside-the-home:
+  en: 9d78c323d3f9d159
+  zh: e11a87b74fe11e5c
+/agent-note-harness-home-path-categories/alternatives-considered:
+  en: cfa4bc5557af4117
+  zh: 7971e54d5770d9aa
+/agent-note-harness-home-path-categories/acceptance-criteria:
+  en: bf87d444099ebb2b
+  zh: 8315e6ddc07fe3c7
+/agent-note-harness-home-path-categories/risks:
+  en: aa70b3a0243a1853
+  zh: 64c74b62d3a42472

@@ -290,7 +290,7 @@ export class LspInstance {
     const shutdownDeadline = deadline(undefined, this.spec.shutdownTimeoutMs, 'LSP_SHUTDOWN')
     try {
       await this.gracefulShutdown(shutdownDeadline.signal)
-    } catch {
+    } catch (_gracefulShutdownFailed) {
       // Graceful shutdown failed or timed out; managed-range cleanup below remains authoritative.
     } finally {
       shutdownDeadline[Symbol.dispose]()

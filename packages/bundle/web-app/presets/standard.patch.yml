@@ -125,6 +125,8 @@
             config:
               fetch: true
               searchTimeoutMs: 60000
+          - id: tool-cordis
+            name: '@deepseek-ai/dsh-tool-cordis'
           - id: present
             name: '@deepseek-ai/dsh-tool-present'
           - id: tool-office

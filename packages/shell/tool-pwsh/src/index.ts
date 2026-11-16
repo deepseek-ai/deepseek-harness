@@ -28,12 +28,11 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { JobError } from '@deepseek-ai/dsh-jobs'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { ESCALATION_TARGETS, SandboxEscalationError, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
+import { ESCALATION_TARGETS, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import { subprocessSpawnFailure } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
@@ -107,7 +106,35 @@ interface PwshForegroundResult {
 }
 
 /* jscpd:ignore-start -- minimal mirror of dsh-tool-bash's validation and execute plumbing (Agent Note). */
-function validatePwshArgs(args: PwshToolArgs): void {
+/** Which optional argument groups the registered schema advertises in this composition. */
+interface AdvertisedArgs {
+  /** `sandbox_permissions` and `justification`; advertised only with a sandboxing executor. */
+  escalation: boolean
+  /** `run_in_background`; advertised unless `enableRunInBackground: false`. */
+  background: boolean
+}
+
+/**
+ * Reject arguments the schema does not advertise. Schema validation checks
+ * advertised keys only, so these still reach `execute`; the model fixes the call
+ * by dropping them, which makes them argument errors. Runs before escalation
+ * pairing checks, approval, and working-directory setup.
+ * @param args - the call's arguments.
+ * @param advertised - the argument groups this composition advertises.
+ */
+function rejectUnadvertisedArgs(
+  args: { sandbox_permissions?: string; justification?: string; run_in_background?: boolean },
+  advertised: AdvertisedArgs,
+): void {
+  if (!advertised.escalation && (args.sandbox_permissions !== undefined || (args.justification ?? '').trim() !== '')) {
+    throw new ToolArgsError(['sandbox_permissions and justification are not available in this composition (no sandboxing executor to escalate)'])
+  }
+  if (!advertised.background && args.run_in_background === true) {
+    throw new ToolArgsError(['run_in_background is disabled for this deployment (enableRunInBackground: false)'])
+  }
+}
+
+function validatePwshArgs(args: PwshToolArgs, advertised: AdvertisedArgs): void {
   if (args.command.trim().length === 0) {
     throw new ToolArgsError(['invalid command: expected a non-empty string'])
   }
@@ -117,6 +144,7 @@ function validatePwshArgs(args: PwshToolArgs): void {
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new ToolArgsError([`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`])
   }
+  rejectUnadvertisedArgs(args, advertised)
   validateEscalationArgs(args.sandbox_permissions, args.justification)
 }
 /* jscpd:ignore-end */
@@ -246,13 +274,11 @@ export function apply(ctx: Context, config: Config = {}): void {
    * Resolve a sandbox-escalation request through `ctx.approval` BEFORE
    * anything executes, delegating the shared fail-closed sequence (strict
    * widening, channel resolution, outcome mapping) to
-   * {@link approveEscalation}. This tool contributes only the composition
-   * guard (the fields are unadvertised without a sandboxing executor, yet
-   * schema validation checks advertised keys only, so an unadvertised
-   * `sandbox_permissions` still reaches execute) and the approval
-   * ingredients. The shared policy resolver is required whenever the
-   * executor advertises confinement, so a split composition fails at
-   * tool-plugin load.
+   * {@link approveEscalation}. This tool contributes only the approval
+   * ingredients; {@link validatePwshArgs} has already rejected the fields when
+   * no sandboxing executor advertises them. The shared policy resolver is
+   * required whenever the executor advertises confinement, so a split
+   * composition fails at tool-plugin load.
    */
   const approvePwshEscalation = (
     mode: string,
@@ -260,12 +286,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     exec: ToolExecution,
     standingPolicy: SandboxExecutionPolicy | undefined,
   ): Promise<SandboxMode> => {
-    if (escalationModes.length === 0) {
-      throw new SandboxEscalationError(
-        'sandbox_permissions is not available in this composition (no sandboxing executor to escalate)',
-        'SANDBOX_ESCALATION_UNAVAILABLE',
-      )
-    }
     const effectiveMode = (standingPolicy as SandboxExecutionPolicy).mode
     return approveEscalation(
       { requestedMode: mode, justification, effectiveMode, subject: 'command' },
@@ -524,7 +544,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       },
       /* jscpd:ignore-start -- the execute path mirrors dsh-tool-bash's by design (see the pwsh-tool-and-executor Agent Note). */
       async execute(args: PwshToolArgs, exec) {
-        validatePwshArgs(args)
+        validatePwshArgs(args, { escalation: escalationModes.length > 0, background: backgroundEnabled })
         // Description is display metadata; workdir defaults to the caller's session.
         const standingPolicy = resolveSandboxPolicy(exec)
         const approvedMode = args.sandbox_permissions !== undefined && args.justification !== undefined
@@ -543,10 +563,6 @@ export function apply(ctx: Context, config: Config = {}): void {
           ...policy !== undefined ? { sandboxPolicy: policy } : {},
         }
         if (args.run_in_background === true) {
-          // Undeclared keys are allowed, so schema omission also needs enforcement.
-          if (!backgroundEnabled) {
-            throw new JobError('run_in_background is disabled for this deployment (enableRunInBackground: false)', 'JOB_BACKGROUND_DISABLED')
-          }
           if (jobs === undefined) {
             throw new ToolContextUnavailableError('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
           }

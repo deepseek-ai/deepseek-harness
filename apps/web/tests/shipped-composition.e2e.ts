@@ -464,18 +464,14 @@ function assertLeanChildRecord(agent: Agent): void {
 }
 
 /**
- * The catalog the shipped Web composition puts in front of the model, minus the
- * ripgrep-dependent pair below. The absences are deliberate, not incidental
- * gaps: the `cordis_*` toolset executes model-written JavaScript that no
- * sandbox row confines, `mcp_*` servers spawn outside `ctx.shell`, and `ralph`
- * runs unsupervised rounds whose completion is a worker self-report.
- * `web_fetch` is present because it adds no network reach beyond the
- * mounted shell tools. The composition
- * Agent Note owns the rationale and its sources.
+ * The shipped Standard catalog, minus the ripgrep-dependent pair below.
+ * Runtime inspection is read-only. Generated-code execution tools, external
+ * MCP servers, and ralph are not enabled in this preset.
  */
 const EXPECTED_TOOLS = [
   'ask_user_question',
   'bash',
+  'cordis_inspect',
   'create_goal',
   'edit',
   'exit_plan_mode',
@@ -537,9 +533,11 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   const ctx = scaffold.ctx
   expect(ctx.llm.listProviders().some(provider => provider.id === 'deepseek-messages')).toBe(false)
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
-  const index = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}`, {
+  const index = await scaffold.hostFetch('/', {
     headers: { 'accept-encoding': 'gzip' },
   })
+  expect(index.status).toBe(200)
+  expect(index.headers.get('content-type')).toContain('text/html')
   expect(index.headers.get('content-encoding')).toBe('gzip')
   expect(index.headers.get('vary')).toContain('Accept-Encoding')
   await index.body?.cancel()

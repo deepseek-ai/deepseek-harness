@@ -561,7 +561,7 @@ describe('strict image-modality gate', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn(model))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('does not declare image input')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_MODEL' })
+    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'MODEL_DOES_NOT_SUPPORT_IMAGES' })
   })
 
   it('refuses when the route cannot be resolved (no agent, or no header and no options)', async () => {

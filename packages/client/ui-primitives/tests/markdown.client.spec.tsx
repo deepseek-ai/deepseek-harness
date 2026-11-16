@@ -104,6 +104,8 @@ describe('MarkdownText', () => {
       '```',
       '**普通**内容',
       '*普通*内容',
+      'word**“引号”**word',
+      '词*“引号”*继续',
     ].join('\n\n')
     const { container } = render(<MarkdownText text={source} />)
 
@@ -115,6 +117,29 @@ describe('MarkdownText', () => {
     expect(container.textContent).toContain('**Notice:**text')
     expect(container.textContent).toContain('*提醒！*继续')
     expect(container.textContent).toContain('**注意：**内容')
+    expect(container.textContent).toContain('word**“引号”**word')
+    expect(container.textContent).toContain('词*“引号”*继续')
+  })
+
+  it('opens strong emphasis after CJK text when the span starts with punctuation', () => {
+    const cases = [
+      ['针对**“当键盘已经进入深睡眠（彻底断连）时的重连速度”**，继续', ['“当键盘已经进入深睡眠（彻底断连）时的重连速度”']],
+      ['一条**“N 小、D 大”**的路', ['“N 小、D 大”']],
+      ['是**“用大模型少训”与“用小模型多训”之间的抉择**。', ['“用大模型少训”与“用小模型多训”之间的抉择']],
+      ['采用**（实验性）**方案', ['（实验性）']],
+      ['导致了**“Wi-Fi 下收不到推送”**的现象，以及包含**（内容）**的列表。', ['“Wi-Fi 下收不到推送”', '（内容）']],
+      ['用户判定**「还是有点现代」**，根因是**走错了一代**，不是配色', ['「还是有点现代」', '走错了一代']],
+      ['执行**`bluetoothd`**进程，以及**“深睡眠”**测试', ['bluetoothd', '“深睡眠”']],
+    ] as const
+    const source = cases.map(([markdown]) => markdown).join('\n\n')
+
+    for (const streaming of [false, true]) {
+      const rendered = render(<MarkdownText text={source} streaming={streaming} />)
+      expect([...rendered.container.querySelectorAll('strong')].map(node => node.textContent))
+        .toEqual(cases.flatMap(([, strong]) => strong))
+      expect(rendered.container.textContent).not.toContain('**')
+      rendered.unmount()
+    }
   })
 
   it('links complete HTTP(S) inline code without promoting commands, unsafe schemes, or fences', () => {

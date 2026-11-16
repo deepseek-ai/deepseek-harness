@@ -1,0 +1,59 @@
+{
+  "format": "dsh-timeline-tree",
+  "version": 1,
+  "title": "Restore saved plans",
+  "description": "Complete the interrupted recovery checks.",
+  "elapsedMs": 120000,
+  "metadata": {
+    "plugin": "@magolor/dsh-timeline",
+    "pluginVersion": "0.3.6",
+    "exportedAt": "2026-10-30T12:04:00.000Z",
+    "sourceSessionId": "session-example",
+    "sourceTreeId": "tree-example",
+    "treeCreatedAt": "2026-10-30T12:00:00.000Z",
+    "lastTaskUpdatedAt": "2026-10-30T12:02:00.000Z"
+  },
+  "tasks": [
+    { "id": "recovery", "title": "Recover saved work", "priority": "P1" },
+    {
+      "id": "read",
+      "parent": "recovery",
+      "title": "Read saved plans",
+      "status": "done",
+      "done": [3, 3],
+      "weight": 0.25,
+      "note": "Saved plans load correctly."
+    },
+    {
+      "id": "verify",
+      "parent": "recovery",
+      "title": "Verify interrupted saves",
+      "status": "active",
+      "done": [2, 5],
+      "weight": 1.75,
+      "priority": "P0",
+      "note": "Recovery after restart still needs a check.",
+      "details": "The saved plan reopens. Verify the last interrupted write before release."
+    },
+    {
+      "id": "access",
+      "title": "Confirm release access",
+      "status": "blocked",
+      "note": "Waiting for repository access."
+    },
+    {
+      "id": "docs",
+      "title": "Document installation",
+      "status": "paused",
+      "note": "Deferred by the user."
+    }
+  ],
+  "discussions": [
+    {
+      "task": "verify",
+      "text": "Check the interrupted write.",
+      "createdAt": 1793352000000,
+      "reply": { "text": "The restart check is still open.", "createdAt": 1793352060000 }
+    }
+  ]
+}

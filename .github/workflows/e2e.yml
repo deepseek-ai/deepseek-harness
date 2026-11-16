@@ -79,11 +79,28 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       # The with-key escalation e2e self-skips without a usable runner. Prepare
       # bwrap so trusted CI exercises it; the functional probe remains the
       # authority on whether the runner can use the sandbox.
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      # A restored archive whose digest fails is re-downloaded but not re-saved
+      # (the hit key already exists), so a tampered entry survives until
+      # eviction; that needs deliberate cache poisoning.
+      - name: Save verified bubblewrap archive
+        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       # Guard against a false green: the e2e suites self-skip when the key is
       # absent, so a missing/misconfigured secret would otherwise pass as

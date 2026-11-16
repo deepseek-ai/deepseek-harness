@@ -3,32 +3,32 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-jobs/README.md
 /:
-  en: 063a69d5d6281c07
-  zh: 04562d2b1dd29590
+  en: ee6ba7faaa030a05
+  zh: c74dcdb3f5d7d0b7
 /deepseek-ai-dsh-client-ui-jobs:
   en: faa1eecdc7f06930
   zh: c6e7b06ccb434f0b
 /deepseek-ai-dsh-client-ui-jobs/summary:
-  en: b61245c057c1a924
-  zh: 6013131975ece32e
+  en: 4181e6f8df4dc4e9
+  zh: 7a8f25a775bd854a
 /deepseek-ai-dsh-client-ui-jobs/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-jobs/use-this-package:
-  en: 3466553808f81088
-  zh: 02a806ece1c3e012
+  en: 6ebf1b995be0d5ba
+  zh: a6dba97d5b8f6bfb
 /deepseek-ai-dsh-client-ui-jobs/use-this-package/one-row-per-job:
-  en: 64c1f55b35e73295
-  zh: 4d93594923cf787f
+  en: 67eec41471ccdf6b
+  zh: 2ffe602ad5575643
 /deepseek-ai-dsh-client-ui-jobs/use-this-package/the-expanded-panel:
   en: c34dad62fee63306
   zh: 167d9da7928a9488
 /deepseek-ai-dsh-client-ui-jobs/understand-the-implementation:
-  en: 640e8bd39b28c07d
-  zh: 86c7eb39acfeebc0
+  en: e5bbb2f24732e6e9
+  zh: ac3f248b255c5211
 /deepseek-ai-dsh-client-ui-jobs/further-exploration:
-  en: 01eaaecb5850f391
-  zh: 2eabd14cde191ab8
+  en: e9370f09a7b49495
+  zh: 6b297e9dbf7a6aa6
 /deepseek-ai-dsh-client-ui-jobs/model-experience:
   en: 84ad94ba940f17af
   zh: 0199b09d360df0d8

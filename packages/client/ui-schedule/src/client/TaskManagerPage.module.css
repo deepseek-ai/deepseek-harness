@@ -1365,8 +1365,18 @@
   --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
+/* The instruction only identifies the task here, so a long one stays a
+   three-line excerpt instead of growing the dialog. */
 .confirmPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1440,4 +1450,137 @@
   .zoneSearch {
     font-size: 16px;
   }
+}
+
+/* Recommended tasks under the empty Enabled and All views: a two-column grid,
+   one column below 600px of content width. The heading starts on the tiles'
+   12px inset. */
+.recommendations {
+  container-type: inline-size;
+  margin-top: 8px;
+}
+
+.recommendationsHeading {
+  margin: 0 0 6px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.recommendationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (max-width: 600px) {
+  .recommendationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.recommendation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  height: auto;
+  padding: 12px;
+  border-radius: var(--dsw-radius-lg);
+  text-align: left;
+  white-space: normal;
+}
+
+/* Tiles take the empty illustration's background. Glyphs draw in the blue
+   accent, and each glyph's main shape takes a 16% tint of that blue, which
+   stays visible against the tile in both themes. */
+.tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-illustration-background);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tile [data-fill] {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+
+.tileGlyph {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.tilePlus {
+  display: none;
+  flex: none;
+}
+
+.recommendation:focus-visible .tileGlyph {
+  display: none;
+}
+
+.recommendation:focus-visible .tilePlus {
+  display: block;
+}
+
+@media (hover: hover) {
+  .recommendation:hover .tileGlyph {
+    display: none;
+  }
+
+  .recommendation:hover .tilePlus {
+    display: block;
+  }
+}
+
+.recommendationContent,
+.recommendationDetails {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recommendationContent {
+  flex: 1;
+}
+
+.recommendationTitle {
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.recommendationDescription {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.recommendationWhen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.whenGlyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }

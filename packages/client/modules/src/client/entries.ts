@@ -6,7 +6,7 @@ import { parseBootManifest, readRelease } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { notifySubscribers } from './notify.ts'
-import { removeOwnedStyles, tearDownEntryFiber } from './entry-lifecycle.ts'
+import { tearDownEntryFiber } from './entry-lifecycle.ts'
 
 /** Page-local failures do not change the Host's bundle enablement. */
 export interface ClientEntryState {
@@ -19,7 +19,10 @@ export interface ClientEntryState {
 /** Module-table capabilities used within serialized entry operations. */
 interface ModuleIndex {
   update(manifest: BootManifest, managed: Iterable<string>): void
+  /** Reset a package's code while its previous records stay active for the runtime that is still running. */
   invalidateForReplacement(id: string, rev: string): void
+  /** Release the previous records once the replaced runtime has been torn down. */
+  releaseReplaced(id: string): void
   prune(roots: Iterable<string>): void
 }
 
@@ -146,7 +149,6 @@ export class ClientEntries {
       const entry = this.managed.get(id)
       if (entry === undefined) {
         this.modules.invalidate(id, desired.rev)
-        removeOwnedStyles(id)
         await this.reconcile(this.generation)
         return
       }
@@ -194,7 +196,7 @@ export class ClientEntries {
     await this.modules.prefetch(id)
     if (!this.current(generation)) return
     await tearDownEntryFiber(entry)
-    removeOwnedStyles(id)
+    this.index.releaseReplaced(id)
     if (!this.current(generation)) return
     await this.modules.import(id, '', {})
     if (!this.current(generation)) return

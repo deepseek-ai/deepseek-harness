@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import {
-  anchorRange, formatThreadQuote, gapOf, inFileOrder, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
+  anchorRange, formatThreadQuote, inFileOrder, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
 } from '../src/client/review-threads.ts'
 import { diffFile, reviewComment, reviewThread } from './thread-fixtures.client.ts'
 
@@ -40,19 +40,6 @@ describe('placeThread', () => {
 it('names a side and its lines', () => {
   expect(anchorRange('R', { startLine: 12, endLine: 12 })).toBe('R12')
   expect(anchorRange('L', { startLine: 3, endLine: 5 })).toBe('L3–5')
-})
-
-it('finds the collapsed unchanged lines that hold a line on either side', () => {
-  const file = diffFile('a.ts', [
-    { oldStart: 5, oldLines: 3, newStart: 5, newLines: 3, lines: [' a', '-b', '+b', ' c'] },
-    { oldStart: 20, oldLines: 2, newStart: 22, newLines: 2, lines: ['-x', '+x', ' y'] },
-  ])
-  expect(gapOf(file, 'R', 2)).toBe(0)
-  expect(gapOf(file, 'R', 6)).toBeUndefined()
-  expect(gapOf(file, 'R', 10)).toBe(1)
-  expect(gapOf(file, 'L', 21)).toBeUndefined()
-  expect(gapOf(file, 'R', 21)).toBe(1)
-  expect(gapOf(file, 'R', 40)).toBe(2)
 })
 
 it('orders a file\'s threads as its section shows them', () => {

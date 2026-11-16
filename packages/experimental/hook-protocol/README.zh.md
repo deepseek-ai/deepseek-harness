@@ -88,6 +88,7 @@ kind: "package-library"
 | [`src/runner.ts`](src/runner.ts) | 通过 `ctx.shell` 的 `runHook` 执行与 `DEFAULT_HOOK_TIMEOUT_MS` |
 | [`src/codec.ts`](src/codec.ts) | 退出码与结构化 stdout 解码为 `HookOutput` |
 | [`src/merge.ts`](src/merge.ts) | 最严格合并与 `MergedHookOutcome` 类型 |
+| [`src/errors.ts`](src/errors.ts) | 被拒绝和被阻塞的工具调用所记录的 `HookError` 名称及 `HOOK_DENIED`、`HOOK_BLOCKED` code |
 | [`src/events.ts`](src/events.ts) | `hook/*` 事件声明、追加辅助函数、stderr 摘要 |
 | [`src/detached.ts`](src/detached.ts) | 脱离运行的完全停稳跟踪 |
 | [`src/types.ts`](src/types.ts) | `HookOutput`、`MatcherGroup`、`CommandHook` 与 `hook/*` 载荷类型 |

@@ -15,6 +15,7 @@ import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
   ForgeReadiness, ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
+import { GH_COMMANDS } from '@deepseek-ai/dsh-experimental-forge-github/src/commands.ts'
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -279,13 +280,16 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
 /** Provider for `https://fake.test/<owner>/<name>.git` remotes and `https://fake.test/<owner>/<name>/pull/<n>` URLs. */
 export class FakeProvider implements ForgeProvider {
   readonly forge = 'fake'
+  readonly hosts = ['fake.test', 'other.test']
+  readonly label = 'Fake'
+  readonly changeRequestNoun = 'pull-request'
   readonly fetches: (readonly number[])[] = []
   readonly probes: string[] = []
   /** Polling failures returned instead of snapshots, by change request number. */
   readonly failures = new Map<number, ForgeFailure>()
   /** Snapshot fields that replace the defaults, by change request number. */
   readonly overrides = new Map<number, Partial<ChangeRequestSnapshot>>()
-  readinessImpl: (host: string, signal: AbortSignal) => Promise<ForgeReadiness> = () => Promise.resolve({ state: 'ready', message: null })
+  readinessImpl: (host: string, signal: AbortSignal) => Promise<ForgeReadiness> = () => Promise.resolve({ state: 'ready', message: null, signIn: null })
   /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
   readonly actions: string[] = []
   /** Outcome of the next actions; undefined reports success. */
@@ -565,6 +569,9 @@ export async function runtime(cwd: string, options: BenchOptions = {}): Promise<
     await ctx.plugin(ForgeService, { activeIntervalMs: 60_000, idleIntervalMs: 60_000, maxBackoffMs: 60_000, fetchTimeoutMs: 1_000 })
     await ctx.plugin({ inject: ['forge'], apply(child: Context) { child.forge.register(provider) } })
     await ctx.plugin(ForgeSessionService, {})
+    // forge-github registers these commands in a real composition; the projection re-registers with them.
+    await ctx.plugin({ inject: ['forgeSession'], apply(child: Context) { child.forgeSession.registerCommands(GH_COMMANDS) } })
+    await new Promise((resolve) => { setImmediate(resolve) })
     const worktrees = options.worktrees === true ? ctx.plugin(WorktreeService, {}) : undefined
     if (worktrees !== undefined) await worktrees
     const session = ctx.sessions.create(brandString<SessionId>(`forge-panel-${Math.random().toString(36).slice(2)}`), { meta: { cwd } })
