@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-connector-account/README.md
+/:
+  en: f09638e4097c52fb
+  zh: 2fb344b05a189ad0
+/deepseek-ai-dsh-client-ui-connector-account:
+  en: bdb528546ec26353
+  zh: 0dd55dbc0c8e837a
+/deepseek-ai-dsh-client-ui-connector-account/summary:
+  en: b25fc16fb18a63c1
+  zh: 4508e8a44745b08d
+/deepseek-ai-dsh-client-ui-connector-account/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-client-ui-connector-account/use-this-package:
+  en: 9d8d49a0b1b3ce24
+  zh: 8eba3710036afa00
+/deepseek-ai-dsh-client-ui-connector-account/use-this-package/register-an-account:
+  en: e618281ea7721daf
+  zh: a5d5f5e307ea3435
+/deepseek-ai-dsh-client-ui-connector-account/use-this-package/present-the-section:
+  en: fcbc46fc932ed5c8
+  zh: 2f1cce21453bced6
+/deepseek-ai-dsh-client-ui-connector-account/use-this-package/following-operations:
+  en: 0f6140d7ed6427b9
+  zh: feadef500ee4fd98
+/deepseek-ai-dsh-client-ui-connector-account/use-this-package/shared-copy:
+  en: 353a48db7e7dd0f7
+  zh: 653f3d983d3fd572
+/deepseek-ai-dsh-client-ui-connector-account/understand-the-implementation:
+  en: 6bfc9077699bd3cd
+  zh: ead092e865285eee
+/deepseek-ai-dsh-client-ui-connector-account/further-exploration:
+  en: 029949903a73d283
+  zh: 6f9a8c2f7620de69
+/deepseek-ai-dsh-client-ui-connector-account/model-experience:
+  en: bdbc56a07884f8d6
+  zh: 22ca2ee613472c0b
+/deepseek-ai-dsh-client-ui-connector-account/model-experience/kv-cache-effect:
+  en: 4cd0965a7997970e
+  zh: 690e5a9d945f7f6e
+/deepseek-ai-dsh-client-ui-connector-account/known-limitations-and-deferred-work:
+  en: d2c5f54b80b86b15
+  zh: 8b637f97ac1d0223
+/deepseek-ai-dsh-client-ui-connector-account/known-limitations-and-deferred-work/dev-note:
+  en: 2ab3c4acae06850c
+  zh: bd2093ba1fdd6860
