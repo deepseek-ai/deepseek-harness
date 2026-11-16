@@ -539,6 +539,41 @@ describe('ImMediaStore.read', () => {
     )
     expect(await store.read(CHAT.key, '7.1')).toMatchObject({ ref: { seq: 7, index: 1, src: 'https://cdn/9.png' } })
   })
+
+  it('forwards the caller AbortSignal to forward expansion readMessage when the platform read hangs', async () => {
+    const bare = message(media(h('forward', { id: 'm_8' })), 8)
+    const history = {
+      after: (chat: string, seq: number, limit: number) =>
+        [bare].filter(entry => entry.chat.key === chat && entry.seq > seq).slice(0, limit),
+      before: () => [],
+      get: () => undefined,
+      latest: () => undefined,
+    }
+    const controller = new AbortController()
+    let seenSignal: AbortSignal | undefined
+    const store = mediaStore(
+      fakeContext({
+        http: httpServing(PNG_BYTES),
+        attachments: attachmentsSaving(),
+        im: {
+          history,
+          readMessage: (_chat: string, _id: string, signal?: AbortSignal) => {
+            seenSignal = signal
+            return new Promise<ImMessage>((_resolve, reject) => {
+              signal?.addEventListener('abort', () => {
+                reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)))
+              }, { once: true })
+            })
+          },
+        },
+      }),
+      config(),
+    )
+    const pending = store.read(CHAT.key, '8.1', controller.signal)
+    controller.abort(new Error('cancelled by user'))
+    await expect(pending).rejects.toThrow('cancelled by user')
+    expect(seenSignal).toBe(controller.signal)
+  })
 })
 
 describe('ImMediaStore.readFile', () => {

@@ -267,7 +267,7 @@ export class ImMediaStore {
     signal?: AbortSignal,
     allow?: (message: ImMessage) => boolean,
   ): Promise<ImMediaItem> {
-    const ref = await this.elementAt(chat, id, allow)
+    const ref = await this.elementAt(chat, id, allow, signal)
     if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
     return this.admitAs(ref, signal, 'image')
@@ -288,7 +288,7 @@ export class ImMediaStore {
     signal?: AbortSignal,
     allow?: (message: ImMessage) => boolean,
   ): Promise<ImMediaFileItem> {
-    const ref = await this.elementAt(chat, id, allow)
+    const ref = await this.elementAt(chat, id, allow, signal)
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
     return await this.admitAs(ref, signal, 'file')
   }
@@ -298,9 +298,15 @@ export class ImMediaStore {
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
    * @param allow - optional predicate checking whether the owning message is readable by the caller.
+   * @param signal - cancellation of the calling turn, forwarded to any platform forward expansion.
    * @returns that element's reference.
    */
-  private async elementAt(chat: ImChatKey, id: string, allow?: (message: ImMessage) => boolean): Promise<ImMediaRef> {
+  private async elementAt(
+    chat: ImChatKey,
+    id: string,
+    allow?: (message: ImMessage) => boolean,
+    signal?: AbortSignal,
+  ): Promise<ImMediaRef> {
     const parsed = parseMediaId(id)
     if (!parsed) throw new ImError('access', `"${id}" is not a media id such as 12.1.`)
     const stored = this.messageAt(chat, parsed.seq)
@@ -308,7 +314,7 @@ export class ImMediaStore {
     if (allow !== undefined && !allow(stored)) {
       throw new ImError('access', `Message #${parsed.seq} is outside the threads granted to this session.`)
     }
-    const message = await this.expanded(chat, stored)
+    const message = await this.expanded(chat, stored, signal)
     const ref = mediaRefs(message).find(ref => ref.index === parsed.index)
     if (!ref) throw new ImError('access', `Message #${parsed.seq} has no media element #${parsed.index}.`)
     return ref
@@ -319,11 +325,12 @@ export class ImMediaStore {
    * platform read, and that read is what puts the pictures of the forwarded conversation inside the message.
    * @param chat - the chat the message was shown in.
    * @param message - the stored message.
+   * @param signal - cancellation of the calling turn.
    * @returns the message, expanded when the platform carries its entries.
    */
-  private async expanded(chat: ImChatKey, message: ImMessage): Promise<ImMessage> {
+  private async expanded(chat: ImChatKey, message: ImMessage, signal?: AbortSignal): Promise<ImMessage> {
     if (!hasUnreadForward(message.content)) return message
-    return await this.imOf().readMessage(chat, splitKey(message.key).id)
+    return await this.imOf().readMessage(chat, splitKey(message.key).id, signal)
   }
 
   /** Stored message with exactly this per-chat seq. */
