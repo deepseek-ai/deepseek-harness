@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
-import type { RemoteAccessBinding } from '@deepseek-ai/dsh-api-remote-access'
+import RemoteAccessService, { type RemoteAccessBinding } from '@deepseek-ai/dsh-api-remote-access'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -43,6 +43,8 @@ async function harness() {
   await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(RemoteAccessService)
+  await ctx.plugin(TypertGatewayService)
   await createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'mock', model: 'mock' }), cwd: root })
   await ctx.plugin(SubagentRuntime)
   ctx.subagents.registerProvider({
@@ -60,7 +62,6 @@ async function harness() {
   })
   await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
   const child = ctx.agents.get(run.childId)!
-  await ctx.plugin(TypertGatewayService)
   const bindings: RemoteAccessBinding[] = []
   ctx.remoteAccess.registerPolicy('test-guest', { bindings: () => bindings })
   const call = (method: 'prompt' | 'interruptByUser', principal: Principal = GUEST, image = false) => {

@@ -65,7 +65,7 @@ describe('source connections', () => {
     await first.publish(10)
     await second.publish(20)
     expect(values).toEqual(['total=2', 'total=5', 'text'])
-    expect(() => sum.connectText(text.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => sum.connectText(text.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
   })
 
   it('accepts a narrow output at a wider receiver without widening the writable output', async () => {
@@ -75,9 +75,9 @@ describe('source connections', () => {
     const input = test.own(new SourceInput<number | string>(async (value) => { values.push(value) }))
     const connection = input.connect(output)
     expectTypeOf(connection).toEqualTypeOf<AutomationConnection<number>>()
-    expectTypeOf<AutomationConnection<number>>().not.toMatchTypeOf<AutomationConnection<number | string>>()
-    expectTypeOf<SourceOutput<number>>().not.toMatchTypeOf<SourceOutput<number | string>>()
-    expectTypeOf<SourceOutput<number | string>>().not.toMatchTypeOf<Parameters<SourceInput<number>['connect']>[0]>()
+    expectTypeOf<AutomationConnection<number>>().not.toExtend<AutomationConnection<number | string>>()
+    expectTypeOf<SourceOutput<number>>().not.toExtend<SourceOutput<number | string>>()
+    expectTypeOf<SourceOutput<number | string>>().not.toExtend<Parameters<SourceInput<number>['connect']>[0]>()
     await connection.send(1)
     await output.emit(2)
     expect(values).toEqual([1, 2])
@@ -182,7 +182,7 @@ describe('source connections', () => {
       values.push(value)
     })).connect(source.output)
     let settled = false
-    const result = test.track(source.publish(1).catch((error) => { settled = true; return error }))
+    const result = test.track(source.publish(1).catch((error: unknown) => { settled = true; return error }))
     await entered.promise
     expect(settled).toBe(false)
     release.resolve(undefined)
@@ -249,7 +249,7 @@ describe('source connections', () => {
     const closing = first.dispose()
     await expect(connection.send(1)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await expect(first.publish(2)).rejects.toMatchObject({ code: 'SOURCE_CLOSED' })
-    expect(() => input.connect(first.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => input.connect(first.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
     await closing
     input.connect(second.output)
     await second.publish(3)
@@ -262,7 +262,7 @@ describe('source connections', () => {
     const input = test.own(new SourceInput<number>(async () => {}))
     const connection = input.connect(source.output)
     const closing = input.dispose()
-    expect(() => input.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => input.connect(source.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
     await expect(connection.send(1)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await closing
     const values: number[] = []
@@ -294,7 +294,7 @@ describe('source connections', () => {
     await expect(downstream.send(4)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await closing
     expect(values).toEqual([1, 2, 3])
-    expect(() => source.open()).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => source.open()).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
   })
 
   it('retains an owned input after cleanup rejects and preserves the cleanup promise', async () => {
@@ -381,7 +381,7 @@ describe('source connections', () => {
     await Promise.race([entered.promise, work])
     const closing = test.track(composite.dispose())
     expect(composite.dispose()).toBe(closing)
-    expect(() => composite.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => composite.connect(source.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
     await expect(connection.send(2)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     release.resolve(undefined)
     if (outcome === 'fail') await expect(work).rejects.toBe(failure)

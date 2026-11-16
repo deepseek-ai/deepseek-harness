@@ -4,10 +4,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
+import { z } from 'zod'
 import {
   LOADER_SMOKE_TEST_TIMEOUT_MS, resolveExampleLaunch, resolveExampleMode, runLoaderSmoke,
   type ExampleMode, type LoaderSmokeOptions,
 } from '@deepseek-ai/dsh-loader-smoke'
+
+const entriesSchema = z.array(z.looseObject({ name: z.string() }))
+
+it('source controller entries schema rejects missing or non-string names', () => {
+  const entry = { name: '@deepseek-ai/dsh-api-session-controller', id: 'controller' }
+  expect(entriesSchema.parse(JSON.parse(JSON.stringify([entry])))).toEqual([entry])
+  for (const json of ['[{}]', '[{"name":1}]']) {
+    expect(() => entriesSchema.parse(JSON.parse(json)), json).toThrow(z.ZodError)
+  }
+})
 
 const fixture = new URL('../fixtures/source-controller-lifecycle/', import.meta.url)
 const driver = fileURLToPath(new URL('driver.ts', fixture))
@@ -70,13 +81,15 @@ it.each(['src', 'lib'] as const)('selects %s launch and package resolution for t
   })
   expect(launch.command).toBe(process.execPath)
   expect(launch.args).toEqual(mode === 'src'
-    ? ['--import', expect.any(String), driver, ...options.binArgs!]
-    : [driver, ...options.binArgs!])
+    ? ['--import', expect.any(String), driver, ...options.binArgs]
+    : [driver, ...options.binArgs])
   expect(launch.env.TSX_TSCONFIG_PATH).toBe(mode === 'src' ? options.tsconfigPath : undefined)
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-source-controller-launch-'))
   try {
     await options.prepare?.(cwd)
-    const entries: { name: string }[] = JSON.parse(await readFile(join(cwd, 'cordis.yml'), 'utf8'))
+    const entries = entriesSchema.parse(
+      JSON.parse(await readFile(join(cwd, 'cordis.yml'), 'utf8')),
+    )
     expect(entries.map(entry => entry.name)).toContain('@deepseek-ai/dsh-api-session-controller')
     expect(entries.map(entry => entry.name)).toContain(scheduleProvider)
     for (const { name } of entries) {

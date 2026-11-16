@@ -1,5 +1,5 @@
 /** Source delivery shares task admission, durable acknowledgement, and disposal with Schedule management. */
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -75,6 +75,13 @@ function observer(receive: (value: AutomationCandidate) => Promise<void>): Sourc
   return input
 }
 
+function sentText(message: Parameters<HarnessAgent['followup']>[0]): string {
+  const first = message.content[0]
+  assert(first?.type === 'text')
+  expect(message.content).toEqual([{ type: 'text', text: first.text }])
+  return first.text
+}
+
 function rejected(code: string) {
   return { code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ code })] } }
 }
@@ -106,7 +113,7 @@ it('rejects task input acquisition while the constructed service awaits its doma
     await entered.promise
     expect(ctx!.schedule).toBeInstanceOf(ScheduleService)
     expect(ctx!.storageDomain.get(scheduleDomain.name)).toBeUndefined()
-    expect(() => ctx!.schedule.input(ID)).toThrowError(
+    expect(() => ctx!.schedule.input(ID)).toThrow(
       expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
     )
     release.resolve(undefined)
@@ -132,9 +139,9 @@ it('delivers one source independently to two tasks and detaches only the selecte
   const firstReceipt = taskTable(test.ctx).get(ID)!.lastDelivery!
   const secondTask = taskTable(test.ctx).get(secondId)!
   expect(firstReceipt.messageId).not.toBe(secondTask.lastDelivery!.messageId)
-  expect(test.agent.followup.mock.calls.map(([message]) => message.content)).toEqual([
-    [{ type: 'text', text: expect.stringContaining('schedule_id_json: "source-task"') }],
-    [{ type: 'text', text: expect.stringContaining('schedule_id_json: "second-source-task"') }],
+  expect(test.agent.followup.mock.calls.map(([message]) => sentText(message))).toEqual([
+    expect.stringContaining('schedule_id_json: "source-task"'),
+    expect.stringContaining('schedule_id_json: "second-source-task"'),
   ])
   await secondConnection.dispose()
   vi.setSystemTime(Date.now() + 60_000)
@@ -311,9 +318,7 @@ it('keeps the timed occurrence while source input wins several consecutive admis
         record, status: 'active',
         lastDelivery: { scheduledAt: new Date(Date.now()).toISOString(), deliveredAt: new Date(Date.now()).toISOString() },
       })
-      expect(test.agent.followup.mock.calls[floor]![0].content).toEqual([
-        { type: 'text', text: expect.stringContaining(`source_input_json: "source at floor ${floor}"`) },
-      ])
+      expect(sentText(test.agent.followup.mock.calls[floor]![0])).toContain(`source_input_json: "source at floor ${floor}"`)
     }
     await vi.advanceTimersByTimeAsync(59_999)
     expect(test.agent.followup).toHaveBeenCalledTimes(4)
@@ -323,9 +328,7 @@ it('keeps the timed occurrence while source input wins several consecutive admis
       record, status: 'ended',
       lastDelivery: { scheduledAt: record.scheduledAt, deliveredAt: '2026-09-16T00:04:00.000Z' },
     })
-    expect(test.agent.followup.mock.calls[4]![0].content).toEqual([
-      { type: 'text', text: expect.not.stringContaining('source_input_json:') },
-    ])
+    expect(sentText(test.agent.followup.mock.calls[4]![0])).not.toContain('source_input_json:')
   } finally {
     for (const timer of timers) clearTimeout(timer)
     await Promise.all(started)
@@ -554,7 +557,7 @@ it('joins repeated connection disposal and receiver-owner shutdown until the acc
   release.resolve(undefined)
   await Promise.all([work, first, repeated, closing])
   expect([firstDrained, repeatedDrained, ownerDrained]).toEqual([true, true, true])
-  expect(() => target!.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+  expect(() => target!.connect(source.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
   const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
   observer(observed).connect(source.output)
   await source.publish('source remains open')
@@ -577,9 +580,7 @@ it('sends directly to one task connection without broadcasting to other receiver
     messageId: test.agent.followup.mock.calls[0]![0].id,
   })
   expect(taskTable(test.ctx).get(secondId)?.lastDelivery).toBeUndefined()
-  expect(test.agent.followup.mock.calls[0]![0].content).toEqual([
-    { type: 'text', text: expect.stringContaining('source_input_json: "Build failed\\n\\"master\\" needs inspection"') },
-  ])
+  expect(sentText(test.agent.followup.mock.calls[0]![0])).toContain('source_input_json: "Build failed\\n\\"master\\" needs inspection"')
   await expect(test.connection.send({ text: 'too early' })).rejects.toMatchObject({ code: 'SOURCE_TASK_BUSY' })
   expect(test.agent.followup).toHaveBeenCalledOnce()
   vi.setSystemTime(Date.now() + 60_000)
@@ -592,7 +593,7 @@ it('sends directly to one task connection without broadcasting to other receiver
 it('preserves the closed source error when acquiring a task subscription', async () => {
   const test = await setup()
   await test.source.dispose()
-  expect(() => test.service.input(ID).connect(test.source.output)).toThrowError(
+  expect(() => test.service.input(ID).connect(test.source.output)).toThrow(
     expect.objectContaining({ code: 'SOURCE_CLOSED' }),
   )
   expect(test.agent.followup).not.toHaveBeenCalled()
@@ -631,13 +632,13 @@ it('automatically detaches and drains a connection owned by an unloading consume
     release.resolve(undefined)
     await work
     await closing
-    expect(() => scoped!.input(ID)).toThrowError(
+    expect(() => scoped!.input(ID)).toThrow(
       expect.objectContaining({ code: 'INACTIVE_EFFECT' }),
     )
     await expect(connection!.send({ text: 'after consumer unload' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await expect(secondConnection!.send({ text: 'other source after unload' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await second.publish('unsubscribed output')
-    expect(() => target!.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => target!.connect(source.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
     const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
     const observation = observer(observed).connect(source.output)
     await source.publish('after consumer unload')
@@ -659,8 +660,8 @@ it('keeps an old source connection bound to its stopped runtime after Schedule i
   await expect(test.connection.send({ text: INPUT })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
   await test.source.publish(INPUT)
   expect(test.agent.followup).not.toHaveBeenCalled()
-  expect(() => test.target.connect(test.source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
-  expect(() => test.service.input(ID).connect(test.source.output)).toThrowError(
+  expect(() => test.target.connect(test.source.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+  expect(() => test.service.input(ID).connect(test.source.output)).toThrow(
     expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
   )
   const replacementSource = new InputSource()
@@ -762,7 +763,7 @@ it.each([
     const agents = new Map<SessionId, HarnessAgent>()
     test.createSession.mockImplementation(async (request) => {
       await pause('create')
-      agents.set(request.sessionId!, agentFor(test.ctx, request.sessionId!))
+      agents.set(request.sessionId!, agentFor(test.ctx, request.sessionId))
       return { sessionId: request.sessionId! }
     })
     test.resolve.mockImplementation(async (id) => {

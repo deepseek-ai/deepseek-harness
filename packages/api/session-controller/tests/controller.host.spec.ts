@@ -9,7 +9,7 @@ import type TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
 import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { assert, describe, expect, it, onTestFinished, vi } from 'vitest'
 import SessionController from '../src/index.ts'
 import type { ApiSessionAgentController } from '../src/agent.ts'
 import { createSessionTestController, testSessionPersistence } from './test-remote.ts'
@@ -77,20 +77,15 @@ describe('SessionController facade', () => {
     }, abort.signal)[Symbol.asyncIterator]()
     onTestFinished(async () => { abort.abort(); await frames.return?.(undefined) })
     try {
-      await expect(frames.next()).resolves.toMatchObject({
-        value: {
-          type: 'snapshot',
-          assistantStream: {
-            revision: 3,
-            activeAttempt: {
-              attemptId, turn: 1, step: 1, nextIndex: 2,
-              stream: expect.arrayContaining([
-                expect.objectContaining({ type: 'text-chunks', index: 0, texts: ['Text during owner initialization.'] }),
-              ]),
-            },
-          },
-        },
+      const frame = await frames.next()
+      assert(!frame.done && frame.value.type === 'snapshot')
+      expect(frame.value.assistantStream).toMatchObject({
+        revision: 3,
+        activeAttempt: { attemptId, turn: 1, step: 1, nextIndex: 2 },
       })
+      expect(frame.value.assistantStream?.activeAttempt?.stream).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'text-chunks', index: 0, texts: ['Text during owner initialization.'] }),
+      ]))
     } finally {
       abort.abort()
       await frames.return?.(undefined)

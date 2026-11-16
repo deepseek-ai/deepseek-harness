@@ -727,8 +727,8 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     const retained = test.runtime.connect(clock.output)
     await test.runtime.dispose()
     await expect(retained.send(Date.now())).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
-    expect(() => test.runtime.connect(clock.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
-    expect(() => test.runtime.input(record.id)).toThrowError(expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }))
+    expect(() => test.runtime.connect(clock.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => test.runtime.input(record.id)).toThrow(expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }))
     clock.request()
     await vi.advanceTimersByTimeAsync(0)
     expect(receipts).toEqual([false, true, true, true])
@@ -863,12 +863,13 @@ describe('Schedule dispatch failures and concurrent changes', () => {
       await clock.dispose()
       expect(admission).toHaveBeenCalledTimes(2)
       expect(admission.mock.results[1]).toMatchObject({ type: 'throw' })
-      expect(reportFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-        code: 'SOURCE_DELIVERY_FAILED',
-        cause: expect.objectContaining({ errors: [expect.objectContaining({
-          message: expect.stringContaining('agent initiator scope is disposed'),
-        })] }),
-      }))
+      expect(reportFailure).toHaveBeenCalledOnce()
+      const [failureCall] = reportFailure.mock.calls
+      expect(failureCall).toHaveLength(1)
+      const failure = failureCall![0]
+      expect(failure).toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
+      expect(failure).toHaveProperty('cause.errors', [expect.objectContaining({})])
+      expect(failure).toHaveProperty('cause.errors.0.message', expect.stringContaining('agent initiator scope is disposed'))
       expect(transaction).toHaveBeenCalledTimes(1)
       expect(stop).toHaveBeenCalledTimes(1)
       expect(vi.getTimerCount()).toBe(0)

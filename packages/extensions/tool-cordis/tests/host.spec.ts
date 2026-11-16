@@ -32,19 +32,17 @@ describe('the cordis-inspect-providers host entry', () => {
     const connectionName = input?.declaration.match(/\bconnect:[^;]*=>\s*(\w+)\s*</)?.[1]
     expect(connectionName).toBeDefined()
     const result = queryServiceApi('schedule')
-    expect.soft(result).toMatchObject({
-      referencedTypes: expect.arrayContaining([expect.objectContaining({
-        name: connectionName,
-        declaration: expect.stringMatching(/\bsend\(value:[^)]*\):\s*Promise<void>;[\s\S]*\bdispose\(\):\s*Promise<void>;/),
-      })]),
-    })
+    const connectionDeclaration: unknown = expect.stringMatching(
+      /\bsend\(value:[^)]*\):\s*Promise<void>;[\s\S]*\bdispose\(\):\s*Promise<void>;/,
+    )
+    expect.soft(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
+      name: connectionName, declaration: connectionDeclaration,
+    })]))
+    const endpointDeclaration: unknown = expect.stringMatching(/\bdispose\(\):\s*Promise<void>;/)
     for (const name of ['SourceInput', 'SourceOutput']) {
-      expect.soft(result).toMatchObject({
-        referencedTypes: expect.arrayContaining([expect.objectContaining({
-          name,
-          declaration: expect.stringMatching(/\bdispose\(\):\s*Promise<void>;/),
-        })]),
-      })
+      expect.soft(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
+        name, declaration: endpointDeclaration,
+      })]))
     }
   })
 

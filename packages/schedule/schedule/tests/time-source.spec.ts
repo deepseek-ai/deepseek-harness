@@ -131,9 +131,10 @@ it('reports a failed receiver with its cause without arming a retry', async () =
   connect(source, receive)
   source.arm(START + 1)
   await vi.advanceTimersByTimeAsync(1)
-  expect(reportFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-    code: 'SOURCE_DELIVERY_FAILED', cause: expect.objectContaining({ errors: [failure] }),
-  }))
+  expect(reportFailure).toHaveBeenCalledOnce()
+  expect(reportFailure.mock.calls[0]).toHaveLength(1)
+  expect(reportFailure.mock.calls[0]![0]).toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
+  expect(reportFailure.mock.calls[0]![0]).toHaveProperty('cause.errors', [failure])
   expect(vi.getTimerCount()).toBe(0)
   await vi.advanceTimersByTimeAsync(86_400_000)
   expect(receive).toHaveBeenCalledOnce()

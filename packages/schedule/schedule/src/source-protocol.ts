@@ -80,7 +80,7 @@ export class SourceOutput<in out T> extends SourceEndpoint<T> {
   async emit(value: T): Promise<void> {
     this.assertOpen()
     const results = await Promise.allSettled([...this.connections].map(connection => connection.send(value)))
-    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+    const failures = results.flatMap((result): unknown[] => result.status === 'rejected' ? [result.reason] : [])
     if (failures.length > 0) {
       throw new SourceError('Some source receivers failed; other receivers may already have committed. Do not retry the entire output.',
         'SOURCE_DELIVERY_FAILED', { cause: new AggregateError(failures) })

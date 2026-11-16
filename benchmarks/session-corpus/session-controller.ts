@@ -2,6 +2,7 @@
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import SessionController, { type Config } from '@deepseek-ai/dsh-api-session-controller'
+import LlmRuntime from '@deepseek-ai/dsh-llm'
 
 class BenchmarkSessionController extends SessionController {
   initialize(): Promise<void> {
@@ -26,7 +27,26 @@ export async function createBenchmarkSessionController(ctx: Context, config: Con
       mediaTypes: ['image/png'],
     },
   } as never)
-  const controller = new BenchmarkSessionController(ctx, config, { canOpenPath: () => false })
-  await controller.initialize()
+  if (ctx.get('llm') === undefined) await ctx.plugin(LlmRuntime)
+  // These workers do not perform filesystem API operations or deliver Remote events.
+  if (ctx.get('fs') === undefined) {
+    const fs: Pick<Context['fs'], 'resolve'> = {
+      resolve: async () => { throw new Error('Session corpus benchmarks do not perform filesystem API operations') },
+    }
+    ctx.provide('fs', fs as Context['fs'])
+  }
+  if (ctx.get('typertGateway') === undefined) {
+    const gateway: Pick<Context['typertGateway'], 'getPendingRemoteEvents'> = { getPendingRemoteEvents: () => [] }
+    ctx.provide('typertGateway', gateway as Context['typertGateway'])
+  }
+  let controller: BenchmarkSessionController | undefined
+  await ctx.plugin({
+    inject: SessionController.inject,
+    apply: async (owner: Context) => {
+      controller = new BenchmarkSessionController(owner, config, { canOpenPath: () => false })
+      await controller.initialize()
+    },
+  })
+  if (controller === undefined) throw new Error('Session corpus controller dependencies did not activate')
   return controller
 }

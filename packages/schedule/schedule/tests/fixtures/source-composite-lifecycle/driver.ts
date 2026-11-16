@@ -28,7 +28,7 @@ try {
   const sessions = ctx.get('sessions')
   const persistence = ctx.get('sessionPersistence')
   assert.ok(world && schedule && sessions && persistence)
-  release = () => world.release.resolve(undefined)
+  release = () => { world.release.resolve(undefined) }
   world.task = await schedule.create({
     title: 'Composite lifecycle',
     prompt: 'Read the composite observation.',
@@ -41,9 +41,9 @@ try {
   assert.ok(owner && provider?.fiber && worldOwner?.fiber)
   await owner.update({ disabled: false })
   assert.ok(owner.fiber)
-  await owner.fiber
+  await owner.fiber.await()
   assert.ok(world.receiver)
-  await world.receiver
+  await world.receiver.await()
 
   const counts = async () => {
     await world.agent.whenIdle()
