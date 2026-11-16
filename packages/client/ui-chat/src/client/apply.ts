@@ -245,6 +245,7 @@ export function apply(ctx: Context): void {
         'conversation.chat.flow': { kind: 'single', scope: 'session', inject: CHAT_FLOW_INJECT },
         'conversation.chat.text-interaction': { kind: 'keyed', scope: 'session' },
         'conversation.chat.markdown.fence': { kind: 'hoc', scope: 'session' },
+        'conversation.chat.aside': { kind: 'single', scope: 'session' },
       },
       store: chatStore,
       inject: (sessionId: SessionId): ChatViewInjected => {

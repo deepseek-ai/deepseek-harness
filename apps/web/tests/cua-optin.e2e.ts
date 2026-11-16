@@ -112,7 +112,8 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     expect(await card.textContent()).not.toContain('将 PTC 模式改为可持久化')
     expect(await card.textContent()).not.toContain('请切换到 PTC 模式')
-    expect(await card.textContent()).toContain('通过 npm 安装 DSH 的 Windows 用户需要单独配置 helper')
+    expect(await card.textContent()).toContain('允许 agent 直接操作电脑上的应用程序。')
+    expect(await card.textContent()).not.toContain('helper')
     expect(await card.textContent()).not.toContain('Swift')
     const description = await card.getByRole('button', { name: '查看 Computer Use', exact: true }).evaluate((button) => {
       const element = document.getElementById(button.getAttribute('aria-describedby')!)!
@@ -175,7 +176,12 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
     expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
-    await plugins.locator('[data-detail-document]').getByText('helperPath', { exact: true }).waitFor()
+    const detail = plugins.locator('[data-detail-document]')
+    await detail.getByRole('img', { name: '将会议要点填入备忘录的指令和输入结果' }).waitFor()
+    const guidance = plugins.locator('[data-cua-guidance]')
+    await guidance.getByText(/请谨慎在生产环境中使用/).waitFor()
+    expect(await guidance.textContent()).not.toContain('helperPath')
+    expect(await detail.textContent()).not.toContain('PTC')
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
     if (!codingTools) {

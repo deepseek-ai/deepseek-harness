@@ -357,6 +357,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('test', 'test'),
         pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
         pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+        pnpmScript('stale-pull-requests', 'test:stale-pull-requests', { label: 'Stale pull-request reminders' }),
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         expectedOutputGate(),
@@ -401,6 +402,7 @@ function ciSharedStaticGates(): Gate[] {
     ...sharedHygieneGates(),
     pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
     pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+    pnpmScript('stale-pull-requests', 'test:stale-pull-requests', { label: 'Stale pull-request reminders' }),
   ]
 }
 
@@ -425,6 +427,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
     pnpmScript('empty-catch', 'verify-empty-catch', { label: 'no new silent catches' }),
+    pnpmScript('cordis-root', 'verify-cordis-root', { label: 'no new Cordis root reads' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
     pnpmScript('plugin-entry-exports', 'verify-plugin-entry-exports', { label: 'plugin entry exports' }),
   ]

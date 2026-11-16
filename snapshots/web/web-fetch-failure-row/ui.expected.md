@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Use the web_fetch tool exactly
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

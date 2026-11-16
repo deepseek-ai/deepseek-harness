@@ -11,7 +11,7 @@ Loading this skill does not authorize changes. Write bundle files, run mutating 
 
 ## Find facts in this order
 
-1. Runtime inspection, when `cordis_inspect_list` and `cordis_inspect_query` are among your tools: exact Service methods and Event modes, a mounted plugin's Config schema and `packageDir`, the Tools this Agent can call, and live Client Slots and theme tokens.
+1. Runtime inspection, when `cordis_inspect` is among your tools: exact Service methods and Event modes, a mounted plugin's Config schema and `packageDir`, the Tools this Agent can call, and live Client Slots and theme tokens.
 2. The installed documentation and package sources, located as `references/locate-docs.md` describes.
 3. When an answer depends on a live API that you can neither inspect nor read, state what remains unverified. Do not change a preset or the profile to gain tools.
 

@@ -68,7 +68,7 @@ const TIMER_REDIRECT
 const NODE_API_REDIRECTS: Record<string, string> = {
   require:
     'Node modules are unavailable. Use the cordis services on ctx instead — e.g. inject: [\'fs\'] for files, '
-    + '[\'web\'] for HTTP, [\'bash\'] for processes; query Service.listService with cordis_inspect_query first.',
+    + '[\'web\'] for HTTP, [\'bash\'] for processes; query Service.listService with cordis_inspect first.',
   setTimeout: TIMER_REDIRECT,
   setInterval: TIMER_REDIRECT,
   setImmediate: TIMER_REDIRECT,
@@ -76,7 +76,7 @@ const NODE_API_REDIRECTS: Record<string, string> = {
   clearInterval: TIMER_REDIRECT,
   fetch:
     'Network access goes through the cordis web service: declare inject: [\'web\'] and call ctx.web '
-    + '(query Host Service.listService with cordis_inspect_query for its methods).',
+    + '(query Host Service.listService with cordis_inspect for its methods).',
 }
 
 /** Build the trap functions for {@link NODE_API_REDIRECTS}: calling one throws the redirect. */

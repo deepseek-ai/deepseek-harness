@@ -390,7 +390,7 @@ export type ChatFlowSlotProps =
 /** Full Chat view props. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
-  & PropsRenderSlots<'conversation.chat.flow' | 'conversation.chat.text-interaction' | 'conversation.chat.markdown.fence'>
+  & PropsRenderSlots<'conversation.chat.flow' | 'conversation.chat.text-interaction' | 'conversation.chat.markdown.fence' | 'conversation.chat.aside'>
   & PropsStore<ChatStore>
   & InjectFace<ChatViewInjected>
   & PropsLocale<'chat'>
@@ -431,6 +431,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.chat.text-interaction': { kind: 'keyed'; scope: 'session'; owner: TextInteractionSurface }
     /** Language-keyed layers around one Markdown fence in the Chat flow; the content is the plain code block. */
     'conversation.chat.markdown.fence': { kind: 'hoc'; scope: 'session'; owner: MarkdownDelegateFenceInfo }
+    /**
+     * One Session-level occupant beside the transcript, such as a summary
+     * panel. Every Chat View occurrence renders it in a zero-height layer at
+     * the top of the Chat frame, which stays in place while the transcript
+     * scrolls and inherits the shared scrollport's composer and viewport
+     * heights. The layer passes pointer events through; the occupant
+     * positions itself in it, enables its own pointer events, and keeps
+     * within the end gutter to stay clear of the transcript column. The
+     * layer publishes that gutter, the inline space between the transcript
+     * column and the frame's end edge, as the `--dsh-chat-aside-gutter`
+     * custom property; its percentage resolves in the inline sizes of an
+     * element whose containing block is the layer.
+     */
+    'conversation.chat.aside': { kind: 'single'; scope: 'session' }
 
     /** Ordered Chat rows and local echoes with viewport-bound visibility hooks. */
     'conversation.chat.flow': {

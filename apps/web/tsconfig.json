@@ -25,6 +25,7 @@
   "exclude": [
     "tests/home-whale.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
+    "tests/session-panel-layout.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
     "tests/deepseek-chat-import.e2e.ts",

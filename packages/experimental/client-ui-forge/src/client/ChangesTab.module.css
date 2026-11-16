@@ -734,8 +734,9 @@
 
 /* Collapsed unchanged lines; the row expands them. */
 /* Collapsed unchanged lines, a collapsed large file, and a file whose lines cannot be drawn share one strip;
-   only the first two open on a click. */
+   only the first two open on a click. Unchanged lines over one expansion step name their count beside step buttons. */
 .gap,
+.gapSteps,
 .fileNote {
   display: flex;
   align-items: center;
@@ -766,6 +767,41 @@
 }
 
 .gap:disabled {
+  cursor: progress;
+}
+
+.gapSteps {
+  gap: 2px;
+  padding-inline-start: 7px;
+}
+
+.gapSteps > span {
+  margin-inline-start: 4px;
+}
+
+.gapStep {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .gapStep:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.gapStep:disabled {
   cursor: progress;
 }
 
@@ -902,7 +938,8 @@
 .fileToggle:focus-visible,
 .localFile:focus-visible,
 .select:focus-visible,
-.gap:focus-visible {
+.gap:focus-visible,
+.gapStep:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }

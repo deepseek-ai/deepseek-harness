@@ -18,7 +18,7 @@ import UserQuestionService, {
   UserQuestionError, type AskUserQuestionAnswer, type AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import PlanModeController, { EXIT_PLAN_MODE, planProjectionDefinition, resolveConfig } from '../src/index.ts'
 import type { PlanModeConfig } from '../src/index.ts'
@@ -954,7 +954,8 @@ describe('exit_plan_mode', () => {
       async run(request: PtcRunRequest): Promise<PtcRunResult> {
         const exit = request.bindings[0]?.functions[EXIT_PLAN_MODE]
         if (exit === undefined) throw new Error('missing exit_plan_mode binding')
-        return { output: [], value: await exit({ plan }) }
+        const resolved = await exit({ plan })
+        return { output: [], value: resolved instanceof PtcInspectableValue ? resolved.value : resolved }
       }
     }
     const ctx = new Context()
