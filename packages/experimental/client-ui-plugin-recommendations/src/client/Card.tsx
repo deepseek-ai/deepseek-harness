@@ -62,12 +62,13 @@ function statusKey(phase: string, data: CardData): RecommendationKey | undefined
 /**
  * Display one plugin card: its current catalog title and description, the user's choice and its outcome.
  * Until the plugin's first catalog lookup returns, a placeholder line and the disabled actions hold the final layout.
- * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable.
+ * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable. A card that names no plugin shows
+ * the frame's fallback.
  * @param props - card, state, actions and plugin-lifetime services.
  * @returns the card body.
  */
 export function PluginCardBody({
-  proposal, decision, sessionId, summary, act, catalog, describe, openDetails, resolveText, t,
+  proposal, decision, sessionId, fallback, act, catalog, describe, openDetails, resolveText, t,
 }: PluginCardProps) {
   const details = detailsSchema.safeParse(proposal.details)
   const name = details.success ? details.data.name : undefined
@@ -96,7 +97,7 @@ export function PluginCardBody({
     )
     return () => { current = false }
   }, [catalog, describe, sessionId, proposal.cardId, name, phase, attempt])
-  if (name === undefined) return <div className={css.body}>{summary}</div>
+  if (name === undefined) return fallback
   // Remembered text shows at once; this card's own refusal or lost reply still decides what it offers.
   const current = lookup === null || lookup?.status === 'refused' ? lookup : cached ?? lookup
   const loading = current === undefined

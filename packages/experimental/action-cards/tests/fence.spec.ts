@@ -15,12 +15,21 @@ it('removes the opening indentation from content and runs an unclosed fence to t
   expect(actionCardFences('````action-card\n{"a":1}\n```\n````')).toEqual(['{"a":1}\n```'])
 })
 
-it('skips other languages, fences nested in another fence, indented code and backtick info strings', () => {
+it('reads fences in list items, closing them by the item content column so a later card still counts', () => {
+  expect(actionCardFences('- ```json\n  {"a":1}\n  ```\n\nText.\n\n```action-card\n{"b":2}\n```')).toEqual(['{"b":2}'])
+  expect(actionCardFences('10. ```action-card\n    {"c":3}\n       ```\nafter')).toEqual(['{"c":3}'])
+  expect(actionCardFences('- ```action-card\n  {"d":4}\n      ```\n  ```')).toEqual(['{"d":4}\n    ```'])
+  expect(actionCardFences('1. Step\n   ```action-card\n   {"e":5}\n   ```')).toEqual(['{"e":5}'])
+})
+
+it('skips other languages, fences nested in another fence or a block quote, deeper indentation and backtick info strings', () => {
   expect(actionCardFences('No card here.')).toEqual([])
   expect(actionCardFences('action-card mentioned in prose only')).toEqual([])
   expect(actionCardFences('```json\n{"action-card":true}\n```')).toEqual([])
   expect(actionCardFences('```action-cards\n{}\n```')).toEqual([])
   expect(actionCardFences('````md\n```action-card\n{"e":5}\n```\n````')).toEqual([])
   expect(actionCardFences('    ```action-card\n    {"f":6}\n    ```')).toEqual([])
+  expect(actionCardFences('- Item\n  - Nested\n    ```action-card\n    {"f":6}\n    ```')).toEqual([])
+  expect(actionCardFences('> ```action-card\n> {"h":8}\n> ```')).toEqual([])
   expect(actionCardFences('```action-card `x`\n{"g":7}\n```')).toEqual([])
 })

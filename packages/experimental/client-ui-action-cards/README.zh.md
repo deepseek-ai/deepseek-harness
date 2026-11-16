@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-用户在已完成的回答下方看到一张可选操作卡片：标题、过长时会折叠的说明，以及提议该卡片的实验所提供的控件。回答里提供卡片的 `action-card` 代码块从不显示。如果实验在当前浏览器中没有提供控件，卡片只提供“暂不需要”。展示、展开和折叠卡片都不会发起模型请求。
+用户在已完成的回答下方看到一张可选操作卡片：标题、过长时会折叠的说明，以及提议该卡片的实验所提供的控件。回答里提供卡片的 `action-card` 代码块从不显示。如果实验在当前浏览器中没有提供控件，或者控件读不了卡片的字段，卡片只提供“暂不需要”。展示、展开和折叠卡片都不会发起模型请求。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 注册卡片正文
 
-种类的浏览器插件注入 `actionCards`，并在自己的 `ctx.effect` 中注册正文：`ctx.actionCards.register({ action, locale, Body })` 返回注销函数。框架为该动作的卡片渲染 `Body`，并传入：卡片、已记录或推导出的决定、会话 id、框架渲染的标题与折叠说明 `summary`、框架的折叠组件 `Folded`、绑定到该卡片的 `act(verb, payload?)`，以及正文自己语言命名空间的翻译函数 `t`。正文把 `summary` 放进自己的布局，并负责自己的标题栏、控件、状态和底部操作。为同一动作注册第二个正文属于注册错误。
+种类的浏览器插件注入 `actionCards`，并在自己的 `ctx.effect` 中注册正文：`ctx.actionCards.register({ action, locale, Body })` 返回注销函数。框架为该动作的卡片渲染 `Body`，并传入：卡片、已记录或推导出的决定、会话 id、框架渲染的标题与折叠说明 `summary`、只提供“暂不需要”的后备内容 `fallback`、框架的折叠组件 `Folded`、绑定到该卡片的 `act(verb, payload?)`，以及正文自己语言命名空间的翻译函数 `t`。正文把 `summary` 放进自己的布局，卡片的 `details` 未通过自己的校验时改为渲染 `fallback`，并负责自己的标题栏、控件、状态和底部操作。为同一动作注册第二个正文属于注册错误。
 
 -----
 
@@ -46,9 +46,9 @@ kind: "package-reference"
 | 源码 | 内容 |
 |---|---|
 | [`src/client/mount.ts`](src/client/mount.ts) | 注册表、Remote、词典与插槽条目 |
-| [`src/client/Card.tsx`](src/client/Card.tsx) | 轮次尾部、框架、折叠、兜底正文与代码块显示层 |
+| [`src/client/Card.tsx`](src/client/Card.tsx) | 轮次尾部、框架、折叠、后备正文与代码块显示层 |
 | [`src/client/registry.ts`](src/client/registry.ts) | 正文注册表与正文属性 |
-| [`tests/`](tests/) | 位置、框架、兜底、代码块与注册测试 |
+| [`tests/`](tests/) | 位置、框架、后备正文、代码块与注册测试 |
 
 </details>
 

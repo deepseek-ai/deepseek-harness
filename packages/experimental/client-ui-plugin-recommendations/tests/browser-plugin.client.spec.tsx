@@ -38,7 +38,7 @@ it('registers the plugin body, its copy and Remote for the plugin lifetime and s
   const proposal = { cardId: brandString<ActionCardId>('card'), turn: 1, action: 'enable_official_plugin', title: 'Search', brief: 'Find old sessions.',
     details: { name: 'official-search' } }
   const card = () => <descriptor.Body proposal={proposal} decision={undefined} sessionId={brandString<SessionId>('session-one')} summary={null}
-    Folded={FoldedText} act={vi.fn()} t={locale.bind('pluginRecommendations')} />
+    fallback={null} Folded={FoldedText} act={vi.fn()} t={locale.bind('pluginRecommendations')} />
   render(card())
   await act(async () => {})
   expect(describe).toHaveBeenCalledWith('session-one', 'card')

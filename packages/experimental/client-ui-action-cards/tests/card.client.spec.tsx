@@ -78,6 +78,16 @@ it('renders a registered body with the frame summary, the fold, its own translat
   expect(value.act).toHaveBeenCalledWith(cardId, 'start', { value: 'x' })
 })
 
+it('hands a registered body the fallback, which offers only Not now for a card the body cannot read', async () => {
+  const value = props(new Map([['test_action', { locale: 'testCard', render: frame => frame.fallback }]]))
+  render(<ActionCard {...value} />)
+  expect(screen.getByRole('region', { name: 'Counter' }).textContent).toContain('Keep my task count visible.')
+  const dismiss = screen.getByRole('button', { name: en.dismiss })
+  fireEvent.click(dismiss)
+  expect(value.act).toHaveBeenCalledWith(cardId, 'dismiss', undefined)
+  await vi.waitFor(() => { expect(dismiss.hasAttribute('disabled')).toBe(false) })
+})
+
 it('offers only Not now for a card whose kind registered no body, and reports refusals and lost replies', async () => {
   const value = props(new Map(), undefined, true)
   const pending = Promise.withResolvers<ActionCardResult | undefined>()

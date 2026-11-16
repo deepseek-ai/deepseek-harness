@@ -116,10 +116,11 @@ export function ActionCard({ proposal, decision, sessionId, act, bind, useBodies
     <strong className={css.title}>{proposal.title}</strong>
     <FoldedText text={proposal.brief} expandLabel={t('expandBrief')} collapseLabel={t('collapseBrief')} />
   </>
+  const fallback = <FallbackBody summary={summary} decision={decision} act={send} t={t} />
   // The frame re-renders on a locale change and hands the body a new summary, so the body re-renders with it.
   const content = body === undefined
-    ? <FallbackBody summary={summary} decision={decision} act={send} t={t} />
-    : body.render({ proposal, decision, sessionId, summary, Folded: FoldedText, act: send }, bind(body.locale))
+    ? fallback
+    : body.render({ proposal, decision, sessionId, summary, fallback, Folded: FoldedText, act: send }, bind(body.locale))
   return <section className={css.card} aria-label={proposal.title} data-action-card={proposal.cardId} data-action={proposal.action}>
     {content}
   </section>
@@ -128,7 +129,7 @@ export function ActionCard({ proposal, decision, sessionId, act, bind, useBodies
 /** Phases the fallback can name; other kind phases leave only the summary. */
 const NAMED_PHASES: Readonly<Record<string, ActionCardKey>> = { dismissed: 'dismissed', replaced: 'replaced' }
 
-/** Title, brief and Not now for a card whose kind registered no body in this browser. */
+/** Title, brief and Not now for a card whose kind registered no body in this browser or whose body rejects its `details`. */
 function FallbackBody({ summary, decision, act, t }: {
   summary: ReactNode
   decision: ActionCardDecision | undefined

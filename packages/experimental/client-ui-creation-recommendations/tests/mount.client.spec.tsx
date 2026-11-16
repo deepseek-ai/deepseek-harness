@@ -30,7 +30,7 @@ it('registers the page body and its copy for the plugin lifetime', async () => {
   expect(locale.bind('creationRecommendations')('heading')).toBe('Personalized pages')
   const t = locale.bind('creationRecommendations')
   render(<descriptor.Body proposal={{ cardId: brandString<ActionCardId>('card'), turn: 1, action: 'create_personalized_page', title: 'Counter', brief: 'Keep count.',
-    details: { slot: 'page' } }} decision={undefined} sessionId={brandString<SessionId>('session')} summary={null} Folded={FoldedText} act={vi.fn()} t={t} />)
+    details: { slot: 'page' } }} decision={undefined} sessionId={brandString<SessionId>('session')} summary={null} fallback={null} Folded={FoldedText} act={vi.fn()} t={t} />)
   expect(screen.getByRole('note').textContent).toContain(en.creationCost)
   await fiber.dispose()
   expect(unregister).toHaveBeenCalledOnce()

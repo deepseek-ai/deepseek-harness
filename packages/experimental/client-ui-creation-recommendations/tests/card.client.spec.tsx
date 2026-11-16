@@ -19,8 +19,8 @@ type Act = (verb: string, payload?: ActionCardFields) => Promise<ActionCardResul
 function props(decision?: { phase: string; data?: ActionCardFields }, chinese = true, details: ActionCardFields = { slot: 'sidebar-right' }): PageCardProps & { act: ReturnType<typeof vi.fn<Act>> } {
   const proposal = { cardId, turn: 1, action: ACTION, title: 'Counter', brief: 'Keep my task count visible.', details }
   return { proposal, decision: decision === undefined ? undefined : { cardId, action: ACTION, ...decision },
-    sessionId: brandString<SessionId>('session-1'), summary: <><strong>{proposal.title}</strong><p>{proposal.brief}</p></>, Folded: FoldedText,
-    act: vi.fn<Act>(async () => ({ status: 'accepted' })), infoDismissed: createSnapshotStore(true),
+    sessionId: brandString<SessionId>('session-1'), summary: <><strong>{proposal.title}</strong><p>{proposal.brief}</p></>,
+    fallback: <p>frame fallback</p>, Folded: FoldedText, act: vi.fn<Act>(async () => ({ status: 'accepted' })), infoDismissed: createSnapshotStore(true),
     t: makeTranslate(chinese ? zh : en) }
 }
 
@@ -255,9 +255,10 @@ it('shows supplied initial content as folded data below the plan and omits it ot
   expect(screen.getByRole('button', { name: '收起内容' }).getAttribute('aria-expanded')).toBe('true')
 })
 
-it('falls back to the summary for invalid fields and ignores unknown phases and invalid data', () => {
+it('shows only the frame fallback for invalid fields and ignores unknown phases and invalid data', () => {
   const invalid = render(<PageCardBody {...props(undefined, true, { slot: 'elsewhere' })} />)
-  expect(screen.getByText('Counter')).toBeTruthy()
+  expect(screen.getByText('frame fallback')).toBeTruthy()
+  expect(screen.queryByText('Counter')).toBeNull()
   expect(screen.queryByRole('button')).toBeNull()
   invalid.unmount()
   render(<PageCardBody {...props({ phase: 'archived', data: { slot: 'elsewhere' } }, false)} />)

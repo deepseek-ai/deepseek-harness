@@ -30,8 +30,8 @@ function catalog() {
 function props(decision?: { phase: string; data?: ActionCardFields }, details: RecommendationDetails = available, store = catalog()) {
   return {
     proposal, decision: decision === undefined ? undefined : { cardId, action: ACTION, ...decision },
-    sessionId: brandString<SessionId>('session-1'), summary: <strong>{proposal.title}</strong>, Folded: FoldedText,
-    act: vi.fn<Act>(async () => ({ status: 'settled', decision: { cardId, action: ACTION, phase: 'enabled' } })),
+    sessionId: brandString<SessionId>('session-1'), summary: <strong>{proposal.title}</strong>, fallback: <p>frame fallback</p>,
+    Folded: FoldedText, act: vi.fn<Act>(async () => ({ status: 'settled', decision: { cardId, action: ACTION, phase: 'enabled' } })),
     catalog: store, describe: vi.fn<Describe>(async () => details), openDetails: vi.fn<(name: string) => void>(),
     resolveText: (text: LocalizedText) => typeof text === 'string' ? text : text.zh ?? text.en,
     t: makeTranslate(zh),
@@ -213,10 +213,11 @@ it('renders a remembered plugin at once on a later card while refusals and lost 
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
 })
 
-it('renders only the frame summary when the card names no plugin', () => {
+it('shows only the frame fallback when the card names no plugin', () => {
   const value = { ...props(), proposal: { ...proposal, details: {} } }
   render(<PluginCardBody {...value} />)
-  expect(screen.getByText('搜索旧会话')).toBeTruthy()
+  expect(screen.getByText('frame fallback')).toBeTruthy()
+  expect(screen.queryByText('搜索旧会话')).toBeNull()
   expect(screen.queryByRole('button')).toBeNull()
   expect(value.describe).not.toHaveBeenCalled()
 })

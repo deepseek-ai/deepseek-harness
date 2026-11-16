@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. The answer's `action-card` block that offers the card is never shown. A card whose experiment provides no controls in this browser offers only Not now. Showing, expanding and folding cards make no model request.
+Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. The answer's `action-card` block that offers the card is never shown. A card whose experiment provides no controls in this browser, or whose fields those controls cannot read, offers only Not now. Showing, expanding and folding cards make no model request.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Enable the [Personalized recommendations](../personalized-recommendations/README
 
 ### Register a card body
 
-A kind's browser plugin injects `actionCards` and registers its body inside its own `ctx.effect`: `ctx.actionCards.register({ action, locale, Body })` returns the disposer. The frame renders `Body` for cards of that action with the card, its recorded or derived decision, the Session id, the frame's title and folded brief as `summary`, the frame's fold component as `Folded`, an `act(verb, payload?)` bound to the card, and a translator `t` for the body's own locale namespace. The body places `summary` in its own layout and owns its header, controls, status and footer. A second body for the same action is a registration error.
+A kind's browser plugin injects `actionCards` and registers its body inside its own `ctx.effect`: `ctx.actionCards.register({ action, locale, Body })` returns the disposer. The frame renders `Body` for cards of that action with the card, its recorded or derived decision, the Session id, the frame's title and folded brief as `summary`, the frame's dismiss-only content as `fallback`, the frame's fold component as `Folded`, an `act(verb, payload?)` bound to the card, and a translator `t` for the body's own locale namespace. The body places `summary` in its own layout, renders `fallback` instead when its schema rejects the card's `details`, and owns its header, controls, status and footer. A second body for the same action is a registration error.
 
 -----
 
