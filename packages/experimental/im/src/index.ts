@@ -35,7 +35,6 @@ import { applyTools } from './tools.ts'
 export type * from './api.ts'
 export { ImError } from './error.ts'
 export type { ImMediaFileItem, ImMediaItem, ImMediaKind, ImMediaRef } from './media.ts'
-export type { ImToolName } from './tools.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

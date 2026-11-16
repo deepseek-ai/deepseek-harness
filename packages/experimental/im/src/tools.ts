@@ -43,8 +43,6 @@ import { grantChain, messageInThreads, operationId } from './send.ts'
 export const IM_TOOLS = [
   'im_read', 'im_history', 'im_members', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
 ] as const
-/** One registered IM tool name. */
-export type ImToolName = typeof IM_TOOLS[number]
 
 /** What the tools need from the service. */
 export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members'> {
