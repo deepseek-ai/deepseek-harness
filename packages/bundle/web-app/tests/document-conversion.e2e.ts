@@ -7,22 +7,27 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
 import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import { OfficeSourceKey, type OfficeToPdfRequest } from '@deepseek-ai/dsh-office-to-pdf'
-import * as LibreOfficeProvider from '@deepseek-ai/dsh-office-to-pdf'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { OfficeSourceKey, OfficeKitRequest } from '@deepseek-ai/dsh-office-kit/types'
+import * as LibreOfficeProvider from '@deepseek-ai/dsh-office-kit'
 import { expect, it, onTestFinished } from 'vitest'
 
 it('loads one shared conversion row and retains caller-owned PDFs after disposal', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-conversion-loader-'))
+  const outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-conversion-outputs-'))
   const ctx = new Context()
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() }
-    finally { await rm(directory, { recursive: true, force: true }) }
+    finally {
+      await rm(directory, { recursive: true, force: true })
+      await rm(outputDirectory, { recursive: true, force: true })
+    }
   })
   const rows = loadOverlayPatches('conversion-test', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
     .flatMap(patch => patch.insert ?? [])
-    .filter(row => row.name === '@deepseek-ai/dsh-office-to-pdf')
-  expect(rows.map(row => row.id)).toEqual(['office-to-pdf'])
-  const configured = applyEntryPatches(rows, [{ id: 'office-to-pdf', config: { maxConcurrentConversions: 1 } }],
+    .filter(row => row.name === '@deepseek-ai/dsh-office-kit')
+  expect(rows.map(row => row.id)).toEqual(['office-kit'])
+  const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1, outputDirectory } }],
     (message) => { throw new Error(message) })
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(configured))
@@ -33,21 +38,21 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
   ctx.loader.internal = {
     version: 'v2',
     async import(specifier: string) {
-      if (specifier !== '@deepseek-ai/dsh-office-to-pdf') throw new Error(`Unexpected plugin: ${specifier}`)
+      if (specifier !== '@deepseek-ai/dsh-office-kit') throw new Error(`Unexpected plugin: ${specifier}`)
       return LibreOfficeProvider
     },
   } as unknown as NonNullable<typeof ctx.loader.internal>
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
   await ctx.loader.await()
-  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'office-to-pdf')!
+  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'office-kit')!
   await entry.fiber!.await()
   expect(ctx.get('workspaceFiles')).toBeUndefined()
   expect(ctx.get('skills')).toBeUndefined()
   const bytes = await readFile(new URL('./fixtures/document-conversion.docx', import.meta.url))
   let reads = 0
-  const request = (key: string): OfficeToPdfRequest => ({
+  const request = (key: string): OfficeKitRequest => ({
     extension: 'docx', priority: 'foreground',
-    source: { key: OfficeSourceKey(key), version: 'fixture', bytes: bytes.length,
+    source: { key: brandString<OfficeSourceKey>(key), version: 'fixture', bytes: bytes.length,
       async read(signal, maxBytes) {
         signal.throwIfAborted()
         expect(bytes.length).toBeLessThanOrEqual(maxBytes)
@@ -56,7 +61,8 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
       },
     },
   })
-  const provider = ctx.officeToPdf
+  const provider = ctx.officeKit
+  expect(provider.outputDirectory).toBe(outputDirectory)
   const [first, second] = await Promise.all([provider.convert(request('first')), provider.convert(request('second'))])
   expect(reads).toBe(2)
   expect(Buffer.from(first.pdf).subarray(0, 5).toString()).toBe('%PDF-')

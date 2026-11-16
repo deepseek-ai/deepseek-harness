@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import type { ResolvedSubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import { expect, it } from 'vitest'
@@ -25,14 +26,14 @@ async function setup() {
       start: async (request) => {
         calls.push({ provider: name, request })
         return {
-          id: SessionId(randomUUID()),
+          id: brandString<SessionId>(randomUUID()),
           result: Promise.resolve({ output: [{ type: 'text' as const, text: 'child result' }], stopReason: 'completed' as const }),
           dispose: () => Promise.resolve(),
         }
       },
     })
   }
-  const parent = await harness.create(SessionId(randomUUID()), {}, { cwd: process.cwd() })
+  const parent = await harness.create(brandString<SessionId>(randomUUID()), {}, { cwd: process.cwd() })
   return { ctx, parent, calls }
 }
 
@@ -44,19 +45,21 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
   expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
-  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'prompt', 'runtime'])
+  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
-  for (const runtime of ['codex', 'claude', 'future']) {
+  for (const [runtime, name, expected] of [['codex', undefined, 'agent-1'], ['claude', 'reviewer', 'reviewer'], ['future', undefined, 'agent-2']] as const) {
     const result = await executeToolFixture(ctx, {
       agent: parent, name: 'subagent_oar', signal: test.signal,
-      callId: ToolCallId(randomUUID()),
-      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task' },
+      callId: brandString<ToolCallId>(randomUUID()),
+      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task', ...name === undefined ? {} : { name } },
     })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
-    expect(result.content).toHaveLength(1)
-    const content = result.content[0]
-    expect(content?.type).toBe('text')
-    if (content?.type === 'text') expect(content.text).toMatch(/^started subagent /u)
+    expect(result.content).toEqual([{ type: 'text', text: `started subagent ${expected}` }])
+    if (!result.isError) {
+      expect(result.value).toEqual({ kind: 'activation', name: expected })
+      expect(ctx.tools.get('subagent_oar')?.output.presentationMeta?.({}, result.value))
+        .toEqual({ kind: 'activation', name: expected })
+    }
   }
   expect(calls.map(call => call.provider)).toEqual(['codex-provider', 'claude-provider', 'future-provider'])
   expect(calls[0]?.request.prompt).toEqual([{ type: 'text', text: 'independent task' }])
@@ -75,7 +78,7 @@ it('rejects unconfigured runtime names before starting any child', async (test) 
   await ctx.plugin(externalTool, { providers: { codex: 'codex-provider' } })
   const result = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', signal: test.signal,
-    callId: ToolCallId(randomUUID()),
+    callId: brandString<ToolCallId>(randomUUID()),
     arguments: { runtime: 'unconfigured', description: 'task', prompt: 'task' },
   })
   expect(result.isError).toBe(true)
@@ -88,10 +91,11 @@ it('fails visibly when the selected provider disappears', async (test) => {
   await ctx.plugin(externalTool, { providers: { missing: 'missing-provider' } })
   const result = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', signal: test.signal,
-    callId: ToolCallId(randomUUID()),
+    callId: brandString<ToolCallId>(randomUUID()),
     arguments: { runtime: 'missing', description: 'task', prompt: 'task' },
   })
   expect(result.isError).toBe(true)
+  expect(result.isError && result.error.info).toEqual({ name: 'SubagentError', code: 'NO_PROVIDER' })
   expect(calls).toEqual([])
 })
 
@@ -115,13 +119,15 @@ it('requires a caller and independently scoped one-shot providers', async (test)
   await ctx.plugin(externalTool, { providers: { inherited: 'inherited' } })
   const args = { runtime: 'inherited', description: 'task', prompt: 'task' }
   const noParent = await executeToolFixture(ctx, {
-    name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
+    name: 'subagent_oar', arguments: args, callId: brandString<ToolCallId>(randomUUID()), signal: test.signal,
   })
   expect(noParent.isError).toBe(true)
+  expect(noParent.isError && noParent.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   const inherited = await executeToolFixture(ctx, {
-    agent: parent, name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
+    agent: parent, name: 'subagent_oar', arguments: args, callId: brandString<ToolCallId>(randomUUID()), signal: test.signal,
   })
   expect(inherited.isError).toBe(true)
+  expect(inherited.isError && inherited.error.info).toEqual({ name: 'SubagentError', code: 'UNSUPPORTED_CAPABILITY' })
   expect(JSON.stringify(inherited.content)).toContain('independent conversation')
 })
 
@@ -134,7 +140,7 @@ it('passes an explicit child directory and presents the task description', async
     card: 'generic', title: 'Inspect child', rawInput: args,
   })
   const result = await executeToolFixture(ctx, {
-    agent: parent, name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
+    agent: parent, name: 'subagent_oar', arguments: args, callId: brandString<ToolCallId>(randomUUID()), signal: test.signal,
   })
   expect(result.isError).toBe(false)
   expect(calls[0]?.request.cwd).toBe(join(process.cwd(), 'packages'))

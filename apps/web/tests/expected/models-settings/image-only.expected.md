@@ -3,7 +3,7 @@
   - navigation:
     - button "通用设置"
     - button "模型"
-    - button "内置插件"
+    - button "插件管理"
     - button "Agent 预设"
   - button "打开配置文件"
   - button "关闭"
@@ -36,6 +36,13 @@
           - option "OpenAI Chat Completions"
           - option "OpenAI Responses"
           - option "Anthropic Messages" [selected]
+          - option "Gemini API"
+        - group "重试策略":
+          - text: 重试策略
+          - combobox "重试策略":
+            - option "默认（仅临时错误）" [selected]
+            - option "仅临时错误"
+            - option "所有错误"
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"

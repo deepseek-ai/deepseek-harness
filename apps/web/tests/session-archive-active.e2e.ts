@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -43,7 +44,7 @@ const WAIT_COMMAND = `node -e "const fs=require('node:fs'); fs.writeFileSync('st
  */
 function script(): ReplayEntry[] {
   const args = JSON.stringify({ command: WAIT_COMMAND, description: 'Wait a long time' })
-  const callId = ToolCallId('call_wait')
+  const callId = brandString<ToolCallId>('call_wait')
   const first: StreamChunk[] = [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
     { type: 'tool-call-delta', index: 0, id: callId, name: 'bash', argumentsDelta: args },
@@ -169,8 +170,7 @@ describe.skipIf(MODE === 'record')('web e2e: archiving a running Session stops i
     expect(scaffold.ctx.agents.get(sessionId)?.status).toBe('running')
     expect(await childAlive(cwd)).toBe(true)
     await expect.poll(() => sessionRow().count()).toBe(1)
-    // The Bash command is a running job while the dialog is open, by design.
-    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, { runningJobs: 'keep' })
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DIALOG_EXPECTED, snapshot, MODE)
 
     // Cancel keeps everything as it was.

@@ -38,7 +38,7 @@ export async function managerProfile(ctx: Context, options: { id?: string; base?
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
   const profile: ProfileContext = {
     name: 'test', startedBundles: ['test-mcp-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
-    installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+    installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   if (options.user !== undefined) writeFileSync(profile.patchPath, JSON.stringify([{ id, config: options.user }]))
   const start = async (context: Context) => {

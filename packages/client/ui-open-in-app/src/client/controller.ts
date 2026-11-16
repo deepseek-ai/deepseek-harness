@@ -1,4 +1,4 @@
-/** Browser availability/choice state and the launch carrier for the split button. */
+/** Shared directory application catalog, preference, and launch carrier for controls and menus. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
@@ -20,7 +20,7 @@ type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 /**
  * Owns the once-per-page availability read, the persisted last choice, and
  * the launch POST. Availability and choice publish through uSES-safe sources
- * so every Session header shares one truth.
+ * so Session menus and directory controls share the same catalog and choice.
  */
 export class OpenInAppController {
   /** Installed app ids in host menu order; null until the host answered. */
@@ -99,18 +99,19 @@ export class OpenInAppController {
 
   private async run(): Promise<void> {
     let apps: readonly string[] = []
+    let payload: OpenInAppAppsPayload | undefined
     try {
-      const response = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, {
-        headers: { accept: 'application/json' },
-      })
-      if (response.ok) {
-        const payload = await response.json() as OpenInAppAppsPayload
-        if (Array.isArray(payload.apps)) apps = payload.apps.filter(id => typeof id === 'string')
-      }
-    } catch {
-      // Swallows network failures: an unreachable host reads as no apps, and
-      // the header simply shows no button rather than a broken one.
+      payload = await this.readAppsPayload()
+    } catch (_appsUnavailable) {
+      // An unreachable Host or an unreadable reply supplies no directory openers in menus or controls.
     }
+    if (Array.isArray(payload?.apps)) apps = payload.apps.filter(id => typeof id === 'string')
     this.apps.set(apps)
+  }
+
+  /** The Host's opener payload, or `undefined` for a non-OK reply; rejects when the Host or its reply is unreadable. */
+  private async readAppsPayload(): Promise<OpenInAppAppsPayload | undefined> {
+    const response = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, { headers: { accept: 'application/json' } })
+    return response.ok ? await response.json() as OpenInAppAppsPayload : undefined
   }
 }

@@ -1,12 +1,11 @@
 /**
  * Host routes over a real WebServer booted through the vendored Loader
  * (the REAL-composition requirement), asserting the HTTP surface: the
- * connection trust fence, the one-pass catalog resolution the routes share,
+ * centralized admission, owner authorization, and one-pass catalog resolution,
  * icon serving with caching, the open route's wire validation, and the
  * stale-launcher (ENOENT) refresh. Host commands, launches, and PATH
- * resolution are faked through the package `internals` seam; the connection
- * service is a controllable stub (its real provider is the browser
- * composition); the filesystem is real.
+ * resolution are faked through the package `internals` seam; admission returns
+ * a controllable Peer; the filesystem is real.
  */
 
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
@@ -18,7 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import WebServer from '@deepseek-ai/dsh-host-webserver'
+import WebServer, { type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
 import {
   createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentLayerInput,
@@ -27,9 +26,15 @@ import * as OpenInApp from '../src/index.ts'
 import { internals } from '../src/internals.ts'
 import type { OpenInAppLauncher } from '../src/resolver.ts'
 
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface PrincipalMap {
+    openInAppAuthorizationTest: { readonly kind: 'open-in-app-authorization-test' }
+  }
+}
+
 let root: string | undefined
 let context: Context | undefined
-/** Answer the connection stub gives every route until a test changes it. */
+/** Central admission decision until a test changes it. */
 const trust: { rejection: 401 | 403 | undefined } = { rejection: undefined }
 
 afterEach(async () => {
@@ -48,7 +53,7 @@ function pathTable(entries: Record<string, string> = {}): (name: string) => Prom
 }
 
 /** Boot webserver + open-in-app rows through the real Loader. */
-async function boot(layers: readonly LaunchEnvironmentLayerInput[] = []): Promise<string> {
+async function boot(layers: readonly LaunchEnvironmentLayerInput[] = [], access: 'owner' | 'restricted' = 'owner'): Promise<string> {
   internals.catalog = { env: {}, ...internals.catalog }
   root = await mkdtemp(join(tmpdir(), 'dsh-open-in-app-loader-'))
   const configPath = join(root, 'cordis.yml')
@@ -68,7 +73,17 @@ async function boot(layers: readonly LaunchEnvironmentLayerInput[] = []): Promis
   context = new Context()
   context.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot(layers))
   context.baseUrl = pathToFileURL(root).href + '/'
-  context.provide('connection', { requestRejection: () => trust.rejection } as never)
+  type Peer = NonNullable<Parameters<WebRoute['handler']>[2]>
+  const abort = new AbortController()
+  const peer: Peer = {
+    id: 'open-in-app-fixture' as Peer['id'], ctx: context,
+    principal: access === 'owner' ? { kind: 'owner' } : { kind: 'open-in-app-authorization-test' },
+    signal: abort.signal, interactions: 'none', dispose: async () => { abort.abort() },
+  }
+  context.effect(() => () => peer.dispose())
+  context.on('webserver/authorize', () => trust.rejection === undefined
+    ? { kind: 'allow', peer }
+    : { kind: 'deny', status: trust.rejection })
   // The plugin resolves PATH names through the composition's subprocess
   // capability; the not-found rejection is the provider's real signal.
   context.provide('subprocess', {
@@ -172,7 +187,7 @@ describe('open-in-app host routes (real Loader composition)', () => {
     expect(Object.keys(OpenInApp).sort()).toEqual(['Config', 'apply', 'inject', 'name'])
   })
 
-  it('answers the connection rejection on every route, before any resolution runs', async () => {
+  it('answers the admission rejection on every route, before any resolution runs', async () => {
     const run = vi.fn<NativeCommandRunner>()
     internals.catalog = { platform: 'darwin', run, resolveExecutable: pathTable() }
     const base = await boot()
@@ -186,6 +201,31 @@ describe('open-in-app host routes (real Loader composition)', () => {
     expect((await fetch(`${base}/open-in-app/apps`)).status).toBe(401)
     trust.rejection = undefined
     expect((await fetch(`${base}/open-in-app/apps`)).status).toBe(200)
+  })
+
+  it('refuses an authenticated non-owner before probing, reading icons, or launching', async () => {
+    const run = vi.fn<NativeCommandRunner>()
+    const launch = vi.fn<OpenInAppLauncher>()
+    const resolveExecutable = vi.fn(pathTable())
+    internals.catalog = { platform: 'darwin', run, launch, resolveExecutable }
+    const base = await boot([], 'restricted')
+    expect(context?.get('connection')).toBeUndefined()
+    for (const [path, options] of [
+      ['/open-in-app/apps', {}],
+      ['/open-in-app/icon/finder', {}],
+      ['/open-in-app/open', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app: 'finder', path: root }),
+      }],
+    ] as const) {
+      const response = await fetch(`${base}${path}`, options)
+      expect(response.status).toBe(403)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+      await response.text()
+    }
+    expect(run).not.toHaveBeenCalled()
+    expect(resolveExecutable).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
   })
 
   it('serves the resolved catalog, one cached icon, and launches from the same resolution', async () => {

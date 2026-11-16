@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url'
 import {
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
   SessionSeq,
   type SessionEvent,
@@ -17,17 +17,17 @@ import {
 import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
-import { SUBAGENT_CATALOG_VERSION } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Root copied by the preview image's repository adapter. */
 export const VFS_EXAMPLE_ROOT = fileURLToPath(new URL('./fixtures/vfs-example', import.meta.url))
 
 /** Durable ids used by browser assertions and subagent parent links. */
 export const VFS_EXAMPLE_SESSION_IDS = {
-  main: SessionId('preview-showcase'),
-  oneShot: SessionId('preview-architecture-review'),
-  continuable: SessionId('preview-follow-up-builder'),
-  spacing: SessionId('preview-turn-spacing'),
+  main: brandString<SessionId>('preview-showcase'),
+  oneShot: brandString<SessionId>('preview-architecture-review'),
+  continuable: brandString<SessionId>('preview-follow-up-builder'),
+  spacing: brandString<SessionId>('preview-turn-spacing'),
 } as const
 
 /** Stable title rendered in the root Session list. */
@@ -386,7 +386,8 @@ function mainLog(): {
     { childId: VFS_EXAMPLE_SESSION_IDS.oneShot, childCreatedAt: CREATED_AT + 100_000, mode: 'one-shot', label: 'Review preview architecture' },
     { childId: VFS_EXAMPLE_SESSION_IDS.continuable, childCreatedAt: CREATED_AT + 200_000, mode: 'continuable', label: 'Continue preview verification' },
   ] as const) {
-    log.add({ type: 'subagent/catalog', data: { version: SUBAGENT_CATALOG_VERSION, ...child } })
+    // Version 0 keeps both preview children unnamed, as releases before agent names recorded them.
+    log.add({ type: 'subagent/catalog', data: { version: 0, ...child } })
   }
   log.add({ type: 'step/end', data: { turn, step: 1 } })
   log.add({ type: 'step/start', data: { turn, step: 2 } })

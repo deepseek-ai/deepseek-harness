@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as subprocess from 'execa'
 import { afterAll, beforeAll, expect, it, onTestFinished, vi } from 'vitest'
-import { checkGithubConnection } from '../src/github-connection.ts'
+import { checkGitConnection, checkGithubConnection } from '../src/github-connection.ts'
 import { parseInstallSpec } from '../src/install-spec.ts'
 import { isolateGitCommandLineConfig } from './git-environment.ts'
 
@@ -40,7 +40,14 @@ async function fixture() {
     tasks.push(task)
     return task
   }
-  return { dir, config, controller, check, env }
+  const checkAny = (spec: string) => {
+    const parsed = parseInstallSpec(spec)
+    if (parsed.kind !== 'git') throw new Error(`${spec} is not a Git spec`)
+    const task = checkGitConnection(parsed, dir, { timeoutMs: 3000, outputBytes: 4096, signal: controller.signal, env })
+    tasks.push(task)
+    return task
+  }
+  return { dir, config, controller, check, checkAny, env }
 }
 
 /** The exact command line a check runs for one repository URL. */
@@ -111,8 +118,14 @@ it('ends a silent proxy connection and its Git child at the connection deadline'
   await transport.connected
   const result = await running
   expect(result?.kind).toBe('timeout')
-  // The result records the status the terminated Git is read as; only the streamed run reports no exit code.
-  expect(result).toMatchObject({ exitCode: 1, timedOut: true, argv: checkArgv('https://github.com/acme/plugin.git') })
+  // Git's termination status varies by platform; preserve the observed status, or the fallback when absent.
+  const childRun = vi.mocked(subprocess.execa).mock.results.at(-1)
+  if (childRun?.type !== 'return') throw new Error('Git probe did not return a child process')
+  const childResult = await childRun.value
+  expect(childResult.timedOut).toBe(true)
+  expect(result).toMatchObject({
+    exitCode: childResult.exitCode ?? 1, timedOut: true, argv: checkArgv('https://github.com/acme/plugin.git'),
+  })
   expect(result!.output).toContain('connection to github.com timed out after 3000ms')
   await transport.disconnected
   expect(transport.sockets.size).toBe(0)
@@ -130,13 +143,25 @@ it('cancels a connected Git probe and closes its transport before the deadline',
   expect(transport.sockets.size).toBe(0)
 })
 
+it.each([128, undefined])('reports a timeout while retaining Git exit status %s', async (exitCode) => {
+  const { check } = await fixture()
+  const run = vi.spyOn(subprocess, 'execa').mockResolvedValue({
+    failed: true, timedOut: true, exitCode,
+  } as Awaited<ReturnType<typeof subprocess.execa>>)
+  onTestFinished(() => { run.mockRestore() })
+  const result = await check('github:acme/plugin')
+  expect(result).toMatchObject({ exitCode: exitCode ?? 1, timedOut: true, kind: 'timeout' })
+  expect(result!.output).toContain('connection to github.com timed out after 3000ms')
+  expect(await readFile(result!.logPath, 'utf8')).toBe(result!.output)
+})
+
 it.each([undefined, 'Git could not start'])('retains a diagnostic when Git writes no stderr (%s)', async (shortMessage) => {
   const { check } = await fixture()
   const run = vi.spyOn(subprocess, 'execa').mockResolvedValue({ failed: true, shortMessage } as Awaited<ReturnType<typeof subprocess.execa>>)
   onTestFinished(() => { run.mockRestore() })
   const result = await check('github:acme/plugin')
   expect(result).toMatchObject({
-    exitCode: 1, kind: 'unknown', output: shortMessage ?? 'GitHub connection check failed',
+    exitCode: 1, kind: 'unknown', output: shortMessage ?? 'Git connection check failed',
     argv: checkArgv('https://github.com/acme/plugin'),
   })
   expect(await readFile(result!.logPath, 'utf8')).toBe(result!.output)
@@ -210,4 +235,17 @@ it('does not invoke configured credential helpers or askpass for an authenticati
   await rm(marker)
   expect(await check('github:acme/private.git')).toMatchObject({ exitCode: 128, kind: 'unknown' })
   await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it.each([
+  ['gitlab:acme/plugin#main', 'https://gitlab.com/'],
+  ['bitbucket:acme/plugin#main', 'https://bitbucket.org/'],
+  [`git+https://git.example/acme/plugin.git#${'a'.repeat(40)}&path:/packages/a`, 'https://git.example/'],
+  ['git+ssh://git@git.example/acme/plugin.git#main', 'ssh://git@git.example/'],
+])('checks the repository of %s on any host', async (spec, prefix) => {
+  const { checkAny, dir, config } = await fixture()
+  const repository = join(dir, 'empty.git')
+  await subprocess.execa('git', ['init', '--bare', repository])
+  await writeFile(config, `[url "${pathToFileURL(repository).href}"]\n insteadOf = ${prefix}acme/plugin.git\n insteadOf = ${prefix}acme/plugin\n`)
+  expect(await checkAny(spec)).toBeUndefined()
 })

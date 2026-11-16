@@ -65,7 +65,6 @@ jobs:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
           BASE_SHA: ${{ needs.master.outputs.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          SINCE: ${{ needs.master.outputs.since }}
         run: |
           stop() {
             if [ "$CHECK_MODE" = block ]; then
@@ -75,21 +74,18 @@ jobs:
             echo "::warning title=Pre-Merge Check::$1"
             exit 0
           }
-          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$SINCE" =~ ^[0-9]+$ ]]; then
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             stop "the master diff check reported no base commit, so nothing was merged or compiled"
           fi
-          # A shallow fetch starts a background maintenance run that rewrites .git/shallow, and the second shallow fetch
-          # below then fails with "shallow file has changed since we read it".
-          fetch() {
-            git -c maintenance.auto=false -c gc.auto=0 fetch --no-tags --no-write-fetch-head "$@" origin "$HEAD_SHA" "$BASE_SHA"
-          }
-          fetch --shallow-since="$SINCE" ||
+          # The checkout is already shallow, and a shallow fetch starts a background maintenance run that rewrites
+          # .git/shallow, so the fetch below would fail with "shallow file has changed since we read it".
+          # The history is bounded by depth, not by date: a date window marks a merge commit shallow when one parent
+          # predates it, which drops the other parent too and lets the merge base settle on an older commit. Within its
+          # depth every commit keeps all parents; 150 covers the base-branch commits a 72-hour-old base can be behind.
+          git -c maintenance.auto=false -c gc.auto=0 fetch --no-tags --no-write-fetch-head --depth=150 --filter=blob:none origin "$HEAD_SHA" "$BASE_SHA" ||
             stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
-          # A time window records a merge commit itself as shallow when one of its parents predates the window, which
-          # drops the other, in-window parent too; a depth bound keeps both parents of every commit it covers.
           if ! git merge-base "$HEAD_SHA" "$BASE_SHA" >/dev/null; then
-            fetch --depth=20 --filter=blob:none ||
-              stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
+            stop "the pull request shares no commit with $BASE_SHA within 150 commits of history, so nothing was merged or compiled; merge master into it and push, then this check runs again"
           fi
           git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com merge --no-ff --no-edit -m "Merge $BASE_SHA into $HEAD_SHA" "$BASE_SHA" ||
             stop "the pull request cannot merge $BASE_SHA; merge master into it and push, then this check runs again"
@@ -108,6 +104,7 @@ jobs:
         if: steps.merge.outputs.merged == 'true'
         env:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+          BASE_SHA: ${{ needs.master.outputs.base_sha }}
         run: |
           # The check names one file and knows nothing else about how the merged tree builds itself.
           if [ ! -f scripts/pre-merge-check.ts ]; then

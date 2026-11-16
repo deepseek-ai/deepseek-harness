@@ -5,6 +5,7 @@
  */
 
 import { HarnessError } from './error.ts'
+import type { BuiltinLlmFailureCode } from './error.ts'
 import type { LlmFailure } from './types.ts'
 
 /**
@@ -16,7 +17,7 @@ import type { LlmFailure } from './types.ts'
 export function normalizeLlmFailure(value: unknown): LlmFailure {
   const error = value instanceof Error
     ? value
-    : new HarnessError(thrownMessage(value), 'UNKNOWN', { cause: value })
+    : new HarnessError(thrownMessage(value), 'UNKNOWN' satisfies BuiltinLlmFailureCode, { cause: value })
   // Cross-package copies preserve own data but not class identity. Trust the
   // carried facts only when both own properties agree after validation.
   const carried = ownFailureSnapshot(error)
@@ -92,16 +93,17 @@ function failureSnapshot(value: unknown): LlmFailure | undefined {
 
 /** Read an SDK error message without letting an accessor replace the primary failure. */
 function errorMessage(error: Error): string {
+  let message: unknown
   try {
-    const message: unknown = error.message
-    if (typeof message === 'string' && message.length > 0) return message
+    message = error.message
   } catch (_sdkMessageGetter) {
     // The fallback below preserves a serializable failure beside the original Error.
   }
+  if (typeof message === 'string' && message.length > 0) return message
   return 'LLM adapter failed'
 }
 
 /** Trust only Harness-owned codes; third-party SDK codes are not our taxonomy. */
 function harnessErrorCode(error: Error): string {
-  return error instanceof HarnessError ? error.code : 'UNKNOWN'
+  return error instanceof HarnessError ? error.code : 'UNKNOWN' satisfies BuiltinLlmFailureCode
 }

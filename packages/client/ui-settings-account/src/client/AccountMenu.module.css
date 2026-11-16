@@ -1,5 +1,6 @@
-.root { flex: 1; min-width: 0; }
+.root { position: relative; flex: 1; min-width: 0; }
 .root[data-inset='true'] { margin-inline: 2px; }
+.notifications { position: absolute; inset-inline: 0; bottom: calc(100% + 4px); z-index: 1; }
 .anchor { width: 100%; }
 .trigger { user-select: none; display: flex; align-items: center; width: 100%; height: 44px; gap: 8px; padding: 6px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset)); border: 0; border-inline: var(--dsh-sidebar-paint-inset) solid transparent; box-sizing: border-box; border-radius: var(--dsw-radius-md); background: transparent; background-clip: padding-box; color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer; }
 .trigger[data-signed-out='false']:not([data-collapsed='true']) { padding: 6px; border-inline: 0; background-clip: border-box; }

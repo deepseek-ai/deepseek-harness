@@ -382,7 +382,14 @@ class Hmr extends Service {
       })
       yield () => { unsubscribe(); started.resolve(false); return Promise.resolve() }
       const manifestPath = join(profile.dir, 'package.json')
-      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME)]
+      // A file named by several layers or repeated `--patch` options, under any spelling, is watched and compared once.
+      const canonicalFiles = new Set<string>()
+      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME), ...profile.overlayPaths].filter((filename) => {
+        const canonical = canonicalPath(filename)
+        if (canonicalFiles.has(canonical)) return false
+        canonicalFiles.add(canonical)
+        return true
+      })
       let lastInputs: string | undefined
       let lastBundles = JSON.stringify(profile.startedBundles)
       const refresh = async (manifestOnly: boolean): Promise<void> => {
@@ -971,7 +978,7 @@ class Hmr extends Service {
           return job !== undefined && namespaceOf(job) === undefined
         }))
       }, undefined)
-      const result = await recomposeProfile(this.ownerContext.root, patches, 'dsh', { requiredIds, running })
+      const result = await recomposeProfile(this.ownerContext[Context.root], patches, 'dsh', { requiredIds, running })
       const restartReason = compared === undefined || unavailable ? 'module-comparison' : result.restartReason
       return { warnings: result.warnings, pending, ...restartReason === undefined ? {} : { restartReason } }
     } finally {

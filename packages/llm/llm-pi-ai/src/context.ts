@@ -7,8 +7,8 @@
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText, requiredImageOffload } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, RequestMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import type {
-  AttachmentId,
   AttachmentStore,
   ImageAttachmentRef,
   ImageRequestTarget,
@@ -16,6 +16,7 @@ import type {
 } from '@deepseek-ai/dsh-attachment'
 import type { Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 import { toPiAssistant } from './replay.ts'
+import type { PrefixDigests } from './prefix-binding.ts'
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
 import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
 
@@ -205,8 +206,9 @@ function appendAssistant(
   messages: PiMessage[],
   toolNames: Map<ToolCallId, string>,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): void {
-  const assistant = toPiAssistant(message, onReplayDegrade)
+  const assistant = toPiAssistant(message, onReplayDegrade, prefixDigests)
   for (const block of assistant.content) {
     if (block.type === 'toolCall') toolNames.set(brandString<ToolCallId>(block.id), block.name)
   }
@@ -221,6 +223,7 @@ function appendSharedHistory(
   toolNames: Map<ToolCallId, string>,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): boolean {
   if (message.role === 'developer') {
     appendDeveloper(message, options, messages)
@@ -239,7 +242,7 @@ function appendSharedHistory(
     return true
   }
   if (message.role === 'assistant') {
-    appendAssistant(message, messages, toolNames, onReplayDegrade)
+    appendAssistant(message, messages, toolNames, onReplayDegrade, prefixDigests)
     return true
   }
   return false
@@ -249,6 +252,7 @@ function textOnlyContext(
   options: GenerateOptions,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): PiContext {
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
@@ -258,7 +262,7 @@ function textOnlyContext(
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
-    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, flattenText(message)))
       continue
@@ -309,6 +313,7 @@ export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageReque
  * @param images - absent; selects the synchronous conversion.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
+ * @param prefixDigests - receives the recorded request-prefix digest of each replayed assistant message that has one.
  * @returns the pi-ai context; `tools` is omitted when the request declares none.
  * @throws {LlmError} `UNSUPPORTED_CONTENT` for images in any history role, including a leading system message.
  */
@@ -317,6 +322,7 @@ export function toPiContext(
   images?: undefined,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages?: boolean,
+  prefixDigests?: PrefixDigests,
 ): PiContext
 /**
  * Convert harness history to a pi-ai Context while resolving durable images.
@@ -330,6 +336,7 @@ export function toPiContext(
  * @param images - attachment provider, current path resolver, and request limits.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
+ * @param prefixDigests - receives the recorded request-prefix digest of each replayed assistant message that has one.
  * @returns the asynchronously resolved pi-ai context.
  */
 export function toPiContext(
@@ -337,16 +344,18 @@ export function toPiContext(
   images: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages?: boolean,
+  prefixDigests?: PrefixDigests,
 ): Promise<PiContext>
 export function toPiContext(
   options: GenerateOptions,
   images?: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages = false,
+  prefixDigests?: PrefixDigests,
 ): PiContext | Promise<PiContext> {
   return images === undefined
-    ? textOnlyContext(options, supportsMidConvoSystemMessages, onReplayDegrade)
-    : toPiContextWithImages(options, images, supportsMidConvoSystemMessages, onReplayDegrade)
+    ? textOnlyContext(options, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)
+    : toPiContextWithImages(options, images, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)
 }
 
 async function toPiContextWithImages(
@@ -354,6 +363,7 @@ async function toPiContextWithImages(
   images: PiImageRequestContext,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): Promise<PiContext> {
   const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages, imageOffloadCountQuantum } = images
   const requestImagePolicy = images.requestImagePolicy ?? {
@@ -388,7 +398,7 @@ async function toPiContextWithImages(
   const messages: PiMessage[] = []
 
   for (const message of exactMessages) {
-    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, userContent(message.content, requestImages, resolveImageAccess)))
       continue

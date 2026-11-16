@@ -1,6 +1,7 @@
 /**
- * Endpoint and credential of the Search and Fetch APIs: each capability follows the DeepSeek credential of the
- * conversation unless it has its own base URL or key reference, and readiness answers what the operation would send.
+ * Endpoint and credential of the Search and Fetch APIs: each capability's billing chooses its DeepSeek credential, by
+ * default following the conversation, unless it has its own base URL or key reference, and readiness answers what the
+ * operation would send.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
@@ -8,11 +9,12 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
 import { provideRoutes, type RouteRow } from './routes.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A value the API-key route resolver throws instead of resolving; undefined lets it resolve normally. */
 const resolverThrow = vi.hoisted(() => ({ value: undefined as string | undefined }))
@@ -109,7 +111,7 @@ let sessions = 0
 async function operate(ctx: Context, operation: Operation, route?: string): Promise<unknown> {
   const run = () => operation === 'search' ? ctx.web.search({ query: 'q' }) : ctx.web.fetch({ url: 'https://example.test/' })
   if (route === undefined) return await run()
-  const session = ctx.sessions.create(SessionId(`web-api-${String(sessions++)}`))
+  const session = ctx.sessions.create(brandString<SessionId>(`web-api-${String(sessions++)}`))
   session.append('turn/start', { turn: 1 })
   session.append('request/context', { provider: route, model: 'test-model' })
   return await ctx.agents.withInitiator({ session } as Agent, run)
@@ -138,7 +140,7 @@ describe.each(OPERATIONS)('%s in a conversation on the DeepSeek account route', 
     expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
     await operate(ctx, operation, 'deepseek-account')
     expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
-    expect(asked).toEqual([ACCOUNT, `${ACCOUNT}/${operation}`])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
   })
 
   it('derives the account endpoint from DEEPSEEK_BASE_URL', async () => {
@@ -177,9 +179,10 @@ describe.each(OPERATIONS)('%s in a conversation on the DeepSeek account route', 
     expect(await ready(ctx, operation, 'deepseek-account')).toBe(false)
     await expect(operate(ctx, operation, 'deepseek-account')).rejects.toMatchObject({
       code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
-      message: `DeepSeek ${subject} API uses the DeepSeek API key, and no key is configured for "DEEPSEEK_API_KEY". Guide the`
-        + ' user to add the DeepSeek API key on the Models page or export "DEEPSEEK_API_KEY" in the launching environment, or'
-        + ' to sign in to DeepSeek and chat on the DeepSeek account model provider.',
+      message: `DeepSeek ${subject} API uses the DeepSeek account sign-in of this conversation, then the DeepSeek API key,`
+        + ' and neither is available: no signed-in DeepSeek account is available, and no key is configured for'
+        + ' "DEEPSEEK_API_KEY". Guide the user to sign in to DeepSeek, or to add the DeepSeek API key on the Models page or'
+        + ' export "DEEPSEEK_API_KEY" in the launching environment.',
     })
     expect(sent()).toEqual([])
   })
@@ -258,9 +261,96 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     expect(asked).toEqual([])
   })
 
-  it('is not ready with only a sign-in', async () => {
-    const { ctx } = await mount({ routes: bothRoutes, account: signedIn() })
-    for (const route of others) expect(await ready(ctx, operation, route)).toBe(false)
+  it('is not ready on the DeepSeek API-key route with only a sign-in, and names the account billing', async () => {
+    const subject = operation === 'search' ? 'Search' : 'Fetch'
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ routes: bothRoutes, account: signedIn(asked) })
+    expect(await ready(ctx, operation, 'deepseek-official')).toBe(false)
+    await expect(operate(ctx, operation, 'deepseek-official')).rejects.toMatchObject({
+      code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
+      message: `DeepSeek ${subject} API uses the DeepSeek API key, as this conversation's model provider does, and no key is`
+        + ' configured for "DEEPSEEK_API_KEY". Guide the user to add the DeepSeek API key on the Models page or export'
+        + ' "DEEPSEEK_API_KEY" in the launching environment, or to sign in to DeepSeek and set'
+        + ` web-deepseek-api.${operation}Billing to "account" on the Web search and fetch settings page.`,
+    })
+    expect(sent()).toEqual([])
+    expect(asked).toEqual([])
+  })
+
+  it.each(['moonshotai', undefined])('sends the account token to the account route origin without a key for route %s', async (route) => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ routes: bothRoutes, account: signedIn(asked) })
+    expect(await ready(ctx, operation, route)).toBe(true)
+    await operate(ctx, operation, route)
+    expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
+  })
+
+  it('sends the account token to the default account origin without the account route', async () => {
+    const { ctx, sent } = await mount({
+      routes: [officialRoute()], account: signedIn(), environment: { DEEPSEEK_BASE_URL: 'https://internal.deepseek.test/anthropic' },
+    })
+    expect(await ready(ctx, operation, 'moonshotai')).toBe(true)
+    await operate(ctx, operation, 'moonshotai')
+    expect(sent()).toEqual([{ endpoint: `https://internal.deepseek.test/v1/tools/${operation}`, authorization: null, token: 'account-token' }])
+  })
+
+  it('sends the account token to the official origin without any model route', async () => {
+    const { ctx, sent } = await mount({ account: signedIn() })
+    await operate(ctx, operation)
+    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
+  })
+
+  it('is not ready and names both recoveries without a key and a sign-in', async () => {
+    const subject = operation === 'search' ? 'Search' : 'Fetch'
+    for (const account of [{ resolveToken: async () => undefined }, undefined]) {
+      const { ctx, sent } = await mount({ routes: bothRoutes, ...account === undefined ? {} : { account } })
+      expect(await ready(ctx, operation, 'moonshotai')).toBe(false)
+      await expect(operate(ctx, operation, 'moonshotai')).rejects.toMatchObject({
+        code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
+        message: `DeepSeek ${subject} API uses the DeepSeek API key, then the DeepSeek account sign-in, and neither is available:`
+          + ' no key is configured for "DEEPSEEK_API_KEY", and no signed-in DeepSeek account is available. Guide the user to'
+          + ' add the DeepSeek API key on the Models page or export "DEEPSEEK_API_KEY" in the launching environment, or to'
+          + ' sign in to DeepSeek.',
+      })
+      expect(sent()).toEqual([])
+    }
+  })
+
+  it('sends the key while the mounted account route settings do not resolve, and is misconfigured without the key', async () => {
+    const subject = operation === 'search' ? 'Search' : 'Fetch'
+    const routes = [officialRoute(), accountRoute({ thinking: 'disabled', reasoningEffort: 'high' })]
+    const withKey = await mount({ routes, account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(withKey.ctx, operation, 'moonshotai')).toBe(true)
+    await operate(withKey.ctx, operation, 'moonshotai')
+    expect(withKey.sent()).toEqual([{ endpoint: `${ROUTE}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+    const asked: string[] = []
+    const withoutKey = await mount({ routes, account: signedIn(asked) })
+    expect(await ready(withoutKey.ctx, operation, 'moonshotai')).toBe(false)
+    await expect(operate(withoutKey.ctx, operation, 'moonshotai')).rejects.toMatchObject({
+      code: 'WEB_PROVIDER_MISCONFIGURED',
+      message: `DeepSeek ${subject} API sends the DeepSeek account sign-in to the origin of the DeepSeek account model`
+        + ' provider, and that provider\'s settings do not resolve: llm-deepseek: only reasoningEffort "off" can be configured'
+        + ` when thinking is disabled. ${subject} did not send the request. Guide the user to correct that provider's settings`
+        + ' on the Models page or in the deployment configuration, or to set'
+        + ` web-deepseek-api.${operation}BaseURL and web-deepseek-api.${operation}ApiKeyEnv so ${subject} uses its own endpoint.`,
+    })
+    expect(withoutKey.sent()).toEqual([])
+    expect(asked).toEqual([])
+  })
+
+  it('fails without asking the account when the credential store cannot be read', async () => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({
+      routes: bothRoutes, account: signedIn(asked),
+      credentials: { describe: () => Promise.reject(new Error('store locked')), resolve: () => Promise.reject(new Error('store locked')) },
+    })
+    expect(await ready(ctx, operation, 'moonshotai')).toBe(false)
+    await expect(operate(ctx, operation, 'moonshotai')).rejects.toMatchObject({
+      code: 'WEB_PROVIDER_ERROR', message: 'DeepSeek web credential resolution failed: Error: store locked',
+    })
+    expect(sent()).toEqual([])
+    expect(asked).toEqual([])
   })
 
   it('sends the key under the route apiKeyEnv to the origin DEEPSEEK_BASE_URL names, from the credential store', async () => {
@@ -355,6 +445,157 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
   })
 })
 
+const ROUTES = ['deepseek-account', 'deepseek-official', 'moonshotai', undefined] as const
+
+describe.each(OPERATIONS)('%s billed to the signed-in DeepSeek account', (operation) => {
+  const subject = operation === 'search' ? 'Search' : 'Fetch'
+  const config = { [`${operation}Billing`]: 'account' }
+
+  it.each(ROUTES)('sends only the account token to the account route origin for route %s, despite a key', async (route) => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ config, routes: bothRoutes, account: signedIn(asked), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(ctx, operation, route)).toBe(true)
+    await operate(ctx, operation, route)
+    expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
+  })
+
+  it('sends the token to the default account origin without the account route', async () => {
+    const { ctx, sent } = await mount({
+      config, routes: [officialRoute()], account: signedIn(),
+      environment: { DEEPSEEK_API_KEY: 'chat-key', DEEPSEEK_BASE_URL: 'https://internal.deepseek.test/anthropic' },
+    })
+    expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
+    await operate(ctx, operation, 'deepseek-account')
+    expect(sent()).toEqual([{ endpoint: `https://internal.deepseek.test/v1/tools/${operation}`, authorization: null, token: 'account-token' }])
+  })
+
+  it.each<[string, Setup['account']]>([
+    ['the user is not signed in', { resolveToken: async () => undefined }],
+    ['the account releases an empty token', { resolveToken: async () => '' }],
+    ['no account service is mounted', undefined],
+  ])('is not ready and never sends the key when %s', async (_label, account) => {
+    const { ctx, sent } = await mount({
+      config, routes: bothRoutes, ...account === undefined ? {} : { account }, environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    for (const route of ROUTES) {
+      expect(await ready(ctx, operation, route)).toBe(false)
+      await expect(operate(ctx, operation, route)).rejects.toMatchObject({
+        code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
+        message: `DeepSeek ${subject} API bills only the signed-in DeepSeek account, and no signed-in DeepSeek account is`
+          + ` available. ${subject} did not send the request. Guide the user to sign in to DeepSeek, or to set`
+          + ` web-deepseek-api.${operation}Billing to "api-key" or "auto" on the Web search and fetch settings page.`,
+      })
+    }
+    expect(sent()).toEqual([])
+  })
+
+  it('is not ready and fails without a token when the mounted account route settings do not resolve', async () => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({
+      config, routes: [officialRoute(), accountRoute({ thinking: 'disabled', reasoningEffort: 'high' })],
+      account: signedIn(asked), environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, operation, 'moonshotai')).toBe(false)
+    const failure = operate(ctx, operation, 'moonshotai')
+    await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_MISCONFIGURED' })
+    await expect(failure).rejects.toThrow('DeepSeek account model provider, and that provider\'s settings do not resolve')
+    expect(sent()).toEqual([])
+    expect(asked).toEqual([])
+  })
+
+  it('is not ready and fails without a token when the default account settings do not resolve', async () => {
+    const { ctx, sent } = await mount({
+      config, account: signedIn(), environment: { DEEPSEEK_BASE_URL: 'https://user:secret@internal.deepseek.test/anthropic' },
+    })
+    expect(await ready(ctx, operation, undefined)).toBe(false)
+    await expect(operate(ctx, operation)).rejects.toMatchObject({ code: 'WEB_PROVIDER_MISCONFIGURED' })
+    expect(sent()).toEqual([])
+  })
+
+  it('is not ready and fails when the account grant cannot be read', async () => {
+    const { ctx, sent } = await mount({
+      config, routes: bothRoutes, account: { resolveToken: () => Promise.reject(new Error('grant unreadable')) },
+      environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, operation, 'moonshotai')).toBe(false)
+    await expect(operate(ctx, operation, 'moonshotai')).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
+    expect(sent()).toEqual([])
+  })
+
+  it('invalidates the token the API rejects with 401', async () => {
+    const rejectToken = vi.fn(async () => {})
+    const { ctx } = await mount({ config, routes: bothRoutes, account: { ...signedIn(), rejectToken }, status: 401 })
+    await expect(operate(ctx, operation, 'moonshotai')).rejects.toThrow('HTTP 401')
+    expect(rejectToken).toHaveBeenCalledExactlyOnceWith('account-token')
+  })
+})
+
+describe.each(OPERATIONS)('%s billed to the DeepSeek API key', (operation) => {
+  const subject = operation === 'search' ? 'Search' : 'Fetch'
+  const config = { [`${operation}Billing`]: 'api-key' }
+
+  it.each(ROUTES)('sends only the route key to the route origin for route %s, despite a sign-in', async (route) => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ config, routes: bothRoutes, account: signedIn(asked), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(ctx, operation, route)).toBe(true)
+    await operate(ctx, operation, route)
+    expect(sent()).toEqual([{ endpoint: `${ROUTE}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+    expect(asked).toEqual([])
+  })
+
+  it('sends DEEPSEEK_API_KEY to the official base without the API-key route', async () => {
+    const { ctx, sent } = await mount({ config, routes: [accountRoute()], account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    await operate(ctx, operation, 'deepseek-account')
+    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+  })
+
+  it('is not ready and never sends the token without a key', async () => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ config, routes: bothRoutes, account: signedIn(asked) })
+    for (const route of ROUTES) {
+      expect(await ready(ctx, operation, route)).toBe(false)
+      await expect(operate(ctx, operation, route)).rejects.toMatchObject({
+        code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
+        message: `DeepSeek ${subject} API bills only the DeepSeek API key, and no key is configured for "DEEPSEEK_API_KEY".`
+          + ' Guide the user to add the DeepSeek API key on the Models page or export "DEEPSEEK_API_KEY" in the launching'
+          + ` environment, or to set web-deepseek-api.${operation}Billing to "account" or "auto" on the Web search and fetch`
+          + ' settings page.',
+      })
+    }
+    expect(sent()).toEqual([])
+    expect(asked).toEqual([])
+  })
+
+  it('is not ready and fails without sending when the mounted API-key route settings do not resolve', async () => {
+    const { ctx, sent } = await mount({
+      config, routes: [officialRoute({ thinking: 'disabled', reasoningEffort: 'high' }), accountRoute()],
+      account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, operation, 'deepseek-account')).toBe(false)
+    const failure = operate(ctx, operation, 'deepseek-account')
+    await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_MISCONFIGURED' })
+    await expect(failure).rejects.toThrow('DeepSeek API-key model provider, and that provider\'s settings do not resolve')
+    expect(sent()).toEqual([])
+  })
+})
+
+describe.each(OPERATIONS)('%s billing under its own endpoint settings', (operation) => {
+  it.each(['account', 'api-key'])('ignores %s billing and sends the own key to the own base', async (billing) => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({
+      config: { [`${operation}Billing`]: billing, [`${operation}BaseURL`]: OWN }, routes: bothRoutes, account: signedIn(asked),
+      environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    for (const route of ROUTES) {
+      expect(await ready(ctx, operation, route)).toBe(true)
+      await operate(ctx, operation, route)
+    }
+    expect(sent()).toEqual(ROUTES.map(() => ({ endpoint: `${OWN}/${operation}`, authorization: 'Bearer chat-key', token: null })))
+    expect(asked).toEqual([])
+  })
+})
+
 describe.each(OPERATIONS)('%s with its own endpoint settings', (operation) => {
   const subject = operation === 'search' ? 'Search' : 'Fetch'
   const baseURL = `${operation}BaseURL`, apiKeyEnv = `${operation}ApiKeyEnv`
@@ -418,6 +659,19 @@ describe('independent capabilities', () => {
     ])
   })
 
+  it('bills Search to the account and Fetch to the API key from their own settings', async () => {
+    const { ctx, sent } = await mount({
+      config: { searchBilling: 'account', fetchBilling: 'api-key' }, routes: bothRoutes, account: signedIn(),
+      environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    await operate(ctx, 'search', 'moonshotai')
+    await operate(ctx, 'fetch', 'moonshotai')
+    expect(sent()).toEqual([
+      { endpoint: `${ACCOUNT}/search`, authorization: null, token: 'account-token' },
+      { endpoint: `${ROUTE}/fetch`, authorization: 'Bearer chat-key', token: null },
+    ])
+  })
+
   it('reports one capability not ready while the other is ready', async () => {
     const { ctx } = await mount({ config: { fetchApiKeyEnv: 'UNSET_KEY' }, routes: [officialRoute()], environment: { DEEPSEEK_API_KEY: 'chat-key' } })
     expect([await ready(ctx, 'search', undefined), await ready(ctx, 'fetch', undefined)]).toEqual([true, false])
@@ -432,6 +686,15 @@ describe('route resolver failures', () => {
     await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_MISCONFIGURED' })
     await expect(failure).rejects.toThrow('that provider\'s settings do not resolve: route resolver unavailable. Search did not send')
     expect(sent()).toEqual([])
+  })
+})
+
+describe('billing settings', () => {
+  it('defaults both capabilities to automatic billing and rejects an unknown billing', () => {
+    const config = webApiPlugin.Config({})
+    expect([config.searchBilling.get(), config.fetchBilling.get()]).toEqual(['auto', 'auto'])
+    // @ts-expect-error A stored settings file can carry a value outside the billing union.
+    expect(() => webApiPlugin.Config({ searchBilling: 'session' })).toThrow()
   })
 })
 
@@ -460,12 +723,12 @@ describe('provider registration', () => {
     expect(search.map(({ id }) => id)).toEqual(['deepseek-search-api'])
     expect(fetch.map(({ id }) => id)).toEqual(['deepseek-fetch-api'])
     expect(search[0]?.description).toMatchObject({
-      en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
-      zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+      en: 'Incurs charges, paid by the account or API key chosen under Billing.',
+      zh: '会产生费用，由「计费方式」选定的账号或 API Key 支付。',
     })
     expect(fetch[0]?.description).toMatchObject({
-      en: 'Fetches public URLs on DeepSeek servers and returns Markdown. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, may incur API charges, and cannot reach intranet or loopback addresses.',
-      zh: '由 DeepSeek 服务端抓取公网页面并返回 Markdown。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费，且无法访问内网和本机',
+      en: "Can't reach intranet or local addresses. Incurs charges, paid by the account or API key chosen under Billing.",
+      zh: '无法访问内网和本机。会产生费用，由「计费方式」选定的账号或 API Key 支付。',
     })
   })
 })

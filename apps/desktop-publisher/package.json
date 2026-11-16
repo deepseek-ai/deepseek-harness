@@ -1,0 +1,19 @@
+{
+  "name": "@deepseek-ai/dsh-desktop-publisher",
+  "version": "0.2.2-rc.3",
+  "description": "Private Desktop release metadata, rollout and website publisher",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "zod": "4.6.6",
+    "js-yaml": "^4.3.2",
+    "semver": "^7.8.5",
+    "cos-nodejs-sdk-v5": "3.0.0",
+    "tencentcloud-sdk-nodejs-teo": "4.1.330",
+    "tsx": "^4.23.13"
+  }
+}

@@ -270,7 +270,7 @@ describe('HTML bootstrap facade', () => {
     target.load({ id: MODULES_ID, factory: () => modulesClient })
     const system = target.create({
       boot: graph,
-      staticModules: {},
+      staticModules: [],
       loadBundle: async (url) => {
         expect(url).toBe(APPLICATION_URL)
         target.load({ id: UI_RENDERER_ID, factory: () => ({ marker: 'ui-renderer' }) })
@@ -282,7 +282,7 @@ describe('HTML bootstrap facade', () => {
     expect(system.manifest.rev).toBe('graph')
     expect(await system.import(MODULES_ID)).toBe(modulesClient)
     expect(await system.import(`${UI_RENDERER_ID}/client`)).toEqual({ marker: 'ui-renderer' })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow('create called after module-system boot')
   })
 
@@ -299,7 +299,7 @@ describe('HTML bootstrap facade', () => {
   it('rejects a page that did not preload the modules bundle', () => {
     const graph = bootGraph()
     const { target } = injectedFacade(graph)
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`HTML did not preload ${MODULES_ID}/client.js`)
   })
 
@@ -313,7 +313,7 @@ describe('HTML bootstrap facade', () => {
         return modulesClient
       },
     })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`${MODULES_ID}/client.js requested external "react"`)
   })
 
@@ -325,7 +325,7 @@ describe('HTML bootstrap facade', () => {
     const graph = bootGraph()
     const { target } = injectedFacade(graph)
     target.load({ id: MODULES_ID, factory: () => exports as unknown as Record<string, unknown> })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`${MODULES_ID}/client.js did not export the bootstrap module face`)
   })
 })

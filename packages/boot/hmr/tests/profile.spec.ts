@@ -1,5 +1,5 @@
 /** Profile watches share HMR's queue and readiness barrier without waiting for package installation. */
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -23,14 +23,32 @@ vi.mock('chokidar', async (original) => {
   } }
 })
 
-async function fixture(beforeWatch?: (profile: ProfileContext) => void) {
+/** An overlay file's content, or the empty home patch named directly or through a linked directory. */
+type Overlay = string | { home: 'path' | 'link' }
+
+/** Write each overlay beside the home patch. */
+async function fixture(beforeWatch?: (profile: ProfileContext) => void, overlays: readonly Overlay[] = []) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'hmr-profile-')))
   const dir = join(home, 'profiles', 'test')
   initProfile(dir, [])
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
+  const homePatch = join(home, 'cordis.patch.yml')
+  const overlayPaths = overlays.map((overlay, index) => {
+    if (typeof overlay === 'string') {
+      const path = join(home, `overlay-${index}.yml`)
+      writeFileSync(path, overlay)
+      return path
+    }
+    writeFileSync(homePatch, '[]\n')
+    if (overlay.home === 'path') return homePatch
+    // A directory junction aliases the home patch on every platform without file-symlink privileges.
+    const alias = join(home, `alias-${index}`)
+    symlinkSync(home, alias, 'junction')
+    return join(alias, 'cordis.patch.yml')
+  })
   const profile: ProfileContext = {
     name: 'test', dir, patchPath: join(dir, 'cordis.patch.yml'), home, cwd: home,
-    installAnchor: join(home, 'package.json'), startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+    installAnchor: join(home, 'package.json'), startedBundles: [], overlayPaths, telemetryDisabledEnv: undefined,
   }
   const rows = [{ insert: [
     { id: 'timer', name: 'cordis:timer' },
@@ -49,7 +67,8 @@ async function fixture(beforeWatch?: (profile: ProfileContext) => void) {
     host.loader.builtins.probe = { apply(ctx: Context, config: { value: string }) { ctx.provide('profileProbe', config.value) } }
   })
   onTestFinished(async () => { await ctx.fiber.dispose(); rmSync(home, { recursive: true, force: true }) })
-  const configWatches = watchers.slice(start, start + 3)
+  // Profile, home, and overlay patch watches precede the manifest watch.
+  const configWatches = watchers.slice(start, start + 3 + overlayPaths.length)
   const emit = (index: number, filename: string) => { configWatches[index]!.emit('change', filename) }
   const drain = () => ctx.hmr.runExclusive(async () => {})
   return { ctx, profile, dir, home, emit, drain, commit: () => commit?.() }
@@ -204,4 +223,51 @@ it('applies a patch edited after boot parsing but before watcher registration', 
   f.emit(0, f.profile.patchPath)
   await f.drain()
   expect(f.ctx.get('profileProbe')).toBe('edited-during-boot')
+})
+
+it('applies edited --patch overlays above profile and home patches in argv order', async () => {
+  const f = await fixture(undefined, ['- id: probe\n  config: { value: first }\n', '[]\n'])
+  f.commit()
+  expect(f.ctx.get('profileProbe')).toBe('first')
+  const [first, second] = f.profile.overlayPaths
+  writeFileSync(second!, '- id: probe\n  config: { value: second }\n')
+  f.emit(3, second!)
+  await f.drain()
+  expect(f.ctx.get('profileProbe')).toBe('second')
+  writeFileSync(join(f.home, 'cordis.patch.yml'), '- id: probe\n  config: { value: home }\n')
+  writeFileSync(second!, '[]\n')
+  f.emit(1, join(f.home, 'cordis.patch.yml'))
+  await f.drain()
+  expect(f.ctx.get('profileProbe')).toBe('first')
+  writeFileSync(first!, '[]\n')
+  f.emit(2, first!)
+  await f.drain()
+  expect(f.ctx.get('profileProbe')).toBe('home')
+})
+
+it('keeps the running configuration when an overlay file disappears and recovers when it returns', async () => {
+  const f = await fixture(undefined, ['- id: probe\n  config: { value: overlay }\n'])
+  f.commit()
+  const warn = vi.spyOn(f.ctx.logger, 'warn').mockImplementation(() => {})
+  onTestFinished(() => { warn.mockRestore() })
+  const [overlay] = f.profile.overlayPaths
+  rmSync(overlay!)
+  f.emit(2, overlay!)
+  await f.drain()
+  expect(warn.mock.calls.some(([reason]) => reason instanceof Error && reason.message.includes(`failed to read overlay ${overlay}`))).toBe(true)
+  expect(f.ctx.get('profileProbe')).toBe('overlay')
+  writeFileSync(overlay!, '- id: probe\n  config: { value: restored }\n')
+  f.emit(2, overlay!)
+  await f.drain()
+  expect(f.ctx.get('profileProbe')).toBe('restored')
+})
+
+it('watches a home patch also named by repeated or linked-directory overlays once', async () => {
+  const f = await fixture(undefined, [{ home: 'path' }, { home: 'path' }, { home: 'link' }])
+  f.commit()
+  const homePatch = join(f.home, 'cordis.patch.yml')
+  writeFileSync(homePatch, '- id: probe\n  config: { value: home }\n')
+  f.emit(1, homePatch)
+  await f.drain()
+  expect(f.ctx.get('profileProbe')).toBe('home')
 })

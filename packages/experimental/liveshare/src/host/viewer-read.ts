@@ -45,11 +45,11 @@ export interface ViewerReadDeps {
   /** Typert gateway; absent in profiles without the api gateway. */
   readonly gateway?: ViewerReadGateway
   /**
-   * Session the named share currently points at.
+   * Source Sessions the named share currently serves.
    * @param shareId - Share the Relay addressed.
-   * @returns The shared Session id, or undefined when the share is gone.
+   * @returns The source Session ids, primary first, or undefined when the share is gone.
    */
-  readonly sharedSessionId: (shareId: string) => string | undefined
+  readonly sharedSessionIds: (shareId: string) => readonly string[] | undefined
   /** Forked children this Host created, so a viewer's list can show exactly its own. */
   readonly forks?: ForkRegistry
   /**
@@ -104,14 +104,14 @@ export interface ViewerReadDeps {
    * A `write` share drives that Session with the viewer's input, so the prompt is refused unless the host
    * installed the layer that confines it. Absent means no layer this host can vouch for.
    */
-  readonly sourceConfined?: (shareId: string) => boolean
+  readonly sourceConfined?: (shareId: string, sessionId: string) => boolean
   /**
    * Why the share's source Session carries no usable layer, when the host recorded a reason.
    *
    * Diagnostics for the refusal's body: a capability the backend lacks reads differently from a layer that
    * was never attempted, and the owner or an integrator needs to tell those apart without a debugger.
    */
-  readonly sourceRefusal?: (shareId: string) => string | undefined
+  readonly sourceRefusal?: (shareId: string, sessionId: string) => string | undefined
   /**
    * Resolve or resume one Session through the owner's own service, without executing anything.
    *

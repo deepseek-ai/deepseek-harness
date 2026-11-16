@@ -14,14 +14,12 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync }
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
-import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   boot,
   readProfilePatches,
   createRuntimeResolution,
   initProfile,
   installFailLoud,
-  loadOverlayPatches,
   loadProfile,
   reportSkippedBundles,
   PluginPackages,
@@ -204,8 +202,8 @@ interface ComposedProfile {
   profile: Profile
   /** Immutable runtime resolution computed before any plugin imports. */
   resolution: RuntimeResolution
-  /** Command-line overlay contents, frozen for this invocation. */
-  overlays: PatchOptions[]
+  /** Absolute command-line overlay files, in argv order. */
+  overlayPaths: string[]
 }
 
 /**
@@ -231,8 +229,7 @@ async function composeProfile(
   if (resolvedProfile !== undefined) writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   const resolutionOptions = { installAnchor: resolvedProfile?.installAnchor ?? INSTALL_ANCHOR, profile }
   const resolution = await createRuntimeResolution(resolutionOptions)
-  const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
-  return { profile, resolution, overlays }
+  return { profile, resolution, overlayPaths: patchFiles.map(file => resolve(file)) }
 }
 
 /** An application-owned profile and its independent installation fallback. */
@@ -262,6 +259,17 @@ export interface RunProfileOptions {
 }
 
 /**
+ * Render a profile name as an RFC 9110 `User-Agent` product version: bytes outside `tchar`, and `%`, are percent-encoded,
+ * so spaces, `/`, and non-ASCII names stay readable and reversible.
+ * @param name - the booted profile name.
+ * @returns the encoded name.
+ */
+export function userAgentProfile(name: string): string {
+  // encodeURIComponent leaves only `(` and `)` outside tchar.
+  return encodeURIComponent(name).replace(/[()]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
+/**
  * Boot one profile invocation end to end and leave process lifetime to the
  * mounted plugins (or to a one-shot runner the composition mounts).
  * @param options - environment snapshot, profile name, overlays, and the booted app's own arguments.
@@ -269,6 +277,8 @@ export interface RunProfileOptions {
  * @throws after disposing startup resources; cleanup failures retain the original error.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
+  // Model providers see which profile sent a request.
+  process.env.DSH_USER_AGENT_SUFFIX = `dsh-profile/${userAgentProfile(options.profile)}`
   // Before the first plugin mounts and before anything can issue a request: Node's fetch ignores the
   // proxy environment on its own, so every profile would otherwise connect directly. Resolving from
   // the launcher's snapshot — not `process.env` — is what lets a proxy declared in a `.env` layer
@@ -318,7 +328,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       installAnchor: options.resolvedProfile?.installAnchor ?? INSTALL_ANCHOR,
       startedBundles: composed.profile.layers.map(layer => layer.packageName),
       cwd: process.cwd(), home: resolveDshHome(),
-      overlays: composed.overlays, telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+      overlayPaths: composed.overlayPaths, telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
     }
     const ctx = await boot(NAME, rootConfig, readProfilePatches(NAME, profileContext, composed.profile), async (hostCtx) => {
       app.current = hostCtx

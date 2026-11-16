@@ -15,7 +15,7 @@ const RELAY = 'https://relay.example.test/liveshare'
 function storedShare(overrides: Partial<OwnerShare> = {}): OwnerShare {
   return {
     shareId: 'share-1',
-    sessionId: 'session-1',
+    sessionIds: ['session-1'],
     sessionTitle: 'Session',
     accessMode: 'open',
     link: `${RELAY}/?shareId=share-1`,
@@ -56,6 +56,7 @@ interface Harness {
   readonly viewerRead: { closeShare: ReturnType<typeof vi.fn>; cancelPendingCalls: ReturnType<typeof vi.fn> }
   readonly forks: { revokeShare: ReturnType<typeof vi.fn> }
   readonly offeredCapabilities: ReturnType<typeof vi.fn>
+  readonly workspaces: ReturnType<typeof vi.fn>
   readonly persistOwnerState: ReturnType<typeof vi.fn>
   readonly applySourceAccess: ReturnType<typeof vi.fn>
   readonly accessChanged: ReturnType<typeof vi.fn>
@@ -67,6 +68,7 @@ interface Harness {
   readonly sourceConfined: ReturnType<typeof vi.fn>
   readonly storedCredential: ReturnType<typeof vi.fn>
   readonly effectiveRelay: ReturnType<typeof vi.fn>
+  readonly holdOwnerState: (held: boolean) => void
 }
 
 function harness(): Harness {
@@ -94,6 +96,9 @@ function harness(): Harness {
   const viewerRead = { closeShare: vi.fn(), cancelPendingCalls: vi.fn() }
   const forks = { revokeShare: vi.fn(async () => {}) }
   const offeredCapabilities = vi.fn(() => [])
+  const workspaces = vi.fn(() => [
+    { id: 'workspace-1', sessionIds: ['session-1', 'session-2'] },
+  ])
   const persistOwnerState = vi.fn(async () => {})
   const applySourceAccess = vi.fn(async () => {})
   const accessChanged = vi.fn()
@@ -105,13 +110,16 @@ function harness(): Harness {
   const sourceConfined = vi.fn(() => true)
   const storedCredential = vi.fn(() => undefined)
   const effectiveRelay = vi.fn(() => effective)
+  let ownerStateHeld = false
   const operations = createOwnerShareOperations({
     ownerShares,
     pendingRemovals,
+    ownerStateHeld: () => ownerStateHeld,
     allowedSubjectIds: [],
     forks,
     viewerRead,
     offeredCapabilities,
+    workspaces,
     relay,
     tunnel,
     effectiveRelay,
@@ -128,9 +136,10 @@ function harness(): Harness {
     reconcileSourceAccess,
   } as never)
   return {
-    operations, ownerShares, pendingRemovals, tunnel, relay, viewerRead, forks, offeredCapabilities,
+    operations, ownerShares, pendingRemovals, tunnel, relay, viewerRead, forks, offeredCapabilities, workspaces,
     persistOwnerState, applySourceAccess, accessChanged, cancelShareTurn, cancelChildTurns, reconcileSourceAccess,
     selectRelayAddress, bumpRelayRevision, sourceConfined, storedCredential, effectiveRelay,
+    holdOwnerState: (held: boolean) => { ownerStateHeld = held },
   }
 }
 
@@ -149,11 +158,11 @@ describe('creating a share', () => {
       allowedSubjectIds: ['alice'], sessionMode: 'write', allowsFork: true,
     })
 
-    expect(created).toMatchObject({ sessionId: 'session-1', sessionMode: 'write' })
+    expect(created).toMatchObject({ sessionIds: ['session-1'], sessionMode: 'write' })
     expect(created.link).toMatch(/^https:\/\/relay\.example\.test\/liveshare\/\?shareId=/u)
     const stored = h.ownerShares.get(created.shareId)
     expect(stored).toMatchObject({
-      sessionId: 'session-1', sessionTitle: 'My Session', accessMode: 'selected', relay: RELAY,
+      sessionIds: ['session-1'], sessionTitle: 'My Session', accessMode: 'selected', relay: RELAY,
       allowedSubjectIds: ['alice'], sessionMode: 'write', allowsFork: true, online: true, revision: 1,
     })
     expect(Date.parse(stored?.expiresAt ?? '')).toBeGreaterThanOrEqual(now + 10 * 60_000)
@@ -162,8 +171,119 @@ describe('creating a share', () => {
     expect(h.tunnel.waitForShare).toHaveBeenCalledWith(created.shareId, 15_000)
     expect(h.persistOwnerState).toHaveBeenCalledTimes(1)
     expect(h.tunnel.scheduleShareExpiry).toHaveBeenCalledWith(stored)
-    expect(h.applySourceAccess).toHaveBeenCalledWith(stored, undefined, 'publish')
+    expect(h.applySourceAccess).toHaveBeenCalledWith(stored, 'session-1', undefined, 'publish')
     expect(h.ownerShares.has('kept')).toBe(true)
+  })
+
+  it('adds source Sessions to one share', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2', 'session-2'] }))
+      .resolves.toEqual({ shareId: 'share-1', sessionIds: ['session-1', 'session-2'] })
+    expect(h.ownerShares.get('share-1')).toMatchObject({
+      sessionIds: ['session-1', 'session-2'],
+      revision: 2,
+    })
+    expect(h.persistOwnerState).toHaveBeenCalledTimes(1)
+    expect(h.applySourceAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionIds: ['session-1', 'session-2'] }), 'session-2', undefined, 'publish')
+    expect(h.accessChanged).toHaveBeenCalled()
+  })
+
+  it('refuses a Session from another workspace', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.workspaces.mockReturnValue([
+      { id: 'workspace-1', sessionIds: ['session-1'] },
+      { id: 'workspace-2', sessionIds: ['session-3'] },
+    ])
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-3'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/session-workspace-mismatch' })
+    expect(h.ownerShares.get('share-1')).toMatchObject({ sessionIds: ['session-1'] })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+    expect(h.applySourceAccess).not.toHaveBeenCalled()
+  })
+
+  it('refuses a share whose primary source belongs to no workspace', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.workspaces.mockReturnValue([{ id: 'workspace-1', sessionIds: ['session-2'] }])
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/session-workspace-unknown' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('refuses a share that lists no source Session', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare({ sessionIds: [] }))
+    h.workspaces.mockReturnValue([{ id: 'workspace-1', sessionIds: ['session-2'] }])
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/session-workspace-unknown' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('refuses a Session that belongs to no workspace', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.workspaces.mockReturnValue([{ id: 'workspace-1', sessionIds: ['session-1'] }])
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-9'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/session-workspace-unknown' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('refuses to add when the host cannot resolve workspaces', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.workspaces.mockReturnValue(undefined)
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/workspace-unavailable' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('refuses to add while the stored sources already span workspaces', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare({ sessionIds: ['session-1', 'session-2'] }))
+    h.workspaces.mockReturnValue([
+      { id: 'workspace-1', sessionIds: ['session-1', 'session-3'] },
+      { id: 'workspace-2', sessionIds: ['session-2'] },
+    ])
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-3'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/session-workspace-mismatch' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('is idempotent when every named Session is already served', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-1'] }))
+      .resolves.toEqual({ shareId: 'share-1', sessionIds: ['session-1'] })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+    expect(h.applySourceAccess).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unknown share or an empty source list', async () => {
+    const h = harness()
+    await expect(h.operations.addSessions({ shareId: 'missing', sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/share-not-found' })
+    h.ownerShares.set('share-1', storedShare())
+    await expect(h.operations.addSessions({ shareId: '', sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/missing-share-id' })
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: [] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/missing-session-ids' })
+    await expect(h.operations.addSessions({ shareId: 'share-1', sessionIds: [''] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/missing-session-ids' })
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+
+  it('restores the record when an addition cannot be written', async () => {
+    const h = harness()
+    const share = storedShare()
+    h.ownerShares.set(share.shareId, share)
+    h.persistOwnerState.mockRejectedValue(new Error('disk full'))
+    await expect(h.operations.addSessions({ shareId: share.shareId, sessionIds: ['session-2'] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/owner-state-unavailable' })
+    expect(h.ownerShares.get(share.shareId)).toBe(share)
+    expect(h.applySourceAccess).not.toHaveBeenCalled()
   })
 
   it('falls back to the session id and open/view defaults', async () => {
@@ -310,7 +430,7 @@ describe('stopping a share', () => {
     expect(h.cancelShareTurn).toHaveBeenCalledWith(share.shareId)
     expect(h.cancelChildTurns).toHaveBeenCalledWith(share.shareId)
     // A Session no share names any more loses its sandbox.
-    expect(h.reconcileSourceAccess).toHaveBeenCalledWith(share.sessionId)
+    expect(h.reconcileSourceAccess).toHaveBeenCalledWith(share.sessionIds[0])
     expect(h.forks.revokeShare).toHaveBeenCalledWith(share.shareId, expect.any(String))
     expect(h.ownerShares.has(share.shareId)).toBe(false)
     expect(h.accessChanged).toHaveBeenCalled()
@@ -362,7 +482,7 @@ describe('updating share permissions', () => {
     expect(h.persistOwnerState).toHaveBeenCalledTimes(1)
     // oxlint-disable-next-line typescript/no-unsafe-member-access, typescript/no-unsafe-return -- typed test doubles and mock calls.
     expect(h.tunnel.send.mock.calls.map(call => call[0].type)).toEqual(['remove-share', 'add-share'])
-    expect(h.applySourceAccess).toHaveBeenCalledWith(expect.objectContaining({ sessionMode: 'view' }), undefined, 'mode')
+    expect(h.applySourceAccess).toHaveBeenCalledWith(expect.objectContaining({ sessionMode: 'view' }), 'session-1', undefined, 'mode')
   })
 
   it('keeps the stored value for a switch the request omits', async () => {
@@ -379,7 +499,7 @@ describe('updating share permissions', () => {
     h.sourceConfined.mockReturnValue(false)
     await expect(h.operations.updatePermissions({ shareId: 'share-1', sessionMode: 'view' }))
       .resolves.toEqual({ shareId: 'share-1', sessionMode: 'view', allowsFork: false })
-    expect(h.applySourceAccess).toHaveBeenCalledWith(expect.objectContaining({ shareId: 'share-1' }), undefined, 'mode')
+    expect(h.applySourceAccess).toHaveBeenCalledWith(expect.objectContaining({ shareId: 'share-1' }), 'session-1', undefined, 'mode')
     expect(h.persistOwnerState).not.toHaveBeenCalled()
     expect(h.tunnel.send).not.toHaveBeenCalled()
 
@@ -744,9 +864,65 @@ describe('Relay checks', () => {
     h.tunnel.probeRelayPublish.mockResolvedValue({ ok: true, blocking: false })
     await expect(h.operations.testPublish({ sessionId: 'session-1' })).resolves.toEqual({ ok: true, blocking: false })
     expect(h.tunnel.shareSpec).toHaveBeenCalledWith(expect.objectContaining({
-      shareId: '', sessionId: 'session-1', sessionTitle: 'session-1', accessMode: 'open', relay: RELAY,
+      shareId: '', sessionIds: ['session-1'], sessionTitle: 'session-1', accessMode: 'open', relay: RELAY,
       allowedSubjectIds: [], allowsFork: false, sessionMode: 'view',
     }), { relay: RELAY, credential: 'owner-credential' })
     expect(h.tunnel.probeRelayPublish).toHaveBeenCalledWith(RELAY, expect.objectContaining({ shareId: '' }))
+  })
+})
+
+describe('reading the owner identity without the state', () => {
+  it('reports what this host holds without asking the Relay for support', async () => {
+    const h = harness()
+    h.holdOwnerState(true)
+    // The credential it reports is the one a login commits here; the probe would ask the holder's
+    // Relay on this host's behalf, and the owner-state-held case refuses the actions that read it.
+    await expect(h.operations.identity({})).resolves.toMatchObject({ relay: RELAY })
+    expect(h.tunnel.ownerIdentityStatus).toHaveBeenCalledWith(RELAY, {}, undefined)
+    expect(h.tunnel.probeRelayCredentialSupport).not.toHaveBeenCalled()
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+})
+
+describe('a state another live host owns', () => {
+  it('refuses every write and still lists what is shared', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.holdOwnerState(true)
+
+    for (const write of [
+      () => h.operations.create({ sessionId: 'session-1' }),
+      // The persisted record is the whole map, so an addition from a stale snapshot rolls back every
+      // share the holder created, changed, or stopped since this host restored its own.
+      () => h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2'] }),
+      () => h.operations.stop({ shareId: 'share-1' }),
+      () => h.operations.updatePermissions({ shareId: 'share-1', sessionMode: 'write' }),
+      // A request that repeats the stored state installs an access layer instead of returning.
+      () => h.operations.updatePermissions({ shareId: 'share-1' }),
+      () => h.operations.setCapabilities({ shareId: 'share-1', viewerPlugins: [], viewerPluginAccess: 'none' }),
+      () => h.operations.setRelay({ relayUrl: null }),
+      // Relay probes change state as well: testRelay persists owed removals from this host's stale
+      // maps, testPublish registers a throwaway share on the holder's Relay, and audit presents a
+      // management token.
+      () => h.operations.testRelay(),
+      () => h.operations.testPublish({ sessionId: 'session-1' }),
+      () => h.operations.audit({ shareId: 'share-1' }),
+    ]) {
+      await expect(write()).rejects.toMatchObject({ code: 'liveshareShares/owner-state-held' })
+    }
+    // No write reached a Relay, a stored record, an installed layer, or the state file.
+    expect(h.tunnel.send).not.toHaveBeenCalled()
+    expect(h.ownerShares.get('share-1')).toBeDefined()
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+    expect(h.applySourceAccess).not.toHaveBeenCalled()
+    expect(h.tunnel.probeRelayPublish).not.toHaveBeenCalled()
+
+    const listed = await h.operations.list()
+    expect(listed.shares.map(share => share.shareId)).toEqual(['share-1'])
+    // Everything that acts on the holder's Relay registration, including the title reconciliation that
+    // re-registers a renamed share, stays with the holder.
+    expect(h.relay.readRelayAuthority).not.toHaveBeenCalled()
+    expect(h.tunnel.reconcileShareTitles).not.toHaveBeenCalled()
+    expect(h.tunnel.flushPendingRemovals).not.toHaveBeenCalled()
   })
 })

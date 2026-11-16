@@ -26,7 +26,11 @@ kind: "package-library"
 
 本包是库，不是服务或插件：没有 `ctx`、没有注册、没有状态，也没有 I/O。
 
-先把获取到的文档解析为 JSON，再把该值和读取它的 URL 传给 `parseMarketIndex`。遇到第一条被违反的规则时，它抛出 `MarketIndexError`，并附带违规值的 JSON 路径。成功的结果会丢弃格式未定义的成员，用空值填充缺失的 `metadata` 分组、`keywords`、`labels`、`sortKeys` 和 `engines`，按 SemVer 优先级降序排列每个插件的 `versions`，并把每个相对 `icon` 引用替换为其绝对 URL。
+先把获取到的文档解析为 JSON，再把该值和读取它的 URL 传给 `parseMarketIndex`。遇到第一条被违反的规则时，它抛出 `MarketIndexError`，并附带违规值的 JSON 路径。成功的结果会丢弃格式未定义的成员，用空值填充缺失的 `metadata` 分组、`keywords`、`labels`、`sortKeys` 和 `engines`，并按 SemVer 优先级降序排列每个插件的 `versions`。
+
+对于 HTTP 或 HTTPS 索引，解析器以索引 URL 为基准解析相对 `icon` 引用。对于 `git+https` 和 `git+ssh` 索引，图标必须使用 HTTPS 绝对 URL 或 base64 数据 URL。
+
+在插件元数据中，`null` 表示不可用：元数据对象及其字段按缺省输入归一化，值为 null 的排序值会被省略。数值零会被保留。生成器省略不可用的元数据和值。未知的对象字段会被忽略，但已声明的映射条目、已知字段和来源判别字段仍会校验。
 
 使用 `marketInstallTarget(name, version)` 安装一个版本：它返回精确的 pnpm spec（npm 为 `name@version`，Git 为固定到提交、可带 `path:` 参数的 `git+https` URL），该版本指定了 registry 时还返回首先询问的 registry。
 
@@ -37,6 +41,7 @@ kind: "package-library"
 
 ```ts
 import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepseek-ai/dsh-plugin-market-index'
+import { gitMarketIndexSource, isGitMarketIndexSourceAddress, parseGitMarketIndexSource } from '@deepseek-ai/dsh-plugin-market-index/source'
 ```
 
 | 导出 | 作用 |
@@ -45,6 +50,9 @@ import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepse
 | `marketInstallTarget(name, version)` | 安装该精确版本的 `{ spec, registry? }`。 |
 | `MarketIndexError` | 携带 `path` 和 `reason` 的校验失败。 |
 | `MAX_INLINE_ICON_BYTES` | 内联 `data:` 图标解码后载荷的最大字节数，即 32 KiB。 |
+| `parseGitMarketIndexSource(input)` | 规范的 Git 索引地址、Git 远端和文件位置。 |
+| `gitMarketIndexSource(input, path?, ref?)` | 从粘贴的仓库链接和可选的文件位置生成规范的 Git 索引地址。 |
+| `isGitMarketIndexSourceAddress(input)` | 地址是否指向 Git 仓库。 |
 | `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketRepository`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | 经过校验的记录类型。 |
 
 <a id="model-experience"></a>

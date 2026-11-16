@@ -331,7 +331,7 @@ export function SidebarRoot({
         {/* Expanded, the brand doubles as a New Session shortcut while the
             access snapshot allows `session/create` — except on
             macOS, where it stays part of the logo row's window-drag surface
-            (a button would subtract itself through the global no-drag rule);
+            (the drag-row controls rule would subtract a button);
             the collapsed rail's logo is the expand toggle below instead.
             Mouse clicks on the local-build fallbacks copy the version instead. */}
         {wide && (() => {
@@ -380,25 +380,31 @@ export function SidebarRoot({
 
       {/* The label fades before the hover/focus shortcut, including on translucent backgrounds. */}
       {canStartSession && (
-        <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
-          <button
-            type="button"
-            className={css.newSession}
-            aria-label={t('session.new.label')}
-            aria-keyshortcuts={newShortcut?.aria}
-            onClick={openNewSession}
-          >
-            <span className={css.newSessionLabelMask}><span className={css.newSessionContent}>
-              {wide
-                ? <IconNewChatOutlineMedium size={14} />
-                : <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />}
-              {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
-            </span></span>
-            {wide && newShortcut !== undefined && newShortcut.keys.length > 0 && <span className={css.newSessionShortcut} aria-hidden="true">
-              <ShortcutKeys keys={newShortcut.keys} />
-            </span>}
-          </button>
-        </Tooltip>
+        <div className={css.newSessionRow}>
+          {renderSlot('sidebar.session.action', { wide }, {
+            children: (
+              <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
+                <button
+                  type="button"
+                  className={css.newSession}
+                  aria-label={t('session.new.label')}
+                  aria-keyshortcuts={newShortcut?.aria}
+                  onClick={openNewSession}
+                >
+                  <span className={css.newSessionLabelMask}><span className={css.newSessionContent}>
+                    {wide
+                      ? <IconNewChatOutlineMedium size={14} />
+                      : <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />}
+                    {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
+                  </span></span>
+                  {wide && newShortcut !== undefined && newShortcut.keys.length > 0 && <span className={css.newSessionShortcut} aria-hidden="true">
+                    <ShortcutKeys keys={newShortcut.keys} />
+                  </span>}
+                </button>
+              </Tooltip>
+            ),
+          })}
+        </div>
       )}
 
       <div className={css.scrollRegion}>

@@ -17,6 +17,7 @@ import {
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { en, zh } from '../src/client/locales.ts'
 import rowCss from '../src/client/rows/Rows.module.css'
+import { renderMenuButton } from './menu-button.tsx'
 
 afterEach(cleanup)
 beforeEach(() => { vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-hover: hover)' })) })
@@ -52,22 +53,24 @@ function realDoubleClick(el: Element): void {
   fireEvent.doubleClick(el)
 }
 
-function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, openSessionMenu = vi.fn(),
+function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, renderFactorySlot = renderMenuButton,
   useContextMenuTarget = select => select(null), useSessionAccess = allowAllAccess.useSessionAccess, ...props }: Omit<
-    SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'openSessionMenu' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'
-  > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'openSessionMenu' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'>>) {
+    SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'
+  > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'>>) {
   return <SessionNodeItemComponent {...props} renderSlot={renderSlot} onRenameRequest={onRenameRequest}
-    useContextMenu={props.useContextMenu ?? contextMenuHook((target, point) => { if (target.kind === 'session') openSessionMenu(target.value.sessionId, target.value.displayTitle, point) })} openSessionMenu={openSessionMenu} useContextMenuTarget={useContextMenuTarget} useSessionAccess={useSessionAccess} />
+    useContextMenu={props.useContextMenu ?? contextMenuHook()} renderFactorySlot={renderFactorySlot}
+    useContextMenuTarget={useContextMenuTarget} useSessionAccess={useSessionAccess} />
 }
 
 // Direct header specs hold every access answer unless the case refuses one.
 function ProjectRowItem({
-  useRemoteAccess = allowAllAccess.useRemoteAccess, useWorkspaceAccess = allowAllAccess.useWorkspaceAccess,
-  openWorkspaceMenu = vi.fn(), useContextMenuTarget = select => select(null), ...props
-}: Omit<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess' | 'openWorkspaceMenu' | 'useContextMenuTarget' | 'useContextMenu'>
-  & Partial<Pick<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess' | 'openWorkspaceMenu' | 'useContextMenuTarget' | 'useContextMenu'>>) {
-  return <ProjectRowItemComponent {...props} useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess}
-    useContextMenu={props.useContextMenu ?? contextMenuHook((target, point) => { if (target.kind === 'workspace') openWorkspaceMenu(target.value.workspaceId, target.value.path, target.value.displayTitle, point) })} openWorkspaceMenu={openWorkspaceMenu} useContextMenuTarget={useContextMenuTarget} />
+  useWorkspaceAccess = allowAllAccess.useWorkspaceAccess,
+  renderFactorySlot = renderMenuButton, useContextMenuTarget = select => select(null), ...props
+}: Omit<ProjectRowItemProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'>
+  & Partial<Pick<ProjectRowItemProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'>>) {
+  return <ProjectRowItemComponent {...props} useWorkspaceAccess={useWorkspaceAccess}
+    useContextMenu={props.useContextMenu ?? contextMenuHook()} renderFactorySlot={renderFactorySlot}
+    useContextMenuTarget={useContextMenuTarget} />
 }
 
 /** Half detection reads the row rect; jsdom rects are all-zero by default. */
@@ -109,7 +112,7 @@ describe('Workspace and Session hover handoff', () => {
       })
       const session: SessionNode = {
         id: sid('session'), title: 'Session', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<HoverCardGroup>
         <ProjectRowItem group={workspace('Workspace A')} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />
@@ -172,7 +175,7 @@ describe('native row drag previews', () => {
       }} onToggle={vi.fn()} onCreate={vi.fn()} drag={drag} t={t} />
       : <SessionNodeItem node={{
         id: sid('session'), title: 'Draggable row', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     const row = screen.getByRole('treeitem')
     stubRect(row)
@@ -235,7 +238,7 @@ describe('native row drag previews', () => {
     const image = start()
     rerender(<SessionNodeItem node={{
       id: sid('session'), title: 'Draggable row', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: true,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: true,
     }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     expect(row.getAttribute('draggable')).toBe('false')
     fireEvent.dragEnd(row)
@@ -262,19 +265,19 @@ describe('workspace browser rows', () => {
   it('keeps the leading status cell in the hierarchy-free flat list', () => {
     const idle: SessionNode = {
       id: sid('flat'), title: 'Flat Session', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const view = render(<SessionNodeItem node={idle} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
     // The cell is the row's first element and holds nothing while the row is
-    // idle without an occupant; the title follows it.
-    const cell = screen.getByText('Flat Session').previousElementSibling
+    // idle without an occupant; the title, whose text sits in an inner span, follows it.
+    const cell = screen.getByText('Flat Session').parentElement?.previousElementSibling
     expect(cell?.className).toMatch(/slot/)
     expect(cell?.children).toHaveLength(0)
 
     view.rerender(<SessionNodeItem node={{ ...idle, running: true }} currentId={undefined} now={0}
       onOpen={vi.fn()} t={t} />)
     // A row that gains a state dot keeps that dot in the same cell.
-    expect(screen.getByText('Flat Session').previousElementSibling?.querySelector('[data-state="ongoing"]')).toBeTruthy()
+    expect(screen.getByText('Flat Session').parentElement?.previousElementSibling?.querySelector('[data-state="ongoing"]')).toBeTruthy()
   })
 
   it('renders a selected content-search row and opens only its session', () => {
@@ -285,7 +288,7 @@ describe('workspace browser rows', () => {
       workspace: 'Workspace context',
       running: true,
       runningSubagentCount: 0,
-      completed: false,
+      completed: false, failed: false,
       archived: false,
       snippet: 'matching message excerpt',
     }
@@ -305,7 +308,7 @@ describe('workspace browser rows', () => {
   it('withholds the search-result restore control while the Session access excludes unarchiving', () => {
     const result: SearchResultNode = {
       id: sid('archived-result'), title: 'Archived', workspace: 'Project',
-      running: false, runningSubagentCount: 0, completed: false, archived: true,
+      running: false, runningSubagentCount: 0, completed: false, failed: false, archived: true,
     }
     const denied = vi.fn(() => false)
     const view = render(<SearchResultItem result={result} currentId={undefined}
@@ -327,7 +330,7 @@ describe('workspace browser rows', () => {
   ] as const)('shows %s ahead of running in search results', (pendingInteraction, label) => {
     const result: SearchResultNode = {
       id: sid(pendingInteraction), title: 'Needs input', workspace: 'Project',
-      pendingInteraction, running: true, runningSubagentCount: 0, completed: false, archived: false,
+      pendingInteraction, running: true, runningSubagentCount: 0, completed: false, failed: false, archived: false,
     }
     render(<SearchResultItem result={result} currentId={undefined}
       onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
@@ -361,7 +364,7 @@ describe('workspace browser rows', () => {
   it('renders and opens a selected running Session row', () => {
     const node: SessionNode = {
       id: sid('session'), title: 'Session', blank: false, running: true,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const onOpen = vi.fn()
     render(
@@ -379,7 +382,7 @@ describe('workspace browser rows', () => {
   it('keeps a row.action entry click in the strip, so a plain button does not open the row', () => {
     const node: SessionNode = {
       id: sid('session'), title: 'Session', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const onOpen = vi.fn()
     const pluginAction = vi.fn()
@@ -395,173 +398,80 @@ describe('workspace browser rows', () => {
   })
 
   it('marquees a clipped session title at a constant speed while the row is hovered', () => {
-    vi.useFakeTimers()
-    // jsdom implements no matchMedia; the stub answers the reduced-motion probe.
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
-    try {
-      const node: SessionNode = {
-        id: sid('clipped'), title: 'A Session Title Long Enough To Be Clipped (1)', blank: false,
-        running: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
-        pinned: false, archived: false,
-      }
-      render(
-        <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />,
-      )
-      const row = screen.getByRole('treeitem')
-      const title = screen.getByText(node.title)
-      // jsdom lays out nothing: the title's clipped geometry is stated outright.
-      const geometry = (scrollWidth: number, clientWidth: number): void => {
-        Object.defineProperty(title, 'scrollWidth', { value: scrollWidth, configurable: true })
-        Object.defineProperty(title, 'clientWidth', { value: clientWidth, configurable: true })
-      }
-
-      geometry(320, 180)
-      const touch = new Event('pointerover', { bubbles: true })
-      Object.defineProperty(touch, 'pointerType', { value: 'touch' })
-      fireEvent(row, touch)
-      vi.advanceTimersByTime(1000)
-      expect(title.scrollLeft).toBe(0)
-      fireEvent.pointerEnter(row)
-      // The first frame only records the clock; travel begins on the second.
-      vi.advanceTimersByTime(16)
-      expect(title.scrollLeft).toBe(0)
-      expect(title.hasAttribute('data-scrolled')).toBe(false)
-      expect(title.hasAttribute('data-clipped')).toBe(true)
-      // Constant 30px/s: 1600ms of frames crawl 48px, and the moved title
-      // publishes both fade-mask hooks — off its start, short of its far edge.
-      vi.advanceTimersByTime(1600)
-      expect(title.scrollLeft).toBeCloseTo(48, 5)
-      expect(title.hasAttribute('data-scrolled')).toBe(true)
-      expect(title.hasAttribute('data-clipped')).toBe(true)
-      // The crawl clamps at the far edge and rests there under the pointer;
-      // the right fade lifts so the final character reads at full strength.
-      vi.advanceTimersByTime(10_000)
-      expect(title.scrollLeft).toBe(140)
-      expect(title.hasAttribute('data-clipped')).toBe(false)
-      fireEvent.pointerLeave(row)
-      expect(title.scrollLeft).toBe(0)
-      expect(title.hasAttribute('data-scrolled')).toBe(false)
-      expect(title.hasAttribute('data-clipped')).toBe(false)
-
-      // A title that fits has no scroll range: hovering leaves it at its start.
-      geometry(180, 180)
-      fireEvent.pointerEnter(row)
-      vi.advanceTimersByTime(1000)
-      expect(title.scrollLeft).toBe(0)
-      fireEvent.pointerLeave(row)
-
-      // Overflow at the 8px jitter threshold also stays put.
-      geometry(188, 180)
-      fireEvent.pointerEnter(row)
-      vi.advanceTimersByTime(1000)
-      expect(title.scrollLeft).toBe(0)
-      fireEvent.pointerLeave(row)
-
-      // One pixel past the threshold crawls to its 9px extent.
-      geometry(189, 180)
-      fireEvent.pointerEnter(row)
-      vi.advanceTimersByTime(1000)
-      expect(title.scrollLeft).toBe(9)
-    } finally {
-      vi.useRealTimers()
-      vi.unstubAllGlobals()
+    const node: SessionNode = {
+      id: sid('clipped'), title: 'A Session Title Long Enough To Be Clipped (1)', blank: false,
+      running: false, runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0,
+      pinned: false, archived: false,
     }
-  })
-
-  it('continues a title crawl while its context menu owns the hover highlight', () => {
-    vi.useFakeTimers()
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
-    try {
-      const node: SessionNode = { id: sid('context-crawl'), title: 'A long Session title', blank: false,
-        running: false, runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false }
-      const props = { node, currentId: undefined, now: 0, onOpen: vi.fn(), t }
-      const view = render(<SessionNodeItem {...props} />)
-      const row = screen.getByRole('treeitem')
-      const title = screen.getByText(node.title)
-      Object.defineProperty(title, 'scrollWidth', { value: 400, configurable: true })
-      Object.defineProperty(title, 'clientWidth', { value: 160, configurable: true })
-      fireEvent.pointerEnter(row)
-      vi.advanceTimersByTime(1616)
-      expect(title.scrollLeft).toBeCloseTo(48)
-      view.rerender(<SessionNodeItem {...props} useContextMenuTarget={select => select({ kind: 'session',
-        value: { sessionId: node.id, displayTitle: node.title } })} />)
-      fireEvent.pointerLeave(row)
-      vi.advanceTimersByTime(1600)
-      expect(title.scrollLeft).toBeCloseTo(96)
-      view.rerender(<SessionNodeItem {...props} />)
-      expect(title.scrollLeft).toBe(0)
-    } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
-  })
-
-  it('jumps a clipped title to its far edge under reduced motion', () => {
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' })))
-    try {
-      const node: SessionNode = {
-        id: sid('reduced-motion'), title: 'A Session Title Long Enough To Be Clipped (1)', blank: false,
-        running: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
-        pinned: false, archived: false,
-      }
-      render(
-        <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />,
-      )
-      const row = screen.getByRole('treeitem')
-      const title = screen.getByText(node.title)
-      Object.defineProperty(title, 'scrollWidth', { value: 320, configurable: true })
-      Object.defineProperty(title, 'clientWidth', { value: 180, configurable: true })
-
-      fireEvent.pointerEnter(row)
-      expect(title.scrollLeft).toBe(140)
-      expect(title.hasAttribute('data-scrolled')).toBe(true)
-      expect(title.hasAttribute('data-clipped')).toBe(false)
-      fireEvent.pointerLeave(row)
-      expect(title.scrollLeft).toBe(0)
-      expect(title.hasAttribute('data-scrolled')).toBe(false)
-    } finally {
-      vi.unstubAllGlobals()
+    render(
+      <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />,
+    )
+    const row = screen.getByRole('treeitem')
+    // The title text sits in the span that travels; its parent clips it.
+    const title = screen.getByText(node.title).parentElement as HTMLElement
+    // jsdom lays out nothing: the title's clipped geometry is stated outright.
+    const geometry = (scrollWidth: number, clientWidth: number): void => {
+      Object.defineProperty(title, 'scrollWidth', { value: scrollWidth, configurable: true })
+      Object.defineProperty(title, 'clientWidth', { value: clientWidth, configurable: true })
     }
+    const marquee = (): (string | undefined)[] =>
+      [title.dataset.marquee, title.style.getPropertyValue('--dsh-marquee-range'), title.style.getPropertyValue('--dsh-marquee-duration')]
+
+    geometry(320, 180)
+    const touch = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(touch, 'pointerType', { value: 'touch' })
+    fireEvent(row, touch)
+    expect(marquee()).toEqual([undefined, '', ''])
+    // Constant 30px/s: the stylesheet travels the 140px overflow in 4667ms.
+    fireEvent.pointerEnter(row)
+    expect(marquee()).toEqual(['', '140px', '4667ms'])
+    // Leaving returns the title to its start in one step.
+    fireEvent.pointerLeave(row)
+    expect(marquee()).toEqual([undefined, '', ''])
+
+    // A title that fits has nothing to travel: hovering leaves it at rest.
+    geometry(180, 180)
+    fireEvent.pointerEnter(row)
+    expect(marquee()).toEqual([undefined, '', ''])
+    fireEvent.pointerLeave(row)
+
+    // Overflow at the 8px jitter threshold also stays put.
+    geometry(188, 180)
+    fireEvent.pointerEnter(row)
+    expect(marquee()).toEqual([undefined, '', ''])
+    fireEvent.pointerLeave(row)
+
+    // One pixel past the threshold travels its 9px extent.
+    geometry(189, 180)
+    fireEvent.pointerEnter(row)
+    expect(marquee()).toEqual(['', '9px', '300ms'])
   })
 
-  it('returns a marqueed title to its start in one step and cancels the crawl', () => {
-    vi.useFakeTimers()
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
-    try {
-      const node: SessionNode = {
-        id: sid('instant-return'), title: 'A Session Title Long Enough To Be Clipped (1)', blank: false,
-        running: false, runningSubagentCount: 0, completed: false, updatedAt: 0,
-        pinned: false, archived: false,
-      }
-      render(
-        <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />,
-      )
-      const row = screen.getByRole('treeitem')
-      const title = screen.getByText(node.title)
-      Object.defineProperty(title, 'scrollWidth', { value: 320, configurable: true })
-      Object.defineProperty(title, 'clientWidth', { value: 180, configurable: true })
-      const scrollTo = vi.fn()
-      Object.defineProperty(title, 'scrollTo', { value: scrollTo, configurable: true })
-
-      fireEvent.pointerEnter(row)
-      vi.advanceTimersByTime(160)
-      fireEvent.pointerLeave(row)
-      // Browsers receive the explicit instant behavior so mid-crawl positions
-      // never ease; the return is one step.
-      expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: 'instant' })
-      // Leaving cancels the crawl rather than letting it finish under the mask.
-      const settled = scrollTo.mock.calls.length
-      vi.advanceTimersByTime(1000)
-      expect(scrollTo.mock.calls.length).toBe(settled)
-    } finally {
-      vi.useRealTimers()
-      vi.unstubAllGlobals()
-    }
+  it('keeps a title marqueed while its context menu owns the hover highlight', () => {
+    const node: SessionNode = { id: sid('context-crawl'), title: 'A long Session title', blank: false,
+      running: false, runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false }
+    const props = { node, currentId: undefined, now: 0, onOpen: vi.fn(), t }
+    const view = render(<SessionNodeItem {...props} />)
+    const row = screen.getByRole('treeitem')
+    const title = screen.getByText(node.title).parentElement as HTMLElement
+    Object.defineProperty(title, 'scrollWidth', { value: 400, configurable: true })
+    Object.defineProperty(title, 'clientWidth', { value: 160, configurable: true })
+    fireEvent.pointerEnter(row)
+    expect(title.style.getPropertyValue('--dsh-marquee-range')).toBe('240px')
+    view.rerender(<SessionNodeItem {...props} useContextMenuTarget={select => select({ kind: 'session',
+      value: { sessionId: node.id, displayTitle: node.title } })} />)
+    fireEvent.pointerLeave(row)
+    expect(title.hasAttribute('data-marquee')).toBe(true)
+    view.rerender(<SessionNodeItem {...props} />)
+    expect(title.hasAttribute('data-marquee')).toBe(false)
   })
 
-  it('shows the green done dot only on a finished, unviewed session (live activity wins the slot)', () => {
+  it('shows the green unread dot only on an unread session (live activity wins the slot)', () => {
     const renderRow = (over: Partial<SessionNode>) => render(
       <SessionNodeItem
         node={{
           id: sid('s1'), title: 'One', blank: false, running: false,
-          runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false, ...over,
+          runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false, ...over,
         }}
         currentId={undefined} now={0} onOpen={vi.fn()} t={t}
       />,
@@ -572,27 +482,51 @@ describe('workspace browser rows', () => {
     const plain = renderRow({})
     expect(stateDot(plain)).toBeNull()
     plain.unmount()
-    // Completed while unviewed: the green done dot.
     const done = renderRow({ completed: true })
     expect(done.container.querySelector('[data-state="done"]')).not.toBeNull()
     done.unmount()
-    // Running wins the slot: the animated ongoing dot, no done dot.
-    const running = renderRow({ completed: true, running: true })
+    // Running wins the slot: the ongoing dot takes precedence over the unread dot.
+    const running = renderRow({ completed: true, failed: false, running: true })
     expect(running.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(running.container.querySelector('[data-state="done"]')).toBeNull()
     running.unmount()
     // Descendant activity also wins until the last running descendant stops.
-    const delegated = renderRow({ completed: true, runningSubagentCount: 1 })
+    const delegated = renderRow({ completed: true, failed: false, runningSubagentCount: 1 })
     expect(delegated.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(delegated.container.querySelector('[data-state="done"]')).toBeNull()
   })
+
+  it('shows a red unread failure and removes it after the Session is read', () => {
+    const node = {
+      id: sid('failed'), title: 'Failed', blank: false, running: false,
+      runningSubagentCount: 0, completed: true, failed: true, updatedAt: 0, pinned: false, archived: false,
+    }
+    const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
+    expect(view.container.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-state="done"]')).toBeNull()
+    expect(screen.getByText('运行出错')).toBeTruthy()
+    view.rerender(<SessionNodeItem node={{ ...node, completed: false }} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
+    expect(view.container.querySelector('[data-state]')).toBeNull()
+  })
+
+  it.each(['approval', 'plan-review', 'question'] as const)(
+    'keeps the yellow %s dot when the session is unread', (pendingInteraction) => {
+      render(<SessionNodeItem node={{
+        id: sid('unread-pending'), title: 'Pending', blank: false, running: false,
+        runningSubagentCount: 0, completed: true, failed: true, updatedAt: 0, pinned: false, archived: false, pendingInteraction,
+      }} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
+      const row = screen.getByRole('treeitem')
+      expect(row.querySelector('[data-state="warning"]')).not.toBeNull()
+      expect(row.querySelector('[data-state="done"]')).toBeNull()
+    },
+  )
 
   it('shows descendant activity without describing an idle parent as running', () => {
     vi.useFakeTimers()
     try {
       const node: SessionNode = {
         id: sid('owner'), title: 'Delegating', blank: false, running: false,
-        runningSubagentCount: 2, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 2, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       const row = screen.getByRole('treeitem')
@@ -613,7 +547,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('owner'), title: 'Delegating', blank: false, running: true,
-        runningSubagentCount: 1, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 1, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       const row = screen.getByRole('treeitem')
@@ -633,7 +567,7 @@ describe('workspace browser rows', () => {
   it('keeps child activity as a secondary status while user attention is primary', () => {
     const node: SessionNode = {
       id: sid('owner'), title: 'Needs input', blank: false, pendingInteraction: 'question',
-      running: false, runningSubagentCount: 1, completed: false, updatedAt: 0, pinned: false, archived: false,
+      running: false, runningSubagentCount: 1, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
     const row = screen.getByRole('treeitem')
@@ -643,11 +577,11 @@ describe('workspace browser rows', () => {
     expect(screen.getByText('1 个子智能体运行中')).toBeTruthy()
   })
 
-  it('shows the green done dot on a finished search result row', () => {
+  it('shows the green unread dot on an unread search result row', () => {
     render(<SearchResultItem
       result={{
         id: sid('result'), title: 'Done', workspace: 'Workspace', running: false,
-        runningSubagentCount: 0, completed: true, archived: false,
+        runningSubagentCount: 0, completed: true, failed: false, archived: false,
       }}
       currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()}
       useSessionAccess={allowAllAccess.useSessionAccess} t={t}
@@ -655,21 +589,25 @@ describe('workspace browser rows', () => {
     expect(screen.getByRole('treeitem').querySelector('[data-state="done"]')).not.toBeNull()
   })
 
-  it('workspace right-click and ellipsis capture the row without toggling expansion', () => {
-    const openWorkspaceMenu = vi.fn(), onToggle = vi.fn()
+  it('gives right-click and the shared button the Workspace row target without changing expansion', () => {
+    const openMenu = vi.fn(), onToggle = vi.fn()
+    const renderFactorySlot = vi.fn(renderMenuButton)
     const group: GroupNode = {
       key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
       sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
     }
-    const view = render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()} openWorkspaceMenu={openWorkspaceMenu} t={t} />)
+    const target = { kind: 'workspace', value: { workspaceId: wid('project'), path: '/projects/project', displayTitle: 'Project' } } as const
+    const view = render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 36, clientY: 48 })
-    expect(openWorkspaceMenu).toHaveBeenLastCalledWith(wid('project'), '/projects/project', 'Project', { x: 36, y: 48 })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
-    expect(openWorkspaceMenu).toHaveBeenLastCalledWith(wid('project'), '/projects/project', 'Project', { x: 0, y: 0 }, 'toggle')
+    expect(openMenu).toHaveBeenLastCalledWith(target, { x: 36, y: 48 })
+    expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
+      target, label: '工作区“Project”的操作', className: rowCss.iconButton,
+    })
     expect(onToggle).not.toHaveBeenCalled()
     view.rerender(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()} t={t}
-      useContextMenuTarget={select => select({ kind: 'workspace', value: { workspaceId: wid('project'), path: group.cwd!, displayTitle: 'Project' } })} />)
-    expect(screen.getByRole('button', { name: '工作区“Project”的操作' }).getAttribute('aria-expanded')).toBe('true')
+      useContextMenuTarget={select => select(target)} />)
+    expect(screen.getByRole('treeitem').className).toContain(rowCss.menuOpen)
   })
 
   it('workspace row offers only the actions its Workspace access snapshot allows', () => {
@@ -700,19 +638,17 @@ describe('workspace browser rows', () => {
     view.rerender(<ProjectRowItem {...props} useWorkspaceAccess={useWorkspaceAccess} />)
     expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '在“Project”中新建会话' }))
-    expect(props.onCreate).toHaveBeenCalledOnce()
+    expect(props.onCreate).toHaveBeenCalledExactlyOnceWith(props.group.workspaceId)
   })
 
-  it('ungrouped bucket asks the global resource whether it may start a Session', () => {
+  it('ungrouped bucket offers no New Session and asks no access', () => {
     const group: GroupNode = {
       key: 'ungrouped', workspaceId: undefined, cwd: undefined, createdAt: undefined, label: '',
       sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
     }
-    const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
     const useWorkspaceAccess = vi.fn(() => true)
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t}
-      useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess} />)
-    expect(useRemoteAccess).toHaveBeenCalledWith('session/create')
+      useWorkspaceAccess={useWorkspaceAccess} />)
     expect(useWorkspaceAccess).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /新建会话/ })).toBeNull()
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(true)
@@ -721,7 +657,7 @@ describe('workspace browser rows', () => {
   it('session row drags and renames from its title only while its access snapshot allows each', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const drag: RowDragProps = {
       active: false, marker: null, start: vi.fn(), end: vi.fn(), hover: vi.fn(), drop: vi.fn(),
@@ -896,7 +832,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s-blank'), title: 'ignored', blank: true, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       const rendered = vi.fn()
       const renderSlot: RowRenderSlot = (name: RowSlotName) => { rendered(name); return null }
@@ -922,7 +858,7 @@ describe('workspace browser rows', () => {
   describe('Session hover-card working directory', () => {
     const located: SessionNode = {
       id: sid('s-cwd'), title: 'Located', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       cwd: '/home/u/project',
     }
     function hoverCard(node: SessionNode): void {
@@ -952,24 +888,30 @@ describe('workspace browser rows', () => {
     })
   })
 
-  it('routes both context and More gestures to the clicked Session without selecting it', () => {
-    const onOpen = vi.fn(), openSessionMenu = vi.fn()
+  it('gives right-click and the shared button the Session row target and omits blank-row actions', () => {
+    const onOpen = vi.fn(), openMenu = vi.fn()
+    const renderFactorySlot = vi.fn(renderMenuButton)
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
-    render(<SessionNodeItem node={node} currentId={sid('other')} now={0} onOpen={onOpen} openSessionMenu={openSessionMenu} t={t} />)
+    const target = { kind: 'session', value: { sessionId: node.id, displayTitle: 'One' } }
+    render(<SessionNodeItem node={node} currentId={sid('other')} now={0} onOpen={onOpen}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 31, clientY: 47 })
-    expect(openSessionMenu).toHaveBeenLastCalledWith(node.id, 'One', { x: 31, y: 47 })
-    fireEvent.pointerDown(screen.getByRole('button', { name: '会话“One”的操作' }))
-    fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
-    expect(openSessionMenu).toHaveBeenLastCalledWith(node.id, 'One', { x: 0, y: 0 }, 'toggle')
+    expect(openMenu).toHaveBeenLastCalledWith(target, { x: 31, y: 47 })
+    expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
+      target, label: '会话“One”的操作', className: rowCss.iconButton,
+    })
     expect(onOpen).not.toHaveBeenCalled()
     cleanup()
-    render(<SessionNodeItem node={{ ...node, blank: true }} currentId={sid('other')} now={0} onOpen={onOpen} openSessionMenu={openSessionMenu} t={t} />)
-    openSessionMenu.mockClear()
+    openMenu.mockClear()
+    renderFactorySlot.mockClear()
+    render(<SessionNodeItem node={{ ...node, blank: true }} currentId={sid('other')} now={0} onOpen={onOpen}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'))
-    expect(openSessionMenu).not.toHaveBeenCalled()
+    expect(openMenu).not.toHaveBeenCalled()
+    expect(renderFactorySlot).not.toHaveBeenCalled()
   })
 
   it('renders the row action list inside the actions area after the menu trigger', () => {
@@ -982,7 +924,7 @@ describe('workspace browser rows', () => {
       : null
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen} renderSlot={renderSlot} t={t} />)
     const trigger = screen.getByRole('button', { name: '会话“One”的操作' })
@@ -1001,7 +943,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('more-hover'), title: 'More hover', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       const row = screen.getByRole('treeitem')
@@ -1026,7 +968,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('action-hover'), title: 'Action hover', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       const renderSlot: RowRenderSlot = (name: RowSlotName) => name === 'sidebar.workspaces.session.row.action'
         ? <Tooltip label="Archive" delayMs={500}><button type="button" aria-label="Archive" /></Tooltip>
@@ -1081,7 +1023,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Hovered', blank: false, running: true,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       const view = render(<SessionNodeItem node={node} currentId={undefined} now={60_000} onOpen={vi.fn()} t={t} />)
       const wrapper = screen.getByRole('treeitem').parentElement as HTMLElement
@@ -1112,11 +1054,12 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid(pendingInteraction), title: 'Needs input', blank: false,
-        pendingInteraction, running: true, runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        pendingInteraction, running: true, runningSubagentCount: 0, completed: false, failed: false,
+        updatedAt: 0, pinned: false, archived: false,
       }
       const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       const row = screen.getByRole('treeitem')
-      const title = screen.getByText('Needs input')
+      const title = screen.getByText('Needs input').parentElement as HTMLElement
       expect(row.querySelector('[data-state="warning"]')).toBeTruthy()
       expect(row.querySelector('[data-state="ongoing"]')).toBeNull()
       expect(row.textContent).toContain(label)
@@ -1147,11 +1090,12 @@ describe('workspace browser rows', () => {
   ] as const)('uses the compact English %s row label', (pendingInteraction, compactLabel) => {
     const node: SessionNode = {
       id: sid(pendingInteraction), title: 'Needs input', blank: false,
-      pendingInteraction, running: false, runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      pendingInteraction, running: false, runningSubagentCount: 0, completed: false, failed: false,
+      updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={tEn} />)
     const row = screen.getByRole('treeitem')
-    expect(screen.getByText('Needs input').nextElementSibling?.textContent).toBe(compactLabel)
+    expect(screen.getByText('Needs input').parentElement?.nextElementSibling?.textContent).toBe(compactLabel)
     expect(screen.getByText(compactLabel).getAttribute('aria-hidden')).toBe('true')
     expect(row.textContent).not.toContain('now')
   })
@@ -1161,7 +1105,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Quiet', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -1173,18 +1117,18 @@ describe('workspace browser rows', () => {
     }
   })
 
-  it('completed hover card shows the Completed status line', () => {
+  it('unread hover card identifies the reminder without claiming successful completion', () => {
     vi.useFakeTimers()
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Done', blank: false, running: false,
-        runningSubagentCount: 0, completed: true, updatedAt: 0, pinned: false, archived: false,
+        runningSubagentCount: 0, completed: true, failed: false, updatedAt: 0, pinned: false, archived: false,
       }
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(800) })
       // Row's visually-hidden reminder label plus the hover card's status line.
-      expect(screen.getAllByText('已完成')).toHaveLength(2)
+      expect(screen.getAllByText('未读')).toHaveLength(2)
     } finally {
       vi.useRealTimers()
     }
@@ -1195,7 +1139,7 @@ describe('workspace browser rows', () => {
     try {
       const node: SessionNode = {
         id: sid('s1'), title: 'Stored', blank: false, running: false,
-        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: true,
+        runningSubagentCount: 0, completed: true, failed: false, updatedAt: 0, pinned: false, archived: true,
       }
       const { rerender } = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -1204,6 +1148,7 @@ describe('workspace browser rows', () => {
       // resting status would restate the same inactivity and stays out.
       expect(screen.getAllByText('已归档')).toHaveLength(1)
       expect(screen.queryByText('空闲')).toBeNull()
+      expect(screen.queryByText('未读')).toBeNull()
 
       // Live activity on an archived session still shows beside the line.
       rerender(<SessionNodeItem node={{ ...node, running: true }} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
@@ -1217,7 +1162,7 @@ describe('workspace browser rows', () => {
   it('draggable row wires start/end and gates hover/drop on an active same-group drag', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'Drag me', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const inactive = dragProps()
     const { rerender } = render(
@@ -1259,7 +1204,7 @@ describe('workspace browser rows', () => {
   it('marks a pinned row and keeps it draggable', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'Pinned', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: true, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: true, archived: false,
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       drag={dragProps()} t={t} />)
@@ -1277,7 +1222,7 @@ describe('workspace browser rows', () => {
     const drag = dragProps({ active: true, marker: 'before' })
     render(<SessionNodeItem node={{
       id: sid('not-draggable'), title: 'Not draggable', blank: state === 'blank', running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: state === 'archived',
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: state === 'archived',
     }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.getAttribute('draggable')).toBe('false')
@@ -1289,7 +1234,7 @@ describe('workspace browser rows', () => {
   it('marks an archived row and blocks dragging it', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'Stored', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: true, archived: true,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: true, archived: true,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       drag={dragProps()} t={t} />)
@@ -1308,7 +1253,7 @@ describe('workspace browser rows', () => {
     const onOpen = vi.fn()
     const node: SessionNode = {
       id: sid('s1'), title: 'Named', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
@@ -1328,7 +1273,7 @@ describe('workspace browser rows', () => {
     const onOpen = vi.fn()
     const node: SessionNode = {
       id: sid('s1'), title: 'Named', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
@@ -1357,7 +1302,7 @@ describe('workspace browser rows', () => {
   it('flags an archived content-search result', () => {
     const result: SearchResultNode = {
       id: sid('result'), title: 'Old result', workspace: 'Workspace context',
-      running: false, runningSubagentCount: 0, completed: false, archived: true,
+      running: false, runningSubagentCount: 0, completed: false, failed: false, archived: true,
     }
     render(<SearchResultItem result={result} currentId={undefined}
       onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
@@ -1384,7 +1329,7 @@ describe('session row decoration seats', () => {
 
   const idle: SessionNode = {
     id: sid('idle'), title: 'Idle Session', blank: false, running: false,
-    runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
   }
 
   function renderRow(node: SessionNode, renderSlot: RowRenderSlot) {
@@ -1458,7 +1403,7 @@ describe('session row decoration seats', () => {
   })
 
   it.each<[string, SessionNode, string]>([
-    ['an unviewed completion (new message)', { ...idle, completed: true }, 'done'],
+    ['an unread reminder', { ...idle, completed: true }, 'done'],
     ['live activity', { ...idle, running: true }, 'ongoing'],
     ['a pending approval', { ...idle, pendingInteraction: 'approval' as const }, 'warning'],
     ['a running subagent', { ...idle, runningSubagentCount: 2 }, 'ongoing'],
@@ -1517,7 +1462,7 @@ describe('session row decoration seats', () => {
 
 it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (label, translate) => {
   const node: SessionNode = { id: sid('unnamed'), title: '', blank: false, running: false,
-    runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false }
+    runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false }
   const onRenameRequest = vi.fn()
   render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
     renderSlot={() => null} onRenameRequest={onRenameRequest} t={translate} />)
@@ -1528,7 +1473,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (
 
 it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed search results as %s', (label, translate) => {
   const result: SearchResultNode = { id: sid('unnamed-search'), title: '', workspace: 'Project',
-    running: false, runningSubagentCount: 0, completed: false, archived: false }
+    running: false, runningSubagentCount: 0, completed: false, failed: false, archived: false }
   const onOpen = vi.fn()
   render(<SearchResultItem result={result} currentId={undefined} onOpen={onOpen}
     onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={translate} />)

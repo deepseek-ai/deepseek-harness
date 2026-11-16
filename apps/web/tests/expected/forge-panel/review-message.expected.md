@@ -3,6 +3,7 @@
 > Side: R
 > Lines: 1
 > Source: Local (branch)
+> Base: origin/main
 > Diff hunk:
 > ```diff
 > @@ -0,0 +1,1 @@
@@ -16,6 +17,7 @@
 > Side: R
 > Lines: 1
 > Source: Local (branch)
+> Base: origin/main
 > Diff hunk:
 > ```diff
 > @@ -0,0 +1,1 @@

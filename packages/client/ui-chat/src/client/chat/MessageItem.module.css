@@ -28,6 +28,53 @@
   padding: 2px 0;
 }
 
+/* Inherited-history divider: a hairline split by a centered caption. The
+   bottom padding approaches the inter-turn space above it, so the divider
+   does not read as the next message's header. */
+.inheritedHistoryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 20px;
+}
+
+.inheritedHistoryLine {
+  flex: 1 1 0;
+  min-width: 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* Glyph and label share one caption and its tertiary ink. The 6px gap matches
+   a flow row's glyph-to-label gap; without the flow row's 16px leading box the
+   label starts 20px in rather than 22px. */
+.inheritedHistoryCaption {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The 14px flow-row glyph edge shared with DisclosureRow's leading icon: the
+   CSS edge overrides the svg's own width/height so the glyph follows the font
+   delta. */
+.inheritedHistoryIcon {
+  flex: none;
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
+}
+
+.inheritedHistoryLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Compaction marker: one 24px row with a context icon at rest and a
    hover/focus disclosure for the summary body. */
 .compactionRow {
@@ -321,7 +368,7 @@
   width: 240px;
   min-height: 64px;
   padding: 8px 12px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-input-major, transparent);
   box-sizing: border-box;
@@ -354,7 +401,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 15px;
 }

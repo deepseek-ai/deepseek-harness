@@ -4,7 +4,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { registerAgentTeamUi } from './mount.ts'
 
 export { inject } from './mount.ts'
-export type { TeamBoardProps } from './TeamBoard.tsx'
+export type { TeamBoardProps, TeamProgressProps } from './TeamBoard.tsx'
 export type { TeamKey } from './locales.ts'
 
 /**

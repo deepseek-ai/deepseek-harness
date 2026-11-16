@@ -1,6 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
+import type { ForgeReviewData, ForgeReviewWrite, ForgeThreadId } from '../src/types.ts'
 import { demo, FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 let ctx: Context | undefined
@@ -36,7 +37,7 @@ describe('forge registry', () => {
     expect(ctx.forge).toBeDefined()
   })
 
-  it('resolves remotes and change request URLs through the first provider that serves them', async () => {
+  it('resolves remotes and change request URLs through the provider that serves their host', async () => {
     ctx = await forgeContext()
     await provide(ctx, new FakeProvider('fake'))
     await provide(ctx, new FakeProvider('other'))
@@ -45,19 +46,37 @@ describe('forge registry', () => {
     expect(ctx.forge.changeRequestFromUrl('https://fake.test/Octo/Demo/change/7')).toEqual(ref(7))
     expect(ctx.forge.repositoryFromRemote('https://unknown.test/a/b')).toBeUndefined()
     expect(ctx.forge.changeRequestFromUrl('https://unknown.test/a/b/pull/1')).toBeUndefined()
+    expect(ctx.forge.changeRequestFromUrl('https://other.test/a/b/change/2')).toEqual({ repository: { forge: 'other', host: 'other.test', owner: 'a', name: 'b' }, number: 2 })
+  })
+
+  it('refuses a provider that lists a host another provider serves, compared without case', async () => {
+    ctx = await forgeContext()
+    await provide(ctx, new FakeProvider('fake', ['fake.test', 'shared.test']))
+
+    await expect(provide(ctx, new FakeProvider('other', ['other.test', 'Shared.TEST'])))
+      .rejects.toThrow('forge: host "Shared.TEST" is already served by the "fake" provider')
+    expect(ctx.forge.describe('other')).toBeUndefined()
+  })
+
+  it('describes the family of each registered provider', async () => {
+    ctx = await forgeContext()
+    await provide(ctx, new FakeProvider())
+
+    expect(ctx.forge.describe('fake')).toEqual({ forge: 'fake', label: 'Fake', changeRequestNoun: 'pull-request' })
+    expect(ctx.forge.describe('missing')).toBeUndefined()
   })
 
   it('delegates repository operations to the provider of their forge', async () => {
     ctx = await forgeContext()
     const provider = new FakeProvider()
     provider.heads.set('Octo/Demo:topic', [ref(3)])
-    provider.readinessResult = { state: 'unauthenticated', message: 'run gh auth login' }
+    provider.readinessResult = { state: 'unauthenticated', message: 'run gh auth login', signIn: { command: 'gh auth login' } }
     await provide(ctx, provider)
     const signal = new AbortController().signal
 
     expect(ctx.forge.changeRequestUrl(ref(3))).toBe('https://fake.test/Octo/Demo/change/3')
     await expect(ctx.forge.findByHead(demo, 'topic', signal)).resolves.toEqual([ref(3)])
-    await expect(ctx.forge.readiness(demo, signal)).resolves.toEqual({ state: 'unauthenticated', message: 'run gh auth login' })
+    await expect(ctx.forge.readiness(demo, signal)).resolves.toEqual({ state: 'unauthenticated', message: 'run gh auth login', signIn: { command: 'gh auth login' } })
   })
 
   it('rejects operations for a forge without a provider', async () => {
@@ -71,7 +90,7 @@ describe('forge registry', () => {
     await expect(ctx.forge.markReady(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.merge(ref(1, elsewhere), { method: 'squash', headSha: 'a'.repeat(40) }, signal))
       .rejects.toThrow('forge: no provider is registered for "missing"')
-    await expect(ctx.forge.diff(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.diff(ref(1, elsewhere), 'a'.repeat(40), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.fileText(ref(1, elsewhere), 'a'.repeat(40), 'x', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     expect(() => ctx!.forge.fileUrl(ref(1, elsewhere), 'a'.repeat(40), 'x')).toThrow('forge: no provider is registered for "missing"')
   })
@@ -97,11 +116,120 @@ describe('forge registry', () => {
     await provide(ctx, provider)
     const signal = new AbortController().signal
 
-    await expect(ctx.forge.diff(ref(3), signal)).resolves.toBe('diff --git a/x b/x')
+    await expect(ctx.forge.diff(ref(3), 'a'.repeat(40), signal)).resolves.toBe('diff --git a/x b/x')
     provider.readResult = { code: 'not-found', message: 'gone' }
     await expect(ctx.forge.fileText(ref(3), 'b'.repeat(40), 'src/a.ts', signal)).resolves.toEqual({ code: 'not-found', message: 'gone' })
     expect(ctx.forge.fileUrl(ref(3), 'b'.repeat(40), 'src/a.ts')).toBe(`https://fake.test/Octo/Demo/file/${'b'.repeat(40)}/src/a.ts`)
-    expect(provider.actions).toEqual(['diff 3', `text 3 ${'b'.repeat(40)} src/a.ts`])
+    expect(provider.actions).toEqual([`diff 3 ${'a'.repeat(40)}`, `text 3 ${'b'.repeat(40)} src/a.ts`])
+  })
+
+  it('reads commits and commit ranges only from a provider that implements both', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const list = { headSha: 'b'.repeat(40), truncated: false, commits: [] }
+
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.compare(ref(3), 'a'.repeat(40), 'b'.repeat(40), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'This provider does not read commits' })
+    const commits = vi.fn(async () => list)
+    Object.assign(provider, { commits })
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBeUndefined()
+    const compare = vi.fn(async () => 'diff --git a/x b/x')
+    Object.assign(provider, { compare })
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBe(list)
+    await expect(ctx.forge.compare(ref(3), 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toBe('diff --git a/x b/x')
+    expect(commits).toHaveBeenCalledWith(ref(3), expect.any(AbortSignal))
+    expect(compare).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), 'b'.repeat(40), expect.any(AbortSignal))
+  })
+
+  it('delegates review reads to the provider of their forge and reports a provider without them as unsupported', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider does not support review reads' })
+    const review: ForgeReviewData = {
+      headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: false, reviewEvents: [],
+    }
+    const readReview = vi.fn(async () => review)
+    Object.assign(provider, { readReview })
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal)).resolves.toBe(review)
+    expect(readReview).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), expect.any(AbortSignal))
+  })
+
+  it('delegates review writes to the provider of their forge and reports a provider without them as unsupported', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const write: ForgeReviewWrite = { kind: 'resolve', headSha: 'a'.repeat(40), thread: 'thread-1' as ForgeThreadId, resolved: true }
+
+    await expect(ctx.forge.writeReview(ref(3), write, signal))
+      .resolves.toEqual({ ok: false, code: 'unsupported', message: 'This provider does not support review writes' })
+    const writeReview = vi.fn(async () => ({ ok: true as const }))
+    Object.assign(provider, { writeReview })
+    await expect(ctx.forge.writeReview(ref(3), write, signal)).resolves.toEqual({ ok: true })
+    expect(writeReview).toHaveBeenCalledWith(ref(3), write, expect.any(AbortSignal))
+  })
+
+  it('reads and saves viewed marks only through a provider that implements both', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const marks = { headSha: 'a'.repeat(40), files: { 'src/a.ts': 'viewed' as const }, truncated: false }
+    const request = { path: 'src/a.ts', viewed: true, headSha: 'a'.repeat(40) }
+
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.setViewed(ref(3), request, signal)).resolves.toEqual({ code: 'failed', message: 'This provider keeps no viewed marks' })
+    const viewedFiles = vi.fn(async () => marks)
+    Object.assign(provider, { viewedFiles })
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBeUndefined()
+    const setViewed = vi.fn(async () => undefined)
+    Object.assign(provider, { setViewed })
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBe(marks)
+    await expect(ctx.forge.setViewed(ref(3), request, signal)).resolves.toBeUndefined()
+    expect(viewedFiles).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), expect.any(AbortSignal))
+    expect(setViewed).toHaveBeenCalledWith(ref(3), request, expect.any(AbortSignal))
+  })
+
+  it('fails the overview actions of a provider without them and forwards them to one with them', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const rerun = { headSha: 'a'.repeat(40) }
+    const reviewers = { reviewers: [{ kind: 'user' as const, login: 'mona' }] }
+    const update = { method: 'rebase' as const, headSha: 'a'.repeat(40) }
+
+    await expect(ctx.forge.rerunChecks(ref(3), rerun, signal)).resolves.toEqual({ code: 'failed', message: 'This provider reruns no checks' })
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toEqual({ code: 'failed', message: 'This provider requests no reviews' })
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider requests no reviews' })
+    await expect(ctx.forge.updateBranch(ref(3), update, signal)).resolves.toEqual({ code: 'failed', message: 'This provider updates no branches' })
+    // Requests need both halves of the review request capability.
+    const requestReviews = vi.fn(async () => undefined)
+    Object.assign(provider, { requestReviews })
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toMatchObject({ code: 'failed' })
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal)).resolves.toMatchObject({ code: 'unsupported' })
+
+    const candidates = [{ login: 'mona', name: 'Mona', avatarUrl: null, suggested: true }]
+    const reviewerCandidates = vi.fn(async () => candidates)
+    const rerunChecks = vi.fn(async () => undefined)
+    const updateBranch = vi.fn(async () => ({ code: 'stale' as const, message: 'moved' }))
+    Object.assign(provider, { reviewerCandidates, rerunChecks, updateBranch })
+    await expect(ctx.forge.rerunChecks(ref(3), rerun, signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal)).resolves.toBe(candidates)
+    await expect(ctx.forge.updateBranch(ref(3), update, signal)).resolves.toEqual({ code: 'stale', message: 'moved' })
+    expect(rerunChecks).toHaveBeenCalledWith(ref(3), rerun, expect.any(AbortSignal))
+    expect(requestReviews).toHaveBeenCalledWith(ref(3), reviewers, expect.any(AbortSignal))
+    expect(reviewerCandidates).toHaveBeenCalledWith(ref(3), 'mo', expect.any(AbortSignal))
+    expect(updateBranch).toHaveBeenCalledWith(ref(3), update, expect.any(AbortSignal))
   })
 
   it('delegates change request actions to the provider of their forge and returns its outcome', async () => {

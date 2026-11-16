@@ -1,6 +1,6 @@
 /** Card proposals, recorded decisions and user-action results shared by every action kind. */
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'

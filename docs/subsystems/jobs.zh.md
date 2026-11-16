@@ -182,6 +182,12 @@ interface JobOutcome {
    */
   detail?: string
   /**
+   * Exit code of the process the job ran, for a producer that runs one. A
+   * nonzero code on a `completed` job means the command reported failure while
+   * the job itself finished.
+   */
+  exitCode?: number
+  /**
    * Return value for jobs whose result is a value rather than a stream (a
    * workflow's rendered result, a subagent's report). The output ring carries
    * the stream; this is handed out once by the model's next {@link JobRegistry.read}.
@@ -295,6 +301,8 @@ interface JobView {
   readonly progress?: string
   /** Terminal reason (`exit code: 3`); a recorded kill reason is merged in. */
   readonly detail?: string
+  /** Exit code of the process the job ran, once settled, for a producer that reports one. */
+  readonly exitCode?: number
   /** Epoch ms when the job was registered. */
   readonly startedAt: number
   /** Epoch ms when the job settled; absent while live. */
@@ -404,6 +412,9 @@ Host service backing the generated `ctx.remote.job` namespace.
  * Stream the jobs one session can see — its own plus every unowned job —
  * as whole-set frames: one on open, then one after each coalesced burst of
  * lifecycle commits. The stream has no natural end; the carrier closes it.
+ *
+ * The Gateway names this call's Session resource from `request.sessionId`
+ * through the session controller's resolver; no explicit reader is needed.
  * @param request - the session whose visible set to mirror.
  * @param signal - cancellation owned by the Remote stream carrier.
  * @returns the roster frames.

@@ -1,6 +1,7 @@
 /** The Composer model's private Lexical editor, projections, and node operations. */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor, NodeKey } from 'lexical'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   $addUpdateTag, $createParagraphNode, $createTextNode, $getAdjacentNode, $isTextNode,
   $getRoot, $getSelection, $getNodeByKey, $isRangeSelection,
@@ -348,14 +349,15 @@ export class DraftEditorRuntime {
    * Insert one quote after the retained draft selection as an independent undo edit.
    * @param text - nonblank selected transcript text.
    * @param labels - current localized editor controls.
+   * @param summary - readable display shown instead of the text.
    * @returns whether the insertion position accepted the node.
    */
-  insertQuote(text: string, labels: QuoteNodeLabels): boolean {
+  insertQuote(text: string, labels: QuoteNodeLabels, summary?: QuoteSummary): boolean {
     let applied = false
     this.applyEdit(() => {
       const projection = $projectComposer(key => this.occurrenceIdOf(key))
       const at = projection.selection?.end ?? projection.detectText.length
-      applied = $replaceDetectSpanWithNodes({ start: at, end: at }, [$createQuoteNode(text, labels), $createTextNode(' ')])
+      applied = $replaceDetectSpanWithNodes({ start: at, end: at }, [$createQuoteNode(text, labels, summary), $createTextNode(' ')])
     }, PASTE_TAG)
     return applied
   }
@@ -451,7 +453,7 @@ export class DraftEditorRuntime {
         const occurrence = span.value
         appendText(draft.slice(cursor, occurrence.offset))
         if (span.kind === 'quote') {
-          paragraph.append($createQuoteNode(span.value.text, labels))
+          paragraph.append($createQuoteNode(span.value.text, labels, span.value.summary))
           cursor = occurrence.offset + occurrence.length
           continue
         }

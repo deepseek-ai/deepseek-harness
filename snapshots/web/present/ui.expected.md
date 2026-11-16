@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Use one run_code program to
   - text: PTC mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -13,6 +14,7 @@
 - button "Completed in {{duration}}" [expanded]
 - button "Called tools, ran code, ran commands" [expanded]
 - button "Context injection runtime-context"
+- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - button "Think The user wants one run_code program that:"
 - text: Failed

@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Use the bash tool to
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -13,6 +14,7 @@
 - button "Completed in {{duration}}" [expanded]
 - button "Ran commands" [expanded]
 - button "Context injection runtime-context"
+- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - button "Think The user wants me to run a simple bash command and reply with \"DONE\"."
 - button "Bash Echo the test string"

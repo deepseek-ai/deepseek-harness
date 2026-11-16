@@ -6,7 +6,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { PendingUserQuestion, UserQuestionProjectionView } from '@deepseek-ai/dsh-user-questions/types'
 import { QuestionComposer } from '../src/client/QuestionComposer.tsx'
 import { PendingQuestion } from '../src/client/contract/slots.ts'
@@ -16,7 +17,7 @@ import { TimedQuestionWait } from '../../../interaction/user-questions/src/timed
 
 const SESSION_ID = 'session-question' as SessionId
 const SESSION_SCOPE = Symbol('question-session-scope')
-const CALL = ToolCallId('call-timed')
+const CALL = brandString<ToolCallId>('call-timed')
 const QUESTIONS = [{ id: 'mode', question: 'Choose a mode' }] as const
 const ANSWER = { answers: [{ id: 'mode', selected: ['Fast'] }] }
 const PLAN_QUESTIONS: PendingQuestion['questions'] = [{
@@ -355,7 +356,7 @@ describe('apply', () => {
     // Unbinding the Session removes its cards and stops following its projection.
     b.list.set({ ...b.list.getSnapshot(), ids: [other], byId: { [other]: { id: other } } })
     expect(b.pending.getSnapshot()).toEqual([])
-    b.projection.set(view([{ ...CONTINUED, callId: ToolCallId('call-after-unbind') }]))
+    b.projection.set(view([{ ...CONTINUED, callId: brandString<ToolCallId>('call-after-unbind') }]))
     expect(b.pending.getSnapshot()).toEqual([])
   })
 
@@ -608,7 +609,7 @@ describe('apply', () => {
   it('creates a continued card from the projection and answers it through the Remote path', async () => {
     const b = await bench()
 
-    b.projection.set(view([CONTINUED, { callId: ToolCallId('call-other'), questions: [...QUESTIONS], state: 'continued' }]))
+    b.projection.set(view([CONTINUED, { callId: brandString<ToolCallId>('call-other'), questions: [...QUESTIONS], state: 'continued' }]))
     const cards = b.pending.getSnapshot()
     expect(cards.map(card => card.key)).toEqual([
       `question:${SESSION_ID}:${CALL}`, `question:${SESSION_ID}:call-other`,
@@ -627,7 +628,7 @@ describe('apply', () => {
   })
 
   it('queues an older answer while a later question is waiting', async () => {
-    const currentCall = ToolCallId('call-current')
+    const currentCall = brandString<ToolCallId>('call-current')
     const b = await bench(true, [CONTINUED, { ...CONTINUED, callId: currentCall, state: 'open' }])
     const current = b.invoke(b.agent, { ...timed(), wait: { callId: currentCall, timed: true } }, async () => ANSWER)
     await vi.waitFor(() => {
@@ -646,7 +647,7 @@ describe('apply', () => {
   })
 
   it('does not reopen a queued older answer after a browser reconnect', async () => {
-    const currentCall = ToolCallId('call-current')
+    const currentCall = brandString<ToolCallId>('call-current')
     const active = [CONTINUED, { ...CONTINUED, callId: currentCall, state: 'open' as const }]
     const b = await bench(true, active)
     try {
@@ -680,7 +681,7 @@ describe('apply', () => {
   })
 
   it('ignores unrelated inbox entries and recognizes a next-turn reply', async () => {
-    const otherCall = ToolCallId('call-other')
+    const otherCall = brandString<ToolCallId>('call-other')
     const b = await bench(true, [CONTINUED, { ...CONTINUED, callId: otherCall }])
     try {
       b.inbox.set(undefined)
@@ -762,7 +763,7 @@ describe('apply', () => {
     expect(b.pending.getSnapshot()).toEqual([])
     expect(card.snapshot().closed).toBe(true)
 
-    b.projection.set(view([CONTINUED, { callId: ToolCallId('call-after-dispose'), questions: [...QUESTIONS], state: 'continued' }]))
+    b.projection.set(view([CONTINUED, { callId: brandString<ToolCallId>('call-after-dispose'), questions: [...QUESTIONS], state: 'continued' }]))
     expect(b.pending.getSnapshot()).toEqual([])
   })
 })

@@ -10,7 +10,7 @@ The calling Session's current directory selects the source repository. Creation 
 
 The default destination is `<current checkout root>/.agents/worktrees/<name>`. `repositoryRoot` is the top-level directory of the caller’s current checkout; a linked checkout therefore contains its own pool. The service writes a `.gitignore` containing `*` and a trailing newline only when its allocation creates the configured pool directory. Existing files and ignore rules are preserved. The calling Session’s existing sandbox policy must permit writes to the destination and shared Git administration directory. Successful Git setup precedes the working-directory change.
 
-Leaving through `working_directory({ cd: path })` retains the checkout and branch. Cancellation or failure can also retain partial artifacts; the error identifies their location. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
+Leaving through `working_directory({ cd: path })` retains the checkout and branch. Cancellation or failure can also retain partial artifacts; the error identifies their location. Worktree failures throw `WorktreeError` with a `WORKTREE_*` code; a failure after allocation keeps the wrapped error's `name` and `code`, and caller cancellation stays an `AbortError`. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
 
 ## Request and result
 
@@ -74,6 +74,29 @@ interface RestoredWorktree {
 }
 ```
 
+```ts type-equiv
+/** One checkout in a Session's log and whether that Session, rather than a fork ancestor, created it. */
+interface WorktreeCreation {
+  readonly worktree: CreatedWorktree
+  /** False for a creation inside the fork-inherited prefix. */
+  readonly owned: boolean
+}
+```
+
+```ts type-equiv
+/** Process-local state of one archive-triggered cleanup of a checkout. */
+interface WorktreeCleanup {
+  /** Monotonic attempt number within this Host lifetime; a Remote waits on a specific one. */
+  readonly revision: number
+  /**
+   * `scheduled` until the background inspection ends; `retained` when a use,
+   * policy, or Git state keeps the checkout; `removed` after `git worktree
+   * remove`; `failed` when removal threw and may have left a partial directory.
+   */
+  readonly status: 'scheduled' | 'retained' | 'removed' | 'failed'
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -86,7 +109,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.worktrees` — `WorktreeService`
 
-Creates retained Git worktrees under the mounted filesystem and sandbox providers.
+Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.
 
 ```ts cordis-catalog
 /**
@@ -101,6 +124,8 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
  * @param signal - cancellation of lookup, creation, and working-directory publication.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
+ * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
+ *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
 
@@ -117,11 +142,46 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param signal - cancellation of the restoration.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns the directory and whether the branch was created again.
+ * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
+ *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
+
+/**
+ * Read the archive cleanup of a Session's created checkout; waiting never
+ * starts one. Absent without the Workspace and query providers.
+ * @param session - archived Session whose cleanup is read.
+ * @param revision - null reads at once; a matching revision waits for that attempt to settle.
+ * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
+ */
+async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
 ```
 
-Types: [Agent](core.md)
+Types: [Agent](core.md) · [Session](session.md)
 
 Source: [`packages/experimental/worktree/src/index.ts`](../../packages/experimental/worktree/src/index.ts)
+
+<a id="worktree-events"></a>
+
+### `worktree/*` events
+
+<a id="worktreecleanup--emit"></a>
+
+#### `worktree/cleanup` — emit
+
+A cleanup attempt changed state. Fires once at admission with `scheduled` and once at settlement with the final status.
+
+```ts cordis-catalog
+/**
+ * A cleanup attempt changed state. Fires once at admission with
+ * `scheduled` and once at settlement with the final status.
+ * @param info - the archived Session, the checkout, and the attempt state.
+ * @mode emit
+ */
+'worktree/cleanup'(info: { sessionId: SessionId; path: string; cleanup: WorktreeCleanup }): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/experimental/worktree/src/archive.ts`](../../packages/experimental/worktree/src/archive.ts)
 <!-- END GENERATED cordis-surface -->

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-atomic-write` to replace a file without exposing partial content or following a symlinked temporary path. Its writer lock serializes read-modify-write cycles across processes so concurrent writers cannot overwrite one another with stale state. Each replacement uses caller-selected permission bits on a fresh inode, which safely narrows an existing file's permissions. This zero-dependency library accepts strings and binary byte arrays; it does not provide a `cordis.yml` plugin or crash durability because it does not call `fsync`.
+Use `dsh-atomic-write` to replace a file without exposing partial content or following a symlinked temporary path. Its writer lock serializes read-modify-write cycles across processes so concurrent writers cannot overwrite one another with stale state. Each replacement uses caller-selected permission bits on a fresh inode, which safely narrows an existing file's permissions. This library depends only on `dsh-error` for its lock failure and accepts strings and binary byte arrays; it does not provide a `cordis.yml` plugin or crash durability because it does not call `fsync`.
 
 ## Table of Contents
 
@@ -60,7 +60,7 @@ Only writers contend — readers never take the lock — and a contender backs o
 
 Windows retries one `EPERM` when the lock cannot be observed, because its holder can release between exclusive creation and the existence check. A repeated unconfirmed `EPERM` is rethrown without running the operation.
 
-The lock's parent directory must already exist, so `withFileLock` rejects an invalid parent hierarchy before running the operation. A process that exits while holding the lock leaves the lock sibling behind, and the next writer takes it over. A lock whose record is empty or incomplete, or names a PID that a live process reused, is not taken over; later writers time out, and an operator removes it only after verifying that no writer still owns it. An optional `signal` cancels acquisition and contention waits; the operation owns cancellation after it starts.
+The lock's parent directory must already exist, so `withFileLock` rejects an invalid parent hierarchy before running the operation. A process that exits while holding the lock leaves the lock sibling behind, and the next writer takes it over. A lock whose record is empty or incomplete, or names a PID that a live process reused, is not taken over; later writers time out with `FileLockError` `FILE_LOCK_TIMEOUT`, which names the `lockPath`, and an operator removes it only after verifying that no writer still owns it. An optional `signal` cancels acquisition and contention waits; the operation owns cancellation after it starts.
 
 -----
 
@@ -76,7 +76,7 @@ The package is built on one separation: the atomic commit owns the swap, and the
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `writeFileAtomic` and `withFileLock`, the package's whole surface |
+| [`src/index.ts`](src/index.ts) | `writeFileAtomic`, `withFileLock`, and `FileLockError`, the package's whole surface |
 
 ### Write path
 
@@ -101,7 +101,7 @@ Read these pages when you need the consuming stores or the family this primitive
 
 - [Profile configuration editor](../../boot/config-editor/README.md) — the profile patch every edit replaces through this package.
 - [Credentials store](../../credentials/credentials-local/README.md) — the credentials file this package locks and replaces.
-- [util group map](../README.md) — the zero-dependency utility family this package belongs to.
+- [util group map](../README.md) — the utility family this package belongs to.
 
 -----
 

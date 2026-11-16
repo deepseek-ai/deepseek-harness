@@ -4,9 +4,10 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, LlmError, type ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -43,7 +44,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
     ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
   }))
-  const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('admission'), { provider: 'capable', model: 'model' })
   installModelSelection(agent.ctx)
   ctx.on('llm/stream', (request, next) => {
     // Rebuild from copied source events, not the live projection's cached state.
@@ -211,7 +212,7 @@ describe('prepared-route prompt admission', () => {
     expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(count)
     expect(systemTexts(adapter.requests.at(-1)!)).toEqual([])
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('cleared-resume'), agentOptions: { provider, model: 'model' },
+      sessionId: brandString<SessionId>('cleared-resume'), agentOptions: { provider, model: 'model' },
       seed: [...h.agent.session.snapshotEvents()],
     })
     await send(resumed, 'resume clear')
@@ -287,7 +288,7 @@ describe('prepared-route prompt admission', () => {
   })
 
   it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
-    const overflow = () => { throw new LlmError('context window exceeded', 'CONTEXT_LENGTH') }
+    const overflow = () => { throw LlmError.fromFailure({ message: 'context window exceeded', code: 'CONTEXT_LENGTH' }) }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), overflow, overflow, textResponse('done')])
     const h = await harness(adapter)
     const resolve = vi.spyOn(adapter, 'resolveModel')
@@ -386,7 +387,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('resumed-capable'), agentOptions: { provider: 'capable', model: 'model' },
+      sessionId: brandString<SessionId>('resumed-capable'), agentOptions: { provider: 'capable', model: 'model' },
       seed: [...h.agent.session.snapshotEvents()],
     })
     h.ctx.on('agent/pre-step', ({ agent }, next) => {
@@ -419,7 +420,7 @@ describe('prepared-route prompt admission', () => {
     await send(h.agent, 'second')
     const seed = h.agent.session.snapshotEvents()
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('resumed'),
+      sessionId: brandString<SessionId>('resumed'),
       agentOptions: { provider: 'plain', model: 'model' },
       seed: [...seed],
       setup: (_ctx, agent) => { agent.model.select({ provider: 'plain', model: 'model' }) },
@@ -459,13 +460,13 @@ describe('prepared-route prompt admission', () => {
   })
 
   it.each([
-    { selected: undefined, proposed: ReasoningEffortId('high') },
-    { selected: ReasoningEffortId('high'), proposed: ReasoningEffortId('low') },
-    { selected: ReasoningEffortId('high'), proposed: undefined },
+    { selected: undefined, proposed: brandString<ReasoningEffortId>('high') },
+    { selected: brandString<ReasoningEffortId>('high'), proposed: brandString<ReasoningEffortId>('low') },
+    { selected: brandString<ReasoningEffortId>('high'), proposed: undefined },
   ])('rejects an agent/request effort change from $selected to $proposed before input admission', async ({ selected, proposed }) => {
     const adapter = new MockAdapter([textResponse('never')], {
-      efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }, { id: ReasoningEffortId('high'), name: 'High' }],
-      defaultEffort: ReasoningEffortId('low'),
+      efforts: [{ id: brandString<ReasoningEffortId>('low'), name: 'Low' }, { id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+      defaultEffort: brandString<ReasoningEffortId>('low'),
     })
     const h = await harness(adapter)
     h.agent.model.select({
@@ -491,9 +492,9 @@ describe('prepared-route prompt admission', () => {
     const adapter = new MockAdapter([
       () => { throw new LlmError('retry this request', 'SERVER') },
       textResponse('recovered'),
-    ], { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] })
+    ], { efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }] })
     const h = await harness(adapter)
-    const selection = { provider: 'capable', model: 'model', reasoningEffort: ReasoningEffortId('high') }
+    const selection = { provider: 'capable', model: 'model', reasoningEffort: brandString<ReasoningEffortId>('high') }
     h.agent.model.select(selection)
     const prepared: (Readonly<ModelSelection> | undefined)[] = []
     h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {

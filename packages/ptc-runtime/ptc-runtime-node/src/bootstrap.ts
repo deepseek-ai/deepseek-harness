@@ -3,15 +3,64 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect, types } from 'node:util'
+import { inspect, types, type InspectOptions } from 'node:util'
+import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
-import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
+import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
-const isNativeError = types.isNativeError
-const capturedObjectCreate = Object.create
-const capturedObjectDefineProperty = Object.defineProperty
+const { isNativeError, isProxy } = types
+const {
+  create: capturedObjectCreate,
+  defineProperty: capturedObjectDefineProperty,
+  getOwnPropertyDescriptor: capturedObjectGetOwnPropertyDescriptor,
+  getPrototypeOf: capturedObjectGetPrototypeOf,
+  is: capturedObjectIs,
+} = Object
+const capturedOwnKeys = Reflect.ownKeys
+
+/** Text and the original JSON data associated with one binding result. */
+export interface BindingInspection {
+  /** Detached data used to detect changes before selecting the text. */
+  snapshot: PtcJsonValue
+  /** Host-authored text for direct inspection of the unchanged value. */
+  text: string
+}
+
+/** Compare data properties without invoking accessors or traversing model-created proxies. */
+function matchesInspection(value: object, snapshot: PtcJsonValue, images: Pick<WeakMap<object, string>, 'get'>): boolean {
+  const pending: [unknown, PtcJsonValue][] = [[value, snapshot]]
+  let size = 1
+  while (size > 0) {
+    const pair = pending[--size] as [unknown, PtcJsonValue]
+    const current = pair[0]
+    const original = pair[1]
+    if (capturedObjectIs(current, original)) continue
+    if (current === null || typeof current !== 'object' || original === null || typeof original !== 'object'
+      || isProxy(current) || images.get(original) !== undefined
+      || capturedObjectGetPrototypeOf(current) !== capturedObjectGetPrototypeOf(original)) return false
+    const keys = capturedOwnKeys(current)
+    if (keys.length !== capturedOwnKeys(original).length) return false
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index] as string | symbol
+      const actual = capturedObjectGetOwnPropertyDescriptor(current, key) as PropertyDescriptor
+      const expected = capturedObjectGetOwnPropertyDescriptor(original, key)
+      if (!expected || !('value' in actual) || actual.enumerable !== expected.enumerable) return false
+      const slot = capturedObjectCreate(null) as PropertyDescriptor
+      slot.value = [actual.value, expected.value as PtcJsonValue]
+      slot.configurable = true
+      capturedObjectDefineProperty(pending, size++, slot)
+    }
+  }
+  return true
+}
+
+/** Node formatting options shared with the runtime-owned Image hook. */
+export interface ImageInspectOptions extends InspectOptions {
+  /** Primitive token retained by Node when passing options to a formatter in another VM context. */
+  ptcImageCollector?: symbol
+}
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -84,32 +133,81 @@ export class LogBuffer {
     this.sink(text)
   }
 
+  /** Whether captured text has exceeded the shared output budget. */
+  get overflowed(): boolean { return this.truncated }
+
   /** Remaining exact JSON-byte budget for the completion value or failure message. */
   remainingOutputBytes(): number {
     return this.maxBytes - this.bytes
   }
 }
 
-/** The five console methods the shim captures, in the seam's level vocabulary. */
-const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
-
 /**
- * A `console` replacement whose five leveled methods render their arguments
- * `util.inspect`-style (matching real console formatting closely enough for
- * a model to recognize its own output) into the buffer. Only these five
- * exist — the program gets a deliberately small console, not Node's full
- * console API.
+ * Render arguments without depth, array-length or string-length previews and emit registered images in order.
  * @param logs - the buffer every rendered line is pushed into.
- * @returns the five-method console object handed to the program.
+ * @param images - Image identities owned by the execution process.
+ * @param emitImage - Emits a registered image in the current evaluation.
+ * @param inspections - Process-owned text associated with original binding result identities.
+ * @returns The program's inspect function and its matching Image collection hook.
+ * @throws If object formatting fails; preceding arguments remain visible.
  */
-export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
-  const render = (args: unknown[]): string =>
-    args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' ')
-  const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
-  for (const level of CONSOLE_LEVELS) {
-    shim[level] = (...args: unknown[]) => { logs.push(render(args)) }
+export function makeInspect(
+  logs: Pick<LogBuffer, 'push'>, images: Pick<WeakMap<object, string>, 'get'>, emitImage: (id: string) => void,
+  inspections?: Pick<WeakMap<object, BindingInspection>, 'get'>,
+): {
+  inspect: (...args: unknown[]) => void
+  collectImage: (image: object, options: ImageInspectOptions) => void
+} {
+  const collectors = new Map<symbol, string[]>()
+  const programInspect = (...args: unknown[]): void => {
+    const pending: string[] = []
+    const flush = (): void => {
+      if (pending.length === 0) return
+      logs.push(pending.join(' ') + '\n')
+      pending.length = 0
+    }
+    for (const arg of args) {
+      const inspection = arg !== null && typeof arg === 'object' ? inspections?.get(arg) : undefined
+      if (inspection !== undefined && matchesInspection(arg as object, inspection.snapshot, images)) {
+        flush()
+        if (inspection.text.length > 0) logs.push(inspection.text.endsWith('\n') ? inspection.text : inspection.text + '\n')
+        continue
+      }
+      const directImage = arg !== null && typeof arg === 'object' ? images.get(arg) : undefined
+      if (directImage !== undefined) {
+        flush()
+        emitImage(directImage)
+        continue
+      }
+      const nested: string[] = []
+      const collector = Symbol()
+      const options: ImageInspectOptions = {
+        depth: null, maxArrayLength: null, maxStringLength: null,
+        ptcImageCollector: collector,
+      }
+      collectors.set(collector, nested)
+      try {
+        pending.push(typeof arg === 'string' ? arg : inspect(arg, options))
+      } catch (error: unknown) {
+        flush()
+        throw error
+      } finally {
+        collectors.delete(collector)
+      }
+      if (nested.length === 0) continue
+      flush()
+      for (const id of nested) emitImage(id)
+    }
+    flush()
+    if (args.length === 0) logs.push('\n')
   }
-  return shim
+  return {
+    inspect: programInspect,
+    collectImage(image, options) {
+      const id = images.get(image)
+      if (id !== undefined && options.ptcImageCollector !== undefined) collectors.get(options.ptcImageCollector)?.push(id)
+    },
+  }
 }
 
 /**
@@ -141,9 +239,6 @@ export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: Patch
   }
   return () => { stream.write = original }
 }
-
-/** Bounded inspect options: deep enough to be useful, bounded so a pathological value cannot explode the rendering. */
-const INSPECT_OPTIONS = { depth: 4, maxArrayLength: 100, maxStringLength: 10_000 } as const
 
 /**
  * Prepare the program's completion value for the run result. Only lossless
@@ -182,8 +277,12 @@ export function prepareCompletion(
   return { value: encodePtcJsonWire(snapshot) }
 }
 
-/** Build the fixed overflow fragment without carrying rejected variable bytes. */
-function outputLimit(maxOutputBytes: number): ProgramResult {
+/**
+ * Build the fixed overflow fragment without carrying rejected variable bytes.
+ * @param maxOutputBytes Configured limit reported to the caller.
+ * @returns The output-limit failure shared by evaluation phases.
+ */
+export function outputLimit(maxOutputBytes: number): ProgramResult {
   return { error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } }
 }
 
@@ -251,12 +350,18 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
  * @param data - Namespace declarations injected into the program.
  * @param host - Evaluation-scoped remote binding calls.
  * @param errorClasses - Constructors shared with program globals, resolved per invocation.
- * @returns One namespace object per declaration; arguments and results must be lossless JSON.
+ * @param inspections - Required process-owned inspection text indexed by decoded result identity.
+ * @param decodeImage - Optional decoder for host-issued images; image tokens are rejected when absent.
+ * @param isImage - Optional recognition of decoded images; omission restricts inspection snapshots to JSON data.
+ * @returns One namespace object per declaration.
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
   host: Pick<HostMethods, 'invoke'>,
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
+  inspections: Pick<WeakMap<object, BindingInspection>, 'set'>,
+  decodeImage?: (wire: PtcImageWire) => PtcJsonValue,
+  isImage?: (value: object) => boolean,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
@@ -272,8 +377,20 @@ export function makeNamespaces(
               detached = undefined
             }
             if (detached === undefined) throw new CapturedError('binding arguments must be lossless JSON')
-            const result = decodePtcJsonWire(await host.invoke(global, name, encodePtcJsonWire(detached)))
+            const resolution: unknown = await host.invoke(global, name, encodePtcJsonWire(detached))
+            if (resolution === null || typeof resolution !== 'object' || Array.isArray(resolution) || !('value' in resolution)) {
+              throw new CapturedError('binding resolution must be lossless JSON')
+            }
+            const inspection = 'inspection' in resolution ? resolution.inspection : undefined
+            if (inspection !== undefined && typeof inspection !== 'string') throw new CapturedError('binding resolution must be lossless JSON')
+            const result = decodePtcJsonWire(resolution.value, decodeImage)
             if (result === undefined) throw new CapturedError('binding resolution must be lossless JSON')
+            if (inspection !== undefined) {
+              if (result === null || typeof result !== 'object') throw new CapturedError('binding inspection requires an object or array')
+              const snapshot = snapshotPtcJsonValue(result, isImage)
+              if (snapshot === undefined) throw new CapturedError('binding inspection requires lossless JSON data')
+              inspections.set(result, { snapshot, text: inspection })
+            }
             return result
           } catch (error: unknown) {
             throw bindingFailure(errorClass, name, error instanceof CapturedError ? error.message : String(error))

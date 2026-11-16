@@ -17,7 +17,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -33,6 +33,7 @@ import {
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createSessionTestRemote, testSessionPersistence, type TestSessionRemote } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const ownedContexts = new Set<Context>()
 afterEach(async () => {
@@ -136,7 +137,7 @@ async function harness(withRegistry: boolean): Promise<{
   await mountAgentLoopTestDependencies(ctx)
   const loop = await mountAgentLoopTestHarness(ctx)
   const agent = await loop.create(
-    SessionId(`session-projections-${String(nextHarnessSession++)}`),
+    brandString<SessionId>(`session-projections-${String(nextHarnessSession++)}`),
     {},
     { cwd: '/workspace' },
   )
@@ -165,11 +166,11 @@ describe('session.history projections block', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const parent = ctx.sessions.create(SessionId('wire-seed-parent'), { meta: { cwd: '/workspace' } })
+    const parent = ctx.sessions.create(brandString<SessionId>('wire-seed-parent'), { meta: { cwd: '/workspace' } })
     parent.append('turn/start', { turn: 1 })
     parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const inheritedEventCount = parent.seq
-    const child = ctx.sessions.create(SessionId('wire-seed-child'), {
+    const child = ctx.sessions.create(brandString<SessionId>('wire-seed-child'), {
       seed: parent.snapshotEvents(),
       inheritedEventCount,
       meta: {
@@ -238,7 +239,7 @@ describe('session.history projections block', () => {
     ownedContexts.add(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await mountAgentLoopTestHarness(ctx)
-    const coldId = SessionId('cold-persisted-queue')
+    const coldId = brandString<SessionId>('cold-persisted-queue')
     const meta: SessionHeader = { version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 1, cwd: '/tmp', isSeeded: false }
     const message = createUserMessage({
       content: [{ type: 'text', text: 'survive process restart' }],
@@ -417,11 +418,16 @@ describe('session.history projections block', () => {
       .toBe(false)
 
     seedMessages(session, 1)
-    const changed = await iterator.next()
-    expect(changed).toMatchObject({
-      done: false,
-      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
-    })
+    let changed = await iterator.next()
+    while (!changed.done && changed.value.type === 'projection'
+      && !changed.value.changes.some(change => change.key === 'sessionListMetadata')) {
+      expect(changed.value.changes.map(change => change.key)).not.toContain('test/internal-count')
+      changed = await iterator.next()
+    }
+    if (changed.done || changed.value.type !== 'projection') throw new Error('control stream ended before its projection')
+    const keys = changed.value.changes.map(change => change.key)
+    expect(keys).toContain('sessionListMetadata')
+    expect(keys).not.toContain('test/internal-count')
     abort.abort()
     await iterator.return?.()
 
@@ -490,7 +496,7 @@ describe('session.list projections column', () => {
 
   it('lists the latest preset selected by a blank Session instead of its creation preset', async () => {
     const { ctx } = await harness(true)
-    const session = ctx.sessions.create(SessionId('preset-list'), {
+    const session = ctx.sessions.create(brandString<SessionId>('preset-list'), {
       meta: { cwd: '/workspace', agentPreset: 'standard' },
     })
     await ctx.sessionProjections.register(agentPresetProjectionDefinition)
@@ -527,7 +533,7 @@ describe('session.list projections column', () => {
     expect(excludedApply).not.toHaveBeenCalled()
   })
 
-  it('carries every registered summary key, which is only its own list metadata when no other unit is registered', async () => {
+  it('carries list metadata and unavailable retry eligibility through registered summary keys', async () => {
     const { ctx, session } = await harness(false)
     seedMessages(session, 1)
     const response = await (await remote(ctx)).list(request({}))
@@ -535,12 +541,13 @@ describe('session.list projections column', () => {
     const row = response.value.items.find(item => item.sessionId === session.id)
     expect(row?.projections?.kind).toBe('sequenced')
     expect(Object.keys(row?.projections?.values ?? {})).toEqual([...ctx.sessionProjections.summaryKeys()])
-    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['sessionListMetadata'])
+    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['conversationContinuation', 'sessionListMetadata'])
+    expect(row?.projections?.values.conversationContinuation).toBeNull()
   })
 
   it('serves the summary projection hints from the cache with zero log loads', async () => {
     const { ctx } = await harness(true)
-    const coldId = SessionId('session-cold-listing')
+    const coldId = brandString<SessionId>('session-cold-listing')
     const load = () => { throw new Error('list must not load event logs') }
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: async () => [{ version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
@@ -596,7 +603,7 @@ describe('session.list projections column', () => {
       const gateway = await remote(ctx)
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      const id = SessionId('session-cold-host-state')
+      const id = brandString<SessionId>('session-cold-host-state')
       const secret = 'private prompt text from the cache'
       let session: Session | undefined
       const owner = await ctx.plugin(Object.assign((sessionCtx: Context) => {
@@ -636,7 +643,7 @@ describe('session.list projections column', () => {
 
   it('lists a forked Session\'s cached title after a Host restart without opening its body', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-api-projcache-'))
-    const id = SessionId('session-cold-fork')
+    const id = brandString<SessionId>('session-cold-fork')
     /** One Host process over `root`: storage stack, registry with the title unit, and the cache. */
     const boot = async (): Promise<Context> => {
       const ctx = new Context()
@@ -662,7 +669,7 @@ describe('session.list projections column', () => {
       await new Promise(resolve => setTimeout(resolve, 0))
       let child: Session | undefined
       const owner = await first.plugin(Object.assign((sessionCtx: Context) => {
-        const parent = sessionCtx.sessions.create(SessionId('session-cold-fork-parent'), {
+        const parent = sessionCtx.sessions.create(brandString<SessionId>('session-cold-fork-parent'), {
           meta: { createdAt: 5, cwd: '/workspace' },
         })
         parent.append('turn/start', { turn: 1 })
@@ -719,7 +726,7 @@ describe('session.list projections column', () => {
 
   it('cold rows without a cache plugin (or without a stored row) just lack the column', async () => {
     const { ctx } = await harness(true)
-    const coldId = SessionId('session-cold-uncached')
+    const coldId = brandString<SessionId>('session-cold-uncached')
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: async () => [{ version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
     }) as never)
@@ -754,11 +761,12 @@ describe('Session control projection frames', () => {
     iterable: AsyncIterable<SessionControlFrame>,
     count: number,
     abort: AbortController,
+    keys: readonly string[],
   ): Promise<SessionControlFrame[]> {
     const frames: SessionControlFrame[] = []
     for await (const frame of iterable) {
       frames.push(frame)
-      if (frames.filter(candidate => candidate.type === 'projection').length >= count) abort.abort()
+      if (frames.filter(candidate => candidate.type === 'projection' && candidate.changes.some(change => keys.includes(change.key))).length >= count) abort.abort()
     }
     return frames
   }
@@ -772,7 +780,7 @@ describe('Session control projection frames', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 3, abort)
+    const collected = collect(stream, 3, abort, ['test/last-user', 'sessionListMetadata'])
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)
@@ -789,6 +797,7 @@ describe('Session control projection frames', () => {
       {
         type: 'projection', sessionId: session.id, seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },
@@ -829,6 +838,7 @@ describe('Session control projection frames', () => {
       value: {
         type: 'projection', seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },

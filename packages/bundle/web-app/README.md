@@ -54,12 +54,16 @@ The `minimal` agent preset uses a persistent shell, the `read_image` tool, and a
 
 | Field | Default | Meaning |
 |---|---|---|
-| `openBrowser` | `true` | Open the default browser after startup; SSH launches suppress it |
-| `printUrl` | `true` | Print the `dsh web:` URL line at startup |
+| `printUrl` | `true` | Print contributed entry URLs after startup settles |
+| `openBrowser` | `true` | Open the first eligible entry after startup, except under SSH |
 | `surfaceContext` | `true` | Expose `DSH_WEB_URL` to the agent's shell commands |
 | `publicUrl` | Unset | Advertised HTTP(S) application root; otherwise announce the bind-address URL |
 
+WebApp owns `printUrl` and `openBrowser`. This bundle enables URL printing and maps the parsed `--no-open` setting to the runtime. After readiness, synchronous `webserver/entry-url` listeners contribute complete entries. WebApp prints every entry as `label: url` when printing is enabled and opens only the first entry marked `open: true` when browser opening is enabled outside SSH. No entries means no output or opening.
+
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them.
+
+The `standard`, `cordis`, and `ptc` presets set `config.interrupt: false` on their `tool-subagent-control` rows. To expose `interrupt_agent`, including in Team mode, override the relevant preset declaration as described in the [migration steps](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.md); changing the disabled Host row does not change preset tools.
 
 <a id="public-deployments"></a>
 ### Listening, trust, and public deployments
@@ -82,7 +86,7 @@ Without `--public-url`, mapped IPv6 loopback binds such as `::ffff:127.0.0.1` ad
 
 Neither the advertised URL nor the browser-trust fence protects the port itself, so restrict the port to the trusted proxy or network.
 
-The printed URL contains a process credential; share it only with intended users. `printUrl: false` suppresses the line with or without `--public-url`, and the credential never appears in the model context or in `DSH_WEB_URL`.
+The printed URL contains a process credential; share it only with intended users. `printUrl: false` on the WebApp runtime suppresses the line with or without `--public-url`, and the credential never appears in the model context or in `DSH_WEB_URL`.
 
 ### Running over SSH
 
@@ -92,6 +96,10 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
+Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
+
+The packaged skill uses the custom skill root: a same-named project skill overrides it, and it overrides same-named user skills. One catalog entry wins without an error; see [skill-root priority](../../skill/skill-filesystem/README.md).
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -100,7 +108,9 @@ Each browser session selects a shipped preset (`standard` by default). The Agent
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The bundle is one patch layer of five files plus one runtime glue plugin: `cordis.patch.yml` carries the host rows and the preset registry, and each `presets/<id>.patch.yml` inserts one shipped preset declaration, applied in the order `dsh.bundle.patch` lists them. The storage stack and projection cache come from `dsh-base`; the web overlay's workspace and message-feedback rows consume that shared `storageDomain` service. The patch restates the surface-specific values the base deliberately omits, inserts the web-only host rows and browser roster, then moves the agent plane behind presets. The glue plugin owns dist serving, the advertised application URL, the plain-HTTP exposure warning, the bash variable, and the readiness announcements. The `office-to-pdf` row mounts one lazy [Office conversion provider](../../document/office-to-pdf/README.md) for Host consumers, including Desktop compositions using this bundle. The conversion service's Remote methods authorize preview reads, while Document Preview owns the Office viewer and Client cache.
+The bundle is one patch layer of five files plus one runtime glue plugin: `cordis.patch.yml` carries the host rows and the preset registry, and each `presets/<id>.patch.yml` inserts one shipped preset declaration, applied in the order `dsh.bundle.patch` lists them. The storage stack and projection cache come from `dsh-base`; the web overlay's workspace and message-feedback rows consume that shared `storageDomain` service. The patch restates the surface-specific values the base deliberately omits, inserts the web-only host rows and browser roster, then moves the agent plane behind presets. The glue plugin owns dist serving, the advertised application URL, the plain-HTTP exposure warning, and the bash variable. WebApp owns startup URL publication and browser handoff; the [Token authentication plugin](../../host/authentication-token/README.md) contributes its signed entry URL. The `office-kit` row mounts one lazy [Office conversion provider](../../document/office-kit/README.md) for Host consumers, including Desktop compositions using this bundle, and keeps converted files under `$DSH_HOME/office-kit/outputs`. The `standard` and `ptc` presets mount the [Office tools](../../document/tool-office/README.md) in every profile, whether or not Kit is installed, and declare them after an Office skill loads; the `minimal` preset omits them. The conversion service's Remote methods authorize preview reads, while Document Preview owns the Office viewer and Client cache.
+
+The `skill-office` row mounts the [Office skills](../../skill/skill-office/README.md) from their packaged assets in every profile. Desktop with a nonempty `DSH_PRIMARY_RUNTIME` also mounts the bundled dependency-query row and selects `pythonEnvironment: 'workspace-dependencies'`; other profiles, and Desktop without a primary runtime, select `pythonEnvironment: 'user'` and leave the dependency-query row disabled. The [Desktop application](../../../apps/desktop/README.md#bundled-workspace-dependencies) owns resource packaging.
 
 ### Patch semantics
 
@@ -112,21 +122,20 @@ Startup display and browser handoff receive the advertised root with its launch 
 
 ### Readiness
 
-The URL line and browser handoff are readiness signals: supervisors RPC as soon as they observe the line, and a browser requests the page as soon as it opens, so both run only after the Loader tree settles, the required-startup audit passes, and Connection authentication is available — or immediately in a hand-built tree without a Loader. Client combo JavaScript and source maps remain unmaterialized at this point. Optional plugin failures do not suppress readiness; a required startup failure or a tree disposed mid-boot announces nothing.
+The URL line and browser handoff are readiness signals: supervisors RPC as soon as they observe the line, and a browser requests the page as soon as it opens, so both run only after the Loader tree settles and the required-startup audit passes — or immediately in a hand-built tree without a Loader. Client combo JavaScript and source maps remain unmaterialized at this point. Optional plugin failures do not suppress readiness; a required startup failure or a tree disposed mid-boot announces nothing. Entry collection passes the ordinary base URL and a mutable entry list; each listener synchronously appends its label, complete URL, and automatic-opening eligibility. Publication runs once per root application; providers that contribute no entry produce no line.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The `web-app` glue plugin: dist resolution, advertised application URL, bash variable, URL line, browser handoff |
+| [`src/index.ts`](src/index.ts) | The `web-app` glue plugin: dist resolution, advertised application URL, bash variable |
 | [`src/public-url.ts`](src/public-url.ts) | Advertised-root validation and trailing-slash normalization; a leaf module for local imports, not package API |
 | [`src/startup.ts`](src/startup.ts) | The `web-startup` provider: `--host`, `--port`, `--tls-cert`, `--tls-key`, `--public-url`, `--trusted-host`, `--no-open`, `--help` |
 | [`cordis.patch.yml`](cordis.patch.yml) | The web patch: restated base values, web host rows, browser roster, preset registry |
 | [`presets/`](presets) | One `@deepseek-ai/dsh-agent-preset` declaration per shipped preset (`standard`, `ptc`, `minimal`, `cordis`), each its own patch file |
-| [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | Dist index anchoring, advertised-URL publication and warnings, bash variable, readiness publication |
+| [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | Dist index anchoring, advertised-URL publication and warnings, bash variable |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
 | [`tests/public-url.spec.ts`](tests/public-url.spec.ts) | Advertised-root parsing and normalization |
-| [`tests/browser-open.spec.ts`](tests/browser-open.spec.ts) | Default-browser handoff after the page is reachable |
 
 </details>
 
@@ -148,6 +157,34 @@ Read these pages when you want to go deeper into the shared core, the browser re
 <a id="model-experience"></a>
 ## Model Experience
 
+### DSH documentation skill
+
+#### What the model sees
+
+Standard and Creator list `dsh-doc` in the skill catalog. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
+
+#### Token effect
+
+The preset contributes one catalog entry. A session with no other skills also receives the catalog's shared invocation instructions. Skill bodies and reference files enter context only when loaded.
+
+#### KV Cache effect
+
+The catalog is logged at the first step and remains stable until its entries change. Loading the skill appends tool output without changing the tool schemas.
+
+### Creator persona
+
+#### What the model sees
+
+The Creator preset adds “You help the user customize DeepSeek Harness itself.” after the shared coding-agent sentence. Plugin implementation and authorization rules remain in the on-demand `dsh-doc` skill.
+
+#### Token effect
+
+One fixed sentence is added to Creator requests. Standard requests are unchanged.
+
+#### KV Cache effect
+
+The sentence is stable within the Creator preset; switching to a different preset changes the persona prefix.
+
 ### Web runtime variable
 
 #### What the model sees
@@ -161,6 +198,20 @@ Two managed-environment variable lines; constant per process.
 #### KV Cache effect
 
 None; the plugin contributes no system-prompt text.
+
+### Office skills
+
+#### What the model sees
+
+The skill catalog lists the Office router and three Office authoring skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+
+#### Token effect
+
+The four catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+
+#### KV Cache effect
+
+While resources and configuration stay unchanged, the built-in Office summaries and Python environment sections stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
 
 ## Known Limitations and Deferred Work
 

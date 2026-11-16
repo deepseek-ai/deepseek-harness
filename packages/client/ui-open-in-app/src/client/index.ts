@@ -7,8 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
  * file defaults and application lists come from the serving Host desktop.
  */
 
-import { createElement } from 'react'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -23,8 +21,8 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import { OPEN_IN_APP_ICON_PREFIX_ROUTE } from '@deepseek-ai/dsh-host-open-in-app/shared'
 import { OpenInAppController } from './controller.ts'
-import { registerSessionReveal } from './session-reveal.tsx'
-import { OpenInAppAction, type OpenInAppActionInjected, type OpenInAppActionProps } from './OpenInAppAction.tsx'
+import { registerSessionOpenWith } from './session-open-with.ts'
+import { OpenInAppAction, type OpenInAppActionInjected } from './OpenInAppAction.tsx'
 import { OpenInAppPathController } from './open-path.ts'
 import { OpenPathAction, type OpenPathInjected } from './OpenPathAction.tsx'
 import { FileRouteAction } from './FileRouteAction.tsx'
@@ -35,7 +33,7 @@ import { createOpenInAppToastSource, OpenInAppToast } from './open-toast.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Session-header "open workspace in application" copy. */
+    /** Native application menu and control copy. */
     'open-in-app': OpenInAppKey
   }
 }
@@ -58,6 +56,7 @@ export function apply(ctx: ClientContext): void {
   const controller = new OpenInAppController()
   void controller.load()
   const paths = new OpenInAppPathController(ctx.remote)
+  ctx.effect(() => () => { paths.dispose() }, 'open-in-app: association refreshes')
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'open-in-app: dictionaries')
   const t = ctx.locale.bind(NS)
   // Keep operation feedback visible after its initiating panel closes.
@@ -70,7 +69,7 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({ name: 'contextMenu.icon', key: 'open-in-app.application' }, ContextMenuApplicationIcon)
   })
   registerContextMenus(ctx, paths, t, controller, announcement.report)
-  registerSessionReveal(ctx, controller, t, announcement.report)
+  registerSessionOpenWith(ctx, controller, t, announcement.report)
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'open-in-app.toast', locale: NS,
     inject: () => ({ hooks: announcement.hooks, dismiss: announcement.dismiss }),
@@ -113,17 +112,6 @@ export function apply(ctx: ClientContext): void {
     choose: (appId) => { controller.choose(appId) },
     iconUrl: appId => `${OPEN_IN_APP_ICON_PREFIX_ROUTE}/${appId}`,
   })
-  function SessionOpenInAppAction(
-    props: PropsRuntime<'conversation.session.header.utilities'> & Omit<OpenInAppActionProps, 'absolutePath'>,
-  ) {
-    const { sessionId, useSessions } = props
-    const cwd = useSessions(state => state.byId[sessionId]?.cwd)
-    return cwd ? createElement(OpenInAppAction, { ...props, absolutePath: cwd }) : null
-  }
-  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-    name: 'conversation.session.header.utilities',
-    id: 'open-in-app', order: -10, locale: NS, inject: directoryInjected,
-  }, SessionOpenInAppAction))
   ctx.slots.inject('sidebar.right.tab.files.actions', () => ctx.slots.register({
     name: 'sidebar.right.tab.files.actions',
     id: 'open-in-app', locale: NS, inject: directoryInjected,

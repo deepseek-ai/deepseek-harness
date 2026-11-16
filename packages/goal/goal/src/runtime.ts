@@ -22,9 +22,8 @@ export class GoalError extends HarnessError {
    * @param message - human-readable rejection reason.
    * @param code - stable machine-routable classification.
    */
-  // Keep the constructor to narrow HarnessError's string code at this boundary.
-  // oxlint-disable-next-line typescript/no-useless-constructor -- type-only narrowing
   constructor(message: string, code: GoalErrorCode) {
     super(message, code)
+    this.name = 'GoalError'
   }
 }

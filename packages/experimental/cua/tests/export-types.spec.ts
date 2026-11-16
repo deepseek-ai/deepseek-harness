@@ -3,7 +3,7 @@ import { expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import * as Cua from '../src/index.ts'
 import type { CuaApi } from '@deepseek-ai/dsh-cua/api'
-import type { CuaApplicationState } from '@deepseek-ai/dsh-cua/types'
+import type { CuaApplicationState, CuaSystemPermissionState } from '@deepseek-ai/dsh-cua/types'
 // @ts-expect-error Permission payloads are not part of the platform-provider root entry.
 import type { CuaSystemPermissionState as RemovedRoot } from '@deepseek-ai/dsh-cua'
 // @ts-expect-error The object API does not expose permission-page state.
@@ -17,6 +17,14 @@ it('keeps application operations and the necessary Remote payload types availabl
   expectTypeOf<CuaApi>().toHaveProperty('getApp')
   expectTypeOf<CuaApplicationState>().toHaveProperty('allowedApps')
   expectTypeOf<[RemovedRoot, RemovedApi, RemovedTypes, RemovedGrant]>().toBeArray()
+})
+
+it('requires process IDs only on macOS permission diagnostics', () => {
+  type Mac = Extract<CuaSystemPermissionState, { platform: 'darwin' }>
+  type Windows = Extract<CuaSystemPermissionState, { platform: 'windows' }>
+  expectTypeOf<Mac['helper']['pid']>().toEqualTypeOf<number>()
+  expectTypeOf<Mac['parent']['pid']>().toEqualTypeOf<number>()
+  expectTypeOf<Windows['helper']>().not.toHaveProperty('pid')
 })
 
 it('mounts the Host marker without installing native or browser services', async () => {

@@ -12,6 +12,7 @@ import type { ScheduleId, ScheduleCatalogEntry, ScheduleCreateRequest } from '@d
 import type { TaskCreateOutcome } from './TaskDetail.tsx'
 import type { TaskEditorStoreProps } from './editor-store.ts'
 import { taskNextRunAt, taskSessionId } from './task-record.ts'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { CatalogSnapshot } from './catalog-source.ts'
 import { CatalogFeedback } from './CatalogFeedback.tsx'
 import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail.tsx'
@@ -19,6 +20,7 @@ import { useRelativeClock } from './relative-clock.ts'
 import { formatScheduleFrequency, nextRunParts, taskName, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import { ScheduleEmptyIllustration } from './ScheduleEmptyIllustration.tsx'
+import { ScheduleRecommendations } from './ScheduleRecommendations.tsx'
 import css from './TaskManagerPage.module.css'
 
 /** Injected catalog and task actions for the management page. */
@@ -30,6 +32,12 @@ export interface TaskManagerInjected extends TaskDetailInjected {
    * schedule it, using the existing new-conversation action.
    */
   readonly onNewTask: () => void
+  /**
+   * Start a new Session with a recommended task's request prefilled, through
+   * the same new-conversation action as `onNewTask`.
+   * @param prompt - the recommendation's localized request.
+   */
+  readonly onUseRecommendation: (prompt: string) => void
   /**
    * Remove every ended Host task, after this page has confirmed the action.
    *
@@ -58,7 +66,7 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
  * @returns the searchable task list beside the selected task's detail.
  */
 export function TaskManagerPage(props: TaskManagerPageProps) {
-  const { useCatalog, onNewTask, onClearEnded, onRetry, onCreateTask, t } = props
+  const { useCatalog, onNewTask, onUseRecommendation, onClearEnded, onRetry, onCreateTask, t } = props
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const catalog = useCatalog(snapshot => snapshot)
@@ -93,17 +101,15 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     () => records.filter(record => record.status === 'ended').length,
     [records],
   )
-  const rows = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return records.filter(record => (
-      (statusFilter === 'all' || record.status === statusFilter)
-      && (record.prompt.toLowerCase().includes(query)
-        || (taskSessionId(record) ?? '').toLowerCase().includes(query)
-        || taskName(record).toLowerCase().includes(query))
-    )).toSorted((left, right) =>
-      Date.parse(taskNextRunAt(left)) - Date.parse(taskNextRunAt(right)))
-  }, [records, search, statusFilter])
+  const rowIndex = useMemo(() => new TextSearchIndex(
+    records.filter(record => statusFilter === 'all' || record.status === statusFilter)
+      .toSorted((left, right) => Date.parse(taskNextRunAt(left)) - Date.parse(taskNextRunAt(right))),
+    record => ({ fuzzy: [taskName(record)], substring: [taskSessionId(record), record.prompt] }),
+  ), [records, statusFilter])
+  const rows = useMemo(() => rowIndex.search(search), [rowIndex, search])
 
+  const showRecommendations = status === 'ready' && rows.length === 0 && search.trim() === ''
+    && (statusFilter === 'active' || statusFilter === 'all')
   const emptyTitle = search.trim() !== '' ? 'list.noMatches'
     : statusFilter === 'paused' ? 'list.emptyPaused'
       : statusFilter === 'ended' ? 'list.emptyInactive'
@@ -288,6 +294,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                   {t('empty.action')}
                 </Button>
               </div>}
+              {showRecommendations && <ScheduleRecommendations t={t} onUse={onUseRecommendation} />}
               <ul className={css.listRows} aria-label={t('list.label')} aria-busy={status === 'loading'}>
                 {rows.map((record) => {
                   // One pair per row: the same absolute stamp and distance reach

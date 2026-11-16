@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -17,8 +17,9 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { TestSessionQuery } from './test-session-query.ts'
-import { managerState, subagentManager } from './manager-internals.ts'
+import { bindSubagentActivation, managerState, subagentManager } from './manager-internals.ts'
 import { requireLocalActivation } from '../src/activation.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A model reply, or a turn that stays open until its Agent is cancelled. */
 type Reply = StreamChunk[] | 'hang'
@@ -73,7 +74,7 @@ async function setup(replies: Record<string, Reply[]>, maxActiveSubagents = 16) 
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   const adapter = new RoutedAdapter(new Map(Object.entries(replies)))
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   ctx.on('agent/pre-step', async ({ agent }, next) => agent === parent ? { kind: 'reject' } : next())
   return { ctx, parent, adapter }
 }
@@ -90,6 +91,18 @@ async function start(ctx: Context, parent: Agent, marker: string, description = 
     delivery: 'caller',
   })
   return started.childId
+}
+
+/** Start one caller-delivery child under a requested or default name and return its receipt. */
+function startNamed(ctx: Context, parent: Agent, marker: string, name?: string, startSignal = signal) {
+  return ctx.subagents.startActivation({
+    provider: 'spawn',
+    label: `task ${marker}`,
+    ...name === undefined ? {} : { name },
+    prompt: [{ type: 'text', text: `TASK:${marker}` }], parent,
+    signal: startSignal,
+    delivery: 'caller',
+  })
 }
 
 /** Wait until a child's first model request is open. */
@@ -116,7 +129,7 @@ function textOf(event: SessionEvent<'user/message'>): string {
 }
 
 describe('subagent sibling messages', () => {
-  it('keeps duplicate descriptions as display text and addresses siblings by Session id', async () => {
+  it('keeps duplicate descriptions as display text and names siblings uniquely', async () => {
     const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('resumed')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
@@ -124,15 +137,15 @@ describe('subagent sibling messages', () => {
     await settled(ctx, b)
     expect(a).not.toBe(b)
     expect(await listChildren(ctx, parent.id)).toEqual([
-      expect.objectContaining({ id: a, mode: 'continuable', label: 'shared responsibility' }),
-      expect.objectContaining({ id: b, mode: 'continuable', label: 'shared responsibility' }),
+      expect.objectContaining({ id: a, mode: 'continuable', label: 'shared responsibility', name: 'agent-1' }),
+      expect.objectContaining({ id: b, mode: 'continuable', label: 'shared responsibility', name: 'agent-2' }),
     ])
     expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog').map(event => event.data.version))
-      .toEqual([0, 0])
+      .toEqual([3, 3])
 
     await ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'hello' }], { signal })
     const delivered = (await storedUserMessages(ctx, b)).find(event => event.data.source.kind === 'agent-message')!
-    expect(textOf(delivered)).toBe(`Agent ${a} sent a message: hello`)
+    expect(textOf(delivered)).toBe('Agent agent-1 sent a message: hello')
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     ctx.subagents.interrupt(a, { kind: 'ancestor', agent: parent })
     await settled(ctx, a)
@@ -140,7 +153,7 @@ describe('subagent sibling messages', () => {
 
   it('keeps unrelated parents outside sibling delivery even when descriptions match', async () => {
     const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
-    const other = await ctx.agentLoop.create(SessionId('other-parent'), { provider: 'mock', model: 'mock' })
+    const other = await ctx.agentLoop.create(brandString<SessionId>('other-parent'), { provider: 'mock', model: 'mock' })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, other, 'b')
@@ -159,18 +172,18 @@ describe('tree-wide messages', () => {
     const { ctx, parent } = await setup({})
     expect(ctx.subagents.rootOf(parent)).toBe(parent)
     expect(() => ctx.subagents.rootOf({ ...parent })).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
-    const source = ctx.sessions.create(SessionId('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    const source = ctx.sessions.create(brandString<SessionId>('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
     source.append('turn/start', { turn: 1 })
     source.append('subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label: 'source' })
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const fork = ctx.sessions.fork(source, undefined, SessionId('ordinary-fork'))
+    const fork = ctx.sessions.fork(source, undefined, brandString<SessionId>('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }
     onTestFinished(ctx.agents.enter(caller))
     expect(ctx.subagents.rootOf(caller)).toBe(caller)
     for (const [id, parentSession] of [
-      ['orphan', undefined], ['offline-parent', SessionId('absent')], ['cycle', SessionId('cycle')],
+      ['orphan', undefined], ['offline-parent', brandString<SessionId>('absent')], ['cycle', brandString<SessionId>('cycle')],
     ] as const) {
-      const session = ctx.sessions.create(SessionId(id), {
+      const session = ctx.sessions.create(brandString<SessionId>(id), {
         meta: { origin: 'subagent', ...parentSession === undefined ? {} : { parentSession } },
       })
       const child = { ...parent, id: session.id, session }
@@ -198,9 +211,9 @@ describe('tree-wide messages', () => {
     await ctx.subagents.sendMessage(parent, leafId, [{ type: 'text', text: 'grandchild' }], { signal })
     await ctx.subagents.sendMessage(leaf, parent.id, [{ type: 'text', text: 'grandparent' }], { signal })
     expect(received).toEqual([
-      { target: leafId, sender: a, text: `Agent ${a} sent a message: cousin` },
-      { target: leafId, sender: parent.id, text: `Agent ${parent.id} sent a message: grandchild` },
-      { target: parent.id, sender: leafId, text: `Agent ${leafId} sent a message: grandparent` },
+      { target: leafId, sender: a, text: 'Agent agent-1 sent a message: cousin' },
+      { target: leafId, sender: parent.id, text: 'Agent lead sent a message: grandchild' },
+      { target: parent.id, sender: leafId, text: 'Agent agent-2/agent-1 sent a message: grandparent' },
     ])
     expect(() => { ctx.subagents.interrupt(leafId, { kind: 'ancestor', agent: sender }) })
       .toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
@@ -226,7 +239,7 @@ describe('tree-wide messages', () => {
 
     const messages = await storedUserMessages(ctx, leafId)
     const delivered = messages.find(event => event.data.source.kind === 'agent-message')!
-    expect(textOf(delivered)).toBe(`Agent ${a} sent a message: cold cousin`)
+    expect(textOf(delivered)).toBe('Agent agent-2 sent a message: cold cousin')
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     await settled(ctx, branchId)
     expect(resumed).toEqual([{ id: leafId, parent: branchId }])
@@ -355,12 +368,105 @@ describe('tree-wide messages', () => {
       expect(ctx.agents.get(branchId)).toBe(branch)
       release.resolve(undefined)
       const messages = await storedUserMessages(ctx, leafId)
-      expect(messages.some(message => textOf(message) === `Agent ${parent.id} sent a message: after close`)).toBe(true)
+      expect(messages.some(message => textOf(message) === 'Agent lead sent a message: after close')).toBe(true)
       await settled(ctx, branchId)
     } finally {
       release.resolve(undefined)
       await drained
       await delivery
     }
+  })
+})
+
+describe('agent names', () => {
+  it('records requested and default names and rejects duplicates and invalid names before startup', async () => {
+    const { ctx, parent, adapter } = await setup({ a: ['hang'], b: ['hang'] })
+    const reviewer = await startNamed(ctx, parent, 'a', 'reviewer')
+    const unnamed = await startNamed(ctx, parent, 'b')
+    expect([reviewer.name, unnamed.name]).toEqual(['reviewer', 'agent-1'])
+    for (const name of ['reviewer', 'agent-1']) {
+      await expect(startNamed(ctx, parent, 'c', name)).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
+    }
+    for (const name of ['lead', 'Reviewer', '1st', 'a'.repeat(33), 'review/er', '']) {
+      await expect(startNamed(ctx, parent, 'c', name)).rejects.toMatchObject({ code: 'INVALID_AGENT_NAME' })
+    }
+    expect(adapter.routed.some(request => JSON.stringify(request.messages).includes('TASK:c'))).toBe(false)
+    expect((await listChildren(ctx, parent.id)).map(entry => 'name' in entry ? entry.name : undefined))
+      .toEqual(['reviewer', 'agent-1'])
+    for (const started of [reviewer, unnamed]) {
+      ctx.subagents.interrupt(started.childId, { kind: 'ancestor', agent: parent })
+      await settled(ctx, started.childId)
+    }
+  })
+
+  it('holds a requested name across concurrent startup and releases it when startup fails', async () => {
+    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'], c: ['hang'] })
+    const first = startNamed(ctx, parent, 'a', 'worker')
+    const concurrent = startNamed(ctx, parent, 'c')
+    await expect(startNamed(ctx, parent, 'b', 'worker')).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
+    const started = await first
+    const aborted = new AbortController()
+    aborted.abort(new Error('cancelled'))
+    await expect(startNamed(ctx, parent, 'b', 'helper', aborted.signal)).rejects.toThrow('cancelled')
+    const retried = await startNamed(ctx, parent, 'b', 'helper')
+    const sibling = await concurrent
+    expect([started.name, sibling.name, retried.name]).toEqual(['worker', 'agent-1', 'helper'])
+    for (const child of [started, retried, sibling]) {
+      ctx.subagents.interrupt(child.childId, { kind: 'ancestor', agent: parent })
+      await settled(ctx, child.childId)
+    }
+  })
+
+  it('names nested members by path and resolves names without granting authority', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: ['hang'] })
+    const branch = await startNamed(ctx, parent, 'branch', 'reviewer')
+    const branchAgent = await running(ctx, branch.childId)
+    const leaf = await startNamed(ctx, branchAgent, 'leaf', 'checker')
+    const leafAgent = await running(ctx, leaf.childId)
+    expect(leaf.name).toBe('reviewer/checker')
+    expect(ctx.subagents.namesOf(parent)).toEqual({ self: 'lead' })
+    expect(ctx.subagents.namesOf(branchAgent)).toEqual({ self: 'reviewer', parent: 'lead' })
+    expect(ctx.subagents.namesOf(leafAgent)).toEqual({ self: 'reviewer/checker', parent: 'reviewer' })
+    const resolve = (name: string) => ctx.subagents.resolveName(leafAgent, name, signal)
+    expect(await Promise.all(['lead', 'reviewer', 'reviewer/checker', 'missing', 'Not a name', leaf.childId].map(resolve)))
+      .toEqual([parent.id, branch.childId, leaf.childId, 'missing', 'Not a name', leaf.childId])
+    // A slash-separated address is never a Session id, so an unmatched path fails instead of reaching member lookup.
+    await expect(resolve('reviewer/missing')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+    await expect(resolve('reviewer/checker/deeper')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+    expect((await ctx.subagents.listDescendants(parent.id, signal)).map(entry => entry.path))
+      .toEqual(['reviewer', 'reviewer/checker'])
+    ctx.subagents.interrupt(branch.childId, { kind: 'ancestor', agent: parent })
+    ctx.subagents.interrupt(leaf.childId, { kind: 'ancestor', agent: parent })
+    await settled(ctx, branch.childId)
+    await settled(ctx, leaf.childId)
+  })
+
+  it('restores a cold member\'s path from the catalogs along its creation chain', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('first'), 'hang'] })
+    const branch = await startNamed(ctx, parent, 'branch', 'reviewer')
+    const branchAgent = await running(ctx, branch.childId)
+    const leaf = await startNamed(ctx, branchAgent, 'leaf', 'checker')
+    await settled(ctx, leaf.childId)
+    ctx.subagents.interrupt(branch.childId, { kind: 'ancestor', agent: parent })
+    await settled(ctx, branch.childId)
+
+    await ctx.subagents.sendMessage(parent, leaf.childId, [{ type: 'text', text: 'resume' }], { signal })
+    const resumed = await running(ctx, leaf.childId)
+    expect(ctx.subagents.namesOf(resumed)).toEqual({ self: 'reviewer/checker', parent: 'reviewer' })
+    ctx.subagents.interrupt(leaf.childId, { kind: 'ancestor', agent: parent })
+    await settled(ctx, leaf.childId)
+  })
+
+  it('addresses members below an unnamed historical creator by Session id', async () => {
+    const { ctx, parent } = await setup({ legacy: ['hang'], leaf: ['hang'] })
+    const legacy = await ctx.agentLoop.create(brandString<SessionId>('legacy-child'), { provider: 'mock', model: 'mock' })
+    bindSubagentActivation(ctx, legacy, parent)
+    expect(ctx.subagents.namesOf(legacy)).toEqual({ self: 'legacy-child', parent: 'lead' })
+    const leaf = await startNamed(ctx, legacy, 'leaf', 'checker')
+    const leafAgent = await running(ctx, leaf.childId)
+    expect(leaf.name).toBe(leaf.childId)
+    expect(ctx.subagents.namesOf(leafAgent)).toEqual({ self: leaf.childId, parent: 'legacy-child' })
+    ctx.subagents.interrupt(leaf.childId, { kind: 'ancestor', agent: parent })
+    await settled(ctx, leaf.childId)
   })
 })

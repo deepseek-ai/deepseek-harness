@@ -1,9 +1,10 @@
 - menu:
   - menuitem "Pin session"
   - menuitem "Rename"
+  - menuitem "Mark as unread"
   - menuitem "Fork session"
   - separator
   - menuitem "Copy Session ID"
-  - menuitem "Show in Finder"
+  - menuitem "Open in"
   - separator
   - menuitem "Archive session"

@@ -9,7 +9,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { build, type TsdownBundle, type UserConfig } from 'tsdown'
+import { build, type Rolldown, type TsdownBundle, type UserConfig } from 'tsdown'
+import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 import { afterEach, describe, expect, it } from 'vitest'
 import { packageAssetRevision } from '../packages/client/modules/src/assets.ts'
 import { clientBundle } from '../packages/client/tsdown.client.ts'
@@ -26,11 +27,14 @@ interface PluginContext {
   addWatchFile(id: string): void
 }
 
+type LoadedModule = string | { code: string; moduleSideEffects: string } | null
+
 interface BundlePlugin {
   name: string
   buildStart?: (this: PluginContext) => void
   resolveId?: (source: string, importer?: string) => string | null
-  load?: (this: PluginContext, id: string) => string | null | Promise<string | null>
+  load?: (this: PluginContext, id: string) => LoadedModule | Promise<LoadedModule>
+  stylesheetBundle?: (code: string, id: string) => string
   writeBundle?: (this: { meta: { watchMode: boolean } }, outputOptions: { dir?: string }, bundle: Record<string, unknown>) => Promise<void>
   renderChunk?: (code: string, chunk: unknown, outputOptions: { format: string }) => { toString(): string } | null
 }
@@ -47,7 +51,8 @@ const WHALE_URL = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale-${
 const RESOLVER_CALL = /__dshPackageAsset_[0-9a-f]{12}(?=\()/u
 
 /** Read the resolver call identifier from one compiled module. */
-function resolverCall(output: string | null): string {
+function resolverCall(output: string | { code: string } | null): string {
+  if (output !== null && typeof output !== 'string') output = output.code
   const call = RESOLVER_CALL.exec(output ?? '')?.[0]
   if (call === undefined) throw new Error('compiled module carries no resolver call')
   return call
@@ -61,11 +66,25 @@ function resolverCall(output: string | null): string {
  */
 function stylesheetText(output: string | null, resolve: (reference: string) => string): string {
   if (output === null) throw new Error('stylesheet module was not emitted')
+  if (output.startsWith('window.__ModuleLoader__.load(')) {
+    const stylesheets = stylesheetManifest(output).meta?.().stylesheets
+    if (stylesheets === undefined) throw new Error('compiled stylesheet metadata missing')
+    const descriptors = Object.values(stylesheets)
+    if (descriptors.length !== 1) throw new Error('expected exactly one compiled stylesheet')
+    return descriptors[0]!.text({ asset: resolve })
+  }
   const call = RESOLVER_CALL.exec(output)?.[0]
-  const body = output
-    .replace(/^export default (.*);$/mu, 'return typeof css === "undefined" ? $1 : css;')
-    .replace(/^export \{\};$/mu, 'return css;')
+  const body = output.replace(/^export default (.*);$/mu, 'return $1;')
   return runInNewContext(`(() => {\n${body}\n})()`, { ...call === undefined ? {} : { [call]: resolve }, document: undefined }) as string
+}
+
+/** Capture the actual manifest emitted by the stylesheet render hook. */
+function stylesheetManifest(code: string | null): DshClientModuleManifest {
+  if (code === null) throw new Error('stylesheet module was not emitted')
+  let manifest: DshClientModuleManifest | undefined
+  runInNewContext(code, { window: { __ModuleLoader__: { load(value: DshClientModuleManifest) { manifest = value } } } })
+  if (manifest === undefined) throw new Error('stylesheet manifest was not registered')
+  return manifest
 }
 
 const temporaryRoots: string[] = []
@@ -113,7 +132,23 @@ function configPlugin(config: UserConfig | undefined, name: string): BundlePlugi
 /** Look up plugins of one browser config, so stylesheet and asset plugins share its per-build state. */
 function browserPlugins(packageDir: string): (name: PluginName) => BundlePlugin {
   const client = clientFaceConfigs(packageDir).find(config => config.platform === 'browser')
-  return name => configPlugin(client, name)
+  if (client === undefined || typeof client.outputOptions !== 'object') throw new Error('browser output options missing')
+  const { banner, footer } = client.outputOptions
+  if (typeof banner !== 'function' || typeof footer !== 'string') throw new Error('browser manifest wrapper missing')
+  const styles = configPlugin(client, 'dsh-client-style-factory')
+  return name => ({
+    ...configPlugin(client, name),
+    stylesheetBundle(code, id) {
+      const chunk = { isEntry: true, fileName: 'client.js', modules: { [id]: {} } }
+      const body = code.replace(/^export default (.*);$/mu, 'module.exports = $1;').replace(/^export \{\};$/mu, '')
+      const prefix = banner(chunk as Rolldown.RenderedChunk)
+      if (typeof prefix !== 'string') throw new Error('expected a synchronous manifest banner')
+      const wrapped = `${prefix}\nvar module = { exports: {} };\n${body}\n${footer}`
+      const rendered = styles.renderChunk?.(wrapped, chunk, { format: 'cjs' })
+      if (rendered === undefined || rendered === null) throw new Error('stylesheet metadata was not rendered')
+      return rendered.toString()
+    },
+  })
 }
 
 function bundlePlugin(name: PluginName): BundlePlugin {
@@ -154,34 +189,47 @@ async function loadImport(plugin: BundlePlugin, context: PluginContext, source: 
   const { resolveId, load } = hooks(plugin)
   const id = resolveId(source, importer)
   if (typeof id !== 'string') throw new Error(`${plugin.name} did not resolve ${source}`)
-  return await load.call(context, id)
+  const output = await load.call(context, id)
+  if (output === null || typeof output === 'string') return output
+  if (plugin.stylesheetBundle === undefined) throw new Error('stylesheet manifest renderer missing')
+  expect(output.moduleSideEffects).toBe('no-treeshake')
+  return plugin.stylesheetBundle(output.code, id)
 }
 
 describe('client bundle CSS Modules', () => {
   it('registers the source stylesheet as a watch dependency', async () => {
-    const root = await temporaryDirectory('dsh-client-css-watch-')
+    const root = await assetPackage({})
     const stylesheet = join(root, 'Fixture.module.css')
     await writeFile(stylesheet, '.root { color: red; }\n')
     const context = recordingContext()
 
-    const output = await loadImport(bundlePlugin('dsh-css-modules-inline'), context, './Fixture.module.css', join(root, 'index.ts'))
+    const output = await loadImport(browserPlugins(root)('dsh-css-modules-inline'), context, './Fixture.module.css', join(root, 'index.ts'))
 
     expect(context.watched).toEqual([stylesheet])
-    expect(output).toContain('data-plugin-css')
+    expect(output).not.toContain('data-plugin-css')
+    const manifest = stylesheetManifest(output)
+    const require = Object.assign(() => { throw new Error('stylesheet has no JavaScript dependencies') }, {
+      async: async () => { throw new Error('stylesheet has no asynchronous dependencies') },
+      asset: (reference: string) => reference,
+    })
+    const classMap = manifest.factory(require)
+    expect(Object.keys(classMap)).toEqual(['root'])
+    expect(classMap['root']).toMatch(/_root$/u)
+    expect(stylesheetText(output, reference => reference)).toContain(`.${String(classMap['root'])}{color:red}`)
   })
 })
 
 describe('client bundle global CSS', () => {
-  it('compiles a side-effect stylesheet into a watched style injector', async () => {
-    const root = await temporaryDirectory('dsh-client-global-css-watch-')
+  it('compiles a side-effect stylesheet into watched metadata', async () => {
+    const root = await assetPackage({})
     const stylesheet = join(root, 'base.css')
     await writeFile(stylesheet, 'body { color: red; }\n')
     const context = recordingContext()
 
-    const output = await loadImport(bundlePlugin('dsh-css-global-inline'), context, './base.css', join(root, 'index.ts'))
+    const output = await loadImport(browserPlugins(root)('dsh-css-global-inline'), context, './base.css', join(root, 'index.ts'))
 
     expect(context.watched).toEqual([stylesheet])
-    expect(output).toContain('data-plugin-css')
+    expect(output).not.toContain('data-plugin-css')
     expect(output).toContain('body{color:red}')
   })
 
@@ -260,9 +308,10 @@ describe('client bundle package asset imports', () => {
       })
       const output = builds.flatMap(bundle => bundle.chunks).find(chunk => chunk.type === 'chunk' && chunk.fileName === 'client.js')
       const code = output?.type === 'chunk' ? output.code : ''
-      expect(code).toContain(`require.asset(${JSON.stringify(WHALE_URL)})`)
+      // The minifier may print either string quote.
+      expect(code).toMatch(new RegExp(`require\\.asset\\(["\`]${WHALE_URL.replaceAll('.', '\\.')}["\`]\\)`))
       expect(code).not.toContain('__dshPackageAsset_')
-      expect(code).toContain('"__dshPackageAsset("')
+      expect(code).toMatch(/["`]__dshPackageAsset\(["`]/)
     } finally {
       for (const bundle of builds) await bundle[Symbol.asyncDispose]()
     }
@@ -436,7 +485,7 @@ describe('client bundle stylesheet url()', () => {
 
     const output = await loadImport(browserPlugins(root)('dsh-css-modules-inline'), context, './View.module.css', join(root, 'src/client/index.ts'))
 
-    expect(output).toContain(`url(" + ${resolverCall(output)}(${JSON.stringify(WHALE_URL)}) + ")`)
+    expect(output).toContain(`context.asset(${JSON.stringify(WHALE_URL)})`)
     const css = stylesheetText(output, reference => `resolved:${reference}`)
     expect(css).toContain(`url(resolved:${WHALE_URL})`)
     for (const preserved of ['(mask-image:url(\'\'))', 'background:url()', 'url(data:image/svg+xml,%3Csvg%3E)', 'url(#mask)', 'url(/static/a.png)', 'url(https://example.com/a.png)']) {

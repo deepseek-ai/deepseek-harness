@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TunnelShareSpec } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import type { ViewerAnswer } from '../src/viewer-channel.ts'
-import { createTunnelSupervision, gatewayWorkerCommand, refreshedShareTitle } from '../src/host/tunnel-supervision.ts'
+import { createTunnelSupervision, gatewayWorkerCommand, ownerPlatform, refreshedShareTitle } from '../src/host/tunnel-supervision.ts'
 import { FakeTunnelWorker } from './tunnel-supervision-fake-worker.ts'
 
 vi.mock('../src/host/tunnel-worker.ts', async () => {
@@ -33,7 +33,7 @@ beforeEach(() => {
 
 function share(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionId: 'session-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     link: `${RELAY}/?shareId=share-1`, relay: RELAY, gatewayToken: 'gateway-token',
     allowedSubjectIds: [], revision: 1, createdAt: '2026-01-01T00:00:00Z',
     allowsFork: false, sessionMode: 'view', online: false, ...overrides,
@@ -105,9 +105,9 @@ function harness(options: HarnessOptions = {}) {
   }
 }
 
-function spec(overrides: Partial<TunnelShareSpec> = {}): TunnelShareSpec {
+function spec(overrides: Partial<TunnelShareSpec> = {}): TunnelShareSpec & { readonly sessionIds: readonly string[] } {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionId: 'session-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     relay: RELAY, gatewayToken: 'gateway-token', ownerDisplayName: 'Owner', allowedSubjectIds: [],
     ...overrides,
   }
@@ -315,6 +315,16 @@ describe('registration payloads', () => {
 
     const host = harness({ ownerIdentity: { providerId: 'p', tenantId: 't', subjectId: 'owner' } })
     expect(host.supervision.shareSpec(spec() as never, undefined)).toMatchObject({ ownerDisplayName: 'relay.example.test' })
+  })
+
+  it('reports the platform this process runs on and none outside the enum', () => {
+    const reported = ownerPlatform()
+    const h = harness()
+    const payload = h.supervision.shareSpec(spec() as never, undefined)
+    expect(payload.platform).toBe(reported)
+
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('freebsd')
+    expect(h.supervision.shareSpec(spec() as never, undefined)).not.toHaveProperty('platform')
   })
 
   it('re-registers only offline shares of the credential relay', () => {
@@ -643,6 +653,20 @@ describe('relay probes and claims', () => {
       expect(h.worker().stopped).toBe(true)
     } finally {
       vi.useRealTimers()
+    }
+  })
+})
+
+describe('owner platform reporting', () => {
+  it('maps the three systems the wire enum names', () => {
+    expect(ownerPlatform('darwin')).toBe('macos')
+    expect(ownerPlatform('win32')).toBe('windows')
+    expect(ownerPlatform('linux')).toBe('linux')
+  })
+
+  it('reports nothing for a system outside the enum', () => {
+    for (const platform of ['freebsd', 'aix', 'sunos', 'android'] as const) {
+      expect(ownerPlatform(platform), platform).toBeUndefined()
     }
   })
 })

@@ -455,7 +455,7 @@ interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
 
 `ToolExecutionToken` 是不透明的运行时 `Symbol`，仅用于身份比较。策略执行前，`execute()` 会物化并冻结参数、拒绝非 JSON 输入并分配 token。身份字段、调用方必需的 signal 和可选的 parent token 均保持 readonly。`ToolDispatchExecution` 包装层可以替换 signal 但不能移除；注册表会在调用工具函数体前重新融合调用方的 signal。最终观察者接收冻结的执行身份。
 
-`ToolGuard` 是感知作用域的最终预分派策略。其返回类型有意不包含 allow 结果：`undefined` 保留 waterfall 的决策，而返回的 reason 只能缩减权限，因此后续监听器无法撤销它。
+`ToolGuard` 是感知作用域的最终预分派策略。其返回类型有意不包含 allow 结果：`undefined` 保留 waterfall 的决策，而返回的 reason 或 `ToolGuardDenial` 只能缩减权限，因此后续监听器无法撤销它。拒绝中可选的 `info` 会成为失败结果的结构化错误身份。
 
 ```ts type-equiv
 /**
@@ -464,9 +464,19 @@ interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
  * returning `undefined` leaves it unchanged. Because guards have no allow
  * result, listener ordering cannot turn a denial back into permission.
  * @param execution - the identity-protected call after extensible pre-execute policy completed.
- * @returns a final denial reason, or `undefined` to leave the call allowed.
+ * @returns a final denial reason, a denial with structured error identity, or `undefined` to leave the call allowed.
  */
-type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
+type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined
+```
+
+```ts type-equiv
+/** A guard denial: the model-facing reason and optional structured error identity recorded on the result. */
+interface ToolGuardDenial {
+  /** Model-facing reason rendered as the failed call's content. */
+  readonly reason: string
+  /** Structured error identity persisted beside the reason. */
+  readonly info?: ToolErrorInfo
+}
 ```
 
 ```ts type-equiv
@@ -522,7 +532,7 @@ interface ToolErrorInfo {
 }
 ```
 
-结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError`、可选结构化 `error` 和展示 `meta`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。
+结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError`、可选结构化 `error` 和展示 `meta`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。注册表会在以下情况设置 `info`：抛出的是 `HarnessError`（取其 `name` 和 `code`）、pre-execute 的 `deny` 自带 `info`，以及注册表自己生成的取消结果（`AbortError`，code 为 `ABORTED` 或 `ABORTED_BEFORE_DISPATCH`）；已开始的工具主体在取消后抛出 signal 的 reason 或 name 为 `AbortError` 的 `Error` 时，结果保留其 message，并带上 `AbortError` 与 `ABORTED`，`tools/execute` 包装器在调用方取消后抛出这类值时也得到同样的标识，工具主体尚未开始时为 `ABORTED_BEFORE_DISPATCH`；`tools/execute` 包装器也可能返回带 `info` 的结果，例如超时策略的 `TOOL_TIMEOUT`。审批未授予的 `ask` 会变成 name 为 `ApprovalError` 的拒绝（该 name 标识注册表的拒绝，并不对应可抛出的类），code 为 `APPROVAL_REJECTED`、`APPROVAL_CANCELLED` 或 `APPROVAL_UNAVAILABLE`。guard 拒绝或 post-execute block 只有自带 `info` 时才会携带它；其他抛出值产生的 `error` 不含 `info`。
 
 成功时，注册表会快照并校验函数体返回值，将其冻结，然后调用纯渲染器，并为原生与嵌套调用执行可选的展示元数据投影器。注册表会在 `tools/result` 之前另行物化持久展示字段；无效值、渲染器/投影器失败或非 JSON 展示都会转为 JSON 安全的 `isError`。因此，最终实时观察者能看到精确的执行期值，以及可安全用于后续持久追加的字段。
 
@@ -550,17 +560,18 @@ type PreToolDecision =
 ```ts type-equiv
 /**
  * Post-dispatch decision: accept, replace one projection, attach context for the
- * next request, or block by turning corrective feedback into an error result.
+ * next request, or block by turning corrective feedback into an error result
+ * whose optional `info` is its structured error identity.
  */
 type PostToolDecision =
   | { kind: 'accept'; content?: ContentBlock[]; value?: never; additionalContexts?: UserMessage[] }
   | { kind: 'accept'; value: JsonValue; content?: never; additionalContexts?: UserMessage[] }
-  | { kind: 'block'; feedback: ContentBlock[]; additionalContexts?: UserMessage[] }
+  | { kind: 'block'; feedback: ContentBlock[]; info?: ToolErrorInfo; additionalContexts?: UserMessage[] }
 ```
 
 调用 `next()` 获取默认决策，或直接返回一个决策以短路。前置策略可以 deny 或 ask；只有 `allowed-once` 才继续执行，而未授权、缺少审批通道或服务、或无 agent 的请求都会变为拒绝。拒绝可以附带结构化身份与用户可见详情，而不改变其模型可见原因。Guard 仍可施加最终拒绝。参数不可被改写，因为历史记录、审计、UI 和执行必须保持一致。
 
-后置策略可以替换内容或值，但不能同时替换两者。替换内容会保留规范值和现有元数据；替换值会重新校验并重新计算内容/元数据；阻止会移除值，并转为包含纠正反馈的 `isError`。内容替换是展示策略，而非保密策略；需要隐藏程序化值的监听器必须阻止或替换该值。`tools/result` 在归一化后接收冻结的执行和结果；观察者无法对其进行变换，观察者的失败也会被隔离。未知工具和抛出异常的工具都会变为结构化错误（`ToolNotFoundError` 映射为 `UNKNOWN_TOOL`），调用失败但不终止当前轮次。
+后置策略可以替换内容或值，但不能同时替换两者。替换内容会保留规范值和现有元数据；替换值会重新校验并重新计算内容/元数据；阻止会移除值，并转为包含纠正反馈的 `isError`。内容替换是展示策略，而非保密策略；需要隐藏程序化值的监听器必须阻止或替换该值。`tools/result` 在归一化后接收冻结的执行和结果；观察者无法对其进行变换，观察者的失败也会被隔离。未知工具和抛出异常的工具都会变为结构化错误（`ToolNotFoundError` 映射为 `UNKNOWN_TOOL`），调用失败但不终止当前轮次。工具主体所需的 Agent、服务或进行中的 turn 不存在时，抛出 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）。
 
 ## 已强制执行的原始 JSON Schema 子集
 
@@ -733,9 +744,9 @@ guard(guard: ToolGuard): () => void
 /**
  * Check global and inherited guards after pre-execute policy and approval resolve.
  * @param exec - invocation whose guards are checked before dispatch.
- * @returns the first denial reason, or undefined when no guard denies.
+ * @returns the first denial with its optional structured identity, or undefined when no guard denies.
  */
-checkGuards(exec: ToolExecution): string | undefined
+checkGuards(exec: ToolExecution): ToolGuardDenial | undefined
 ```
 
 Types: [ScopeKey](scope.zh.md)

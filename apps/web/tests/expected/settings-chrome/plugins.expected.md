@@ -1,5 +1,0 @@
-- listitem:
-  - button "子智能体委派工具, tool-subagent, 已启用":
-    - strong: 子智能体委派工具
-    - text: 让 AI 将任务交给子智能体，并获取运行结果。
-    - code: tool-subagent

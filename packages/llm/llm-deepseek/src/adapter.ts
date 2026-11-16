@@ -100,7 +100,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,
       },
-      connection.filePolicy, connection.filesApiTimeoutMs, signal, activity)
+      connection.filePolicy, signal, activity)
       let inline = false
       while (true) {
         signal.throwIfAborted()
@@ -162,7 +162,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
           if (await files.retry(detail)) continue
           const failure = providerError(raw, response.status, response.headers)
           const message = files.errorMessage(response.status, failure.message, detail)
-          throw new LlmError(message, failure.code, { ...failure.failure, cause: new Error(text) })
+          throw LlmError.fromFailure({ ...failure.failure, message }, { cause: new Error(text) })
         }
         await extensions.accept()
         if (response.body === null) throw new LlmError('DeepSeek Messages returned no response body', 'EMPTY_RESPONSE')

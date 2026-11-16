@@ -5,8 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { ScheduleRecord, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
-import { ScheduleId } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleRecord, ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   formatScheduleAbsolute,
@@ -24,6 +23,7 @@ import type { CatalogSnapshot } from '../src/client/catalog-source.ts'
 import { en, zh } from '../src/client/locales.ts'
 import catalogCss from '../src/client/ScheduleCatalogAction.module.css'
 import { en as managerEn, zh as managerZh } from '../src/client/task-manager-locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SESSION = 'schedule-session' as SessionId
 const START = Date.parse('2026-08-25T12:00:00.000Z')
@@ -60,7 +60,7 @@ function record(
 ): ScheduleRecord {
   const prompt = options.prompt ?? id
   const common = {
-    id: ScheduleId(id),
+    id: brandString<ScheduleId>(id),
     kind,
     title: options.title ?? prompt,
     prompt,
@@ -95,7 +95,7 @@ function entry(id: string, scheduledAt: number, options: { prompt?: string; titl
   const prompt = options.prompt ?? id
   const instant = new Date(scheduledAt).toISOString()
   return { kind: 'rrule',
-    id: ScheduleId(id), title: options.title ?? prompt, prompt, scheduledAt: instant,
+    id: brandString<ScheduleId>(id), title: options.title ?? prompt, prompt, scheduledAt: instant,
     rrule: options.rrule ?? `DTSTART;TZID=UTC:${instant.replace(/[-:]|\.\d{3}Z$/g, '')}\nRRULE:FREQ=DAILY;COUNT=1`,
     target: { kind: 'session', sessionId: SESSION }, involvedSessionIds: [SESSION], status: 'active',
     createdAt: CREATED, updatedAt: CREATED,
@@ -117,7 +117,7 @@ function sessionSnapshot(openState: SessionSnapshot['openState']): SessionSnapsh
     openState,
     openError: null,
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false,
     promptError: null,
     blank: false,
     lastAgentError: null,

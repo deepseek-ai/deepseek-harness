@@ -15,7 +15,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import * as yaml from 'js-yaml'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import {
   afterEach,
   beforeEach,
@@ -360,7 +360,7 @@ describe('task admission and package contracts', () => {
       '@modelcontextprotocol/sdk',
       '^1.31.0',
     )
-    expect(manifest.dependencies).toHaveProperty('zod', '4.4.3')
+    expect(manifest.dependencies).toHaveProperty('zod', '4.6.6')
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-codex')
 
     const sdkRoot = dirname(fileURLToPath(
@@ -392,7 +392,7 @@ describe('task admission and package contracts', () => {
       )
     }
 
-    const parsed = yaml.load(readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'))
+    const parsed = parseEntryYaml(readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'))
     expect(parsed).toEqual([{ insert: [
       { id: 'subagent-claude-code', name: '@deepseek-ai/dsh-subagent-claude-code' },
       { id: 'tool-subagent-claude-code', name: '@deepseek-ai/dsh-tool-subagent', config: {

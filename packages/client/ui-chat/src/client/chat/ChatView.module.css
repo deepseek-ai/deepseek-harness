@@ -37,6 +37,11 @@
   container-type: inline-size;
 }
 
+.scroll,
+:global([data-conversation-scroll]):has(.root) {
+  overscroll-behavior-y: none;
+}
+
 .root[data-chat-following-tail] .scroll,
 :global([data-conversation-scroll]):has(.root[data-chat-following-tail]) {
   overflow-anchor: none;
@@ -318,11 +323,15 @@
 }
 
 .older {
+  overflow-anchor: none;
   display: flex;
   justify-content: center;
 }
 
 .older button {
+  display: grid;
+  line-height: 18px;
+  white-space: nowrap;
   border: none;
   border-radius: var(--dsw-radius-sm);
   padding: 4px 12px;
@@ -332,6 +341,14 @@
   cursor: pointer;
 }
 
+.older button > span {
+  grid-area: 1 / 1;
+}
+
+.historyHidden {
+  visibility: hidden;
+}
+
 .older button:disabled {
   cursor: default;
   opacity: 0.6;
@@ -339,6 +356,30 @@
 
 /* Floating controls sit outside the clipped transcript. A standalone Chat
    anchors them to its frame; the shared host supplies the sticky scrollport. */
+/* The aside layer: zero height at the frame's top, sticky in a shared
+   scrollport so its occupant stays put while the transcript scrolls and
+   inherits the scrollport's --dsh-composer-height and
+   --dsh-conversation-viewport-height. Above the turn rail (7) and the
+   back-to-bottom control (8). It publishes the end gutter, the inline space
+   between the centered transcript column and the frame's end edge, for the
+   occupant's inline sizes: the percentage resolves against the layer in an
+   element whose containing block is the layer, as it does in the
+   back-to-bottom control's padding below. */
+.asideSlot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 9;
+  height: 0;
+  pointer-events: none;
+  --dsh-chat-aside-gutter: max(0px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2));
+}
+
+:global([data-conversation-scroll]) .asideSlot {
+  position: sticky;
+}
+
 .toBottomSlot {
   position: absolute;
   right: 0;

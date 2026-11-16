@@ -45,6 +45,19 @@ it('refuses an edit shadowed by a higher home layer', async () => {
   expect(ctx.agentDefaultModel.currentSelection().model).toBe('home')
 }, 15_000)
 
+it('reads current overlay files for edits in a startup-only profile', async () => {
+  const { ctx, profile, overlayPath } = await fixture({ hmr: false, overlay: '[]\n' })
+  writeFileSync(overlayPath, JSON.stringify([{ id: 'default-model', config: { provider: 'test', model: 'overlay' } }]))
+  const before = readFileSync(profile.patchPath, 'utf8')
+  await expect(ctx.settings.update('default-model', { model: 'profile' })).rejects.toThrow('overridden')
+  expect(readFileSync(profile.patchPath, 'utf8')).toBe(before)
+  expect(ctx.agentDefaultModel.currentSelection().model).toBe('overlay')
+  rmSync(overlayPath)
+  await expect(ctx.settings.update('default-model', { model: 'profile' })).rejects.toThrow(`failed to read overlay ${overlayPath}`)
+  expect(readFileSync(profile.patchPath, 'utf8')).toBe(before)
+  expect(ctx.agentDefaultModel.currentSelection().model).toBe('overlay')
+}, 15_000)
+
 it('serializes concurrent writes and refuses stale revisions after external changes', async () => {
   const { ctx, profile } = await fixture()
   const revision = ctx.settings.describe().find(row => row.ns === 'first')!.revision

@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { approveEscalation } from '@deepseek-ai/dsh-sandbox'
 import type { ChangeResult, ManagementError, PluginEntryId, PluginInstallFailureKind, RestartReason } from './types.ts'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 
 /** What the model does next for each refusal the manager reports. */
@@ -24,6 +24,7 @@ const ERROR_STEPS: Record<ManagementError['code'], string> = {
   'stale-approval': 'Call install_bundle again without approvedBuilds to read the current pendingBuilds.',
   'incompatible-version': 'Install a version compatible with the running DSH. A version exemption needs the user\'s explicit acceptance of crash and data-loss risk.',
   'unsupported-platform': 'This bundle cannot run on the current Host platform; ask the user to use a supported Host.',
+  'unexpected-package': 'The source installed another package or version than requested and was rolled back; report this to the user.',
   'operation-error': 'Report the diagnostic to the user; retry only after its cause is addressed.',
 }
 
@@ -115,7 +116,7 @@ export function apply(ctx: Context): void {
           return JSON.stringify({ runtimeVersion: getDshRuntimeVersion(), ...manager.listVersionExemptions() })
         case 'set_version_exemption':
           if (args.target === undefined || args.runtimeVersion === undefined || args.enabled === undefined) {
-            throw new Error('target package-name@version, runtimeVersion, and enabled are required')
+            throw new ToolArgsError(['target package-name@version, runtimeVersion, and enabled are required'])
           }
           return JSON.stringify(withNextStep(
             await manager.setVersionExemption(args.target, args.runtimeVersion, args.enabled, args.acceptRisk)))
@@ -124,13 +125,13 @@ export function apply(ctx: Context): void {
           const offset = args.offset ?? 0
           const limit = args.limit ?? 25
           if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
-            throw new Error('offset must be a non-negative integer and limit must be an integer from 1 to 100')
+            throw new ToolArgsError(['offset must be a non-negative integer and limit must be an integer from 1 to 100'])
           }
           const rows = args.action === 'list_plugins' ? await manager.listPlugins() : await manager.listBundles()
           const entries = rows.slice(offset, offset + limit).map(({ meta: _meta, ...row }) =>
             'rows' in row
               // GUI listing and update eligibility do not change the tool's management operations.
-              ? (({ updatable: _updatable, listedByDefault: _listedByDefault, ...bundle }) => ({
+              ? (({ update: _update, listedByDefault: _listedByDefault, ...bundle }) => ({
                 ...bundle, rows: bundle.rows.map(({ meta: _rowMeta, ...declared }) => declared),
               }))(row)
               : row)
@@ -139,20 +140,20 @@ export function apply(ctx: Context): void {
         }
         case 'set_plugin':
         case 'set_bundle': {
-          if (args.target === undefined || args.enabled === undefined) throw new Error('target and enabled are required')
+          if (args.target === undefined || args.enabled === undefined) throw new ToolArgsError(['target and enabled are required'])
           return JSON.stringify(withNextStep(await (args.action === 'set_plugin'
             ? manager.setPluginEnabled(args.target as PluginEntryId, args.enabled)
             : manager.setBundleEnabled(args.target, args.enabled))))
         }
         case 'install_bundle':
-          if (args.target === undefined) throw new Error('target package spec is required')
+          if (args.target === undefined) throw new ToolArgsError(['target package spec is required'])
           return JSON.stringify(withNextStep(await manager.installBundle(args.target, {
             ...args.enabled === undefined ? {} : { enabled: args.enabled },
             ...args.approvedBuilds === undefined ? {} : { approvedBuilds: args.approvedBuilds },
             ...args.registry === undefined ? {} : { registry: args.registry },
           })))
         case 'remove_bundle':
-          if (args.target === undefined) throw new Error('target bundle name is required')
+          if (args.target === undefined) throw new ToolArgsError(['target bundle name is required'])
           return JSON.stringify(withNextStep(await manager.removeBundle(args.target)))
         /* v8 ignore next -- tool JSON validation rejects actions outside the declared enum */
         default: return assertNever(args.action)

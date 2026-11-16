@@ -7,11 +7,11 @@ import type { DetailFailureReason } from '@deepseek-ai/dsh-plugin-detail/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    /** An index URL is not http(s), or carries credentials or a fragment. */
+    /** An index address is invalid for its HTTP(S) or Git source. */
     'plugin-market/invalid-index-url': { readonly url: string; readonly reason: string }
     /** The URL is not one of the configured index sources. */
     'plugin-market/unknown-index': { readonly url: string }
-    /** The index could not be fetched: network failure, timeout, redirect, non-2xx status, or a body over the size limit. */
+    /** The source did not supply the index, or the index exceeded its size limit. */
     'plugin-market/fetch-failed': { readonly url: string; readonly reason: string }
     /** The fetched document is not valid format-1 JSON; `path` names the offending JSON value. */
     'plugin-market/invalid-index': { readonly url: string; readonly path: string; readonly reason: string }
@@ -71,6 +71,12 @@ export type MarketCompatibility =
 export interface MarketListingVersion extends MarketVersion {
   readonly install: MarketInstallTarget
   readonly compatibility: MarketCompatibility
+  /**
+   * Whether `pluginManager.updateBundle` accepts this version for the installed copy: the copy came from a Git commit
+   * (`pluginManager` lists it with `update: 'git'`), this version is newer, and it pins a commit in the same repository
+   * and `path:` directory. `compatibility` reports separately whether the running DSH accepts it.
+   */
+  readonly update: boolean
 }
 
 /** One index plugin with the profile-specific facts a market list displays. */

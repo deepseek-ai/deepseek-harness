@@ -32,8 +32,6 @@ export const en = {
   'more': 'More',
   'collapse': 'Collapse',
   'expand': 'Expand',
-  'subtitle.expand': 'Expand description for {name}',
-  'subtitle.collapse': 'Collapse description for {name}',
   'back': 'Back',
   'brand.localBuild': 'DSH Local Build',
   'workspace.defaultName': 'Default workspace',

@@ -1,8 +1,9 @@
 /** Real Agent, Tools, skills, card service and projections with a controlled profile manager. */
 import { Context } from '@deepseek-ai/cordis'
 import { onTestFinished, vi } from 'vitest'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
@@ -16,13 +17,13 @@ export const ACTION = 'enable_official_plugin'
 
 export const bundle: BundleInfo = {
   name: 'official-search', official: true, optional: true, availability: 'installation',
-  enabled: false, installed: false, removable: false, updatable: false, rows: [], overrides: [],
+  enabled: false, installed: false, removable: false, rows: [], overrides: [],
   meta: { title: { en: 'Search', zh: '搜索' }, description: 'Search past conversations.' },
 }
 /** Text of an accepted `enable_official_plugin` call's result. */
 export const RESULT_TEXT = 'Card shown below your answer. Do not restate it. End with at most one short invitation in the user’s language to click '
   + 'Enable below; do not say the plugin is already on.'
-export const callId = ToolCallId('call-plugin-1')
+export const callId = brandString<ToolCallId>('call-plugin-1')
 export const proposal = { title: 'Search', brief: 'Search your conversation history.', details: { name: bundle.name } }
 
 /**
@@ -36,7 +37,7 @@ export const proposal = { title: 'Search', brief: 'Search your conversation hist
  */
 export function logProposal(ctx: Context, agent: Agent, id = 'call-plugin-1', args: object = proposal, action = ACTION): ToolCallId {
   const turn = Math.max(1, ctx.agents.turnBoundaryOf(agent.session).lastTurn)
-  const toolCallId = ToolCallId(id)
+  const toolCallId = brandString<ToolCallId>(id)
   agent.session.append('tool/call', { turn, step: 1, callId: toolCallId, name: 'propose_action', arguments: JSON.stringify({ action, ...args }) })
   agent.session.append('tool/result', { turn, step: 1, message: createToolResultMessage({ callId: toolCallId,
     content: [{ type: 'text', text: RESULT_TEXT }], isError: false }) }, { surfaceOp: 'append' })
@@ -58,7 +59,7 @@ export async function fixture() {
   }
   ctx.provide('pluginManager', manager)
   const fiber = await ctx.plugin(PluginRecommendations)
-  const handle = await ctx.agents.create({ sessionId: SessionId('recommendations') })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('recommendations') })
   const agent = handle.agent
   const events: SessionEvent[] = []
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })

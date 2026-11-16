@@ -10,22 +10,19 @@ import type {
   TeamTaskSnapshot,
   TeamTaskView,
 } from './types.ts'
-import {
-  TeamId as toTeamId,
-  TeamTaskId as toTeamTaskId,
-} from './types.ts'
+import type { TeamTaskId } from './types.ts'
 import { assertTaskGraphCandidate } from './task-graph.ts'
 import { projectTaskView } from './task-view.ts'
 
 const nonNegativeSafeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const positiveSafeInteger = nonNegativeSafeInteger.min(1)
 const sessionIdSchema = z.string().min(1).transform(value => brandString<SessionId>(value))
-const teamIdSchema = z.string().min(1).transform(value => toTeamId(value))
+const teamIdSchema = z.string().min(1).transform(value => brandString<TeamId>(value))
 const numericTaskIdPattern = /^task-(\d+)$/u
 const teamTaskIdSchema = z.string().min(1).refine((value) => {
   const match = numericTaskIdPattern.exec(value)
   return match === null || Number.isSafeInteger(Number(match[1]))
-}, { message: 'numeric task id suffix must be a safe integer' }).transform(value => toTeamTaskId(value))
+}, { message: 'numeric task id suffix must be a safe integer' }).transform(value => brandString<TeamTaskId>(value))
 const teamTaskSnapshotSchema = z.object({
   id: teamTaskIdSchema,
   revision: positiveSafeInteger,
@@ -33,9 +30,12 @@ const teamTaskSnapshotSchema = z.object({
   description: z.string(),
   status: z.enum(['pending', 'in_progress', 'completed', 'deleted']),
   ownerId: sessionIdSchema.optional(),
+  ownerName: z.string().min(1).optional(),
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
-}).strict() as z.ZodType<TeamTaskSnapshot>
+}).strict().refine(task => task.ownerName === undefined || task.ownerId !== undefined, {
+  message: 'task ownerName requires ownerId',
+}) as z.ZodType<TeamTaskSnapshot>
 
 const teamEventSelectorSchema = z.object({
   version: nonNegativeSafeInteger,
@@ -69,7 +69,7 @@ export interface TeamState {
 export function emptyTeamState(rootId: SessionId, inheritedEventCount = 0): TeamProjectionState {
   return {
     inheritedEventCount,
-    id: toTeamId(rootId),
+    id: brandString<TeamId>(rootId),
     tasks: [],
     nextTaskNumber: 1,
   }
@@ -158,6 +158,7 @@ const teamTaskViewSchema = z.object({
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
   ownerId: sessionIdSchema.optional(),
+  ownerName: z.string().min(1).optional(),
   ready: z.boolean(),
   writeScopeWarnings: z.array(z.string()),
 }).strict() as z.ZodType<TeamTaskView>
@@ -201,6 +202,7 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
  * Team projection selected by the projected Session identity; the wire view
  * carries the selection and task board. Current subagents are
  * supplied separately by the existing `subagentCatalog` projection.
+ * Version-7 checkpoints without owner names remain usable without backfilling.
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',

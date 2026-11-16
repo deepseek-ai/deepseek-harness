@@ -27,3 +27,15 @@ describe('viewer endpoint classification', () => {
         + 'missing []; unexpected ["newPlugin/endpoint"]')
   })
 })
+
+describe('owner-only namespaces', () => {
+  it('classifies every permission preset endpoint, read or write, as owner-only', () => {
+    const presets = Object.entries(VIEWER_ENDPOINT_CLASSES)
+      .filter(([endpoint]) => endpoint.startsWith('permissionPresets/'))
+    // A preset write changes the source Session's sandbox and approval, so a new endpoint classified as
+    // reader-* here would hand a reader the reach `/permission` is refused for. The Client face's
+    // `satisfies` declaration proves a new endpoint has a row; this case proves the row stays owner-only.
+    expect(presets).not.toHaveLength(0)
+    for (const [endpoint, classOf] of presets) expect(classOf, endpoint).toBe('owner-only')
+  })
+})

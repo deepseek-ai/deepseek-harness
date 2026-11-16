@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { SESSION_FORMAT_VERSION, Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'
 import {
@@ -22,6 +22,7 @@ import {
   VFS_EXAMPLE_TAIL_MESSAGE,
   VFS_EXAMPLE_TITLE,
 } from './vfs-example-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function filesUnder(root: string): string[] {
   const files: string[] = []
@@ -167,7 +168,7 @@ describe('WebWorker preview VFS example', () => {
     expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
     expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
     expect(() => Session.fromRestore(
-      SessionId(meta.id),
+      brandString<SessionId>(meta.id),
       events,
       meta,
       inheritedEventCount,
@@ -271,7 +272,7 @@ describe('WebWorker preview VFS example', () => {
       expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
       expect(foldSubagentDescriptor(events.slice(inheritedEventCount))).toMatchObject({ mode })
       expect(() => Session.fromRestore(
-        SessionId(meta.id),
+        brandString<SessionId>(meta.id),
         events,
         meta,
         inheritedEventCount,

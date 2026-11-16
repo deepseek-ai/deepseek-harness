@@ -110,10 +110,7 @@
       "path": "../../boot/plugin-market"
     },
     {
-      "path": "../../document/office-to-pdf"
-    },
-    {
-      "path": "../account-controller"
+      "path": "../../document/office-kit"
     },
     {
       "path": "../../credentials/deepseek-account"

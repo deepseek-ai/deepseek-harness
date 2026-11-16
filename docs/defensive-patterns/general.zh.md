@@ -137,6 +137,37 @@ globalThis.__dshCache = new Map()   // shared across instances, reclaimed never
 
 反例让实例之间互相覆盖、回收时机不可控，并让状态在测试之间泄漏。
 
+<a id="plugins-do-not-read-the-cordis-root-context"></a>
+
+## 插件不读取 Cordis 根上下文
+
+插件通过自己的上下文获取服务、监听事件和注册内容，绝不经由 `ctx[Context.root]` 返回的根上下文。经由根上下文读取会跳过 `inject` 检查，因为根 fiber 没有 runtime；在根上下文上注册的监听器会跳过 scope 过滤；根上下文在根 isolate realm 中解析服务，而不是插件所在的 realm；在根上下文上注册的监听器或 accessor 不会随插件释放而移除。
+
+判定条件：为每处用法说出它替代的显式声明机制。读取服务对应一条 `inject` 条目；必须观察所有 scope 的监听器传入 `{ global: true }`；应用级的键或根级启动操作由拥有它的服务提供。边界是第一方 JavaScript 和 TypeScript（包括测试和 fixture），覆盖 `Context.root`、`symbols.root` 和 `Symbol.for('cordis.root')`，三者指向同一个符号。[verify-cordis-root.ts](../../scripts/verify-cordis-root.ts) 通过 `pnpm run verify-cordis-root` 运行，并由 `scripts/run-gates.ts` 作为 `cordis-root` 门禁运行，拒绝新增读取。例外：其 `CORDIS_ROOT_EXEMPTIONS` 中列出的文件，它们测试根上下文约定本身。`scripts/cordis-root.baseline.json` 中记录的读取是各包所有者待清理的工作，不是新代码的先例；理由见[决策记录](../../.agents/notes/implemented/process/2026-11-13-no-new-cordis-root-reads.zh.md)。
+
+```ts
+// Services come from inject; a listener that observes every scope says so.
+interface Loader { await(): Promise<void> }
+interface Context {
+  readonly loader: Loader
+  on(name: string, listener: () => void, options?: { global?: boolean }): () => void
+}
+
+export const inject = ['loader']
+
+export function apply(ctx: Context, listener: () => void): void {
+  void ctx.loader.await()
+  ctx.on('agent/inbox/inserted', listener, { global: true })
+}
+```
+
+```ts ignore-check
+void ctx[Context.root].loader.await()                   // no inject entry, no wait
+ctx[Context.root].on('agent/inbox/inserted', listener)  // escapes scope filtering and plugin disposal
+```
+
+反例让插件在依赖存在之前启动，让它观察和修改自身 scope 与 realm 之外的状态，并在插件释放后留下注册内容。
+
 <a id="a-business-capability-owns-itself"></a>
 
 ## 业务能力自己拥有自己

@@ -18,7 +18,7 @@ const otherViewer = { ...viewer, subjectId: 'ou_other' }
 function share(extra: Partial<ForkShareState> = {}): ForkShareState {
   return {
     shareId: 'share-1',
-    sessionId: 'session-1',
+    sessionIds: ['session-1'],
     allowsFork: false,
     viewerAdmitted: true,
     stopped: false,
@@ -68,7 +68,7 @@ function service(options: {
   const read = createViewerReadService({
     connection: readers.connection,
     gateway: gateway(signals),
-    sharedSessionId: () => 'session-1',
+    sharedSessionIds: () => ['session-1'],
     forkStateOf: options.state ?? (() => share()),
     ...(options.admitted === undefined ? {} : { viewerStillAdmitted: options.admitted }),
   })

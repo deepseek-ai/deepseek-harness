@@ -12,7 +12,7 @@ async function setupRuntime(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const { runtime, fiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', ...config })
+  const { runtime, fiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped: false, ...config })
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))
@@ -24,7 +24,8 @@ function bindings(value: PtcBindingFunction) {
 }
 
 describe.each([
-  { executionMode: 'persistent-in-memory', scriptPersistence: false, format: 'repl' },
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: false, format: 'repl' },
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: true, format: 'scoped-repl' },
   { executionMode: 'vm-script', scriptPersistence: true, format: 'script' },
 ] as const)('retained Node $format', ({ format, ...mode }) => {
   const setup = (config: Config = {}) => setupRuntime({ ...mode, ...config })
@@ -39,14 +40,14 @@ describe.each([
       expect((await run('typeof retained')).value).toBe('undefined')
     } finally { await runtime.release(owner); await pending }
   })
-  it('keeps a snapshot of caller-owned root arrays and rejects changed grants', async () => {
+  it('retains variables across additional-root changes until release', async () => {
     const { run, runtime, owner, cwd } = await setup()
     const roots = [cwd]
     const policy = { mode: 'danger-full-access' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
     expect((await run('var retained = 7; retained', { sandboxPolicy: policy })).value).toBe(7)
     expect((await run('retained', { sandboxPolicy: { ...policy, additionalWritableRoots: [cwd, cwd] } })).value).toBe(7)
     roots[0] = tmpdir()
-    await expect(run('retained', { sandboxPolicy: policy })).rejects.toThrow('release the retained environment')
+    expect((await run('retained', { sandboxPolicy: policy })).value).toBe(7)
     await runtime.release(owner)
     expect((await run('typeof retained', { sandboxPolicy: policy })).value).toBe('undefined')
   })
@@ -75,7 +76,7 @@ describe.each([
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
-    expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
+    expect(await run('inspect("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ output: [{ type: 'text', text: 'second call\n' }], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
 
@@ -87,17 +88,17 @@ describe.each([
     expect((await run('await query()', { bindings: bindings(second) })).value).toBe('new')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
-    expect((await run('let failure; try { await query() } catch (error) { console.log(error.toolName); failure = "unavailable" }; failure')).value).toBe('unavailable')
+    expect((await run('let failure; try { await query() } catch (error) { inspect(error.toolName); failure = "unavailable" }; failure')).value).toBe('unavailable')
     expect(second).toHaveBeenCalledTimes(1)
   })
 
   it('runs top-level await blocks with reusable local declarations and keeps outer state', async () => {
     const { run } = await setup()
     await run('let total = 0;')
-    const code = '{ const amount = await tools.value({}); total += amount; console.log(amount); }'
-    expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ logs: ['2'] })
-    expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ logs: ['3'] })
-    expect(await run('({ total, local: typeof amount })')).toMatchObject({ logs: [], value: { total: 5, local: 'undefined' } })
+    const code = '{ const amount = await tools.value({}); total += amount; inspect(amount); }'
+    expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ output: [{ type: 'text', text: '2\n' }] })
+    expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ output: [{ type: 'text', text: '3\n' }] })
+    expect(await run('({ total, local: typeof amount })')).toMatchObject({ output: [], value: { total: 5, local: 'undefined' } })
   })
 
   it('uses the current error descriptor through a saved binding and retains matching constructor identity', async () => {
@@ -131,10 +132,11 @@ describe.each([
     const { run } = await setup()
     const called = vi.fn(async () => 42)
     const options = { bindings: bindings(called) }
-    await run('let retained = 17; let trigger; let rejection; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { rejection = error.message } });', options)
-    expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); rejection', options)).value).toBe('PTC evaluation ended')
+    // The late callback stores into an object so that copy-per-call scoped REPL bindings observe it as well.
+    await run('let retained = 17; let trigger; const late = {}; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { late.rejection = error.message } });', options)
+    expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); late.rejection', options)).value).toBe('PTC evaluation ended')
     expect(called).not.toHaveBeenCalled()
-    expect(await run('({ retained, answer: await tools.value({}) })', options)).toMatchObject({ logs: [], value: { retained: 17, answer: 42 } })
+    expect(await run('({ retained, answer: await tools.value({}) })', options)).toMatchObject({ output: [], value: { retained: 17, answer: 42 } })
     expect(called).toHaveBeenCalledTimes(1)
   })
 
@@ -144,8 +146,8 @@ describe.each([
     const result = await run(`let retained = 17; const child = await import("node:child_process"); child.execFileSync(process.execPath, ["-e", ${JSON.stringify(childProgram)}], { stdio: "inherit" }); retained`)
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(17)
-    expect(result.logs.join('')).toContain('stdout marker')
-    expect(result.logs.join('')).toContain('stderr marker')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('stdout marker')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('stderr marker')
     expect((await run('retained')).value).toBe(17)
   })
 
@@ -155,7 +157,7 @@ describe.each([
     expect(result.error?.kind).toBe('worker-exit')
     expect(result.error?.message).toContain('7')
     expect(result.error?.message).toContain('fatal fixture')
-    expect(result.logs.join('')).toContain('fatal fixture')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('fatal fixture')
     expect((await run('42')).value).toBe(42)
   })
 
@@ -229,14 +231,14 @@ describe.each([
     const controller = new AbortController()
     const entered = Promise.withResolvers<undefined>()
     await run('var kept = { count: 1 }; var alias = kept; var effects = [];')
-    const pending = run('kept.count++; console.log("before stop"); await tools.value({})', {
+    const pending = run('kept.count++; inspect("before stop"); await tools.value({})', {
       timeoutMs: action === 'timeout' ? 200 : null, signal: controller.signal,
       bindings: bindings(() => { entered.resolve(undefined); return new Promise(() => {}) }),
     })
     await entered.promise
     if (action === 'abort') controller.abort()
     const result = await pending
-    expect(result.logs).toEqual(['before stop'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop\n'])
     expect(result.error?.kind).toBe(action)
     expect(result.error?.message).toContain('retained variables were preserved')
     expect((await run('({ count: kept.count, same: kept === alias, effects })')).value)
@@ -252,14 +254,14 @@ describe.each([
     const { run, cwd } = await setup({ stopGraceMs: 50 })
     await run('var kept = 42; var fs = await import("node:fs");')
     const controller = new AbortController()
-    const pending = run(`${prefix} console.log("before stop"); fs.writeFileSync("entered-loop", "ready"); while (true) {}`, {
+    const pending = run(`${prefix} inspect("before stop"); fs.writeFileSync("entered-loop", "ready"); while (true) {}`, {
       timeoutMs: action === 'timeout' ? 1000 : null, signal: controller.signal,
     })
     try {
       await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
       if (action === 'abort') controller.abort()
       const result = await pending
-      expect(result.logs).toEqual(['before stop'])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop\n'])
       expect(result.error?.kind).toBe(action)
       expect(result.error?.message).toContain('retained variables were cleared')
       expect((await run('typeof kept')).value).toBe('undefined')
@@ -321,6 +323,7 @@ describe.each([
       await entered.promise
       await expect(run('1')).rejects.toThrow('concurrent runs')
       await expect(run('const =')).rejects.toThrow('concurrent runs')
+      await expect(run('1')).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_CONFLICT' })
       expect((await run('2', { stateOwner: {} })).value).toBe(2)
     } finally { proceed.resolve(null) }
     expect((await pending).value).toBeNull()
@@ -357,7 +360,7 @@ describe.each([
     const result = await run(program)
     expect(result.error?.kind).toBe('output-limit')
     expect(result.error?.message).toContain('retained variables were cleared')
-    const outputBytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const outputBytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(outputBytes).toBeLessThanOrEqual(100)
     expect((await run('typeof retained')).value).toBe('undefined')
   })
@@ -367,18 +370,19 @@ describe.each([
     await run('let retained = true;')
     const result = await run('const =')
     expect(result.error?.kind).toBe('output-limit')
-    const outputBytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const outputBytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(outputBytes).toBeLessThanOrEqual(32)
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 
-  it('rejects a packaged host without a persistent bootstrap during provider loading', async () => {
+  it('accepts an embedded carrier for a packaged host', async () => {
     const previous = Object.getOwnPropertyDescriptor(process, 'pkg')
     try {
       Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
-      await expect(setup()).rejects.toThrow('requires a node-script launch')
-      const { runtime } = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
-      expect(runtime.programFormat).toBe(format)
+      const embedded = await setup()
+      expect(embedded.runtime.programFormat).toBe(format)
+      const scripted = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
+      expect(scripted.runtime.programFormat).toBe(format)
     } finally {
       if (previous === undefined) Reflect.deleteProperty(process, 'pkg')
       else Object.defineProperty(process, 'pkg', previous)
@@ -387,7 +391,7 @@ describe.each([
 
   it('bounds output and clears state after an overflow', async () => {
     const { run } = await setup({ maxOutputBytes: 100 })
-    expect((await run('let retained = true; console.log("x".repeat(1000))')).error?.kind).toBe('output-limit')
+    expect((await run('let retained = true; inspect("x".repeat(1000))')).error?.kind).toBe('output-limit')
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 })
@@ -395,7 +399,7 @@ describe.each([
 it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the active evaluation', async (name) => {
   const { run } = await setupRuntime()
   const called = vi.fn(async () => 7)
-  expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toMatchObject({ logs: [], value: 42 })
+  expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toMatchObject({ output: [], value: 42 })
   expect(called).toHaveBeenCalledOnce()
   expect((await run(name)).value).toBe(42)
 })
@@ -437,8 +441,8 @@ it('retains implicit REPL globals and does not attribute a completed callback ex
     const acknowledged = new Promise(resolve => { acknowledge = resolve });
     void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
   `)
-  expect(await run('fireLate(); await acknowledged; implicitValue')).toMatchObject({ logs: [], value: 7 })
-  expect(await run('implicitValue')).toMatchObject({ logs: [], value: 7 })
+  expect(await run('fireLate(); await acknowledged; implicitValue')).toMatchObject({ output: [], value: 7 })
+  expect(await run('implicitValue')).toMatchObject({ output: [], value: 7 })
 })
 
 it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {
@@ -446,6 +450,6 @@ it('settles an asynchronous exception once while a later evaluation awaits a too
   const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')
   expect(failed.error?.message).toContain('async failure')
   const next = await run('resume(); await tools.value({})', { bindings: bindings(async () => { await setImmediate(); return 42 }) })
-  expect(next).toMatchObject({ logs: [], value: 42 })
+  expect(next).toMatchObject({ output: [], value: 42 })
   expect((await run('retained')).value).toBe(17)
 })

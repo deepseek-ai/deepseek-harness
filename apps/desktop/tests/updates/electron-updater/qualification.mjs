@@ -60,11 +60,19 @@ async function main() {
     await target.checkForUpdates()
     assert.equal(requests.at(-1), `/stable${process.platform === 'darwin' ? '-mac' : ''}.yml`)
     assert.equal(target.allowDowngrade, false)
-    assert.equal(target.allowPrerelease, false)
-    version = '0.9.0'
-    await discardDesktopUpdate(target)
-    await target.checkForUpdates()
-    assert.equal(target.updateInfoAndProvider, null)
+    assert.equal(target.allowPrerelease, true)
+    for (const candidate of ['2.0.0-alpha.1', '2.0.0-rc.1', '2.0.0']) {
+      version = candidate
+      await discardDesktopUpdate(target)
+      assert.equal((await target.checkForUpdates()).isUpdateAvailable, true)
+      assert.equal(target.updateInfoAndProvider.info.version, candidate)
+    }
+    for (const candidate of ['0.9.0-rc.1', '1.0.0-rc.1']) {
+      version = candidate
+      await discardDesktopUpdate(target)
+      assert.equal((await target.checkForUpdates()).isUpdateAvailable, false)
+      assert.equal(target.updateInfoAndProvider, null)
+    }
     version = '2.0.0'
     percentage = 0
     await discardDesktopUpdate(target)
@@ -98,7 +106,7 @@ async function main() {
     // A later process can encounter files that a previous process could not remove.
     await writeFile(file, oldPayload)
     await writeFile(join(pending, 'update-info.json'), cachedInfo)
-    version = '2.1.0'
+    version = '2.1.0-rc.1'
     payload = Buffer.from('different release after obsolete cache survived')
     sha512 = createHash('sha512').update(payload).digest('base64')
     const recovered = new Target(undefined, adapter)
@@ -115,7 +123,7 @@ async function main() {
     await recovered.checkForUpdates()
     await recovered.downloadUpdate()
     assert.deepEqual(await readFile(recovered.downloadedUpdateHelper.file), payload)
-    assert.equal(recovered.downloadedUpdateHelper.versionInfo.version, '2.1.0')
+    assert.equal(recovered.downloadedUpdateHelper.versionInfo.version, '2.1.0-rc.1')
     console.log('PASS: obsolete cache rejected by a new updater instance; current payload verified')
     console.log('PASS: real provider channel switching, rollout eligibility, real downloads, native platform cache and proxy retirement')
   } finally {

@@ -34,11 +34,19 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
     mergeability: 'mergeable',
     mergeReady: true,
     mergeMethods: ['squash', 'merge', 'rebase'],
+    branchUpdates: [],
     reviewDecision: 'none',
+    reviewers: [],
+    reviewersTruncated: false,
+    canRequestReviews: false,
     checks: [],
     checksRollup: 'success',
     checksTruncated: false,
+    canRerunChecks: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
+    closingIssues: [],
+    closingIssuesTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
     ...overrides,
@@ -48,34 +56,43 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
 /** A scripted provider that records every call. */
 export class FakeProvider implements ForgeProvider {
   readonly forge: string
+  readonly hosts: readonly string[]
+  readonly label = 'Fake'
+  readonly changeRequestNoun = 'pull-request'
   readonly fetches: (readonly ChangeRequestRef[])[] = []
   readonly signals: AbortSignal[] = []
   readonly results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
   readonly heads = new Map<string, readonly ChangeRequestRef[]>()
   fetchImpl: ((refs: readonly ChangeRequestRef[], signal: AbortSignal) => Promise<FetchResult>) | undefined
-  readinessResult: ForgeReadiness = { state: 'ready', message: null }
+  readinessResult: ForgeReadiness = { state: 'ready', message: null, signIn: null }
   /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
   readonly actions: string[] = []
   actionResult: ForgeActionFailure | undefined
   /** Patch or file text the reads return. */
   readResult: string | ForgeFailure = ''
 
-  constructor(forge = 'fake') {
+  constructor(forge = 'fake', hosts: readonly string[] = [`${forge}.test`]) {
     this.forge = forge
+    this.hosts = hosts
   }
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const match = /^fake:\/\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(url)
     if (match === null) return undefined
     const [, host = '', owner = '', name = ''] = match
-    return { forge: this.forge, host, owner, name }
+    return this.serves(host) ? { forge: this.forge, host, owner, name } : undefined
   }
 
   changeRequestFromUrl(url: string): ChangeRequestRef | undefined {
     const match = /^https:\/\/([^/]+)\/([^/]+)\/([^/]+)\/change\/(\d+)$/.exec(url)
     if (match === null) return undefined
     const [, host = '', owner = '', name = '', number = '0'] = match
-    return { repository: { forge: this.forge, host, owner, name }, number: Number(number) }
+    return this.serves(host) ? { repository: { forge: this.forge, host, owner, name }, number: Number(number) } : undefined
+  }
+
+  /** Whether `host` is one of `hosts`, compared without case. */
+  private serves(host: string): boolean {
+    return this.hosts.some(served => served.toLowerCase() === host.toLowerCase())
   }
 
   changeRequestUrl(target: ChangeRequestRef): string {
@@ -110,8 +127,8 @@ export class FakeProvider implements ForgeProvider {
     return this.actionResult
   }
 
-  async diff(target: ChangeRequestRef): Promise<string | ForgeFailure> {
-    this.actions.push(`diff ${target.number}`)
+  async diff(target: ChangeRequestRef, headSha: string, _signal: AbortSignal, _base?: string): Promise<string | ForgeFailure> {
+    this.actions.push(`diff ${target.number} ${headSha}`)
     return this.readResult
   }
 

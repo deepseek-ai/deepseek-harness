@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Reply with the single word
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -13,6 +14,7 @@
 - button "Completed in {{duration}}" [expanded]
 - button "Analysis completed" [expanded]
 - button "Context injection runtime-context"
+- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - button "Think The user wants me to reply with a single word. Let me comply."
 - paragraph: LIGHTHOUSE

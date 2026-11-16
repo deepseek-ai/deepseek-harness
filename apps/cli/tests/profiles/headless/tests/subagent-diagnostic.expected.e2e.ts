@@ -15,9 +15,10 @@ import {
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SESSION_FORMAT_VERSION, type SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { describe, expect, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const fixtureDir = fileURLToPath(new URL('./expected/subagent-diagnostic', import.meta.url))
 const replayOverride = join(fixtureDir, 'replay.override.json')
@@ -25,8 +26,8 @@ const parentExpected = join(fixtureDir, 'parent.expected.jsonl')
 const configPath = fileURLToPath(new URL('../subagent-diagnostic-snapshot.patch.yml', import.meta.url))
 const binScript = fileURLToPath(new URL('../../../../../../packages/test-support/loader-smoke/tests/fixtures/headless-driver.ts', import.meta.url))
 const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', import.meta.url))
-const parentId = SessionId('subagent-diagnostic-parent')
-const childId = SessionId('subagent-diagnostic-child')
+const parentId = brandString<SessionId>('subagent-diagnostic-parent')
+const childId = brandString<SessionId>('subagent-diagnostic-child')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 const task = 'Call list_agents once and report what it shows.'
 
@@ -132,8 +133,8 @@ describe('parent-owned cold child catalog snapshot', () => {
         if (parent === undefined) throw new Error('missing persisted parent log')
 
         // Discovery reads child catalogs without requiring activation descriptors.
-        expect(parent).toContain(`${childId} [inactive] parent=${parentId} depth=1 — descriptorless child`)
-        expect(parent).not.toContain('[diagnostic: corrupt]')
+        expect(parent).toContain(`${childId} [inactive] — descriptorless child`)
+        expect(parent).not.toContain(`${childId} [corrupt]`)
 
         const context: NormalizeContext = { sessionIds: [parentId, childId], cwd }
         const normalizedParent = normalizeSessionSnapshot(parent, context)

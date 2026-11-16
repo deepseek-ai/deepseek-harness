@@ -9,7 +9,8 @@ import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
-import { TeamTaskId } from './types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TeamTaskId } from './types.ts'
 import type {
   CreateTeamTaskRequest,
   TeamTaskSnapshot,
@@ -60,7 +61,7 @@ export class TeamTaskBoard {
       if (active >= this.maxTasks) {
         throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
       }
-      const id = TeamTaskId(`task-${state.nextTaskNumber}`)
+      const id = brandString<TeamTaskId>(`task-${state.nextTaskNumber}`)
       if (state.tasks.some(task => task.id === id)) {
         throw new TeamError('Team task id space exhausted', 'TEAM_TASK_LIMIT')
       }
@@ -139,15 +140,18 @@ export class TeamTaskBoard {
       }
       let next: TeamTaskSnapshot
       switch (request.action) {
-        case 'claim':
+        case 'claim': {
           if (current.ownerId !== undefined && current.ownerId !== caller.id) {
             throw new TeamError(`team task "${current.id}" is owned by another member`, 'TEAM_TASK_ALREADY_CLAIMED')
           }
           if (current.status !== 'pending' || !taskReady(state, current)) {
             throw new TeamError(`team task "${current.id}" is not ready to claim`, 'TEAM_TASK_BLOCKED')
           }
-          next = { ...current, status: 'in_progress', ownerId: caller.id }
+          const name = this.ctx.subagents.namesOf(caller).self
+          next = { ...this.withoutOwner(current), status: 'in_progress', ownerId: caller.id,
+            ...name === caller.id ? {} : { ownerName: name } }
           break
+        }
         case 'release':
           authorizeOwner()
           if (current.status !== 'in_progress') throw new TeamError('only an in-progress task can be released', 'TEAM_TASK_INVALID_TRANSITION')
@@ -195,7 +199,7 @@ export class TeamTaskBoard {
             break
           }
           if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
-          next = { ...current, status: 'in_progress', ownerId: await this.resolveAssignee(root, request.owner, signal) }
+          next = { ...this.withoutOwner(current), status: 'in_progress', ...await this.resolveAssignee(root, request.owner, signal) }
           break
         }
         case 'delete': {
@@ -226,10 +230,11 @@ export class TeamTaskBoard {
   }
 
   /** Resolve a task owner through the same durable tree used by Agent discovery. */
-  private async resolveAssignee(root: Agent, target: SessionId, signal?: AbortSignal): Promise<SessionId> {
-    if (target === root.id) return target
+  private async resolveAssignee(root: Agent, target: SessionId, signal?: AbortSignal): Promise<{ ownerId: SessionId; ownerName?: string }> {
+    if (target === root.id) return { ownerId: target, ownerName: this.ctx.subagents.namesOf(root).self }
     const descendants = await this.ctx.subagents.listDescendants(root.id, signal)
-    if (descendants.some(entry => entry.kind !== 'diagnostic' && entry.mode === 'continuable' && entry.id === target)) return target
+    const member = descendants.find(entry => entry.kind !== 'diagnostic' && entry.mode === 'continuable' && entry.id === target)
+    if (member !== undefined) return { ownerId: target, ...member.path === undefined ? {} : { ownerName: member.path } }
     throw new TeamError(`agent "${target}" is not a continuable descendant of this task board's root`, 'TEAM_MEMBER_NOT_FOUND')
   }
 
@@ -270,9 +275,9 @@ export class TeamTaskBoard {
     }
   }
 
-  /** Remove an optional owner field under exactOptionalPropertyTypes. */
+  /** Remove both optional owner fields under exactOptionalPropertyTypes. */
   private withoutOwner(task: TeamTaskSnapshot): TeamTaskSnapshot {
-    const { ownerId: _ownerId, ...without } = task
+    const { ownerId: _ownerId, ownerName: _ownerName, ...without } = task
     return without
   }
 }

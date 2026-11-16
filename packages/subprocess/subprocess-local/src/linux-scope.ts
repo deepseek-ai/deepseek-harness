@@ -350,9 +350,13 @@ class SystemdScopeOwner implements BoundProcessOwner {
 
   terminateForHostExit(): void {
     if (this.stopped) return
-    try {
-      if (this.direct.running()) this.direct.signal('SIGKILL')
-    } catch { /* Continue with the native owner. */ }
+    if (this.direct.running()) {
+      try {
+        this.direct.signal('SIGKILL')
+      } catch (_directSignalFailed) {
+        // Host exit cannot report one range; the scope kill below remains the next attempt.
+      }
+    }
     try {
       this.runSync(this.systemctl, [
         '--user',
@@ -361,7 +365,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
         '--signal=SIGKILL',
         this.unit,
       ], { env: managerEnvironment(), stdio: 'ignore', timeout: SYSTEMCTL_TIMEOUT_MS })
-    } catch {
+    } catch (_scopeKillFailed) {
       // Host exit cannot report one range; the runtime continues with the rest.
     }
   }
@@ -403,7 +407,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
         stdio: 'ignore',
         timeout: SYSTEMCTL_TIMEOUT_MS,
       })
-    } catch {
+    } catch (_scopeStopFailed) {
       // The range is already empty; a failed cleanup leaves only the transient unit.
     }
   }
@@ -593,7 +597,7 @@ function directOutcome(
 export function signalLinuxDirectProcess(pid: number, send: () => boolean): boolean {
   try {
     if (send()) return true
-  } catch { /* A failed signal still permits an independent absence observation. */ }
+  } catch (_signalFailed) { /* A failed signal still permits an independent absence observation. */ }
   try {
     process.kill(pid, 0)
     return false
@@ -606,7 +610,7 @@ function signalChildGroup(child: ReturnType<typeof spawn>, signal: 'SIGTERM' | '
   let groupSignalled = false
   try {
     groupSignalled = process.kill(-(child.pid as number), signal)
-  } catch { /* A missing or inaccessible group still permits a direct-process attempt. */ }
+  } catch (_groupSignalFailed) { /* A missing or inaccessible group still permits a direct-process attempt. */ }
   if (groupSignalled && signal === 'SIGTERM') return true
   // Group success can reflect another member; joining direct exit requires its own SIGKILL submission.
   // ChildProcess.kill can emit an error that settles directOutcome before the real exit.
@@ -676,8 +680,10 @@ export function launchLinuxScope(
   internals: LinuxScopeInternals = {},
 ): ManagedProcessLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
+  const stdio = runnerStdio(spec, false)
   const files = createLinuxLaunchFiles({
     cwd: spec.cwd, env: targetEnv,
+    pipeFds: stdio.slice(0, 3).flatMap((disposition, fd) => disposition === 'pipe' ? [fd] : []),
     ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control },
   })
   const startup = new LinuxScopeStartup(files, 'subprocess')
@@ -692,7 +698,7 @@ export function launchLinuxScope(
     ), {
       cwd: process.cwd(),
       env: runnerEnvironment(files.requestPath, invocation),
-      stdio: runnerStdio(spec, false),
+      stdio,
       detached: true,
     })
   } catch (error) {

@@ -125,5 +125,29 @@ it.each([1, 2])('keeps icon stroke widths at device pixel ratio %s', async (devi
         expect(Math.abs(coverage / deviceScaleFactor - expectedWidth), `${size}px ${weight}, dark=${dark}`).toBeLessThan(0.04)
       }
     }
+    for (const size of [12, 14]) {
+      await page.evaluate(({ size, dark }) => {
+        const svg = document.querySelector<SVGSVGElement>('[data-stroke-sample]')!
+        svg.style.width = `${size}px`
+        svg.style.height = `${size}px`
+        svg.style.color = dark ? 'white' : 'black'
+        svg.style.backgroundColor = dark ? 'black' : 'white'
+        svg.querySelector('use')!.setAttribute('href', '#dsw-icon-browse-outline-regular')
+      }, { size, dark })
+      const { data, info } = await sharp(await page.locator('[data-stroke-sample]').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+      const ink = (x: number, y: number) => {
+        const intensity = data[(y * info.width + x) * info.channels]! / 255
+        return dark ? intensity : 1 - intensity
+      }
+      const scale = size * deviceScaleFactor / 16
+      // The mixed glyph's filled side walls scale; its separate inner line does not.
+      const row = Math.floor(7.5 * scale)
+      const walls = Array.from({ length: info.width }, (_, x) => ink(x, row)).reduce((sum, value) => sum + value, 0)
+      expect(Math.abs(walls / deviceScaleFactor / 2 - size / 16)).toBeLessThan(0.04)
+      const column = Math.floor(7 * scale)
+      let line = 0
+      for (let y = Math.ceil(4 * scale); y <= Math.floor(7.5 * scale); y++) line += ink(column, y)
+      expect(Math.abs(line / deviceScaleFactor - 1)).toBeLessThan(0.04)
+    }
   }
 })

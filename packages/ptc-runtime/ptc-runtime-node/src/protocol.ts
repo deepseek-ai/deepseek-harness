@@ -3,16 +3,28 @@ import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Wire revision required before the host dispatches program code. */
-export const PROGRAM_PROTOCOL_VERSION = 2
+export const PROGRAM_PROTOCOL_VERSION = 4
+
+/** One binding's JSON value and optional host-authored inspection text. */
+export interface BindingResult {
+  /** Flat lossless JSON data returned to the program. */
+  value: PtcJsonWire
+  /** Direct inspection text for an unchanged object or array. */
+  inspection?: string
+}
 
 /** Inputs for one program; host functions remain in the parent process. */
 export interface ProgramBootData {
   /** Type-stripped JavaScript source. */
   code: string
+  /** Environment initialization, supplied only until the Host accepts initialized(). */
+  initialization?: string
   /** Evaluation syntax; omitted uses the installed bootstrap's default. */
   programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
   retainsState: boolean
+  /** Await successful completion without serializing its value. */
+  discardCompletion?: boolean
   /** Globals and callable names injected into the program. */
   namespaces: {
     global: string
@@ -37,18 +49,29 @@ export interface HostMethods {
    */
   ready(version: number): void
   /**
+   * Accept successful environment initialization while the first run remains active.
+   * The child awaits the RPC reply before starting user code; cancellation rejects.
+   * @returns Host acceptance before user code may start.
+   */
+  initialized(): Promise<void>
+  /**
    * Invoke a binding under its originating host execution context.
    * @param global - Namespace global.
    * @param name - Function name within the namespace.
    * @param args - Flat lossless JSON arguments.
-   * @returns Flat lossless JSON result; binding failures and cancellation reject.
+   * @returns JSON data with optional inspection text; binding failures and cancellation reject.
    */
-  invoke(global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
+  invoke(global: string, name: string, args: PtcJsonWire): Promise<BindingResult>
   /**
    * Admit captured output before completion or interruption.
    * @param text - Captured text.
    */
   log(text: string): void
+  /**
+   * Emit one registered image at the current output position.
+   * @param id - Image identity issued by this process’s host.
+   */
+  image(id: string): void
   /** Report exhausted program-side output accounting. */
   outputLimit(): void
 }

@@ -13,7 +13,8 @@ import {
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
@@ -22,6 +23,7 @@ import { commandDefinition } from '../src/client/conversation-nodes/command.ts'
 import { compactionDefinition } from '../src/client/conversation-nodes/compaction.ts'
 import { unknownFallbackDefinition } from '../src/client/conversation-nodes/fallback.ts'
 import { nextStepInboxDefinition, nextTurnInboxDefinition } from '../src/client/conversation-nodes/inbox.ts'
+import { inheritedHistoryDefinition } from '../src/client/conversation-nodes/inherited-history.ts'
 import { developerMessageDefinition, messageDefinition } from '../src/client/conversation-nodes/message.ts'
 import { inspectRequestPrompt } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { requestPromptDefinition, systemMessageDefinition } from '../src/client/conversation-nodes/request-prompt.ts'
@@ -48,6 +50,7 @@ const DEFINITIONS: readonly ConversationNodeDefinition[] = [
   toolDefinition,
   commandDefinition,
   compactionDefinition,
+  inheritedHistoryDefinition,
   retryDefinition,
   turnErrorDefinition,
   turnMaxTokensDefinition,
@@ -174,7 +177,7 @@ function appendAssistantChunk(value: ConversationNodeAssembler, seq: number, chu
     type: 'transient',
     event: {
       type: 'assistant/live-chunk', seq, time: 1_700_000_000_000 + seq,
-      data: { attemptId: LlmAttemptId('assistant-visibility'), turn: 1, step: 1, chunk },
+      data: { attemptId: brandString<LlmAttemptId>('assistant-visibility'), turn: 1, step: 1, chunk },
     },
   })
   value.flush()
@@ -625,6 +628,39 @@ describe('built-in conversation node Definitions', () => {
       expect(running.order.map(key => running.nodes.get(key)?.kind)).toEqual([kind, 'turn-process', 'assistant-step'])
     },
   )
+
+  it.each(['replay', 'live', 'prepend'] as const)('presents empty retry receipts through %s while retaining other input', (mode) => {
+    const retry = { id: 'empty-retry', role: 'user', content: [], source: { kind: 'retry' } }
+    const before = [
+      at(1, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [retry] }),
+      at(2, 'turn/start', { turn: 1 }),
+      at(3, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
+      at(4, 'step/start', { turn: 1, step: 1 }),
+    ]
+    const message = at(5, 'user/message', retry, { surfaceOp: 'append' })
+    const value = assembler(mode === 'replay' ? [...before, message] : mode === 'prepend' ? [message] : [], mode === 'prepend')
+    if (mode === 'live') for (const entry of [...before, message]) value.append(entry)
+    if (mode === 'prepend') value.prepend(before, false)
+    value.flush()
+    const current = snapshot(value)
+    const receipt = node(current, 'turn-trigger')
+    expect(receipt).toMatchObject({ anchorSeq: 5, groupTree: 'input', data: { content: [], source: { kind: 'retry' } } })
+    expect(current.order).toContain(receipt?.key)
+    expect(node(current, 'unknown')).toBeUndefined()
+
+    value.append(at(6, 'user/message', { ...retry, id: 'retry-with-content',
+      content: [{ type: 'text', text: 'retained context' }],
+    }, { surfaceOp: 'append' }))
+    value.append(at(7, 'user/message', { ...retry, id: 'ordinary-empty', source: { kind: 'user' } }, { surfaceOp: 'append' }))
+    value.append(at(8, 'developer/message', { turn: 1, step: 1,
+      message: { ...retry, id: 'developer-empty', role: 'developer' },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+    expect(node(snapshot(value), 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'retained context' }] })
+    expect(node(snapshot(value), 'user')?.data).toMatchObject({ content: [], source: { kind: 'user' } })
+    expect(snapshot(value).nodes.values().find(candidate => candidate.anchorSeq === 8)?.data)
+      .toMatchObject({ content: [], source: { kind: 'retry' } })
+  })
 
   it.each(['replay', 'live', 'prepend'] as const)('classifies waking Inbox messages through %s', (mode) => {
     const notice = { ...textMessage('notice', 'scheduled work'), source: { kind: 'schedule' } }
@@ -1196,7 +1232,7 @@ describe('built-in conversation node Definitions', () => {
     appendAssistantChunk(value, 10, { type: 'block-start', index: 0, blockType: 'image' })
     expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
     appendAssistantChunk(value, 11, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('visibility-tool'), name: 'read', argumentsDelta: '',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('visibility-tool'), name: 'read', argumentsDelta: '',
     })
     expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('hidden')
     appendAssistantChunk(value, 12, { type: 'block-start', index: 0, blockType: 'image' })
@@ -1397,7 +1433,7 @@ describe('built-in conversation node Definitions', () => {
     { outcome: 'abandoned', startLoaded: true },
     { outcome: 'abandoned', startLoaded: false },
   ])('retains the Assistant key after $outcome retirement (startLoaded=$startLoaded)', ({ outcome, startLoaded }) => {
-    const attemptId = LlmAttemptId('retired-chat-attempt')
+    const attemptId = brandString<LlmAttemptId>('retired-chat-attempt')
     const chunk = { type: 'text-delta' as const, index: 0, text: 'Discarded reply' }
     const stream = new AssistantStreamAccumulator()
     stream.push({ time: 1_030, chunk })
@@ -1446,7 +1482,7 @@ describe('built-in conversation node Definitions', () => {
       event: {
         type: 'assistant/live-chunk', seq: 4.5, time: 1_050,
         data: {
-          attemptId: LlmAttemptId('replacement-chat-attempt'), turn: 1, step: 1,
+          attemptId: brandString<LlmAttemptId>('replacement-chat-attempt'), turn: 1, step: 1,
           chunk: { type: 'text-delta', index: 0, text: 'Replacement reply' },
         },
       },
@@ -1459,7 +1495,7 @@ describe('built-in conversation node Definitions', () => {
   })
 
   it('omits first-token metrics after live settlement and after reopening the same history', () => {
-    const attemptId = LlmAttemptId('settled-chat-timing')
+    const attemptId = brandString<LlmAttemptId>('settled-chat-timing')
     const starts = [
       at(1, 'turn/start', { turn: 1 }, { time: 1_000 }),
       at(2, 'step/start', { turn: 1, step: 1 }, { time: 1_010 }),
@@ -2786,6 +2822,54 @@ describe('built-in conversation node Definitions', () => {
     const automatic = node(snapshot(compactions), 'compaction')
     expect(automatic?.data).toMatchObject({ summary: 'automatic summary', summaryEventSeq: 21 })
     expect(snapshot(compactions).nodes.values().filter(candidate => candidate.kind === 'compaction')).toHaveLength(1)
+  })
+
+  it.each(['replace', 'append', 'prepend'] as const)('places one divider at the latest inherited history marker via %s', (mode) => {
+    const entries = [
+      at(0, 'session/end-seed', { inherited: true }),
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('parent', 'parent prompt'), { surfaceOp: 'append' }),
+      at(3, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(4, 'session/end-seed', { inherited: true }),
+      at(5, 'session/end-seed', {}),
+      at(6, 'turn/start', { turn: 2 }),
+      at(7, 'user/message', textMessage('child', 'child prompt'), { surfaceOp: 'append' }),
+    ]
+    const value = assembler(mode === 'replace' ? entries : mode === 'append' ? entries.slice(0, 4) : entries.slice(4), mode === 'prepend')
+    if (mode === 'append') {
+      for (const entry of entries.slice(4)) value.append(entry)
+    } else if (mode === 'prepend') {
+      value.prepend(entries.slice(0, 4), false)
+    }
+    value.flush()
+    const dividers = [...snapshot(value).nodes.values()].filter(candidate => candidate.kind === 'inherited-history')
+    expect(dividers.map(divider => [divider.anchorSeq, divider.location.kind])).toEqual([[4, 'session']])
+  })
+
+  it.each([false, true])('keeps a mid-turn inherited cut outside the Turn process (paginated: %s)', (paginated) => {
+    const entries = [
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'user/message', textMessage('parent', 'parent prompt'), { surfaceOp: 'append' }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'session/end-seed', { inherited: true }),
+      at(4, 'turn/end', { turn: 1, reason: { kind: 'forked' } }),
+    ]
+    const value = assembler(paginated ? entries.slice(3) : entries, paginated)
+    if (paginated) {
+      value.prepend(entries.slice(0, 3), false)
+      value.flush()
+    }
+    const divider = node(snapshot(value), 'inherited-history')
+    expect(divider).toMatchObject({ anchorSeq: 3, groupTree: 'turn', location: { kind: 'step' } })
+  })
+
+  it('places no divider in a Session without inherited history', () => {
+    const value = assembler([
+      at(0, 'session/end-seed', {}),
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('own', 'own prompt'), { surfaceOp: 'append' }),
+    ])
+    expect(node(snapshot(value), 'inherited-history')).toBeUndefined()
   })
 
   it('fills a landed compaction marker when an older page supplies its summary', () => {

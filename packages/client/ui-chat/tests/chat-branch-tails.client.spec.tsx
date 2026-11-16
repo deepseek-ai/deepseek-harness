@@ -227,11 +227,32 @@ describe('MessageItem arms', () => {
     expect(exec).toHaveBeenCalledWith('copy')
   })
 
+  it('user copy succeeds through execCommand when the host refuses the async write', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    const exec = vi.fn().mockReturnValue(true)
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec })
+    render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [{ type: 'text', text: 'refused body' }] as never,
+        source: null,
+      }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    expect(await screen.findByRole('button', { name: '复制成功' })).toBeTruthy()
+    expect(exec).toHaveBeenCalledWith('copy')
+  })
+
   it('user copy never claims success when the host rejects the write', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
     render(
       <MessageItem t={t} node={{
         kind: 'user', seq: 1, time: 1_000,
@@ -776,6 +797,23 @@ describe('MessageItem arms', () => {
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
     expect(view.container.querySelector('[data-context-snapshot-supersedes]')?.textContent)
       .toBe('取代先前的快照')
+  })
+
+  it('an empty runtime snapshot keeps the cleared reminder visible', () => {
+    const text = '<system-reminder>\nCurrent runtime context: none. Earlier runtime-context snapshots no longer apply.\n</system-reminder>'
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'context', seq: 3, content: [{ type: 'text', text }],
+        source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
+        producer: { role: 'inject', label: 'runtime-context' },
+        form: 'snapshot',
+      } as never}
+      />,
+    )
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*runtime-context$/ }))
+    expect(view.container.querySelector('[data-context-text]')?.textContent).toBe(text)
+    expect(view.container.querySelector('[data-context-sections]')).toBeNull()
+    expect(view.queryByText('取代先前的快照')).toBeNull()
   })
 
   it('a relay names the agent that sent it above what it said', () => {

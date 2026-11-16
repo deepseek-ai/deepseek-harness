@@ -12,7 +12,7 @@
  * the same artifact safe.
  */
 
-import { execFileSync } from 'node:child_process'
+import { cuaHelperSourceDigest } from '../cua-helper/build-inputs.ts'
 import { verifyCuaHelperTarball } from '../cua-helper/verify-tarball.ts'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -187,9 +187,8 @@ export async function publishRelease(familyId: string, directory: string, distTa
     return { tarball, ...packedIdentity(tarball) }
   })
   for (const member of order) {
-    if (member.name !== '@deepseek-ai/dsh-experimental-cua-macos') continue
-    const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-    await verifyCuaHelperTarball(member.tarball, { version: member.version, commit })
+    if (member.name !== '@deepseek-ai/dsh-cua-macos') continue
+    await verifyCuaHelperTarball(member.tarball, { sourceDigest: cuaHelperSourceDigest(resolve(import.meta.dirname, '../..')) })
   }
   if (distTag !== undefined) {
     for (const member of order) verifyDistTag(member, distTag)

@@ -39,7 +39,7 @@ Give each instance a unique profile entry id. The base bundle mounts settings an
 
 Change a field in Plugins and save. Verify the profile patch, the next consumer operation, unchanged plugin instance identity, and restoration after restart. Reject an invalid value and verify that neither the file nor the live value changed.
 
-Custom plugin pages receive `form.state` and `form.mutate(operations, expectedRevision)` from the Plugins page owner. The Host validates full Config and applies edits through ConfigEditor and volatile HMR. The [plugin settings package](../../packages/client/ui-settings-plugins/README.md) owns the existing card examples.
+Custom plugin pages receive `form.state` and `form.mutate(operations, expectedRevision)` from the Plugins page owner. The Host validates full Config and applies edits through ConfigEditor and volatile HMR. The [Plugins page README](../../packages/client/ui-plugin-manager/README.md#configuration-pages) lists the slots such a page registers into and how a `settings.section` entry also appears there; [ui-settings-shell](../../packages/client/ui-settings-shell/README.md) is an existing page.
 
 ## 4. Contribute to another plugin's page
 

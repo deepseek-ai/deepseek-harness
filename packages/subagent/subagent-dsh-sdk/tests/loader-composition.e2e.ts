@@ -47,7 +47,7 @@ function settlementText(events: SessionEvent[]): string[] {
   const notice = notices[0]!
   if (notice.type !== 'user/message' || notice.data.source.kind !== 'subagent-settled') throw new Error('missing completion notice')
   expect(results[0]!.data.message.content).toEqual([
-    { type: 'text', text: `started subagent ${notice.data.source.senderSessionId}` },
+    { type: 'text', text: 'started subagent agent-1' },
   ])
   return notice.data.content.slice(1).filter(block => block.type === 'text').map(block => block.text)
 }
@@ -157,8 +157,9 @@ describe('SDK subagent routing and diagnostics through the production profile', 
           expect(results[0]!.data.message.isError).toBe(true)
           expect(results[0]!.data.message.content).toEqual([{
             type: 'text',
-            text: 'Error: child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields',
+            text: 'Error: invalid arguments: child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields. Call `list_subagent_models` to see the routes you may select.',
           }])
+          expect(results[0]!.data.error).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
           expect(events.some(event => event.type === 'subagent/catalog')).toBe(false)
           expect(existsSync(join(child.childHome, 'sessions'))).toBe(false)
         },

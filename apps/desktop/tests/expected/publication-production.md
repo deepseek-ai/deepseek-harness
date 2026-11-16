@@ -8,6 +8,7 @@
 | 发布环境 | <code>production</code> |
 | 版本号 | <code>1.0.0</code> |
 | 升级通道 | <code>stable</code> |
+| 更新灰度比例 | 全量（未设置） |
 | 平台 | <code>win-x64</code> |
 | 下载地址预览 | <a href="https&#58;//download.example.com/dsh-desk/bin/win-x64/stable/deepseek-harness-1.0.0-win-x64.exe">https&#58;//download.example.com/dsh-desk/bin/win-x64/stable/deepseek-harness-1.0.0-win-x64.exe</a><br>发布后的目标地址，审批前不保证可下载。 |
 | 升级 YAML | <a href="https&#58;//download.example.com/dsh-desk/feeds/win-x64/stable.yml">https&#58;//download.example.com/dsh-desk/feeds/win-x64/stable.yml</a><br>本次发布将更新此文件；审批前可能不存在或仍指向旧版本。 |

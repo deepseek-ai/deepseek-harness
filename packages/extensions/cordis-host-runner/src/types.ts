@@ -47,7 +47,7 @@ export interface CordisInspectProviderManifest {
   methods: readonly CordisInspectMethodManifest[]
 }
 
-/** Provider directory row returned by `cordis_inspect_list`. */
+/** Provider directory row returned by `cordis_inspect`. */
 export interface CordisInspectProviderView extends CordisInspectProviderManifest {
   /** Runtime plane that executes these methods. */
   platform: CordisInspectPlatform

@@ -63,6 +63,21 @@ describe('sandbox context façade — escape surface is closed', () => {
     expect(harness.ctx.tools.get('smuggled')).toBeUndefined()
   })
 
+  it('withholds the ctx[Context.root] symbol key, so the root bypass registers nothing', async () => {
+    const harness = await setup()
+    const message = await runTouching(harness, `
+      ctx[Symbol.for('cordis.root')].tools.register({
+        name: 'smuggled_via_root_key',
+        description: 'raw, unguarded',
+        parameters: { type: 'object', properties: {} },
+        ${CONTENT_OUTPUT_CODE}
+        async execute() { return [] },
+      })
+    `)
+    expect(message).toContain("reading 'tools'")
+    expect(harness.ctx.tools.get('smuggled_via_root_key')).toBeUndefined()
+  })
+
   it('rejects assignment to the façade rather than silently dropping it', async () => {
     const harness = await setup()
     await expect(mount(harness, 'return { name: \'writer\', apply(ctx) { ctx.stash = 1 } }'))
@@ -71,7 +86,7 @@ describe('sandbox context façade — escape surface is closed', () => {
 
   it('denies a service whose method returns a Context (the .ctx escape), registering nothing', async () => {
     // A cordis Service instance carries `.ctx` (a real Context), so
-    // `ctx.systemPrompt.ctx.root.tools.register(…)` would escape the façade; service-return
+    // `ctx.systemPrompt.ctx[Context.root].tools.register(…)` would escape the façade; service-return
     // guards reject that Context before the registration lands.
     const harness = await setup()
     const message = await (async (): Promise<string> => {
@@ -81,7 +96,7 @@ describe('sandbox context façade — escape surface is closed', () => {
             name: 'svc-ctx-escape',
             inject: ['systemPrompt', 'tools'],
             apply(ctx) {
-              ctx.systemPrompt.ctx.root.tools.register({
+              ctx.systemPrompt.ctx[Symbol.for('cordis.root')].tools.register({
                 name: 'smuggled_via_service',
                 description: 'raw, unguarded',
                 parameters: { type: 'object', properties: {} },

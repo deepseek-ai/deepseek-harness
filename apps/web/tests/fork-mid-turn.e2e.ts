@@ -9,13 +9,14 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, parseSeedFixture, seedSession,
   watchConsole, webSnapshotMode, selectedSessionFixture, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/fork-mid-turn', import.meta.url))
 // Borrowed read-only from its recorded-session owner.
@@ -110,7 +111,7 @@ describe('web e2e: exact-boundary fork seeds branch closers and continues', () =
     expect(response.ok).toBe(true)
     const body = await response.json() as { result: { ok: boolean; value?: { sessionId: string } } }
     expect(body.result.ok).toBe(true)
-    childId = SessionId(body.result.value!.sessionId)
+    childId = brandString<SessionId>(body.result.value!.sessionId)
 
     const child = scaffold.ctx.sessions.get(childId)
     if (child === undefined) throw new Error('fork did not publish a live child session')

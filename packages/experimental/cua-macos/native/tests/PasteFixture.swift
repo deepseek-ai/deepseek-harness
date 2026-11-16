@@ -16,6 +16,11 @@ final class PasteFixture: NSObject, NSApplicationDelegate, NSTextViewDelegate {
         let paste = NSMenuItem(title: "Paste", action: #selector(pasteText(_:)), keyEquivalent: "v")
         paste.target = self
         edit.addItem(paste)
+        if CommandLine.arguments.last == "--duplicate" {
+            let duplicate = NSMenuItem(title: "Second Paste", action: #selector(pasteText(_:)), keyEquivalent: "v")
+            duplicate.target = self
+            edit.addItem(duplicate)
+        }
         editItem.submenu = edit
         menu.addItem(editItem)
         NSApp.mainMenu = menu
