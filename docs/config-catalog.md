@@ -1127,7 +1127,7 @@ export interface StagehandModelConfig {
 ## `@deepseek-ai/dsh-experimental-claude-code-mods`
 
 - `inject`: `workingDirectory` · `agents`
-- `source`: [`packages/experimental/claude-code-mods/src/index.ts:54`](../packages/experimental/claude-code-mods/src/index.ts)
+- `source`: [`packages/experimental/claude-code-mods/src/index.ts:55`](../packages/experimental/claude-code-mods/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the limits mod hooks run under. */
@@ -1727,7 +1727,7 @@ export interface Config {
 
 - `inject`: `agentDefaultModel` · `agents` · `sessions`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.md)
-- `source`: [`packages/bundle/headless/src/index.ts:48`](../packages/bundle/headless/src/index.ts)
+- `source`: [`packages/bundle/headless/src/index.ts:49`](../packages/bundle/headless/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the task and run options resolved from this app's injected provider service. */
@@ -1775,7 +1775,7 @@ export interface HmrConfig extends ChokidarOptions {
 ## `@deepseek-ai/dsh-hooks-claude-code`
 
 - `inject`: `shell` · `agents` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:53`](../packages/experimental/hooks-claude-code/src/index.ts)
+- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:54`](../packages/experimental/hooks-claude-code/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the CC hook config lives + substitution roots. */
@@ -1814,7 +1814,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-hooks-codex`
 
 - `inject`: `shell` · `agents` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-codex/src/index.ts:52`](../packages/experimental/hooks-codex/src/index.ts)
+- `source`: [`packages/experimental/hooks-codex/src/index.ts:53`](../packages/experimental/hooks-codex/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the Codex hooks.json lives + the model name for payloads. */
@@ -3634,7 +3634,7 @@ export enum SessionTelemetryMode {
 ## `@deepseek-ai/dsh-session-title`
 
 - `inject`: `sessions` · `sessionProjections` · `agents`
-- `source`: [`packages/session/session-title/src/index.ts:56`](../packages/session/session-title/src/index.ts)
+- `source`: [`packages/session/session-title/src/index.ts:57`](../packages/session/session-title/src/index.ts)
 
 ```ts config-catalog
 /** Required deterministic fallback and accepted-title limits. */
@@ -3656,7 +3656,7 @@ export interface Config {
 
 - `inject`: `sessionTitle` · `llm` · `sessions`
 - `refs`: [`SessionTitleLlmConfig`](../packages/session/session-title-llm/src/index.ts)
-- `source`: [`packages/experimental/session-title-all-prompts-llm/src/index.ts:29`](../packages/experimental/session-title-all-prompts-llm/src/index.ts)
+- `source`: [`packages/experimental/session-title-all-prompts-llm/src/index.ts:30`](../packages/experimental/session-title-all-prompts-llm/src/index.ts)
 
 ```ts config-catalog
 /** Required execution controls plus this provider's title-length targets; no defaults. */
@@ -3676,7 +3676,7 @@ export interface Config extends SessionTitleLlmConfig {
 
 - `inject`: `sessionTitle` · `llm` · `sessions`
 - `refs`: [`SessionTitleLlmConfig`](../packages/session/session-title-llm/src/index.ts)
-- `source`: [`packages/session/session-title-first-prompt-llm/src/index.ts:29`](../packages/session/session-title-first-prompt-llm/src/index.ts)
+- `source`: [`packages/session/session-title-first-prompt-llm/src/index.ts:30`](../packages/session/session-title-first-prompt-llm/src/index.ts)
 
 ```ts config-catalog
 /** Required execution controls plus this provider's title-length targets; no defaults. */
@@ -5212,7 +5212,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:64`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:65`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /**
