@@ -163,7 +163,7 @@ export class ImSender {
 
   /** The body of {@link send}, async so every refusal is a rejection rather than a synchronous throw. */
   private async publishNow(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImSendResult> {
-    this.grant(chat, options.session)
+    this.grant(chat, options.session, options)
     const target = this.target(chat, options)
     const quoted = withQuote(content, options.quote)
     const id = options.operationId
@@ -187,7 +187,7 @@ export class ImSender {
    * @returns the stream, already gated on the grants check.
    */
   async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream> {
-    this.grant(chat, options.session)
+    this.grant(chat, options.session, options)
     const target = this.target(chat, options)
     const bot = this.botOf(chat)
     const id = options.operationId
@@ -462,15 +462,31 @@ export class ImSender {
   }
 
   /**
-   * Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat. A publication without a
-   * session has no agent identity to check — it is host- or plugin-originated, and only the chat's admission gates it.
+   * Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat, and if all writable bindings
+   * for `chat` are confined to specific threads (`binding.thread`), the publication must target one of them.
    */
-  private grant(chat: ImChatKey, session: SessionId | undefined): void {
+  private grant(chat: ImChatKey, session: SessionId | undefined, options: Pick<ImSendOptions, 'thread' | 'quote'>): void {
     if (session === undefined) return
-    for (const record of grantChain(this.deps.sessions, session)) {
-      if (record.bindings.some(binding => binding.chat === chat && binding.writable)) return
+    const writable = grantChain(this.deps.sessions, session)
+      .flatMap(record => record.bindings)
+      .filter(binding => binding.chat === chat && binding.writable)
+    if (writable.length === 0) {
+      throw new ImError('access', `Chat ${chat} is not writable for session ${session}.`)
     }
-    throw new ImError('access', `Chat ${chat} is not writable for session ${session}.`)
+    if (writable.some(binding => binding.thread === undefined)) return
+    const explicit = typeof options.thread === 'string' ? options.thread.trim() : undefined
+    const quoted = options.quote === undefined ? undefined : this.deps.store.get(options.quote)
+    const fromQuote = quoted?.chat.key === chat ? quoted : undefined
+    const allowed = writable.some((binding) => {
+      const thread = binding.thread
+      if (thread === undefined) return true
+      if (explicit !== undefined) return explicit === thread
+      if (fromQuote === undefined) return false
+      return fromQuote.thread?.id === thread || fromQuote.thread?.root === thread
+    })
+    if (!allowed) {
+      throw new ImError('access', `Chat ${chat} is confined to specific thread(s) for session ${session}.`)
+    }
   }
 
   /** The bot of a chat (`ImError('unavailable')` when it is not mounted). */

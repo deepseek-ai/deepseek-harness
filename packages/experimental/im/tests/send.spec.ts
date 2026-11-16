@@ -443,6 +443,29 @@ describe('ImSender grants', () => {
       .rejects.toThrow(/not writable for session stranger/)
   })
 
+  it('enforces binding.thread on send and stream when all writable bindings for the chat are thread-confined', async () => {
+    const { sender, sessions, store } = await boot()
+    const confined = sessions.add('confined', [{ chat: CHAT, writable: true, home: true, thread: 't1' }])
+    const inThread = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-t1'), undefined), 'none')
+    await store.put({ ...inboundDraft(ImMessageKey('fake:bot', 'm-t2'), undefined), thread: { id: 't2' } }, 'none')
+    await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'm-t1-msg'), thread: { id: 't1' } }, 'none')
+
+    await expect(sender.send(CHAT, h.text('main'), { session: confined.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
+    await expect(sender.send(CHAT, h.text('other'), { session: confined.sessionId, thread: 't2' }))
+      .rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { session: confined.sessionId, thread: 't2' }))
+      .rejects.toMatchObject({ code: 'access' })
+
+    const okSend = await sender.send(CHAT, h.text('ok'), { session: confined.sessionId, thread: 't1' })
+    expect(okSend.status).toBe('confirmed')
+    const okQuote = await sender.send(CHAT, h.text('reply'), {
+      session: confined.sessionId,
+      quote: ImMessageKey('fake:bot', 'm-t1-msg'),
+    })
+    expect(okQuote.status).toBe('confirmed')
+  })
+
   it('bounds a grants chain whose parent points back into it', () => {
     const sessions = new FakeSessions()
     const cycle = sessions.add('cycle', [], 'cycle')
