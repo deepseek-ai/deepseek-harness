@@ -72,18 +72,31 @@ export interface DelegationModelRequest {
 }
 
 /**
- * Read model-facing route fields from tool arguments, treating an empty string
- * as an omitted field. Some models fill every optional string parameter with `""`.
+ * Copy optional string tool arguments, treating an empty string as an omitted
+ * field. Some models fill every optional string parameter with `""`.
+ * @param args - Parsed tool arguments.
+ * @param keys - Optional string fields to copy.
+ * @returns The listed fields whose values are non-empty.
+ */
+export function nonEmptyFields<K extends string>(
+  args: Readonly<Partial<Record<K, string>>>,
+  keys: readonly K[],
+): Partial<Record<K, string>> {
+  const fields: Partial<Record<K, string>> = {}
+  for (const key of keys) {
+    const value = args[key]
+    if (value !== undefined && value !== '') fields[key] = value
+  }
+  return fields
+}
+
+/**
+ * Read model-facing route fields from tool arguments, treating an empty string as an omitted field.
  * @param args - Parsed tool arguments carrying the route fields.
  * @returns The non-empty route fields.
  */
 export function delegationModelRequest(args: DelegationModelRequest): DelegationModelRequest {
-  const { provider, model, reasoning_effort } = args
-  return {
-    ...provider === undefined || provider === '' ? {} : { provider },
-    ...model === undefined || model === '' ? {} : { model },
-    ...reasoning_effort === undefined || reasoning_effort === '' ? {} : { reasoning_effort },
-  }
+  return nonEmptyFields(args, ['provider', 'model', 'reasoning_effort'])
 }
 
 /**

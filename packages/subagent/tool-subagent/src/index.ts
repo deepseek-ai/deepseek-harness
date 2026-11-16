@@ -258,8 +258,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           },
           reasoning_effort: {
             type: 'string' as const,
-            description: 'Reasoning effort id; requires `provider` and `model`. '
-              + 'Omitted with them, the selected model\'s default effort applies, even when that model is your own.',
+            description: 'Reasoning effort id; requires `provider` and `model`. Omit to use that model\'s default effort.',
           },
         } : {},
       },

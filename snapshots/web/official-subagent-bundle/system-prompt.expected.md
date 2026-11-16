@@ -254,7 +254,7 @@ interface ToolArgsMap {
     provider?: string;
     /** Model id within that provider; requires `provider`. */
     model?: string;
-    /** Reasoning effort id; requires `provider` and `model`. Omitted with them, the selected model's default effort applies, even when that model is your own. */
+    /** Reasoning effort id; requires `provider` and `model`. Omit to use that model's default effort. */
     reasoning_effort?: string;
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. This backend does not accept follow-up messages. */

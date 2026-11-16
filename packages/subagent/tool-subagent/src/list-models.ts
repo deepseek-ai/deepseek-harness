@@ -9,6 +9,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
 import { subagentModelSelectionPolicy } from './model-selection-state.ts'
+import { nonEmptyFields } from './model-selection.ts'
 
 interface ListSubagentModelsRequest {
   readonly provider?: string
@@ -34,15 +35,6 @@ function registeredProvider(
 /** Render one advertised or resolved model. */
 function modelLine(provider: string, model: { id: string; name: string; description?: string }): string {
   return `${provider}/${model.id} — ${model.name}${model.description === undefined ? '' : `: ${model.description}`}`
-}
-
-/** Read the query fields, treating an empty string as an omitted field. */
-function listSubagentModelsRequest(args: ListSubagentModelsRequest): ListSubagentModelsRequest {
-  const { provider, model } = args
-  return {
-    ...provider === undefined || provider === '' ? {} : { provider },
-    ...model === undefined || model === '' ? {} : { model },
-  }
 }
 
 /** Read the requested provider, allowed models, or exact-model efforts. */
@@ -135,7 +127,7 @@ export function registerListSubagentModels(
     // Route and model metadata reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     execute(args, exec) {
-      return listSubagentModels(ctx, policyHandle, listSubagentModelsRequest(args), exec)
+      return listSubagentModels(ctx, policyHandle, nonEmptyFields(args, ['provider', 'model']), exec)
     },
   }))
 }

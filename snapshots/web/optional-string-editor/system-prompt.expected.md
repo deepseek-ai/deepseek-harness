@@ -271,7 +271,7 @@ interface ToolArgsMap {
     provider?: string;
     /** Model id within that provider; requires `provider`. */
     model?: string;
-    /** Reasoning effort id; requires `provider` and `model`. Omitted with them, the selected model's default effort applies, even when that model is your own. */
+    /** Reasoning effort id; requires `provider` and `model`. Omit to use that model's default effort. */
     reasoning_effort?: string;
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */

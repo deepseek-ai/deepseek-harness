@@ -165,8 +165,7 @@ describe('dsh-tool-subagent model selection', () => {
       provider: 'LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; '
         + 'omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. '
         + 'Use a provider id listed by `list_subagent_models`.',
-      effort: 'Reasoning effort id; requires `provider` and `model`. '
-        + 'Omitted with them, the selected model\'s default effort applies, even when that model is your own.',
+      effort: 'Reasoning effort id; requires `provider` and `model`. Omit to use that model\'s default effort.',
     })
     expect(owner.tools.get('list_subagent_models', modelSelectionSetupAgent(owner))?.description).toBe(
       'Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. '
