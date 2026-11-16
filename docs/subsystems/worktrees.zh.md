@@ -2,7 +2,7 @@
 
 [English](worktrees.md) | 中文
 
-实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)选中它；`enter_worktree` 选中池中已有的检出目录，`exit_worktree` 回到 Session 来自的检出目录。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
+实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`enter_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 通过[工作目录服务](working-directory.zh.md)选中池中的检出目录，没有同名检出目录时创建新的 Git 分支与检出目录；`exit_worktree` 回到 Session 来自的检出目录。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
 
 ## 创建与保留
 
@@ -10,7 +10,7 @@
 
 默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
 
-`enter_worktree` 工具调用的 `ctx.worktrees.enter(agent, { name })` 把 Session 移入它所在检出的池中已有的工作树。该目录必须位于池内，并且是仓库已登记的工作树：名称不存在、目录未登记、链接指向池外都以 `WORKTREE_NOT_FOUND` 失败。进入不改变 Git 状态和文件，并在 Session 日志中记录这次进入。
+`ctx.worktrees.enter(agent, { name })` 把 Session 移入它所在检出的池中已有的工作树。`enter_worktree` 工具对带名称且不带起始修订的请求先调用它，只有它报告 `WORKTREE_NOT_FOUND` 时才调用 `create`。该目录必须位于池内，并且是仓库已登记的工作树：名称不存在、目录未登记、链接指向池外都以 `WORKTREE_NOT_FOUND` 失败。进入不改变 Git 状态和文件，并在 Session 日志中记录这次进入。
 
 `exit_worktree` 工具调用的 `ctx.worktrees.exit(agent)` 找到包含 Session 当前目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出；检出目录与分支保留。嵌套的工作树每次退出一层。取消或失败也可能留下部分产物；错误会指出它们的位置。worktree 失败抛出带 `WORKTREE_*` code 的 `WorktreeError`；分配开始后的失败保留被包装错误的 `name` 与 `code`，调用方取消仍为 `AbortError`。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
 

@@ -14,7 +14,7 @@ Status: implemented
 
 `workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。已存储的这类事件写于模型还能移动目录的时期，它只移动当前目录，因此已存储的 Session 保持原有的根。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
 
-工作树创建通过 `set` 进入检出目录。`ctx.worktrees.enter` 以 `enter_worktree` 的形式提供给模型，它把 Session 移入名称在所在检出的池中选中的已有工作树；名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的工作区根或 Host 选定的目录启动。
+工作树创建通过 `set` 进入检出目录。模型只有一个进入检出的工具 `enter_worktree`：名称在 Session 所在检出的池中选中一个工作树。已有的工作树通过 `ctx.worktrees.enter` 进入，没有同名工作树时通过 `ctx.worktrees.create` 新建。名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的工作区根或 Host 选定的目录启动。
 
 ## Deferred
 
@@ -32,7 +32,9 @@ Status: implemented
 
 **通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类，而已存储的模型 `cd` 仍需要一种只移动目录的记录。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
 
-**按路径进入工作树，或把创建与进入合并为一个工具。** 模型提供的路径可以不经用户批准就把写边界移到任意已登记的工作树，这正是移除目录工具所排除的；harness 也没有针对目录移动的审批步骤。带创建模式的单一工具需要给 `create_worktree` 改名，而已存储的 Session 和录制场景都在调用它。池内的名称把边界留在检出之内，只新增一个工具。
+**按路径进入工作树。** 模型提供的路径会把写边界移到任意已登记的工作树，除非用户逐次批准，否则这正是移除目录工具所排除的。`tools/pre-execute` 监听器可以通过审批服务请求这一批准；本决定把路径形式，以及随之而来的“从工作树内进入同级工作树”，留给之后的变更。池内的名称把边界留在检出之内。
+
+**创建与进入各用一个工具。** `create_worktree` 与 `enter_worktree` 并存时，模型为“进入工作树”这一个动作面对两个工具，还要按工作树是否存在来选择。单一工具与 Claude Code 的 `EnterWorktree` 一致，后者创建工作树，或打开同名的已有工作树。在一位开发者提供过 `create_worktree` 的 79 个已记录 Session 中，模型在 6,599 次工具调用里只调用过它一次，因此移除这个名称影响的已存储 Session 很少。
 
 **在调用之间保留 shell 的 `cd`。** 这是一个隐式的光标。在该开发者的 Session 中，68% 的 `cd` 前缀指向 Session 目录之外，30% 指向 Session 目录本身，限制在工作区内的保留只对约 2% 生效。
 
@@ -40,4 +42,4 @@ Status: implemented
 
 ## Consequences
 
-消费方读取一个目录：相对路径用 `get`，属于工作区的一切用 `rootOf`。两者只在含有 `working-directory/change` 事件的 Session 中不同，下一次 Host 移动会让它们重新一致。读者继续把该事件折叠为只移动目录的变更，因此以后增加光标不需要改格式。模型只能通过工作树工具进入检出：用 `create_worktree` 进入新建的检出，用 `enter_worktree` 进入池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。工作树快照夹具覆盖进入、离开和失去工作树。迁移 Deferred 中列出的消费方是另一项变更。
+消费方读取一个目录：相对路径用 `get`，属于工作区的一切用 `rootOf`。两者只在含有 `working-directory/change` 事件的 Session 中不同，下一次 Host 移动会让它们重新一致。读者继续把该事件折叠为只移动目录的变更，因此以后增加光标不需要改格式。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。工作树快照夹具覆盖进入、离开和失去工作树。迁移 Deferred 中列出的消费方是另一项变更。

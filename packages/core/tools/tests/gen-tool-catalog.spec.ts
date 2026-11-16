@@ -28,7 +28,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
     const names = catalog.flatMap(entry => entry.schemas.map(s => s.name)).sort()
     expect(names).toEqual([
       'apply_patch', 'ask_user_question', 'bash', 'bash', 'cordis_inspect',
-      'create_goal', 'create_worktree', 'edit', 'enter_worktree', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
+      'create_goal', 'edit', 'enter_worktree', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
       'interrupt_agent', 'job_kill', 'job_list', 'job_output',
       'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
       'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'plugin_market', 'present', 'propose_action', 'pwsh', 'pwsh', 'ralph',
@@ -49,8 +49,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       }
     }
     const worktree = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-experimental-tool-worktree')
-    expect(worktree?.sources.create_worktree).toBe('packages/experimental/tool-worktree/src/index.ts')
-    const parameters = worktree?.schemas.find(schema => schema.name === 'create_worktree')?.parameters
+    expect(worktree?.sources.enter_worktree).toBe('packages/experimental/tool-worktree/src/index.ts')
+    const parameters = worktree?.schemas.find(schema => schema.name === 'enter_worktree')?.parameters
     expect(parameters).toHaveProperty('properties.name.type', 'string')
     expect(parameters?.required ?? []).not.toContain('name')
   })

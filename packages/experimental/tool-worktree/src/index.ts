@@ -1,10 +1,10 @@
 /**
- * Model tools for creating and entering a new Git worktree, entering an existing one, and returning to the
- * source checkout, through the shared runtime.
+ * Model tools for entering a Git worktree, which is created when no worktree has the requested name, and for
+ * returning to the source checkout, through the shared runtime.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-experimental-worktree'
+import { WorktreeError } from '@deepseek-ai/dsh-experimental-worktree'
 import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 /** Cordis plugin name. */
@@ -12,26 +12,16 @@ export const name = 'tool-worktree'
 /** Services required to register and execute the worktree tools. */
 export const inject = ['tools', 'worktrees']
 
-/** Result fields of a created worktree. */
-const CREATED_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    path: { type: 'string', required: true },
-    branch: { type: 'string', required: true },
-    baseCommit: { type: 'string', required: true },
-    repositoryRoot: { type: 'string', required: true },
-  },
-} as const
-
-/** Result fields of an entered worktree; `branch` is absent on a detached HEAD. */
+/** Result fields of the worktree a Session entered; a created one adds `baseCommit`, and `branch` is absent on a detached HEAD. */
 const ENTERED_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
     path: { type: 'string', required: true },
     branch: { type: 'string' },
+    baseCommit: { type: 'string' },
     repositoryRoot: { type: 'string', required: true },
+    created: { type: 'boolean', required: true },
   },
 } as const
 
@@ -48,32 +38,16 @@ const EXITED_SCHEMA = {
 } as const
 
 /**
- * Register create_worktree, enter_worktree, and exit_worktree for model and PTC callers.
+ * Register enter_worktree and exit_worktree for model and PTC callers.
  * @param ctx - tool registry and worktree runtime.
  */
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
-    name: 'create_worktree',
-    description: 'Create a new Git branch and worktree from a local commit, branch, or tag, then change this session\'s working directory to it. Uncommitted files stay in the source checkout. Existing names fail; enter_worktree enters an existing worktree. exit_worktree returns to the source checkout.',
-    parameters: {
-      name: { type: 'string', description: 'New branch name, also used as the checkout directory: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to generate a unique name.' },
-      from: { type: 'string', description: 'Local commit, branch, or tag to start from. Defaults to HEAD; no fetch is performed.' },
-    },
-    output: {
-      schema: CREATED_SCHEMA,
-      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
-    },
-    async execute(args, exec) {
-      if (exec.agent === undefined) throw new ToolContextUnavailableError('create_worktree requires a calling agent')
-      return ctx.worktrees.create(exec.agent, args, exec.signal)
-    },
-    presentCall: args => ({ card: 'generic', title: 'create_worktree', rawInput: args }),
-  }))
-  ctx.tools.register(defineTool({
     name: 'enter_worktree',
-    description: 'Change this session\'s working directory to an existing worktree that was created from the checkout this session is in. Branches and files stay as they are. exit_worktree returns to that checkout.',
+    description: 'Change this session\'s working directory to a Git worktree of the checkout it is in. An existing worktree named name is entered as it is. Otherwise a new branch and worktree are created from a local commit, branch, or tag, and uncommitted files stay in the source checkout. exit_worktree returns to the source checkout.',
     parameters: {
-      name: { type: 'string', required: true, description: 'Name the worktree was created with.' },
+      name: { type: 'string', description: 'Worktree to enter, also the branch name and checkout directory of a new one: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to create a worktree with a generated name.' },
+      from: { type: 'string', description: 'Local commit, branch, or tag a new worktree starts from. Defaults to HEAD; no fetch is performed. Fails when the worktree already exists.' },
     },
     output: {
       schema: ENTERED_SCHEMA,
@@ -81,7 +55,15 @@ export function apply(ctx: Context): void {
     },
     async execute(args, exec) {
       if (exec.agent === undefined) throw new ToolContextUnavailableError('enter_worktree requires a calling agent')
-      return ctx.worktrees.enter(exec.agent, args, exec.signal)
+      // A start revision asks for a new worktree, as does a call without a name.
+      if (args.name !== undefined && args.from === undefined) {
+        try {
+          return { ...await ctx.worktrees.enter(exec.agent, { name: args.name }, exec.signal), created: false }
+        } catch (error) {
+          if (!(error instanceof WorktreeError && error.code === 'WORKTREE_NOT_FOUND')) throw error
+        }
+      }
+      return { ...await ctx.worktrees.create(exec.agent, args, exec.signal), created: true }
     },
     presentCall: args => ({ card: 'generic', title: 'enter_worktree', rawInput: args }),
   }))
