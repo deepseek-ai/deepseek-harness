@@ -4,10 +4,11 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountEntry, ConnectorAccountsView, ConnectorOperationId } from '../types.ts'
-import type { ConnectorAccountNotice, ConnectorAccountsRemote, ConnectorAccountsState } from './types.ts'
+import type { ConnectorAccountNotice, ConnectorAccountsState } from './types.ts'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
@@ -45,7 +46,7 @@ export class BrowserAccounts {
    * @param ctx - the browser context carrying the Remote client.
    * @param remote - the `connectorAccounts` Remote.
    */
-  constructor(private readonly ctx: Context, remote: Pick<ConnectorAccountsRemote, 'watch'>) {
+  constructor(private readonly ctx: Context, remote: Pick<ClientRemote['connectorAccounts'], 'watch'>) {
     this.stream = ctx.remote.$stream<ConnectorAccountsView>({
       name: 'Connector accounts', open: signal => remote.watch(signal),
       ended: () => new Error('Connector accounts stream ended'),
