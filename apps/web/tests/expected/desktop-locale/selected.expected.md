@@ -3,7 +3,7 @@
   - navigation:
     - button "General"
     - button "Models"
-    - button "Built-in plugins"
+    - button "Plugins"
     - button "Agent presets"
   - button "Open configuration file"
   - button "Close"

@@ -13,7 +13,7 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ReasoningEffortId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { type LlmAttemptId, type ReasoningEffortId, type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
@@ -70,10 +70,10 @@ interface BenchOptions {
   afterIdle?: () => void
 }
 
-const frameStates = new WeakMap<Agent, { attemptId: ReturnType<typeof LlmAttemptId>; revision: number; index: number }>()
+const frameStates = new WeakMap<Agent, { attemptId: LlmAttemptId; revision: number; index: number }>()
 
 function startFrames(agent: Agent, turn = 1, step = 1): void {
-  const state = { attemptId: LlmAttemptId(`${agent.id}:test`), revision: 1, index: 0 }
+  const state = { attemptId: brandString<LlmAttemptId>(`${agent.id}:test`), revision: 1, index: 0 }
   frameStates.set(agent, state)
   agent.ctx.emit('agent/assistant-stream', {
     agent,
@@ -615,7 +615,7 @@ describe('headless runner', () => {
     test.ctx.emit('agent/assistant-stream', {
       agent: { session: other } as Agent,
       frame: {
-        type: 'chunk', attemptId: LlmAttemptId('other'), revision: 1,
+        type: 'chunk', attemptId: brandString<LlmAttemptId>('other'), revision: 1,
         index: 0, time: Date.now(), chunk: { type: 'reasoning-delta', index: 0, text: 'other session' },
       },
     })
@@ -894,7 +894,7 @@ describe('headless runner', () => {
     })
     try {
       const session = test.ctx.sessions.create(brandString<SessionId>('session-effort'), { meta: { cwd: process.cwd() } })
-      session.append('model/selection', { provider: 'test-provider', model: savedModel, reasoningEffort: ReasoningEffortId('high') })
+      session.append('model/selection', { provider: 'test-provider', model: savedModel, reasoningEffort: brandString<ReasoningEffortId>('high') })
       expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
     } finally {
       await test.ctx.fiber.dispose()
@@ -1210,19 +1210,19 @@ describe('headless runner', () => {
             content: [
               { type: 'reasoning', text: 'thinking hard' },
               { type: 'text', text: 'answer' },
-              { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{"command":"ls"}' },
+              { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{"command":"ls"}' },
             ],
             source: { provider: 'test-provider', model: 'test-model' },
           }),
         }, { surfaceOp: 'append' })
         session.append('tool/call', {
-          turn: 1, step: 1, callId: ToolCallId('call-1'), name: 'bash', arguments: '{"command":"ls"}',
+          turn: 1, step: 1, callId: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{"command":"ls"}',
         })
         session.append('tool/result', {
           turn: 1,
           step: 1,
           message: createToolResultMessage({
-            callId: ToolCallId('call-1'),
+            callId: brandString<ToolCallId>('call-1'),
             content: [{ type: 'text', text: 'a.txt' }],
             isError: false,
           }),

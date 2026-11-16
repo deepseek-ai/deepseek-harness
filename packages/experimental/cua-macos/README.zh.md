@@ -3,7 +3,7 @@ description: "通过按应用和窗口限定的对象，观察和操作原生 ma
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-cua-macos
+# @deepseek-ai/dsh-cua-macos
 
 [English](README.md) | 中文
 
@@ -43,10 +43,10 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；通过 Computer Use 权限页打开系统设置并添加 helper。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 返回提供方声明的平台能力，以及实际查询的权限和锁屏状态。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。找到指定的安装包后，`getApp` 用可执行文件路径查找已有进程，进程显示名可以是其他语言。需要启动时，macOS 打开指定的安装副本，也可以复用授权期间启动的进程。helper 等待应用完成启动后返回运行状态。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回对象时不读取 AX，也不激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口声明的 `AXRaise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
-源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua` 是加载 `@deepseek-ai/dsh-experimental-cua-macos` 的节点 ID：
+源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua-macos` 是加载 `@deepseek-ai/dsh-cua-macos` 的节点 ID：
 
 ```yaml
-- id: cua
+- id: cua-macos
   config:
     sourceSigning:
       identity: "<certificate SHA-1 fingerprint>"
@@ -57,11 +57,12 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `agentPreset` | `ptc` | 为该 preset 提供原始 `cua`，为其他已组合的 preset 提供 `cua_run_code`；`false` 表示全局注册原始 `cua`。 |
+| `agentPreset` | `ptc` | 为该 preset 提供原始 `cua`，并在[程序工具所需服务](../cua/README.zh.md#use-this-package)可用时为其他 Agent（无论是否组合 preset）提供 `cua_run_code`；`false` 表示全局注册原始 `cua`。 |
 | `standaloneRunCode.runtime` / `standaloneRunCode.executor` | 共享 Node / PTC 上限 | 专用 CUA 运行时的资源、启动和嵌套调用设置；参见 [CUA](../cua/README.zh.md)。 |
+| `screenshotTarget` | 未设置 | 截图使用的固定 `{ longEdge, maxBytes }` 请求图片目标。未设置时按 Agent 的模型路由解析，该路由未声明图片输入时拒绝截图。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
-| `requireSystemPointerApproval` | `true` | 主任务首次显式请求移动系统指针时询问用户。设为 `false` 时仅本次显式移动免询问。 |
+| `requireSystemPointerApproval` | `true` | 主任务首次显式请求使用系统鼠标移动或拖动时询问用户。 |
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
@@ -78,9 +79,9 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
 
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
-`pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
+`pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。`pressKey`、`click` 和 `drag` 都接受修饰键 `command`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`。只有 `pressKey` 的修饰键参数还接受 `command` 的别名 `cmd`。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
 
 长按时，在 `run_code` 或 `cua_run_code` 中调用 `app.sendKeyEvent('w', 'down')`。首次按下后，该键在同一次执行的后续工具调用中保持按下。对自己已按住的普通键再发一次 `down`，原接收进程会收到一次带重复标志的按下事件。调用方决定是否重复和间隔多久。控件可能过滤模拟的重复事件，可通过控件的实际变化确认效果。松键只需一次 `up`。每个键可分别松开。例如先按 W，再按 D，松开 D 后 W 仍按着。程序正常返回、出错退出或用户暂停时，helper 为本次执行仍按着的键逐一发送松开事件，每个事件都发回原接收进程。后续执行不能释放前一次执行的键。
 
@@ -90,7 +91,7 @@ CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用�
 
 原始 `getState` 操作返回经过校验的状态字段，以及按本次披露选项生成的完整文本。原生 helper 还返回供原生检查使用的结构化元素诊断数组，其中 `elementId` 是不透明字符串；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
-AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。
+AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。子项无法读取时，树中会标出缺失部分，原始结果会返回 `hasUnreadableElements: true`。控件旁边有缺失提示时，仍可按该控件的元素 ID 操作。执行时需要重新查找目标的，macOS 会沿用读树时的分段读取方式找回可读子项。
 
 实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。读树时，AXValue 或 AXSelectedTextRange 的可写性探测返回 -25200，会将该字段保留为未知并继续读取其他节点。实际写入仍严格校验；权限、通信和失效元素错误仍向上传播。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。调用 `performAction` 时使用 `listActions(elementId)` 返回的完整名称。
 
@@ -102,7 +103,7 @@ AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ inc
 
 ### 接入外部执行环境
 
-使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，并遵守当前选择的文件沙箱策略。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。persistent PTC 会在 CUA 指引中收到安装目录内 bridge 的文件 URL，项目无须安装本包。下面的例子用于能从自身安装目录解析本包、且已提供 `tools` 的外部宿主。在其他已组合的 preset 中，`cua_run_code` 已经提供全局对象，并通过[共享 CUA 包](../cua/README.zh.md)保留变量：
+使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，并遵守当前选择的文件沙箱策略。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。persistent PTC 会在 CUA 指引中收到安装目录内 bridge 的文件 URL，项目无须安装本包。下面的例子用于能从自身安装目录解析本包、且已提供 `tools` 的外部宿主。对其他 Agent，`cua_run_code` 已经提供全局对象，并通过[共享 CUA 包](../cua/README.zh.md)保留变量：
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
@@ -118,9 +119,11 @@ inspect(await window.getScreenshot())
 
 使用 `cua` API 发现并选择应用（`listApps`、`getState`、`findApps`、`getApp`）；使用选定的应用来激活它、枚举其窗口并选择窗口。截图和指针输入都要求选择窗口，不只在存在多个窗口时才需要。`getApp` 和 `app.getWindow(windowId)` 返回时不读取 AX；根据 `getWindows()` 中的标题与位置选择窗口。
 
-`getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图不要求 AX 读取成功。所有坐标输入（包括相对坐标）都要求先成功读取覆盖该窗口的 AX 或取得截图；绝对像素坐标要求已交付的截图。已确认归属但没有 AX 界面的窗口在显式观察时返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
+`getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图不要求 AX 读取成功。所有坐标输入（包括相对坐标）都要求先成功读取覆盖该窗口的 AX 或取得截图；绝对像素坐标要求已交付的截图。仅当窗口和 sheet 发现过程未遇到不可读元素时，已确认归属但没有 AX 界面的窗口才返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。局部 AX 节点失效时会成功返回带明确不可用分支标记的部分快照；原始状态包含 `hasUnreadableElements: true`。这些分支没有元素 ID，内容未知，应通过截图查看。致命观察错误不发布快照。处理错误前请参阅[原生观察与错误语义](native/README.zh.md#observation-and-input)；不要自动重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
 普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemPointer: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemPointer: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
+
+默认拖动向目标窗口发送鼠标事件。需要系统鼠标按键状态的控件可使用 `win.drag(from, to, { useSystemPointer: true })`。该操作与系统指针移动共用会话授权，起点和拖动路径必须位于可接收输入的前台窗口内。取消或失去目标窗口时，helper 在最后投递的位置释放鼠标键。
 
 `paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。临时格式保留到剪贴板读取方请求其数据，然后只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
@@ -154,7 +157,7 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 
 原生请求 ID 与工具日志中的调用 ID 一致。成功的激活操作会在原始工具结果中保留前台操作信息，以及操作前后的即时焦点观察。应用已在前台时跳过重复激活。无法确认时保留原请求。这些观察不能确认其他焦点切换的发起者，也不代表操作已经完成。
 
-每次观察在同一批 AX 请求中读取节点角色和元数据。组节点和滚动区域节点只提供子节点，未使用的元数据错误不会导致它们被拒绝。不支持批量读取时保留逐个属性读取。AX 遍历对每个原生身份只访问一次，包括表示同一元素的不同代理引用，避免循环子节点重复展开整个子树。[源码清单](native/upstream.json)记录改写的上游行为和本地 Swift 模块。AppKit 使用主事件循环，独立串行执行器持有 AX 引用并发送同步输入。一条请求在截图和结果发送期间仍独占执行。本包不发布 invariant 入口，因为没有需要对照的独立注册表投影或持久执行器状态。协议验证、目标身份和资源清理由对应实现负责。
+每次观察在同一批 AX 请求中读取节点角色和元数据。透明容器省略自身文本与边界，但仍可遍历其子节点。不支持批量读取时保留逐个属性读取。AX 遍历对每个原生身份只访问一次，包括表示同一元素的不同代理引用，避免循环子节点重复展开整个子树。[源码清单](native/upstream.json)记录改写的上游行为和本地 Swift 模块。AppKit 使用主事件循环，独立串行执行器持有 AX 引用并发送同步输入。一条请求在截图和结果发送期间仍独占执行。本包不发布 invariant 入口，因为没有需要对照的独立注册表投影或持久执行器状态。协议验证、目标身份和资源清理由对应实现负责。
 
 </details>
 
@@ -176,18 +179,20 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 
 #### 模型可见内容
 
-配置指定的 PTC preset 通过 `run_code` 获得一个定义各方法参数的 `cua` 操作工具。其他已组合的 preset 获得 `cua_run_code`，其中全局 `cua` 对象可直接使用，程序内只绑定 `tools.cua`。下方逐字引用 PTC 操作指引，其中使用 `tools.write`、`tools.grep` 和 `tools.read` 处理较大的 AX 树。`cua_run_code` 版本使用 `node:fs/promises` 保存树，再在程序外直接调用普通会话工具搜索；初始化和程序说明由[共享 CUA 包](../cua/README.zh.md#model-experience)选择。
+配置指定的 PTC preset 通过 `run_code` 获得一个定义各方法参数的 `cua` 操作工具。其他 Agent 获得 `cua_run_code`，其中全局 `cua` 对象可直接使用，程序内只绑定 `tools.cua`。下方逐字引用 PTC 操作指引，其中使用 `tools.write`、`tools.grep` 和 `tools.read` 处理较大的 AX 树。`cua_run_code` 版本使用 `node:fs/promises` 保存树，再在程序外直接调用普通会话工具搜索；初始化和程序说明由[共享 CUA 包](../cua/README.zh.md#model-experience)选择。
 
 ##### PTC 操作指引（原文）
 
 ```markdown
-macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. For pointer input on a sheet, select its window ID with app.getWindow(id). For menu items outside a window, use app.invoke(id). findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
+macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. pressKey, click, and drag accept command, control (or ctrl), option (or alt), shift, and fn. pressKey also accepts cmd for command. For pointer input on a sheet, select its window ID with app.getWindow(id). For menu items outside a window, use app.invoke(id). findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
 
 Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 
 Call inspect(...values) to display selected observation results.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: string and the methods listed below for window level. Window IDs are opaque provider-issued strings; preserve them verbatim.
+
+Supported modifier names depend on the platform and the operation; see the platform guidance.
 
 Setup and discovery:
 - cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
@@ -213,12 +218,14 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
 ## Simulated mouse
+Leave useSystemPointer unset for ordinary mouseMove and drag calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request the system pointer only when the user explicitly asks for it or the intended effect requires it.
+
 Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
-- mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
-- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
+- mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. With useSystemPointer omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
+- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
-- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], relative?: boolean }) -> ActionResult — drag between two points of one window.
+- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean, useSystemPointer?: boolean }) -> ActionResult — drag between two points of one window. Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control. An explicit system drag shares the session decision with mouseMove and holds the chosen button along the path in the unobscured foreground window.
 
 A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current AX observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then explicitly activate the target and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
 
@@ -226,8 +233,8 @@ A string target is an element id; coordinate targets are [x, y] and are pixels i
 Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
-- pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
+- pressKey(key: string, modifiers?: Modifier[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier. Send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 
@@ -256,6 +263,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 - 元素 ID 只对应用当前的辅助功能快照有效；之后的读取会替换它们。截图和指针输入都要求显式的窗口对象。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
+- 系统鼠标拖动的每一步都必须命中所选窗口。同一应用中拦截鼠标的弹窗也会中断手势。检查窗口和投递事件的耗时会计入实际拖动时间。修饰键记录在鼠标事件上。读取系统键盘状态的应用可能无法识别这些修饰键。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
 - 源码构建默认使用 `ad-hoc`，二进制变化后可能需要重新授权。[开发者固定身份](../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)保存在 DSH home 之外；删除 DSH home 只删除选择它的配置，不删除证书和私钥。正式分发应以固定 Developer ID 签名并完成公证；构建命令支持 `--identity` 指定签名身份，安装版保留分发时的签名。[权限页面](../cua/README.zh.md)提供 helper 授权入口和目标应用许可撤销。

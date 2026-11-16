@@ -157,6 +157,82 @@ describe('DiscoverController', () => {
     expect(snapshot()).toMatchObject({ editing: false, selected: null, listing: null })
   })
 
+  it('saves an ambiguous HTTPS address directly and honors an explicit Git address', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    const address = 'https://git.example/acme/plugins'
+    face.editDraft(address)
+    face.addSource()
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ selected: address, saving: false }) })
+    expect(market.setIndexes).toHaveBeenCalledWith([A, address])
+    face.editDraft(`git+${address}`)
+    face.editSourceOptions({ path: 'market/index.json', ref: 'main' })
+    face.addSource()
+    const source = `git+${address}?path=market%2Findex.json&ref=main`
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ selected: source, saving: false }) })
+    expect(market.setIndexes).toHaveBeenLastCalledWith([A, address, source])
+    expect(snapshot()).toMatchObject({ draft: '', sourceOptions: { path: '', ref: '' } })
+  })
+
+  it('saves a GitHub repository address with the default index path and ref', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    face.editDraft('https://github.com/acme/plugins')
+    face.addSource()
+    expect(market.setIndexes).toHaveBeenCalledWith([A, 'git+https://github.com/acme/plugins.git'])
+    await vi.waitFor(() => { expect(snapshot().saving).toBe(false) })
+  })
+
+  it('keeps a Git source draft with an invalid file path', () => {
+    const { face, market, snapshot } = setup([])
+    const address = 'https://github.com/acme/plugins'
+    face.editDraft(address)
+    face.editSourceOptions({ path: '../index.json' })
+    face.addSource()
+    expect(snapshot()).toMatchObject({ draft: address, sourceOptions: { path: '../index.json' }, sourceFailure: { kind: 'invalid-git' } })
+    expect(market.setIndexes).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Git draft and its file options when the Host rejects the source', async () => {
+    const { face, market, snapshot } = setup([])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    const address = 'git@github.com:acme/plugins.git'
+    const source = 'git+ssh://git@github.com/acme/plugins.git?path=market%2Findex.json&ref=main'
+    market.setIndexes.mockImplementationOnce(() => fail('plugin-market/invalid-index-url', 'Invalid source', { url: source, reason: 'git-source' }))
+    face.editDraft(address)
+    face.editSourceOptions({ path: 'market/index.json', ref: 'main' })
+    face.addSource()
+    await vi.waitFor(() => { expect(snapshot().sourceFailure).toEqual({ kind: 'invalid-git' }) })
+    expect(market.setIndexes).toHaveBeenCalledWith([source])
+    expect(snapshot()).toMatchObject({ saving: false, draft: address, sourceOptions: { path: 'market/index.json', ref: 'main' } })
+  })
+
+  it('blocks another source edit until the saved list has been read back', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().listing?.status).toBe('ready') })
+    const save = Promise.withResolvers<{ ok: true; value: undefined }>()
+    const reload = Promise.withResolvers<{ ok: true; value: MarketIndexSummary[] }>()
+    market.setIndexes.mockImplementationOnce(() => save.promise)
+    market.listIndexes.mockImplementationOnce(() => reload.promise)
+    face.editDraft(B)
+    face.addSource()
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenCalledExactlyOnceWith([A, B])
+    save.resolve({ ok: true, value: undefined })
+    await vi.waitFor(() => { expect(market.listIndexes).toHaveBeenCalledTimes(2) })
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenCalledTimes(1)
+    reload.resolve({ ok: true, value: [{ url: A }, { url: B }] })
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ saving: false, selected: B }) })
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenLastCalledWith([B])
+    await vi.waitFor(() => { expect(snapshot().saving).toBe(false) })
+  })
+
   it.each([
     ['plugin-market/invalid-index-url', { url: 'x', reason: 'scheme' }, { kind: 'invalid' }],
     ['plugin-market/invalid-index-url', { url: 'x', reason: 'duplicate' }, { kind: 'duplicate' }],
@@ -167,10 +243,10 @@ describe('DiscoverController', () => {
     face.ensure()
     await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
     market.setIndexes.mockImplementationOnce(() => fail(code, 'broken', details))
-    face.editDraft('x')
+    face.editDraft(B)
     face.addSource()
     await vi.waitFor(() => { expect(snapshot().sourceFailure).toEqual(expected) })
-    expect(snapshot()).toMatchObject({ saving: false, draft: 'x' })
+    expect(snapshot()).toMatchObject({ saving: false, draft: B })
     face.editDraft('y')
     expect(snapshot().sourceFailure).toBeNull()
   })
@@ -214,6 +290,23 @@ describe('DiscoverController', () => {
     save.resolve({ ok: true, value: undefined })
     await Promise.resolve()
     expect(snapshot().listing?.status).toBe('loading')
+  })
+
+  it('drops the source-list readback when Discover is disposed after saving', async () => {
+    const { controller, face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().listing?.status).toBe('ready') })
+    const reload = Promise.withResolvers<{ ok: true; value: MarketIndexSummary[] }>()
+    market.listIndexes.mockImplementationOnce(() => reload.promise)
+    face.editDraft(B)
+    face.addSource()
+    await vi.waitFor(() => { expect(market.listIndexes).toHaveBeenCalledTimes(2) })
+    controller.dispose()
+    const before = snapshot()
+    reload.resolve({ ok: true, value: [{ url: A }, { url: B }] })
+    await reload.promise
+    await Promise.resolve()
+    expect(snapshot()).toBe(before)
   })
 
   it('sends the query text, filters, and order, and starts each index with the initial query', async () => {

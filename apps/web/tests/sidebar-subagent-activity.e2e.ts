@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionId as SessionIdValue } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionId as SessionIdValue } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-workspace'
 import {
@@ -20,6 +20,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/sidebar-subagent-activity', import.meta.url))
 const RUNNING_OWNER_EXPECTED = join(SNAPSHOT_DIR, 'owner-running.expected.md')
@@ -87,7 +88,7 @@ describe('web e2e: sidebar subagent activity', () => {
     const cwd = join(scaffold.workspaceCwd, 'workspace')
     await mkdir(cwd)
     parentHandle = await scaffold.ctx.agents.create({
-      sessionId: SessionId('sidebar-activity-owner'),
+      sessionId: brandString<SessionId>('sidebar-activity-owner'),
       meta: { cwd },
       agentOptions: { provider: HOLD_PROVIDER, model: HOLD_MODEL },
     })
@@ -135,7 +136,7 @@ describe('web e2e: sidebar subagent activity', () => {
   it('pins a running descendant on its visible idle owner row', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-subagent-activity'))
     const sidebar = page.getByRole('tree', { name: 'Sessions' })
-    const ownerRow = sidebar.getByRole('treeitem', { name: /1 subagent running Delegate a background job/ })
+    const ownerRow = sidebar.getByRole('treeitem', { name: /1 subagent running.*Delegate a background job/ })
     await ownerRow.waitFor({ timeout: 10_000 })
     expect(parentHandle.agent.status).toBe('idle')
     await compareOrRefreshGolden(

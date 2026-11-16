@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
+import { NativeError } from '../src/native-client.ts'
 import type { CuaApp, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
@@ -229,10 +230,10 @@ describe('pointer buttons and modifiers', () => {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', x: 10, y: 20,
       mouseButton: 'left', clickCount: 1, modifiers: ['command'],
     } })
-    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'] })
+    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'], useSystemPointer: true })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'drag', params: {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', fromX: 10, fromY: 20, toX: 30, toY: 40,
-      mouseButton: 'middle', modifiers: ['shift', 'option'],
+      useSystemPointer: true, mouseButton: 'middle', modifiers: ['shift', 'option'],
     } })
     const count = f.dispatch.mock.calls.length
     await expect(window.click(element('0'), { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
@@ -622,13 +623,29 @@ describe('application and window observations', () => {
     } })
   })
 
-  it('clears a failed refresh and requires a new read before element operations', async () => {
+  it('keeps marked partial trees usable through the latest snapshot without retrying input', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.getAccessibilityTree()
+    await app.pressKey('Return')
+    const tree = '- [0] AXButton "Save"\n[One child could not be read.]'
+    f.dispatch.mockResolvedValueOnce(state({ tree, hasUnreadableElements: true }))
+    await expect(app.getAccessibilityTree()).resolves.toBe(tree)
+    await app.invoke(element('0'))
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: {
+      appHandle: 'app-17', snapshotId: 'changed', elementId: '0',
+    } })
+    expect(f.dispatch.mock.calls.filter(([operation]) => operation.method === 'pressKey')).toHaveLength(1)
+    expect(f.dispatch.mock.calls.filter(([operation]) => operation.method === 'getState')).toHaveLength(2)
+  })
+
+  it.each(['AX_OBSERVATION_UNAVAILABLE', 'PERMISSION_DENIED'])('preserves %s and requires a new read before element operations', async (code) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     await app.getAccessibilityTree()
     const window = await app.getWindow('23')
     await window.getAccessibilityTree()
-    const failure = new Error('Native app is busy')
+    const failure = new NativeError(code, 'Observation failed')
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.getAccessibilityTree()).rejects.toBe(failure)
     await expect(window.setValue(element('0'), 'stale')).rejects.toThrow('Read getAccessibilityTree')
@@ -1029,6 +1046,23 @@ it('forwards provider options while retaining the selected target and coordinate
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
     appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: '23', x: 250, y: 750, relative: true, trackingMode: 'coarse',
   } })
+})
+
+it('keeps ordinary Windows drags portable and rejects explicit system-pointer options before dispatch', async () => {
+  const f = fixture()
+  f.setCapabilities({ ...capabilities, platform: 'windows', systemPointer: false, appLevelAccessibility: false, keyboard: ['window'] })
+  const win = await (await f.api.getApp('Editor')).getWindow('23')
+  await win.getAccessibilityTree()
+  f.dispatch.mockClear()
+  for (const useSystemPointer of [true, false]) {
+    await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
+  }
+  expect(f.dispatch).not.toHaveBeenCalled()
+  await win.drag([10, 20], [30, 40], { mouseButton: 'right', modifiers: ['win'] })
+  expect(f.dispatch.mock.calls).toEqual([[{ method: 'drag', params: {
+    appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', fromX: 10, fromY: 20, toX: 30, toY: 40,
+    mouseButton: 'right', modifiers: ['win'],
+  } }]])
 })
 
 it('forwards bounded traversal limits on a window-only provider', async () => {

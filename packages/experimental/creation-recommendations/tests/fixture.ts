@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { expect, onTestFinished, vi } from 'vitest'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { appendPluginRecord, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
@@ -22,7 +23,7 @@ export const ACTION = 'create_personalized_page'
 export const RESULT_TEXT = 'Card shown below your answer. Do not restate it. End with at most one short invitation in the user’s language, in the first '
   + 'person: after they click Create below, you will build it in the background as a plugin page that stays available, without blocking the chat; '
   + 'the build takes minutes and many tokens.'
-export const callId = ToolCallId('call-creation-1')
+export const callId = brandString<ToolCallId>('call-creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', details: { slot: 'sidebar-right' as const } }
 
 /** A page card's recorded phase with its data flattened, as the tests compare it. */
@@ -80,7 +81,7 @@ export async function fixture(initial?: PageCardState) {
   const workspace = join(directory, 'workspace')
   await mkdir(workspace)
   ctx.provide('profileContext', { dir: directory, cwd: workspace })
-  const agentHandle = await ctx.agents.create({ sessionId: SessionId('creation-root'), meta: { cwd: workspace } })
+  const agentHandle = await ctx.agents.create({ sessionId: brandString<SessionId>('creation-root'), meta: { cwd: workspace } })
   const agent = agentHandle.agent
   const events: SessionEvent[] = []
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
@@ -95,7 +96,7 @@ export async function fixture(initial?: PageCardState) {
   let step = 0
   const propose = async (id = 'call-creation-1', args: object = proposal, caller = agent) => {
     const turn = Math.max(1, ctx.agents.turnBoundaryOf(caller.session).lastTurn)
-    const toolCallId = ToolCallId(id)
+    const toolCallId = brandString<ToolCallId>(id)
     caller.session.append('tool/call', { turn, step: ++step, callId: toolCallId, name: 'propose_action', arguments: JSON.stringify({ action: ACTION, ...args }) })
     caller.session.append('tool/result', { turn, step, message: createToolResultMessage({ callId: toolCallId,
       content: [{ type: 'text', text: RESULT_TEXT }], isError: false }) }, { surfaceOp: 'append' })

@@ -16,9 +16,10 @@ import { join } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { launchWebScaffold, watchConsole, captureStableAria, compareOrRefreshGolden, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Points the shipped shared Agent default at this scenario's own route. */
 const OVERLAY = fileURLToPath(new URL('./default-model.overlay.yml', import.meta.url))
@@ -39,7 +40,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
   /** Create one session and its agent through the same wire face the browser uses. */
   const createSession = async (sessionId: string): Promise<string> => {
     const response = await scaffold.ctx.sessionController.create({
-      sessionId: SessionId(sessionId),
+      sessionId: brandString<SessionId>(sessionId),
       cwd: scaffold.workspaceCwd,
     })
     return response.sessionId
@@ -47,7 +48,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
 
   /** The route the Client derives from the Session projection and Host default. */
   const currentOf = (sessionId: string): Promise<unknown> => {
-    const session = scaffold.ctx.sessions.get(SessionId(sessionId))
+    const session = scaffold.ctx.sessions.get(brandString<SessionId>(sessionId))
     if (session === undefined) throw new Error(`session "${sessionId}" is not live`)
     return Promise.resolve(
       scaffold.ctx.sessionProjections.snapshot(session).values.modelSelection?.next
@@ -141,7 +142,13 @@ describe('web e2e: the composer model switch is the default for later sessions',
         badge.textContent = ' — Provider identification badge with a long channel name'
         node.appendChild(badge)
       })
-      await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      if (pane === 'root') {
+        expect(original!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.x).toBeCloseTo(original!.x)
+      } else {
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      }
       await expect.poll(async () => {
         const box = (await surface.boundingBox())!
         return box.x >= 12 && box.x + box.width <= 378
@@ -473,7 +480,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     // A session that has already run a turn, spelled as the fact a turn
     // leaves behind: its own logged route.
     const loggedId = await createSession('default-model-logged')
-    scaffold.ctx.sessions.get(SessionId(loggedId))?.append('request/header', {
+    scaffold.ctx.sessions.get(brandString<SessionId>(loggedId))?.append('request/header', {
       header: { config: { provider: START_ROUTE, model: START_MODEL } },
       reason: 'initial',
     })

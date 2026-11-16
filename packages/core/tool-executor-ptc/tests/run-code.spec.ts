@@ -2,10 +2,10 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage, ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
@@ -15,7 +15,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createRunCodeTool, RunCodeConfig } from '../src/run-code.ts'
 
 class ControlledRuntime extends PtcRuntime {
-  readonly language = 'typescript'
+  readonly language: string = 'typescript'
   readonly isolation = 'fixture'
   override get retainsState() { return true }
   override get programFormat() { return 'repl' as const }
@@ -55,7 +55,7 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
   ctx.tools.setExecutor(new NativeToolExecutor(ctx))
   await runtimeContext.plugin(ControlledRuntime)
   const runtime = runtimeContext.ptcRuntime as ControlledRuntime
-  const session = ctx.sessions.create(SessionId('private-program'))
+  const session = ctx.sessions.create(brandString<SessionId>('private-program'))
   session.append('turn/start', { turn: 1 })
   const agent = { ctx: agentContext, id: session.id, session } as Agent
   const fiber = await ctx.plugin(Object.assign((owner: Context) => {
@@ -70,7 +70,7 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
     const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal })
     try {
       return await ctx.tools.execute({
-        calls: [{ type: 'tool-call', id: ToolCallId('program'), name, arguments: JSON.stringify({ code: 'await cua.inspect()', description: 'Inspect the current computer', ...args }) }],
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>('program'), name, arguments: JSON.stringify({ code: 'await cua.inspect()', description: 'Inspect the current computer', ...args }) }],
         agent, toolSet, signal,
       })
     } finally { toolSet.dispose() }
@@ -79,6 +79,16 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
 }
 
 describe('registered program tool factory', () => {
+  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s before creating a program tool', async (language) => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    class UnsupportedRuntime extends ControlledRuntime { override readonly language = language }
+    await ctx.plugin(UnsupportedRuntime)
+    expect(() => createRunCodeTool(ctx, {
+      name: 'unsupported_program', description: 'Run a program.', runtime: ctx.ptcRuntime, tools: [],
+    })).toThrow(expect.objectContaining({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }))
+  })
+
   it('uses the explicit runtime and binds only private definitions under native execution', async () => {
     const body = vi.fn(async () => 'private result')
     const definition = privateTool(body)

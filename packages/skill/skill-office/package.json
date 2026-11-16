@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-office",
   "description": "Bundled Word, PowerPoint, and Excel workflows and Office operation guidance",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -36,6 +36,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",

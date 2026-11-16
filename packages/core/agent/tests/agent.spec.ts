@@ -2,7 +2,7 @@ import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, expectTypeOf, it, onTestFinished } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 
@@ -14,9 +14,10 @@ import type {
   CreateAgentOptions,
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const session = overrides.session ?? Session.create(id)
   const ctx = overrides.ctx ?? new Context()
   const agent: Agent = {
@@ -49,7 +50,7 @@ describe('AgentRegistry', () => {
     expect(ctx.get('agents')).toBeUndefined()
     await ctx.plugin(SessionProjectionRegistry)
     await fiber
-    const session = Session.create(SessionId('turn-positions'))
+    const session = Session.create(brandString<SessionId>('turn-positions'))
     expect(ctx.agents.turnBoundaryOf(session)).toEqual({
       openTurnStartSeq: null, lastStepStartSeq: null, lastStepBoundary: null, lastTurn: 0,
     })
@@ -67,7 +68,7 @@ describe('AgentRegistry', () => {
     session.append('turn/start', { turn: 4 })
     // The released unit keeps its last row and folds no event after the unload.
     expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('turnBoundary', row)
-    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('turn-positions-after-unload')))).not.toHaveProperty('turnBoundary')
+    expect(ctx.sessionProjections.checkpoint(Session.create(brandString<SessionId>('turn-positions-after-unload')))).not.toHaveProperty('turnBoundary')
   })
 
   it('contributes Agent lookup and scoped Context providers while Typert is live', async () => {
@@ -122,7 +123,7 @@ describe('AgentRegistry', () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const agent = stubAgent('agent-id', { session: Session.create(SessionId('session-id')) })
+    const agent = stubAgent('agent-id', { session: Session.create(brandString<SessionId>('session-id')) })
 
     expect(() => ctx.agents.enter(agent))
       .toThrow('agent id "agent-id" does not match session id "session-id"')
@@ -139,7 +140,7 @@ describe('AgentRegistry', () => {
     ctx.on('agent/disposed', ({ agent }) => void lifecycle.push(`disposed:${agent.id}`))
 
     await expect(Promise.resolve(ctx.agents.register(stubAgent('vetoed')))).rejects.toThrow('creation veto')
-    expect(ctx.agents.get(SessionId('vetoed'))).toBeUndefined()
+    expect(ctx.agents.get(brandString<SessionId>('vetoed'))).toBeUndefined()
     expect(lifecycle).toEqual(['created:vetoed', 'disposed:vetoed'])
   })
 
@@ -323,15 +324,15 @@ describe('AgentRegistry factory seam', () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    await expect(ctx.agents.create({ sessionId: SessionId('s') })).rejects.toThrow(/no agent factory/)
+    await expect(ctx.agents.create({ sessionId: brandString<SessionId>('s') })).rejects.toThrow(/no agent factory/)
     const { factory, calls } = stubFactory()
     ctx.agents.setFactory(factory)
 
     let callerFiber: Context['fiber'] | undefined
     await ctx.plugin(Object.assign(async (inner: Context) => {
       callerFiber = inner.fiber
-      await inner.agents.create({ sessionId: SessionId('create-s') })
-      await inner.agents.resume({ resumeSessionId: SessionId('resume-s') })
+      await inner.agents.create({ sessionId: brandString<SessionId>('create-s') })
+      await inner.agents.resume({ resumeSessionId: brandString<SessionId>('resume-s') })
     }, { inject: ['agents'] }))
     expect(calls.create[0]?.ownerCtx.fiber).toBe(callerFiber)
     expect(calls.resume[0]?.ownerCtx.fiber).toBe(callerFiber)
@@ -345,9 +346,9 @@ describe('AgentRegistry factory seam', () => {
       inner.agents.setFactory(stubFactory().factory)
       expect(() => inner.agents.setFactory(stubFactory().factory)).toThrow(/already registered/)
     }, { inject: ['agents'] }))
-    await expect(ctx.agents.create({ sessionId: SessionId('before-s') })).resolves.toBeDefined()
+    await expect(ctx.agents.create({ sessionId: brandString<SessionId>('before-s') })).resolves.toBeDefined()
     await owner.dispose()
-    await expect(ctx.agents.create({ sessionId: SessionId('after-s') })).rejects.toThrow(/no agent factory/)
+    await expect(ctx.agents.create({ sessionId: brandString<SessionId>('after-s') })).rejects.toThrow(/no agent factory/)
   })
 
   it('canonicalizes an already traced Service before tracing it for the caller', async () => {
@@ -378,8 +379,8 @@ describe('AgentRegistry factory seam', () => {
     await ctx.plugin(TracedFactory)
     const traced = (ctx as Context & { tracedFactory: TracedFactory }).tracedFactory
     ctx.agents.setFactory(traced)
-    await ctx.agents.create({ sessionId: SessionId('create-s') })
-    await ctx.agents.resume({ resumeSessionId: SessionId('resume-s') })
+    await ctx.agents.create({ sessionId: brandString<SessionId>('create-s') })
+    await ctx.agents.resume({ resumeSessionId: brandString<SessionId>('resume-s') })
     const raw = (traced as unknown as { [symbols.original]?: TracedFactory })[symbols.original]
     expect(states.get(raw!)).toEqual(['create', 'resume'])
   })

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer use",
-    "description": "Control applications on macOS and Windows. On Windows, npm installations require a separately configured helper.",
+    "description": "Allow the agent to directly control applications on your computer.",
     "detail": "docs/DETAIL.md"
   }
 }

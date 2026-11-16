@@ -12,7 +12,8 @@ import { renderList, renderRead, renderSpawn } from '@deepseek-ai/dsh-tool-termi
 import { formatSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 import { detailBadge, detailJson, detailList, detailRecord, inspectionItems, nonempty } from '../src/client/tool/models/detail-model-shared.ts'
 import { detailsCardModel } from '../src/client/tool/models/details-card-model.ts'
-import { SpillLocator } from '@deepseek-ai/dsh-spill'
+import type { SpillLocator } from '@deepseek-ai/dsh-spill'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 const t = makeTranslate(en, commonEn)
@@ -222,6 +223,9 @@ describe('inspection detail adapters', () => {
   })
 
   it('accepts Cordis, workflow, and Ralph producer results', () => {
+    expect(details('cordis_inspect', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
+    expect(details('cordis_inspect', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
+    expect(details('cordis_inspect', '{}')).toBeNull()
     expect(details('cordis_inspect_list', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
     expect(details('cordis_inspect_query', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
     expect(details('cordis_inspect_self', '{"mode":"client","plugins":[]}')?.summary).toBe('0 dynamic plugins')
@@ -284,7 +288,7 @@ describe('inspection detail adapters', () => {
   it('retains generic output for malformed or spilled inspection results', () => {
     expect(details('workflow', 'bad')).toBeNull()
     expect(details('session_trace', 'Session s1 — title\nCreated: invalid\nAvailability: unavailable\n\nAncestors (nearest first):\n- none (target is a root session)\n\nDescendants:\n- none')?.items[0]?.fields).toContainEqual({ label: 'Time', value: 'invalid' })
-    const notice = formatSpillNotice({ kind: 'exact', count: 100 }, { locator: SpillLocator('/tmp/result.txt'), retrievalHint: 'Read it with read' })
+    const notice = formatSpillNotice({ kind: 'exact', count: 100 }, { locator: brandString<SpillLocator>('/tmp/result.txt'), retrievalHint: 'Read it with read' })
     expect(details('session_event_trace', `Session s1 — title\nCreated: 1970-01-01T00:00:00.000Z\n\n${notice}`)).toBeNull()
     expect(details('session_search', 'not a result')).toBeNull()
     expect(details('session_event_read', 'not a result')).toBeNull()

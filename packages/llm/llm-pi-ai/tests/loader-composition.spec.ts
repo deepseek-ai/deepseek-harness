@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader, { type ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import LlmRuntime, { createMessage, createUserMessage, userAgent } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { profileComposition } from '../../../settings/settings/tests/profile-composition.ts'
@@ -17,6 +17,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { recordKeyFor } from '../src/auth.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** One text block, then a tool call truncated by the output-token ceiling. */
 const truncatedToolCallEvents = [
@@ -103,7 +104,7 @@ describe('llm-pi-ai real dormant composition', () => {
     await vi.waitFor(() => {
       expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['deepseek'])
     }, { timeout: 5000 })
-    const result = await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: SessionId('loader-session') })
+    const result = await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: brandString<SessionId>('loader-session') })
     expect(result.finish).toEqual({ kind: 'stop' })
     expect(server.headers[0]?.['x-request-session']).toBe('loader-session')
   })

@@ -6,14 +6,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellProcess, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
@@ -27,6 +27,7 @@ import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { processOutcome } from '../src/background.ts'
 import { renderJobRead, renderResult } from '../src/render.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Use the newest id returned by the real registry, including settled jobs. */
 function currentId(ctx: Context, owner?: Agent): string {
@@ -88,7 +89,7 @@ async function setupWithJobs() {
  */
 async function registerFakeAgent(ctx: Context, sessionId: string, inject: (...args: unknown[]) => void = () => {}): Promise<Agent> {
   const scopeFiber = ctx.plugin(() => {})
-  const id = SessionId(sessionId)
+  const id = brandString<SessionId>(sessionId)
   const agent = {
     id,
     ctx: scopeFiber.ctx,
@@ -100,7 +101,7 @@ async function registerFakeAgent(ctx: Context, sessionId: string, inject: (...ar
 }
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
+  return executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -214,7 +215,7 @@ class CountingStartExecutor extends ShellExecutor {
   }
 }
 
-async function setupSandboxed(withApproval = false) {
+async function setupSandboxed(withApproval = false, toolConfig: Partial<ToolBash.Config> = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
@@ -228,7 +229,7 @@ async function setupSandboxed(withApproval = false) {
   await ctx.plugin(RecordingSandboxExecutor)
   if (withApproval) await ctx.plugin(ApprovalService)
   await ctx.plugin(BashEnvPlugin)
-  await ctx.plugin(ToolBash)
+  await ctx.plugin(ToolBash, toolConfig)
   return { ctx, bash: ctx.shell as RecordingSandboxExecutor }
 }
 
@@ -239,7 +240,7 @@ function sandboxAgent(
 ): Agent {
   const events: Array<{ type: string; data?: Record<string, unknown>; seq: number }> = [{ type: 'turn/start', seq: 0, data: { turn: 1 } }]
   if (mode !== undefined) events.push({ type: 'sandbox/mode', seq: events.length, data: { mode } })
-  const id = SessionId('sandbox-session')
+  const id = brandString<SessionId>('sandbox-session')
   return {
     id,
     ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
@@ -349,7 +350,7 @@ describe('bash tool', () => {
     const ctx = await setup()
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
-      callId: ToolCallId('call-abort'),
+      callId: brandString<ToolCallId>('call-abort'),
       name: 'bash',
       arguments: { command: 'sleep 60', description: 'test command' },
       signal: controller.signal,
@@ -664,7 +665,7 @@ describe('background execution through the job runtime', () => {
     const controller = new AbortController()
     controller.abort()
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('call-pre-aborted'),
+      callId: brandString<ToolCallId>('call-pre-aborted'),
       name: 'bash',
       arguments: { command: 'sleep 60', description: 'test command', run_in_background: true },
       signal: controller.signal,
@@ -720,8 +721,8 @@ describe('background execution through the job runtime', () => {
 
     // Schema omission is advertising; execution must also enforce the opt-out.
     const forced = await call(ctx, 'bash', { command: 'echo hi', description: 'test command', run_in_background: true })
-    expect(forced).toMatchObject({ isError: true, error: { info: { name: 'JobError', code: 'JOB_BACKGROUND_DISABLED' } } })
-    expect(text(forced)).toContain('run_in_background is disabled for this deployment')
+    expect(forced).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(text(forced)).toContain('invalid arguments: run_in_background is disabled for this deployment (enableRunInBackground: false)')
     const foreground = await call(ctx, 'bash', { command: 'echo hi', description: 'test command' })
     expect(foreground.isError).toBe(false)
   })
@@ -797,11 +798,25 @@ describe('sandbox escalation through the generic task producer', () => {
     }
   })
 
+  it('rejects a forced background call before asking for an escalation', async () => {
+    const { ctx, bash } = await setupSandboxed(true, { enableRunInBackground: false })
+    const prompted = vi.fn()
+    ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+    const result = await call(ctx, 'bash', { ...escalate, run_in_background: true }, sandboxAgent())
+    expect(text(result)).toContain('invalid arguments: run_in_background is disabled for this deployment (enableRunInBackground: false)')
+    expect(result).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(prompted).not.toHaveBeenCalled()
+    expect(bash.modes).toEqual([])
+  })
+
   it('rejects injected escalation without a sandbox and narrower escalation without prompting', async () => {
     const plain = await setup()
-    const unavailable = await call(plain, 'bash', escalate)
-    expect(text(unavailable)).toContain('not available in this composition')
-    expect(unavailable).toMatchObject({ error: { info: { name: 'SandboxEscalationError', code: 'SANDBOX_ESCALATION_UNAVAILABLE' } } })
+    const { command, description, sandbox_permissions, justification } = escalate
+    for (const args of [escalate, { command, description, sandbox_permissions }, { command, description, justification }]) {
+      const unavailable = await call(plain, 'bash', args)
+      expect(text(unavailable)).toContain('invalid arguments: sandbox_permissions and justification are not available in this composition')
+      expect(unavailable).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    }
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()
@@ -871,7 +886,7 @@ describe('sandbox escalation through the generic task producer', () => {
     const agent = sandboxAgent(undefined, ctx)
     await ctx.agents.register(agent)
     const foreground = await executeToolFixture(ctx, {
-      callId: ToolCallId('sandbox-signal'),
+      callId: brandString<ToolCallId>('sandbox-signal'),
       name: 'bash',
       arguments: escalate,
       agent,
@@ -897,7 +912,7 @@ describe('sandbox escalation through the generic task producer', () => {
     const started = vi.spyOn(bash, 'execute')
 
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-escalation-background'),
+      callId: brandString<ToolCallId>('cancelled-escalation-background'),
       name: 'bash',
       arguments: { ...escalate, run_in_background: true },
       agent,
@@ -1087,7 +1102,7 @@ describe('session-cwd routing (per-session workdir)', () => {
   it('falls back to the executor default when the agent has no session cwd', async () => {
     const ctx = await setup()
     // No exec.agent at all → executor uses its config/process.cwd() default.
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('cwd-noagent'), name: 'bash', arguments: { command: 'pwd', description: 'pwd' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('cwd-noagent'), name: 'bash', arguments: { command: 'pwd', description: 'pwd' } })
     expect(result.isError).toBe(false)
     expect(text(result).trim().length).toBeGreaterThan(0)
   })
@@ -1387,7 +1402,7 @@ describe('the model-facing bash tool builds its request from named args only (no
 
     await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('session-env-fg'),
+      callId: brandString<ToolCallId>('session-env-fg'),
       name: 'bash',
       arguments: { command: 'true', description: 'run command' },
       agent,
@@ -1408,7 +1423,7 @@ describe('the model-facing bash tool builds its request from named args only (no
 
     await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('session-env-bg'),
+      callId: brandString<ToolCallId>('session-env-bg'),
       name: 'bash',
       arguments: {
         command: 'sleep 1',
@@ -1436,7 +1451,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     for (const [callId, agent] of [['parent', parent], ['child', child]] as const) {
       await executeToolFixture(ctx, {
         signal: testToolSignal,
-        callId: ToolCallId(`session-env-${callId}`),
+        callId: brandString<ToolCallId>(`session-env-${callId}`),
         name: 'bash',
         arguments: { command: 'true', description: 'run command' },
         agent,
@@ -1466,7 +1481,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     // already set environment variables or feed stdin.
     await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('no-forward-1'),
+      callId: brandString<ToolCallId>('no-forward-1'),
       name: 'bash',
       arguments: {
         command: 'echo hi',
@@ -1488,7 +1503,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     const { ctx, bash } = await setupRecording()
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('no-forward-2'),
+      callId: brandString<ToolCallId>('no-forward-2'),
       name: 'bash',
       arguments: {
         command: 'sleep 1',
@@ -1570,7 +1585,7 @@ describe('launch failures without a job registry', () => {
     })
     const aborted = await executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('launch-aborted'),
+      callId: brandString<ToolCallId>('launch-aborted'),
       name: 'bash',
       arguments: { command: 'true', description: 'd' },
     })
@@ -1586,7 +1601,7 @@ describe('launch failures without a job registry', () => {
     })
     const result = await executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('launch-aborted-spawn-error'),
+      callId: brandString<ToolCallId>('launch-aborted-spawn-error'),
       name: 'bash',
       arguments: { command: 'true', description: 'd' },
     })

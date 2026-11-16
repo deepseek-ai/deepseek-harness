@@ -1,4 +1,6 @@
-import { createServer } from 'node:http'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import * as Token from '@deepseek-ai/dsh-host-authentication-token'
+import { BrowserAuth } from '@deepseek-ai/dsh-host-authentication-token/src/browser-auth.ts'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
@@ -6,7 +8,6 @@ import { z } from 'zod'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
 import type {
   ConnectionRpcHandler,
-  HostConnectionHandle,
   PeerScope,
 } from '@deepseek-ai/dsh-client-connection'
 import type { WebServer, WebRoute } from '@deepseek-ai/dsh-host-webserver'
@@ -145,10 +146,6 @@ class FakeConnectionService extends Service {
         }),
     }
   }
-
-  requestRejection(): undefined {
-    return undefined
-  }
 }
 
 function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIndex' | 'port'> {
@@ -165,9 +162,18 @@ function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIn
   }
 }
 
-async function serveRoute(route: WebRoute): Promise<{ readonly origin: string; close(): Promise<void> }> {
+async function serveRoute(ctx: Context, route: WebRoute): Promise<{ readonly origin: string; close(): Promise<void> }> {
   const server = createServer((request, response) => {
-    void route.handler(request, response)
+    const admission = ctx.bail('webserver/authorize', {
+      headers: request.headers, method: request.method, socket: request.socket,
+      url: new URL(request.url ?? '/', 'http://localhost'), transport: 'http',
+    }, 'required')
+    if (admission?.kind !== 'allow') {
+      response.writeHead(admission?.status ?? 503)
+      response.end()
+      return
+    }
+    void route.handler(request, response, admission.peer)
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address() as AddressInfo
@@ -182,18 +188,21 @@ async function serveRoute(route: WebRoute): Promise<{ readonly origin: string; c
   }
 }
 
-/** Exchange a Connection launch token without mounting the frontend fallback. */
-function browserCookie(connection: HostConnectionHandle, origin: string): string {
-  const target = new URL(connection.authenticatedUrl(origin))
+/** Exchange the token plugin's launch URL for the separate HTTP fixture's origin. */
+async function browserCookie(ctx: Context, origin: string): Promise<string> {
+  await ctx.plugin(Token, { cookieMaxAgeDays: 30 }).await()
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
+  const target = new URL(auth.authenticatedUrl(origin))
   let setCookie: string | undefined
-  connection.authorizeIndex({
-    method: 'GET',
-    url: `${target.pathname}${target.search}`,
-    headers: { host: target.host },
-  }, {
-    writeHead(_status, headers) { setCookie = headers?.['set-cookie'] },
+  const request = {
+    method: 'GET', url: `${target.pathname}${target.search}`,
+    headers: { host: target.host }, socket: { destroyed: false },
+  } as IncomingMessage
+  const response = {
+    writeHead(_status: number, headers?: Readonly<Record<string, string>>) { setCookie = headers?.['set-cookie'] },
     end() {},
-  })
+  } as ServerResponse
+  await ctx.waterfall('webserver/request', request, response, async () => {})
   if (setCookie === undefined) throw new Error('gateway fixture did not receive an authentication cookie')
   return setCookie.split(';', 1)[0]!
 }
@@ -1389,8 +1398,8 @@ describe('TypertGatewayService', () => {
     let strictActive = true
     const apiRoute = routes.find(route => route.path === '/api')
     if (apiRoute === undefined) throw new Error('fixture API route was not installed')
-    const server = await serveRoute(apiRoute)
-    const cookie = browserCookie(ctx.connection, server.origin)
+    const server = await serveRoute(ctx, apiRoute)
+    const cookie = await browserCookie(ctx, server.origin)
 
     try {
       const response = await fetch(`${server.origin}/api/goals/create`, {

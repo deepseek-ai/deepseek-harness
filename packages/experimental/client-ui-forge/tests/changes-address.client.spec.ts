@@ -1,14 +1,15 @@
 /** Changes tab addresses, titles, the tab type definition, and the per-tab store. */
 import { describe, expect, it } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   CHANGES_ID, CHANGES_KIND, changesAddress, changesDefinition, changesTitle, parseChangesAddress,
 } from '../src/client/changes-address.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const SESSION = SessionId('s/1')
+const SESSION = brandString<SessionId>('s/1')
 const URL = 'https://github.com/octo/demo/pull/7'
 
 describe('changes addresses', () => {

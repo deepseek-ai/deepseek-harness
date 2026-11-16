@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-harness-dev-context",
   "description": "Model context naming the DeepSeek Harness checkout and Web GUI URL without letting either change the system prompt",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -42,6 +42,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",

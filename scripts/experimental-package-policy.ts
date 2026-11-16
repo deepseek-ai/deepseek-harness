@@ -8,7 +8,10 @@
 export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, string>> = {
   'packages/experimental/cua': '@deepseek-ai/dsh-cua',
   'packages/experimental/cua-bundle': '@deepseek-ai/dsh-cua-bundle',
+  'packages/experimental/cua-macos': '@deepseek-ai/dsh-cua-macos',
+  'packages/experimental/cua-mcp': '@deepseek-ai/dsh-cua-mcp',
   'packages/experimental/cua-windows': '@deepseek-ai/dsh-cua-windows',
+  'packages/experimental/timeline': '@deepseek-ai/dsh-timeline',
   'packages/experimental/tool-session-query': '@deepseek-ai/dsh-tool-session-query',
   'packages/experimental/session-title-all-prompts-llm': '@deepseek-ai/dsh-session-title-all-prompts-llm',
   'packages/experimental/tool-terminal': '@deepseek-ai/dsh-tool-terminal',
@@ -27,6 +30,8 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/plugin-recommendations': '@deepseek-ai/dsh-plugin-recommendations',
   'packages/experimental/client-ui-plugin-recommendations': '@deepseek-ai/dsh-client-ui-plugin-recommendations',
   'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
+  'packages/experimental/forge-gitlab': '@deepseek-ai/dsh-forge-gitlab',
+  'packages/experimental/deepseek-chat-import': '@deepseek-ai/dsh-deepseek-chat-import',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */
@@ -50,7 +55,6 @@ export const LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES: readonly string[]
   'packages/experimental/computer-use-cua-driver-mcp',
   'packages/experimental/computer-use-cua-driver-native',
   'packages/experimental/cot-translation-bundle',
-  'packages/experimental/cua-macos',
   'packages/experimental/forge',
   'packages/experimental/forge-bundle',
   'packages/experimental/forge-github',
@@ -60,7 +64,6 @@ export const LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES: readonly string[]
   'packages/experimental/liveshare',
   'packages/experimental/liveshare-protocol',
   'packages/experimental/plugin-market-bundle',
-  'packages/experimental/ptc-runtime-python',
   'packages/experimental/ralph-bundle',
   'packages/experimental/session-inspector',
   'packages/experimental/session-search',

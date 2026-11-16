@@ -224,7 +224,7 @@ export class CordisTreeStore implements InspectorRecordConsumer {
     for (const listener of [...this.listeners]) {
       try {
         listener(event)
-      } catch {
+      } catch (_listenerFailed) {
         // One query adapter cannot prevent later repository observers from updating.
       }
     }

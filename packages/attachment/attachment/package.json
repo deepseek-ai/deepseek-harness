@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-attachment",
   "description": "Durable immutable attachment storage seam for the DeepSeek Harness",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -22,7 +22,6 @@
   "files": ["lib/index.js", "lib/types/**/*.js", "lib/types/**/*.d.ts", "lib/types/**/*.d.ts.map", "lib/**/*.js.map", "src"],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },

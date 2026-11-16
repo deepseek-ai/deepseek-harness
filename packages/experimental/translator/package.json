@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-translator",
   "description": "Machine translation with reusable Session results",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -37,6 +37,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~"
   },
   "peerDependencies": {

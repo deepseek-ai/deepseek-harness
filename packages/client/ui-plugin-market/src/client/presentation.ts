@@ -2,6 +2,7 @@
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { MarketIndexSummary, MarketListingEntry, MarketListingVersion, MarketSort } from '@deepseek-ai/dsh-api-remotes/client'
 import type { MarketIndexMetadata } from '@deepseek-ai/dsh-plugin-market-index'
+import { parseGitMarketIndexSource } from '@deepseek-ai/dsh-plugin-market-index/source'
 
 /** The Discover query: text, filters, and order, without paging. */
 export interface DiscoverQuery {
@@ -112,4 +113,69 @@ export function sourceFacts(name: string, version: MarketListingVersion): Source
 export function indexLabel(index: MarketIndexSummary, resolveText: (text: LocalizedText) => string): string {
   if (index.title !== undefined) return resolveText(index.title)
   return URL.canParse(index.url) ? new URL(index.url).host : index.url
+}
+
+interface GitHubIndexName {
+  readonly label: string
+  readonly location: string
+}
+
+function githubIndexName(index: MarketIndexSummary, resolveText: (text: LocalizedText) => string): GitHubIndexName | undefined {
+  if (!URL.canParse(index.url)) return undefined
+  const { host, protocol, pathname } = new URL(index.url)
+  if (host === 'github.com' && /^git\+(?:https|ssh):$/u.test(protocol)) {
+    const repository = /^\/([\w.-]+\/[\w.-]+)\.git$/u.exec(pathname)?.[1]
+    if (repository === undefined) return undefined
+    try {
+      const { ref = 'HEAD', path } = parseGitMarketIndexSource(index.url)
+      return { label: `github:${repository}`, location: `${ref}:${path}` }
+    } catch (_invalidGitSource) {
+      return undefined
+    }
+  }
+  if (host === 'raw.githubusercontent.com' && /^https?:$/u.test(protocol)) {
+    const prefix = /^\/[\w.-]+\/[\w.-]+\/(?=[^/]+\/[^/])/u.exec(pathname)?.[0]
+    if (prefix === undefined) return undefined
+    const source = `github:${prefix.slice(1, -1)}`
+    const label = index.title === undefined ? source : `${resolveText(index.title)} · ${source}`
+    return { label, location: pathname.slice(prefix.length) }
+  }
+  return undefined
+}
+
+function repeatedLabels(items: readonly { readonly label: string }[]): Set<string> {
+  const seen = new Set<string>()
+  const repeated = new Set<string>()
+  for (const { label } of items) {
+    if (seen.has(label)) repeated.add(label)
+    seen.add(label)
+  }
+  return repeated
+}
+
+/**
+ * Label the Discover selector and its menu in source order. Titled Raw indexes keep their localized title.
+ * Duplicate GitHub labels include the file location, then an ordinal if the location still matches.
+ * @param indexes - the configured sources in display order.
+ * @param resolveText - current-language text resolution.
+ * @returns menu items identified by their configured source URLs.
+ */
+export function indexMenuItems(
+  indexes: readonly MarketIndexSummary[], resolveText: (text: LocalizedText) => string,
+): { readonly id: string; readonly label: string }[] {
+  const items = indexes.map((index) => {
+    const github = githubIndexName(index, resolveText)
+    return { id: index.url, label: github?.label ?? indexLabel(index, resolveText), location: github?.location }
+  })
+  const duplicates = repeatedLabels(items)
+  const named = items.map(item => item.location !== undefined && duplicates.has(item.label)
+    ? { ...item, label: `${item.label} · ${item.location}` } : item)
+  const repeated = repeatedLabels(named)
+  const positions = new Map<string, number>()
+  return named.map(({ id, label, location }) => {
+    if (location === undefined || !repeated.has(label)) return { id, label }
+    const position = (positions.get(label) ?? 0) + 1
+    positions.set(label, position)
+    return { id, label: `${label} (${position})` }
+  })
 }

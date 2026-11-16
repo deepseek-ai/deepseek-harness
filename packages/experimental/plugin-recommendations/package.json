@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-recommendations",
   "description": "Official plugin suggestions with explicit user activation and persistent conversation decisions",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -43,6 +43,7 @@
     "@deepseek-ai/dsh-skill": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",

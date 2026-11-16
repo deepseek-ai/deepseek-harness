@@ -1,7 +1,7 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
 import { HarnessError } from '@deepseek-ai/dsh-error'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
@@ -10,6 +10,7 @@ import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeClient, NativeError } from '../src/native-client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const shared = vi.hoisted(() => ({ create: vi.fn() }))
 
@@ -116,7 +117,7 @@ describe('native helper transport', () => {
   it('keeps screenshot diagnostics on the cancellation returned during graceful disposal', async () => {
     const reportDiagnostic = vi.fn<(message: string) => void>()
     const f = fixture({ reportDiagnostic })
-    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('graceful-capture'))
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, brandString<ToolCallId>('graceful-capture'))
     const result = pending.catch((error: unknown) => error)
     f.reply({ type: 'diagnostic', requestId: 'graceful-capture', stage: 'capture-image.begin', elapsedMs: 2 })
     const entered: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -212,7 +213,7 @@ describe('native helper transport', () => {
     const original = new NativeError('NATIVE_IO', 'original connection failure')
     const closeFailure = new Error('connection close acknowledgement failed')
     const pending = kind === 'request'
-      ? f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('failed-capture'))
+      ? f.client.request('screenshot', {}, new AbortController().signal, brandString<ToolCallId>('failed-capture'))
       : f.client.requestCleanup('releaseHeldKeys', { runId: 'both-failed' })
     const result = pending.catch((error: unknown) => error)
     if (kind === 'request') f.reply({ type: 'diagnostic', requestId: 'failed-capture', stage: 'capture-image.begin', elapsedMs: 2 })
@@ -244,7 +245,7 @@ describe('native helper transport', () => {
       output: { schema: { type: 'json' }, render: () => [] },
       execute: async (_args, execution) => f.client.request('screenshot', {}, execution.signal, execution.callId),
     }))
-    const running = ctx.tools.execute({ calls: [{ type: 'tool-call', name: 'capture_fixture', id: ToolCallId('pipeline-capture'), arguments: '{}' }],
+    const running = ctx.tools.execute({ calls: [{ type: 'tool-call', name: 'capture_fixture', id: brandString<ToolCallId>('pipeline-capture'), arguments: '{}' }],
       signal: new AbortController().signal,
     })
     await expect.poll(() => f.requests.length).toBe(1)
@@ -357,7 +358,7 @@ describe('native helper transport', () => {
 
   it('uses the logged tool invocation ID for the native request and its matching reply', async () => {
     const f = fixture()
-    const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, ToolCallId('foreground-call'))
+    const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, brandString<ToolCallId>('foreground-call'))
     expect(f.id()).toBe('foreground-call')
     f.reply({ id: 'foreground-call', result: { dispatched: true } })
     await expect(pending).resolves.toEqual({ dispatched: true })
@@ -502,7 +503,9 @@ describe('native helper transport', () => {
 
   it('rejects a pre-cancelled operation without writing or invalidating acquired handles', async () => {
     const f = fixture()
-    await expect(f.client.request('click', {}, AbortSignal.abort())).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
+    const rejected = f.client.request('click', {}, AbortSignal.abort())
+    await expect(rejected).rejects.toBeInstanceOf(HarnessError)
+    await expect(rejected).rejects.toMatchObject({ name: 'NativeError', code: 'NATIVE_CANCELLED' })
     expect(f.requests).toEqual([])
     expect(f.client.disposed).toBe(false)
   })
@@ -718,7 +721,7 @@ describe('native helper transport', () => {
     try {
       const reportDiagnostic = vi.fn<(message: string) => void>()
       const f = fixture({ timeoutMs: 25, reportDiagnostic })
-      const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture-timeout'))
+      const pending = f.client.request('screenshot', {}, new AbortController().signal, brandString<ToolCallId>('capture-timeout'))
       const rejected = Promise.all([
         expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT' }),
         expect(pending).rejects.toThrow('"stage":"capture-image.begin"'),
@@ -735,7 +738,7 @@ describe('native helper transport', () => {
 
   it('accepts diagnostic and result frames in one chunk and omits unrelated requests and extra fields', async () => {
     const f = fixture()
-    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('current'))
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, brandString<ToolCallId>('current'))
     f.stdout.write([
       { type: 'diagnostic', requestId: 'previous', stage: 'old.begin', elapsedMs: 1 },
       { type: 'diagnostic', requestId: 'current', stage: 'ax-geometry.begin', elapsedMs: 3, title: 'private' },
@@ -761,7 +764,7 @@ describe('native helper transport', () => {
   it('bounds retained screenshot diagnostics and keeps successful results out of model text', async () => {
     const reportDiagnostic = vi.fn<(message: string) => void>()
     const f = fixture({ reportDiagnostic })
-    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture'))
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, brandString<ToolCallId>('capture'))
     for (let index = 0; index < 200; index++) {
       f.reply({ type: 'diagnostic', requestId: 'capture', stage: `phase-${index}`, elapsedMs: index })
     }

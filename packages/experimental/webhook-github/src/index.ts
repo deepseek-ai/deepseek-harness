@@ -48,6 +48,7 @@ export function apply(ctx: Context, config: Config): void {
   assertConfig(config)
   const route = {
     kind: 'exact' as const,
+    auth: 'anonymous' as const,
     path: config.path,
     handler: createGitHubWebhookHandler(ctx, {
       source: config.source,

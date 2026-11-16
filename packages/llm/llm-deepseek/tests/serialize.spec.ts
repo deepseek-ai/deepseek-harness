@@ -1,8 +1,9 @@
 /** Request conversion and durable replay validation. */
 import { describe, expect, it, vi } from 'vitest'
-import { createDeveloperMessage, createUserMessage, createAssistantMessage, createMessage, createSystemMessage, createToolResultMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createDeveloperMessage, createUserMessage, createAssistantMessage, createMessage, createSystemMessage, createToolResultMessage, type ReasoningEffortId, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageBlock, Message, RequestMessage, RequestUserInput } from '@deepseek-ai/dsh-llm'
-import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { resolveAdapterOptions } from '../src/config.ts'
 import { modelInfo } from '../src/model-info.ts'
@@ -13,9 +14,9 @@ import { serialize } from '../src/serialize.ts'
 import { MODEL, options, user, requestImageStore } from './helpers.ts'
 
 const connection = resolveAdapterOptions({})
-const call = (id = 'a'): ContentBlock => ({ type: 'tool-call', id: ToolCallId(id), name: 'read', arguments: '{"path":"a"}' })
+const call = (id = 'a'): ContentBlock => ({ type: 'tool-call', id: brandString<ToolCallId>(id), name: 'read', arguments: '{"path":"a"}' })
 const assistant = (content: ContentBlock[]) => createAssistantMessage({ content, source: { provider: 'deepseek-official', model: MODEL } })
-const result = (id = 'a', content: ContentBlock[] = [{ type: 'text', text: 'result' }]) => createToolResultMessage({ callId: ToolCallId(id), content, isError: false })
+const result = (id = 'a', content: ContentBlock[] = [{ type: 'text', text: 'result' }]) => createToolResultMessage({ callId: brandString<ToolCallId>(id), content, isError: false })
 const body = (messages: RequestMessage[] = [user()], overrides: Partial<GenerateOptions> = {}) => serialize(
   options({ messages, ...overrides }), connection, messages, new Map(), () => undefined,
 )
@@ -103,10 +104,10 @@ describe('Messages request conversion', () => {
 
   it('preserves request-only image content through image preparation and wire conversion', async () => {
     const attachment: ImageAttachmentRef = {
-      attachmentId: AttachmentId(`sha256:${'e'.repeat(64)}`), mediaType: 'image/png', bytes: 3, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>(`sha256:${'e'.repeat(64)}`), mediaType: 'image/png', bytes: 3, width: 1, height: 1,
     }
     const version: RequestImageAttachment = {
-      variantId: ImageVariantId(`sha256:${'f'.repeat(64)}`), attachment, data: Uint8Array.of(1, 2, 3),
+      variantId: brandString<ImageVariantId>(`sha256:${'f'.repeat(64)}`), attachment, data: Uint8Array.of(1, 2, 3),
       mediaType: 'image/png', bytes: 3, width: 1, height: 1, depth: 'uchar', space: 'srgb', hasAlpha: true,
     }
     const input: RequestUserInput = { role: 'user', content: [
@@ -222,7 +223,7 @@ describe('Messages request conversion', () => {
   })
 
   it('groups parallel results before ordinary text and keeps tool failure content', () => {
-    const messages = [user(), assistant([call(), call('b')]), user('follow-up'), result(), createToolResultMessage({ callId: ToolCallId('b'), content: [{ type: 'text', text: 'permission denied' }], isError: true })]
+    const messages = [user(), assistant([call(), call('b')]), user('follow-up'), result(), createToolResultMessage({ callId: brandString<ToolCallId>('b'), content: [{ type: 'text', text: 'permission denied' }], isError: true })]
     expect(body(messages).messages).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'hello' }] },
       { role: 'assistant', content: ['a', 'b'].map(id => ({ type: 'tool_use', id, name: 'read', input: { path: 'a' } })) },
@@ -238,7 +239,7 @@ describe('Messages request conversion', () => {
   it('preserves empty results without inventing model-visible output', () => {
     const response = body([user(), assistant([call()]), result('a', [])])
     expect(response.messages[2]?.content[0]).toMatchObject({ content: [] })
-    const { isError: _isError, ...minimal } = createToolResultMessage({ callId: ToolCallId('a'), content: [{ type: 'text', text: '' }], isError: false })
+    const { isError: _isError, ...minimal } = createToolResultMessage({ callId: brandString<ToolCallId>('a'), content: [{ type: 'text', text: '' }], isError: false })
     expect(body([assistant([call()]), minimal]).messages[1]?.content[0]).toEqual({ type: 'tool_result', tool_use_id: 'a', content: [] })
   })
 
@@ -261,7 +262,7 @@ describe('Messages request conversion', () => {
   it('omits assistant-only blocks inside tool results while retaining calls, errors and empty results', () => {
     const reasoning: ContentBlock = { type: 'reasoning', text: 'tool reasoning' }
     const history = [assistant([reasoning, call(), call('b')]),
-      createToolResultMessage({ callId: ToolCallId('a'), content: [reasoning, call('nested-call'), { type: 'text', text: '  result\n' }], isError: true }),
+      createToolResultMessage({ callId: brandString<ToolCallId>('a'), content: [reasoning, call('nested-call'), { type: 'text', text: '  result\n' }], isError: true }),
       result('b', [reasoning, call('another-nested-call')]),
     ]
     const saved = JSON.stringify(history)
@@ -328,19 +329,19 @@ describe('Messages request conversion', () => {
   })
 
   it.each(['off', 'low', 'high', 'max'])('maps reasoning effort %s', (effort) => {
-    const request = body([user()], { reasoningEffort: ReasoningEffortId(effort) })
+    const request = body([user()], { reasoningEffort: brandString<ReasoningEffortId>(effort) })
     expect(request.thinking.type).toBe(effort === 'off' ? 'disabled' : 'enabled')
     expect(request.output_config).toEqual(effort === 'off' ? undefined : { effort })
   })
 
   it('disables thinking for the off effort, passes temperature with thinking and refuses unsupported effort', () => {
-    expect(body([user()], { reasoningEffort: ReasoningEffortId('off'), temperature: 0 }))
+    expect(body([user()], { reasoningEffort: brandString<ReasoningEffortId>('off'), temperature: 0 }))
       .toMatchObject({ thinking: { type: 'disabled' }, temperature: 0 })
     expect(body([user()], { temperature: 0 })).toMatchObject({ thinking: { type: 'enabled' }, temperature: 0 })
-    expect(() => body([user()], { reasoningEffort: ReasoningEffortId('medium') })).toThrow(/effort/)
+    expect(() => body([user()], { reasoningEffort: brandString<ReasoningEffortId>('medium') })).toThrow(/effort/)
     const disabled = resolveAdapterOptions({ thinking: 'disabled' })
     expect(serialize(options(), disabled, [user()], new Map(), () => undefined).thinking).toEqual({ type: 'disabled' })
-    expect(() => serialize(options({ reasoningEffort: ReasoningEffortId('high') }), disabled, [user()], new Map(), () => undefined)).toThrow(/effort/)
+    expect(() => serialize(options({ reasoningEffort: brandString<ReasoningEffortId>('high') }), disabled, [user()], new Map(), () => undefined)).toThrow(/effort/)
     const capped = resolveAdapterOptions({ models: [{ id: MODEL, maxTokens: 321 }] })
     expect(serialize(options(), capped, [user()], new Map(), () => undefined).max_tokens).toBe(321)
   })
@@ -354,8 +355,8 @@ describe('Messages request conversion', () => {
   })
 
   it.each(['{', '', '[]', 'null', '42', 'true', '"text"', '{"description":"最快，但"某个说法"没有证据。"}'])('uses empty input for malformed or non-object historical tool arguments %s', (arguments_) => {
-    const message = assistant([{ type: 'tool-call', id: ToolCallId('a'), name: 'read', arguments: arguments_ }])
-    const history = [user(), message, createToolResultMessage({ callId: ToolCallId('a'), content: [{ type: 'text', text: 'Invalid arguments' }], isError: true }), user('Continue')]
+    const message = assistant([{ type: 'tool-call', id: brandString<ToolCallId>('a'), name: 'read', arguments: arguments_ }])
+    const history = [user(), message, createToolResultMessage({ callId: brandString<ToolCallId>('a'), content: [{ type: 'text', text: 'Invalid arguments' }], isError: true }), user('Continue')]
     const saved = JSON.stringify(history)
     const restored = JSON.parse(saved) as Message[]
     expect(body(restored).messages).toEqual([
@@ -431,7 +432,7 @@ describe('Messages request conversion', () => {
   })
 
   it.each([1, 2])('uses empty historical tool input with replay version %s', (version) => {
-    const message = createAssistantMessage({ content: [{ type: 'tool-call', id: ToolCallId('a'), name: 'read', arguments: '{' }], source: {
+    const message = createAssistantMessage({ content: [{ type: 'tool-call', id: brandString<ToolCallId>('a'), name: 'read', arguments: '{' }], source: {
       provider: 'deepseek-official', model: MODEL, replayState: { response: { kind: 'deepseek-messages', version, model: MODEL }, blocks: [{ type: 'tool-call' }] },
     } })
     const saved = JSON.stringify(message)
@@ -474,9 +475,9 @@ describe('validated configuration', () => {
 })
 
 describe('Messages images', () => {
-  const ref: ImageAttachmentRef = { attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png', width: 1, height: 1, bytes: 3 }
+  const ref: ImageAttachmentRef = { attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png', width: 1, height: 1, bytes: 3 }
   const image: ImageBlock = { type: 'image', attachment: ref }
-  const version: RequestImageAttachment = { attachment: ref, variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`), mediaType: 'image/png', bytes: 3, data: Uint8Array.of(1, 2, 3), width: 1, height: 1, depth: 'uchar', space: 'srgb', hasAlpha: false }
+  const version: RequestImageAttachment = { attachment: ref, variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`), mediaType: 'image/png', bytes: 3, data: Uint8Array.of(1, 2, 3), width: 1, height: 1, depth: 'uchar', space: 'srgb', hasAlpha: false }
   const access = () => ({ readonlyPath: '/workspace/image.png' })
   const model = 'deepseek-flash'
   // Only the read operation is consumed by image preparation; the transport is mocked, not durable content.
@@ -525,7 +526,7 @@ describe('Messages images', () => {
     expect(() => body([result('a', [image])])).toThrow(/image/)
     expect(() => body([assistant([image])])).toThrow(/assistant/)
     // @ts-expect-error -- malformed provider input can carry a retired nested result block.
-    expect(() => body([result('a', [{ type: 'tool-result', toolCallId: ToolCallId('nested'), content: [] }])]))
+    expect(() => body([result('a', [{ type: 'tool-result', toolCallId: brandString<ToolCallId>('nested'), content: [] }])]))
       .toThrow(/user\/tool-result content tool-result/)
     expect(() => serialize(options({ model }), connection, [result('a', [image])], new Map([[ref.attachmentId, version]]), access, undefined, new Map()))
       .toThrow(/request file id is missing/)

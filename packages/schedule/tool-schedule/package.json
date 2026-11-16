@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-schedule",
   "description": "Model-facing scheduled task tools (schedule_create, schedule_list, schedule_view, schedule_edit) over the Host ctx.schedule service",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -31,6 +31,9 @@
     "src"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",

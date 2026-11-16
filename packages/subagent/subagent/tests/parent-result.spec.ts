@@ -5,12 +5,13 @@ import { expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as Control from '@deepseek-ai/dsh-tool-subagent-control'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime from '../src/index.ts'
 import { mountLocalActivations } from './local-activation.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it.each(['absent', 'unused'] as const)('returns the closing answer when send_message is %s', async (availability) => {
   const ctx = new Context()
@@ -23,7 +24,7 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   if (availability !== 'absent') await ctx.plugin(Control)
   const adapter = new MockAdapter([textResponse('CHILD_RESULT_42'), textResponse('Parent received the answer.')])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
     parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
@@ -55,7 +56,7 @@ it('delivers structured output to the parent when the child has send_message', a
     textResponse('Parent received the structured answer.'),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
     parent, prompt: [{ type: 'text', text: 'Find the answer.' }],

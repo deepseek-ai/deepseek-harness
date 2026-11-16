@@ -211,15 +211,32 @@ describe('DetailsRow', () => {
     expect(header.textContent).toBe('Waiting for messages…')
   })
 
+  it.each([
+    ['cordis_inspect_list', {}, { providers: [] }],
+    ['cordis_inspect_query', { platform: 'host', provider: 'Service', method: 'listService' }, { provider: 'Service', method: 'listService', data: {} }],
+  ] as const)('keeps the %s title and details for the unified tool', (legacyName, query, value) => {
+    const legacy = result(legacyName, value, JSON.stringify(query))
+    const current = result('cordis_inspect', value, JSON.stringify(legacyName === 'cordis_inspect_list' ? {} : { query }))
+    expect(detailsCardModel(current, t, 'en')).toEqual(detailsCardModel(legacy, t, 'en'))
+    const oldView = render(
+      <DetailsRow {...{ useDisclosure, toolName: legacyName, block: legacy, t } as Parameters<typeof DetailsRow>[0]} />,
+    )
+    const title = screen.getByRole('button', { expanded: false }).textContent
+    oldView.unmount()
+    render(<DetailsRow {...{ useDisclosure, toolName: 'cordis_inspect', block: current, t } as Parameters<typeof DetailsRow>[0]} />)
+    expect(screen.getByRole('button', { expanded: false }).textContent).toBe(title)
+  })
+
   it('registers the supported tool names through the scoped keyed slot', () => {
     const register = vi.fn((_spec: unknown, _component: unknown) => () => undefined)
     const inject = vi.fn((_name: string, callback: () => Iterable<() => void>) => {
       for (const dispose of callback()) dispose()
     })
     detailsToolview.apply({ slots: { inject, register } } as never)
-    expect(register.mock.calls).toHaveLength(40)
+    expect(register.mock.calls).toHaveLength(41)
     const specs = register.mock.calls.map(([spec]) => spec)
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'subagent_fork', locale: 'conversation' })
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect', locale: 'conversation' })
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
     for (const key of ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit', 'schedule_update', 'schedule_delete']) {
       expect(specs).toContainEqual({ name: 'tool.call.toolview', key, locale: 'conversation' })

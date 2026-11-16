@@ -129,7 +129,7 @@ export function ReviewComposer({ selection, actions, close, visible = true, t }:
         })}
         {visible && actions.queue !== undefined && <SplitAction disabled={busy || actions.publishingBlocked === true || empty}
           label={t(busy ? 'review.publishing' : actions.reviewStarted === true ? 'review.queue' : 'review.startReview')}
-          run={() => { void send(actions.queue) }} menuLabel={t('review.githubActions')}
+          run={() => { void send(actions.queue) }} menuLabel={t('review.hostActions')}
           other={actions.publish === undefined ? undefined : t('review.publish')} menu={() => { void send(actions.publish) }} />}
         {actions.queue === undefined && actions.publish !== undefined && <Button size="sm" variant="primary"
           disabled={busy || actions.publishingBlocked === true || empty} onClick={() => { void send(actions.publish) }}>{t('review.publish')}</Button>}

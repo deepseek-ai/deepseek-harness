@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-将 `dsh-host-open-in-app` 与其[浏览器配套包](../../client/ui-open-in-app/README.zh.md)一起使用，让用户能在已安装的编辑器、Git GUI、终端或文件管理器中打开 workspace 目录。本包提供固定的应用目录，并只显示主机能够验证的条目；新安装的应用在重启后出现，而检测到启动器缺失时会移除对应条目。请求须通过部署的浏览器认证与主机来源信任检查。检测与启动命令使用可配置的期限，且不会把继承的凭据传给启动的应用。
+将 `dsh-host-open-in-app` 与其[浏览器配套包](../../client/ui-open-in-app/README.zh.md)一起使用，让用户能在已安装的编辑器、Git GUI、终端或文件管理器中打开 workspace 目录。本包提供固定的应用目录，并只显示主机能够验证的条目；新安装的应用在重启后出现，而检测到启动器缺失时会移除对应条目。请求须通过 WebServer 准入并持有 owner Peer；非 owner Peer 在应用探测、图标访问或启动前收到403。检测与启动命令使用可配置的期限，且不会把继承的凭据传给启动的应用。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把本包挂进携带 `webServer`、`connection` 与 `subprocess` 的组合，通常与其浏览器表面 [`dsh-client-ui-open-in-app`](../../client/ui-open-in-app/README.zh.md) 并排；只要主机解析出目录中至少一个已安装的应用，这对包就会在 Web 会话头部放上 "Open In..." 分体按钮。
+把本包挂进携带 `webServer` 与 `subprocess` 的组合，通常与其浏览器表面 [`dsh-client-ui-open-in-app`](../../client/ui-open-in-app/README.zh.md) 并排；只要主机解析出目录中至少一个已安装的应用，这对包就会在 Web 会话头部放上 "Open In..." 分体按钮。
 
 ### 何时选择
 
@@ -77,9 +77,9 @@ Linux 桌面文件字段和图标使用共享的 [native-command](../../util/nat
 <details>
 <summary>实现内幕——点击展开</summary>
 
-本包拆为一张数据表与三个角色。[`src/catalog.ts`](src/catalog.ts) 是编译期表格：每个条目按平台的 locator 链（`fixed`、`app`、`xcode`、`cli`、`file`、`scan`、`app-paths`、`install-record`、`github-desktop`、`desktop`），以及 Linux 上拥有其图标的 desktop 条目 id。[`src/resolver.ts`](src/resolver.ts) 把表格解析到本机：一趟产出目录 id 到已验证启动的映射（主/回退 argv 加图标来源），共享一次批量的 Windows 注册表读取；argv 启动以清理过凭据的环境（`scrubbedParentEnv`）叠加适配器显式环境后 detached 派生，Windows GUI 默认保持可见，只有负责另行打开 GUI 的 CLI 适配器会隐藏自己的进程。`shell-open` 启动（文件管理器）在同一看护窗口下经 `dsh-native-command` 的路径打开器执行 OS shell 的 open verb，spawn 的 `ENOENT` 被归类为 `missing`，让路由能刷新失效条目。[`src/icons.ts`](src/icons.ts) 按平台提取图标：macOS 在解析出的 bundle 上跑 `plutil`/`sips`，Windows 在解析出的可执行文件上跑生成的 PowerShell `ExtractAssociatedIcon` 脚本（`-File` 位置参数让路径不经过命令行解析），Linux 走 desktop 条目/hicolor/pixmaps 的文件系统查找。
+本包拆为一张数据表与三个角色。[`src/catalog.ts`](src/catalog.ts) 是编译期表格：每个条目按平台的 locator 链（`fixed`、`app`、`xcode`、`cli`、`file`、`scan`、`app-paths`、`install-record`、`github-desktop`、`desktop`），以及 Linux 上拥有其图标的 desktop 条目 id。[`src/resolver.ts`](src/resolver.ts) 把表格解析到本机：一趟产出目录 id 到已验证启动的映射（主/回退 argv 加图标来源），共享一次批量的 Windows 注册表读取；argv 启动以清理过凭据的环境（`scrubbedParentEnv`）去掉 Desktop Host 的 `ELECTRON_RUN_AS_NODE` 后叠加适配器显式环境，再 detached 派生，Windows GUI 默认保持可见，只有负责另行打开 GUI 的 CLI 适配器会隐藏自己的进程。`shell-open` 启动（文件管理器）在同一看护窗口下经 `dsh-native-command` 的路径打开器执行 OS shell 的 open verb，spawn 的 `ENOENT` 被归类为 `missing`，让路由能刷新失效条目。[`src/icons.ts`](src/icons.ts) 按平台提取图标：macOS 在解析出的 bundle 上跑 `plutil`/`sips`，Windows 在解析出的可执行文件上跑生成的 PowerShell `ExtractAssociatedIcon` 脚本（`-File` 位置参数让路径不经过命令行解析），Linux 走 desktop 条目/hicolor/pixmaps 的文件系统查找。
 
-[`src/index.ts`](src/index.ts) 在 `ctx.webServer` 上注册三条路由：`GET /open-in-app/apps`（解析映射的 keys）、`GET /open-in-app/icon/<id>`（提取的图标，进程内内存缓存）、`POST /open-in-app/open`（直接使用映射中已验证的启动器——绝不重新检测）。每条路由都先向组合的 `connection` 服务询问是否拒绝；完整的信任叙述——Host/Origin 栅栏与浏览器认证——唯一的出处在 [`src/index.ts`](src/index.ts) 的模块注释。在该栅栏之上，open 路由在 wire 边界校验请求体：`application/json` 媒体类型、64 KiB 上限、解析为可用的目录 id、指向现存目录的绝对路径。解析与图标命令经 [`@deepseek-ai/dsh-native-command`](../../util/native-command/README.zh.md)（argv，绝不走 shell）在各自期限内执行；PATH 名称走 `ctx.subprocess.resolveExecutable()` 进程内解析。
+[`src/index.ts`](src/index.ts) 在 `ctx.webServer` 上注册三条路由：`GET /open-in-app/apps`（解析映射的 keys）、`GET /open-in-app/icon/<id>`（提取的图标，进程内内存缓存）、`POST /open-in-app/open`（直接使用映射中已验证的启动器——绝不重新检测）。每条路由均声明 WebServer 认证准入，并在访问 Host 资源前检查传入 Peer 的 owner principal。open 路由还在 wire 边界校验请求体：`application/json` 媒体类型、64 KiB 上限、解析为可用的目录 id、指向现存目录的绝对路径。解析与图标命令经 [`@deepseek-ai/dsh-native-command`](../../util/native-command/README.zh.md)（argv，绝不走 shell）在各自期限内执行；PATH 名称走 `ctx.subprocess.resolveExecutable()` 进程内解析。
 
 </details>
 

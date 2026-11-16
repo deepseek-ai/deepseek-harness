@@ -122,7 +122,7 @@ class WindowsJobOwner implements BoundProcessOwner {
   }
 
   terminateForHostExit(): void {
-    try { this.runner.kill('SIGKILL') } catch { /* Host exit continues with other live runners. */ }
+    try { this.runner.kill('SIGKILL') } catch (_runnerKillFailed) { /* Host exit continues with other live runners. */ }
   }
 }
 

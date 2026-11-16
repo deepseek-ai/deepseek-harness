@@ -11,7 +11,8 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as systemPromptPlugin from '@deepseek-ai/dsh-system-prompt'
 import * as toolsPlugin from '@deepseek-ai/dsh-tools'
 import * as fsPlugin from '@deepseek-ai/dsh-fs-local'
@@ -19,7 +20,7 @@ import * as toolFsPlugin from '@deepseek-ai/dsh-tool-fs'
 import * as sessionPlugin from '@deepseek-ai/dsh-session'
 import * as sessionProjectionPlugin from '@deepseek-ai/dsh-session-projection'
 import * as workingDirectoryPlugin from '@deepseek-ai/dsh-working-directory'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import * as queryPlugin from '@deepseek-ai/dsh-session-query-sqlite'
 import * as referencePlugin from '@deepseek-ai/dsh-session-reference'
 import * as spillPlugin from '@deepseek-ai/dsh-spill-local'
@@ -71,11 +72,11 @@ describe('session-reference real Loader composition', () => {
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
     await ctx.loader.await()
 
-    const target = ctx.sessions.create(SessionId('reference-target'))
+    const target = ctx.sessions.create(brandString<SessionId>('reference-target'))
     const agent = { id: target.id, ctx, session: target } as Agent
     const direct = createUserMessage({
       content: [{ type: 'text', text: 'Use ' + referencePlugin.formatSessionReferenceMention({
-        sessionId: SessionId('reference-source'), label: 'Research',
+        sessionId: brandString<SessionId>('reference-source'), label: 'Research',
       }) }],
       source: { kind: 'user' },
     })
@@ -115,7 +116,7 @@ describe('session-reference real Loader composition', () => {
     let totalLines = Infinity
     for (let offset = 1; offset <= totalLines; offset += 7) {
       const read = await executeToolFixture(ctx, {
-        name: 'read', callId: ToolCallId(`read-${offset}`),
+        name: 'read', callId: brandString<ToolCallId>(`read-${offset}`),
         arguments: { file_path: notice.fullSnapshot.locator, offset, limit: 7 },
         signal: new AbortController().signal,
       })
@@ -139,10 +140,10 @@ describe('session-reference real Loader composition', () => {
     expect(await readdir(spillRoot)).toEqual([dirname(notice.fullSnapshot.locator).split(/[\\/]/).at(-1)])
 
     const captured = target.deriveMessages()
-    ctx.sessions.get(SessionId('reference-source'))!.append('user/message', createUserMessage({
+    ctx.sessions.get(brandString<SessionId>('reference-source'))!.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'LATER_SOURCE_MUTATION' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    expect(Session.create(SessionId('replayed-target'), target.snapshotEvents()).deriveMessages()).toEqual(captured)
+    expect(Session.create(brandString<SessionId>('replayed-target'), target.snapshotEvents()).deriveMessages()).toEqual(captured)
     expect(await readFile(notice.fullSnapshot.locator, 'utf8')).toBe(transcript)
   })
 })

@@ -28,7 +28,7 @@ Manage the current profile's plugins without editing configuration by hand. Enab
 <a id="use-this-package"></a>
 ## Use this package
 
-Base-backed profiles provide the manager. In Web, the sidebar's **Plugins** page ([ui-plugin-manager](../../client/ui-plugin-manager/README.md)) manages the profile's bundles and their uniquely addressable rows; the Settings Plugin list stays read-only. Agent-preset rows remain read-only. The `plugin_manager` tool exposes the same operations and is enabled in the Standard and Creator presets. Other Web presets keep it disabled by default. The full SDK profile enables it at profile scope in native/PTC mode; without HMR, saved changes return `restart-required` with `no-hmr` and apply after the runtime restarts. Every tool action requires `danger-full-access` or approval for that call. Under lower sandbox modes, `ask` requests approval; `never`, rejection, cancellation, or an unavailable approval channel prevents execution. An approval leaves the session permission mode unchanged. Profile changes persist across sessions, and installed Host code executes in-process outside the workspace sandbox. Dependency build-script approval remains separate.
+Base-backed profiles provide the manager. In Web, the sidebar's **Plugins** page ([ui-plugin-manager](../../client/ui-plugin-manager/README.md)) manages the profile's bundles and their uniquely addressable rows. Agent-preset rows remain read-only. The `plugin_manager` tool exposes the same operations and is enabled in the Standard and Creator presets. Other Web presets keep it disabled by default. The full SDK profile enables it at profile scope in native/PTC mode; without HMR, saved changes return `restart-required` with `no-hmr` and apply after the runtime restarts. Every tool action requires `danger-full-access` or approval for that call. Under lower sandbox modes, `ask` requests approval; `never`, rejection, cancellation, or an unavailable approval channel prevents execution. An approval leaves the session permission mode unchanged. Profile changes persist across sessions, and installed Host code executes in-process outside the workspace sandbox. Dependency build-script approval remains separate.
 
 For a deployment without agent presets other than the full SDK profile, enable the tool in the profile patch. Package installation/removal requires pnpm on `PATH` or an explicit `pnpmCommand`; a launcher-provided package manager takes precedence. Preset-backed sessions use their preset’s `tool-plugin-manager` entry.
 
@@ -143,7 +143,6 @@ The `@deepseek-ai/dsh-plugin-manager/diagnostic` entry supplies Desktop Host and
 - [App boot](../app-boot/README.md) — profile layers and startup policy.
 - [Plugin inventory](../../host/plugin-inventory/README.md) — current Loader and preset observations.
 - [Plugin manager page](../../client/ui-plugin-manager/README.md) — the Web sidebar page over this service.
-- [Plugin settings](../../client/ui-settings-plugin-inventory/README.md) — the read-only Web inventory.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -152,7 +151,7 @@ The `@deepseek-ai/dsh-plugin-manager/diagnostic` entry supplies Desktop Host and
 
 #### What the model sees
 
-The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents.
+The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents. A missing or unbounded argument fails as `ToolArgsError` with `INVALID_ARGS`. A failure before a change starts or while reading the profile throws `PluginManagerError`: `PLUGIN_MANAGER_PROFILE_READ_FAILED` when a profile or installation manifest or the profile patches cannot be read, and `PLUGIN_MANAGER_UNAVAILABLE` after the manager is disposed; another writer holding the profile lock past `lockWaitMs` fails with the atomic-write `FileLockError` `FILE_LOCK_TIMEOUT`; other operation failures stay in the change result.
 
 #### Token effect
 
@@ -178,7 +177,7 @@ Tool results append to the transcript. Enabling or disabling other tools can cha
 - Startup-only profiles cannot remove packages used to start the current process; stop it and use `dsh plugin`.
 - The manager cannot disable its own management components, change another profile, or edit an agent preset's composition.
 - A failed removal may leave dependencies partially changed, and a failed or cancelled installation can leave downloaded files under `node_modules` or the pnpm store. Inactive dependencies with missing files remain removable. Diagnostic logs remain under the profile's `.plugin-manager/logs` directory.
-- Management results describe Host activation. Browser synchronization failures appear separately in the Settings plugin list.
+- Management results describe Host activation. Browser synchronization failures appear separately in the Plugins page's synchronization notice.
 - Desktop package operations remain owned by the Desktop shell.
 
 <a id="failure-behavior"></a>

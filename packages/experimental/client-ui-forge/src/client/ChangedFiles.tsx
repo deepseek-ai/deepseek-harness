@@ -5,7 +5,7 @@ import { FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, In
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
-import { changedFileTree, filesInTreeOrder, filterFileTree, type ChangedFileNode } from './file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree, viewedNodes, type ChangedFileNode } from './file-tree.ts'
 import type { NS } from './locales.ts'
 import css from './ChangedFiles.module.css'
 
@@ -27,11 +27,17 @@ export interface ChangedFilesProps extends PropsLocale<typeof NS> {
   readonly menu?: boolean
   /** Unresolved host review threads by file path; files without any are absent. */
   readonly threadCounts?: ReadonlyMap<string, number>
+  /** Paths of the files marked viewed at their current change, which draw subdued with any directory they fill. */
+  readonly viewed?: ReadonlySet<string>
 }
 
-function Rows({ nodes, depth, props }: {
+const NONE_VIEWED: ReadonlySet<string> = new Set()
+
+function Rows({ nodes, depth, done, props }: {
   readonly nodes: readonly ChangedFileNode[]
   readonly depth: number
+  /** Paths of the viewed files and of the directories whose files are all viewed. */
+  readonly done: ReadonlySet<string>
   readonly props: ChangedFilesProps
 }): ReactNode {
   const { state, toggle, jump, menu, threadCounts, t } = props
@@ -41,10 +47,13 @@ function Rows({ nodes, depth, props }: {
     const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
     const label = node.kind === 'file' && node.file.previousPath !== null
       ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : node.path
+    const viewed = done.has(node.path)
     return <div key={node.path}>
       <Tooltip label={label} portal side="left">
-        <button type="button" role={menu ? 'menuitem' : undefined} className={clsx(css.row, !directory && state.selected === node.path && css.selected)}
+        <button type="button" role={menu ? 'menuitem' : undefined}
+          className={clsx(css.row, !directory && state.selected === node.path && css.selected, viewed && css.viewed)}
           style={{ paddingInlineStart: `${8 + depth * 14}px` }} aria-label={label} aria-expanded={directory ? expanded : undefined}
+          aria-description={viewed ? t(directory ? 'viewed.directory' : 'viewed.label') : undefined} data-viewed={viewed ? '' : undefined}
           aria-current={!directory && state.selected === node.path ? 'true' : undefined}
           onKeyDown={(event) => {
             if (!directory || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return
@@ -61,7 +70,7 @@ function Rows({ nodes, depth, props }: {
           {node.kind === 'file' && <Counts file={node.file} t={t} />}
         </button>
       </Tooltip>
-      {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} props={props} />}
+      {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} done={done} props={props} />}
     </div>
   })
 }
@@ -92,6 +101,7 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
   const tree = useMemo(() => changedFileTree(props.files), [props.files])
   const nodes = useMemo(() => filterFileTree(tree, props.state.query), [tree, props.state.query])
   const order = useMemo(() => filesInTreeOrder(tree), [tree])
+  const done = useMemo(() => viewedNodes(tree, props.viewed ?? NONE_VIEWED), [tree, props.viewed])
   const selectedIndex = order.findIndex(file => file.path === props.state.selected)
   const rows = useRef<HTMLDivElement>(null)
   const query = useRef(props.state.query)
@@ -121,7 +131,7 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
       value={props.state.query} onChange={(event) => { props.filter(event.target.value) }}
       onKeyDown={(event) => { if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation() }} /></div>
     <div ref={rows} className={css.rows}>
-      {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} props={props} />}
+      {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} done={done} props={props} />}
     </div>
   </div>
 }
