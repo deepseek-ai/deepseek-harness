@@ -718,4 +718,54 @@ describe('lifecycle', () => {
     await remounted.dispose()
     await ctx.fiber.dispose()
   })
+
+  it('settles ready and unblocks in-flight handle calls even when domain.close() throws during startup failure', async () => {
+    const base = await boot({ withoutStart: true })
+    const ctx = base.ctx
+    ctx.provide('im', { sessions: { forChat: () => [] } })
+    ctx.provide('commands', { list: () => [] })
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+
+    const realOpen = ctx.storageDomain.open.bind(ctx.storageDomain)
+    let releasePrune!: () => void
+    const pruneGate = new Promise<void>((resolve) => { releasePrune = resolve })
+    let enteredPrune!: () => void
+    const pruneEntered = new Promise<void>((resolve) => { enteredPrune = resolve })
+    vi.spyOn(ctx.storageDomain, 'open').mockImplementation(async (spec) => {
+      const domain = await realOpen(spec)
+      vi.spyOn(domain, 'table').mockImplementation(() => ({
+        entries: () => {
+          enteredPrune()
+          throw new Error('corrupt receipts table')
+        },
+        delete: async () => {
+          await pruneGate
+        },
+      }) as never)
+      vi.spyOn(domain, 'close').mockRejectedValue(new Error('close failed'))
+      return domain
+    })
+
+    const sub = ctx.plugin(sessionCommandsPlugin, Config({}))
+    await pruneEntered
+    const earlyEvent = {
+      message: {
+        key: ImMessageKey('fake:bot', 'early-close-err'),
+        addressed: true,
+        command: { name: 'help', args: '' },
+      },
+      reply: async () => ({ status: 'confirmed' }),
+    } as never
+    const earlyDispatch = ctx.waterfall('im/message', earlyEvent, async () => ({ kind: 'ignored' }))
+    releasePrune()
+
+    await expect(sub).rejects.toThrow(/corrupt receipts table/)
+    await expect(earlyDispatch).rejects.toThrow(/corrupt receipts table/)
+    expect(warn).toHaveBeenCalledWith(
+      'Failed to close IM session-commands domain after startup failure: %s',
+      expect.stringContaining('close failed'),
+    )
+    warn.mockRestore()
+    await ctx.fiber.dispose()
+  })
 })

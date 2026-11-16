@@ -116,8 +116,12 @@ export class SessionCommands {
     } catch (error) {
       const domain = this.domain
       this.domain = undefined
-      await domain?.close()
       this.failReady(error)
+      try {
+        await domain?.close()
+      } catch (closeError) {
+        this.ctx.logger.warn('Failed to close IM session-commands domain after startup failure: %s', String(closeError))
+      }
       throw error
     }
   }
