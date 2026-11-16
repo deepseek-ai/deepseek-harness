@@ -3,6 +3,7 @@ import { mkdir, open, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { crc32, deflateSync } from 'node:zlib'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -37,6 +38,31 @@ const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 )
+const STACKED_ALTS = ['Stacked page 1', 'Stacked page 2']
+
+/** Encode one opaque gray RGB PNG wide enough that consecutive images stack. */
+function grayPng(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
+    const frame = Buffer.alloc(body.length + 8)
+    frame.writeUInt32BE(data.length, 0)
+    body.copy(frame, 4)
+    frame.writeUInt32BE(crc32(body), body.length + 4)
+    return frame
+  }
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header.set([8, 2, 0, 0, 0], 8)
+  const row = Buffer.alloc(1 + width * 3, 0xb0)
+  row[0] = 0
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
 
 interface ImageOrigin {
   server: Server
@@ -129,6 +155,8 @@ function markdownImageFixture(remoteUrl: string, outsidePath: string): string {
           '',
           '![]({{cwd}}/corrupt.png)',
           '',
+          ...STACKED_ALTS.map(alt => `![${alt}]({{cwd}}/page.png)`),
+          '',
           'REMOTE_IMAGE_DONE',
         ].join('\n'),
       }],
@@ -178,6 +206,7 @@ describe('web e2e: Markdown image rendering', () => {
     await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试图.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'corrupt.png'), 'invalid image')
+    await writeFile(join(scaffold.workspaceCwd, 'page.png'), grayPng(640, 120))
     const oversized = await open(join(scaffold.workspaceCwd, 'oversized.png'), 'w')
     try {
       // One byte over attachment-local's default maxImageBytes (50 MiB), which also bounds /api/file.
@@ -284,7 +313,16 @@ describe('web e2e: Markdown image rendering', () => {
       [join(scaffold.persistenceRoot, 'outside.png'), 200],
       [join(scaffold.workspaceCwd, 'missing.png'), 404],
       [join(scaffold.workspaceCwd, 'corrupt.png'), 200],
+      [join(scaffold.workspaceCwd, 'page.png'), 200],
     ]))
+    // Images on consecutive source lines share one paragraph; their rows keep the paragraph gap.
+    const stacked = STACKED_ALTS.map(name => page.getByRole('img', { name, exact: true }))
+    for (const image of stacked) {
+      await image.scrollIntoViewIfNeeded()
+      await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(640)
+    }
+    const [first, second] = await Promise.all(stacked.map(image => image.boundingBox()))
+    expect(second!.y - (first!.y + first!.height)).toBeCloseTo(16, 0)
 
     await page.getByRole('button', { name: `View full image: ${WORKSPACE_ALT}`, exact: true }).click()
     const lightbox = page.getByRole('dialog', { name: 'Image preview', exact: true })
