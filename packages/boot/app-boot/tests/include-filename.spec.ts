@@ -13,5 +13,6 @@ describe('includeFilename', () => {
     expect(includeFilename('file:///etc/extra.yml', 'file:///app/', 'linux')).toBe('/etc/extra.yml')
     // Off Windows, Include reads `C:` as a URL scheme too.
     expect(() => includeFilename('C:/config/extra.yml', 'file:///app/', 'linux')).toThrow()
+    expect(includeFilename('./extra.yml', 'file:///D:/app/cordis.yml', 'win32')).toBe('D:\\app\\extra.yml')
   })
 })
