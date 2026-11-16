@@ -1,5 +1,5 @@
 ---
-description: "Browser half of optional action cards: the card frame below completed answers, the body registry that experiment packages fill, the layer for the action-card blocks that offer them, and the process row of older propose_action calls."
+description: "Browser half of optional action cards: the card frame below completed answers, the body registry that experiment packages fill, and the layer that hides the action-card blocks offering them."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. The answer's `action-card` block that offers the card stays hidden unless its content is not JSON. In Sessions recorded before cards moved into answers, the process area shows the proposal as one row with the card title and whether the call was accepted; a refused call expands to its reason. A card whose experiment provides no controls in this browser offers only Not now. Showing, expanding and folding cards make no model request.
+Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. The answer's `action-card` block that offers the card is never shown. A card whose experiment provides no controls in this browser offers only Not now. Showing, expanding and folding cards make no model request.
 
 ## Table of Contents
 
@@ -41,15 +41,14 @@ A kind's browser plugin injects `actionCards` and registers its body inside its 
 
 One `conversation.chat.turnTail` entry reads the `actionCards` Session projection and shows the card admitted in its Turn after that Turn has ended with a final answer; a Turn that ends without answer text shows no card, and should several cards share a Turn, the lowest card id is shown. The frame sets `data-action-card` to the card id and names its region by the card title. Folding counts a wide grapheme, such as a Chinese character, as two Latin-letter widths and folds after about 260; it never measures layout or alters the full text.
 
-A `conversation.chat.markdown.fence` layer keyed `action-card` renders nothing while the answer streams and once the block's content parses as JSON, so such blocks stay hidden wherever the Chat flow renders Markdown: in answers, reasoning and compaction summaries, including blocks the Host does not admit. A settled block whose content is not JSON offers no card and renders as plain code. A `tool.call.toolview` entry keyed `propose_action` renders the process row of older Sessions' calls from the recorded call arguments and result. The plugin provides the body registry at its top level, then mounts the generated `actionCards` Remote and registers its dictionaries and slot entries for the same lifetime.
+A `conversation.chat.markdown.fence` layer keyed `action-card` renders nothing, so these blocks stay hidden wherever the Chat flow renders Markdown: in answers, reasoning and compaction summaries, including blocks the Host does not admit. The plugin provides the body registry at its top level, then mounts the generated `actionCards` Remote and registers its dictionaries and slot entries for the same lifetime.
 
 | Source | Contents |
 |---|---|
 | [`src/client/mount.ts`](src/client/mount.ts) | Registry, Remote, dictionaries and slot entries |
 | [`src/client/Card.tsx`](src/client/Card.tsx) | Turn tail, frame, fold, fallback body and block layer |
-| [`src/client/ProposeRow.tsx`](src/client/ProposeRow.tsx) | Process row of older Sessions' calls |
 | [`src/client/registry.ts`](src/client/registry.ts) | Body registry and body props |
-| [`tests/`](tests/) | Placement, frame, fallback, block, row and registration tests |
+| [`tests/`](tests/) | Placement, frame, fallback, block and registration tests |
 
 </details>
 
@@ -60,7 +59,7 @@ A `conversation.chat.markdown.fence` layer keyed `action-card` renders nothing w
 
 - [Action cards](../action-cards/README.md) — the card blocks, card state and user actions behind the frame.
 - [Personalized page cards](../client-ui-creation-recommendations/README.md) and [recommendation cards](../client-ui-plugin-recommendations/README.md) — the shipped card bodies.
-- [Slots](../../client/ui-slots/README.md) — Turn tail, Markdown fence layer and tool row registration.
+- [Slots](../../client/ui-slots/README.md) — Turn tail and Markdown fence layer registration.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -69,7 +68,7 @@ Indirectly, through the Host card service: card actions reach it as Remote calls
 
 #### KV Cache effect
 
-Rendering cards, their blocks and process rows does not change any model request.
+Rendering cards and hiding their blocks does not change any model request.
 
 ## Known Limitations and Deferred Work
 

@@ -49,7 +49,7 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 延伸阅读
 - [推荐服务](../plugin-recommendations/README.zh.md) — 推荐范围、启用和决定。
-- [操作卡片显示](../client-ui-action-cards/README.zh.md) — 框架、种类正文和过程行。
+- [操作卡片显示](../client-ui-action-cards/README.zh.md) — 框架和种类正文。
 
 <a id="model-experience"></a>
 ## 模型体验

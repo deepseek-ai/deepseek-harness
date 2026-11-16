@@ -50,7 +50,7 @@ Cards use the application font, a distinct title and compact body scale, and a s
 ## Further Exploration
 
 - [Recommendation service](../plugin-recommendations/README.md) — eligibility, enabling and decisions.
-- [Action card display](../client-ui-action-cards/README.md) — the frame, kind bodies and the process row.
+- [Action card display](../client-ui-action-cards/README.md) — the frame and kind bodies.
 
 <a id="model-experience"></a>
 ## Model Experience

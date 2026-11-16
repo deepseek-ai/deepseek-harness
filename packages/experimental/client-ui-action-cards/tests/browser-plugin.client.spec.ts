@@ -9,8 +9,7 @@ import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountActionCards, inject } from '../src/client/mount.ts'
 import { apply as hostApply } from '../src/index.ts'
-import { CardBlock, type TailInjected } from '../src/client/Card.tsx'
-import { ProposeRow } from '../src/client/ProposeRow.tsx'
+import { HiddenCardBlock, type TailInjected } from '../src/client/Card.tsx'
 
 const apply = (ctx: Context) => mountActionCards(ctx, { package: '@deepseek-ai/dsh-action-cards', descriptors: [] })
 const Body = () => null
@@ -24,7 +23,6 @@ it('binds actions to the displayed session, serves registered bodies and removes
   slots.register({ name: 'root', children: {
     'conversation.chat.turnTail': { kind: 'list', scope: 'session' },
     'conversation.chat.markdown.fence': { kind: 'hoc', scope: 'session' },
-    'tool.call.toolview': { kind: 'keyed', scope: 'session' },
   } }, (_props: { renderSlot?: unknown }) => null)
   const act = vi.fn().mockResolvedValue({ ok: true, value: { status: 'accepted' } })
   const unmount = vi.fn(async () => {})
@@ -34,8 +32,9 @@ it('binds actions to the displayed session, serves registered bodies and removes
   ctx.provide('locale', locale)
   const fiber = await ctx.plugin({ inject, apply })
   const entry = slots.entries('conversation.chat.turnTail')[0]!
-  expect(slots.entries('conversation.chat.markdown.fence').map(item => [item.options.key, item.component])).toEqual([['action-card', CardBlock]])
-  expect(slots.entries('tool.call.toolview').map(item => [item.options.key, item.component])).toEqual([['propose_action', ProposeRow]])
+  expect(slots.entries('conversation.chat.markdown.fence').map(item => [item.options.key, item.component]))
+    .toEqual([['action-card', HiddenCardBlock]])
+  expect(HiddenCardBlock()).toBeNull()
   const resolve = entry.inject as NonNullable<typeof entry.inject> & ((sessionId: SessionId) => TailInjected)
   const bound = resolve(brandString<SessionId>('session-one'))
   expect(bound.sessionId).toBe('session-one')
@@ -69,7 +68,6 @@ it('binds actions to the displayed session, serves registered bodies and removes
   expect(unmount).toHaveBeenCalledOnce()
   expect(slots.entries('conversation.chat.turnTail')).toHaveLength(0)
   expect(slots.entries('conversation.chat.markdown.fence')).toHaveLength(0)
-  expect(slots.entries('tool.call.toolview')).toHaveLength(0)
   expect(ctx.get('actionCards')).toBeUndefined()
   vi.spyOn(locale, 'register').mockImplementation(() => { throw new Error('registration failed') })
   const failed = ctx.plugin({ inject, apply })

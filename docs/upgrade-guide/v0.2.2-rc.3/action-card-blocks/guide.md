@@ -17,7 +17,7 @@ For plugins that register a card kind or call the service:
 - `ActionCardProposal`, `ActionCardDecision`, `ctx.actionCards.act()` and the `actionCards` Remote name cards by `cardId` (type `ActionCardId`) instead of `callId`, and new `plugin:action-cards/decision` records carry `cardId`.
 - The package no longer exports `Config` or `ActionCardError`.
 
-Sessions recorded with `propose_action` keep their cards and decisions. This affects users who changed `queuedMessageLimit` and plugins that register card kinds; the shipped bundle needs no change.
+Sessions recorded with `propose_action` no longer show those cards: the calls appear as ordinary tool rows, and their decisions are not read. This affects users with such Sessions, users who changed `queuedMessageLimit` and plugins that register card kinds; the shipped bundle needs no change.
 
 ## Migration
 

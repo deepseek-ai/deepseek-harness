@@ -6,7 +6,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
 import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { ActionCardDecision, ActionCardResult, ActionCardView } from '@deepseek-ai/dsh-action-cards/types'
-import { ActionCard, ActionCardTail, CardBlock, FoldedText } from '../src/client/Card.tsx'
+import { ActionCard, ActionCardTail, FoldedText } from '../src/client/Card.tsx'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en, zh } from '../src/client/locales.ts'
 import type { ActionCardBodyProps, RegisteredBody } from '../src/client/registry.ts'
@@ -139,17 +139,4 @@ it('only offers expansion for omitted text and preserves the full brief without 
   view.rerender(<FoldedText text={prefix} expandLabel={zh.expandBrief} collapseLabel={zh.collapseBrief} />)
   expect(screen.queryByRole('button', { name: zh.expandBrief })).toBeNull()
   expect(paragraph.textContent).toBe(prefix)
-})
-
-it('hides an action-card block while the answer streams and once it parses, and shows a settled block that is not JSON', () => {
-  type BlockProps = ComponentProps<typeof CardBlock>
-  const block = (code: string, streaming: boolean) =>
-    render(<CardBlock {...{ lang: 'action-card', code, streaming } as BlockProps}><pre data-testid="code" /></CardBlock>)
-  for (const [code, streaming] of [['{"action":"a"}', false], ['{"act', true]] as const) {
-    block(code, streaming)
-    expect(screen.queryByTestId('code')).toBeNull()
-    cleanup()
-  }
-  block('{"act', false)
-  expect(screen.getByTestId('code')).toBeTruthy()
 })

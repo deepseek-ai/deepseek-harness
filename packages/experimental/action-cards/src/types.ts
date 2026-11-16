@@ -8,16 +8,13 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 /** Kind-defined JSON fields of a proposal or decision; each kind validates its own fields. */
 export type ActionCardFields = Readonly<Record<string, JsonValue>>
 
-/**
- * Id of one card in its Session: the id of the assistant message whose answer holds the card's block, or, for a card
- * that a `propose_action` call offered in an older Session, the id of that call.
- */
+/** Id of one card in its Session: the id of the assistant message whose answer holds the card's block. */
 export type ActionCardId = Branded<'ActionCardId'>
 
 /** Language of the fenced answer block that offers a card. The Host reads cards from these blocks and the Web client hides them. */
 export type ActionCardFence = 'action-card'
 
-/** One card admitted from an `action-card` block, or from a successful `propose_action` call in an older Session. */
+/** One card admitted from an `action-card` block. */
 export interface ActionCardProposal {
   readonly cardId: ActionCardId
   /** Turn whose answer the card follows. */
@@ -74,8 +71,8 @@ declare module '@deepseek-ai/dsh-llm' {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
-    /** Dismissals and kind-defined progress of action cards. Records written before cards moved into answers name the card `callId`. */
-    'plugin:action-cards/decision': ActionCardDecision | (Omit<ActionCardDecision, 'cardId'> & { readonly callId: ActionCardId })
+    /** Dismissals and kind-defined progress of action cards. */
+    'plugin:action-cards/decision': ActionCardDecision
   }
 }
 

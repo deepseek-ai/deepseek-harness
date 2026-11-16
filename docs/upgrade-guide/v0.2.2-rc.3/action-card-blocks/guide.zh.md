@@ -17,7 +17,7 @@ description: "个性化推荐的卡片改由回答里的 action-card 代码块�
 - `ActionCardProposal`、`ActionCardDecision`、`ctx.actionCards.act()` 与 `actionCards` Remote 用 `cardId`（类型 `ActionCardId`）指代卡片，不再用 `callId`；新写入的 `plugin:action-cards/decision` 记录带 `cardId`。
 - 本包不再导出 `Config` 与 `ActionCardError`。
 
-用 `propose_action` 录下的会话，卡片和决定照常保留。受影响的是改过 `queuedMessageLimit` 的用户和注册卡片种类的插件；随产品提供的 Bundle 无需改动。
+用 `propose_action` 录下的会话不再显示这些卡片：这些调用显示为普通工具行，其决定也不再读取。受影响的是有这类会话的用户、改过 `queuedMessageLimit` 的用户和注册卡片种类的插件；随产品提供的 Bundle 无需改动。
 
 ## 迁移
 

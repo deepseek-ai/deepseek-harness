@@ -52,16 +52,10 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
-    "@deepseek-ai/dsh-util-values": "workspace:*",
-    "@types/mdast": "^4.0.4"
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "mdast-util-from-markdown": "^2.1.0",
-    "mdast-util-gfm": "^3.1.0",
-    "mdast-util-math": "^3.0.0",
-    "micromark-extension-gfm": "^3.0.0",
-    "micromark-extension-math": "^3.1.0",
     "zod": "4.6.6"
   },
   "files": [

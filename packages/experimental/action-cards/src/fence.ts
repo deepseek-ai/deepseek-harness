@@ -1,41 +1,59 @@
-/** Find the `action-card` blocks of answer text with the Markdown grammar the Chat client renders settled answers with. */
-import type { Nodes } from 'mdast'
-import { fromMarkdown } from 'mdast-util-from-markdown'
-import { gfmFromMarkdown } from 'mdast-util-gfm'
-import { mathFromMarkdown } from 'mdast-util-math'
-import { gfm } from 'micromark-extension-gfm'
-import { math } from 'micromark-extension-math'
+/** Find the fenced blocks of answer text that offer action cards. */
 import type { ActionCardFence } from './types.ts'
 
-/** Language of a block that offers a card, compared as the Chat client dispatches fences. */
+/** Language of a block that offers a card, matched after lowercasing, as the Chat client dispatches fences. */
 export const ACTION_CARD_FENCE: ActionCardFence = 'action-card'
 
-/**
- * Three backticks or tildes, then spaces or tabs, then a first info-string character that can decode to the card
- * language: `a`, `A`, or the `&` of a character reference. Text without this opening holds no card block.
- */
-const CARD_FENCE_OPENING = /(?:`{3}|~{3})[\t ]*[a&]/iu
+const OPENING = /^( {0,3})(`{3,}|~{3,})(.*)$/u
 
-/** Append, in document order, the content of every non-empty code block at any depth whose language is the card language. */
-function collect(node: Nodes, found: string[]): string[] {
-  const language = /^[\w-]+/u.exec(node.type === 'code' ? node.lang ?? '' : '')?.[0].toLowerCase()
-  if (node.type === 'code' && node.value !== '' && language === ACTION_CARD_FENCE) found.push(node.value)
-  if ('children' in node) for (const child of node.children) collect(child, found)
-  return found
+/** An open fence: its closing line, its content indentation and, for a card block, the content read so far. */
+interface OpenFence {
+  readonly closing: RegExp
+  readonly outdent: RegExp
+  readonly content: string[] | undefined
+}
+
+/** Lowercased leading letters, digits, `_` and `-` of an info string's first word. */
+function languageOf(info: string): string {
+  return info.trim().replace(/[^\w-][\s\S]*$/u, '').toLowerCase()
+}
+
+/** The fence a line opens, or undefined when the line opens none. */
+function opened(line: string): OpenFence | undefined {
+  const opening = OPENING.exec(line)
+  if (opening === null) return undefined
+  const indent = String(opening[1])
+  const marker = String(opening[2])
+  const info = String(opening[3])
+  if (marker.startsWith('`') && info.includes('`')) return undefined
+  return {
+    closing: new RegExp(`^ {0,3}${marker.charAt(0)}{${String(marker.length)},}[ \\t]*$`, 'u'),
+    outdent: new RegExp(`^ {0,${String(indent.length)}}`, 'u'),
+    content: languageOf(info) === ACTION_CARD_FENCE ? [] : undefined,
+  }
 }
 
 /**
- * Contents of the fenced code blocks whose language is {@link ACTION_CARD_FENCE}, at any depth and in text order.
- * The text is parsed with the GFM and math grammar of the Chat client's settled answers, so a block counts exactly when
- * the client dispatches it to the card language: the leading letters, digits, `_` and `-` of the info string's first
- * word after escapes and character references are decoded, compared case-insensitively. An empty block offers nothing.
+ * Contents of the top-level fenced code blocks whose language is {@link ACTION_CARD_FENCE}, in text order.
+ * A fence opens with at least three backticks or tildes indented by at most three spaces, and closes at a line of the
+ * same character at least as long, or at the end of the text; content lines lose up to the opening's indentation.
+ * Fences inside lists or block quotes are not read.
  * @param text - one text block of an assistant message.
  * @returns the blocks' contents.
  */
 export function actionCardFences(text: string): string[] {
-  if (!CARD_FENCE_OPENING.test(text)) return []
-  return collect(fromMarkdown(text, {
-    extensions: [gfm({ singleTilde: false }), math()],
-    mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
-  }), [])
+  const found: string[] = []
+  let fence: OpenFence | undefined
+  for (const line of text.split(/\r?\n/u)) {
+    if (fence === undefined) {
+      fence = opened(line)
+    } else if (fence.closing.test(line)) {
+      if (fence.content !== undefined) found.push(fence.content.join('\n'))
+      fence = undefined
+    } else {
+      fence.content?.push(line.replace(fence.outdent, ''))
+    }
+  }
+  if (fence?.content !== undefined) found.push(fence.content.join('\n'))
+  return found
 }
