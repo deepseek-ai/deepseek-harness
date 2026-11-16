@@ -6,7 +6,8 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { ScheduleRuntime } from '../src/runtime.ts'
 import { MAX_TIMER_DELAY_MS, TimeSource } from '../src/time-source.ts'
-import { SourceInput } from '../src/source-protocol.ts'
+import { SourceInput, SourceOutput } from '../src/source-protocol.ts'
+import { SourceError } from '../src/source-error.ts'
 import {
   createAfterScheduleRecord,
   createAtScheduleRecord,
@@ -63,6 +64,77 @@ function delivered(rule: ScheduleRecord, status: ScheduleTask['status'], deliver
     },
   })
 }
+
+it.each(['closed', 'other-code', 'foreign'] as const)('contains only typed time-admission shutdown (%s)', async (kind) => {
+  const test = await setup([])
+  await vi.advanceTimersByTimeAsync(0)
+  const failure = kind === 'closed' ? new SourceError('Schedule has stopped', 'SOURCE_CLOSED')
+    : kind === 'other-code' ? new SourceError('Task is busy', 'SOURCE_TASK_BUSY')
+      : new Error('Foreign transaction failure')
+  const transaction = vi.fn(async <T>(_work: () => Promise<T>): Promise<T> => { throw failure })
+  const scan = vi.fn(() => [])
+  const runtime = new ScheduleRuntime(test.ctx, scan, transaction, async () => {}, () => {}, LIMITS,
+    test.resolveAgent, () => test.ctx.get('sessionController'))
+  runtimes.push(runtime)
+  const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+  const reportFailure = vi.fn<(error: unknown) => void>()
+  const clock = new TimeSource(reportFailure)
+  beforeDispose.push(async () => { await clock.dispose() })
+  runtime.connect(clock.output)
+  runtime.requestDrive()
+  await vi.advanceTimersByTimeAsync(0)
+  clock.request()
+  await vi.advanceTimersByTimeAsync(0)
+  await clock.dispose()
+  await runtime.dispose()
+  expect(scan).not.toHaveBeenCalled()
+  expect(transaction).toHaveBeenCalledTimes(2)
+  if (kind === 'closed') {
+    expect(warning).not.toHaveBeenCalled()
+    expect(reportFailure).not.toHaveBeenCalled()
+  } else {
+    expect(warning).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('schedule: dispatch stopped'))
+    expect(reportFailure).toHaveBeenCalledOnce()
+    const reported = reportFailure.mock.calls[0]![0]
+    expect(reported).toBeInstanceOf(SourceError)
+    if (!(reported instanceof SourceError) || !(reported.cause instanceof AggregateError)) {
+      throw new Error('Time delivery did not preserve an aggregate failure')
+    }
+    expect(reported.code).toBe('SOURCE_DELIVERY_FAILED')
+    expect(reported.cause.errors).toHaveLength(1)
+    expect(reported.cause.errors[0]).toBe(failure)
+  }
+})
+
+it('returns typed closure when runtime shutdown interrupts target resolution', async () => {
+  const record = createAfterScheduleRecord(brandString<ScheduleId>('closing-target'), 'Target', 3600, Date.now(), 'Target')
+  const test = await setup([task(record)])
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const output = new SourceOutput<{ text: string }>()
+  const connection = test.runtime.input(record.id).connect(output)
+  const pending: Promise<void>[] = []
+  beforeDispose.push(async () => {
+    release.resolve(undefined)
+    await Promise.allSettled([...pending, output.dispose()])
+  })
+  test.resolve.mockImplementationOnce(async () => {
+    entered.resolve(undefined)
+    await release.promise
+    return { agent: test.agent }
+  })
+  const sending = connection.send({ text: 'Accepted before target resolution finished' })
+  pending.push(sending)
+  const rejected = expect(sending).rejects.toMatchObject({ name: 'SourceError', code: 'SOURCE_CLOSED' })
+  await entered.promise
+  const closing = test.runtime.dispose()
+  pending.push(closing)
+  release.resolve(undefined)
+  await rejected
+  await closing
+  expect(test.followup).not.toHaveBeenCalled()
+  expect(test.commit).not.toHaveBeenCalled()
+})
 
 it('appends after stored history in arrival order and keeps the change time monotonic through wall-clock rollback', async () => {
   const previous = {

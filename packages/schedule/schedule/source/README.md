@@ -64,7 +64,7 @@ A directed send preserves the receiver's rejection. Broadcast waits for every re
 
 A composing plugin declares a `schedule` dependency and uses `ctx.schedule.input(taskId).connect(source.output)` for output containing `AutomationCandidate.text`. Schedule owns the returned `SourceInput<AutomationCandidate>` in the caller's context and closes it when its runtime stops. Each connection is an ordinary `AutomationConnection<AutomationCandidate>` with `send()` and `dispose()`; repeated disposal joins accepted work. The [Schedule package](../README.md#source-delivery) owns task admission, persistence acknowledgement, and message framing.
 
-`input(taskId)` requires a ready, running Schedule service; otherwise it throws `SOURCE_TASK_RECEIVER_UNAVAILABLE`. A stopped runtime closes its inputs and connections without rebinding them. Sending through a closed connection rejects with `SOURCE_CONNECTION_CLOSED`; broadcasting from an otherwise open output with no remaining connections produces no delivery. Reconnect to a new input after the replacement service becomes ready.
+`input(taskId)` requires a ready, running Schedule service; otherwise it throws `SOURCE_TASK_RECEIVER_UNAVAILABLE`. A callback reaching the service after its mutation FIFO stops admitting work rejects with `SOURCE_CLOSED`; previously admitted FIFO work still finishes. A stopped runtime closes its inputs and connections without rebinding them. Sending through a closed connection rejects with `SOURCE_CONNECTION_CLOSED`; broadcasting from an otherwise open output with no remaining connections produces no delivery. Reconnect to a new input after the replacement service becomes ready.
 
 ### Time input
 
@@ -82,7 +82,7 @@ The Schedule runtime uses `runtime.connect(time.output)`, backed by `SourceInput
 
 ### Cleanup ownership
 
-Input and output endpoints track accepted calls even after a connection detaches. Closing either endpoint rejects new connections and closes its existing connections; closing a connection rejects new sends. Repeated disposal joins the same drain. `AutomationSource.dispose()` closes and drains its owned inputs while output remains usable, then closes and drains output. Subclasses stop external producers before calling it. Borrowed upstream Sources remain owned by their creators.
+Input and output endpoints track accepted calls even after a connection detaches. Closing either endpoint rejects new connections and closes its existing connections; closing a connection rejects new sends. Repeated disposal joins the same drain. An individually disposed input remains owned by its Source until its drain succeeds; the Source then releases that input without closing other inputs or output. With no owned inputs remaining, Source disposal closes output admission immediately. `AutomationSource.dispose()` closes and drains its owned inputs while output remains usable, then closes and drains output. Subclasses stop external producers before calling it. Borrowed upstream Sources remain owned by their creators.
 
 A receiver must not await its own connection, input, Source, or current emitter's disposal from inside an accepted call: that cleanup waits for the call to return. Connection and endpoint disposal wait for settlement; delivery errors belong to the original send or broadcast.
 

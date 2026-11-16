@@ -7,7 +7,7 @@ import type { AutomationCandidate } from '../src/source-types.ts'
 import { AutomationSource } from '../src/source.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
-import ScheduleService, { SourceInput, type AutomationConnection } from '../src/index.ts'
+import ScheduleService, { SourceError, SourceInput, type AutomationConnection } from '../src/index.ts'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
 import {
   agentFor, boundTask, gatedScheduleBackend, harness, seededTask, seedTasks, taskTable, type HarnessAgent,
@@ -863,6 +863,108 @@ it('finishes source deliveries already queued behind another delivery before sto
     await firstWork
     await secondWork
     await closing
+  }
+})
+
+it.each([false, true])('retires the native controller child after accepted work even when domain close rejects (%s)', async (fails) => {
+  const fibers: Fiber[] = []
+  const test = await setup(stored(), {
+    sessionController: false,
+    onContext: (ctx) => { ctx.on('internal/plugin', (fiber) => { fibers.push(fiber) }) },
+  })
+  const child = fibers.find(fiber => fiber.parent.fiber === test.fiber && Object.hasOwn(fiber.inject, 'sessionController'))
+  if (child === undefined || child.runtime === null) throw new Error('Schedule did not own its controller child')
+  const callback = child.runtime.callback
+  const nativeDispose = child.dispose
+  const provider = await test.ctx.plugin({
+    apply(ctx: Context) { ctx.provide('sessionController', { resolveAgent: test.resolve, create: test.createSession } as never) },
+  })
+  await child.await()
+  const retired = vi.fn<() => void>()
+  child.context.effect(() => retired)
+  const reported = vi.spyOn(test.fiber.ctx.logger, 'error').mockImplementation(() => {})
+  const failure = new Error('Schedule domain close rejected')
+  const domain = test.ctx.storageDomain.get(scheduleDomain.name)!
+  const originalClose = domain.close.bind(domain)
+  const close = vi.spyOn(domain, 'close').mockImplementationOnce(async () => {
+    if (fails) throw failure
+    await originalClose()
+  })
+  const entered = Promise.withResolvers<undefined>()
+  const release = releaseGate()
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const work = test.source.publish(INPUT)
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    closing = Promise.resolve(test.fiber.dispose())
+    expect(close).not.toHaveBeenCalled()
+    expect(retired).not.toHaveBeenCalled()
+    release.resolve(undefined)
+    await work
+    await closing
+    expect(test.agent.followup).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(retired).toHaveBeenCalledOnce()
+    expect(child.dispose).toBe(nativeDispose)
+    expect(child.uid).toBeNull()
+    expect(child.state).toBe(FiberState.DISPOSED)
+    expect(test.ctx.registry.get(callback)?.fibers ?? []).not.toContain(child)
+    if (fails) expect(reported).toHaveBeenCalledWith(failure)
+    else expect(reported).not.toHaveBeenCalled()
+    await provider.restart()
+    await child.await()
+    expect(child.state).toBe(FiberState.DISPOSED)
+    expect(retired).toHaveBeenCalledOnce()
+  } finally {
+    release.resolve(undefined)
+    await Promise.allSettled([work, closing])
+    close.mockRestore()
+    await originalClose()
+    // The regression's negative control leaves this child alive; the test still owns its cleanup.
+    await child.dispose()
+  }
+})
+
+it('classifies Source admission during Schedule shutdown without interrupting its accepted receipt', async () => {
+  const test = await setup()
+  const entered = Promise.withResolvers<undefined>()
+  const release = releaseGate()
+  const table = taskTable(test.ctx)
+  const domain = test.ctx.storageDomain.get(scheduleDomain.name)!
+  const originalClose = domain.close.bind(domain)
+  let receipt: ScheduleTask['lastDelivery']
+  const close = vi.spyOn(domain, 'close').mockImplementation(async () => {
+    receipt = table.get(ID)?.lastDelivery
+    await originalClose()
+  })
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const work = test.source.publish(INPUT)
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    closing = Promise.resolve(test.fiber.dispose())
+    await vi.waitFor(() => {
+      let refusal: unknown
+      try { void test.service.input(ID).dispose() } catch (error: unknown) { refusal = error }
+      expect(refusal).toMatchObject({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' })
+    })
+    const refusal = await test.connection.send({ text: 'After Schedule stopped admission' }).catch((error: unknown) => error)
+    expect(refusal).toBeInstanceOf(SourceError)
+    expect(refusal).toMatchObject({ code: 'SOURCE_CLOSED' })
+    expect(test.agent.followup).toHaveBeenCalledOnce()
+    expect(close).not.toHaveBeenCalled()
+    release.resolve(undefined)
+    await work
+    await closing
+    expect(receipt?.messageId).toBe(test.agent.followup.mock.calls[0]![0].id)
+    expect(test.agent.followup).toHaveBeenCalledOnce()
+    await expect(test.connection.send({ text: 'After the connection closed' }))
+      .rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+  } finally {
+    release.resolve(undefined)
+    await Promise.allSettled([work, closing])
+    close.mockRestore()
   }
 })
 

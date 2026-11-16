@@ -309,6 +309,72 @@ describe('function plugin entry exports', () => {
   })
 })
 
+describe('Schedule Source constructor exception', () => {
+  const constructors = 'export class SourceInput {}\nexport class SourceOutput {}\nexport class TimeSource {}\n'
+  const service = 'export default class Schedule {}\n'
+
+  it.each([
+    {
+      label: 'accepts the three concrete constructor re-exports from the Schedule class plugin',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: service + "export { SourceInput, SourceOutput, TimeSource } from './constructors.ts'\n",
+      rejected: [],
+    },
+    {
+      label: 'reports a fourth constructor beside the three permitted constructors',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: service + constructors + 'export class OtherSource {}\n',
+      rejected: ['OtherSource'],
+    },
+    {
+      label: 'reports the same constructor names from another package',
+      packageName: '@f/not-schedule',
+      entry: service + constructors,
+      rejected: ['SourceInput', 'SourceOutput', 'TimeSource'],
+    },
+    {
+      label: 'reports the three constructors from a function plugin',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: 'export function apply(): void {}\n' + constructors,
+      rejected: ['SourceInput', 'SourceOutput', 'TimeSource'],
+    },
+    {
+      label: 'reports a mixed function and default class plugin including its Source constructors',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: 'export function apply(): void {}\n' + service + constructors,
+      rejected: ['default', 'SourceInput', 'SourceOutput', 'TimeSource'],
+    },
+    {
+      label: 'reports functions and constructor-typed values under the permitted names',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: service + 'export function SourceInput(): void {}\nexport const SourceOutput = () => ({})\n'
+        + 'export const TimeSource: new () => object = class {}\n',
+      rejected: ['SourceInput', 'SourceOutput', 'TimeSource'],
+    },
+    {
+      label: 'reports abstract declarations under the permitted names',
+      packageName: '@deepseek-ai/dsh-schedule',
+      entry: service + constructors.replaceAll('export class', 'export abstract class'),
+      rejected: ['SourceInput', 'SourceOutput', 'TimeSource'],
+    },
+  ])('$label', ({ packageName, entry, rejected }) => {
+    const fixtureRoot = writeFixture({
+      ...FIXTURE,
+      'packages/f/source-case/package.json': manifest(packageName),
+      'packages/f/source-case/src/index.ts': entry,
+      'packages/f/source-case/src/constructors.ts': constructors,
+    }, 'plugin-entry-source-')
+    try {
+      const scanned = scanRepository(fixtureRoot, EXISTING)
+      expect(scanned.unloadedEntries).toEqual(['packages/f/orphan/src/index.ts'])
+      expect(scanned.violations.filter(value => value.packageName === packageName).map(value => value.exportName))
+        .toEqual(rejected)
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('existing-export list', () => {
   it('passes a listed export', () => {
     expect(result.violations.some(value => value.packageName === '@f/listed')).toBe(false)

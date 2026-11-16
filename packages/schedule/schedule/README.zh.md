@@ -178,7 +178,7 @@ runtime 将数值输入连接到 `TimeSource.output`，并在管理 FIFO 内等�
 
 管理和投递写入共用一个宿主 FIFO。修改在持久化前重新检查取消信号和版本；启用任务时在队列内重查 Session 目标可用性。提交发出 `schedule/changed`、重算定时器，并独立排入通知。投递在创建前保存 `new` 目标预留，排入 `schedule` 消息，等待 Session flush，然后保存回执、已存指令快照及下一个发生时点或结束状态。独立提交可能在崩溃后重复投递。复用目标持有执行槽直到 Agent 空闲；每次新建的目标可以并发运行。立即执行使用同一准入，不移动下一个发生时点。
 
-仅卸载 Session-controller provider 时，不再允许新的操作使用该 provider。已使用它的投递会保留该 provider，直到整个操作完成或失败，包括 Session flush 和任务写入。不相关的管理写入及仍在 FIFO 中等待的投递不会延迟该卸载。卸载 Schedule 本身时，先停止接受新工作，排空已接受工作及通知，关闭存储，然后释放它对 Session-controller 的依赖。
+仅卸载 Session-controller provider 时，不再允许新的操作使用该 provider。已使用它的投递会保留该 provider，直到整个操作完成或失败，包括 Session flush 和任务写入。不相关的管理写入及仍在 FIFO 中等待的投递不会延迟该卸载。卸载 Schedule 本身时，先停止接受新工作，排空已进入 FIFO 的工作及已排队通知，尝试关闭存储；即使关闭失败，也尝试释放它对 Session-controller 的依赖。关闭失败仍报告原始错误；若剩余清理也失败，`SOURCE_DISPOSAL_FAILED` 的聚合 cause 保留两项失败。关闭失败不能说明存储已释放。因关闭而被拒绝的时间输入不执行扫描，也不产生调度警告；其他调度失败仍会报告。
 
 历史与任务一同保存，只在追加时裁剪。旧历史缺失时保留最新回执，并标记更早记录不可用。历史 Session 日志中的 `schedule/change` 事件保留冻结类型，作为既有记录；Schedule 不解释这些事件、发出相关警告或将它们导入宿主存储。
 
@@ -193,7 +193,7 @@ source、手动与定时投递共用单任务准入：复用目标共用执行�
 
 任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次候选以 `SOURCE_TASK_BUSY` 拒绝。任务不会消费该候选；直接 `connection.send()` 保留任务错误，广播则将其聚合为 `SOURCE_DELIVERY_FAILED`。恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
 
-获取输入时，不活动的调用方 context 保留 Cordis `INACTIVE_EFFECT`；Schedule 尚未就绪或正在停止时抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。连接已关闭的输入或输出会抛出 `SOURCE_CLOSED`。runtime 停止会关闭其输入与连接；后续定向发送以 `SOURCE_CONNECTION_CLOSED` 拒绝。仍然打开但没有剩余连接的输出不发出数据。调用方声明 `schedule` 依赖，并在替代 runtime 就绪后连接新的输入；旧输入不会重新绑定。
+获取输入时，不活动的调用方 context 保留 Cordis `INACTIVE_EFFECT`；Schedule 尚未就绪或正在停止时抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。连接已关闭的输入或输出会抛出 `SOURCE_CLOSED`。连接回调在 Schedule 停止 FIFO 准入后才到达时，以 `SOURCE_CLOSED` 拒绝；已进入该 FIFO 的工作仍会排空。runtime 停止会关闭其输入与连接；后续定向发送以 `SOURCE_CONNECTION_CLOSED` 拒绝。仍然打开但没有剩余连接的输出不发出数据。调用方声明 `schedule` 依赖，并在替代 runtime 就绪后连接新的输入；旧输入不会重新绑定。
 
 目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；Schedule 和 source 多接收者投递都不自动重试。Schedule 在关闭存储之前停止接受新工作，并排空已接受的投递。连接和中间 source 状态不存入任务记录。
 

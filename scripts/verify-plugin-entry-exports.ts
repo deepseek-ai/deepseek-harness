@@ -25,7 +25,9 @@
  * name, and a name that only `export type *` reaches, at any depth, is a type. A value passes as a class when every
  * construct signature builds an instance whose base types reach Cordis `Service` or the global `Error`; class
  * declarations, class expressions, and mixin results are judged by what they construct. An export whose target does
- * not resolve is reported, and so is an `export *` whose module does not resolve, under the name `*`.
+ * not resolve is reported, and so is an `export *` whose module does not resolve, under the name `*`. Schedule's
+ * class-style plugin also admits concrete `SourceInput`, `SourceOutput`, and `TimeSource` class declarations, shared
+ * with its Source leaf through root-owned constructor re-exports.
  *
  * Exports that predate the gate are listed in scripts/plugin-entry-existing-exports.ts. A listed export passes. A list
  * line fails when its package has no entry or its entry is not a plugin, when its export list is empty or repeats a
@@ -52,6 +54,9 @@ const RULE = 'docs/defensive-patterns/package-surface.md#a-plugin-package-export
 
 /** Values the Loader reads from a function plugin's module namespace. */
 const LOADER_FIELDS: ReadonlySet<string> = new Set(['name', 'inject', 'Config', 'apply'])
+
+/** Root-owned class declarations shared by Schedule's plugin entry and Source leaf. */
+const SCHEDULE_SOURCE_CONSTRUCTORS: ReadonlySet<string> = new Set(['SourceInput', 'SourceOutput', 'TimeSource'])
 
 /** The plugin forms the rule names: `apply` on the module namespace, or a default-exported plugin class. */
 export type PluginForm = 'function' | 'service'
@@ -348,6 +353,9 @@ function classifyEntry(
     if (form === 'function' ? LOADER_FIELDS.has(exportName) : symbol === pluginClass) continue
     // The Loader loads a default export instead of a function plugin's namespace, so the class allowance never covers it.
     if (exportName !== 'default' && symbol !== undefined && constructsRootClass(symbol)) continue
+    if (form === 'service' && entry.packageName === '@deepseek-ai/dsh-schedule'
+      && SCHEDULE_SOURCE_CONSTRUCTORS.has(exportName) && symbol !== undefined
+      && (symbol.flags & ts.SymbolFlags.Class) !== 0 && isConstructibleClass(symbol, checker)) continue
     valueExports.push({
       file: entry.file,
       line: lineOf(node ?? sourceFile, sourceFile),

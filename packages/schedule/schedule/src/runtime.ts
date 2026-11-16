@@ -100,7 +100,12 @@ export class ScheduleRuntime {
       this.ctx.logger.warn(`schedule: dispatch stopped: ${inspect(error)}`)
     })
     this.timeInput = new SourceInput(async () => {
-      await this.ctx.agents.withoutInitiator(() => this.transact(async () => { await this.drive() }))
+      try {
+        await this.ctx.agents.withoutInitiator(() => this.transact(async () => { await this.drive() }))
+      } catch (error: unknown) {
+        // A time signal rejected by shutdown has no remaining due-task scan.
+        if (!(error instanceof SourceError && error.code === 'SOURCE_CLOSED')) throw error
+      }
     })
     this.connect = this.timeInput.connect
     this.connect(this.time.output)
@@ -153,7 +158,8 @@ export class ScheduleRuntime {
    * @param id - Task identity checked inside the shared management transaction.
    * @param candidate - Additional input accompanying the stored instruction.
    * @returns Resolves after Session persistence and the task receipt commit, not model completion.
-   * @throws SourceError when the task is missing, inactive, or busy; delivery failures may follow partial persistence.
+   * @throws SourceError when the task is missing, inactive, or busy, or with SOURCE_CLOSED when shutdown refuses
+   * this delivery. Other delivery failures preserve their cause and may follow partial persistence.
    */
   async deliverSource(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
     await this.deliverNow(id, candidate)
@@ -183,7 +189,7 @@ export class ScheduleRuntime {
         return { task, admitted: false }
       }
       const target = await this.resolveTarget(task)
-      if (this.stopping) throw new Error('Schedule runtime is stopping')
+      if (this.stopping) throw new SourceError('The Schedule runtime is stopping.', 'SOURCE_CLOSED')
       // Sample after Session restoration, which can take longer than one delivery interval.
       const occurrenceAt = new Date(Date.now()).toISOString()
       const held = task.target.kind !== 'new' ? [id] : []

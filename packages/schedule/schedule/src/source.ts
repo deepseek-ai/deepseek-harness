@@ -8,19 +8,29 @@ export { SourceInput, SourceOutput, TimeSource } from '@deepseek-ai/dsh-schedule
 export abstract class AutomationSource<T> {
   /** Output connected by downstream Sources or runtimes. */
   readonly output: SourceOutput<T> = new SourceOutput<T>()
-  private readonly inputs: Array<{ dispose(): Promise<void> }> = []
+  private readonly inputs = new Set<{ dispose(): Promise<void> }>()
   private closing: Promise<void> | undefined
 
   /**
    * Create an input owned by this Source; a composite can expose its bound connect function directly.
    * @param receive - Accepts typed upstream values, possibly emitting derived output before it settles.
-   * @returns The receiving endpoint, automatically drained before this Source closes its output.
+   * @returns The endpoint, owned until its drain succeeds and automatically drained before output closes.
    * @throws SourceError with SOURCE_CLOSED after this Source starts disposal.
    */
   protected createInput<Input>(receive: SourceReceiver<Input>): SourceInput<Input> {
     if (this.closing !== undefined) throw new SourceError('This source has been disposed.', 'SOURCE_CLOSED')
-    const input = new SourceInput(receive)
-    this.inputs.push(input)
+    const inputs = this.inputs
+    const input = new class extends SourceInput<Input> {
+      override dispose(): Promise<void> {
+        const closed = super.dispose()
+        void closed.then(
+          () => { inputs.delete(this) },
+          () => { /* Keep ownership; the returned promise reports cleanup failure. */ },
+        )
+        return closed
+      }
+    }(receive)
+    inputs.add(input)
     return input
   }
 
@@ -31,9 +41,9 @@ export abstract class AutomationSource<T> {
    */
   dispose(): Promise<void> {
     if (this.closing === undefined) {
-      this.closing = this.inputs.length === 0
+      this.closing = this.inputs.size === 0
         ? this.output.dispose()
-        : Promise.all(this.inputs.map(input => input.dispose())).then(() => this.output.dispose())
+        : Promise.all([...this.inputs].map(input => input.dispose())).then(() => this.output.dispose())
     }
     return this.closing
   }

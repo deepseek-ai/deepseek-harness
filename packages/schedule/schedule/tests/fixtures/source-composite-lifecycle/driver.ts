@@ -4,7 +4,6 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { mock } from 'node:test'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
-import { FiberState } from '@deepseek-ai/cordis'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { descriptorOf } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
@@ -15,6 +14,9 @@ const mode = process.argv[3]
 assert.ok(configPath)
 assert.ok(mode === 'provider' || mode === 'composer')
 const ctx = await boot('source-composite-lifecycle', resolveConfigPath(configPath, undefined))
+assert.equal(ctx.fiber.uid, 0)
+// The root stays active while the provider and composer are unloaded.
+const activeState = ctx.fiber.state
 let release: (() => void) | undefined
 let sender: Promise<object> | undefined
 let closing: Promise<void> | undefined
@@ -94,8 +96,8 @@ try {
   const beforeRelease = {
     receiverCleanup: world.events.includes('receiver-cleanup'),
     disposalDone: world.events.includes('disposal-done'),
-    providerActive: provider.fiber?.state === FiberState.ACTIVE,
-    worldActive: worldOwner.fiber.state === FiberState.ACTIVE,
+    providerActive: provider.fiber?.state === activeState,
+    worldActive: worldOwner.fiber.state === activeState,
   }
   assert.equal(beforeRelease.disposalDone, false)
   assert.equal(beforeRelease.worldActive, true)
@@ -115,9 +117,9 @@ try {
     await owner.fiber.await()
     assert.ok(world.receiver)
     await world.receiver.await()
-    assert.equal(provider.fiber.state, FiberState.ACTIVE)
-    assert.equal(owner.fiber.state, FiberState.ACTIVE)
-    assert.equal(world.receiver.state, FiberState.ACTIVE)
+    assert.equal(provider.fiber.state, activeState)
+    assert.equal(owner.fiber.state, activeState)
+    assert.equal(world.receiver.state, activeState)
     const replacementSchedule = ctx.get('schedule')
     assert.ok(replacementSchedule)
     const view = await replacementSchedule.view({ id: world.task.id })

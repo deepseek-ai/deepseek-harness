@@ -30,11 +30,12 @@ export interface AutomationCandidate {
   readonly text: string
 }
 
-/** Handling-relevant failures from source connections and task delivery. */
+/** Handling-relevant failures from source connections, task delivery, and cleanup. */
 export type SourceErrorCode =
   | 'SOURCE_CLOSED'
   | 'SOURCE_CONNECTION_CLOSED'
   | 'SOURCE_DELIVERY_FAILED'
+  | 'SOURCE_DISPOSAL_FAILED'
   | 'SOURCE_TASK_RECEIVER_UNAVAILABLE'
   | 'SOURCE_TASK_UNAVAILABLE'
   | 'SOURCE_TASK_BUSY'

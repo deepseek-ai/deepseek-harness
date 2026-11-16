@@ -6,6 +6,7 @@ import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
+import { rethrowAfterCleanup } from './cleanup-failure.ts'
 import type { AutomationCandidate } from './source-types.ts'
 import type { SourceInput } from './source-protocol.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -305,17 +306,21 @@ export class ScheduleService extends TypertRemoteService {
         await this.chain // Finish accepted deliveries before stopping their runtime and closing storage.
         await this.runtime?.dispose()
         await this.notifications // Each notice contains its own delivery failure.
-        await domain.close()
+        try {
+          await domain.close()
+        } catch (error: unknown) {
+          // A rejected close must not skip the transferred child after its consumers have drained.
+          await rethrowAfterCleanup(error, () => controllerChild.dispose())
+        }
       }
       try {
         ctx.effect(function* () {
           yield controllerChild.dispose
           yield cleanup
         })
-      } catch (error) {
+      } catch (error: unknown) {
         this.stopping = true
-        await domain.close()
-        throw error
+        await rethrowAfterCleanup(error, () => domain.close())
       }
       const tasks = domain.table('tasks')
       const runtime = this.runtime = new ScheduleRuntime(ctx,
@@ -847,7 +852,7 @@ export class ScheduleService extends TypertRemoteService {
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
-    if (this.stopping) return Promise.reject(new Error('Schedule service is stopping'))
+    if (this.stopping) return Promise.reject(new SourceError('The Schedule service is stopping.', 'SOURCE_CLOSED'))
     const pending = this.chain.then(async () => {
       const settled = Promise.withResolvers<void>()
       this.operation = { settled: settled.promise, controller: undefined }

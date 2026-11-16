@@ -64,7 +64,7 @@ await first.dispose()
 
 组合插件声明 `schedule` 依赖，对包含 `AutomationCandidate.text` 的输出使用 `ctx.schedule.input(taskId).connect(source.output)`。Schedule 在调用方 context 中拥有返回的 `SourceInput<AutomationCandidate>`，并在其 runtime 停止时关闭该输入。每条连接都是提供 `send()` 和 `dispose()` 的普通 `AutomationConnection<AutomationCandidate>`；重复销毁也会等待已接受工作。[Schedule 包](../README.zh.md#source-delivery)拥有任务准入、持久化确认与消息格式。
 
-`input(taskId)` 要求 Schedule 服务已就绪且正在运行，否则抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。停止的 runtime 关闭其输入与连接，不重新绑定。通过已关闭连接发送会以 `SOURCE_CONNECTION_CLOSED` 拒绝；仍然打开但已没有连接的输出在广播时不执行投递。替代服务就绪后，再连接新的输入。
+`input(taskId)` 要求 Schedule 服务已就绪且正在运行，否则抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。如果回调到达服务时 mutation FIFO 已停止接受新工作，该调用以 `SOURCE_CLOSED` 拒绝；此前已进入 FIFO 的工作仍会完成。停止的 runtime 关闭其输入与连接，不重新绑定。通过已关闭连接发送会以 `SOURCE_CONNECTION_CLOSED` 拒绝；仍然打开但已没有连接的输出在广播时不执行投递。替代服务就绪后，再连接新的输入。
 
 ### 时间输入
 
@@ -82,7 +82,7 @@ Schedule runtime 使用由 `SourceInput<number>` 实现的 `runtime.connect(time
 
 ### 清理所有权
 
-即使连接已经断开，输入端与输出端仍跟踪已接受调用。关闭任一端点会拒绝新连接并关闭其已有连接；关闭连接会拒绝新发送。重复销毁会等待同一次排空。`AutomationSource.dispose()` 先关闭并排空自有输入，此时输出仍可使用，再关闭并排空输出。子类在调用它之前停止外部生产者。借用的上游 Source 仍由其创建者拥有。
+即使连接已经断开，输入端与输出端仍跟踪已接受调用。关闭任一端点会拒绝新连接并关闭其已有连接；关闭连接会拒绝新发送。重复销毁会等待同一次排空。单独销毁的输入在排空成功前仍由其 Source 拥有；之后 Source 释放该输入，不关闭其他输入或输出。没有剩余自有输入时，Source 销毁会立即停止输出接纳新调用。`AutomationSource.dispose()` 先关闭并排空自有输入，此时输出仍可使用，再关闭并排空输出。子类在调用它之前停止外部生产者。借用的上游 Source 仍由其创建者拥有。
 
 接收者不得在已接受调用内部等待自身连接、输入、Source 或当前发起输出者的销毁：这些清理会等待该调用返回。连接与端点的销毁等待调用结束；投递错误由原始发送或广播负责报告。
 
