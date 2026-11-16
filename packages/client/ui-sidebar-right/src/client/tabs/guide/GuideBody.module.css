@@ -2,18 +2,21 @@
    stylesheet does not carry them. Tokens only. */
 
 /* The capsules form one centred column at the column's own 14px gap, lifted
-   above the body's middle by the spacer below. The minimum height centres a
-   short guide while allowing a tall guide to grow into the pane's scroller. */
+   above the body's middle by the spacer below. The guide fills the tab body,
+   which clips, and scrolls itself; `safe` centring starts a guide taller than
+   the pane at its top so every capsule stays reachable. */
 .guide {
   --dsl-guide-entry-radius: var(--dsw-radius-xl);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 14px;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   box-sizing: border-box;
-  min-height: 100%;
+  min-height: 0;
   padding: 0 24px;
+  overflow-y: auto;
 }
 
 /* The lift, as a share of the pane's height (a column flex basis resolves
