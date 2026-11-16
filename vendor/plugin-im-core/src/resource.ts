@@ -439,7 +439,12 @@ export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy 
  * raced against it instead of trusting the stream to error.
  */
 function abortable<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason)
+  if (signal.aborted) {
+    // Callers construct `pending` (e.g. `reader.read()` / `response.arrayBuffer()`) before entering here;
+    // observe any late rejection on it so an already-aborted signal never leaks an unhandledRejection.
+    void pending.catch(() => {})
+    return Promise.reject(signal.reason)
+  }
   return new Promise<T>((resolve, reject) => {
     const abort = () => reject(signal.reason)
     signal.addEventListener('abort', abort, { once: true })

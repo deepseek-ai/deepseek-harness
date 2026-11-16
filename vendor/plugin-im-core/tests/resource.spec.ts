@@ -678,6 +678,38 @@ describe('createResourceFetcher', () => {
       await ctx.fiber.dispose()
     }
   })
+
+  it('does not leak an unhandledRejection when signal aborts after headers arrive and before body read', async () => {
+    const reason = new Error('aborted after headers')
+    const caller = new AbortController()
+    const readError = new Error('body read rejected after abort')
+    const unhandled: unknown[] = []
+    const onUnhandled = (err: unknown) => { unhandled.push(err) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const http = {
+        async get() {
+          caller.abort(reason)
+          return {
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/octet-stream' }),
+            body: {
+              getReader: () => ({
+                read: () => Promise.reject(readError),
+                cancel: async () => {},
+              }),
+            },
+          } as unknown as Response
+        },
+      } as unknown as Http
+      const fetch = createResourceFetcher(fakeContext(http), { timeout: 60_000 })
+      await expect(fetch('https://example.com/headers-then-abort.bin', caller.signal)).rejects.toBe(reason)
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
 })
 
 // ---- helpers ----------------------------------------------------------------------------------------------------
