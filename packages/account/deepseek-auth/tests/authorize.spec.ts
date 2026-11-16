@@ -44,16 +44,22 @@ describe('the API key', () => {
   })
 
   it.each([
-    ['   ', undefined, 'web-test: the API key resolved from DEEPSEEK_API_KEY is blank'],
-    ['sk-你好', 'llm-deepseek', 'llm-deepseek: the API key resolved from DEEPSEEK_API_KEY contains characters no HTTP header can carry'],
+    [
+      '   ', undefined,
+      'web-test: the API key resolved from DEEPSEEK_API_KEY is blank; set DEEPSEEK_API_KEY to the raw key'
+      + ' (the web Models page writes it) or export it in the launching environment',
+    ],
+    [
+      'sk-你好', 'llm-deepseek',
+      'llm-deepseek: the API key resolved from DEEPSEEK_API_KEY contains characters no HTTP header can carry;'
+      + ' set DEEPSEEK_API_KEY to the raw key alone (the web Models page writes it)',
+    ],
   ])('refuses the unusable key %j, naming its owner and reference and never the key', async (value, owner, message) => {
     const ctx = await mount({ stored: { DEEPSEEK_API_KEY: value } })
     const connections = { 'api-key': { baseURL: 'https://api.deepseek.com', ...owner === undefined ? {} : { owner } } }
     const failure = await ctx.deepseekAuth.authorize({ ...key, connections }).catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(DeepSeekAuthError)
-    expect(failure).toMatchObject({ code: 'INVALID_CREDENTIAL' })
-    expect((failure as Error).message).toContain(message)
-    expect((failure as Error).message).not.toContain('你好')
+    expect(failure).toMatchObject({ code: 'INVALID_CREDENTIAL', message })
   })
 
   it('starts no read for a cancelled lookup', async () => {

@@ -16,7 +16,7 @@ DeepSeek 的 API 接受两种凭据：API 密钥和账号登录。每个 API 接
 
 每个种类同一时间只有一个部署。模型路由插件在 `ctx.effect()` 内用 `connect(kind, connection)` 登记其设置所指的部署，服务为每个请求调用这个函数。没有登记时，API 密钥是发往 `https://api.deepseek.com` 的 `DEEPSEEK_API_KEY`，账号登录发往 `DEEPSEEK_BASE_URL` 所指的 origin，默认为官方 API。凭据只释放给其种类的部署 origin 之下且不内嵌凭据的目的地。请求可以在 `connections` 里携带某一种类自己的连接，它取代已登记的或默认的连接：模型路由传入它为一次模型请求捕获的那一代配置，拥有自己端点和密钥的消费方传入这两项。连接无法解析的种类作为未解析条目留在候选中，`authorize()` 在此以 `UNRESOLVED_CONNECTION` 停止，不再尝试后面的种类。
 
-API 密钥通过 `@deepseek-ai/dsh-credentials` 的 `resolveCredentialRef` 和 `credentialRefConfigured` 读取，二者把已挂载的凭据服务视为权威，仅在没有该服务时读取启动环境。`dsh-credentials` 还拥有 `normalizeApiKey` 和 `unusableApiKeyMessage`，即 Host 端对“能放进 HTTP 请求头的密钥”的定义，以及密钥不满足该定义时的诊断文案。该服务把这样的密钥报告为代码 `INVALID_CREDENTIAL` 的 `DeepSeekAuthError`，`llm-pi-ai` 把同一检查包成 `LlmError`，`@deepseek-ai/dsh-llm` 既不带凭据接口也不带密钥检查。账号登录就是 `ctx.deepseekAccount.resolveRequestCredential(endpoint)` 释放的凭据；组合中没有账号服务时不存在这种凭据。
+API 密钥通过 `@deepseek-ai/dsh-credentials` 的 `resolveCredentialRef` 和 `credentialRefConfigured` 读取，二者把已挂载的凭据服务视为权威，仅在没有该服务时读取启动环境。`dsh-credentials` 还拥有 `normalizeApiKey`，即 Host 端对“能放进 HTTP 请求头的密钥”的定义：它回答去掉首尾空白后的密钥，或密钥不可用的原因，不生成任何诊断文案。该服务为不可用的密钥写出诊断文案，并将其报告为代码 `INVALID_CREDENTIAL` 的 `DeepSeekAuthError`，`llm-pi-ai` 写出自己的文案并报告为 `LlmError`，`@deepseek-ai/dsh-llm` 既不带凭据接口也不带密钥检查。账号登录就是 `ctx.deepseekAccount.resolveRequestCredential(endpoint)` 释放的凭据；组合中没有账号服务时不存在这种凭据。
 
 `@deepseek-ai/dsh-llm-deepseek` 不读取任何凭据。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回请求头、可选的 `revoked` 信号和可选的失败回调，或 `undefined`；`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`。传输层让每次模型请求及其文件操作受 `revoked` 信号约束，并把由此产生的失败交给提供方的失败回调命名。列表缓存以端点和凭据请求头的哈希划分作用域。
 
@@ -32,7 +32,9 @@ Web 提供方声明各自的 API 接受什么。`web-deepseek-api` 以 `accepts:
 
 **在上述发布之上用公共库代替服务。** 模型路由与其他消费方通过同一个操作鉴权，而读取路由所发布内容的库无法反过来为路由本身服务。
 
-**通过 `dsh-llm` 检查密钥、在服务里保留一份副本，或由每个消费方传入校验函数。** 所有 DeepSeek 消费方共用的服务不能依赖模型服务，后者只是其中一类消费方的依赖。Host 端的第二份规则只能靠注释与第一份以及浏览器端的那份保持一致。校验函数参数会让每个接受密钥的消费方都传一个，两个 Web 包也要为此继续依赖 `dsh-llm`。检查及其文案放在读取密钥的那一层 `dsh-credentials`，每个调用方把文案包成自己的错误类型。
+**通过 `dsh-llm` 检查密钥、在服务里保留一份副本，或由每个消费方传入校验函数。** 所有 DeepSeek 消费方共用的服务不能依赖模型服务，后者只是其中一类消费方的依赖。Host 端的第二份规则只能靠注释与第一份以及浏览器端的那份保持一致。校验函数参数会让每个接受密钥的消费方都传一个，两个 Web 包也要为此继续依赖 `dsh-llm`。检查放在读取密钥的那一层 `dsh-credentials`，每个调用方依据检查返回的原因写出自己的失败。
+
+**把不可用密钥的诊断文案放在 `dsh-credentials`。** 那里的一个函数能让该服务和 `llm-pi-ai` 使用同样的措辞。但文案要告诉用户在 Models 页面设置该引用，存储凭据的包就会写出其消费方的页面。两个调用方各自写出文案，凭据存储不写任何消费方的名字。
 
 **让 `dsh-llm` 从 `dsh-credentials` 导入密钥检查。** 模型服务里没有任何代码读取密钥。该检查在其中唯一的调用方是 `llm-pi-ai`，而它已经依赖 `dsh-credentials`，因此模型服务不导出密钥检查，也不新增依赖。
 

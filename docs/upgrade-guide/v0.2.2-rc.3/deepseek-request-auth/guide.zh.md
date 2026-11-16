@@ -13,7 +13,7 @@ description: "DeepSeek 模型路由和 Web 提供方要求挂载新的 dsh-deeps
 
 `@deepseek-ai/dsh-llm-deepseek` 不再导出 `resolveDeepSeekApiKey`、`deepSeekApiKeyConfigured`、`resolveDeepSeekAccountToken` 和 `rejectDeepSeekAccountToken`。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回 `DeepSeekRequestAuth | undefined`，`DeepSeekRequestAuth` 新增可选的 `revoked` 信号，新增的 `missingCredential` 选项命名凭据缺失的失败。`createModelListingCache` 的 `credential(url)` 返回请求头，其 `load` 变为可选。
 
-`@deepseek-ai/dsh-llm` 不再导出 `normalizeApiKey` 和 `assertUsableApiKey`。`@deepseek-ai/dsh-credentials` 导出 `normalizeApiKey(raw)`、`unusableApiKeyMessage(reason, owner, ref)`、`resolveCredentialRef(ctx, ref)` 和 `credentialRefConfigured(ctx, ref)`。
+`@deepseek-ai/dsh-llm` 不再导出 `normalizeApiKey` 和 `assertUsableApiKey`。`@deepseek-ai/dsh-credentials` 导出 `normalizeApiKey(raw)`、`resolveCredentialRef(ctx, ref)` 和 `credentialRefConfigured(ctx, ref)`。
 
 `@deepseek-ai/dsh-llm-deepseek-api-key` 不再导出 `plainOptions` 和 `resolveAdapterOptions`；`@deepseek-ai/dsh-llm-deepseek-account` 不再导出 `plainAccountOptions` 和 `resolveAccountOptions`。账号路由插件在退登后取消其运行中的 Agent，并注册运行中任务报告。
 
@@ -25,7 +25,7 @@ description: "DeepSeek 模型路由和 Web 提供方要求挂载新的 dsh-deeps
 
 1. 凡是不经 `base` 或 `sdk-minimal` 组合包而挂载上述四个插件之一的组合，都加入 `- name: '@deepseek-ai/dsh-deepseek-auth'`。用 `ctx.plugin()` 挂载它们的代码先挂载该包的默认导出。
 2. 用 `ctx.deepseekAuth.authorize({ consumer, accepts, destination })` 替换被移除的 `llm-deepseek` 辅助函数：发送返回的 `headers`，存在 `reject()` 时在 HTTP 401 之后调用它，并在 `revoked` 中止时结束请求。存在性检查使用 `candidates()`。
-3. 用 `@deepseek-ai/dsh-credentials` 的 `normalizeApiKey` 与 `unusableApiKeyMessage` 替换 `assertUsableApiKey`，并抛出自己的错误。
+3. 用 `@deepseek-ai/dsh-credentials` 的 `normalizeApiKey` 替换 `assertUsableApiKey`，并依据它的 `reason` 抛出自己的错误。
 4. 在自定义的 `DeepSeekAdapter` 或 `registerDeepSeekProvider` 消费方中，没有凭据时让 `resolveAuth` 返回 `undefined`，并为路由专属的失败提供 `missingCredential`。向 `createModelListingCache` 传递凭据请求头而不是 token。
 5. 用路由插件自身的 `Config` 替换对其配置导出的导入。
 6. 让 `deepseekAccount` 替身实现 `resolveRequestCredential` 并返回 `revoked` 信号；为 `hasRunningAccountTasks()` 提供 `ctx.agents` 的替身改为注册报告。

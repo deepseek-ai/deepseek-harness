@@ -60,7 +60,8 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 import type { Context } from '@deepseek-ai/cordis'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { normalizeApiKey, unusableApiKeyMessage } from '@deepseek-ai/dsh-credentials'
+import { normalizeApiKey } from '@deepseek-ai/dsh-credentials'
+import type { ApiKeyRejection } from '@deepseek-ai/dsh-credentials'
 import { INVALID_CREDENTIAL_CODE, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -227,7 +228,14 @@ export function apply(ctx: Context, config: Config): void {
       // reference to fix can be named, instead of inside `fetch`.
       const checked = normalizeApiKey(hit)
       if (checked.ok) return checked.value
-      throw new LlmError(unusableApiKeyMessage(checked.reason, 'llm-pi-ai', ref), INVALID_CREDENTIAL_CODE)
+      // The key never enters the text. The Models page is named as its usual writer; a hand-edited `.env` or a shell
+      // export can supply the same value.
+      const defect: Record<ApiKeyRejection, string> = {
+        empty: `is blank; set ${ref} to the raw key (the web Models page writes it) or export it in the launching environment`,
+        illegalCharacters: 'contains characters no HTTP header can carry;'
+          + ` set ${ref} to the raw key alone (the web Models page writes it)`,
+      }
+      throw new LlmError(`llm-pi-ai: the API key resolved from ${ref} ${defect[checked.reason]}`, INVALID_CREDENTIAL_CODE)
     }
     throw new LlmError(
       `llm-pi-ai: no credential for provider route "${provider}"; its profile resolves ${ref}, which is not`

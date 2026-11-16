@@ -13,7 +13,7 @@ English | [中文](guide.zh.md)
 
 `@deepseek-ai/dsh-llm-deepseek` no longer exports `resolveDeepSeekApiKey`, `deepSeekApiKeyConfigured`, `resolveDeepSeekAccountToken`, or `rejectDeepSeekAccountToken`. `DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` returns `DeepSeekRequestAuth | undefined`, `DeepSeekRequestAuth` gains an optional `revoked` signal, and the new `missingCredential` option names the missing-credential failure. `createModelListingCache` takes `credential(url)` returning request headers, and its `load` is optional.
 
-`@deepseek-ai/dsh-llm` no longer exports `normalizeApiKey` and `assertUsableApiKey`. `@deepseek-ai/dsh-credentials` exports `normalizeApiKey(raw)`, `unusableApiKeyMessage(reason, owner, ref)`, `resolveCredentialRef(ctx, ref)`, and `credentialRefConfigured(ctx, ref)`.
+`@deepseek-ai/dsh-llm` no longer exports `normalizeApiKey` and `assertUsableApiKey`. `@deepseek-ai/dsh-credentials` exports `normalizeApiKey(raw)`, `resolveCredentialRef(ctx, ref)`, and `credentialRefConfigured(ctx, ref)`.
 
 `@deepseek-ai/dsh-llm-deepseek-api-key` no longer exports `plainOptions` and `resolveAdapterOptions`; `@deepseek-ai/dsh-llm-deepseek-account` no longer exports `plainAccountOptions` and `resolveAccountOptions`. The account route plugin cancels its running Agents after sign-out and registers a running-task report.
 
@@ -25,7 +25,7 @@ Without the account route, the Search and Fetch APIs send the account credential
 
 1. Add `- name: '@deepseek-ai/dsh-deepseek-auth'` to every composition that mounts one of the four plugins without the `base` or `sdk-minimal` bundle. Code that mounts them through `ctx.plugin()` mounts the package's default export first.
 2. Replace the removed `llm-deepseek` helpers with `ctx.deepseekAuth.authorize({ consumer, accepts, destination })`: send the returned `headers`, call `reject()` after HTTP 401 when present, and end the request when `revoked` aborts. `candidates()` answers presence checks.
-3. Replace `assertUsableApiKey` with `normalizeApiKey` and `unusableApiKeyMessage` from `@deepseek-ai/dsh-credentials`, and throw your own error.
+3. Replace `assertUsableApiKey` with `normalizeApiKey` from `@deepseek-ai/dsh-credentials`, and throw your own error for its `reason`.
 4. In custom `DeepSeekAdapter` or `registerDeepSeekProvider` consumers, return `undefined` from `resolveAuth` when no credential exists and supply `missingCredential` for a route-specific failure. Pass credential headers, not a token, to `createModelListingCache`.
 5. Replace imports of the route plugins' config exports with the plugins' own `Config`.
 6. Make `deepseekAccount` stand-ins implement `resolveRequestCredential`, returning a `revoked` signal; stand-ins that supplied `ctx.agents` for `hasRunningAccountTasks()` register a report instead.

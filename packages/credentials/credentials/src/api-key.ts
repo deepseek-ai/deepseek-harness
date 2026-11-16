@@ -1,7 +1,7 @@
 /**
- * The one definition of a well-formed API key and of the diagnostic for a key
- * that is not, shared by every consumer that puts a resolved key in an HTTP
- * header.
+ * The one definition of a well-formed API key, shared by every consumer that
+ * puts a resolved key in an HTTP header. A consumer words its own diagnostic
+ * for a key that is not.
  * @module @deepseek-ai/dsh-credentials/api-key
  */
 
@@ -39,23 +39,4 @@ export function normalizeApiKey(raw: string): ApiKeyCheck {
   if (value.length === 0) return { ok: false, reason: 'empty' }
   if (!LEGAL_API_KEY.test(value)) return { ok: false, reason: 'illegalCharacters' }
   return { ok: true, value }
-}
-
-/**
- * The diagnostic for one resolved key {@link normalizeApiKey} rejected. The key
- * never enters the text: `ref` names where to fix it. The Models page is named
- * as the writer it usually is, not as the only one, because the same value can
- * arrive from a hand-edited `.env` or a shell export in a composition that
- * mounts no credentials service.
- * @param reason - why the key cannot be used.
- * @param owner - settings namespace or package name of the consumer that refuses the key, prefixed to the text.
- * @param ref - the credential reference the value resolved through.
- * @returns the text for the consumer's own error type.
- */
-export function unusableApiKeyMessage(reason: ApiKeyRejection, owner: string, ref: string): string {
-  return reason === 'empty'
-    ? `${owner}: the API key resolved from ${ref} is blank; set ${ref} to the raw key`
-      + ' (the web Models page writes it) or export it in the launching environment'
-    : `${owner}: the API key resolved from ${ref} contains characters no HTTP header can carry;`
-      + ` set ${ref} to the raw key alone (the web Models page writes it)`
 }

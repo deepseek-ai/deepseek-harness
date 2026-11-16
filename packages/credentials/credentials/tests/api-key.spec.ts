@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeApiKey, unusableApiKeyMessage } from '@deepseek-ai/dsh-credentials'
+import { normalizeApiKey } from '@deepseek-ai/dsh-credentials'
 
 describe('normalizeApiKey', () => {
   it('accepts a printable-ASCII key unchanged', () => {
@@ -31,21 +31,5 @@ describe('normalizeApiKey', () => {
 
   it('accepts the printable-ASCII boundary characters', () => {
     expect(normalizeApiKey('!~')).toEqual({ ok: true, value: '!~' })
-  })
-})
-
-describe('unusableApiKeyMessage', () => {
-  it('names the refusing consumer and the reference of a blank key, with both ways to supply it', () => {
-    expect(unusableApiKeyMessage('empty', 'llm-deepseek', 'DEEPSEEK_API_KEY')).toBe(
-      'llm-deepseek: the API key resolved from DEEPSEEK_API_KEY is blank; set DEEPSEEK_API_KEY to the raw key'
-      + ' (the web Models page writes it) or export it in the launching environment',
-    )
-  })
-
-  it('names the refusing consumer and the reference of a key no header can carry', () => {
-    expect(unusableApiKeyMessage('illegalCharacters', 'web-deepseek-api', 'ACME_API_KEY')).toBe(
-      'web-deepseek-api: the API key resolved from ACME_API_KEY contains characters no HTTP header can carry;'
-      + ' set ACME_API_KEY to the raw key alone (the web Models page writes it)',
-    )
   })
 })

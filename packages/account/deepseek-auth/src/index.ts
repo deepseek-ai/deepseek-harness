@@ -15,9 +15,8 @@
  * @module @deepseek-ai/dsh-deepseek-auth
  */
 import { Context, Service } from '@deepseek-ai/cordis'
-import {
-  credentialRef, credentialRefConfigured, normalizeApiKey, resolveCredentialRef, unusableApiKeyMessage,
-} from '@deepseek-ai/dsh-credentials'
+import { credentialRef, credentialRefConfigured, normalizeApiKey, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
+import type { ApiKeyRejection } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
@@ -76,6 +75,25 @@ export class DeepSeekAuthError extends HarnessError {
     // Consumers quote this name in their own diagnostics, so it does not follow a bundler's class renaming.
     this.name = 'DeepSeekAuthError'
   }
+}
+
+/**
+ * The diagnostic for a configured API key that cannot be sent. The key never enters the text: `reference` names where to
+ * fix it. The Models page is named as the writer it usually is, not as the only one, because the same value can arrive
+ * from a hand-edited `.env` or a shell export in a composition that mounts no credentials service.
+ * @param reason - why the key cannot be sent.
+ * @param owner - settings namespace or plugin name prefixed to the text.
+ * @param reference - the credential reference the key was read under.
+ * @returns the message of the `INVALID_CREDENTIAL` failure.
+ */
+function unusableKey(reason: ApiKeyRejection, owner: string, reference: string): string {
+  const defect: Record<ApiKeyRejection, string> = {
+    empty: `is blank; set ${reference} to the raw key (the web Models page writes it) or export it in the launching`
+      + ' environment',
+    illegalCharacters: `contains characters no HTTP header can carry; set ${reference} to the raw key alone (the web Models`
+      + ' page writes it)',
+  }
+  return `${owner}: the API key resolved from ${reference} ${defect[reason]}`
 }
 
 /** Marks a failure of the launch-environment deployment, apart from a failure of a connected route's settings. */
@@ -211,7 +229,7 @@ export class DeepSeekAuth extends Service {
         const raw = await resolveCredentialRef(ctx, reference)
         if (raw === undefined) return undefined
         const checked = normalizeApiKey(raw)
-        if (!checked.ok) throw new DeepSeekAuthError(unusableApiKeyMessage(checked.reason, owner, reference), 'INVALID_CREDENTIAL')
+        if (!checked.ok) throw new DeepSeekAuthError(unusableKey(checked.reason, owner, reference), 'INVALID_CREDENTIAL')
         const headers: Record<string, string> = {}
         for (const header of request.apiKeyHeaders ?? ['authorization']) {
           headers[header] = header === 'authorization' ? `Bearer ${checked.value}` : checked.value
