@@ -30,6 +30,7 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
+        "toggleMouse": ["appHandle", "direction", "mouseButton", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]
     static let stringEnums: [String: [String: Set<String>]] = [
@@ -40,5 +41,6 @@ enum NativeProtocol {
         "requestPermission": ["permission": ["accessibility", "screenRecording"]],
         "selectText": ["selectionType": ["cursor_after", "cursor_before", "text"]],
         "sendKeyEvent": ["direction": ["down", "up"]],
+        "toggleMouse": ["direction": ["down", "up"], "mouseButton": ["left", "middle", "right"]],
     ]
 }

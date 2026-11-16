@@ -21,7 +21,8 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import type {} from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+
 import {
   deepSeekApiKeyConfigured, rejectDeepSeekAccountToken, resolveDeepSeekAccountToken, resolveDeepSeekApiKey,
 } from '@deepseek-ai/dsh-llm-deepseek'
@@ -156,7 +157,7 @@ const CAPABILITY = {
 function latestUserQuestion(session: Session | undefined): string | undefined {
   const prompt = session?.deriveMessages().findLast(message => message.role === 'user' && message.source.kind === 'user')
   if (prompt === undefined) return undefined
-  return prompt.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  return extractTextContent(prompt.content, { separator: '\n' })
 }
 
 /**

@@ -1,5 +1,7 @@
 /** Observe command-admitted activity through quiescence and preserve a goal's first terminal outcome. */
 
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { GoalView } from '@deepseek-ai/dsh-goal'
@@ -63,7 +65,7 @@ export class QueryActivity {
       }
       if (this.input || this.goalId !== undefined) {
         if (event.type === 'assistant/message') {
-          this.response = event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+          this.response = extractTextContent(event.data.message.content)
         }
         if (event.type === 'turn/end') this.turnReason = event.data.reason.kind
       }
