@@ -57,6 +57,13 @@ it('admits key events with only an explicit direction enum', () => {
   expect(native.enums.get('sendKeyEvent')?.has('key') ?? false).toBe(false)
 })
 
+it('admits mouse-button events with explicit button and direction enums and no coordinates', () => {
+  const native = nativeProtocol()
+  expect(native.fields.get('toggleMouse')).toEqual(new Set(['appHandle', 'windowId', 'mouseButton', 'direction']))
+  expect(native.enums.get('toggleMouse')?.get('mouseButton')).toEqual(new Set(['left', 'right', 'middle']))
+  expect(native.enums.get('toggleMouse')?.get('direction')).toEqual(new Set(['down', 'up']))
+})
+
 it('accepts a parameter-free object schema without a properties dictionary', () => {
   replacements.values.set(0, { properties: { method: { const: 'getCapabilities' }, params: { type: 'object' } } })
   expect(nativeProtocol().fields.get('getCapabilities')).toEqual(new Set())
