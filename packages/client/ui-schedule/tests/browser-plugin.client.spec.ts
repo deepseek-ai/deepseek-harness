@@ -461,14 +461,14 @@ describe('ui-schedule browser half', () => {
       const panel = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
       for (const dictionary of Object.values(managerLocales)) {
         const prompts = Object.entries(dictionary).filter(([key]) => key.startsWith('recommend.') && key.endsWith('.prompt'))
-        expect(prompts).toHaveLength(7)
+        expect(prompts).toHaveLength(8)
         for (const [, prompt] of prompts) {
           expect(prompt).not.toContain('\n')
           panel.onUseRecommendation(prompt)
           expect(startSession).toHaveBeenLastCalledWith(undefined, { prompt, whenDraftExists: 'append' })
         }
       }
-      expect(startSession).toHaveBeenCalledTimes(56)
+      expect(startSession).toHaveBeenCalledTimes(64)
     } finally {
       await fiber.dispose()
       owner()
@@ -479,7 +479,7 @@ describe('ui-schedule browser half', () => {
   it('states each recommendation\'s shown run time in its request in every language', () => {
     for (const dictionary of Object.values(managerLocales)) {
       const schedules = Object.entries(dictionary).filter(([key]) => key.startsWith('recommend.') && key.endsWith('.schedule'))
-      expect(schedules).toHaveLength(7)
+      expect(schedules).toHaveLength(8)
       for (const [key, schedule] of schedules) {
         const times = schedule.match(/\d{1,2}:\d{2}/g)
         expect(times).toHaveLength(1)
