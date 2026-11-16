@@ -153,22 +153,33 @@ describe('dsh-tool-subagent model selection', () => {
     }
   })
 
-  it('shows discovery guidance only while its tool is visible, regardless of mount order', async () => {
-    const ctx = await setup({ provider: 'mock', modelSelection: true })
-    const agent = modelSelectionSetupAgent(ctx)
-    const descriptions = () => ctx.tools.schemas(agent).map(schema => schema.description).join('\n')
-    const guidance = 'Query when choosing an explicit child route or reasoning effort'
-    expect(descriptions()).not.toContain(guidance)
-    expect(descriptions()).not.toContain('list_subagent_models')
+  it('tells the model when to set route fields and where provider ids come from', async () => {
+    const routeDescriptions = (ctx: Awaited<ReturnType<typeof setup>>, name: string) => {
+      const schema = ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(entry => entry.name === name)!
+      const props = (schema.parameters as { properties: Record<string, { description: string }> }).properties
+      return { tool: schema.description, provider: props['provider']!.description, effort: props['reasoning_effort']!.description }
+    }
+    const owner = await setup({ provider: 'mock', withModelSelection: true })
+    expect(routeDescriptions(owner, 'subagent')).toEqual({
+      tool: expect.not.stringContaining('reasoning_effort') as string,
+      provider: 'LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; '
+        + 'omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. '
+        + 'Use a provider id listed by `list_subagent_models`.',
+      effort: 'Reasoning effort id; requires `provider` and `model`. '
+        + 'Omitted with them, the selected model\'s default effort applies, even when that model is your own.',
+    })
+    expect(owner.tools.get('list_subagent_models', modelSelectionSetupAgent(owner))?.description).toBe(
+      'Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. '
+      + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts.',
+    )
 
-    const discovery = await ctx.plugin(tool, { provider: 'mock', toolName: 'discovery_subagent', modelDiscovery: true })
-    expect(descriptions()).toContain(guidance)
-    const restore = agent.ctx.tools.restrict({ deny: ['list_subagent_models'] })
-    expect(descriptions()).not.toContain(guidance)
-    restore()
-    expect(descriptions()).toContain(guidance)
-    await discovery.dispose()
-    expect(descriptions()).not.toContain(guidance)
+    const selectionOnly = await setup({ provider: 'mock', modelSelection: true })
+    expect(routeDescriptions(selectionOnly, 'subagent').provider).not.toContain('list_subagent_models')
+    const configured = await setup({
+      provider: 'mock', modelSelection: true, agentOptions: { provider: 'alpha', model: 'configured-model' },
+    })
+    expect(routeDescriptions(configured, 'subagent').provider)
+      .toContain('to run the subagent on the default model configured for this tool.')
   })
 
   it.each(['configured', 'provider'] as const)('rejects effort-only selection despite %s route defaults', async (source) => {

@@ -117,13 +117,11 @@ export function registerListSubagentModels(
     name: 'list_subagent_models',
     description:
       'Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. '
-      + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts. '
-      + 'Query when choosing an explicit child route or reasoning effort. '
-      + 'Omit optional fields rather than sending empty strings.',
+      + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts.',
     parameters: {
       provider: {
         type: 'string',
-        description: 'Registered LLM provider id.',
+        description: 'Provider id from the no-argument listing.',
       },
       model: {
         type: 'string',

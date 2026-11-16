@@ -139,7 +139,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort` 及路由指导。`allowedAgentPresets` 增加 `agent_preset` 枚举及默认或继承选择的引导。上下文继承和继续执行能力决定任务与后续工作描述。Agent 限制同时作用于继承自 preset 的委派工具的 schema、执行入口和指导文本，恢复历史 `toolFilter` 覆盖时也相同；同级 Agent 不受影响。preset 选择提示仅依赖工具配置，因此不依赖其他 preset 的声明顺序。
+生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort`。`provider` 的描述告诉模型仅在任务需要其他模型时才设置这些字段，并说明省略时使用的路由：父级当前模型和推理强度，或工具或后端配置的默认值。同一实例启用 `modelDiscovery` 时，它还指明 provider id 取自 `list_subagent_models`。`allowedAgentPresets` 增加 `agent_preset` 枚举及默认或继承选择的引导。上下文继承和继续执行能力决定任务与后续工作描述。Agent 限制同时作用于继承自 preset 的委派工具的 schema、执行入口和指导文本，恢复历史 `toolFilter` 覆盖时也相同；同级 Agent 不受影响。preset 选择提示仅依赖工具配置，因此不依赖其他 preset 的声明顺序。
 
 #### Token 影响
 
@@ -153,7 +153,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具的描述说明何时查询子级路由或强度，并要求省略可选查询字段而不是传空字符串；空字符串查询字段视为未提供。委派工具各自说明选择字段及其默认行为。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
+可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具的描述列出各参数组合的返回内容；空字符串查询字段视为未提供。委派工具各自说明选择字段、默认行为和取值来源。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
 
 #### Token 影响
 
