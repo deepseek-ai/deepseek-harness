@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { dueStage, stageBody, processStalePullRequests } from './remind.mjs'
+import { dueStage as dueAction, stageBody, processStalePullRequests } from './remind.mjs'
 
 const now = new Date('2026-11-30T00:00:00Z')
 const daysAgo = days => new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString()
@@ -9,6 +9,7 @@ const human = { login: 'author', type: 'User' }
 const bot = { login: 'github-actions[bot]', type: 'Bot' }
 const comment = (actor, days, body = 'ok') => ({ event: 'commented', actor, created_at: daysAgo(days), body })
 const reminder = (days, stage) => comment(bot, days, stageBody('author', stage))
+const dueStage = options => dueAction(options)?.days
 
 test('no reminder is due within 7 days of the last activity', () => {
   assert.equal(dueStage({ createdAt: daysAgo(6), timeline: [], now }), undefined)
@@ -31,6 +32,14 @@ test('a pull request closes after 21 days without activity and 7 days after the 
   assert.equal(dueStage({ createdAt: daysAgo(40), timeline: [reminder(30, 7)], now }), 14)
   // A 14-day reminder from before the last activity gives no notice.
   assert.equal(dueStage({ createdAt: daysAgo(60), timeline: [reminder(40, 14), comment(human, 25)], now }), 14)
+  // Reminders posted before closing existed announce no closing.
+  const legacy = comment(bot, 10, '<!-- stale-pr-reminder:14 -->\n@author This pull request has had no activity for 14 days.')
+  assert.equal(dueStage({ createdAt: daysAgo(40), timeline: [legacy], now }), 14)
+})
+
+test('a closing whose comment was posted retries the close without another comment', () => {
+  assert.deepEqual(dueAction({ createdAt: daysAgo(30), timeline: [reminder(9, 14)], now }), { days: 21, comment: true })
+  assert.deepEqual(dueAction({ createdAt: daysAgo(30), timeline: [reminder(9, 14), reminder(1, 21)], now }), { days: 21, comment: false })
 })
 
 test('human activity restarts the cycle and bot activity does not', () => {
@@ -97,12 +106,12 @@ test('reminders and closing mention the author and skip exempt and bot-authored 
   const core = { info() {}, warning: message => warnings.push(message), setFailed: message => failures.push(message) }
   await processStalePullRequests({ github, context: { repo: { owner: 'o', repo: 'r' } }, core, now, sleep: async ms => sleeps.push(ms) })
   assert.deepEqual(timelines, [1, 4, 6, 5, 7, 8])
-  // A failed close posts no closing comment, so the next run retries without repeating it.
+  // A failed close after its comment is retried on the next run without another comment.
   assert.deepEqual(warnings, ['#6: locked', '#8: close failed'])
   assert.equal(failures.length, 1)
-  assert.deepEqual(comments.map(({ issue_number }) => issue_number), [1, 4, 5, 7])
-  assert.match(comments[0].body, /^<!-- stale-pr-reminder:14 -->\n@author This pull request has had no activity for 14 days\./)
-  assert.match(comments[3].body, /^<!-- stale-pr-reminder:21 -->\n@author This pull request has had no activity for 21 days and is now closed\./)
+  assert.deepEqual(comments.map(({ issue_number }) => issue_number), [1, 4, 5, 7, 8])
+  assert.match(comments[0].body, /^<!-- stale-pr:14 -->\n@author This pull request has had no activity for 14 days\./)
+  assert.match(comments[3].body, /^<!-- stale-pr:21 -->\n@author This pull request has had no activity for 21 days and is now closed\./)
   assert.deepEqual(closed, [{ owner: 'o', repo: 'r', pull_number: 7, state: 'closed' }])
   assert.deepEqual(sleeps, [1000, 1000, 1000, 1000, 1000])
 })

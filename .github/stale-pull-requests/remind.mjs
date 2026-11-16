@@ -29,7 +29,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 // GitHub asks integrations to wait at least one second between content-creating requests.
 const COMMENT_INTERVAL_MS = 1000
 const MAX_COMMENTS_PER_RUN = 100
-const MARKER = /<!-- stale-pr-reminder:(\d+) -->/
+// Reminders posted before closing existed use `stale-pr-reminder` and announce no closing, so they are ignored.
+const MARKER = /<!-- stale-pr:(\d+) -->/
 // Review bots that use ordinary user accounts.
 const BOT_LOGINS = new Set(['ds-review-bot'])
 
@@ -66,7 +67,9 @@ function activityTimes(event) {
  * @param {string} options.createdAt Pull-request creation time.
  * @param {object[]} options.timeline Complete issue timeline of the pull request.
  * @param {Date} options.now Evaluation time.
- * @returns {number | undefined} Due stage in days, `CLOSE_DAYS` for closing, or `undefined` when nothing is due.
+ * @returns {{ days: number, comment: boolean } | undefined} Due stage in days, `CLOSE_DAYS` for closing, and whether its
+ *   comment is still unposted; `undefined` when nothing is due. A closing whose comment was posted but whose close failed
+ *   is due again without a comment.
  */
 export function dueStage({ createdAt, timeline, now }) {
   const times = [createdAt, ...timeline.flatMap(activityTimes)].map(time => Date.parse(time)).filter(Number.isFinite)
@@ -77,11 +80,11 @@ export function dueStage({ createdAt, timeline, now }) {
   const finalReminder = REMINDER_DAYS.at(-1)
   const noticeMs = (CLOSE_DAYS - finalReminder) * DAY_MS
   if (now.getTime() - lastActivity >= CLOSE_DAYS * DAY_MS && sent.some(({ days, at }) => days === finalReminder && now.getTime() - at >= noticeMs)) {
-    return CLOSE_DAYS
+    return { days: CLOSE_DAYS, comment: !sent.some(({ days }) => days === CLOSE_DAYS) }
   }
   const due = REMINDER_DAYS.filter(days => now.getTime() - lastActivity >= days * DAY_MS).at(-1)
-  if (due === undefined) return undefined
-  return sent.some(({ days }) => days >= due) ? undefined : due
+  if (due === undefined || sent.some(({ days }) => days >= due)) return undefined
+  return { days: due, comment: true }
 }
 
 /**
@@ -94,7 +97,7 @@ export function stageBody(author, days) {
   const text = days === CLOSE_DAYS
     ? `@${author} This pull request has had no activity for ${days} days and is now closed. Reopen it, or ask a maintainer to reopen it, if you continue the work.`
     : `@${author} This pull request has had no activity for ${days} days. Please update it, reply to keep it open, or close it if it is no longer needed. Pull requests are closed after ${CLOSE_DAYS} days without activity and at least ${CLOSE_DAYS - REMINDER_DAYS.at(-1)} days after the ${REMINDER_DAYS.at(-1)}-day reminder. Add the \`${EXEMPT_LABEL}\` label, or ask a maintainer to add it, to stop reminders and closing.`
-  return `<!-- stale-pr-reminder:${days} -->\n${text}`
+  return `<!-- stale-pr:${days} -->\n${text}`
 }
 
 /**
@@ -118,13 +121,15 @@ export async function processStalePullRequests({ github, context, core, now = ne
     if (pull.labels.some(label => label.name === EXEMPT_LABEL)) continue
     try {
       const timeline = await github.paginate(github.rest.issues.listEventsForTimeline, { owner, repo, issue_number: pull.number, per_page: 100 })
-      const days = dueStage({ createdAt: pull.created_at, timeline, now })
-      if (days === undefined) continue
-      if (posted > 0) await sleep(COMMENT_INTERVAL_MS)
-      // Closing first keeps a failed close from repeating the closing comment on later runs.
+      const stage = dueStage({ createdAt: pull.created_at, timeline, now })
+      if (stage === undefined) continue
+      const { days } = stage
+      if (stage.comment) {
+        if (posted > 0) await sleep(COMMENT_INTERVAL_MS)
+        await github.rest.issues.createComment({ owner, repo, issue_number: pull.number, body: stageBody(pull.user.login, days) })
+        posted++
+      }
       if (days === CLOSE_DAYS) await github.rest.pulls.update({ owner, repo, pull_number: pull.number, state: 'closed' })
-      await github.rest.issues.createComment({ owner, repo, issue_number: pull.number, body: stageBody(pull.user.login, days) })
-      posted++
       core.info(days === CLOSE_DAYS ? `#${pull.number}: closed after ${days} days without activity` : `#${pull.number}: posted the ${days}-day reminder`)
     } catch (error) {
       failed++
