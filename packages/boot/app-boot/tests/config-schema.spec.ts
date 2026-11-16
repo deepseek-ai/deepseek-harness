@@ -445,6 +445,14 @@ describe('collectConfigSchemas', () => {
     expect(result['x-cordis'].complete).toBe(false)
   })
 
+  it('leaves the caller\'s include patches unchanged when a patch replaces a group config', async () => {
+    const patches = [{ id: 'group', config: [{ name: 'noop' }] }]
+    await collectConfigSchemas(profile, [row('cordis:include', {
+      path: './missing.yml', initial: [{ ...row('cordis:group', []), id: 'group', group: true }], patches,
+    })], resolution)
+    expect(patches).toEqual([{ id: 'group', config: [{ name: 'noop' }] }])
+  })
+
   it('does not validate contents of an insertion that Loader skips', async () => {
     const result = await collectConfigSchemas(profile, [row('cordis:include', {
       path: './missing.yml', initial: [row('noop')], patches: [{ id: 'missing', insert: [null] }, { config: {} }],

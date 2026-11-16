@@ -39,5 +39,12 @@ describe('Include YAML dialect', () => {
     }
     expect(entryYamlErrorPosition(error)).toEqual({ line: 3, column: 1 })
     expect(entryYamlErrorPosition(new Error('other'))).toBeUndefined()
+    let alias: unknown
+    try {
+      parseEntryYaml('- id: a\n  config: *missing\n')
+    } catch (caught) {
+      alias = caught
+    }
+    expect(entryYamlErrorPosition(alias)).toEqual({ line: 2, column: 11 })
   })
 })

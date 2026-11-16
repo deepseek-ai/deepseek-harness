@@ -165,7 +165,7 @@ export async function collectConfigSchemas(
       if (hasNonRecordEntry(rows)) throw new Error(`include ${filename} has an entry that is not a mapping; child declarations are unavailable`)
       let children: EntryOptions[]
       try {
-        children = applyEntryPatches(rows as EntryOptions[], patches, warn(path)).data
+        children = applyEntryPatches(rows as EntryOptions[], structuredClone(patches), warn(path)).data
       } catch (error) {
         throw new Error(`include patches could not be composed for ${filename}; child declarations are unavailable`, { cause: error })
       }

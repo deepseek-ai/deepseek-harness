@@ -143,6 +143,20 @@ describe('renderConfigDump', () => {
     expect(dump).toContain('# == base.yml, patched by a.yml, b.yml\n- id: g')
   })
 
+  it('keeps generated ids of anonymous replaced group children across layers', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: g\n  name: ./group.mjs\n  group: true\n  config: []\n- id: other\n  name: ./noop.mjs\n')
+    const patches = [{ id: 'g', config: [{ name: './noop.mjs' }] }]
+    const dump = renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches },
+      { label: 'b.yml', patches: [{ id: 'other', disabled: true }] },
+    ], () => {})
+    expect(dump).toContain('# == base.yml, patched by a.yml\n- id: g')
+    expect(dump).toContain('# == base.yml, patched by b.yml\n- id: other')
+    expect(patches).toEqual([{ id: 'g', config: [{ name: './noop.mjs' }] }])
+  })
+
   it('drops the children of a replaced group config from the patch index', () => {
     const dir = tmp()
     const base = join(dir, 'base.yml')

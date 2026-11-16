@@ -670,12 +670,15 @@ export function renderConfigDump(
   const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The patches are cloned per call: applyEntryPatches clones entries and
-  // inserted rows but assigns override values such as `config` by reference,
-  // so each snapshot keeps its own copies of those values.
+  // Every snapshot reads one clone of the patches: applyEntryPatches writes the
+  // ids it generates for anonymous children of a replaced group config into
+  // that clone, so each prefix assigns them the same ids. The snapshots share
+  // override values by reference and only read them.
+  const patches = structuredClone(layers.flatMap(layer => layer.patches))
+  const ends: number[] = []
+  for (const layer of layers) ends.push((ends.at(-1) ?? 0) + layer.patches.length)
   const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches>['data'] => {
-    const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
-    return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
+    return applyEntryPatches(base, patches.slice(0, ends[count - 1]), (message: string, ...args: unknown[]) => {
       // The include logs through cordis's printf-style logger (`%C` = code); a
       // dump has no logger, so substitute inline for a plain line.
       let index = 0
