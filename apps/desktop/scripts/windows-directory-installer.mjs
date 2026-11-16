@@ -87,10 +87,12 @@ export function installWindowsDirectoryInstaller() {
 /**
  * Retain the original uninstall directory and bypass shared cleanup for directory-only removal.
  * @param {string} source - Pinned upstream uninstaller source.
- * @returns {string} Uninstaller with long-path application removal and no upstream RMDir data removal.
+ * @returns {string} Uninstaller with long-path removal and upgrade rollback, without upstream RMDir data removal.
  */
 export function directoryUninstaller(source) {
   let normalized = source.replaceAll('\r\n', '\n')
+  normalized = normalized.replaceAll('"$INSTDIR$R0', '"\\\\?\\$INSTDIR$R0')
+    .replaceAll('"$PLUGINSDIR\\old-install', '"\\\\?\\$PLUGINSDIR\\old-install')
   normalized = replaceOnce(normalized, 'Function un.onInit\n', 'Var dshUninstallDirectory\nFunction un.onInit\n  StrCpy $dshUninstallDirectory $INSTDIR\n')
   normalized = replaceOnce(normalized, '  !insertmacro initMultiUser', `  !insertmacro initMultiUser
   StrCpy $INSTDIR $dshUninstallDirectory

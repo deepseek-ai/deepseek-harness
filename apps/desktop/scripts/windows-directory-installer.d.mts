@@ -17,7 +17,7 @@ export function directoryInstallerExits(source: string): string
 /**
  * Retain the original uninstall directory, reject another installation owner, and use native data cleanup.
  * @param source - Pinned upstream uninstaller source.
- * @returns Uninstaller with long-path application removal and no upstream RMDir data removal.
+ * @returns Uninstaller with long-path removal and upgrade rollback, without upstream RMDir data removal.
  */
 export function directoryUninstaller(source: string): string
 

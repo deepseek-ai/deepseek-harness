@@ -57,6 +57,10 @@ try {
         } finally { $setup.Dispose() }
         $entry = Get-ItemProperty ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey)
         if ($entry.InstallLocation.TrimEnd('\') -ne $installPath) { throw 'Uninstall entry lacks InstallLocation' }
+        $deepAsset = Join-Path $installPath (('nested-' * 20) + '\' + ('asset-' * 15) + '.txt')
+        if ($deepAsset.Length -le 260) { throw 'Uninstall fixture must exceed MAX_PATH' }
+        [IO.Directory]::CreateDirectory('\\?\' + [IO.Path]::GetDirectoryName($deepAsset)) | Out-Null
+        [IO.File]::WriteAllText(('\\?\' + $deepAsset), 'long path payload')
         foreach ($path in @($homePath, $productDataPath, $userDataPath, $cachePath, $externalPath)) { New-Item -ItemType Directory -Force -Path $path | Out-Null }
         [IO.File]::WriteAllText((Join-Path $externalPath 'keep.txt'), 'outside data root')
         if (-not (Test-Path -LiteralPath (Join-Path $userDataPath 'linked-project'))) {
