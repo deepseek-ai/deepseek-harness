@@ -36,7 +36,7 @@ en.get locale=en_US query=
 web.notice=赠金已到账 / 已赠送您 4.00 元 DSH 体验赠金。 acks=1
 stack.hidden cards=3 acks=0
 stack.initial cards=3 acks=stack-first widths=260,252 inset=10 offset=-4 transition=0.25s ease-out
-stack.update-tag card=260 left-inset=10 card-above-account-row=true tag-in-account-row=true
+stack.update-tag card=260 left-inset=10 card-above-account-row=true tag-in-account-row=true floats-over-list=true
 stack.resized sidebar=360 card=280 left-inset=10
 stack.resized sidebar=280 card=260 left-inset=10
 stack.rail cards=3 visible=false dismissed=0

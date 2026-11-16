@@ -698,7 +698,10 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     expect(taggedBox!.y + taggedBox!.height).toBeLessThanOrEqual(accountBox!.y)
     expect(tagBox!.y).toBeGreaterThanOrEqual(accountBox!.y)
     expect(tagBox!.y + tagBox!.height).toBeLessThanOrEqual(accountBox!.y + accountBox!.height)
-    observations.push('stack.update-tag card=260 left-inset=10 card-above-account-row=true tag-in-account-row=true')
+    // The card floats over the session list: the list still reaches down to the card's bottom edge.
+    const listBottom = await stackPage.locator('[class*="scrollRegion"]').first().evaluate(element => element.getBoundingClientRect().bottom)
+    expect(listBottom).toBeGreaterThanOrEqual(taggedBox!.y + taggedBox!.height - 1)
+    observations.push('stack.update-tag card=260 left-inset=10 card-above-account-row=true tag-in-account-row=true floats-over-list=true')
     await publishUpdate({ phase: 'idle' })
     await updateTag.waitFor({ state: 'detached' })
     for (const [delta, width, edge] of [[80, 280, 360], [-80, 260, 280]] as const) {

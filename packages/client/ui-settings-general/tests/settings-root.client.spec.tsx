@@ -563,7 +563,7 @@ it('passes current Settings key labels to the launcher and removes them when unb
 
 it('renders the notice row before the launcher row and opens the requested section', () => {
   const { renderSlot } = mount({ rows: [{ id: 'general', order: 0, label: 'General' }, { id: 'account', order: 1, label: 'Account' }] })
-  const notice = screen.getByText('Account notice')
+  const notice = screen.getByText('Account notice').parentElement!
   expect(notice.nextElementSibling?.contains(screen.getByRole('button', { name: 'Settings' }))).toBe(true)
   const owner = renderSlot.mock.calls.find(call => call[0] === 'settings.notice')!
   act(() => { (owner[1] as { openSettings: (sectionId?: string) => void }).openSettings('account') })
@@ -572,12 +572,12 @@ it('renders the notice row before the launcher row and opens the requested secti
 
 it('hides the notice row in the collapsed rail and keeps the same node', () => {
   const { setWide } = mount()
-  const notice = screen.getByText('Account notice')
+  const notice = screen.getByText('Account notice').parentElement!
   expect(notice.hidden).toBe(false)
   setWide(false)
-  expect(screen.getByText('Account notice')).toBe(notice)
+  expect(screen.getByText('Account notice').parentElement).toBe(notice)
   expect(notice.hidden).toBe(true)
   setWide(true)
-  expect(screen.getByText('Account notice')).toBe(notice)
+  expect(screen.getByText('Account notice').parentElement).toBe(notice)
   expect(notice.hidden).toBe(false)
 })

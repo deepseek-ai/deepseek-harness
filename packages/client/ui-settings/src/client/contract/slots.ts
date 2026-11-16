@@ -31,8 +31,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Optional sidebar account launcher; opens the shell-owned settings panel. */
     'settings.launcher': { kind: 'single'; scope: 'root'; owner: SettingsLauncherOwnerProps }
     /**
-     * Optional row above the launcher row, at the launcher row's full width;
-     * the shell hides it in the rail without unmounting it.
+     * Optional content anchored above the launcher row at its full width. The
+     * row takes no height, so the content floats over the sidebar list; the
+     * shell hides it in the rail without unmounting it.
      */
     'settings.notice': { kind: 'single'; scope: 'root'; owner: SettingsNoticeOwnerProps }
 

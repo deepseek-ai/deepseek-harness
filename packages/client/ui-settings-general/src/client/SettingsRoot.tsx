@@ -228,7 +228,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
 
   return (
     <>
-      <div hidden={!wide}>{renderSlot('settings.notice', { openSettings })}</div>
+      <div className={css.noticeRow} hidden={!wide}><div className={css.notice}>{renderSlot('settings.notice', { openSettings })}</div></div>
       <div className={clsx(css.triggerRow, !wide && css.railRow)}>
         {renderSlot('settings.launcher', {
           wide, settingsOpen: open, openSettings,
