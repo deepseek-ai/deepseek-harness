@@ -363,13 +363,8 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     const events = await readPersistedEvents(scaffold, childId)
     const userTexts = events.flatMap(event => event.type === 'user/message'
       && event.data.source.kind === 'user'
-      ? event.data.content.flatMap((block, index) => block.type === 'text' && index > 0 ? [block.text] : [])
+      ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
-    for (const event of events) {
-      if (event.type === 'user/message' && event.data.source.kind === 'user') {
-        expect(event.data.content[0]).toEqual({ type: 'text', text: 'This message is from the human user.\n\n' })
-      }
-    }
     expect(userTexts).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
     const delegatedTask = events.find(event => event.type === 'user/message'
       && event.data.source.kind === 'agent-message')
@@ -384,7 +379,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       .toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
     const imageMessage = events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'image'))
-    expect(imageMessage?.type === 'user/message' && imageMessage.data.content.map(block => block.type)).toEqual(['text', 'image'])
+    expect(imageMessage?.type === 'user/message' && imageMessage.data.content.map(block => block.type)).toEqual(['image'])
     const image = imageMessage?.type === 'user/message'
       ? imageMessage.data.content.find(block => block.type === 'image')
       : undefined

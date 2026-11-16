@@ -174,11 +174,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-本地可续聊 agent 收到的初始委派任务与后续 agent 间消息都使用 `agent-message` source，并记录实际发送方的 Session ID。两者均以 `Agent <sender name> sent a message: ` 开头，后接原始内容块。真人直接发给子会话的消息在进入模型步骤时加上 `This message is from the human user.` 前缀，冷恢复后也一样。原始内容块、消息 ID 和 `user` source 保持不变；排队编辑先于前缀生效。主 agent 的输入与已有历史不变。
+本地可续聊 agent 收到的初始委派任务与后续 agent 间消息都使用 `agent-message` source，并记录实际发送方的 Session ID。两者均以 `Agent <sender name> sent a message: ` 开头，后接原始内容块。真人直接发给子会话的消息保留原始内容和 `user` source。下方的子级委派范围声明告诉子 agent：不带 agent 前缀的 user 消息来自真人用户，并应在回复中直接回答。主 agent 的输入与已有历史不变。
 
 #### Token 影响
 
-每条初始委派任务、agent 间消息或发给子 agent 的真人消息增加一个简短作者前缀。主 agent 的真人输入不增加来源 token。
+每条初始委派任务或 agent 间消息增加一个简短作者前缀。真人输入不增加来源 token；作者规则属于子 agent 固定的委派声明。
 
 #### KV Cache 影响
 
@@ -227,7 +227,7 @@ Your final answer is delivered automatically if your parent is still online. Inc
 ##### 委派范围声明
 
 ```markdown
-You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the job needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.
+You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with "Agent <name> sent a message:". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply.
 ```
 
 #### Token 影响

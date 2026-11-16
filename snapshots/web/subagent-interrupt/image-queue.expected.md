@@ -25,7 +25,7 @@
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation"
-- text: {{clock}} This message is from the human user. Keep working until I stop you again. {{clock}}
+- text: {{clock}} Keep working until I stop you again. {{clock}}
 - button "Copy"
 - paragraph: partial
 - status: Deep diving
