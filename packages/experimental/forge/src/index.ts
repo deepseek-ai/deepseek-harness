@@ -7,7 +7,8 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   BranchUpdateRequest, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeCommitList, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData,
+  ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest,
+  ForgeReviewData,
   ForgeReviewChange, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
   ForgeReviewWriteResult,
   ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
@@ -116,13 +117,18 @@ export class ForgeService extends Service {
    * fiber. Watches of that forge receive an `unavailable` failure when the
    * registration ends. Unregistering cancels and awaits its in-flight calls;
    * results from the withdrawn registration are discarded.
-   * @param provider - provider to serve `provider.forge`.
+   * @param provider - provider to serve `provider.forge` on `provider.hosts`.
    * @returns the disposer that unregisters the provider and waits for its calls to finish.
-   * @throws when another provider already serves the same forge.
+   * @throws when another provider already serves the same forge or one of the same hosts, compared without case.
    */
   register(provider: ForgeProvider): () => Promise<void> {
     const dispose = this.ctx.effect(() => {
       if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
+      for (const { provider: other } of this.providers.values()) {
+        const taken = new Set(other.hosts.map(host => host.toLowerCase()))
+        const host = provider.hosts.find(candidate => taken.has(candidate.toLowerCase()))
+        if (host !== undefined) throw new Error(`forge: host "${host}" is already served by the "${other.forge}" provider`)
+      }
       const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set() }
       this.providers.set(provider.forge, registration)
       for (const watch of this.watches.values()) {
@@ -145,7 +151,17 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Map a Git remote URL to a repository through the first provider that serves it.
+   * Name a forge family and its change requests for readers.
+   * @param forge - forge family name, such as `github`.
+   * @returns the registered provider's description, or undefined when no provider serves the family.
+   */
+  describe(forge: string): ForgeDescription | undefined {
+    const provider = this.providers.get(forge)?.provider
+    return provider === undefined ? undefined : { forge, label: provider.label, changeRequestNoun: provider.changeRequestNoun }
+  }
+
+  /**
+   * Map a Git remote URL to a repository through the provider that serves its host.
    * @param url - fetch or push URL as Git reports it.
    * @returns the repository, or undefined when no provider serves the URL.
    */
@@ -158,7 +174,7 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Map a change request web URL through the first provider that serves it.
+   * Map a change request web URL through the provider that serves its host.
    * @param url - web URL of a pull or merge request.
    * @returns the change request, or undefined when no provider serves the URL.
    */

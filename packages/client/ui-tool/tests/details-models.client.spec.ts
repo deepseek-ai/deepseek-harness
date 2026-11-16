@@ -223,6 +223,9 @@ describe('inspection detail adapters', () => {
   })
 
   it('accepts Cordis, workflow, and Ralph producer results', () => {
+    expect(details('cordis_inspect', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
+    expect(details('cordis_inspect', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
+    expect(details('cordis_inspect', '{}')).toBeNull()
     expect(details('cordis_inspect_list', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
     expect(details('cordis_inspect_query', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
     expect(details('cordis_inspect_self', '{"mode":"client","plugins":[]}')?.summary).toBe('0 dynamic plugins')

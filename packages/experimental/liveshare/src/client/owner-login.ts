@@ -258,7 +258,7 @@ export function hostOwnerLogin(
     async cancel(state) {
       try {
         await post(CANCEL_ROUTE, { state })
-      } catch {
+      } catch (_cancelFailed) {
         // A transaction left behind expires on its own; this page has nothing else to do about it.
       }
     },
@@ -308,7 +308,7 @@ export function beginOwnerLogin(options: {
   const close = (): void => {
     try {
       popup.close()
-    } catch {
+    } catch (_windowGone) {
       // A window already gone needs no closing.
     }
   }
@@ -358,7 +358,7 @@ export function beginOwnerLogin(options: {
       // The sign-in page closes on this acknowledgement instead of navigating the opener away.
       try {
         popup.postMessage({ type: OWNER_LOGIN_ACK_TYPE, state: code.state }, minted.messageOrigin)
-      } catch {
+      } catch (_windowUnreachable) {
         // A window that cannot be answered closes itself; the host still redeems this code.
       }
       report('verifying')

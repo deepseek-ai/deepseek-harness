@@ -29,7 +29,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
     initialized: async () => {},
-    invoke: async () => encodePtcJsonWire(42),
+    invoke: async () => ({ value: encodePtcJsonWire(42) }),
     log: (text) => { logs.push(text) },
     image: () => {},
     outputLimit: () => {},
@@ -49,7 +49,7 @@ it('clears the environment and returns a binding result after captured output', 
   const h = await setup()
   h.methods.invoke = async (_global, _name, wire) => {
     const args = decodePtcJsonWire(wire) as { n: number }
-    return encodePtcJsonWire(args.n * 2)
+    return { value: encodePtcJsonWire(args.n * 2) }
   }
   const result = await h.run('const doubled = await tools.echo({ n: 21 }); inspect("got", doubled); return { doubled };')
   expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
@@ -61,6 +61,22 @@ it('clears the environment and returns a binding result after captured output', 
   h.peer.$close()
   await h.main
   expect(h.state.exitCode).toBeUndefined()
+})
+
+it('preserves registered Images while inspecting a binding container', async () => {
+  const h = await setup()
+  const shot = {}
+  const wire = encodePtcJsonWire({ shot }, candidate => candidate === shot ? {
+    kind: 'image', id: 'selected', attachmentId: 'sha256:selected', path: '/selected.png', width: 8, height: 4,
+  } : undefined)
+  h.methods.invoke = async () => ({ value: wire, inspection: 'selected screenshot' })
+  const images: string[] = []
+  h.methods.image = (id) => { images.push(id) }
+  const result = await h.run('const result = await tools.echo({}); inspect(result); inspect(result.shot); return result.shot.width')
+  expect(result.error).toBeUndefined()
+  expect(decodePtcJsonWire(result.value)).toBe(8)
+  expect(h.logs).toEqual(['selected screenshot\n'])
+  expect(images).toEqual(['selected'])
 })
 
 it.each(['function-body', 'repl', 'script'] as const)('provides console in the owning %s realm without replacing the host console', async (format) => {
@@ -75,16 +91,16 @@ it.each(['function-body', 'repl', 'script'] as const)('provides console in the o
 
 it('keeps unfinished temporary calls pending and suppresses later logs while awaiting host shutdown', async () => {
   const h = await setup()
-  const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
+  const release = Promise.withResolvers<Awaited<ReturnType<HostMethods['invoke']>>>()
   h.methods.invoke = () => release.promise
   try {
     expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => inspect("late rejection")); setImmediate(() => inspect("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
-    release.resolve(encodePtcJsonWire(42))
+    release.resolve({ value: encodePtcJsonWire(42) })
     await nextTurn()
     expect(h.logs).toEqual([])
-  } finally { release.resolve(encodePtcJsonWire(null)) }
+  } finally { release.resolve({ value: encodePtcJsonWire(null) }) }
 })
 
 it('rejects a binding call that the host fails during the run', async () => {
@@ -96,8 +112,8 @@ it('rejects a binding call that the host fails during the run', async () => {
 
 it.each(['function-body', 'repl', 'script'] as const)('leaves an unawaited call pending when a temporary %s process closes after the result', async (format) => {
   const h = await setup()
-  const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
-  onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
+  const pending = Promise.withResolvers<Awaited<ReturnType<HostMethods['invoke']>>>()
+  onTestFinished(() => { pending.resolve({ value: encodePtcJsonWire(null) }) })
   h.methods.invoke = () => pending.promise
   const code = format === 'function-body' ? 'void tools.echo({}).catch(() => {}); return 42' : 'void tools.echo({}).catch(() => {}); 42'
   expect(decodePtcJsonWire((await h.run(code, 1024, format)).value)).toBe(42)
@@ -147,7 +163,7 @@ it.each([
 
 it('sends no binding calls or output notifications after returning its result', async () => {
   const h = await setup()
-  const invoked = vi.fn(async () => encodePtcJsonWire(1))
+  const invoked = vi.fn(async () => ({ value: encodePtcJsonWire(1) }))
   const limited = vi.fn()
   h.methods.invoke = invoked
   h.methods.outputLimit = limited
@@ -200,7 +216,7 @@ it('records malformed host traffic after completion', async () => {
 
 it('captures image selection during execution and revokes it for late or external calls', async () => {
   const h = await setup()
-  h.methods.invoke = async () => [{ kind: 'image', id: 'one', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 4 }]
+  h.methods.invoke = async () => ({ value: [{ kind: 'image', id: 'one', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 4 }] })
   const selected = vi.fn()
   h.methods.image = selected
   const done = Promise.withResolvers<undefined>()

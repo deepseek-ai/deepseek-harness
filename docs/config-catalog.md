@@ -262,7 +262,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:111`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:83`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -1182,7 +1182,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:483`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:485`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1206,7 +1206,7 @@ export interface Config {
   worktreePrefix?: string
   /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
-  /** Most untracked files a local diff or the local changes card includes. */
+  /** Most untracked files a local diff or the local changes row includes. */
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
@@ -1270,7 +1270,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:603`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:638`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1293,7 +1293,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-github`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-github/src/index.ts:14`](../packages/experimental/forge-github/src/index.ts)
+- `source`: [`packages/experimental/forge-github/src/index.ts:19`](../packages/experimental/forge-github/src/index.ts)
 
 ```ts config-catalog
 /** GitHub CLI executable, served hosts, and invocation limits. */
@@ -1325,7 +1325,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-session`
 
 - `inject`: `forge` · `sessions` · `sessionProjections`
-- `source`: [`packages/experimental/forge-session/src/types.ts:91`](../packages/experimental/forge-session/src/types.ts)
+- `source`: [`packages/experimental/forge-session/src/types.ts:160`](../packages/experimental/forge-session/src/types.ts)
 
 ```ts config-catalog
 /** Deployment settings of `forgeSession`. */
@@ -1628,6 +1628,39 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-file-reference-local -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-forge-gitlab -->
+<a id="deepseek-aidsh-forge-gitlab"></a>
+
+## `@deepseek-ai/dsh-forge-gitlab`
+
+- `inject`: `forge`
+- `source`: [`packages/experimental/forge-gitlab/src/index.ts:19`](../packages/experimental/forge-gitlab/src/index.ts)
+
+```ts config-catalog
+/** GitLab CLI executable, served hosts, and read limits. */
+export interface Config {
+  /** GitLab CLI executable name or absolute host path. */
+  glabCommand?: string
+  /** Host names this provider serves; list self-managed GitLab hosts explicitly. */
+  hosts?: string[]
+  /** Deadline in milliseconds for one `glab` invocation. */
+  timeoutMs?: number
+  /** Maximum captured bytes per `glab` output stream and combined JSON bytes of one complete check read or review read. */
+  maxOutputBytes?: number
+  /** Most review threads one review read returns, which reports itself truncated past it. */
+  maxReviewThreads?: number
+  /** Most commits one merge request commit listing returns, the oldest ones when there are more. */
+  maxCommits?: number
+  /** Most merge requests one status query reads; GitLab refuses a query over its complexity limit, which halves the batch. */
+  statusBatchSize?: number
+  /** Most `glab` processes one status fetch runs at once. */
+  maxConcurrentRequests?: number
+  /** Most bytes of diff version patches kept in memory for the hunks of outdated review threads. */
+  maxCachedVersionBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-forge-gitlab -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-fs-local -->
 <a id="deepseek-aidsh-fs-local"></a>
@@ -2707,7 +2740,7 @@ export interface Config {
 
 - `inject`: `shell` · `approval` · `sessions` · `agents` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:154`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:161`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -2844,14 +2877,14 @@ export interface Config {
 
 - `inject`: `pluginManager`
 - `refs`: [`NpmFileSource`](subsystems/boot.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/boot/plugin-market/src/index.ts:44`](../packages/boot/plugin-market/src/index.ts)
+- `source`: [`packages/boot/plugin-market/src/index.ts:45`](../packages/boot/plugin-market/src/index.ts)
 
 ```ts config-catalog
 /** Index sources and fetch limits. */
 export interface Config {
   /** Index URLs in display order; Settings and `setIndexes` write this field without remounting the service. */
   indexes: Volatile<string[]>
-  /** Deadline for one index fetch, including the body. */
+  /** Deadline for an HTTP index or detail file request, including its body. */
   fetchTimeoutMs: number
   /** Largest accepted index body in bytes. */
   maxBytes: number
@@ -2867,7 +2900,7 @@ export interface Config {
   detailCacheMaxBytes: number
   /** Directory of the partial clones, relative to the profile directory; absent means `.plugin-market/repositories`. */
   detailCacheDir?: string
-  /** Deadline of one Git command of the clone fallback. */
+  /** Deadline for a Git index read and for each Git command used to read an index or plugin details. */
   detailGitTimeoutMs: number
   /** npm file CDNs read in order; a read's `npmFileSources` moves the CDNs it names first. */
   detailNpmFileSources: NpmFileSource[]
@@ -4684,7 +4717,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:46`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:47`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -5146,7 +5179,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-working-directory`
 
 - `inject`: `fs` · `sessionProjections` · `systemPrompt`
-- `source`: [`packages/session/working-directory/src/index.ts:70`](../packages/session/working-directory/src/index.ts)
+- `source`: [`packages/session/working-directory/src/index.ts:64`](../packages/session/working-directory/src/index.ts)
 
 ```ts config-catalog
 /** Deployment default for Sessions without an original project directory. */
@@ -5238,12 +5271,11 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | — | [`packages/client/ui-secret-mask/src/index.ts`](../packages/client/ui-secret-mask/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session` | — | [`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-session-panel` | — | [`packages/client/ui-session-panel/src/index.ts`](../packages/client/ui-session-panel/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session-status` | `remoteAccess` · `sessions` · `sessionPersistence` · `typert` | [`packages/client/ui-session-status/src/index.ts`](../packages/client/ui-session-status/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings` | — | [`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | — | [`packages/client/ui-settings-agent-loop/src/index.ts`](../packages/client/ui-settings-agent-loop/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-general` | — | [`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | — | [`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-settings-plugins` | — | [`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-session-log` | — | [`packages/client/ui-settings-session-log/src/index.ts`](../packages/client/ui-settings-session-log/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-shell` | — | [`packages/client/ui-settings-shell/src/index.ts`](../packages/client/ui-settings-shell/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-subagent` | — | [`packages/client/ui-settings-subagent/src/index.ts`](../packages/client/ui-settings-subagent/src/index.ts) |

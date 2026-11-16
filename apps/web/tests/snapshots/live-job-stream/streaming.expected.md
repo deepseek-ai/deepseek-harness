@@ -1,7 +1,9 @@
-- list "Background jobs":
-  - listitem:
-    - button "Hide live output of printf 'streamed-%s\\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done" [expanded]: printf 'streamed-%s\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done bash {{duration}}
-    - button "Stop task printf 'streamed-%s\\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done"
-    - text: $ printf 'streamed-%s\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done
-    - button "Copy"
-    - text: streamed-marker-line
+- region "Background jobs":
+  - heading "Background jobs" [level=2]
+  - list:
+    - listitem:
+      - button "Hide live output of printf 'streamed-%s\\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done" [expanded]: printf 'streamed-%s\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done bash · running {{duration}}
+      - button "Stop task printf 'streamed-%s\\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done"
+      - text: $ printf 'streamed-%s\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done
+      - button "Copy"
+      - text: streamed-marker-line

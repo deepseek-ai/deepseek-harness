@@ -1,6 +1,6 @@
 /** Binds change requests to the Session that created, pushed, or tracked them, and watches the bound ones. */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestKey, ChangeRequestRef, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
@@ -8,10 +8,18 @@ import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { sameChangeRequestUrl } from './commands.ts'
+import { compileRules, sameChangeRequestUrl, validateRule } from './commands.ts'
+import type { CommandRules } from './commands.ts'
 import { BINDING_RECORD, forgeChangeRequestsProjection } from './projection.ts'
 import { observeReferences } from './reference-lookup.ts'
-import type { BindingState, Config, ForgeChangeRequestsState, SessionChangeRequest, SessionChangeRequestsListener } from './types.ts'
+import type {
+  BindingState,
+  Config,
+  ForgeChangeRequestsState,
+  ForgeCommandRule,
+  SessionChangeRequest,
+  SessionChangeRequestsListener,
+} from './types.ts'
 
 export type * from './types.ts'
 
@@ -23,6 +31,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Watchers of one Session and the change request watches they share. */
 interface SessionWatch {
+  readonly session: Session
   readonly listeners: Set<SessionChangeRequestsListener>
   /** Projection bindings that `forgeWatches` and the last notification reflect. */
   bindings: readonly BindingState[]
@@ -31,13 +40,14 @@ interface SessionWatch {
 
 /**
  * Session-scoped change request bindings. The `forgeChangeRequests`
- * projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`,
- * `gh pr checkout`, and `git push` results, including those of shell calls
- * inside PTC programs, and from `plugin:forge-session/binding` records.
- * After each push result, and when a caller reports the branch a Session
- * works on, the service looks up open change requests whose head is that
- * branch and records the unbound ones as discovered. Watching a Session
- * polls its visible change requests through `ctx.forge`.
+ * projection derives them from the results of the creation and reference
+ * commands that forge providers register through `registerCommands`,
+ * from `git push` results, including those of shell calls inside PTC
+ * programs, and from `plugin:forge-session/binding` records. After each push
+ * result, and when a caller reports the branch a Session works on, the
+ * service looks up open change requests whose head is that branch and
+ * records the unbound ones as discovered. Watching a Session polls its
+ * visible change requests through `ctx.forge`.
  */
 export class ForgeSessionService extends Service {
   static inject = ['forge', 'sessions', 'sessionProjections']
@@ -52,7 +62,19 @@ export class ForgeSessionService extends Service {
   private readonly discoveries = new Set<Promise<void>>()
   private readonly sessionLifetimes = new WeakMap<Session, AbortController>()
   private readonly lifetime = new AbortController()
+  /** Rules whose registration is live. */
+  private readonly rules = new Map<string, ForgeCommandRule>()
+  /** Rules the projection folds with: every rule registered in this service's lifetime, the latest per id and executable. */
+  private readonly recognized = new Map<string, ForgeCommandRule>()
+  private compiled: CommandRules = compileRules([])
+  /** The live rules, which alone run reference lookups. */
+  private live: CommandRules = compileRules([])
+  /** Registered handle of {@link compiled}; assigned during initialization. */
   private projection!: ProjectionHandle<ForgeChangeRequestsState>
+  private initialized = false
+  /** The running projection rebuild, which also folds rules registered while it runs. */
+  private rebuilding: Promise<void> | undefined
+  private stale = false
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forgeSession')
@@ -64,8 +86,48 @@ export class ForgeSessionService extends Service {
     this.discoveryTimeoutMs = discoveryTimeoutMs
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('forge-session service disposed'))
-      await Promise.allSettled(this.discoveries)
+      await Promise.allSettled([...this.discoveries, this.rebuilding])
     }, 'forge-session: stop discovery')
+  }
+
+  /**
+   * Register the commands of one forge CLI as an effect on the calling fiber.
+   * A rule that changes the recognized rule set re-registers the
+   * `forgeChangeRequests` projection at the new set's state version, so every
+   * Session refolds its log with the new rules when next read, including
+   * commands that ran before the registration, and watchers receive the
+   * refolded bindings. Disposal does not change the recognized set: the rule
+   * keeps recognizing commands until the service restarts or another rule
+   * replaces its id or executable, so unloading a provider, including at
+   * shutdown, leaves the checkpointed state version unchanged. Only live
+   * registrations run reference lookups, so a disposed rule starts no CLI
+   * process; lookups that started before a change finish with the rules they
+   * started with.
+   * @param rule - the CLI's executable, subcommands, change request page path, and selection.
+   * @returns the disposer that ends the registration.
+   * @throws when the rule is malformed, or a live registration has its id or executable.
+   */
+  registerCommands(rule: ForgeCommandRule): () => void {
+    validateRule(rule)
+    const dispose = this.ctx.effect(() => {
+      for (const existing of this.rules.values()) {
+        if (existing.id === rule.id || existing.executable === rule.executable) {
+          throw new Error(`forge-session: command rule ${JSON.stringify(rule.id)} conflicts with the registered rule ${JSON.stringify(existing.id)}`)
+        }
+      }
+      this.rules.set(rule.id, rule)
+      this.live = compileRules([...this.rules.values()])
+      for (const [id, existing] of this.recognized) {
+        if (id === rule.id || existing.executable === rule.executable) this.recognized.delete(id)
+      }
+      this.recognized.set(rule.id, rule)
+      this.scheduleRebuild()
+      return () => {
+        this.rules.delete(rule.id)
+        this.live = compileRules([...this.rules.values()])
+      }
+    }, 'forgeSession.registerCommands()')
+    return () => void dispose()
   }
 
   /**
@@ -134,7 +196,7 @@ export class ForgeSessionService extends Service {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(session)
       if (watch === undefined) {
-        watch = { listeners: new Set(), bindings: this.state(session).bindings, forgeWatches: new Map() }
+        watch = { session, listeners: new Set(), bindings: this.state(session).bindings, forgeWatches: new Map() }
         this.watches.set(session, watch)
         this.sync(watch)
       }
@@ -152,12 +214,13 @@ export class ForgeSessionService extends Service {
   }
 
   protected async [Service.init](): Promise<void> {
-    this.projection = await this.home.sessionProjections.register(forgeChangeRequestsProjection)
+    this.compiled = compileRules([...this.recognized.values()])
+    this.projection = await this.home.sessionProjections.register(forgeChangeRequestsProjection(this.compiled))
     // Events react against the projection, so the listener starts once its reader is ready.
     this.home.on('session/event', (session: Session, event: SessionEvent) => {
       this.react(session, event)
     })
-    observeReferences(this.home, this.discoveryTimeoutMs, (session, url) => {
+    observeReferences(this.home, this.discoveryTimeoutMs, () => this.live, (session, url) => {
       if (!this.state(session).bindings.some(binding => sameChangeRequestUrl(binding.url, url))) {
         appendPluginRecord(session, BINDING_RECORD, { action: 'reference', url })
       }
@@ -167,12 +230,69 @@ export class ForgeSessionService extends Service {
       this.sessionLifetimes.delete(session)
     })
     this.home.on('forge/providers-changed', () => {
-      for (const [session, watch] of [...this.watches]) {
-        if (this.watches.get(session) !== watch) continue
-        this.sync(watch)
-        this.notify(watch)
-      }
+      this.refresh(() => true)
     })
+    this.initialized = true
+    // Folds any rule registered while the projection registered; a rule set already compiled leaves the projection as is.
+    this.scheduleRebuild()
+  }
+
+  /**
+   * Re-register the projection after the rules registered in the current microtask. Only one rebuild runs at a time; a
+   * registration during a rebuild runs one more.
+   */
+  private scheduleRebuild(): void {
+    this.stale = true
+    if (!this.initialized || this.rebuilding !== undefined) return
+    this.rebuilding = this.rebuild().finally(() => { this.rebuilding = undefined })
+  }
+
+  private async rebuild(): Promise<void> {
+    await Promise.resolve()
+    while (this.stale) {
+      this.stale = false
+      const compiled = compileRules([...this.recognized.values()])
+      if (compiled.version === this.compiled.version) continue
+      try {
+        // A key registers at one state version at a time; the released handle stays readable until the swap.
+        await this.projection.dispose()
+        this.projection = await this.home.sessionProjections.register(forgeChangeRequestsProjection(compiled))
+        this.compiled = compiled
+      } catch (error: unknown) {
+        // A registration during service disposal fails because the fiber is no longer active.
+        if (this.home.fiber.state === FiberState.ACTIVE) await this.restore(error)
+        return
+      }
+      this.refresh((watch) => {
+        const { bindings } = this.state(watch.session)
+        if (bindings === watch.bindings) return false
+        watch.bindings = bindings
+        return true
+      })
+    }
+  }
+
+  /**
+   * Register the projection again with the rules it had, after registering it with new ones failed, so clients keep
+   * its view; the failure is logged, and an error when the projection could not be restored either.
+   */
+  private async restore(failure: unknown): Promise<void> {
+    const reason = (error: unknown): string => error instanceof Error ? error.message : String(error)
+    try {
+      this.projection = await this.home.sessionProjections.register(forgeChangeRequestsProjection(this.compiled))
+      this.home.logger.warn(`forge-session: re-registering the forgeChangeRequests projection with new command rules failed, so it keeps the earlier rules: ${reason(failure)}`)
+    } catch (error: unknown) {
+      this.home.logger.error(`forge-session: the forgeChangeRequests projection is unregistered, so clients no longer see bindings: ${reason(failure)}; restoring it failed: ${reason(error)}`)
+    }
+  }
+
+  /** Re-poll and notify the watches that `changed` selects. */
+  private refresh(changed: (watch: SessionWatch) => boolean): void {
+    for (const [session, watch] of [...this.watches]) {
+      if (this.watches.get(session) !== watch || !changed(watch)) continue
+      this.sync(watch)
+      this.notify(watch)
+    }
   }
 
   private state(session: Session): ForgeChangeRequestsState {

@@ -108,12 +108,12 @@ export class ForgeChangesService {
   /**
    * @param sidebar - the right sidebar's open path.
    * @param extensions - the Host's registered lenses and annotation limit, or null before the Host reports them.
-   * @param kinds - tab kinds of the changes view and the change request panel.
+   * @param kinds - tab kind of the changes view.
    */
   constructor(
     private readonly sidebar: ForgeChangesSidebar,
     readonly extensions: HostObservable<ForgeExtensionState | null>,
-    readonly kinds: { readonly changes: string; readonly panel: string },
+    readonly kinds: { readonly changes: string },
   ) {
     this.lenses = this.lensEntries
     this.annotationSources = this.sourceEntries

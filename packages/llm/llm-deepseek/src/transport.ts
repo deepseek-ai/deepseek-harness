@@ -15,6 +15,16 @@ export function providerErrorDetail(raw: unknown): string {
   return [fields.code, fields.type, fields.message].filter((value): value is string => typeof value === 'string').join(' ')
 }
 
+/** Provider-requested wait, in milliseconds, for an HTTP retry.
+ * @param headers - headers from the rejected response.
+ * @returns a positive delay for a numeric or HTTP-date Retry-After.
+ */
+export function retryAfterMs(headers?: Headers): number | undefined {
+  const retry = headers?.get('retry-after')
+  const delay = retry == null ? NaN : /^\d+(?:\.\d+)?$/u.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()
+  return Number.isFinite(delay) && delay > 0 ? delay : undefined
+}
+
 /** Classify a provider error without trusting arbitrary response fields.
  * @param raw - decoded response or in-band error event.
  * @param status - HTTP status when the error preceded streaming.
@@ -35,12 +45,11 @@ export function providerError(raw: unknown, status: number | undefined, headers?
   else if (status === 400 || status === 413 || type === 'invalid_request_error') code = 'INVALID_REQUEST'
   else if ((status !== undefined && status >= 500) || ['api_error', 'overloaded_error'].includes(type)) code = 'SERVER'
   else code = status === undefined ? 'SERVER' : `HTTP_${status}`
-  const retry = headers?.get('retry-after')
-  const delay = retry == null ? NaN : /^\d+(?:\.\d+)?$/u.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()
+  const delay = retryAfterMs(headers)
   const id = headers?.get('request-id') ?? headers?.get('x-request-id') ?? headers?.get('x-deepseek-request-id')
   return new LlmError(message, code, {
     ...status === undefined ? {} : { status },
     ...id ? { requestId: brandString<ProviderRequestId>(id) } : {},
-    ...Number.isFinite(delay) && delay > 0 ? { providerRetryAfterMs: delay } : {},
+    ...delay !== undefined ? { providerRetryAfterMs: delay } : {},
   })
 }

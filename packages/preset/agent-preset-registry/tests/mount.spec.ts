@@ -125,7 +125,7 @@ it('mounts a profile-denied row disabled and the same row active once exempted',
   writeFileSync(compatibilityPath, '{}\n')
   ctx.provide('profileContext', {
     name: 'test', dir: profileDir, patchPath: join(profileDir, 'cordis.patch.yml'), home: dir,
-    cwd: dir, installAnchor: join(dir, 'package.json'), startedBundles: [], overlays: [],
+    cwd: dir, installAnchor: join(dir, 'package.json'), startedBundles: [], overlayPaths: [],
     telemetryDisabledEnv: undefined,
   } satisfies ProfileContext)
   const row = { id: 'row', name: pathToFileURL(join(pluginDir, 'index.mjs')).href }

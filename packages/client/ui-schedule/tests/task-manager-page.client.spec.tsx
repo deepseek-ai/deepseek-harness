@@ -172,6 +172,7 @@ function mount(
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'),
     onRetry: vi.fn(async () => {}),
     onNewTask: vi.fn(),
+    onUseRecommendation: vi.fn(),
     onClearEnded: vi.fn(async () => {}),
     onCreateTask: vi.fn<TaskManagerPageProps['onCreateTask']>(async () => ({ created: at })),
     onOpenSession: vi.fn(),
@@ -837,6 +838,70 @@ describe('Task manager catalog', () => {
     expect(paths?.[17]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-detail)')
     expect(paths?.[18]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-inset)')
     expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
+  })
+
+  const RECOMMENDATION_IDS = ['dailyBrief', 'issueScan', 'pluginCompat', 'topicTracking', 'branchCleanup',
+    'weather', 'workout'] as const
+
+  function recommendations(dictionary: Dictionary = en): HTMLElement | null {
+    return screen.queryByRole('region', { name: dictionary['recommend.heading'] })
+  }
+
+  it('lists the built-in recommendations under the empty Enabled view and prefills each request', () => {
+    const h = mount({ records: [] }, en, {}, { startAtAll: false })
+    const buttons = within(recommendations()!).getAllByRole('button')
+    expect(buttons.map(button => button.getAttribute('aria-label')))
+      .toEqual(RECOMMENDATION_IDS.map(id => en[`recommend.${id}.title`]))
+    for (const [index, id] of RECOMMENDATION_IDS.entries()) {
+      const button = buttons[index]!
+      // The description and the run time are separate references, so a screen reader pauses between them.
+      expect(button.getAttribute('aria-describedby')!.split(' ').map(ref => document.getElementById(ref)?.textContent))
+        .toEqual([en[`recommend.${id}.description`], en[`recommend.${id}.schedule`]])
+      expect(button.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3)
+      fireEvent.click(button)
+      expect(h.props.onUseRecommendation).toHaveBeenLastCalledWith(en[`recommend.${id}.prompt`])
+    }
+    expect(h.props.onUseRecommendation).toHaveBeenCalledTimes(RECOMMENDATION_IDS.length)
+    expect(h.props.onNewTask).not.toHaveBeenCalled()
+    expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
+  })
+
+  it('shows the recommendations under the empty All view in the active language', () => {
+    mount({ records: [] }, zh)
+    const section = recommendations(zh)!
+    expect(within(section).getByRole('button', { name: zh['recommend.weather.title'] })).toBeDefined()
+    expect(section.textContent).toContain(zh['recommend.weather.schedule'])
+  })
+
+  it.each([
+    ['paused', 'list.emptyPaused'],
+    ['ended', 'list.emptyInactive'],
+  ] as const)('omits the recommendations from the empty %s view', (status, title) => {
+    mount({ records: [] })
+    const statuses = screen.getByRole('group', { name: en['statusFilter.label'] })
+    fireEvent.click(within(statuses).getByRole('button', { name: en[`status.${status}`] }))
+    expect(screen.getByRole('status').textContent).toContain(en[title])
+    expect(recommendations()).toBeNull()
+  })
+
+  it('omits the recommendations while rows are listed, a search matches nothing, or the catalog loads', () => {
+    const h = mount({ records })
+    expect(recommendations()).toBeNull()
+    fireEvent.change(screen.getByRole('searchbox', { name: en['search.label'] }), { target: { value: 'no such task' } })
+    expect(screen.getByRole('status').textContent).toContain(en['list.noMatches'])
+    expect(recommendations()).toBeNull()
+    h.view.unmount()
+    mount({ records: [], status: 'loading' })
+    expect(recommendations()).toBeNull()
+  })
+
+  it('lists every recommendation under the empty Enabled view while paused and ended tasks use their titles', () => {
+    mount({ records: [
+      { ...paused, title: en['recommend.dailyBrief.title'] },
+      { ...ended, title: en['recommend.weather.title'] },
+    ] }, en, {}, { startAtAll: false })
+    expect(within(recommendations()!).getAllByRole('button').map(button => button.getAttribute('aria-label')))
+      .toEqual(RECOMMENDATION_IDS.map(id => en[`recommend.${id}.title`]))
   })
 
   it('distinguishes an empty catalog, loading, and a failed read', () => {
@@ -2062,7 +2127,7 @@ describe('Task manager deletion', () => {
     const dialog = openDelete()
     const cancel = within(dialog).getByRole('button', { name: en['delete.cancel'] })
     const confirm = within(dialog).getByRole('button', { name: en['delete.confirm'] })
-    const content = dialog.querySelector(`.${css.confirmContent}`)!
+    const content = dialog.querySelector<HTMLElement>(`.${css.confirmContent}`)!
     expect(dialog.classList.contains(css.confirmDialog!)).toBe(true)
     expect(content.textContent).toContain(at.prompt)
     expect(content.contains(cancel)).toBe(false)
@@ -2075,9 +2140,16 @@ describe('Task manager deletion', () => {
     // installed. The dialog's cap must follow the padding of the Modal layer
     // that holds it, and the scrolling content must sit inside that cap instead
     // of pinning a number that a wrong layer padding could not contradict.
-    installStyles({ confirmDialog: css.confirmDialog, confirmContent: css.confirmContent })
+    installStyles({ confirmDialog: css.confirmDialog, confirmContent: css.confirmContent, confirmPrompt: css.confirmPrompt })
     expect(getComputedStyle(dialog).maxHeight).toBe(`calc(100dvh - ${MODAL_LAYER_PADDING * 2}px)`)
     expect(getComputedStyle(content).overflowY).toBe('auto')
+    // The instruction is a three-line excerpt, so a long one cannot stretch the dialog.
+    const prompt = within(content).getByText(/^Review release/)
+    const clamp = getComputedStyle(prompt)
+    expect(clamp.display).toBe('-webkit-box')
+    expect(clamp.getPropertyValue('-webkit-box-orient')).toBe('vertical')
+    expect(clamp.overflow).toBe('hidden')
+    expect(clamp.getPropertyValue('-webkit-line-clamp')).toBe('3')
     const footer = dialog.lastElementChild as HTMLElement
     expect(getComputedStyle(footer).flexShrink).toBe('0')
     fireEvent.click(confirm)

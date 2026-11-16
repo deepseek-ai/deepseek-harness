@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-mcp",
   "description": "Computer Use as an MCP stdio server: a dsh profile bundle that exposes cua_run_code to external agent harnesses",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

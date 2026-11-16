@@ -79,7 +79,7 @@ function discover(): string[] {
       for (const candidate of candidates) {
         try {
           if (statSync(candidate).isFile()) found.push(candidate)
-        } catch {
+        } catch (_noBundle) {
           // No bundle for this package: it may not build a runtime artifact.
         }
       }

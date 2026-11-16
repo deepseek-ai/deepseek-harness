@@ -496,6 +496,12 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
+  it('inlines only the plugin market index source address entry', () => {
+    expect(resolveId('@deepseek-ai/dsh-plugin-market-index/source')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-plugin-market-index')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-plugin-market-index/source/internal')).toThrow(/purity/)
+  })
+
   it.each(['file-drag'])('inlines the stateless %s entry without admitting its subpaths or UI plugin', (name) => {
     expect(resolveId(`@deepseek-ai/dsh-util-${name}`)).toBeNull()
     expect(() => resolveId(`@deepseek-ai/dsh-util-${name}/internal`)).toThrow(/purity/)

@@ -450,10 +450,11 @@ export interface LaunchOptions {
   harnessHome?: string
 }
 
-/** Dispose the booted tree and remove both owned temp roots, reporting every independent cleanup failure. */
-async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persistenceRoot: string): Promise<unknown[]> {
+/** Dispose the booted tree and remove the owned temp roots and overlay file, reporting every independent cleanup failure. */
+async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persistenceRoot: string, overlayPath: string): Promise<unknown[]> {
   const failures: unknown[] = []
   await Promise.resolve(ctx.fiber.dispose()).catch((error: unknown) => failures.push(error))
+  await rm(overlayPath, { force: true }).catch((error: unknown) => failures.push(error))
   await rm(workspaceCwd, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   await rm(persistenceRoot, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   return failures
@@ -526,6 +527,8 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // paths at load, and an in-process boot must NEVER touch the developer's
   // real ~/.dsh document or credential file.
   const harnessHome = options.harnessHome ?? join(workspaceCwd, '.dsh-home')
+  // Scaffolds sharing a harness home each watch their own process overlay file.
+  const overlayPath = join(harnessHome, 'profiles', 'scaffold', `${basename(workspaceCwd)}.overlay.patch.yml`)
   // Skill discovery is model-visible input, and its roots now resolve inside a
   // PRESET — a subtree this lane's include patches cannot reach, because the
   // roster mounts it directly per session rather than as a row of the booted
@@ -811,6 +814,8 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)
+      // Process-specific rows load like a `--patch` file, so profile reads see the launcher's overlay layer.
+      await writeFile(overlayPath, stringifyEntryYaml(processOverlays))
       const manifest = readProfileManifest('dsh', profileDir)
       manifest.dependencies = dependencies
       await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
@@ -819,7 +824,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         ...options.profile?.packageManager === undefined ? {} : { packageManager: options.profile.packageManager },
         cwd: workspaceCwd, home: harnessHome,
         startedBundles: loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers.map(layer => layer.packageName),
-        overlays: processOverlays, telemetryDisabledEnv: undefined,
+        overlayPaths: [overlayPath], telemetryDisabledEnv: undefined,
       }
       // HMR gates file-driven reloads on application readiness, which the
       // launcher commits after boot; this direct harness is ready at once.
@@ -975,7 +980,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }
   } catch (error) {
     if (process.cwd() !== originalCwd) process.chdir(originalCwd)
-    const cleanupFailures = await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot)
+    const cleanupFailures = await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot, overlayPath)
     if (publicProxy !== undefined) {
       await publicProxy.close().catch((closeError: unknown) => cleanupFailures.push(closeError))
     }
@@ -1051,7 +1056,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       }
       try {
         stopObservingSessions()
-        failures.push(...await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot))
+        failures.push(...await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot, overlayPath))
         if (publicProxy !== undefined) {
           try {
             await publicProxy.close()
@@ -1651,18 +1656,13 @@ function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): st
 /**
  * Capture the region's aria snapshot at a settled milestone: poll until two
  * consecutive normalized captures are equal — a single-shot capture races the
- * last React commits. A foreground shell command is a job while it runs, and
- * its removal reaches the browser one coalesced roster frame after the tool
- * result, so by default the capture first waits for the session header's
- * running-job control to leave; a scenario whose milestone is a running job
- * keeps it with `runningJobs: 'keep'`.
+ * last React commits.
  * @param page - the page under test.
  * @param selector - the region locator selector.
  * @param workspaceCwd - normalization input.
  * @param options - `normalizeAge` collapses relative-time buckets to `{{age}}`
  *   for a region whose rows are dated from live wall-clock state;
- *   `replacements` tokenizes scenario-owned values before generic normalization;
- *   `runningJobs` is `'settle'` (default: wait for no running-job control) or `'keep'`.
+ *   `replacements` tokenizes scenario-owned values before generic normalization.
  * @returns the stable normalized snapshot.
  */
 export async function captureStableAria(
@@ -1672,13 +1672,8 @@ export async function captureStableAria(
   options: {
     normalizeAge?: boolean
     replacements?: readonly (readonly [value: string, token: string])[]
-    runningJobs?: 'settle' | 'keep'
   } = {},
 ): Promise<string> {
-  if ((options.runningJobs ?? 'settle') === 'settle') {
-    await page.getByRole('button', { name: /background jobs? running/ })
-      .waitFor({ state: 'detached', timeout: 10_000 })
-  }
   const region = page.locator(selector).first()
   const age = options.normalizeAge === true
   const normalize = (snapshot: string): string => {

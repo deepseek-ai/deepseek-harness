@@ -2010,7 +2010,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         )
         before_resume = logs[RESTART_FIRST_SESSION_ID]
         with connect("resumed-smoke-model") as harness:
-            session = harness.resume_session(RESTART_FIRST_SESSION_ID)
+            session = harness.resume_session(RESTART_FIRST_SESSION_ID, {"permission_mode": "read-only"})
             if session.id != RESTART_FIRST_SESSION_ID:
                 raise AssertionError(f"resume changed the saved identity: {session.id}")
             if len(MockModelHandler.requests) != first_request + 2:
@@ -2058,7 +2058,20 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             raise AssertionError(f"resume did not persist the initialized model: {selection_events}")
         if requests[0].get("model") != "resumed-smoke-model":
             raise AssertionError(f"resumed request ignored the initialized model: {requests[0]}")
+        permission_events = [
+            {"type": record["type"], "data": record["data"]}
+            for record in restored[len(before_resume):]
+            if record.get("type") in {"permission/preset", "sandbox/mode", "approval/policy"}
+        ]
+        expected_permissions = [
+            {"type": "permission/preset", "data": {"preset": "read-only"}},
+            {"type": "sandbox/mode", "data": {"mode": "read-only"}},
+            {"type": "approval/policy", "data": {"policy": "ask"}},
+        ]
+        if permission_events != expected_permissions:
+            raise AssertionError(f"resume did not persist the requested permissions: {permission_events}")
         files["resume.json"] = json.dumps({
+            "permissionEvents": permission_events,
             "model": requests[0].get("model"),
             "final_response": resumed.final_response,
             "eventTypes": [event.get("type") for event in resumed.events],

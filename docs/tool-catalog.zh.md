@@ -31,7 +31,7 @@
 | `@deepseek-ai/dsh-tool-office` | `office_convert`、`office_recalculate`、`office_render` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.agents`、`ctx.officeKit`、`ctx.attachments and ctx.llm for office_render` | `tool/call`、`tool/result with rendered image attachments`、`temporary converted files in the Office kit output store` | - | Agent 成功加载 Office 技能后，从下一步起向其声明这些工具；上一次请求头已声明 Office 工具时继续保留。未安装 LibreOffice Kit 时，已声明工具的调用以 Office 服务的 unavailable 错误失败。 |
 | `@deepseek-ai/dsh-tool-present` | `present` | `ctx.workingDirectory`、`ctx.tools`, `ctx.fs`, `ctx.agents` | `tool/call`, `deliverables/presented 在成功的最终结果之后`, `tool/result` | - | 交付归调用方 Session 所有；Web ui-deliverables 提供源文件打开与卡片。 |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.workingDirectory`、`ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
-| `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect_list`, `cordis_inspect_query` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | 创造模式提供两个只读运行时检查工具。Cordis host runner 提供检查注册表；Client 查询需要已连接页面。持久化变更编写为组合包，再通过 plugin_manager 安装。 |
+| `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | 标准模式和创造模式提供一个只读运行时检查工具。省略 query 获取 provider 目录；传入 query 查询已声明的方法。Cordis host runner 提供检查注册表；Client 查询需要已连接页面。持久化变更编写为组合包，再通过 plugin_manager 安装。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -627,7 +627,7 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
 
 ### `run_code`
 
-针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，异步函数的函数体（仅限可擦除语法，支持顶层 `await` 和 `return`）；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。使用 inspect(...values) 展示选定的文本和图片。程序是异步 TypeScript 函数的函数体，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层 await 和 return。使用 inspect(...values) 展示输出。不要使用 console。每次调用在新的 Node 进程中运行，可通过 await import(...) 使用 Node API。相对路径以传入的工作目录为准；process.env 初始为空。直接文件系统访问遵循本次执行的沙箱策略。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
+针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，异步函数的函数体（仅限可擦除语法，支持顶层 `await` 和 `return`）；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。使用 inspect(...values) 展示选定的文本和图片。程序是异步 TypeScript 函数的函数体，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层 await 和 return。使用 inspect(...values) 展示输出。不要使用 console。模板字面量的 raw 形式只用于反斜杠必须原样保留的短文本，例如正则表达式；其他文本，尤其是文件内容和命令，用普通字符串书写。文件内容写成引号字符串数组，每行一个元素，用换行符拼接；不要写成一个模板字面量。每次调用在新的 Node 进程中运行，可通过 await import(...) 使用 Node API。相对路径以传入的工作目录为准；process.env 初始为空。直接文件系统访问遵循本次执行的沙箱策略。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
 
 ```json
 {
@@ -949,58 +949,51 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ## `@deepseek-ai/dsh-tool-cordis`
 
-### `cordis_inspect_list`
+### `cordis_inspect`
 
-列出 Host 当前已知的所有 Cordis Inspect Provider，包括本地 Host Provider 和 Client 同步的最新清单。每项包含平台、用途、只读方法以及输入输出 schema。编写或配置插件前先调用本工具，再从结果选择 cordis_inspect_query 的 provider 和方法。不要猜测名称，也不要把 Inspect 方法当作插件代码可调用的业务 Service。
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
-
-来源： [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)
-
-### `cordis_inspect_query`
-
-执行 Inspect Provider 声明的只读查询。platform、provider 和 method 必须来自 cordis_inspect_list，input 必须符合该方法的 schema。编写插件代码前，用本工具读取准确的 Service 方法、Event 模式、插件 Config schema、Tool schema、主题 token，或实时 Slot 树与 props。Host 查询在本地运行。Client 查询在配置的超时内等待页面首个有效响应；否则返回 Client 错误，或提示重新连接后重试。本工具不能调用业务 Service 方法或修改运行时。
+编写或配置插件前查询运行时 API。省略 query 以发现 provider、方法和输入 schema，再查询该目录中的具体条目。只读：不能调用业务 Service 方法或修改运行时。Client 查询需要已连接的页面。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "platform": {
-      "type": "string",
-      "description": "Runtime platform that owns the Provider.",
-      "enum": [
-        "host",
-        "client"
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "Provider platform.",
+          "enum": [
+            "host",
+            "client"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider ID from the directory."
+        },
+        "method": {
+          "type": "string",
+          "description": "Method name from the directory."
+        },
+        "input": {
+          "description": "Arguments matching the method's input schema."
+        }
+      },
+      "required": [
+        "platform",
+        "provider",
+        "method"
       ]
-    },
-    "provider": {
-      "type": "string",
-      "description": "Exact Provider ID returned by cordis_inspect_list."
-    },
-    "method": {
-      "type": "string",
-      "description": "Exact method name declared by the Provider manifest."
-    },
-    "input": {
-      "description": "Optional query input; it must satisfy the method input schema."
     }
-  },
-  "required": [
-    "platform",
-    "provider",
-    "method"
-  ]
+  }
 }
 ```
 
 来源： [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)
 
-创造模式提供两个只读运行时检查工具。Cordis host runner 提供检查注册表；Client 查询需要已连接页面。持久化变更编写为组合包，再通过 plugin_manager 安装。
+标准模式和创造模式提供一个只读运行时检查工具。省略 query 获取 provider 目录；传入 query 查询已声明的方法。Cordis host runner 提供检查注册表；Client 查询需要已连接页面。持久化变更编写为组合包，再通过 plugin_manager 安装。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 
@@ -2212,7 +2205,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_subagent_models`
 
-查询允许为 subagent 显式选择的路由。无参数：提供方；`provider`：允许的模型；`provider` + `model`：该模型及其推理强度。选择子级提供方和模型前先在此查询选项，再将返回的 id 用于委派。
+查询允许为 subagent 显式选择的路由。无参数：提供方；`provider`：允许的模型；`provider` + `model`：该模型及其推理强度。
 
 ```json
 {
@@ -2220,7 +2213,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "provider": {
       "type": "string",
-      "description": "Registered LLM provider id."
+      "description": "Provider id from the no-argument listing."
     },
     "model": {
       "type": "string",
