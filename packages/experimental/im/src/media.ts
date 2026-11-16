@@ -258,10 +258,16 @@ export class ImMediaStore {
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
    * @param signal - cancellation of the calling turn.
+   * @param allow - optional predicate checking whether the owning message is readable by the caller.
    * @returns the admission outcome of exactly that media element, as an image.
    */
-  async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem> {
-    const ref = await this.elementAt(chat, id)
+  async read(
+    chat: ImChatKey,
+    id: string,
+    signal?: AbortSignal,
+    allow?: (message: ImMessage) => boolean,
+  ): Promise<ImMediaItem> {
+    const ref = await this.elementAt(chat, id, allow)
     if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
     return this.admitAs(ref, signal, 'image')
@@ -273,10 +279,16 @@ export class ImMediaStore {
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
    * @param signal - cancellation of the calling turn.
+   * @param allow - optional predicate checking whether the owning message is readable by the caller.
    * @returns the admission outcome of exactly that media element, with the exact bytes a caller stages for the model.
    */
-  async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem> {
-    const ref = await this.elementAt(chat, id)
+  async readFile(
+    chat: ImChatKey,
+    id: string,
+    signal?: AbortSignal,
+    allow?: (message: ImMessage) => boolean,
+  ): Promise<ImMediaFileItem> {
+    const ref = await this.elementAt(chat, id, allow)
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
     return await this.admitAs(ref, signal, 'file')
   }
@@ -285,13 +297,17 @@ export class ImMediaStore {
    * The media element one stable id names within a chat (both read tools resolve their id here).
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
+   * @param allow - optional predicate checking whether the owning message is readable by the caller.
    * @returns that element's reference.
    */
-  private async elementAt(chat: ImChatKey, id: string): Promise<ImMediaRef> {
+  private async elementAt(chat: ImChatKey, id: string, allow?: (message: ImMessage) => boolean): Promise<ImMediaRef> {
     const parsed = parseMediaId(id)
     if (!parsed) throw new ImError('access', `"${id}" is not a media id such as 12.1.`)
     const stored = this.messageAt(chat, parsed.seq)
     if (!stored) throw new ImError('access', `Chat ${chat} has no stored message #${parsed.seq}.`)
+    if (allow !== undefined && !allow(stored)) {
+      throw new ImError('access', `Message #${parsed.seq} is outside the threads granted to this session.`)
+    }
     const message = await this.expanded(chat, stored)
     const ref = mediaRefs(message).find(ref => ref.index === parsed.index)
     if (!ref) throw new ImError('access', `Message #${parsed.seq} has no media element #${parsed.index}.`)

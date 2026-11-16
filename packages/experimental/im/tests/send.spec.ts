@@ -471,6 +471,13 @@ describe('ImSender grants', () => {
       quote: ImMessageKey('fake:bot', 'm-t1-msg'),
     })
     expect(okRootQuote.status).toBe('confirmed')
+
+    await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'r1') }, 'none')
+    const okRootSelfQuote = await sender.send(CHAT, h.text('reply-root-self'), {
+      session: rootConfined.sessionId,
+      quote: ImMessageKey('fake:bot', 'r1'),
+    })
+    expect(okRootSelfQuote.status).toBe('confirmed')
   })
 
   it('bounds a grants chain whose parent points back into it', () => {

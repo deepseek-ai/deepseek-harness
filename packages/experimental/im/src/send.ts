@@ -477,17 +477,18 @@ export class ImSender {
       (binding): binding is typeof binding & { thread: string } => binding.thread !== undefined,
     )
     if (confined.length < writable.length) return
+    const allowedThreads = new Set(confined.map(binding => binding.thread))
     const explicit = typeof options.thread === 'string' ? options.thread.trim() : undefined
     const quoted = options.quote === undefined ? undefined : this.deps.store.get(options.quote)
     const fromQuote = quoted?.chat.key === chat ? quoted : undefined
-    const allowed = confined.some((binding) => {
-      const thread = binding.thread
-      if (explicit !== undefined) return explicit === thread
-      if (fromQuote === undefined) return false
-      return fromQuote.thread?.id === thread || fromQuote.thread?.root === thread
-    })
+    const allowed = explicit !== undefined
+      ? allowedThreads.has(explicit)
+      : (fromQuote !== undefined && messageInThreads(fromQuote, allowedThreads))
     if (!allowed) {
-      throw new ImError('access', `Chat ${chat} is confined to specific thread(s) for session ${session}.`)
+      throw new ImError(
+        'access',
+        `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
+      )
     }
   }
 
@@ -594,6 +595,16 @@ export function grantChain(sessions: Pick<ImSessions, 'of' | 'get'>, sessionId: 
  */
 export function operationId(sessionId: SessionId, toolCallId: string): string {
   return createHash('sha256').update(`${sessionId}\u0000${toolCallId}`).digest('hex')
+}
+
+/** Whether `message` belongs to one of the granted `threads` (by thread id, root id, or root message id). */
+export function messageInThreads(message: ImMessage, threads: ReadonlySet<string>): boolean {
+  const threadId = message.thread?.id
+  const rootId = message.thread?.root
+  const msgId = splitKey(message.key).id
+  return (threadId !== undefined && threads.has(threadId))
+    || (rootId !== undefined && threads.has(rootId))
+    || threads.has(msgId)
 }
 
 /**

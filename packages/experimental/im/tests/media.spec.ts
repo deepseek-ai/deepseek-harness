@@ -580,4 +580,10 @@ describe('ImMediaStore.readFile', () => {
     expect(item.skipped).toBe('disabled')
     expect(attachments.files).toEqual([])
   })
+
+  it('refuses media whose owning message fails the caller allow predicate', async () => {
+    const store = storeWith([fileMessage(12)], { http: http(), attachments: attachmentsSaving() })
+    await expect(store.read(CHAT.key, '12.1', undefined, () => false)).rejects.toMatchObject({ code: 'access' })
+    await expect(store.readFile(CHAT.key, '12.1', undefined, () => false)).rejects.toMatchObject({ code: 'access' })
+  })
 })
