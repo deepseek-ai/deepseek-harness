@@ -1,10 +1,10 @@
 /**
- * Frozen input-machine contract. Types
- * only. Three-tier visibility: business packages see InputState via the
- * InputZone currency; the scoped input events carry the mutation verbs; the
- * conversation wiring layer alone sees the full SessionInput. The draft text
- * and its reference chips live in the shell's Lexical editor; the machine
- * here is the submit plane (phase, claim, attempt) alone.
+ * Input-machine types and Session-addressed draft operations. Business packages
+ * read InputState through InputZone and use scoped input events for guarded
+ * mutations. Conversation wiring and direct draft consumers resolve SessionInput
+ * through conversation.input.for(), including file insertion through addFiles.
+ * Draft text and reference chips live in the shell's Lexical editor; the machine
+ * here owns submission state (phase, claim, attempt).
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'

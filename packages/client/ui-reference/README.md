@@ -33,7 +33,7 @@ A file closes completion as an atomic inline reference displayed with a file gly
 
 A session pick inserts an atomic inline reference whose hidden `ref` and clipboard representation is the canonical `@[label](dsh-session:…)` mention returned by the Host; its visible form is a chat-bubble glyph plus the session title. Sending carries the mention through `session.prompt`, and the session-reference service validates it and captures model context at `agent/pre-step`.
 
-The shared file context menu ends with **Add to chat**. It inserts the clicked file as the same kind of reference into that Session’s draft, preserves existing text and selection, and returns focus without sending. The reference captures the resolved absolute path; line numbers are not included. The action is disabled when the Session cannot be edited or the path cannot use the mention grammar.
+The shared file context menu ends with **Add to chat**. It inserts the clicked file as the same kind of reference into that Session’s draft, preserves existing text and selection, and returns focus without sending. The reference captures the resolved absolute path; line numbers are not included. The action is disabled when the Session cannot be edited or the path cannot use the mention grammar. An open menu updates its label and failure feedback when the interface language changes.
 
 ### Failure behavior
 

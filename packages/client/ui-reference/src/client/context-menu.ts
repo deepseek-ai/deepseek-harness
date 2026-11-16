@@ -4,7 +4,7 @@ import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-me
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
-import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { resolveWorkspacePath, workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ReferenceKey } from './locales.ts'
 
 /**
@@ -34,7 +34,7 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
     id: 'reference.file', target: 'file', order: 300,
     observe: (target) => {
       const current = targetInput(target)
-      return current === undefined ? [] : [current.binding.session, current.input.state, current.blocks]
+      return current === undefined ? [ctx.locale] : [ctx.locale, current.binding.session, current.input.state, current.blocks]
     },
     resolve: (target) => {
       const current = targetInput(target)
@@ -47,7 +47,7 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
         run: () => {
           if (mention === undefined || current === undefined || !current.editable()
             || !current.input.addFiles([{
-              source: 'reference', ref: mention, label: path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1),
+              source: 'reference', ref: mention, label: workspaceTitleOf(path),
               appearance: 'file', clipboardText: mention,
             }], [])) throw new Error('File reference insertion unavailable')
           current.input.focus()

@@ -5,6 +5,7 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { SessionInputShell } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/facade.ts'
 import { ComposerBlockRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/blocks.ts'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { registerReferenceMenu } from '../src/client/context-menu.ts'
@@ -16,6 +17,10 @@ const actionId = 'reference.file/addToChat'
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
+  const locale = new LocaleRuntime(runtime.ctx)
+  runtime.ctx.provide('locale', locale)
+  runtime.ctx.effect(() => locale.register('reference', { en, zh }))
+  locale.setLocale('en')
   await runtime.declare({ 'contextMenu.icon': { kind: 'keyed', scope: 'root', inline: true } })
   await runtime.sessions.add({ id, summary: { cwd: '/workspace' } })
   const owner = runtime.sessions.retain(id)
@@ -36,8 +41,8 @@ async function bench() {
   onTestFinished(() => { menus.dispose() })
   runtime.ctx.provide('contextMenus', { register: menus.register.bind(menus) })
   const fiber = runtime.ctx.plugin({
-    inject: ['slots', 'sessions', 'conversation', 'contextMenus'],
-    apply: (ctx) => { registerReferenceMenu(ctx, key => en[key]) },
+    inject: ['slots', 'sessions', 'conversation', 'contextMenus', 'locale'],
+    apply: (ctx) => { registerReferenceMenu(ctx, locale.bind('reference')) },
   })
   await fiber.await()
   const menu = async (value: Partial<ContextMenuTargetMap['file']> = {}) => {
@@ -46,7 +51,7 @@ async function bench() {
     await result.ready
     return result
   }
-  return { runtime, owner, binding, shell, sink, focus, blocks, resolveInput, failed, menus, fiber, menu }
+  return { runtime, locale, owner, binding, shell, sink, focus, blocks, resolveInput, failed, menus, fiber, menu }
 }
 
 it('appends the final action after other providers and inserts the captured file without sending', async () => {
@@ -157,6 +162,32 @@ it('withdraws open menu actions and their icon on plugin disposal', async () => 
   expect(b.focus).not.toHaveBeenCalled()
   expect(zh['menu.addToChat']).toBe('添加到对话')
 })
+
+it('refreshes open labels and failure feedback when the locale changes', async () => {
+  const b = await bench()
+  const menu = await b.menu()
+  const unavailable = await b.menu({ sessionId: 'absent' as SessionId })
+  expect(menu.source.getSnapshot()[0]?.label).toBe(en['menu.addToChat'])
+  expect(unavailable.source.getSnapshot()[0]?.label).toBe(en['menu.addToChat'])
+  b.locale.setLocale('zh')
+  expect(menu.source.getSnapshot()[0]?.label).toBe(zh['menu.addToChat'])
+  expect(unavailable.source.getSnapshot()[0]?.label).toBe(zh['menu.addToChat'])
+  vi.spyOn(b.shell, 'addFiles').mockReturnValue(false)
+  menu.select(actionId)
+  expect(b.failed).toHaveBeenCalledWith(zh['menu.addToChatFailed'])
+  await b.fiber.dispose()
+  b.locale.setLocale('en')
+  expect(unavailable.source.getSnapshot()).toEqual([])
+})
+
+it.each(['/work/a b.md', 'C:\\work\\a b.md', '\\\\server\\share\\a b.md', '/work/a b.md/'])(
+  'uses the final nonempty path segment as the reference label: %j', async (path) => {
+    const b = await bench()
+    const menu = await b.menu({ path })
+    menu.select(actionId)
+    expect(b.shell.snapshot.occurrences).toMatchObject([{ label: 'a b.md', ref: `@"${path}"` }])
+  },
+)
 
 it('refuses direct file insertion after the draft editor is disposed', async () => {
   const b = await bench()
