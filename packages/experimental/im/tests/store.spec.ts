@@ -158,6 +158,17 @@ describe('ImStore write rules', () => {
     // oxlint-disable-next-line typescript/no-unsafe-assignment -- expect.any() is typed `any`.
     expect(store.recent(5)).toEqual([{ key: pending.key, outcome, at: expect.any(Number) }])
     expect(store.recent(0)).toEqual([])
+
+    // A platform-read record (`dispatch: 'none'`, `via: 'platform'`) is promoted to `pending` when its inbound event
+    // arrives, keeping its seq; an own outbound record (`via: 'self'`) stays `none`.
+    const prefetched = await store.put({ ...draft('m-prefetch'), via: 'platform' }, 'none')
+    const promoted = await store.put(draft('m-prefetch'), 'pending')
+    expect(promoted.seq).toBe(prefetched.seq)
+    expect(store.state(prefetched.key)?.dispatch).toBe('pending')
+
+    const own = await store.put({ ...draft('m-own'), via: 'self' }, 'none')
+    await store.put(draft('m-own'), 'pending')
+    expect(store.state(own.key)?.dispatch).toBe('none')
     expect(store.state(ImMessageKey('fake:bot', 'nope'))).toBeUndefined()
     await expect(store.settle(ImMessageKey('fake:bot', 'nope'), outcome)).rejects.toThrow(ImError)
   })

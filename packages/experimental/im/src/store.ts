@@ -133,7 +133,14 @@ export class ImStore implements ImHistory {
   put(draft: ImMessageDraft, dispatch: 'pending' | 'none'): Promise<ImMessage> {
     return this.serialize(async () => {
       const known = this.records.get(draft.key)
-      if (known) return known.message
+      if (known) {
+        if (dispatch === 'pending' && known.dispatch === 'none' && known.message.via !== 'self') {
+          const promoted: StoredMessage = { ...known, dispatch: 'pending' }
+          await this.domainOf().table('messages').put(draft.key, promoted)
+          this.records.set(draft.key, promoted)
+        }
+        return known.message
+      }
       const domain = this.domainOf()
       await this.evict(domain, draft.chat.key)
       const storedAt = Date.now()
