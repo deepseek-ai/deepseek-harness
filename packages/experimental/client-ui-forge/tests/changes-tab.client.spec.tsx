@@ -25,6 +25,8 @@ import type { ForgeChangesToolbarProps } from '../src/client/slots.ts'
 import { lensVersion } from '../src/lens-version.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
+import treeCss from '../src/client/ChangedFiles.module.css'
+import threadCss from '../src/client/ReviewThreads.module.css'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeLensId, ForgeLocalDiff,
   ForgePanelChangeRequest, ForgePanelState,
@@ -70,6 +72,21 @@ function hoverPath(section: HTMLElement): string | null {
     return within(document.body).getByRole('tooltip').textContent
   } finally {
     fireEvent.pointerLeave(label)
+    vi.useRealTimers()
+  }
+}
+
+/** Hover an anchor and read the tooltip 1ms before and at the 500ms hover delay, then leave it. */
+function tooltipAfterHover(anchor: Element): { readonly early: string | null; readonly at500: string | null } {
+  vi.useFakeTimers()
+  try {
+    fireEvent.pointerEnter(anchor)
+    act(() => { vi.advanceTimersByTime(499) })
+    const early = within(document.body).queryByRole('tooltip')?.textContent ?? null
+    act(() => { vi.advanceTimersByTime(1) })
+    return { early, at500: within(document.body).queryByRole('tooltip')?.textContent ?? null }
+  } finally {
+    fireEvent.pointerLeave(anchor)
     vi.useRealTimers()
   }
 }
@@ -521,6 +538,40 @@ describe('ChangesTab keyboard file navigation', () => {
     } finally {
       selection.removeAllRanges()
     }
+  })
+})
+
+describe('ChangesTab tooltips', () => {
+  it('names only a renamed tree row in a tooltip after 500ms and crawls a name the row clips', async () => {
+    const m = mount()
+    await settle()
+    const tree = within(m.view.getByRole('navigation'))
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'src/app.ts' }))).toEqual({ early: null, at500: null })
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'lib/a.txt → lib/b.txt' })))
+      .toEqual({ early: null, at500: 'lib/a.txt → lib/b.txt' })
+    const row = tree.getByRole('button', { name: 'src/app.ts' })
+    const name = row.querySelector('[data-forge-tree-name]')
+    if (!(name instanceof HTMLElement)) throw new Error('no tree name')
+    expect(name.textContent).toBe('app.ts')
+    Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
+    Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
+    fireEvent.pointerEnter(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+    fireEvent.pointerLeave(row)
+    expect([name.hasAttribute('data-marquee'), name.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
+  })
+
+  it('shows toolbar and viewed hints after 500ms of hover and at once on keyboard focus, with no native titles', async () => {
+    const m = mount()
+    await settle()
+    const refresh = m.view.getByRole('button', { name: en['diff.refresh'] })
+    expect(tooltipAfterHover(refresh)).toEqual({ early: null, at500: en['diff.refresh'] })
+    fireEvent.focus(refresh)
+    expect(within(document.body).getByRole('tooltip').textContent).toBe(en['diff.refresh'])
+    fireEvent.blur(refresh)
+    const viewed = within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }).closest('label')!
+    expect(tooltipAfterHover(viewed)).toEqual({ early: null, at500: en['viewed.hint'] })
+    expect(m.view.container.querySelector('[title]')).toBeNull()
   })
 })
 
@@ -1985,6 +2036,21 @@ describe('ChangesTab viewed marks the host keeps', () => {
   const marks = (m: ReturnType<typeof mount>): (string | null)[][] => [...m.view.container.querySelectorAll('[data-forge-diff-file]')]
     .map(element => [element.getAttribute('data-forge-diff-file'), element.getAttribute('data-viewed'), element.hasAttribute('data-expanded') ? 'open' : 'closed'])
   const hosted = (files: Record<string, 'viewed' | 'unviewed' | 'dismissed'>, headSha = HEAD) => ok({ headSha, files, truncated: false })
+  /** The hint a viewed checkbox's label shows after the hover delay: where its mark is kept, or why it is locked. */
+  const hint = (input: HTMLInputElement): string | null => {
+    const label = input.closest('label')!
+    // Another control's tooltip may still show; the hint is the one the hover adds.
+    const before = new Set(within(document.body).queryAllByRole('tooltip'))
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerEnter(label)
+      act(() => { vi.advanceTimersByTime(500) })
+      return within(document.body).queryAllByRole('tooltip').find(tip => !before.has(tip))?.textContent ?? null
+    } finally {
+      fireEvent.pointerLeave(label)
+      vi.useRealTimers()
+    }
+  }
   const box = (m: ReturnType<typeof mount>, path: string, name: string): HTMLInputElement =>
     within(m.section(path)).getByRole('checkbox', { name: `Mark ${name} as viewed` })
 
@@ -2000,13 +2066,13 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.view.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('1 / 3 viewed')
 
     const gone = box(m, 'docs/gone.txt', 'gone.txt')
-    expect(gone.closest('label')?.title).toBe(hostCopy('viewed.hintHost'))
+    expect(hint(gone)).toBe(hostCopy('viewed.hintHost'))
     fireEvent.click(gone)
     expect(m.faces.setFileViewed).toHaveBeenCalledWith(URL7, { path: 'docs/gone.txt', viewed: true, headSha: HEAD })
     expect(marks(m)[0]).toEqual(['docs/gone.txt', 'viewed', 'closed'])
     // While its write is in flight the mark stays put, also for V.
     expect(gone.disabled).toBe(true)
-    expect(gone.closest('label')?.title).toBe(hostCopy('viewed.saving'))
+    expect(hint(gone)).toBe(hostCopy('viewed.saving'))
     fireEvent.keyDown(m.section('docs/gone.txt'), { key: 'v' })
     expect(m.faces.setFileViewed).toHaveBeenCalledOnce()
     await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
@@ -2051,7 +2117,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     const notice = m.view.getByText('Could not read viewed files from GitHub, so files cannot be marked: API rate limit exceeded')
     const app = box(m, 'src/app.ts', 'app.ts')
     expect(app.disabled).toBe(true)
-    expect(app.closest('label')?.title).toBe(hostCopy('viewed.unavailable'))
+    expect(hint(app)).toBe(hostCopy('viewed.unavailable'))
     fireEvent.click(app)
     fireEvent.keyDown(m.section('src/app.ts'), { key: 'v' })
     expect(m.faces.setFileViewed).not.toHaveBeenCalled()
@@ -2088,7 +2154,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.faces.changeRequestViewed).not.toHaveBeenCalled()
     fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
     expect(m.faces.setFileViewed).not.toHaveBeenCalled()
-    expect(box(m, 'src/app.ts', 'app.ts').closest('label')?.title).toBe(en['viewed.hint'])
+    expect(hint(box(m, 'src/app.ts', 'app.ts'))).toBe(en['viewed.hint'])
   })
 
   it('keeps a write in flight and its lock across a read at the same head, and the saved choice until the next read', async () => {
@@ -2434,7 +2500,12 @@ describe('ChangesTab review threads', () => {
     expect(m.section('docs/notes.txt').firstElementChild?.nextElementSibling?.getAttribute('data-forge-thread')).toBe('file-thread')
     expect(m.section('docs/gone.txt').querySelector(`.${css.code}`)?.lastElementChild?.getAttribute('data-forge-thread')).toBe('beyond')
     for (const id of ['binary', 'oversized', 'renamed', 'large']) expect(card(m, id)).not.toBeNull()
-    expect(within(m.view.getByRole('navigation')).getByTitle('4 unresolved threads').textContent).toBe('4')
+    const chip = within(m.view.getByRole('navigation')).getByRole('button', { name: 'src/app.ts' }).querySelector(`.${treeCss.threads}`)!
+    expect([chip.textContent, chip.hasAttribute('title')]).toEqual(['4', false])
+    expect(tooltipAfterHover(chip)).toEqual({ early: null, at500: '4 unresolved threads' })
+    const time = card(m, 'on-row')!.querySelector(`.${threadCss.time}`)!
+    expect(time.hasAttribute('title')).toBe(false)
+    expect(tooltipAfterHover(time)).toEqual({ early: null, at500: '2026-11-05T08:00:00Z' })
     fireEvent.click(within(app).getByRole('button', { name: '4 unchanged lines' }))
     await settle()
     expect(following(m, 'in-gap')).toBe('const a7 = 8')

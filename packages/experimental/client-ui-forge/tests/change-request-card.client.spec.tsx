@@ -6,7 +6,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeFailure, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import { en } from '../src/client/locales.ts'
-import css from '../src/client/ForgeTab.module.css'
+import css from '../src/client/Forge.module.css'
 import overview from '../src/client/ChangeRequestOverview.module.css'
 import type { ForgePanelChangeRequest } from '../src/types.ts'
 import { check, entry, snapshot, unserved } from './client-fixtures.client.ts'
@@ -36,7 +36,20 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   if (!(item instanceof HTMLElement) || !(head instanceof HTMLElement)) throw new Error('no change request card')
   /** The number and status line below the title, or null when it names neither. */
   const meta = (): HTMLElement | null => head.querySelector(`.${css.meta}`)
-  return { view, item, head, meta, title: within(head).getByRole('link'), openLink, copyLink, retry, remove, onToggle }
+  const menuButton = (): HTMLElement => within(head).getByRole('button', { name: /^Actions for / })
+  /** Labels of the actions menu, closing it again. */
+  const menuItems = (): string[] => {
+    fireEvent.click(menuButton())
+    const labels = screen.queryAllByRole('menuitem').map(row => row.textContent)
+    fireEvent.click(menuButton())
+    return labels
+  }
+  /** Open the actions menu and choose one item. */
+  const choose = (label: string): void => {
+    fireEvent.click(menuButton())
+    fireEvent.click(screen.getByRole('menuitem', { name: label }))
+  }
+  return { view, item, head, meta, menuButton, menuItems, choose, title: within(head).getByRole('link'), openLink, copyLink, retry, remove, onToggle }
 }
 
 /** The number and status line of a card that has one. */
@@ -105,6 +118,22 @@ describe('ChangeRequestCard head', () => {
     expect(b.onToggle).not.toHaveBeenCalled()
   })
 
+  it('crawls a title the card clips while the pointer rests on the card head, expanded or not', () => {
+    for (const expanded of [false, true]) {
+      const b = card(entry(7, snapshot(7)), { expanded })
+      const text = b.title.firstElementChild
+      if (!(text instanceof HTMLElement)) throw new Error('no title text')
+      expect(text.textContent).toBe('Change 7')
+      Object.defineProperty(text, 'scrollWidth', { value: 240, configurable: true })
+      Object.defineProperty(text, 'clientWidth', { value: 120, configurable: true })
+      fireEvent.pointerEnter(b.head)
+      expect([text.hasAttribute('data-marquee'), text.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '120px'])
+      fireEvent.pointerLeave(b.head)
+      expect([text.hasAttribute('data-marquee'), text.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
+      cleanup()
+    }
+  })
+
   it('toggles from the chevron, while the number line stays plain text', () => {
     const b = card(entry(7, snapshot(7)))
     expect(b.item.hasAttribute('data-expanded')).toBe(false)
@@ -126,9 +155,10 @@ describe('collapsed ChangeRequestCard', () => {
     expect(meta.querySelector('[data-flag]')).toBeNull()
     expect(within(b.item).queryByText(en['change.row.changes'])).toBeNull()
     expect(within(b.item).queryByText('+12')).toBeNull()
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
-    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove #7 from this Session' }))
+    expect(b.menuButton().getAttribute('aria-label')).toBe('Actions for #7')
+    b.choose(en['change.view'])
+    b.choose(en['change.copy'])
+    b.choose(en['change.remove'])
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.remove).toHaveBeenCalledOnce()
@@ -245,9 +275,9 @@ describe('expanded ChangeRequestCard', () => {
     expect(within(b.item).getByText('+12,345')).toBeTruthy()
     expect(within(b.item).getByText(`${MINUS}3`)).toBeTruthy()
 
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
-    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove #7 from this Session' }))
+    b.choose(en['change.view'])
+    b.choose(en['change.copy'])
+    b.choose(en['change.remove'])
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
     expect(b.remove).toHaveBeenCalledWith(value)
@@ -296,6 +326,21 @@ describe('expanded ChangeRequestCard', () => {
     expect(row.getAttribute('aria-describedby')).not.toBeNull()
     expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe('2 unresolved threads')
     expect(item.querySelector('[data-forge-threads]')?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('names the unresolved threads in a tooltip after 500ms of hover', () => {
+    const { item } = card(entry(1, snapshot(1, { unresolvedThreads: 2 })), { expanded: true })
+    const threads = item.querySelector('[data-forge-threads]')!
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerEnter(threads)
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe('2 unresolved threads')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
@@ -461,7 +506,8 @@ describe('expanded ChangeRequestCard', () => {
     expect(metaOf(b).textContent).toBe('#1')
     expect(within(b.item).queryByText(en['change.row.checks'])).toBeNull()
     expect(within(b.item).queryByText('+12')).toBeNull()
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
+    expect(b.menuItems()).toEqual([en['change.view'], en['change.copy'], en['change.remove']])
+    b.choose(en['change.copy'])
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/1')
   })
 
@@ -469,16 +515,25 @@ describe('expanded ChangeRequestCard', () => {
     const b = card({ ...unserved('https://example.test/review/latest'), snapshot: snapshot(3, { url: 'https://example.test/review/latest#web' }) }, { expanded: true })
     expect(b.title.textContent).toBe('Change 3')
     expect(metaOf(b).textContent).toBe('feat → main')
-    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove Change 3 from this Session' }))
+    expect(b.menuButton().getAttribute('aria-label')).toBe('Actions for Change 3')
+    b.choose(en['change.remove'])
     expect(b.remove).toHaveBeenCalledOnce()
-    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
+    b.choose(en['change.view'])
     expect(b.openLink).toHaveBeenCalledWith('https://example.test/review/latest#web')
+  })
+
+  it('closes the actions menu on Escape', () => {
+    const b = card(entry(1, snapshot(1)))
+    fireEvent.click(b.menuButton())
+    expect(b.menuButton().getAttribute('aria-expanded')).toBe('true')
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    expect(b.menuButton().getAttribute('aria-expanded')).toBe('false')
   })
 
   it('omits removal on a surface without a Session binding', () => {
     const b = card(entry(1, snapshot(1)), { expanded: true, actions: { remove: undefined } })
-    expect(within(b.head).queryByRole('button', { name: 'Remove #1 from this Session' })).toBeNull()
-    expect(within(b.head).getByRole('button', { name: en['change.view'] })).toBeTruthy()
+    expect(b.menuItems()).toEqual([en['change.view'], en['change.copy']])
   })
 })
 
@@ -502,20 +557,21 @@ describe('ChangeRequestCard actions', () => {
     const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(() => pending.promise)
     const value = entry(7, snapshot(7, { draft: true, mergeReady: true }))
     const b = card(value, { expanded: true, actions: { markReady } })
-    const button = within(b.item).getByRole('button', { name: en['change.markReady'] })
+    const item = (): HTMLElement => screen.getByRole('menuitem', { name: en['change.markReady'] })
     expect(within(b.item).queryByRole('button', { name: en['change.merge'] })).toBeNull()
 
-    fireEvent.click(button)
-    fireEvent.click(button)
+    b.choose(en['change.markReady'])
+    fireEvent.click(b.menuButton())
+    expect(item().hasAttribute('disabled')).toBe(true)
+    fireEvent.click(item())
     expect(markReady).toHaveBeenCalledOnce()
     expect(markReady).toHaveBeenCalledWith(value)
-    expect(button.hasAttribute('disabled')).toBe(true)
 
     await act(async () => {
       pending.resolve()
       await pending.promise
     })
-    expect(button.hasAttribute('disabled')).toBe(false)
+    expect(item().hasAttribute('disabled')).toBe(false)
   })
 
   it('lists the methods the repository allows with the usual one chosen, and merges the confirmed head with the chosen one', async () => {
@@ -524,7 +580,6 @@ describe('ChangeRequestCard actions', () => {
     const value = entry(7, snapshot(7, { mergeReady: true, mergeMethods: ['merge', 'squash', 'rebase'], headSha: head }))
     const b = card(value, { expanded: true, actions: { merge } })
     const button = within(b.item).getByRole('button', { name: en['change.merge'] })
-    expect(within(b.item).queryByRole('button', { name: en['change.markReady'] })).toBeNull()
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(button.classList.contains(css.mergeAction ?? '')).toBe(true)
     const caret = (): Element | null => button.querySelector(`.${css.mergeCaret}`)
@@ -611,8 +666,8 @@ describe('ChangeRequestCard actions', () => {
     ['it is merged', { state: 'merged', mergeReady: true }],
     ['it is a closed draft', { state: 'closed', draft: true }],
   ] as const)('offers neither action when %s', (_label, overrides) => {
-    const b = card(entry(7, snapshot(7, overrides)), { expanded: true })
-    expect(within(b.item).queryByRole('button', { name: en['change.markReady'] })).toBeNull()
+    const b = card(entry(7, snapshot(7, overrides)), { expanded: true, actions: { markReady: vi.fn(async () => {}) } })
+    expect(b.menuItems()).not.toContain(en['change.markReady'])
     expect(within(b.item).queryByRole('button', { name: en['change.merge'] })).toBeNull()
   })
 
@@ -620,7 +675,8 @@ describe('ChangeRequestCard actions', () => {
     const actions = { markReady: undefined, merge: undefined }
     for (const value of [entry(7, snapshot(7, { draft: true })), entry(8, snapshot(8, { mergeReady: true }))]) {
       const b = card(value, { expanded: true, actions })
-      expect(within(b.item).queryAllByRole('button', { name: new RegExp(`^(${en['change.markReady']}|${en['change.merge']})$`) })).toEqual([])
+      expect(b.menuItems()).not.toContain(en['change.markReady'])
+      expect(within(b.item).queryByRole('button', { name: en['change.merge'] })).toBeNull()
       cleanup()
     }
   })
@@ -647,14 +703,17 @@ describe('ChangeRequestCard changes', () => {
 })
 
 describe('ChangeRequestCard layout', () => {
-  it('shows the action row only for a change request with an action', () => {
+  it('shows the action row only for a change request the host would merge', () => {
     const waiting = card(entry(7, snapshot(7)), { expanded: true, actions: { merge: vi.fn(async () => {}) } })
     expect(waiting.item.querySelector(`.${css.footer}`)).toBeNull()
     cleanup()
     const draft = card(entry(8, snapshot(8, { draft: true })), { expanded: true, actions: { markReady: vi.fn(async () => {}) } })
-    const footer = draft.item.querySelector(`.${css.footer}`)
+    expect(draft.item.querySelector(`.${css.footer}`)).toBeNull()
+    cleanup()
+    const mergeable = card(entry(9, snapshot(9, { mergeReady: true })), { expanded: true, actions: { merge: vi.fn(async () => {}) } })
+    const footer = mergeable.item.querySelector(`.${css.footer}`)
     if (!(footer instanceof HTMLElement)) throw new Error('no action row')
-    expect(within(footer).getByRole('button').textContent).toBe(en['change.markReady'])
+    expect(within(footer).getByRole('button').textContent).toBe(en['change.merge'])
   })
 
   it('shows the changed lines of a finished change request below its end', () => {

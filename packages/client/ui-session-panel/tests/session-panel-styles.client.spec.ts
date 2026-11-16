@@ -89,6 +89,24 @@ describe('SessionPanel.module.css row rules', () => {
     })
   })
 
+  it('grows a row with a detail line and keeps the icon level with the first line', () => {
+    const tall = "[data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail'])"
+    expect(row(tall)).toEqual({ 'align-items': 'flex-start', 'height': 'auto', 'padding': '4px 0' })
+    expect(row(`${tall} > [data-row-part='icon']`)).toEqual({ height: '20px' })
+    expect(row("[data-session-panel-row] [data-row-part='lines']")).toMatchObject({ 'display': 'flex', 'flex-direction': 'column', 'min-width': '0' })
+    expect(row("[data-session-panel-row] [data-row-part='detail']")).toMatchObject({
+      'color': 'var(--dsw-alias-label-tertiary)', 'font-size': '12px', 'line-height': '17px', 'text-overflow': 'ellipsis', 'white-space': 'nowrap',
+    })
+    // The two-line rules follow the one-line ones they adjust, since every rule for a part has the same specificity.
+    const order = (selector: string): number => {
+      const at = css.indexOf(`.panel :where(${selector}) {`)
+      expect(at).toBeGreaterThan(-1)
+      return at
+    }
+    expect(order(tall)).toBeGreaterThan(order("[data-session-panel-row] > button[data-row-part='body']"))
+    expect(order(`${tall} > [data-row-part='icon']`)).toBeGreaterThan(order("[data-session-panel-row] [data-row-part='icon']"))
+  })
+
   it('makes a button body the action of the whole row and rings the row when it has keyboard focus', () => {
     expect(row("[data-session-panel-row] > button[data-row-part='body']", '::after')).toMatchObject({ position: 'absolute', inset: '0' })
     expect(row("[data-session-panel-row] > [data-row-part='trailing'], [data-session-panel-row] > [data-row-part='menu']"))
@@ -105,12 +123,33 @@ describe('SessionPanel.module.css row rules', () => {
   it('highlights only a row with an action or a menu that renders something, and keeps an open menu and its row shown', () => {
     const interactive = "[data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty))"
     expect(row("[data-session-panel-row] > [data-row-part='menu']:empty")).toEqual({ display: 'none' })
-    expect(row(`${interactive}:has([aria-expanded='true'])`)['background']).toBe('var(--dsw-alias-interactive-bg-hover)')
+    // Only an open control in the menu part keeps the row highlighted; an expanded body button does not.
+    expect(row("[data-session-panel-row]:has(> [data-row-part='menu'] [aria-expanded='true'])"))
+      .toEqual({ background: 'var(--dsw-alias-interactive-bg-hover)' })
+    expect(css).not.toMatch(/:has\(\[aria-expanded='true'\]\)\)\s*\{\s*background/)
     expect(row("[data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])")['opacity']).toBe('1')
     // Hover rules stay inside the hover media query, where the menu hides until the row is hovered or focused.
     const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
     expect(hover).toContain(`.panel :where(${interactive}:hover)`)
     expect(hover).toMatch(/\[data-row-part='menu'\]\) \{\s*opacity: 0;/)
     expect(css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, '')).not.toContain(':hover')
+  })
+
+  it('sets a fold control in the quiet type of the section counts with a 14px chevron, darker on hover and keyboard focus', () => {
+    const fold = "[data-session-panel-row='fold']"
+    expect(row(fold)).toEqual({
+      'color': 'var(--dsw-alias-label-tertiary)', 'font': 'var(--dsw-font-xxs-12)', 'font-variant-numeric': 'tabular-nums',
+    })
+    expect(row(`${fold} [data-row-part='icon']`, ' svg')).toEqual({ width: '14px', height: '14px' })
+    expect(row(`${fold}:has(> button:focus-visible)`)).toEqual({ color: 'var(--dsw-alias-label-secondary)' })
+    expect(row(`${fold}:hover`)).toEqual({ color: 'var(--dsw-alias-label-secondary)' })
+    // The fold rules follow the row rules they adjust, since every rule for a part has the same specificity.
+    const at = (selector: string, tail = ''): number => {
+      const index = css.indexOf(`.panel :where(${selector})${tail} {`)
+      expect(index).toBeGreaterThan(-1)
+      return index
+    }
+    expect(at(fold)).toBeGreaterThan(at('[data-session-panel-row]'))
+    expect(at(`${fold} [data-row-part='icon']`, ' svg')).toBeGreaterThan(at("[data-session-panel-row] [data-row-part='icon']", ' svg'))
   })
 })

@@ -1,16 +1,19 @@
 /**
- * One change request as a card: its title links to the host, a one-line
- * summary shows while collapsed, and while expanded one sentence per fact
- * (checks, review, merge state, the changed lines, which open its changes, and
- * the linked issues) above the ready-for-review or merge action.
+ * One change request as a card: its one-line title links to the host and
+ * crawls into view while the pointer rests on the card's head, a one-line
+ * summary shows while collapsed, and while expanded one row per fact (checks,
+ * review, merge state, the changed lines, which open its changes, and the
+ * linked issues) above the merge action. Opening, copying, viewing changes,
+ * marking a draft ready, and removing live in the card's actions menu.
  */
 
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular, IconListPenOutlineRegular,
-  IconRightUpOutlineRegular, IconTriangleRightFillRegular, Menu, MenuItemButton, StateDot, Tooltip,
-  type MenuEntry,
+  Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
+  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, MarqueeText, Menu,
+  MenuItemButton, StateDot, Tooltip, useHoverMarquee,
+  type MenuEntry, type MenuItem,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -23,7 +26,7 @@ import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
 import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
 
@@ -129,7 +132,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   const threads = snapshot.unresolvedThreads > 0 || snapshot.threadsTruncated ? threadCount(snapshot, locale) : undefined
   const threadsText = threads === undefined ? undefined : t('change.threads', { count: threads })
   const trailing = threadsText === undefined ? undefined : (
-    <Tooltip label={threadsText} side="top">
+    <Tooltip label={threadsText} side="top" delayMs={500}>
       <span className={css.threads} data-forge-threads={threads} aria-hidden="true"><ThreadGlyph size={14} />{threads}</span>
     </Tooltip>
   )
@@ -137,7 +140,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   // The count shows only a number, so the threads are named in full for assistive technology.
   const parts = (
     <>
-      <RowParts label={t('change.row.changes')} icon={<IconListPenOutlineRegular size={16} />}
+      <RowParts label={t('change.row.changes')} icon={<IconFilesDiffOutlineRegular size={16} />}
         value={<DiffSize snapshot={snapshot} locale={locale} />} trailing={trailing} opens={opens} />
       {threadsText !== undefined && <span id={described} className={css.visuallyHidden}>{threadsText}</span>}
     </>
@@ -272,7 +275,7 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   )
 }
 
-/** The footer with the action of an open change request: mark a draft ready, or merge one the host would merge now. */
+/** The footer with the merge action of an open change request the host would merge now. */
 function Primary({ entry, snapshot, name, actions, t }: {
   readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
@@ -286,18 +289,8 @@ function Primary({ entry, snapshot, name, actions, t }: {
     setBusy(true)
     void action().finally(() => { setBusy(false) })
   }
-  const { markReady, merge } = actions
-  if (snapshot.state !== 'open') return null
-  if (snapshot.draft) {
-    if (markReady === undefined) return null
-    return (
-      <div className={css.footer}>
-        <Button size="sm" variant="outline" className={css.primaryAction} disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
-          {t('change.markReady')}
-        </Button>
-      </div>
-    )
-  }
+  const { merge } = actions
+  if (snapshot.state !== 'open' || snapshot.draft) return null
   const [usual] = snapshot.mergeMethods
   if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
   return (
@@ -311,6 +304,76 @@ function Primary({ entry, snapshot, name, actions, t }: {
         t={t}
       />
     </div>
+  )
+}
+
+/**
+ * The card's actions menu: open on the host, copy the link, view the changes
+ * of a served change request, mark an open draft ready, and remove the binding.
+ */
+function CardMenu({ entry, snapshot, name, url, actions, t }: {
+  readonly entry: ForgePanelChangeRequest
+  readonly snapshot: ChangeRequestSnapshot | null
+  readonly name: string
+  readonly url: string
+  readonly actions: ChangeRequestActions
+  readonly t: Translate
+}): ReactNode {
+  const [open, setOpen] = useState(false)
+  // One ready request at a time: the item stays disabled until the previous one settles.
+  const [busy, setBusy] = useState(false)
+  const { remove, markReady, viewChanges } = actions
+  const ready = markReady !== undefined && snapshot?.state === 'open' && snapshot.draft
+    ? () => {
+      setBusy(true)
+      void markReady(entry).finally(() => { setBusy(false) })
+    }
+    : undefined
+  // Each item carries the action it runs, so a selection never reaches another item's action.
+  const choices: { readonly item: MenuItem; readonly run: () => void }[] = [
+    { item: { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> }, run: () => { actions.openLink(url) } },
+    { item: { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> }, run: () => { actions.copyLink(url) } },
+    ...viewChanges !== undefined && snapshot !== null && entry.ref !== null ? [{
+      item: { id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> },
+      run: () => { viewChanges(entry) },
+    }] : [],
+    ...ready === undefined ? [] : [{
+      item: { id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy },
+      run: ready,
+    }],
+    ...remove === undefined ? [] : [{
+      item: { id: 'remove', label: t('change.remove'), icon: <IconCloseOutlineRegular size={14} />, danger: true },
+      run: () => { remove(entry) },
+    }],
+  ]
+  // Removing sits apart from the other actions.
+  const items: MenuEntry[] = choices.flatMap(({ item }) => item.id === 'remove'
+    ? [{ type: 'separator' as const, id: 'remove-separator' }, item] : [item])
+  const select = (id: string): void => {
+    setOpen(false)
+    for (const choice of choices) if (choice.item.id === id) choice.run()
+  }
+  return (
+    <Menu
+      open={open}
+      onClose={() => { setOpen(false) }}
+      portal
+      align="end"
+      anchor={(
+        <button
+          type="button"
+          className={`${css.iconButton} ${css.moreButton}`}
+          aria-label={t('change.actions', { name })}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => { setOpen(!open) }}
+        >
+          <IconEllipsisOutlineRegular size={14} />
+        </button>
+      )}
+      items={items}
+      onSelect={select}
+    />
   )
 }
 
@@ -368,14 +431,15 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
   const notice = entry.ref === null ? 'change.unserved' : failure === undefined ? undefined : FAILURE[failure.code]
   const tone = toneOf(snapshot)
   const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
+  const titleRef = useRef<HTMLSpanElement>(null)
+  const marquee = useHoverMarquee(titleRef)
   // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
   const meta = expanded
     ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
     : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
-  const { remove } = actions
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
-      <div className={css.changeHead}>
+      <div className={css.changeHead} {...marquee}>
         <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
         <div className={css.headText}>
           <a
@@ -388,7 +452,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
               actions.openLink(url)
             }}
           >
-            {snapshot?.title ?? url.replace(/^https?:\/\//i, '')}
+            <MarqueeText ref={titleRef}>{snapshot?.title ?? url.replace(/^https?:\/\//i, '')}</MarqueeText>
           </a>
           {(number !== null || meta !== null) && (
             <div className={css.meta}>
@@ -399,23 +463,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
           )}
         </div>
         {actions.renderActions?.({ url: entry.url, ref: entry.ref, headSha: snapshot?.headSha ?? null, state: snapshot?.state ?? null })}
-        <Tooltip label={t('change.view')} side="top">
-          <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
-            <IconRightUpOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        <Tooltip label={t('change.copy')} side="top">
-          <button type="button" className={css.iconButton} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
-            <IconCopyOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        {remove !== undefined && (
-          <Tooltip label={t('change.remove')} side="top">
-            <button type="button" className={css.iconButton} aria-label={t('change.removeAria', { name })} onClick={() => { remove(entry) }}>
-              <IconCloseOutlineRegular size={14} />
-            </button>
-          </Tooltip>
-        )}
+        <CardMenu entry={entry} snapshot={snapshot} name={name} url={url} actions={actions} t={t} />
         <button
           type="button"
           className={css.iconButton}

@@ -462,6 +462,12 @@ export const IconListPenOutlineRegular = productIcon('list-pen-outline', 'regula
 /** Medium IconListPenOutline artwork with a 1.3px stroke. */
 export const IconListPenOutlineMedium = productIcon('list-pen-outline', 'medium')
 
+/** Regular one-pixel IconFilesDiffOutline artwork. */
+export const IconFilesDiffOutlineRegular = productIcon('files-diff-outline', 'regular')
+
+/** Medium IconFilesDiffOutline artwork with a 1.3px stroke. */
+export const IconFilesDiffOutlineMedium = productIcon('files-diff-outline', 'medium')
+
 /** Regular one-pixel IconGoalOutline artwork. */
 export const IconGoalOutlineRegular = productIcon('goal-outline', 'regular')
 

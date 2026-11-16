@@ -1,7 +1,9 @@
 /** Changed-file navigation shared by the toolbar menu and wide diff pane, with a disclosure column on every row. */
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, Input, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, Input, MarqueeText, Menu, Tooltip, useHoverMarquee,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
@@ -40,39 +42,59 @@ function Rows({ nodes, depth, done, props }: {
   readonly done: ReadonlySet<string>
   readonly props: ChangedFilesProps
 }): ReactNode {
+  return nodes.map(node => <Row key={node.path} node={node} depth={depth} done={done} props={props} />)
+}
+
+/**
+ * One file or directory of the tree. The tree already shows each row's directory, so only a renamed file
+ * names its paths in a tooltip; a name the row clips crawls into view while the pointer rests on the row.
+ */
+function Row({ node, depth, done, props }: {
+  readonly node: ChangedFileNode
+  readonly depth: number
+  /** Paths of the viewed files and of the directories whose files are all viewed. */
+  readonly done: ReadonlySet<string>
+  readonly props: ChangedFilesProps
+}): ReactNode {
   const { state, toggle, jump, menu, threadCounts, t } = props
-  return nodes.map((node) => {
-    const directory = node.kind === 'directory'
-    const expanded = directory && (state.query.trim() !== '' || state.collapsed[node.path] !== true)
-    const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
-    const label = node.kind === 'file' && node.file.previousPath !== null
-      ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : node.path
-    const viewed = done.has(node.path)
-    return <div key={node.path}>
-      <Tooltip label={label} portal side="left">
-        <button type="button" role={menu ? 'menuitem' : undefined}
-          className={clsx(css.row, !directory && state.selected === node.path && css.selected, viewed && css.viewed)}
-          style={{ paddingInlineStart: `${8 + depth * 14}px` }} aria-label={label} aria-expanded={directory ? expanded : undefined}
-          aria-description={viewed ? t(directory ? 'viewed.directory' : 'viewed.label') : undefined} data-viewed={viewed ? '' : undefined}
-          aria-current={!directory && state.selected === node.path ? 'true' : undefined}
-          onKeyDown={(event) => {
-            if (!directory || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return
-            event.preventDefault()
-            if ((event.key === 'ArrowRight') !== expanded) toggle(node.path)
-          }}
-          onClick={(event) => { if (directory) { event.stopPropagation(); toggle(node.path) } else jump(node.path) }}>
-          <span className={css.chevron} aria-hidden="true">
-            {directory && <IconChevronDownOutlineRegular size={12} className={clsx(!expanded && css.collapsed)} />}
-          </span>
-          {directory ? <IconFolderCloseRegular size={14} /> : <FileTypeIcon path={node.path} size={14} />}
-          <span className={css.name}>{node.name}</span>
-          {threads > 0 && <span className={css.threads} title={t('thread.treeCount', { count: threads })}>{threads}</span>}
-          {node.kind === 'file' && <Counts file={node.file} t={t} />}
-        </button>
-      </Tooltip>
-      {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} done={done} props={props} />}
-    </div>
-  })
+  const nameRef = useRef<HTMLSpanElement>(null)
+  const marquee = useHoverMarquee(nameRef)
+  const directory = node.kind === 'directory'
+  const expanded = directory && (state.query.trim() !== '' || state.collapsed[node.path] !== true)
+  const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
+  const renamed = node.kind === 'file' && node.file.previousPath !== null
+    ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : null
+  const viewed = done.has(node.path)
+  const button = (
+    <button type="button" role={menu ? 'menuitem' : undefined}
+      className={clsx(css.row, !directory && state.selected === node.path && css.selected, viewed && css.viewed)}
+      style={{ paddingInlineStart: `${8 + depth * 14}px` }} aria-label={renamed ?? node.path} aria-expanded={directory ? expanded : undefined}
+      aria-description={viewed ? t(directory ? 'viewed.directory' : 'viewed.label') : undefined} data-viewed={viewed ? '' : undefined}
+      aria-current={!directory && state.selected === node.path ? 'true' : undefined}
+      {...marquee}
+      onKeyDown={(event) => {
+        if (!directory || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return
+        event.preventDefault()
+        if ((event.key === 'ArrowRight') !== expanded) toggle(node.path)
+      }}
+      onClick={(event) => { if (directory) { event.stopPropagation(); toggle(node.path) } else jump(node.path) }}>
+      <span className={css.chevron} aria-hidden="true">
+        {directory && <IconChevronDownOutlineRegular size={12} className={clsx(!expanded && css.collapsed)} />}
+      </span>
+      {directory ? <IconFolderCloseRegular size={14} /> : <FileTypeIcon path={node.path} size={14} />}
+      <MarqueeText ref={nameRef} className={css.name} data-forge-tree-name="">{node.name}</MarqueeText>
+      {threads > 0 && (
+        <Tooltip label={t('thread.treeCount', { count: threads })} portal side="bottom" delayMs={500}>
+          <span className={css.threads}>{threads}</span>
+        </Tooltip>
+      )}
+      {node.kind === 'file' && <Counts file={node.file} t={t} />}
+    </button>
+  )
+  return <div>
+    {renamed === null ? button : <Tooltip label={renamed} portal side="left" delayMs={500}>{button}</Tooltip>}
+    {node.kind === 'directory' && expanded && <Rows nodes={node.children} depth={depth + 1} done={done} props={props} />}
+  </div>
 }
 
 /**
