@@ -244,18 +244,30 @@ export class ImIntake {
     const target = result.handle.target
     const source = this.config.sources.find(candidate => admitsChat(candidate, bot.id, target.chat))
     if (source === undefined) return undefined
-    const thread = target.thread
+    const quoteNode = result.handle.content.children.find(
+      child => child.type === 'quote' && typeof child.attrs.id === 'string',
+    )
+    const quoted = quoteNode === undefined
+      ? undefined
+      : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id as string))
+    const resolvedThread = typeof target.thread === 'string'
+      ? { id: target.thread, ...quoted?.thread?.root === undefined ? {} : { root: quoted.thread.root } }
+      : quoted?.thread === undefined
+        ? undefined
+        : { ...quoted.thread }
+    const referrer = target.referrer ?? quoted?.referrer
     const time = part.time || Date.now()
     const draft: ImMessageDraft = {
       key: ImMessageKey(bot.id, part.id),
       chat: chatOf(bot.id, target.chat, source),
-      ...typeof thread === 'string' ? { thread: { id: thread } } : {},
+      ...resolvedThread === undefined ? {} : { thread: resolvedThread },
       sender: { id: bot.selfId, ...bot.user?.name === undefined ? {} : { name: bot.user.name }, isBot: true, self: true },
       content: result.handle.content,
       text: toText(result.handle.content),
       mentions: { self: false, all: false, users: [] },
       addressed: false,
       time,
+      ...referrer === undefined ? {} : { referrer },
       via: 'self',
     }
     const bounded = this.boundedOwn(draft)

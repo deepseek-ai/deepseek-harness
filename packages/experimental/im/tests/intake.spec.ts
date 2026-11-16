@@ -726,12 +726,30 @@ describe('ImIntake outbound', () => {
   })
 
   it('keeps the thread of the published message', async () => {
-    const { bot, intake } = await boot()
+    const { bot, intake, store } = await boot()
     const quoted = await intake.outbound(bot, await bot.send({ ...target, thread: 't1' }, content))
     expect(quoted?.thread).toEqual({ id: 't1' })
     const chained = await intake.outbound(bot, await bot.send({ ...target, thread: true }, content))
     expect(chained?.thread).toBeUndefined()
     expect(chained?.sender.name).toBeUndefined()
+
+    const parent = await store.put({
+      ...inbound({ id: 'm-threaded' }),
+      key: ImMessageKey('fake:bot', 'm-threaded'),
+      chat: { key: CHAT, bot: 'fake:bot', ref: target.chat, source: ImSourceId('team') },
+      sender: { id: 'u1', self: false },
+      text: 'hi',
+      via: 'platform',
+      thread: { id: 'omt_1', root: 'om_root' },
+      referrer: { threadId: 'omt_1', messageId: 'm-threaded' },
+    }, 'none')
+    const replyResult = await bot.send(
+      { ...target, thread: true, referrer: parent.referrer },
+      h('message', h('quote', { id: 'm-threaded' }), h.text('reply')),
+    )
+    const ownReply = await intake.outbound(bot, replyResult)
+    expect(ownReply?.thread).toEqual({ id: 'omt_1', root: 'om_root' })
+    expect(ownReply?.referrer).toEqual({ threadId: 'omt_1', messageId: 'm-threaded' })
   })
 
   it('falls back to the local clock when the platform does not stamp the part', async () => {
