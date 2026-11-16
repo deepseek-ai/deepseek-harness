@@ -10,9 +10,9 @@ description: "模型工具 `working_directory`、它的包以及子代理工具�
 
 模型工具 `working_directory` 及其包 `@deepseek-ai/dsh-tool-working-directory` 不再存在；`dsh-base` 与 `dsh-sdk-minimal` 组合包不再挂载 `tool-working-directory` 条目。`@deepseek-ai/dsh-tool-subagent` 注册的委派工具以及 `subagent_oar` 不再接受 `cwd`：子代理从调用方的工作区目录启动。
 
-Session 的目录现在只通过 Host 操作改变：`enter_worktree`、新增的 `exit_worktree`、forge 面板、SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`），以及目录消失时的恢复。每次变更都记录为 `workspace-root/change`；[持久化记录](../../../persistence-changes/2026-11-13-workspace-root-change.zh.md)说明已存储日志的读法和早期版本读者的行为。已存储的 Session 在记录的目录位于其原始项目之内时在该目录恢复，否则在原始项目中恢复。其中记录的 `working_directory` 调用仍是历史，新的调用返回 `unknown tool "working_directory"`。
+Session 的目录现在只通过 Host 操作改变：`enter_worktree`、新增的 `exit_worktree`、forge 面板、SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`），以及目录消失时的恢复。每次变更都记录为 `workspace-root/change`；[持久化记录](../../../persistence-changes/2026-11-13-workspace-root-change.zh.md)说明已存储日志的读法和早期版本读者的行为。已存储的 Session 在原始项目中恢复：早期版本记录的目录变更被忽略。其中记录的 `working_directory` 调用仍是历史，新的调用返回 `unknown tool "working_directory"`。
 
-受影响的对象：期望工具列表中有该工具或该参数的提示词、技能与评测集；引用 `tool-working-directory` 条目或该包的 profile 与 patch；记录的目录位于原始项目之外的已存储 Session，例如在仓库子目录中打开、随后进入仓库根下工作树的 Session。
+受影响的对象：期望工具列表中有该工具或该参数的提示词、技能与评测集；引用 `tool-working-directory` 条目或该包的 profile 与 patch；进入过工作树或模型切换过目录的已存储 Session。
 
 ## 迁移
 

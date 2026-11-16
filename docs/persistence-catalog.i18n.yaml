@@ -300,8 +300,8 @@
   en: e8dd0cebbb930eb7
   zh: e8dd0cebbb930eb7
 /session-persistence-event-catalog/events/working-directory/working-directory-change-log-only:
-  en: a7826f149a09b9b6
-  zh: 16b54a5b469e7436
+  en: 361780c2afc0b56f
+  zh: 53c14164db8772bb
 /session-persistence-event-catalog/events/workspace:
   en: 63ee1a85e4b59ae3
   zh: 63ee1a85e4b59ae3
@@ -312,8 +312,8 @@
   en: e15e7133290b732a
   zh: e15e7133290b732a
 /session-persistence-event-catalog/events/workspace-root/workspace-root-change-log-only:
-  en: 3f23638849143611
-  zh: cdc5e0cbfc4655fd
+  en: 2a92a2732bc32a7c
+  zh: 5635944a9ce51002
 /session-persistence-event-catalog/resolved-persistence-types:
   en: 3493ecf0993e5397
   zh: ec95688f593a4ed4
@@ -1506,8 +1506,8 @@
   en: bef51e0442ebb903
   zh: 240ebeb160533d8c
 /session-persistence-event-catalog/resolved-persistence-types/cwd:
-  en: b5e8f345d5f15813
-  zh: 8115c4e99a4d37d6
+  en: dfc595f52f794ea2
+  zh: ae9754ae00a97b5f
 /session-persistence-event-catalog/resolved-persistence-types/decision-durationms-exitcode-handlerid:
   en: a99ac57bbec0370f
   zh: 9073329e324a66e0

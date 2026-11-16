@@ -12,7 +12,7 @@ Status: implemented
 
 一个 Session 在一个目录中工作，只有 Host 操作移动它。面向模型的 `working_directory` 工具与委派工具的 `cwd` 参数被移除；模型通过路径和 shell 的单次调用参数 `workdir` 到达子目录。`header.cwd` 仍是不可变的原始项目：Session 身份、工作区归属和恢复目的地。`dsh-working-directory` 拥有该目录，只有一个读取接口 `get`：相对路径从该目录解析，消费方也以它作为工作区根来限定写入、文件视图和发现。服务通过 `set` 或 `ensure` 的恢复记录的每次变更都是 `workspace-root/change`。
 
-`workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。已存储的这类事件的目录可能由模型选择，因此折叠只在它位于 Session 的原始项目之内时保留它：曾在工作树或项目子目录中工作的 Session 会在原处恢复，历史中使用的相对路径照常解析。位于项目之外的已存储目录让 Session 回到项目，下一次请求的上下文会报告该目录。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
+`workspace-root/change` 是新增的普通事件类型，作为同版本持久化变更记录在[确认记录](../../../../docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)中。`working-directory/change` 保留在事件词汇表中，已标为 deprecated，没有写入方。读者忽略已存储的这类事件：同一种事件既记录模型的 `cd`，也记录进入工作树，而已存储的 Session 很少启用工作树插件，其中大多数是 `cd`。含有这类事件的 Session 在原始项目中恢复，或在最近一条 `workspace-root/change` 的目录中恢复，下一次请求的上下文会报告该目录。旧版本拒绝含有 `workspace-root/change` 的日志；从未移动工作区的 Session 不含该事件。
 
 工作树创建通过 `set` 进入检出目录。模型只有一个进入检出的工具 `enter_worktree`：名称在 Session 所在检出的池中选中一个工作树。已有的工作树通过 `ctx.worktrees.enter` 进入，没有同名工作树时通过 `ctx.worktrees.create` 新建。名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的目录或 Host 选定的目录启动。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 **在 `working-directory/change` 上增加可选的 `workspace` 标记。** 旧读者忽略该属性，仍能读取所有日志。但服务记录的每次变更都要带一个恒定值，缺少属性成为识别已存储变更的唯一依据；单独的事件为工作区移动命名，并让已存储的事件保持不变。
 
-**通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类。包含规则按原样读取已存储的事件。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
+**通过格式迁移退役 `working-directory/change`。** 已存储的事件不带来源，迁移只能依据相邻事件逐条分类。忽略已存储的事件不需要改写日志。[兼容性规则](../../../../docs/persistence-changes/README.zh.md#compatibility-rules)只在现有判别符无法保证安全时才要求升版本。
 
 **按路径进入工作树。** 模型提供的路径会把写边界移到任意已登记的工作树，除非用户逐次批准，否则这正是移除目录工具所排除的。`tools/pre-execute` 监听器可以通过审批服务请求这一批准；本决定把路径形式，以及随之而来的“从工作树内进入同级工作树”，留给之后的变更。池内的名称把边界留在检出之内。
 
@@ -38,10 +38,12 @@ Status: implemented
 
 **在调用之间保留 shell 的 `cd`。** 这是一个隐式的光标。在该开发者的 Session 中，68% 的 `cd` 前缀指向 Session 目录之外，30% 指向 Session 目录本身，限制在工作区内的保留只对约 2% 生效。
 
-**两个公开读取接口。** 用 `get` 读相对路径的基准、用 `rootOf` 读工作区根，可以保留每个已存储的目录，但每个消费方都要在两个值之间做选择，而这两个值在从这个版本起启动的每个 Session 中都相等。只保留一个读取接口、把差异收进折叠，就不需要这种选择。
+**两个公开读取接口。** 用 `get` 读相对路径的基准、用 `rootOf` 读工作区根，可以保留每个已存储的目录，但每个消费方都要在两个值之间做选择，而这两个值在从这个版本起启动的每个 Session 中都相等。只保留一个读取接口，就不需要这种选择。
 
-**保留每个已存储的目录。** 把每条已存储的 `working-directory/change` 都读作目录不需要任何规则，但消费方跟随目录，已存储的模型 `cd` 所到的项目之外的目录（例如用户主目录）会因此成为写边界。
+**保留每个已存储的目录。** 把每条已存储的 `working-directory/change` 都读作目录，由于消费方跟随目录，已存储的模型 `cd`（包括进入用户主目录的）会成为写边界。
+
+**保留原始项目之内的已存储目录。** 进入过工作树的 Session 会在工作树中恢复，但这条规则分不清工作树与 `cd`：已存储的进入子目录的 `cd` 会收窄写边界和文件视图，而位于 Session 打开目录之外的工作树会被丢弃。
 
 ## Consequences
 
-消费方通过 `get` 读取一个目录。曾在项目之内工作的已存储 Session 会在原处恢复，并像其他 Session 一样跟随之后的 Host 移动；模型曾移入项目子目录的 Session，在 Host 操作移动它之前，以该子目录作为写边界和文件视图的根。日志曾离开项目的已存储 Session 会在项目中恢复；这包括在仓库子目录中打开、随后进入仓库根下工作树的 Session，`enter_worktree` 或其他 Host 移动可以让它回到工作树。以后若要增加面向模型的光标，需要它自己的事件，因为已存储的 `working-directory/change` 事件被读作 Session 的目录。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。在链接工作树内打开的 Session 可以在 `workspace-write` 下运行 `git commit`，共享的 `.git`（包括其钩子与配置）对该 Session 可写，正如它对主检出目录中的 Session 一样。SDK 的 `setWorkingDirectory` 调用以及在 Host 选定目录启动的子代理，会让 `workspace-write` 边界随目录一起移动。工作树快照夹具覆盖进入、离开和失去工作树。
+消费方通过 `get` 读取一个目录。无论 `working-directory/change` 事件记录了什么目录，已存储的 Session 都在原始项目中恢复，并从那里跟随 Host 移动。曾在工作树中工作的 Session 通过 `enter_worktree` 回到工作树；在此之前，它的相对路径在原始项目中解析。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。在链接工作树内打开的 Session 可以在 `workspace-write` 下运行 `git commit`，共享的 `.git`（包括其钩子与配置）对该 Session 可写，正如它对主检出目录中的 Session 一样。SDK 的 `setWorkingDirectory` 调用以及在 Host 选定目录启动的子代理，会让 `workspace-write` 边界随目录一起移动。工作树快照夹具覆盖进入、离开和失去工作树。

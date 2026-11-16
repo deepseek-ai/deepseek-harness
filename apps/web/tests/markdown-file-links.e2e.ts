@@ -77,7 +77,7 @@ function changedDirectoryFixture(path: string): string {
     content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('session/title', { title: 'Changed directory links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
-  session.append('working-directory/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
+  session.append('workspace-root/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
   session.append('step/start', { turn: 1, step: 1 })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],

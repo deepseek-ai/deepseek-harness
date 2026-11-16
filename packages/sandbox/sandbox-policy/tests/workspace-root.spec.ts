@@ -94,10 +94,8 @@ describe('workspace root as the write boundary', () => {
     const agent = agentFor(ctx, session)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 
-    // A working-directory/change, as earlier logs hold, moves the boundary only to a directory inside the project.
+    // A working-directory/change, as earlier logs hold, moves neither the directory nor the boundary.
     session.append('working-directory/change', { cwd: join(repo, '.agents') })
-    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(join(repo, '.agents'))
-    session.append('working-directory/change', { cwd: base })
     expect(ctx.workingDirectory.get(session)).toBe(repo)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 

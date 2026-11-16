@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-`dsh-working-directory` 拥有每个 Session 的一个日志化有效目录。投影从不可变的原始项目初始化，并折叠 `workspace-root/change` 与已存储的 `working-directory/change` 事件；消费者读取该服务，而不是从 header 或沙箱根目录派生执行路径。目录变更通过文件系统 provider 验证，在 Session 内串行执行，并只在新目录可用后发布。
+`dsh-working-directory` 拥有每个 Session 的一个日志化有效目录。投影从不可变的原始项目初始化，并折叠 `workspace-root/change` 事件；消费者读取该服务，而不是从 header 或沙箱根目录派生执行路径。目录变更通过文件系统 provider 验证，在 Session 内串行执行，并只在新目录可用后发布。
 
-只有 Host 操作改变目录：工作树的创建与退出、forge 面板、SDK 请求和子代理启动调用该服务。[工作区根记录](2026-11-03-session-workspace-root.zh.md)移除了面向模型的 `working_directory` 工具，把每次变更记录为 `workspace-root/change`，并且只在原始项目之内读取已存储的 `working-directory/change`。
+只有 Host 操作改变目录：工作树的创建与退出、forge 面板、SDK 请求和子代理启动调用该服务。[工作区根记录](2026-11-03-session-workspace-root.zh.md)移除了面向模型的 `working_directory` 工具，把每次变更记录为 `workspace-root/change`，并忽略已存储的 `working-directory/change` 事件。
 
 必需的用户上下文快照携带当前值；每次已提交变更都会尝试通过普通 Agent 收件箱排入通知。取消或销毁可能丢弃尚未进入请求的通知，但目录事件仍然保留，供后续请求使用。所选目录消失时恢复到原始项目。恢复目录也消失时返回错误。写权限保持独立。
 

@@ -1324,9 +1324,10 @@ Source: [`packages/web/web-search-deepseek/src/provider.ts:89`](../packages/web/
 
 ```ts persistence-catalog
 /**
- * Directory change recorded by releases whose model could move the directory. A reader keeps `cwd` only
- * when it lies inside the Session's original project; otherwise the Session returns to that project.
- * @deprecated Read only: no writer records this event. `WorkingDirectoryService.set` records
+ * Directory change recorded by releases whose model could move the directory. Readers ignore it: a
+ * Session that holds one resumes in its original project, or in the directory of its last
+ * `workspace-root/change`.
+ * @deprecated No writer records this event. `WorkingDirectoryService.set` records
  * `workspace-root/change`.
  */
 'working-directory/change': {
@@ -1335,7 +1336,7 @@ Source: [`packages/web/web-search-deepseek/src/provider.ts:89`](../packages/web/
 }
 ```
 
-Source: [`packages/session/working-directory/src/index.ts:61`](../packages/session/working-directory/src/index.ts)
+Source: [`packages/session/working-directory/src/index.ts:62`](../packages/session/working-directory/src/index.ts)
 
 ### `workspace/*`
 
@@ -1368,7 +1369,7 @@ Source: [`packages/deliverables/workspace-changes/src/types.ts:106`](../packages
 }
 ```
 
-Source: [`packages/session/working-directory/src/index.ts:66`](../packages/session/working-directory/src/index.ts)
+Source: [`packages/session/working-directory/src/index.ts:67`](../packages/session/working-directory/src/index.ts)
 
 ## Resolved persistence types
 
@@ -6246,7 +6247,7 @@ Sources: [`packages/compaction/compaction/src/types.ts:24`](../packages/compacti
 
 SHA-256: `da60ed58a8fa23d7aa4920ab5c1f4e3d28109cb0797ef9e5c8b125721b847582`
 
-Sources: [`packages/session/working-directory/src/index.ts:61`](../packages/session/working-directory/src/index.ts) · [`packages/session/working-directory/src/index.ts:66`](../packages/session/working-directory/src/index.ts)
+Sources: [`packages/session/working-directory/src/index.ts:62`](../packages/session/working-directory/src/index.ts) · [`packages/session/working-directory/src/index.ts:67`](../packages/session/working-directory/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

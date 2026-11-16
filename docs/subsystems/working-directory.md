@@ -8,7 +8,7 @@ A Session's active directory is owned by [`dsh-working-directory`](../../package
 
 `ctx.workingDirectory.get(session)` reads the logged value. `ensure(agent)` validates it and restores the original project when the directory disappeared. `set(agent, path)` validates and records a move that a Host operation chose, such as worktree creation, the forge panel, or an SDK request; the model has no tool that moves the directory. Sessions without a header directory use the configured runtime fallback; an unavailable fallback produces an error.
 
-`get` is the one read of a Session's directory: relative paths resolve from it, and it is the workspace root for everything that follows the Session's checkout. Every change the service records is a `workspace-root/change`. A log written while the model could move the directory holds `working-directory/change` events, which have no writer now. The service keeps such a directory only when it lies inside the Session's original project, so a Session that worked in a worktree or a subdirectory of its project resumes there. A stored directory outside the project returns the Session to the project, and the next request's context reports the directory.
+`get` is the one read of a Session's directory: relative paths resolve from it, and it is the workspace root for everything that follows the Session's checkout. Every change the service records is a `workspace-root/change`. A log written while the model could move the directory holds `working-directory/change` events, which have no writer now. The service ignores them: such a Session resumes in its original project, or in the directory of its last `workspace-root/change`, and the next request's context reports the directory.
 
 Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. The sandbox `workspace-write` boundary, the Files tree and directory listings, and the change summaries follow it too. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
 
@@ -30,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 One owner for each Session's directory and its model-visible changes.
 
-A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. A log written while the model could move the directory is read under the rule the `working-directory/change` event documents.
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.
 
 ```ts cordis-catalog
 /**

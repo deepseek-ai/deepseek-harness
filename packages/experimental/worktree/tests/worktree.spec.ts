@@ -78,13 +78,13 @@ describe('creating and entering retained worktrees', () => {
     expect(await git(root, 'rev-parse', '--verify', 'refs/heads/inner')).toBe(inner.baseCommit)
   })
 
-  it('exits a worktree whose subdirectory a working-directory/change recorded', async () => {
+  it('exits a worktree from one of its subdirectories', async () => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
     const created = await ctx.worktrees.create(agent, { name: 'topic' })
     await mkdir(join(created.path, 'src'))
-    agent.session.append('working-directory/change', { cwd: join(created.path, 'src') })
+    await ctx.workingDirectory.set(agent, join(created.path, 'src'))
     await expect(ctx.worktrees.exit(agent)).resolves.toEqual(created)
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
   })

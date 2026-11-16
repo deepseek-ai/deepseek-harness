@@ -71,9 +71,7 @@ export interface ForgeWorktreeState {
   readonly locked: boolean
   /** Whether a step has started; no worktree is created afterwards. */
   readonly stepped: boolean
-  /** The Session's original project, or its first recorded directory without one; null before either. */
-  readonly project: string | null
-  /** The Session's working directory as the working-directory service reads its log, or null when none is recorded. */
+  /** The Session's working directory as its log last recorded it, or null when none is recorded. */
   readonly cwd: string | null
   /** Whether a restoration started without a successful completion, including across reloads. */
   readonly restoring: boolean

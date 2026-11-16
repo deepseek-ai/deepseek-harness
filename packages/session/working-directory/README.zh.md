@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。服务记录的每次变更都是 `workspace-root/change`。同一个折叠也读取早期版本存储的 `working-directory/change` 事件，现在没有写入方：只有当这类目录位于 Session 的原始项目之内时才保留它，否则回到项目，因此模型曾在项目之外选择的目录永远不会成为工作区。包含判断按记录的路径拼写比较。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。失败均为 `WorkingDirectoryError`：路径为空或格式错误时为 `WORKING_DIRECTORY_INVALID`，请求切换到不存在的目录时为 `WORKING_DIRECTORY_NOT_FOUND`，当前目录与原始项目都不存在或服务已释放时为 `WORKING_DIRECTORY_UNAVAILABLE`。
+Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。服务记录的每次变更都是 `workspace-root/change`。折叠忽略早期版本存储的 `working-directory/change` 事件，现在没有写入方，因此模型曾选择的目录永远不会成为工作区。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。失败均为 `WorkingDirectoryError`：路径为空或格式错误时为 `WORKING_DIRECTORY_INVALID`，请求切换到不存在的目录时为 `WORKING_DIRECTORY_NOT_FOUND`，当前目录与原始项目都不存在或服务已释放时为 `WORKING_DIRECTORY_UNAVAILABLE`。
 
 不发布 `./invariant` 伴生模块，因为服务从 Session 投影读取唯一的目录状态，并在使用时检查文件系统有效性。
 
@@ -81,8 +81,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **项目之外的已存储目录** — 已存储日志曾离开原始项目的 Session 会在原始项目中恢复，包括在仓库子目录中打开、随后进入仓库根下工作树的 Session。`enter_worktree` 或其他 Host 移动可以让它回到工作树。
-- **已存储的子目录** — 已存储日志曾移入原始项目子目录的 Session 会在该子目录恢复，写入和文件视图以该子目录为界。SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 可以把它移回项目。
+- **已存储的目录变更** — 早期版本存储的 Session 在原始项目中恢复，即使它进入过工作树或模型切换过目录。`enter_worktree` 或其他 Host 移动可以让它回到工作树。
 - **原始项目缺失** — 当前目录与原始项目均不可用时，提示词组装会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
 
 <a id="dev-note"></a>
