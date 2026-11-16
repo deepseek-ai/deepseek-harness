@@ -53,8 +53,6 @@ export interface DeepSeekConnectionOptions {
   baseURL: string
   /** Request defaults applied to every call (thinking mode, effort). */
   defaults: RequestDefaults
-  /** Send `safety_check: { level: 'high' }` so the provider reviews request input and model output. */
-  safetyCheck: boolean
   /** Default per-request output cap; explicit request values win. */
   maxTokens: number
   /** Positive context capacity used when the selected model has no exact value. */

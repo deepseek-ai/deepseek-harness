@@ -29,8 +29,8 @@ export type WireRequest = {
   system?: string
   thinking: { type: 'enabled' | 'disabled' }
   output_config?: { effort: 'low' | 'high' | 'max' }
-  /** Provider content safety review of the input and output. */
-  safety_check?: { level: 'high' }
+  /** Provider content safety review of the input and output; always `high`. */
+  safety_check: { level: 'high' }
   temperature?: number
   stop_sequences?: string[]
   tools?: {

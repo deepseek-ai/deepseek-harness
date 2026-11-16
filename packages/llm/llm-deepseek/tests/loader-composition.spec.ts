@@ -313,17 +313,14 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(serverB.headers[0]?.['x-api-key']).toBe('rotated-key')
   })
 
-  it('sends the safety check after the settings switch turns it on and fails a refused response', async () => {
+  it('requests the content safety check and fails a refused response', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', '')
     const refusal = textEvents.map(event => event.replace('"end_turn"', '"refusal"'))
-    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: refusal }])
+    const server = await mockServer([{ kind: 'sse', events: refusal }])
     const { ctx } = await loadComposition({ withDynamic: true, baseURL: server.url })
 
-    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
-    expect(server.requests[0]).not.toHaveProperty('safety_check')
-    await ctx.settings.mutate(NS, [{ op: 'set', path: ['safetyCheck'], value: true }])
     const refused = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
-    expect(server.requests[1]).toMatchObject({ safety_check: { level: 'high' } })
+    expect(server.requests[0]).toMatchObject({ safety_check: { level: 'high' } })
     expect(refused.finish).toMatchObject({ kind: 'error', failure: { code: 'CONTENT_REFUSED' } })
   })
 
