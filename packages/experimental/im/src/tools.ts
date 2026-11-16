@@ -47,7 +47,9 @@ export const IM_TOOLS = [
 export type ImToolName = typeof IM_TOOLS[number]
 
 /** What the tools need from the service. */
-export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members' | 'bot'> {
+export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members'> {
+  /** Bot lookup for the chat (only `selfId` is read by tools). */
+  bot(chat: ImChatKey): { readonly selfId?: string }
   /** The two session lookups of the caller guard and the grant chain. */
   readonly sessions: Pick<ImSessions, 'of' | 'get'>
   readonly history: ImHistory
