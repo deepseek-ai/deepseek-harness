@@ -12,11 +12,11 @@ A fixed Session creation directory cannot represent a task that changes checkout
 
 `dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `workspace-root/change` and stored `working-directory/change` events; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
 
-Only Host operations change the directory: worktree creation and exit, the forge panel, SDK requests, and child startup call the service. The [workspace-root note](2026-11-03-session-workspace-root.md) removed the model-facing `working_directory` tool, records each change as `workspace-root/change`, and adds the workspace root on top of this owner.
+Only Host operations change the directory: worktree creation and exit, the forge panel, SDK requests, and child startup call the service. The [workspace-root note](2026-11-03-session-workspace-root.md) removed the model-facing `working_directory` tool, records each change as `workspace-root/change`, and reads a stored `working-directory/change` only inside the original project.
 
 Required user-context snapshots carry the current value; each committed change attempts to queue a notice through the ordinary Agent inbox. Cancellation or disposal may discard unadmitted notices while the directory event survives for subsequent requests. The original project is the recovery destination when the selected directory disappears. Missing recovery destinations produce an error. Write permissions remain independent.
 
-Subagents start in the parent's workspace root or a Host-chosen directory and commit that directory after inherited history. Existing processes, terminals, and persistent shells keep their process-local directory. Project instructions, skills, and completion follow the effective directory without changing Session identity, grouping, or runtime composition.
+Subagents start in the parent's current directory or a Host-chosen directory and commit that directory after inherited history. Existing processes, terminals, and persistent shells keep their process-local directory. Project instructions, skills, and completion follow the effective directory without changing Session identity, grouping, or runtime composition.
 
 Live Session skill catalogs and file completion validate through the same directory owner. These reads can commit recovery and queue its notice before discovery, keeping discovered files and subsequent operations tied to the committed Session directory. Cold skill catalogs read the recorded projection without activating an Agent.
 

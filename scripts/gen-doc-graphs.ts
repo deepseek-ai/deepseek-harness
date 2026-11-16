@@ -257,7 +257,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['working-directory'],
     consumers: ['tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
-    note: 'Two Session projections own the effective execution directory and the workspace root; Host operations move both together. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
+    note: 'One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
   },
   {
     key: 'mcpResources',

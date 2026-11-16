@@ -491,14 +491,11 @@ export class SubagentManager {
     })
   }
 
-  /** Capture the explicit directory, or the parent's workspace root, while the parent still owns startup. */
+  /** Capture the explicit or inherited directory while the parent still owns startup. */
   private async resolveDirectory(request: Pick<SubagentStartRequest, 'parent' | 'cwd'>, signal: AbortSignal): Promise<string> {
-    let cwd = request.cwd
-    if (cwd === undefined || !isAbsolute(cwd)) {
-      // Validation can restore the parent's workspace before its root is read.
-      await this.ctx.workingDirectory.ensure(request.parent, signal)
-      cwd = resolve(this.ctx.workingDirectory.rootOf(request.parent.session), cwd ?? '.')
-    }
+    const cwd = request.cwd !== undefined && isAbsolute(request.cwd)
+      ? request.cwd
+      : resolve(await this.ctx.workingDirectory.ensure(request.parent, signal), request.cwd ?? '.')
     signal.throwIfAborted()
     return cwd
   }

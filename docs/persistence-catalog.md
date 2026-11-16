@@ -1324,13 +1324,13 @@ Source: [`packages/web/web-search-deepseek/src/provider.ts:89`](../packages/web/
 
 ```ts persistence-catalog
 /**
- * Directory change of a stored Session that leaves its workspace root where it is; the immutable
- * Session header retains the original project.
+ * Directory change recorded by releases whose model could move the directory. A reader keeps `cwd` only
+ * when it lies inside the Session's original project; otherwise the Session returns to that project.
  * @deprecated Read only: no writer records this event. `WorkingDirectoryService.set` records
  * `workspace-root/change`.
  */
 'working-directory/change': {
-  /** Absolute directory used by subsequent directory-based operations. */
+  /** Absolute directory the Session worked in after the change. */
   cwd: string
 }
 ```
@@ -1361,9 +1361,9 @@ Source: [`packages/deliverables/workspace-changes/src/types.ts:106`](../packages
 #### `workspace-root/change` — log-only
 
 ```ts persistence-catalog
-/** Workspace move: the Session's current directory and its workspace root both become `cwd`. */
+/** Host move of the Session's directory; the immutable Session header retains the original project. */
 'workspace-root/change': {
-  /** Absolute directory used by subsequent directory-based operations and as the workspace root. */
+  /** Absolute directory the Session works in from this event on. */
   cwd: string
 }
 ```

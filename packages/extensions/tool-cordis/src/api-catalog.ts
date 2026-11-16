@@ -4842,8 +4842,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.',
-    description: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a `working-directory/change`.',
+    summary: 'One owner for each Session\'s directory and its model-visible changes.',
+    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. A log written while the model could move the directory is read under the rule the `working-directory/change` event documents.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4852,26 +4852,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'get(session: Session): string',
-        description: 'Read the committed directory without filesystem I/O.',
+        description: 'Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace root of everything that follows the Session\'s checkout.',
         parameters: [{ name: 'session', description: 'Session whose directory is requested.' }],
-        returns: 'its effective absolute directory.',
-      },
-      {
-        signature: 'rootOf(session: Session): string',
-        description: 'Read the committed workspace root without filesystem I/O.',
-        parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
-        returns: 'the directory of the last `workspace-root/change`, the original project before any, or the deployment default when none is recorded.',
+        returns: 'the directory of the last Host move, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
-        returns: 'the existing directory; recovery is committed before fulfillment and moves the workspace root with the directory. A notice failure is warned without reverting the committed state.',
+        returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Move one Session\'s workspace: its current directory and its workspace root become `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
+        description: 'Move one Session\'s directory to `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],

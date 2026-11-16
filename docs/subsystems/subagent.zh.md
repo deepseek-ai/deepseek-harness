@@ -8,7 +8,7 @@
 
 所有后端都使用 startActivation。能力标记校验请求选项；prepareContinuable 选择本地 Agent 创建，start 选择一次外部执行。面向模型的工具采用 parent 回传。Workflow 与 code mode 消费者可以等待 caller 结果，不额外向父代理注入消息。历史子会话的 descriptor 不可用时，以 `mode: 'unknown'` 保持可发现性，但不授予继续执行能力；[包 README](../../packages/subagent/subagent/README.zh.md) 定义目录持久化语义。
 
-由 Host 选定的可选 `cwd` 指定子级的初始目录，该目录成为它的工作区；相对路径以父级的工作区根为基准解析。省略时，在准入阶段捕获该根。面向模型的委派工具不传目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
+由 Host 选定的可选 `cwd` 指定子级的初始目录；相对路径以父级的当前目录为基准解析。省略时，在准入阶段捕获该目录。面向模型的委派工具不传目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
 
 ```ts type-equiv
 /**
@@ -76,10 +76,7 @@ interface SubagentActivation {
  * shares these task options and defines its own label and cancellation policy.
  */
 interface SubagentStartRequest {
-  /**
-   * Host-chosen initial child directory, which becomes the child's workspace; a relative path resolves
-   * against the parent's workspace root. Omitted starts the child in that root.
-   */
+  /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
   readonly cwd?: string
   /**
    * Independent preset id; omission joins the parent's current generation.
@@ -92,7 +89,7 @@ interface SubagentStartRequest {
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
-   * The spawning agent. Its workspace root supplies the default cwd;
+   * The spawning agent. Its effective directory supplies the default cwd;
    * in-process children retain its origin, lineage, and delegation depth.
    */
   readonly parent: Agent

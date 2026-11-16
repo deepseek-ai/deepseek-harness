@@ -19,7 +19,7 @@ import type {
 /** Plugin record type of worktree requests, withdrawals, and creations. */
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
-const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false, restoring: false }
+const EMPTY: Omit<ForgeWorktreeState, 'project' | 'cwd'> = { request: null, created: null, locked: false, stepped: false, restoring: false }
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -43,6 +43,7 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
   locked: z.boolean(),
   stepped: z.boolean(),
   restoring: z.boolean(),
+  project: z.string().min(1).nullable(),
   cwd: z.string().min(1).nullable(),
 }).strict()
 
@@ -59,9 +60,9 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 5,
+  stateVersion: 6,
   stateSchema,
-  init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
+  init: header => ({ ...EMPTY, project: header.cwd ?? null, cwd: header.cwd ?? null }),
   apply,
   wire: {
     viewSchema: worktreeSchema.nullable(),
@@ -96,13 +97,19 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
       return state.locked ? state : { ...state, locked: true }
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
-    case 'working-directory/change':
     case 'workspace-root/change':
-      return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
+      return moved(state, event.data.cwd)
+    // As the working-directory service reads it: a stored directory outside the project returns the Session to the project.
+    case 'working-directory/change':
+      return moved(state, state.project === null || within(state.project, event.data.cwd) ? event.data.cwd : state.project)
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:
       return applyRecord(state, event)
   }
+}
+
+function moved(state: ForgeWorktreeState, cwd: string): ForgeWorktreeState {
+  return state.cwd === cwd ? state : { ...state, project: state.project ?? cwd, cwd }
 }
 
 function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeState {
