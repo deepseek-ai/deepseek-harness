@@ -23,7 +23,7 @@ const scenarios = [
 
 function smokeOptions(
   [kind, phase, disposition]: (typeof scenarios)[number], mode: ExampleMode,
-): LoaderSmokeOptions {
+) {
   return {
     label: `Source Controller ${kind}/${phase}/${disposition}`,
     tempDirPrefix: 'dsh-source-controller-lifecycle-',
@@ -59,7 +59,7 @@ function smokeOptions(
         launch: { mode }, outcome: { status: 'fulfilled' }, persisted: true, inboxInsertions: 1, receipt: true,
       })
     },
-  }
+  } satisfies LoaderSmokeOptions
 }
 
 it.each(['src', 'lib'] as const)('selects %s launch and package resolution for the actual lifecycle fixture', async (mode) => {

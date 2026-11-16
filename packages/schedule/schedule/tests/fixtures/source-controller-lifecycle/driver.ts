@@ -35,7 +35,9 @@ function errorDetails(error: unknown): object {
 }
 
 async function physicalLogs(): Promise<string[]> {
-  return Array.fromAsync(glob('**/*.jsonl', { cwd: `${process.cwd()}/sessions` }))
+  const paths: string[] = []
+  for await (const path of glob('**/*.jsonl', { cwd: `${process.cwd()}/sessions` })) paths.push(path)
+  return paths
 }
 
 const [configPath, kind, phase, disposition, mode] = process.argv.slice(2)
@@ -106,7 +108,7 @@ try {
   }
   const domain = ctx.storageDomain.get(scheduleDomain.name)
   assert.ok(domain)
-  const saved = domain.table('tasks').get(task.id)
+  const saved = scheduleDomain.tables.tasks.valueSchema.optional().parse(domain.table('tasks').get(task.id))
   await writeFile('result.json', JSON.stringify({
     launch: { mode, execArgv: process.execArgv, scheduleModule },
     outcome, visibleAtGate, logsAtGate, logsAfter: await physicalLogs(), ownerUidAtRelease, providerClosed,
