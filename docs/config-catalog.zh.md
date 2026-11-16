@@ -4776,7 +4776,7 @@ export interface PresetSelectionConfig {
 ## `@deepseek-ai/dsh-tool-subagent-control`
 
 - `inject`: `tools` · `subagents` · `agents` · `systemPrompt`
-- `source`: [`packages/subagent/tool-subagent-control/src/index.ts:24`](../packages/subagent/tool-subagent-control/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent-control/src/index.ts:25`](../packages/subagent/tool-subagent-control/src/index.ts)
 
 ```ts config-catalog
 /** Optional subagent control tools. */
