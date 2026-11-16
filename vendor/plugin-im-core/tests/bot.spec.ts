@@ -134,6 +134,8 @@ interface TestConfig {
   modeOrder?: readonly string[]
   /** Stream driver per mode id (`undefined` ⇒ core `final`). */
   driver?: (mode: string) => StreamDriver | undefined
+  /** Whether `sendPayload` retries are deduplicated by the adapter; default `true` in `TestAdapterBase`. */
+  idempotentSend?: (target: Target, ctx: SendContext) => boolean
 }
 
 class TestAdapterBase extends Adapter<TestConfig, Record<string, Mode<any>>> {
@@ -213,6 +215,10 @@ class TestAdapter extends TestAdapterBase {
     const operation: Operation = { op: 'editPayload', part, payload, handle }
     this.maybeFail(operation)
     this.ops.push(operation)
+  }
+
+  override idempotentSend(target: Target, ctx: SendContext): boolean {
+    return this.config.idempotentSend?.(target, ctx) ?? true
   }
 
   override async deletePart(part: SentPart, handle: MessageHandle): Promise<void> {
@@ -314,6 +320,18 @@ describe('bot.send', () => {
     adapter.fail('sendPayload', new PlatformError('invalid', 'rejected'), 1)
     await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({ kind: 'invalid' })
     expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(1)
+  })
+
+  it('stops retrying unknown-outcome sends when the adapter cannot guarantee idempotency, but still retries published: no', async () => {
+    const { adapter, bot } = await setup(TestAdapter, { idempotentSend: () => false })
+    adapter.fail('sendPayload', new PlatformError('retryable', 'lost', { published: 'unknown', retryAfterMs: 0 }))
+    await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({ kind: 'retryable', published: 'unknown' })
+    expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(1)
+
+    adapter.fail('sendPayload', new PlatformError('retryable', 'not sent', { published: 'no', retryAfterMs: 0 }))
+    const result = await bot.send(target, message(h('p', 'hi')))
+    expect(result.handle.parts.length).toBe(1)
+    expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(3)
   })
 
   it('rejects with PartialSendError when a later part fails', async () => {

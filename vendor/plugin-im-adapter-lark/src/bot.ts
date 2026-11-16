@@ -186,6 +186,10 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
    * @param ctx - part index, quote target and options.
    * @returns the sent part, with the kind the later edits need.
    */
+  override idempotentSend(_target: Target, ctx: SendContext): boolean {
+    return ctx.options.idempotencyKey !== undefined
+  }
+
   override async sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart> {
     return await sendMessagePayload(this, payload, target, ctx)
   }

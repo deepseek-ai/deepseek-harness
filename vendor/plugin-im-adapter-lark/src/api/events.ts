@@ -12,7 +12,6 @@
  * a reply needs without re-reading the event — the chat and its kind, the message the reply answers or the card that
  * was interacted with, the thread the message belongs to, and when this process saw the event.
  * {@link readLarkReferrer} is the narrowing guard for a `Target.referrer: unknown`.
- * for a `Target.referrer: unknown`.
  *
  * @module @deepseek-ai/cordis-plugin-im-adapter-lark/api/events
  */

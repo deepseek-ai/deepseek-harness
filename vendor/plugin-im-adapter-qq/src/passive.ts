@@ -141,6 +141,20 @@ export class PassiveManager {
   }
 
   /**
+   * Whether `claim(referrer, { idempotencyKey })` would produce a passive ticket (carrying `(msg_id, msg_seq)` dedupe)
+   * without mutating state. Active sends (when no passive ticket is available) have no platform dedupe field.
+   */
+  canClaim(referrer: QQReferrer | undefined, idempotencyKey: string | undefined): boolean {
+    if (!referrer || idempotencyKey === undefined) return false
+    const key = passiveKey(referrer)
+    if (!key) return false
+    if (this.now() >= this.until(referrer)) return false
+    const entry = this.entries.get(entryId(referrer.chatId, key))
+    if (entry?.tickets.has(idempotencyKey)) return true
+    return (entry?.used ?? 0) < this.budget(referrer.chatType)
+  }
+
+  /**
  * Book the next passive reply of one referrer, or answer that the adapter must publish actively.
  *
  * The first call of a window books `seqBase`, the next one `seqBase + 1`, and so on, so the sequence is never

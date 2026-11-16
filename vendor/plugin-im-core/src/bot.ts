@@ -670,10 +670,12 @@ export abstract class Bot<C = unknown> {
           options,
           previous: [...parts],
         }
+        const idempotent = this.adapterHooks.idempotentSend?.(target, ctx) ?? false
         const part = await this.withRetry(
           () => this.adapterHooks.sendPayload(frame.payloads[index], target, ctx),
           target,
           options.signal,
+          idempotent,
         )
         parts.push(part)
       }
@@ -804,14 +806,20 @@ export abstract class Bot<C = unknown> {
     }
   }
 
-  /** Run a platform call, retrying `retryable` / `rate-limit` failures. */
-  private async withRetry<R>(operation: () => Promise<R>, target: Target, signal?: AbortSignal): Promise<R> {
+  /** Run a platform call, retrying `retryable` / `rate-limit` failures when safe (`published: 'no'` or idempotent). */
+  private async withRetry<R>(
+    operation: () => Promise<R>,
+    target: Target,
+    signal?: AbortSignal,
+    idempotent = true,
+  ): Promise<R> {
     for (let attempt = 1; ; attempt++) {
       try {
         return await operation()
       } catch (error) {
         const classified = this.classifyError(error)
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit')
+          && (classified.published === 'no' || idempotent)
           && attempt < PIPELINE_ATTEMPTS
         if (!again) throw classified
         await this.sleep(streamBackoff(attempt, classified.retryAfterMs), signal)
@@ -1044,6 +1052,8 @@ export abstract class Adapter<C = unknown, M extends Record<string, Mode<any>> =
   abstract upload(ref: ResourceRef, scope: string, ctx: PrepareContext): Promise<ResolvedResource>
   abstract resourceScope(target: Target, kind: ResourceKind): string
   abstract sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart>
+  /** Whether a retry of `sendPayload` is deduplicated by the platform when the outcome of an earlier attempt is unknown. */
+  idempotentSend?(target: Target, ctx: SendContext): boolean
   editPayload?(part: SentPart, payload: unknown, handle: MessageHandle): Promise<void>
   deletePart?(part: SentPart, handle: MessageHandle): Promise<void>
   /** Stream driver per mode; undefined ⇒ core uses the `final` strategy. */

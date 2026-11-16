@@ -108,13 +108,8 @@ export function replyPlan(bot: LarkBot, target: Target, ctx: SendContext): LarkR
       throw new PlatformError('invalid', `${bot.id}: cannot publish to thread ${threadId} outside a chat`, { published: 'no' })
     }
     if (ctx.quote !== undefined) {
-      if (referrer?.messageId === ctx.quote) {
-        if (referrerMatchesThread(referrer, threadId)) return { messageId: ctx.quote, inThread: true }
-        throw new PlatformError(
-          'invalid',
-          `${bot.id}: quoted message ${ctx.quote} does not belong to thread ${threadId}`,
-          { published: 'no' },
-        )
+      if (referrer?.messageId === ctx.quote && referrerMatchesThread(referrer, threadId)) {
+        return { messageId: ctx.quote, inThread: true }
       }
       return { messageId: ctx.quote, threadId, inThread: true }
     }

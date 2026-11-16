@@ -22,7 +22,7 @@ import { Config, type QQConfig, resolveBaseUrl } from './config.ts'
 import { decodeDispatch as decodeFrame } from './decode.ts'
 import { classify } from './errors.ts'
 import { createQQModes } from './modes/index.ts'
-import { PassiveManager } from './passive.ts'
+import { PassiveManager, referrerOf } from './passive.ts'
 import { uploadResource } from './prepare.ts'
 import { deleteSentPart, sendMessagePayload } from './send.ts'
 import { createStreamDriver } from './stream.ts'
@@ -175,6 +175,12 @@ export class QQBot extends Adapter<QQConfig, QQModes> {
  * @param ctx - part index, quote target and options.
  * @returns the sent part.
  */
+  override idempotentSend(target: Target, ctx: SendContext): boolean {
+    const key = ctx.options.idempotencyKey
+    if (key === undefined) return false
+    return this.passive.canClaim(referrerOf(target), `${key}:${ctx.index}`)
+  }
+
   override async sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart> {
     return await sendMessagePayload(this, payload, target, ctx)
   }

@@ -361,6 +361,27 @@ describe('sendPayload: reply and thread', () => {
     })
     expect(calls.every(call => call.method === 'GET')).toBe(true)
   })
+
+  it('verifies a quoted root message on the platform when its stored referrer has no thread info yet', async () => {
+    const { bot, calls } = await mount({
+      '/open-apis/im/v1/messages/om_root': () =>
+        Response.json({ code: 0, data: { items: [{ message_id: 'om_root', chat_id: 'oc_chat', thread_id: 'omt_1' }] } }),
+      '/open-apis/im/v1/messages/om_root/reply': () =>
+        Response.json({ code: 0, data: { message_id: 'om_reply' } }),
+    })
+    const staleReferrer: LarkReferrer = {
+      chatId: 'oc_chat',
+      chatType: 'group',
+      messageId: 'om_root',
+      seenAt: 1,
+    }
+    await bot.sendPayload(post, { ...group, thread: 'omt_1', referrer: staleReferrer }, send(0, {}, 'om_root'))
+    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
+      'GET /open-apis/im/v1/messages/om_root',
+      'POST /open-apis/im/v1/messages/om_root/reply',
+    ])
+    expect(bodyOf(calls[1])).toMatchObject({ reply_in_thread: true })
+  })
 })
 
 describe('sendPayload: failures', () => {

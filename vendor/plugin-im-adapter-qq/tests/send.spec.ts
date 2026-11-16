@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
-import { PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target } from '@deepseek-ai/cordis-plugin-im-core'
+import { h, PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { normalize } from '@deepseek-ai/satori-element'
 import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import QQBot, {
@@ -248,6 +248,20 @@ describe('sendMessagePayload — quote and dedupe', () => {
     expect(payload).toBeInstanceOf(PlatformError)
     expect(payload.kind).toBe('invalid')
     expect(calls).toHaveLength(0)
+  })
+
+  it('does not retry an active send on an unknown-outcome 500 even with idempotencyKey, but retries a passive send', async () => {
+    const { bot, calls } = await mount((_call, index) => index === 0 || index === 1 ? { status: 500 } : { body: { id: 'ROBOT1.0_ok' } })
+    const active = await bot.send(group, h('message', h('p', 'x')), { idempotencyKey: 'op-active' }).catch(error => error)
+    expect(active).toBeInstanceOf(PlatformError)
+    expect(active).toMatchObject({ kind: 'retryable', published: 'unknown' })
+    expect(calls).toHaveLength(1)
+
+    const result = await bot.send({ ...group, referrer: referrer() }, h('message', h('p', 'x')), { idempotencyKey: 'op-passive' })
+    expect(result.handle.parts[0]!.id).toBe('ROBOT1.0_ok')
+    expect(calls).toHaveLength(3)
+    expect(calls[1]!.data.msg_seq).toBe(2)
+    expect(calls[2]!.data.msg_seq).toBe(2)
   })
 })
 
