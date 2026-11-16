@@ -52,11 +52,41 @@ interface ConversationAttachmentFace {
   ): Promise<SubmitOutcome>
   serializeDraftAttachments(attachmentIds: readonly DraftAttachmentId[]): Promise<DraftAttachmentSerializationResult>
   releaseDraftAttachment(id: DraftAttachmentId): void
+  draftAttachmentIds(sessionId: SessionId): readonly DraftAttachmentId[]
+  draftAttachmentSessions(): readonly SessionId[]
+  releaseDraftSession(sessionId: SessionId): void
+}
+
+/** Per-Session marker that a page unload discarded the draft's browser-owned attachments. */
+const UNLOAD_MARK_PREFIX = 'dsh.composer-draft-attachments-unloaded'
+
+/** Record that an unloading page held draft attachments for these Sessions. */
+function writeUnloadMarks(sessionIds: readonly SessionId[]): void {
+  try {
+    for (const sessionId of sessionIds) localStorage.setItem(`${UNLOAD_MARK_PREFIX}.${sessionId}`, '1')
+  } catch (error) {
+    console.error('conversation draft attachment unload marks could not be saved; a reload cannot report the loss', error)
+  }
+}
+
+/** Remove one Session's unload marker. @returns whether the marker was present. */
+function takeUnloadMark(sessionId: SessionId): boolean {
+  try {
+    const key = `${UNLOAD_MARK_PREFIX}.${sessionId}`
+    const marked = localStorage.getItem(key) !== null
+    localStorage.removeItem(key)
+    return marked
+  } catch (error) {
+    console.error('conversation draft attachment unload mark could not be read', error)
+    return false
+  }
 }
 
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new WeakMap<SessionBinding, SessionInputShell>()
+  private knownSessionIds: Set<SessionId> | undefined
+  private lifecycleWatchInstalled = false
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -168,10 +198,24 @@ export class InputHub implements SessionInputResolver {
       ]
       return () => {
         for (const off of offs) off()
+        // Snapshot the phase before dispose resets the machine.
+        const phaseAtTeardown = shell.snapshot.phase
         const drafts = shell.dispose()
         this.shells.delete(binding)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-        for (const attachmentId of drafts) conversation?.releaseDraftAttachment(attachmentId)
+        if (conversation === undefined) return
+        if (binding.session.getSnapshot().removed) {
+          conversation.releaseDraftSession(binding.sessionId)
+          return
+        }
+        // Teardown aborts adjudication before any message leaves, so those attachments stay with the draft.
+        // A message or command already submitted cannot settle through its retirement path after teardown,
+        // and the Client cannot tell whether a submitted command consumed its attachments, so both release
+        // here rather than risk a duplicate submission; every other draft attachment stays registered for
+        // the Session's next composer.
+        if (phaseAtTeardown === 'sending' || phaseAtTeardown === 'submitting') {
+          for (const attachmentId of drafts) conversation.releaseDraftAttachment(attachmentId)
+        }
       }
     }, 'conversation.input: session shell')
     actx.inject(['inputTriggers'], (scope) => {
@@ -181,7 +225,62 @@ export class InputHub implements SessionInputResolver {
       }, 'conversation.input: reference catalogs')
     })
     shell.setDraft(readConversationDraft(binding.sessionId))
+    this.ensureLifecycleWatch()
+    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+    const retained = conversation?.draftAttachmentIds(binding.sessionId) ?? []
+    // A Session switch keeps the draft's attachments registered; this composer re-adopts them.
+    if (retained.length > 0) shell.addAttachments(retained)
+    // A reload discarded the browser-owned attachments; say so instead of dropping them silently.
+    if (takeUnloadMark(binding.sessionId) && retained.length === 0) shell.notify('error', this.t('attachments.unavailable'))
     return shell
+  }
+
+  /**
+   * Install the root-lifetime watchers once: a Session removed while no composer
+   * is mounted releases its draft attachments, and an unloading page marks the
+   * Sessions whose attachments it discards.
+   */
+  private ensureLifecycleWatch(): void {
+    if (this.lifecycleWatchInstalled) return
+    this.lifecycleWatchInstalled = true
+    const sessions = this.sessions()
+    this.knownSessionIds = new Set(sessions.list.getSnapshot().ids)
+    this.rootCtx.effect(() => {
+      const stop = sessions.list.subscribe(() => { this.cleanupRemovedSessions() })
+      const conversation = (): ConversationAttachmentFace | undefined =>
+        this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+      const onHide = (): void => { writeUnloadMarks(conversation()?.draftAttachmentSessions() ?? []) }
+      // A back-forward cache restore keeps the registry, so the marks just written are stale.
+      const onShow = (event: PageTransitionEvent): void => {
+        if (!event.persisted) return
+        for (const sessionId of conversation()?.draftAttachmentSessions() ?? []) takeUnloadMark(sessionId)
+      }
+      window.addEventListener('pagehide', onHide)
+      window.addEventListener('pageshow', onShow)
+      return () => {
+        stop()
+        window.removeEventListener('pagehide', onHide)
+        window.removeEventListener('pageshow', onShow)
+        this.knownSessionIds = undefined
+        this.lifecycleWatchInstalled = false
+      }
+    }, 'conversation.input: draft attachment lifecycle')
+  }
+
+  /** Release draft attachments and unload marks for every Session removed from the catalog. */
+  private cleanupRemovedSessions(): void {
+    const known = this.knownSessionIds
+    /* v8 ignore next -- the catalog subscription is stopped before the known set is cleared. */
+    if (known === undefined) return
+    const liveIds = new Set(this.sessions().list.getSnapshot().ids)
+    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+    for (const id of [...known]) {
+      if (liveIds.has(id)) continue
+      known.delete(id)
+      conversation?.releaseDraftSession(id)
+      takeUnloadMark(id)
+    }
+    for (const id of liveIds) known.add(id)
   }
 
   /**

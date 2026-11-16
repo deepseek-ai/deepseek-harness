@@ -50,7 +50,11 @@ export * from './api-key.ts'
 export type * from './types.ts'
 export * from './content.ts'
 export * from './assistant-stream.ts'
-export * from './message.ts'
+export type * from './message.ts'
+export {
+  CONTEXT_SUMMARY_MAX_CHARS, boundContextSummary, createAssistantMessage, createDeveloperMessage, createMessage,
+  createSystemMessage, createToolResultMessage, createUserMessage, freezeMessage,
+} from './message.ts'
 export * from './retry-policy.ts'
 export { BlockAssembler } from './assembler.ts'
 export { callConfigEquals, isAgentLoopRequest, markAgentLoopRequest } from './call-config.ts'

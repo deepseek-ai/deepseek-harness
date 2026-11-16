@@ -813,6 +813,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'connectorAccounts',
+    summary: 'Holds the registered accounts and serves them to the Plugins page.',
+    description: 'Holds the registered accounts and serves them to the Plugins page.',
+    methods: [
+      {
+        signature: 'register<View extends AnyConnectorAccountView>(registration: ConnectorAccountRegistration<View>): () => void',
+        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        parameters: [{ name: 'registration', description: 'the account key, its bundle package, the account source, the page operations, and the presentation.' }],
+        returns: 'an idempotent disposer that withdraws the account.',
+        throws: ['when another account already uses the key or the package.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>',
+        description: 'Follow every registered account; each new subscriber starts a check of each account that runs no operation.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
+        returns: 'the current accounts, then each changed set, coalescing changes that arrive before the next read.',
+      },
+      {
+        signature: '@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>',
+        description: 'Start one of the operations the account registered as page actions.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'operation', description: 'the operation kind.' }],
+        returns: 'the operation identity once the account\'s source has started it.',
+        throws: ['for an unknown account or operation, or whatever the account\'s source refuses, such as a second operation.'],
+      },
+      {
+        signature: '@Remote cancel(key: string, id: ConnectorOperationId): Promise<void>',
+        description: 'Cancel one operation while its phase is cancellable, and wait for it to settle.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'id', description: 'the operation to cancel; a finished one or a phase that is not cancellable is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+        throws: ['for an unknown account.'],
+      },
+    ],
+  },
+  {
     key: 'cotTranslation',
     summary: 'Optional reasoning translation delegates Session-bound storage to the translator.',
     description: 'Optional reasoning translation delegates Session-bound storage to the translator.',
@@ -3342,6 +3376,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Unified live-preferred session query service.',
     description: 'Unified live-preferred session query service.\n\nExact reads, filters, and traces are backend-independent concrete behavior. A backend implements full-text observation, reconciliation, ranking, cursor generations, and query execution on the same `ctx.sessionQuery` service.',
     methods: [
+      {
+        signature: 'getListMetadata(session: Session): SessionListMetadata',
+        description: 'Read the metadata that summarizes one live or prepared Session in a Session list.',
+        parameters: [{ name: 'session', description: 'live or prepared Session to summarize.' }],
+        returns: 'whether the Session has no turn, and its latest human-authored prompt time.',
+      },
       {
         signature: 'observeSession( sessionId: SessionId, options: SessionObservationOptions = {}, ): Promise<SessionObservation>',
         description: 'Observe one exact live or prepared Session without a persistence listing preflight.',
@@ -6069,6 +6109,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AnonymousTranslationSpec extends TranslationSpecFields {\n    readonly provider: AnonymousTranslationProvider;\n}',
   },
   {
+    name: 'AnyConnectorAccountView',
+    declaration: 'export type AnyConnectorAccountView = ConnectorAccountView<unknown, string, string>;',
+  },
+  {
     name: 'AnyHook',
     declaration: 'export type AnyHook = ModHook<unknown, unknown>;',
   },
@@ -6503,6 +6547,78 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConnectionTrustRequest',
     declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n    readonly signal?: AbortSignal | undefined;\n    readonly socket?: {\n        readonly destroyed: boolean;\n    } | undefined;\n    readonly method?: string | undefined;\n    readonly url?: string | undefined;\n}',
+  },
+  {
+    name: 'ConnectorAccountButton',
+    declaration: 'export interface ConnectorAccountButton {\n    readonly label: LocalizedText;\n    readonly command: ConnectorAccountCommand;\n    readonly variant?: \'primary\' | \'ghost\';\n    readonly confirm?: ConnectorAccountConfirmation;\n}',
+  },
+  {
+    name: 'ConnectorAccountCommand',
+    declaration: 'export type ConnectorAccountCommand = {\n    readonly kind: \'start\';\n    readonly operation: string;\n} | {\n    readonly kind: \'cancel\';\n} | {\n    readonly kind: \'open\';\n};',
+  },
+  {
+    name: 'ConnectorAccountConfirmation',
+    declaration: 'export interface ConnectorAccountConfirmation {\n    readonly title: LocalizedText;\n    readonly body: LocalizedText;\n    readonly label: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountCopy',
+    declaration: 'export interface ConnectorAccountCopy {\n    readonly title: LocalizedText;\n    readonly hint: LocalizedText;\n    readonly activation: {\n        readonly title: LocalizedText;\n        readonly body: LocalizedText;\n        readonly connect: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountDisplay',
+    declaration: 'export interface ConnectorAccountDisplay {\n    readonly phase: ConnectorAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly ConnectorAccountButton[];\n    readonly connect?: Extract<ConnectorAccountCommand, {\n        readonly kind: \'start\';\n    }>;\n    readonly detail?: LocalizedText;\n    readonly notes: readonly ConnectorAccountNote[];\n    readonly failure?: ConnectorAccountFailure;\n}',
+  },
+  {
+    name: 'ConnectorAccountEntry',
+    declaration: 'export interface ConnectorAccountEntry {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly copy: ConnectorAccountCopy;\n    readonly display: ConnectorAccountDisplay;\n    readonly operation?: {\n        readonly id: ConnectorOperationId;\n        readonly authorizationUrl?: string;\n    };\n    readonly result?: {\n        readonly id: ConnectorOperationId;\n        readonly notice?: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountFailure',
+    declaration: 'export interface ConnectorAccountFailure {\n    readonly text: LocalizedText;\n    readonly details?: readonly string[];\n}',
+  },
+  {
+    name: 'ConnectorAccountNote',
+    declaration: 'export interface ConnectorAccountNote {\n    readonly text: LocalizedText;\n    readonly button?: ConnectorAccountButton;\n}',
+  },
+  {
+    name: 'ConnectorAccountOperation',
+    declaration: 'export interface ConnectorAccountOperation<Kind extends string> {\n    readonly kind: Kind;\n    readonly notice?: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountPhase',
+    declaration: 'export type ConnectorAccountPhase = \'checking\' | \'connecting\' | \'connected\' | \'disconnected\' | \'unavailable\';',
+  },
+  {
+    name: 'ConnectorAccountRegistration',
+    declaration: 'export interface ConnectorAccountRegistration<View extends AnyConnectorAccountView> {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly source: ConnectorAccountSource<View>;\n    readonly operations: readonly ConnectorAccountOperation<ConnectorOperationKindOf<View>>[];\n    readonly copy: ConnectorAccountCopy;\n    readonly present: (view: View) => ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'ConnectorAccountSource',
+    declaration: 'export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId | Promise<ConnectorOperationId>;\n    cancel(id: ConnectorOperationId): Promise<void>;\n}',
+  },
+  {
+    name: 'ConnectorAccountsView',
+    declaration: 'export interface ConnectorAccountsView {\n    readonly accounts: readonly ConnectorAccountEntry[];\n}',
+  },
+  {
+    name: 'ConnectorAccountView',
+    declaration: 'export interface ConnectorAccountView<Account, Kind extends string, Phase extends string, Failure = unknown> {\n    readonly account: Account;\n    readonly operation?: ConnectorOperation<Kind, Phase>;\n    readonly result?: ConnectorOperationResult<Kind, Failure>;\n}',
+  },
+  {
+    name: 'ConnectorOperation',
+    declaration: 'export interface ConnectorOperation<Kind extends string, Phase extends string> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase;\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'ConnectorOperationId',
+    declaration: 'export type ConnectorOperationId = Branded<\'ConnectorOperationId\'>;',
+  },
+  {
+    name: 'ConnectorOperationKindOf',
+    declaration: 'export type ConnectorOperationKindOf<View extends AnyConnectorAccountView> = NonNullable<View[\'result\']>[\'kind\'];',
+  },
+  {
+    name: 'ConnectorOperationResult',
+    declaration: 'export interface ConnectorOperationResult<Kind extends string, Failure = unknown> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'ContentBlockMap',
@@ -9269,6 +9385,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionLineageTrace = {\n    target: SessionRecord;\n    ancestors: SessionRecord[];\n    descendants: SessionLineageNode[];\n} & ({\n    complete: true;\n    root: SessionRecord;\n} | {\n    complete: false;\n    unresolvedParentId: SessionId;\n});',
   },
   {
+    name: 'SessionListMetadata',
+    declaration: 'export interface SessionListMetadata {\n    readonly blank: boolean;\n    readonly lastPromptAt: number | null;\n}',
+  },
+  {
     name: 'SessionListRequest',
     declaration: 'export interface SessionListRequest {\n    readonly cursor?: string;\n}',
   },
@@ -10982,7 +11102,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Workspace',
-    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
+    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    getSessionHeaders(): readonly SessionHeader[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
   },
   {
     name: 'WorkspaceArchiveSessionRequest',

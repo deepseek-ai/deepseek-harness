@@ -143,6 +143,50 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
 
+<a id="ctxconnectoraccounts--connectoraccounts"></a>
+
+### `ctx.connectorAccounts` — `ConnectorAccounts`
+
+Holds the registered accounts and serves them to the Plugins page.
+
+```ts cordis-catalog
+/**
+ * Show one account on the Plugins page for as long as the returned disposer has not run.
+ * @param registration - the account key, its bundle package, the account source, the page operations, and the
+ *   presentation.
+ * @returns an idempotent disposer that withdraws the account.
+ * @throws when another account already uses the key or the package.
+ */
+register<View extends AnyConnectorAccountView>(registration: ConnectorAccountRegistration<View>): () => void
+
+/**
+ * Follow every registered account; each new subscriber starts a check of each account that runs no operation.
+ * @param signal - the Client's observation lifetime; disposal also ends the stream.
+ * @returns the current accounts, then each changed set, coalescing changes that arrive before the next read.
+ */
+@Remote({ mode: 'stream' }) async *watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>
+
+/**
+ * Start one of the operations the account registered as page actions.
+ * @param key - the account key.
+ * @param operation - the operation kind.
+ * @returns the operation identity once the account's source has started it.
+ * @throws for an unknown account or operation, or whatever the account's source refuses, such as a second operation.
+ */
+@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>
+
+/**
+ * Cancel one operation while its phase is cancellable, and wait for it to settle.
+ * @param key - the account key.
+ * @param id - the operation to cancel; a finished one or a phase that is not cancellable is ignored.
+ * @returns after the operation settles, or at once when nothing is cancelled.
+ * @throws for an unknown account.
+ */
+@Remote cancel(key: string, id: ConnectorOperationId): Promise<void>
+```
+
+Source: [`packages/client/ui-connector-account/src/index.ts`](../../packages/client/ui-connector-account/src/index.ts)
+
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 
 ### `ctx.headlessStartup` — `HeadlessStartupValues`
