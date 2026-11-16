@@ -594,11 +594,14 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
   return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
 }
 
-/** True when a paragraph holds several images, optionally linked, and only whitespace or line breaks between them. */
+/**
+ * True when a paragraph holds several images, optionally linked, separated only by whitespace;
+ * such a paragraph wraps its images into rows. A hard break keeps the inline layout so it still starts a new line.
+ */
 function isImageRow(children: Md.PhrasingContent[]): boolean {
   let images = 0
   for (const child of children) {
-    if (child.type === 'break' || (child.type === 'text' && child.value.trim() === '')) continue
+    if (child.type === 'text' && child.value.trim() === '') continue
     const image = child.type === 'image' || child.type === 'imageReference'
       || ((child.type === 'link' || child.type === 'linkReference') && anchorWrapsOnlyImages(child.children))
     if (!image) return false
