@@ -555,6 +555,9 @@ export class ImIntake {
  * @returns what the platform answered.
  */
 export async function readWithin<T>(read: Promise<T>, timeout: number, signal?: AbortSignal): Promise<T> {
+  // Attach a no-op handler immediately so a rejected platform request cannot trigger `unhandledRejection` if
+  // `signal?.aborted` throws early or the deadline/abort wins the race.
+  void read.catch(() => {})
   if (signal?.aborted) {
     throw new ImError('unavailable', 'the platform read was aborted', { cause: signal.reason })
   }

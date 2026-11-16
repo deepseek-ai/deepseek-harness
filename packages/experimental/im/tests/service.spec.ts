@@ -262,6 +262,11 @@ describe('ImService facade', () => {
     const pendingRead = service.readMessage(CHAT, 'm-abort', controller.signal)
     controller.abort(new Error('cancelled'))
     await expect(pendingRead).rejects.toMatchObject({ code: 'unavailable' })
+
+    const preAborted = new AbortController()
+    preAborted.abort(new Error('already cancelled'))
+    bot.getMessage = () => Promise.reject(new Error('late platform failure'))
+    await expect(service.readMessage(CHAT, 'm-pre-aborted', preAborted.signal)).rejects.toMatchObject({ code: 'unavailable' })
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {
