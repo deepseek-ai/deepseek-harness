@@ -7798,7 +7798,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMediaStore',
-    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig, options: ImMediaStoreOptions = {});\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem>;\n}',
+    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig, options: ImMediaStoreOptions = {});\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal, allow?: (message: ImMessage) => boolean): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal, allow?: (message: ImMessage) => boolean): Promise<ImMediaFileItem>;\n}',
   },
   {
     name: 'ImMediaStoreOptions',
