@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-06-connector-account-registry.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-06-connector-account-registry.md
+/agent-note-one-host-registry-and-one-browser-half-for-connector-accounts:
+  en: 3950421fb526f6b7
+  zh: 47c5f6cc4b735058
+/agent-note-one-host-registry-and-one-browser-half-for-connector-accounts/problem:
+  en: 2a7b59cd509a0b9a
+  zh: 38130ce17829342d
+/agent-note-one-host-registry-and-one-browser-half-for-connector-accounts/decision:
+  en: d96b43106a1ba837
+  zh: 97bc8f9436ec07d0
+/agent-note-one-host-registry-and-one-browser-half-for-connector-accounts/alternatives-considered:
+  en: ee0aa3f9ea40ef15
+  zh: fded69a6dcc8ca87
+/agent-note-one-host-registry-and-one-browser-half-for-connector-accounts/consequences:
+  en: 5228f32becfbdec3
+  zh: 013f1073e70d46f7

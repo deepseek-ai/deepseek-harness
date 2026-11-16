@@ -1,4 +1,4 @@
-# Reminds authors of open pull requests after 7 and 14 days without activity; never closes them.
+# Reminds authors of open pull requests after 7 and 14 days without activity and closes them after 21 days.
 # Rules: .github/stale-pull-requests/remind.mjs.
 name: Stale pull requests
 
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   remind:
-    name: Remind stale pull requests
+    name: Remind and close stale pull requests
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,9 +27,9 @@ jobs:
         with:
           sparse-checkout: .github/stale-pull-requests
           persist-credentials: false
-      - name: Post due reminders
+      - name: Post due reminders and close stale pull requests
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
-            const { remindStalePullRequests } = await import(`${process.env.GITHUB_WORKSPACE}/.github/stale-pull-requests/remind.mjs`)
-            await remindStalePullRequests({ github, context, core })
+            const { processStalePullRequests } = await import(`${process.env.GITHUB_WORKSPACE}/.github/stale-pull-requests/remind.mjs`)
+            await processStalePullRequests({ github, context, core })
