@@ -2127,7 +2127,7 @@ describe('Task manager deletion', () => {
     const dialog = openDelete()
     const cancel = within(dialog).getByRole('button', { name: en['delete.cancel'] })
     const confirm = within(dialog).getByRole('button', { name: en['delete.confirm'] })
-    const content = dialog.querySelector(`.${css.confirmContent}`)!
+    const content = dialog.querySelector<HTMLElement>(`.${css.confirmContent}`)!
     expect(dialog.classList.contains(css.confirmDialog!)).toBe(true)
     expect(content.textContent).toContain(at.prompt)
     expect(content.contains(cancel)).toBe(false)
@@ -2140,9 +2140,13 @@ describe('Task manager deletion', () => {
     // installed. The dialog's cap must follow the padding of the Modal layer
     // that holds it, and the scrolling content must sit inside that cap instead
     // of pinning a number that a wrong layer padding could not contradict.
-    installStyles({ confirmDialog: css.confirmDialog, confirmContent: css.confirmContent })
+    installStyles({ confirmDialog: css.confirmDialog, confirmContent: css.confirmContent, confirmPrompt: css.confirmPrompt })
     expect(getComputedStyle(dialog).maxHeight).toBe(`calc(100dvh - ${MODAL_LAYER_PADDING * 2}px)`)
     expect(getComputedStyle(content).overflowY).toBe('auto')
+    // The instruction is a three-line excerpt, so a long one cannot stretch the dialog.
+    const prompt = within(content).getByText(/^Review release/)
+    expect(getComputedStyle(prompt).overflow).toBe('hidden')
+    expect(getComputedStyle(prompt).getPropertyValue('-webkit-line-clamp')).toBe('3')
     const footer = dialog.lastElementChild as HTMLElement
     expect(getComputedStyle(footer).flexShrink).toBe('0')
     fireEvent.click(confirm)
