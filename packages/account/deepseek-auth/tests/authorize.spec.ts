@@ -31,7 +31,7 @@ describe('the API key', () => {
 
   it('is read under the reference of its connection', async () => {
     const ctx = await mount({ stored: { DEEPSEEK_API_KEY: 'sk-default', ROUTE_KEY: 'sk-route' } })
-    ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => ({ baseURL: 'https://route.deepseek.test', reference: credentialRef('ROUTE_KEY') })))
+    ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => ({ baseURL: 'https://route.deepseek.test', reference: credentialRef('ROUTE_KEY') })))
     expect(await ctx.deepseekAuth.authorize(key)).toMatchObject({ reference: 'ROUTE_KEY', headers: { authorization: 'Bearer sk-route' } })
   })
 
@@ -121,7 +121,7 @@ describe('authorize', () => {
     const token = vi.fn(() => 'account-token')
     const ctx = await mount({ account: accountStub({ token }) })
     const failure = new Error('settings do not resolve')
-    ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => { throw failure }))
+    ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => { throw failure }))
     const stopped = await ctx.deepseekAuth.authorize(request()).catch((error: unknown) => error)
     expect(stopped).toMatchObject({ code: 'UNRESOLVED_CONNECTION', cause: failure })
     expect((stopped as Error).message).toContain('the api-key connection does not resolve: Error: settings do not resolve')

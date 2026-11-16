@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, model discovery, and the official model listing for `deepseek-official`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, catalog availability, and model admission.
 
-Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/README.md) for the validated API key in `x-api-key` for Messages, Files, and listing requests. The route connects its base URL and `apiKeyEnv` reference to that service, so the DeepSeek web providers send the same key as a bearer token to the same deployment. The key is released only for destinations under the origin of that base URL.
+Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/README.md) for the validated API key in `x-api-key` for Messages, Files, and listing requests. The route connects its route id, base URL, and `apiKeyEnv` reference to that service, so the DeepSeek web providers send the same key as a bearer token to the same deployment. The key is released only for destinations under the origin of that base URL.
 
 ## Table of Contents
 

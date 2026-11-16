@@ -33,7 +33,7 @@ export interface RouteRow {
 export function provideRoutes(ctx: Context, routes: readonly RouteRow[]): void {
   for (const route of routes) {
     if (route.withoutConnection === true) continue
-    ctx.effect(() => ctx.deepseekAuth.connect(route.provider === 'deepseek-official' ? 'api-key' : 'account', () => {
+    ctx.effect(() => ctx.deepseekAuth.connect(route.provider === 'deepseek-official' ? 'api-key' : 'account', route.provider, () => {
       if (route.throws !== undefined) throw route.throws
       const environment = launchEnvironmentOf(ctx)
       if (route.provider === 'deepseek-official') {

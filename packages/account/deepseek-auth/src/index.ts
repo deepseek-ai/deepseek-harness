@@ -43,15 +43,6 @@ const DEEPSEEK_API_KEY = credentialRef('DEEPSEEK_API_KEY')
  */
 const DEEPSEEK_BASE_URL_ENV = 'DEEPSEEK_BASE_URL'
 
-/**
- * Kind that bills a conversation on each DeepSeek model route. `auto` billing reads the route id of the conversation,
- * which Session logs record, so the ids are fixed here and do not depend on which route plugin is mounted.
- */
-const ROUTE_KINDS: ReadonlyMap<string, DeepSeekAuthKind> = new Map([
-  ['deepseek-account', 'account'],
-  ['deepseek-official', 'api-key'],
-])
-
 /** Failure codes of {@link DeepSeekAuthError}. */
 export type DeepSeekAuthErrorCode =
   /** A second connection of one kind; one model route plugin owns each kind's deployment. */
@@ -104,7 +95,7 @@ class DeploymentError extends Error {
 
 /** `ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation. */
 export class DeepSeekAuth extends Service {
-  private readonly connections = new Map<DeepSeekAuthKind, () => DeepSeekAuthConnection>()
+  private readonly connections = new Map<DeepSeekAuthKind, { route: string; connection: () => DeepSeekAuthConnection }>()
 
   /** @param ctx - Host context; the credentials service and the account service are read when mounted. */
   constructor(ctx: Context) {
@@ -114,25 +105,29 @@ export class DeepSeekAuth extends Service {
   /**
    * Connect the deployment a model route plugin's settings name for one kind. Call it from within `ctx.effect()`.
    * @param kind - the kind the plugin's route bills.
+   * @param route - provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.
    * @param connection - reads the plugin's current settings; a throw marks the kind unresolved for that operation.
    * @returns the disposer removing the connection.
    * @throws {DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.
    */
-  connect(kind: DeepSeekAuthKind, connection: () => DeepSeekAuthConnection): () => void {
+  connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void {
     if (this.connections.has(kind)) {
       throw new DeepSeekAuthError(`deepseek-auth: the ${kind} deployment is already connected`, 'DUPLICATE_CONNECTION')
     }
-    this.connections.set(kind, connection)
+    this.connections.set(kind, { route, connection })
     return () => { this.connections.delete(kind) }
   }
 
   /**
    * The kind that bills a conversation on one model route.
    * @param route - provider route of a model request; undefined names none.
-   * @returns the kind, or undefined for a route that is no DeepSeek route.
+   * @returns the kind connected under that route, or undefined for a route no plugin connected.
    */
   routeKind(route: string | undefined): DeepSeekAuthKind | undefined {
-    return route === undefined ? undefined : ROUTE_KINDS.get(route)
+    for (const [kind, connected] of this.connections) {
+      if (connected.route === route) return kind
+    }
+    return undefined
   }
 
   /**
@@ -174,9 +169,10 @@ export class DeepSeekAuth extends Service {
     const billing = request.billing ?? 'auto'
     if (billing !== 'auto') return [billing]
     switch (this.routeKind(request.route)) {
-      // A conversation on the account route falls back to the API key; the sign-in is tried only through that route.
-      case 'account': return this.connections.has('account') ? ['account', 'api-key'] : ['api-key']
+      // A conversation on the account route falls back to the API key.
+      case 'account': return ['account', 'api-key']
       case 'api-key': return ['api-key']
+      // Every route no plugin connected, whatever its id, and an operation outside a conversation.
       default: return ['api-key', 'account']
     }
   }
@@ -184,7 +180,7 @@ export class DeepSeekAuth extends Service {
   /** Bind one kind to the request's destination; empty when the kind does not serve an absolute destination. */
   private candidate(kind: DeepSeekAuthKind, request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[] {
     let connection: DeepSeekAuthConnection
-    try { connection = request.connections?.[kind] ?? this.connections.get(kind)?.() ?? this.unconnected(kind) }
+    try { connection = request.connections?.[kind] ?? this.connections.get(kind)?.connection() ?? this.unconnected(kind) }
     catch (error: unknown) {
       const unresolved = error instanceof DeploymentError ? 'deployment' : 'connection'
       return [{ kind, unresolved, error: error instanceof DeploymentError ? error.cause : error }]

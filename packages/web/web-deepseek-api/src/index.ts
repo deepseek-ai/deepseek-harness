@@ -2,16 +2,16 @@
  * Register the DeepSeek Search and Fetch APIs in `ctx.web` as `deepseek-search-api` and `deepseek-fetch-api`. Each
  * operation is one direct API request without an auxiliary model request. `web.searchProvider` and `web.fetchProvider`
  * select them. Each capability's billing setting chooses its credential. `auto` follows the conversation: a Session
- * whose latest model request used the `deepseek-account` route sends the account credential to that route's origin and
- * otherwise the API key; one on the `deepseek-official` route sends the API key; any other operation sends the API key
- * and, without a key, the signed-in account's credential. `account` sends only the account credential and `api-key`
- * only the API key. `ctx.deepseekAuth` orders the two kinds and binds each to its deployment: the API key is that of
- * the mounted `deepseek-official` route, sent to its origin, or `DEEPSEEK_API_KEY` sent to the official base without
- * that route; the account credential is sent to the origin of the mounted `deepseek-account` route, or outside an
- * account conversation without that route to the origin `DEEPSEEK_BASE_URL` names, by default the official one. An
- * operation that needs a mounted route whose settings do not resolve fails instead of changing its endpoint or
- * credential. A capability with its own `*BaseURL` or `*ApiKeyEnv` uses only that endpoint and key instead, whatever
- * its billing
+ * whose latest model request used the mounted `deepseek-account` route sends the account credential to that route's
+ * origin and otherwise the API key; one on the mounted `deepseek-official` route sends the API key; any other
+ * operation, including one on either route id while its plugin is not mounted, sends the API key and, without a key,
+ * the signed-in account's credential. `account` sends only the account credential and `api-key` only the API key.
+ * `ctx.deepseekAuth` orders the two kinds and binds each to its deployment: the API key is that of the mounted
+ * `deepseek-official` route, sent to its origin, or `DEEPSEEK_API_KEY` sent to the official base without that route;
+ * the account credential is sent to the origin of the mounted `deepseek-account` route, or without that route to the
+ * origin `DEEPSEEK_BASE_URL` names, by default the official one. An operation that needs a mounted route whose
+ * settings do not resolve fails instead of changing its endpoint or credential. A capability with its own `*BaseURL`
+ * or `*ApiKeyEnv` uses only that endpoint and key instead, whatever its billing
  * ([rationale](../../../../.agents/notes/implemented/architecture/2026-10-29-web-provider-selection.md#credential-resolution)).
  * Both providers report themselves not ready when their next operation would have no credential.
  * @module @deepseek-ai/dsh-web-deepseek-api

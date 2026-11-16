@@ -77,7 +77,7 @@ it('names the Loader entry id in credential diagnostics, as product profiles mou
   }
 })
 
-it('connects its key reference and deployment, so other DeepSeek consumers send its key to its origin', async () => {
+it('connects its route id, key reference and deployment, so other DeepSeek consumers send its key to its origin', async () => {
   vi.stubEnv('DEEPSEEK_API_KEY', 'default-key')
   vi.stubEnv('ROUTE_KEY', 'fixture-api-key')
   const ctx = new Context()
@@ -86,12 +86,14 @@ it('connects its key reference and deployment, so other DeepSeek consumers send 
     await ctx.plugin(DeepSeekAuth)
     const search = { consumer: 'web-test', accepts: ['api-key'], billing: 'api-key', destination: { path: '/v1/tools/search' } } as const
     const route = await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic', apiKeyEnv: 'ROUTE_KEY' })
+    expect(ctx.deepseekAuth.routeKind('deepseek-official')).toBe('api-key')
     expect(await ctx.deepseekAuth.authorize(search)).toEqual({
       kind: 'api-key', endpoint: 'https://route.deepseek.test/v1/tools/search', reference: 'ROUTE_KEY', headers: { authorization: 'Bearer fixture-api-key' },
     })
     vi.stubEnv('ROUTE_KEY', 'invalid\nheader')
     await expect(ctx.deepseekAuth.authorize(search)).rejects.toThrow('llm-deepseek-api-key: the API key resolved from ROUTE_KEY contains characters')
     await route.dispose()
+    expect(ctx.deepseekAuth.routeKind('deepseek-official')).toBeUndefined()
     expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({ endpoint: 'https://api.deepseek.com/v1/tools/search', reference: 'DEEPSEEK_API_KEY' })
   } finally {
     await ctx.fiber.dispose()

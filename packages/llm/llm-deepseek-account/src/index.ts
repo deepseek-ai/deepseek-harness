@@ -29,7 +29,7 @@ export function apply(ctx: Context, config: Config): void {
   const settings = () => resolveAccountOptions(plainAccountOptions(config), environment)
   settings()
   // Every other DeepSeek consumer billed by the account sends the sign-in to this route's deployment.
-  ctx.effect(() => ctx.deepseekAuth.connect('account', () => ({ baseURL: settings().protocol.baseURL })), 'llm-deepseek-account: account deployment')
+  ctx.effect(() => ctx.deepseekAuth.connect('account', PROVIDER, () => ({ baseURL: settings().protocol.baseURL })), 'llm-deepseek-account: account deployment')
   const supported = resolveAdapterOptions({}).models
   /**
    * The account sign-in `ctx.deepseekAuth` releases for one destination under the deployment at `baseURL`; absent

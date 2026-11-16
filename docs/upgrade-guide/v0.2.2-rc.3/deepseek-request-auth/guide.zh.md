@@ -19,7 +19,7 @@ description: "DeepSeek 模型路由和 Web 提供方要求挂载新的 dsh-deeps
 
 `@deepseek-ai/dsh-deepseek-account` 新增仅限 Host 的 `resolveRequestCredential(url)` 与 `registerRunningTaskReport(report)`，并将 `resolveToken(url)` 与 `rejectToken(token)` 改为私有；`hasRunningAccountTasks()` 根据注册的报告作答，不再读取 `ctx.agents`。退登会中止已释放凭据的 `revoked` 信号，从而结束在途的账号请求：回合之外的模型请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，Search 与 Fetch 以 `WEB_PROVIDER_ERROR` 失败。该包移除 `dsh-agent` 与 `dsh-llm` 对等依赖，并以不变的名字从 `packages/credentials/` 移至 `packages/account/`。
 
-没有账号路由时，Search 与 Fetch API 把账号凭据发往 `DEEPSEEK_BASE_URL` 所指的 origin，并拒绝不是不含内嵌凭据的 HTTP(S) URL 的值。`DeepSeekSearchProviderOptions` 用 `authorize(endpoint, signal)` 替换 `resolveAccountToken`、`rejectAccountToken` 与 `resolveApiKey`。
+没有账号路由时，Search 与 Fetch API 把账号凭据发往 `DEEPSEEK_BASE_URL` 所指的 origin，并拒绝不是不含内嵌凭据的 HTTP(S) URL 的值。在 `auto` 计费下，`deepseek-account` 或 `deepseek-official` 上的会话在其路由插件未挂载时先尝试 API 密钥，再尝试账号凭据。`DeepSeekSearchProviderOptions` 用 `authorize(endpoint, signal)` 替换 `resolveAccountToken`、`rejectAccountToken` 与 `resolveApiKey`。
 
 ## 迁移
 

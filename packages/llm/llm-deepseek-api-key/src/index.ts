@@ -37,7 +37,7 @@ export function apply(ctx: Context, config: Config): void {
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
   // Every other DeepSeek consumer billed by the API key sends this route's key to this route's deployment.
-  ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
+  ctx.effect(() => ctx.deepseekAuth.connect('api-key', PROVIDER, () => {
     const connection = options()
     return { baseURL: connection.baseURL, reference: connection.apiKeyEnv, owner: settingsNs }
   }), 'llm-deepseek-api-key: API-key deployment')

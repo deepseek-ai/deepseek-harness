@@ -1111,9 +1111,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
     methods: [
       {
-        signature: 'connect(kind: DeepSeekAuthKind, connection: () => DeepSeekAuthConnection): () => void',
+        signature: 'connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void',
         description: 'Connect the deployment a model route plugin\'s settings name for one kind. Call it from within `ctx.effect()`.',
-        parameters: [{ name: 'kind', description: 'the kind the plugin\'s route bills.' }, { name: 'connection', description: 'reads the plugin\'s current settings; a throw marks the kind unresolved for that operation.' }],
+        parameters: [{ name: 'kind', description: 'the kind the plugin\'s route bills.' }, { name: 'route', description: 'provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.' }, { name: 'connection', description: 'reads the plugin\'s current settings; a throw marks the kind unresolved for that operation.' }],
         returns: 'the disposer removing the connection.',
         throws: ['{DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.'],
       },
@@ -1121,7 +1121,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'routeKind(route: string | undefined): DeepSeekAuthKind | undefined',
         description: 'The kind that bills a conversation on one model route.',
         parameters: [{ name: 'route', description: 'provider route of a model request; undefined names none.' }],
-        returns: 'the kind, or undefined for a route that is no DeepSeek route.',
+        returns: 'the kind connected under that route, or undefined for a route no plugin connected.',
       },
       {
         signature: 'candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]',

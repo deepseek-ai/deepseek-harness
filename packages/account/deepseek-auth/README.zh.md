@@ -58,15 +58,17 @@ await fetch(authorization.endpoint, { method: 'POST', headers: authorization.hea
 |---|---|---|
 | `api-key` | 任意 | API 密钥 |
 | `account` | 任意 | 账号登录 |
-| `auto` | `deepseek-account` | 账号登录，然后 API 密钥；账号路由未挂载时只有 API 密钥 |
-| `auto` | `deepseek-official` | API 密钥 |
-| `auto` | 其他路由，或不在会话中 | API 密钥，然后账号登录 |
+| `auto` | 为账号登录登记的路由，即 `deepseek-account` | 账号登录，然后 API 密钥 |
+| `auto` | 为 API 密钥登记的路由，即 `deepseek-official` | API 密钥 |
+| `auto` | 其他任何路由，或不在会话中 | API 密钥，然后账号登录 |
+
+只有注册某条路由的插件已挂载并登记了它，该路由才属于前两行 `auto`。记录在 `deepseek-account` 或 `deepseek-official` 上的会话，在对应插件未挂载时按最后一行处理。
 
 `destination` 是拼接到所选种类部署 origin 之后的路径，或一个绝对 `url`。只有当绝对 URL 位于某种类部署的 origin 之下且不内嵌凭据时，该种类才为它服务，因此密钥不会被发往其他 origin。
 
 一次授权携带 `kind`、`endpoint` 和请求 `headers`。API 密钥以 `Authorization: Bearer` 发送，除非 `apiKeyHeaders` 指定 `x-api-key` 或两者；账号登录凭据放在账号服务选定的请求头里。`reject()` 只在账号登录时存在，用于在目标返回 HTTP 401 后作废该凭据。`revoked` 同样只在账号登录时存在，账号退出登录时中止：消费方结束它鉴权的请求，并把这次结束报告为自身的失败，而不是调用方的取消。
 
-`candidates(request)` 以相同顺序返回相同的种类，但不读取凭据。每个候选用 `configured()` 回答就绪检查，用 `resolve(signal)` 给出凭据，并给出 `endpoint`，API 密钥还给出供诊断使用的 `reference`。`routeKind(route)` 给出为某条模型路由上的会话计费的种类。
+`candidates(request)` 以相同顺序返回相同的种类，但不读取凭据。每个候选用 `configured()` 回答就绪检查，用 `resolve(signal)` 给出凭据，并给出 `endpoint`，API 密钥还给出供诊断使用的 `reference`。`routeKind(route)` 给出已挂载的模型路由插件在该路由 id 下登记的种类，其他路由一律为 `undefined`。
 
 ### 每种凭据及其部署的来源
 
@@ -75,7 +77,7 @@ await fetch(authorization.endpoint, { method: 'POST', headers: authorization.hea
 | API 密钥 | `deepseek-official` 路由设置里的密钥引用和 base URL，即 Models 页面编辑的那份 | `DEEPSEEK_API_KEY`，发往 `https://api.deepseek.com` |
 | 账号登录 | 账号服务的凭据，发往 `deepseek-account` 路由 base URL 的 origin | 账号服务的凭据，发往 `DEEPSEEK_BASE_URL` 所指的 origin，默认为官方 API |
 
-模型路由插件在 `ctx.effect()` 内登记自己的设置：
+模型路由插件在 `ctx.effect()` 内登记它注册的提供方路由和自己的设置：
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -85,13 +87,13 @@ import type {} from '@deepseek-ai/dsh-deepseek-auth'
 declare const ctx: Context
 declare const settings: () => { baseURL: string; apiKeyEnv: string }
 
-ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
+ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => {
   const { baseURL, apiKeyEnv } = settings()
   return { baseURL, reference: credentialRef(apiKeyEnv), owner: 'llm-deepseek' }
 }))
 ```
 
-服务对每个请求调用这个函数，所以设置的改动在下一个请求生效。请求可以在 `connections` 里携带某一种类自己的连接，它取代已登记的或默认的连接：模型路由传入它为一次模型请求捕获的那一代配置，拥有自己端点和密钥的消费方传入这两项。
+服务对每个请求调用这个函数，所以设置的改动在下一个请求生效。连接存在期间，`auto` 计费按所登记的种类排定该路由上会话的顺序。请求可以在 `connections` 里携带某一种类自己的连接，它取代已登记的或默认的连接：模型路由传入它为一次模型请求捕获的那一代配置，拥有自己端点和密钥的消费方传入这两项。
 
 密钥在凭据服务已挂载时经由它读取，否则经由启动环境读取，规则由 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 为引用定义。
 
@@ -118,7 +120,7 @@ ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
 - **消费方声明其 API 接受什么，服务负责选择。** DeepSeek 逐个为它的 API 增加账号鉴权。消费方的 `accepts` 列表是记录某个 API 接受什么的唯一位置，所以 API 新增一种凭据时，扩充这个列表就是全部改动。
 - **凭据绑定到它的部署。** 每个种类同一时间只有一个部署，凭据只释放给该部署 origin 之下的目标。
 - **模型路由也是消费方。** 路由插件登记自己的设置，并和其他消费方一样索取授权，因此传输层和模型服务不带任何凭据接口。
-- **服务不依赖任何消费方。** 它读取凭据存储和账号服务。路由 id 只出现在 `auto` 计费读取的那张固定表里，因为会话日志记录的就是它们。
+- **服务不依赖任何消费方。** 它读取凭据存储和账号服务，自身不写任何模型路由的名字：每个路由插件在登记时传入自己的路由 id，`auto` 计费把会话的路由与已登记的 id 比较。
 
 ### 源码地图
 
@@ -161,7 +163,7 @@ ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
 这些限制说明本包在何时不适用或需要特别注意。它们是当前的包约束，不是任务积压。
 
 - **每个种类一个部署**——第二条带有自己密钥和端点的 `deepseek-official` 式路由无法登记；需要另一把密钥的消费方在请求里传入自己的连接。
-- **路由表是固定的**——`auto` 计费只把 `deepseek-account` 和 `deepseek-official` 识别为 DeepSeek 会话；经由其他提供方插件访问的 DeepSeek 模型按其他路由处理。
+- **路由只在其插件已登记时才算 DeepSeek 路由**——记录在 `deepseek-account` 或 `deepseek-official` 上的会话，在对应插件未挂载时按其他路由的顺序处理（先 API 密钥，后账号登录）；经由其他提供方插件访问的 DeepSeek 模型也是如此。
 - **不校验凭据**——`configured()` 只报告是否存在，所以错误的密钥在目标拒绝它之前都算已配置。
 
 <a id="dev-note"></a>

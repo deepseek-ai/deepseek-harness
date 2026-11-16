@@ -58,15 +58,17 @@ await fetch(authorization.endpoint, { method: 'POST', headers: authorization.hea
 |---|---|---|
 | `api-key` | any | API key |
 | `account` | any | account sign-in |
-| `auto` | `deepseek-account` | account sign-in, then API key; only the API key while the account route is not mounted |
-| `auto` | `deepseek-official` | API key |
-| `auto` | another route, or no conversation | API key, then account sign-in |
+| `auto` | the route connected for the account sign-in, `deepseek-account` | account sign-in, then API key |
+| `auto` | the route connected for the API key, `deepseek-official` | API key |
+| `auto` | any other route, or no conversation | API key, then account sign-in |
+
+A route belongs to the first two `auto` rows only while the plugin that registers it is mounted and has connected it. A conversation recorded on `deepseek-account` or `deepseek-official` whose plugin is not mounted follows the last row.
 
 `destination` is a path appended to the origin of the chosen kind's deployment, or one absolute `url`. A kind serves an absolute URL only when the URL is under the origin of that kind's deployment and embeds no credentials, so a key is never sent to another origin.
 
 An authorization carries the `kind`, the `endpoint`, and the request `headers`. An API key is sent as `Authorization: Bearer` unless `apiKeyHeaders` names `x-api-key` or both; the account sign-in is sent in the header the account service chooses. `reject()`, present for the account sign-in, invalidates the credential after the destination answered HTTP 401. `revoked`, also present for the account sign-in, aborts when the account signs out: the consumer ends the request it authenticated and reports that end as its own failure, not as the caller's cancellation.
 
-`candidates(request)` returns the same kinds in the same order without reading a credential. Each candidate answers `configured()` for readiness checks and `resolve(signal)` for the credential, and names its `endpoint` and, for an API key, its `reference` for diagnostics. `routeKind(route)` names the kind that bills a conversation on a model route.
+`candidates(request)` returns the same kinds in the same order without reading a credential. Each candidate answers `configured()` for readiness checks and `resolve(signal)` for the credential, and names its `endpoint` and, for an API key, its `reference` for diagnostics. `routeKind(route)` names the kind a mounted model route plugin connected under that route id, and `undefined` for every other route.
 
 ### Where each kind's credential and deployment come from
 
@@ -75,7 +77,7 @@ An authorization carries the `kind`, the `endpoint`, and the request `headers`. 
 | API key | The key reference and base URL of the `deepseek-official` route's settings, which the Models page edits | `DEEPSEEK_API_KEY`, sent to `https://api.deepseek.com` |
 | Account sign-in | The account service's credential, sent to the origin of the `deepseek-account` route's base URL | The account service's credential, sent to the origin `DEEPSEEK_BASE_URL` names, the official API by default |
 
-A model route plugin connects its settings from within `ctx.effect()`:
+A model route plugin connects the provider route it registers and its settings from within `ctx.effect()`:
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -85,13 +87,13 @@ import type {} from '@deepseek-ai/dsh-deepseek-auth'
 declare const ctx: Context
 declare const settings: () => { baseURL: string; apiKeyEnv: string }
 
-ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => {
+ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => {
   const { baseURL, apiKeyEnv } = settings()
   return { baseURL, reference: credentialRef(apiKeyEnv), owner: 'llm-deepseek' }
 }))
 ```
 
-The service calls the function for each request, so a settings change reaches the next request. A request can carry its own connection of a kind in `connections`, which replaces the connected or default one: a model route passes the configuration generation it captured for one model request, and a consumer with its own endpoint and key passes those.
+The service calls the function for each request, so a settings change reaches the next request. While the connection exists, `auto` billing orders a conversation on that route by the connected kind. A request can carry its own connection of a kind in `connections`, which replaces the connected or default one: a model route passes the configuration generation it captured for one model request, and a consumer with its own endpoint and key passes those.
 
 A key is read through the credentials service when one is mounted and through the launch environment otherwise, as [`dsh-credentials`](../../credentials/credentials/README.md) defines for references.
 
@@ -118,7 +120,7 @@ This section explains the design decisions behind the service; the observable be
 - **Consumers declare what their API accepts; the service chooses.** DeepSeek adds account authentication to its APIs one at a time. A consumer's `accepts` list is the only place that records what one API accepts, so widening it is the whole change when an API gains a kind.
 - **A credential is bound to its deployment.** Each kind has one deployment at a time, and a credential is released only for destinations under that deployment's origin.
 - **The model routes are consumers.** The route plugins connect their settings and ask for authorization like every other consumer, so the transport and the model service hold no credential interface.
-- **The service depends on no consumer.** It reads the credential store and the account service. Route ids appear only as the fixed table that `auto` billing reads, because Session logs record them.
+- **The service depends on no consumer.** It reads the credential store and the account service and names no model route: each route plugin passes its own route id when it connects, and `auto` billing compares the conversation's route with the connected ids.
 
 ### Source map
 
@@ -161,7 +163,7 @@ No invalidation; no credential enters a request prefix.
 These limits define when this package is a poor fit or needs special care. They are current package constraints, not a task backlog.
 
 - **One deployment per kind** — a second `deepseek-official` style route with its own key and endpoint cannot connect; a consumer that needs another key passes its own connection in the request.
-- **The route table is fixed** — `auto` billing recognizes only `deepseek-account` and `deepseek-official` as DeepSeek conversations; a DeepSeek model reached through another provider plugin counts as another route.
+- **A route counts as a DeepSeek route only while its plugin is connected** — a conversation recorded on `deepseek-account` or `deepseek-official` follows the order of other routes, API key and then account sign-in, while that plugin is not mounted, and so does a DeepSeek model reached through another provider plugin.
 - **No credential validation** — `configured()` reports presence only, so a wrong key counts as configured until the destination rejects it.
 
 <a id="dev-note"></a>

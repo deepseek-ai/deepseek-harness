@@ -21,11 +21,11 @@
   en: 5ae5865ce8e74ca9
   zh: f35aa7f2742a1e76
 /deepseek-ai-dsh-deepseek-auth/use-this-package/authorizing-a-request:
-  en: 2d168769f3f1c770
-  zh: 63c2a12b0dce3bf7
+  en: 02b641a20536ed3e
+  zh: cf704140423f4091
 /deepseek-ai-dsh-deepseek-auth/use-this-package/where-each-kind-s-credential-and-deployment-come-from:
-  en: 7c354d3c9a712be7
-  zh: a090a04e896512b7
+  en: b909920465406991
+  zh: babec6024f3741a0
 /deepseek-ai-dsh-deepseek-auth/use-this-package/what-can-go-wrong:
   en: 6b4a01982c7a435b
   zh: 188c13fea190a619
@@ -33,8 +33,8 @@
   en: 6133f3219e92d614
   zh: d4f47c8fe96bbb83
 /deepseek-ai-dsh-deepseek-auth/understand-the-implementation/design-philosophy:
-  en: 032b9b45d6d52ad8
-  zh: 666aba40f3d2fa2e
+  en: 781040be419e91c6
+  zh: fd7cfff0a180a6ca
 /deepseek-ai-dsh-deepseek-auth/understand-the-implementation/source-map:
   en: 28159a33fcde18a3
   zh: 8e29411be0a9efe7
@@ -51,8 +51,8 @@
   en: 8d28a9884785f30c
   zh: b1c45c04e1a543d7
 /deepseek-ai-dsh-deepseek-auth/known-limitations-and-deferred-work:
-  en: 19a4f80e69afa8bb
-  zh: be1fe478deaba3c8
+  en: d2fd57e36ce7b03a
+  zh: f105c8dbd169db9e
 /deepseek-ai-dsh-deepseek-auth/known-limitations-and-deferred-work/dev-note:
   en: e3eca6e1556f695c
   zh: 7234e0729568e2e9

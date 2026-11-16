@@ -292,6 +292,24 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
   })
 
+  it.each(['deepseek-account', 'deepseek-official'])('orders route %s as any other route while no plugin connected it', async (route) => {
+    const asked: string[] = []
+    const withKey = await mount({ account: signedIn(asked), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(withKey.ctx, operation, route)).toBe(true)
+    await operate(withKey.ctx, operation, route)
+    expect(withKey.sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+    expect(asked).toEqual([])
+    const signedInOnly = await mount({ account: signedIn() })
+    expect(await ready(signedInOnly.ctx, operation, route)).toBe(true)
+    await operate(signedInOnly.ctx, operation, route)
+    expect(signedInOnly.sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
+    const neither = await mount({ account: signedOut() })
+    expect(await ready(neither.ctx, operation, route)).toBe(false)
+    const failure = operate(neither.ctx, operation, route)
+    await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
+    await expect(failure).rejects.toThrow('uses the DeepSeek API key, then the DeepSeek account sign-in, and neither is available')
+  })
+
   it('is not ready and names both recoveries without a key and a sign-in', async () => {
     const subject = operation === 'search' ? 'Search' : 'Fetch'
     for (const account of [signedOut(), undefined]) {

@@ -9,7 +9,7 @@ describe('absolute destinations', () => {
 
   it('offers a kind for a URL under the origin of its deployment', async () => {
     const ctx = await mount()
-    ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => ({ baseURL: ROUTE })))
+    ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => ({ baseURL: ROUTE })))
     const url = 'https://route.deepseek.test/anthropic/v1/models'
     expect(summary(ctx.deepseekAuth.candidates(request({ billing: 'api-key', destination: { url } })))).toEqual([`api-key ${url}`])
   })
@@ -20,7 +20,7 @@ describe('absolute destinations', () => {
     'https://user:secret@route.deepseek.test/anthropic/v1/models',
   ])('offers no kind for %s, which is outside the deployment or embeds credentials', async (url) => {
     const ctx = await mount()
-    ctx.effect(() => ctx.deepseekAuth.connect('api-key', () => ({ baseURL: ROUTE })))
+    ctx.effect(() => ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => ({ baseURL: ROUTE })))
     expect(ctx.deepseekAuth.candidates(request({ billing: 'api-key', destination: { url } }))).toEqual([])
   })
 

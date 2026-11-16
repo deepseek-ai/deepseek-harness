@@ -19,7 +19,7 @@ English | [中文](guide.zh.md)
 
 `@deepseek-ai/dsh-deepseek-account` adds Host-only `resolveRequestCredential(url)` and `registerRunningTaskReport(report)` and makes `resolveToken(url)` and `rejectToken(token)` private; `hasRunningAccountTasks()` answers from registered reports and no longer reads `ctx.agents`. A sign-out aborts released credentials' `revoked` signal, ending in-flight account requests: model requests outside a turn fail with `ACCOUNT_SIGN_IN_REQUIRED`, Search and Fetch with `WEB_PROVIDER_ERROR`. The package drops its `dsh-agent` and `dsh-llm` peer dependencies and moves from `packages/credentials/` to `packages/account/` under its unchanged name.
 
-Without the account route, the Search and Fetch APIs send the account credential to the origin `DEEPSEEK_BASE_URL` names and reject a value that is not an HTTP(S) URL without embedded credentials. `DeepSeekSearchProviderOptions` replaces `resolveAccountToken`, `rejectAccountToken`, and `resolveApiKey` with `authorize(endpoint, signal)`.
+Without the account route, the Search and Fetch APIs send the account credential to the origin `DEEPSEEK_BASE_URL` names and reject a value that is not an HTTP(S) URL without embedded credentials. With `auto` billing, a `deepseek-account` or `deepseek-official` conversation whose route plugin is not mounted tries the API key, then the account credential. `DeepSeekSearchProviderOptions` replaces `resolveAccountToken`, `rejectAccountToken`, and `resolveApiKey` with `authorize(endpoint, signal)`.
 
 ## Migration
 

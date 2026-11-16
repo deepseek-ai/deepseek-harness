@@ -177,16 +177,17 @@ Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/accoun
 /**
  * Connect the deployment a model route plugin's settings name for one kind. Call it from within `ctx.effect()`.
  * @param kind - the kind the plugin's route bills.
+ * @param route - provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.
  * @param connection - reads the plugin's current settings; a throw marks the kind unresolved for that operation.
  * @returns the disposer removing the connection.
  * @throws {DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.
  */
-connect(kind: DeepSeekAuthKind, connection: () => DeepSeekAuthConnection): () => void
+connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void
 
 /**
  * The kind that bills a conversation on one model route.
  * @param route - provider route of a model request; undefined names none.
- * @returns the kind, or undefined for a route that is no DeepSeek route.
+ * @returns the kind connected under that route, or undefined for a route no plugin connected.
  */
 routeKind(route: string | undefined): DeepSeekAuthKind | undefined
 

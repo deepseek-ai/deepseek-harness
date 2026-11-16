@@ -1121,7 +1121,7 @@ describe('web-search-deepseek search readiness', () => {
     await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
     await ctx.plugin(DeepSeekAuth)
     // The account route plugin connects its settings this way; here they fail as broken route settings do.
-    ctx.effect(() => ctx.deepseekAuth.connect('account', accountRoute))
+    ctx.effect(() => ctx.deepseekAuth.connect('account', 'deepseek-account', accountRoute))
     await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
     expect(await ctx.web.searchReady(undefined)).toBe(true)

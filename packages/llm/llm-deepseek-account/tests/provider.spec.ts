@@ -217,7 +217,7 @@ it('aborts an in-flight listing request when the plugin is disposed', async () =
   await expect(pending).resolves.toEqual(expect.any(Array))
 })
 
-it('connects its deployment, so other DeepSeek consumers send the account sign-in to its origin', async () => {
+it('connects its route id and deployment, so other DeepSeek consumers send the account sign-in to its origin', async () => {
   const asked: string[] = []
   const ctx = new Context()
   contexts.push(ctx)
@@ -226,10 +226,12 @@ it('connects its deployment, so other DeepSeek consumers send the account sign-i
   await ctx.plugin(DeepSeekAuth)
   const search = { consumer: 'web-test', accepts: ['account'], billing: 'account', destination: { path: '/v1/tools/search' } } as const
   const route = await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  expect(ctx.deepseekAuth.routeKind('deepseek-account')).toBe('account')
   expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({
     kind: 'account', endpoint: 'https://account.deepseek.test/v1/tools/search', headers: { 'x-dsh-auth-token': 'fixture-account-token' },
   })
   await route.dispose()
+  expect(ctx.deepseekAuth.routeKind('deepseek-account')).toBeUndefined()
   expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({ endpoint: 'https://api.deepseek.com/v1/tools/search' })
   expect(asked).toEqual(['https://account.deepseek.test/v1/tools/search', 'https://api.deepseek.com/v1/tools/search'])
 })
