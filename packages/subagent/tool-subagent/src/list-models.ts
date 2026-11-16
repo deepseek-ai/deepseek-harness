@@ -9,7 +9,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
 import { subagentModelSelectionPolicy } from './model-selection-state.ts'
-import { nonEmptyFields } from './model-selection.ts'
+import { hasText } from './model-selection.ts'
 
 interface ListSubagentModelsRequest {
   readonly provider?: string
@@ -127,7 +127,10 @@ export function registerListSubagentModels(
     // Route and model metadata reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     execute(args, exec) {
-      return listSubagentModels(ctx, policyHandle, nonEmptyFields(args, ['provider', 'model']), exec)
+      return listSubagentModels(ctx, policyHandle, {
+        ...hasText(args.provider) ? { provider: args.provider } : {},
+        ...hasText(args.model) ? { model: args.model } : {},
+      }, exec)
     },
   }))
 }
