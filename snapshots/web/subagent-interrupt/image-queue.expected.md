@@ -4,6 +4,7 @@
     - text: /
     - 'button "Switch subagent: event-sourcing researcher"': event-sourcing researcher
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

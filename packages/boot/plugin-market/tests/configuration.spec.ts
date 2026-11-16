@@ -30,7 +30,7 @@ it('saves index sources without remounting, announces them, and restores them at
     writeFileSync(join(dir, 'cordis.yml'), '[]\n')
     const profile: ProfileContext = {
       name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
-      installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+      installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
     }
     const start = () => boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (root) => {
       root.provide('profileContext', profile)
@@ -43,14 +43,15 @@ it('saves index sources without remounting, announces them, and restores them at
     const fiber = entry.fiber
     let changes = 0
     ctx.on('plugin-market/changed', () => { changes++ })
-    await market.setIndexes(['https://second.example/index.json ', 'http://127.0.0.1:8080/index.json'])
-    expect(market.listIndexes().map(index => index.url)).toEqual(['https://second.example/index.json', 'http://127.0.0.1:8080/index.json'])
+    const sources = ['https://second.example/index.json', 'http://127.0.0.1:8080/index.json', 'git+ssh://git@git.example/plugins/market.git']
+    await market.setIndexes(['https://second.example/index.json ', ...sources.slice(1)])
+    expect(market.listIndexes().map(index => index.url)).toEqual(sources)
     expect(entry.fiber === fiber).toBe(true)
     expect(changes).toBe(1)
     expect(readFileSync(profile.patchPath, 'utf8')).toContain('https://second.example/index.json')
     await ctx.fiber.dispose()
     ctx = await start()
-    expect(ctx.get('pluginMarket')!.listIndexes().map(index => index.url)).toEqual(['https://second.example/index.json', 'http://127.0.0.1:8080/index.json'])
+    expect(ctx.get('pluginMarket')!.listIndexes().map(index => index.url)).toEqual(sources)
   } finally {
     try { await ctx?.fiber.dispose() } finally { rmSync(home, { recursive: true, force: true }) }
   }
@@ -98,7 +99,7 @@ it('reads a market entry detail document and serves its images through the compo
     writeFileSync(join(dir, 'cordis.yml'), '- name: cordis:connection\n')
     const profile: ProfileContext = {
       name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
-      installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+      installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
     }
     ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (root) => {
       root.provide('profileContext', profile)

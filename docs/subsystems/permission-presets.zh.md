@@ -72,6 +72,8 @@ interface PresetOption {
 
 `set(session, name)` 解析预设（未知名称抛出异常），在适用时运行 Auto 准入，在 `name` 尚不是生效预设时追加一条仅记日志的 `permission/preset` 事件，然后通过各旋钮自己的 setter（[dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) 的 `setSandboxMode` 与 [dsh-user-approval](../../packages/interaction/user-approval) 的 `setApprovalPolicy`）写入，且仅当该 knob 的生效值发生变化时才写。同一轮次内，选择事件先于旋钮事件出现；重新选择当前生效的预设则什么都不追加。
 
+`permissionPresets/set` Remote（`setPreset`）是这条写入路径的 Remote 面：它通过 `set` 切换一个 live Session，并把该 Session 声明为 Gateway 要判定的 `session` 资源，因此访问控制在解析任何预设之前就已执行。
+
 `permission/preset` 是持久、仅记日志的用户意图：它不进入模型 transcript（文本记录），模型可见的后果由 knob 事件经各自消费方承担；它存在是为了在两个预设共享同一个旋钮组合时，让 `current()` 仍能保住用户选择的究竟是哪一个预设。`permissions` 投影把该选择与两个 knob 事件一同折叠，并保留用于区分空恢复 seed 与新会话的 `session/end-seed` 边界；回放不需要任何追赶状态或原始日志重扫。恢复的 `auto` 选择在 agent 发布前必须存在 live Auto 注册。完整事件声明见[持久化日志事件目录](../persistence-catalog.zh.md)；方法签名见生成的[服务目录](#ctxpermissionpresets--permissionpresetservice)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -94,6 +96,25 @@ Owns the deployment's configured permission presets, the fixed Auto integration 
  * @returns every currently selectable preset in contribution order.
  */
 @Remote('catalog') catalog(): PermissionCatalog
+
+/**
+ * Switch one live Session to another preset, opened as a Remote call so a
+ * caller's Session access is decided before any preset is resolved or any
+ * knob is written. The call's `session` resource is the Session named by
+ * `request.sessionId`, per {@link PermissionPresetSetRequest}; the session
+ * controller's resolver names it.
+ *
+ * The switch appends `permission/preset` and the changed knob events to the
+ * Session log, so persisted-only Sessions are refused: they have no live log
+ * to append to.
+ * @param request - live target Session and the preset name to switch to.
+ * @returns the Session's current selection after the switch, read the way
+ * the client reads it: the recorded preset while its bundle still matches,
+ * otherwise the first preset whose bundle matches, otherwise `custom`.
+ * @throws {RemoteError} `gateway/bad-request` for an unknown preset name or a
+ * Session this process does not hold live; neither call writes.
+ */
+@Remote({ name: 'set' }) setPreset(request: PermissionPresetSetRequest): PermissionSelection
 
 /**
  * Publish the fixed current-session Auto preset for the calling

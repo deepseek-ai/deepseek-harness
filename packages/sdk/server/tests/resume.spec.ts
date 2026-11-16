@@ -6,7 +6,11 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ReasoningEffortId, LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import ShellExecutor from '@deepseek-ai/dsh-shell'
+import { ApprovalService } from '@deepseek-ai/dsh-user-approval'
 import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
@@ -50,7 +54,97 @@ async function initialized(root: string) {
   return result
 }
 
+/** The resumed model only returns text; permission state still uses the real services. */
+class UnusedShell extends ShellExecutor {
+  static inject = ['sandboxPolicy']
+  override get sandboxMode() { return this.ctx.sandboxPolicy.defaultMode }
+  override resolve(): never { throw new Error('Unexpected shell resolution') }
+  override execute(): never { throw new Error('Unexpected shell execution') }
+}
+
+async function withPermissions(root: string) {
+  const result = await initialized(root)
+  await result.ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
+  await result.ctx.plugin(UnusedShell)
+  await result.ctx.plugin(ApprovalService, { policy: 'never' })
+  await result.ctx.plugin(PermissionPresetService)
+  return result
+}
+
 describe('SDK persisted session resume', () => {
+  it.each([undefined, 'danger-full-access'])('applies persisted or explicit permissions before resumed execution: %s', async (permissionMode) => {
+    const root = await storageRoot()
+    const sessionId = brandString<SessionId>('saved-permissions')
+    const first = await withPermissions(root)
+    await first.server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId })
+    first.ctx.permissionPresets.set(first.ctx.agents.get(sessionId)!.session, 'workspace-write')
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await withPermissions(root)
+    const modes: string[] = []
+    // A plugin can queue work while the restored Agent is being published.
+    second.ctx.on('agent/created', ({ agent }) => {
+      agent.followup(createUserMessage({
+        content: [{ type: 'text', text: 'continue during publication' }], source: { kind: 'user' },
+      }))
+    })
+    second.ctx.on('agent/pre-step', (input, next) => {
+      modes.push(second.ctx.sandboxPolicy.resolve({ session: input.agent.session }).mode)
+      return next()
+    })
+    await second.server.handleRequest('session/resume', { sessionId, permissionMode })
+    await second.server.wait({ sessionId })
+    const expected = permissionMode ?? 'workspace-write'
+    const session = second.ctx.agents.get(sessionId)!.session
+    expect(modes).toEqual([expected])
+    expect(second.ctx.permissionPresets.current(session)).toBe(expected)
+    expect(second.ctx.approval.overrideOf(session)).toBe(permissionMode === undefined ? 'ask' : 'never')
+    expect(second.adapter.requests).toHaveLength(1)
+    await second.server.shutdown()
+    await second.ctx.fiber.dispose()
+
+    const third = await withPermissions(root)
+    await third.server.resume({ sessionId })
+    expect(third.ctx.permissionPresets.current(third.ctx.agents.get(sessionId)!.session)).toBe(expected)
+    expect(third.ctx.sandboxPolicy.defaultMode).toBe('danger-full-access')
+    expect(third.adapter.requests).toHaveLength(0)
+  })
+
+  it('rejects unsupported permission overrides before opening history and permits retry', async () => {
+    const root = await storageRoot()
+    const { ctx, server } = await initialized(root)
+    const open = vi.spyOn(ctx.sessionPersistence, 'open')
+    await expect(server.resume({ sessionId: 'saved', permissionMode: 'danger-full-access' }))
+      .rejects.toThrow('requires the permission-presets service')
+    await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
+    await ctx.plugin(UnusedShell)
+    await ctx.plugin(ApprovalService, { policy: 'never' })
+    await ctx.plugin(PermissionPresetService)
+    await expect(server.resume({ sessionId: 'saved', permissionMode: 'unknown' })).rejects.toThrow('unknown preset')
+    expect(open).not.toHaveBeenCalled()
+    expect(ctx.agents.list()).toHaveLength(0)
+    await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow()
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects malformed permission overrides at the wire boundary', async () => {
+    const { server } = await initialized(await storageRoot())
+    for (const permissionMode of ['', null, 17, true, {}]) {
+      await expect(server.handleRequest('session/resume', { sessionId: 'saved', permissionMode }))
+        .rejects.toThrow('permissionMode must be a non-empty string')
+    }
+  })
+
+  it('rejects unknown resume fields before restoring a session', async () => {
+    const { server } = await initialized(await storageRoot())
+    const resume = vi.spyOn(server, 'resume')
+    const params = { sessionId: 'saved', permission_mode: 'read-only' }
+    await expect(server.handleRequest('session/resume', params)).rejects.toThrow('permission_mode')
+    expect(resume).not.toHaveBeenCalled()
+  })
+
   it('rejects independent subagent restoration before opening or repairing its log', async () => {
     const root = await storageRoot()
     const { ctx, server } = await initialized(root)
@@ -123,6 +217,8 @@ describe('SDK persisted session resume', () => {
     try {
       await server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'reminder-model', maxTokens: 1234 })
       await opened.promise
+      await expect(server.resume({ sessionId: 'saved', permissionMode: 'danger-full-access' }))
+        .rejects.toThrow('already restored by a reminder')
       const resuming = server.resume({ sessionId: 'saved' })
       const anotherReminder = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
       gate.resolve(undefined)

@@ -73,7 +73,7 @@ function deferred<T>() {
 
 /** A configuration ledger with nothing registered, as the page binds it beside the store. */
 const NO_CONFIG: HostObservable<ConfigLedger> = {
-  getSnapshot: () => ({ items: [], bundles: new Set(), rows: new Set() }),
+  getSnapshot: () => ({ items: [], bundles: new Set(), rows: new Set(), sections: [] }),
   subscribe: () => () => {},
 }
 

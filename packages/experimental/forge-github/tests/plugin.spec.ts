@@ -1,6 +1,8 @@
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeCommandRule } from '@deepseek-ai/dsh-experimental-forge-session'
 import { afterEach, describe, expect, it } from 'vitest'
+import { GH_COMMANDS } from '../src/commands.ts'
 import * as ForgeGitHub from '../src/index.ts'
 
 let ctx: Context | undefined
@@ -9,6 +11,24 @@ afterEach(async () => {
   await ctx?.fiber.dispose()
   ctx = undefined
 })
+
+/** Command rules registered with {@link RecordingForgeSession} whose registering fiber is live. */
+const registered = new Set<ForgeCommandRule>()
+
+/** A `forgeSession` service that records command rule registrations in {@link registered}. */
+class RecordingForgeSession extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'forgeSession')
+  }
+
+  registerCommands(rule: ForgeCommandRule): () => void {
+    const dispose = this.ctx.effect(() => {
+      registered.add(rule)
+      return () => { registered.delete(rule) }
+    })
+    return () => void dispose()
+  }
+}
 
 async function forge(): Promise<Context> {
   ctx = new Context()
@@ -34,6 +54,17 @@ describe('forge-github plugin', () => {
 
     expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toBeDefined()
     expect(context.forge.repositoryFromRemote('https://ghe.corp.example/team/svc.git')).toBeUndefined()
+  })
+
+  it('registers the gh commands with forge-session while both run', async () => {
+    const context = await forge()
+    await context.plugin(RecordingForgeSession)
+    const fiber = context.plugin(ForgeGitHub, {})
+    await fiber
+
+    expect([...registered]).toEqual([GH_COMMANDS])
+    await fiber.dispose()
+    expect(registered.size).toBe(0)
   })
 
   it('unregisters the provider when its fiber is disposed', async () => {

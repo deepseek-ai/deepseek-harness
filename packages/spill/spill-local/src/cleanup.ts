@@ -37,7 +37,7 @@ export type WarnFn = (message: string) => void
 function warnSafely(warn: WarnFn, message: string): void {
   try {
     warn(message)
-  } catch {
+  } catch (_warnSinkFailed) {
     // Warning sinks are observational callbacks; cleanup must remain best-effort
     // even when a logger implementation throws.
   }

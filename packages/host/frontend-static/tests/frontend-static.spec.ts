@@ -135,7 +135,7 @@ describe('real Loader composition', () => {
     expect(unloaded).toEqual([])
     const server = loaded.webServer
     const port = server.port
-    const auth = await BrowserAuth.create(loaded.root, loaded.credentials, 30)
+    const auth = await BrowserAuth.create(loaded[Context.root], loaded.credentials, 30)
     const launchUrl = new URL(auth.authenticatedUrl(`http://127.0.0.1:${String(port)}`))
     const exchange = await fetch(launchUrl, { redirect: 'manual' })
     expect(exchange.status).toBe(303)

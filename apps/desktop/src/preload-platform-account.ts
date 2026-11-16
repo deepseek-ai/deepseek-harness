@@ -15,16 +15,17 @@ if (process.isMainFrame && location.origin === allowedOrigin) {
       try { listener(value) } catch (error) { console.error('Platform locale listener failed', error) }
     }
   })
+  let value: unknown
   try {
-    const value: unknown = ipcRenderer.sendSync(PLATFORM_IPC.bootstrap)
-    if (typeof value === 'object' && value !== null && 'token' in value && 'origin' in value
-      && typeof value.token === 'string' && value.token.length > 0 && value.origin === location.origin
-      && 'locale' in value && (value.locale === 'en_US' || value.locale === 'zh_CN')) {
-      token = value.token
-      locale = value.locale
-    }
-  } catch {
+    value = ipcRenderer.sendSync(PLATFORM_IPC.bootstrap)
+  } catch (_bootstrapFailed) {
     // Initialization failure retains embedded mode so Platform cannot use browser credentials.
+  }
+  if (typeof value === 'object' && value !== null && 'token' in value && 'origin' in value
+    && typeof value.token === 'string' && value.token.length > 0 && value.origin === location.origin
+    && 'locale' in value && (value.locale === 'en_US' || value.locale === 'zh_CN')) {
+    token = value.token
+    locale = value.locale
   }
   contextBridge.exposeInMainWorld('dsh', {
     protocolVersion: 1,

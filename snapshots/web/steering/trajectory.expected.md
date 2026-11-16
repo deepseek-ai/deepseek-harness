@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Use the ask_user_question tool to
   - text: Standard mode
+  - button "Session panel" [disabled]
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

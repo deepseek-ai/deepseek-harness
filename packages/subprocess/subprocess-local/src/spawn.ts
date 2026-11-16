@@ -100,8 +100,8 @@ export function killGroup(pid: number | undefined, sig: NodeJS.Signals): void {
   if (pid === undefined) return
   try {
     process.kill(-pid, sig)
-  } catch {
-    // Swallow: see contract above.
+  } catch (_groupSignalFailed) {
+    // The group may already have exited before delivery (ESRCH); see the contract above.
   }
 }
 
@@ -149,7 +149,7 @@ function signalTree(
        (EPERM-style), which POSIX CI cannot stage; the swallow keeps teardown idempotent. */
     try {
       child.kill(sig)
-    } catch {
+    } catch (_childAlreadyExited) {
       // The direct child already exited; teardown remains idempotent.
     }
     /* v8 ignore stop */
@@ -169,7 +169,7 @@ export function validateSubprocessSpec(spec: SubprocessSpawnSpec): void {
     let reason = 'aborted'
     try {
       reason = String(spec.signal.reason ?? reason)
-    } catch {
+    } catch (_reasonNotStringifiable) {
       // Arbitrary caller-owned reasons cannot escape the stable Error boundary.
     }
     // Named as a cancellation so the tool registry classifies it as the caller's abort.

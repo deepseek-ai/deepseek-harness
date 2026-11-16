@@ -11,7 +11,7 @@ import { expect, it, onTestFailed } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { launchWebScaffold, selectedSessionFixture, watchConsole } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, showSessionPanel } from './support.ts'
 
 const DIR = fileURLToPath(new URL('../../../snapshots/web/subagent-fork-schedule', import.meta.url))
 const LABEL = 'Check child reminder refusal'
@@ -50,8 +50,8 @@ it('places the inherited-history divider between the parent turn and the child p
     } finally {
       await activation.dispose()
     }
-    await page.getByRole('button', { name: '1 subagent' }).click()
-    await page.getByRole('tree', { name: 'Subagent sessions' }).getByRole('treeitem', { name: new RegExp(LABEL) }).click()
+    const subagents = (await showSessionPanel(page)).locator('[data-session-panel-section="subagents"]')
+    await subagents.getByRole('tree', { name: 'Subagent sessions' }).getByRole('treeitem', { name: new RegExp(LABEL) }).click()
     const divider = page.getByRole('separator', { name: 'Inherited history above' })
     await divider.waitFor({ timeout: 15_000 })
     expect(await divider.count()).toBe(1)
