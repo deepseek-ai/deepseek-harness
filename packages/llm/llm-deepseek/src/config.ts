@@ -23,6 +23,8 @@ export interface Config {
   thinking: Volatile<'enabled' | 'disabled' | undefined>
   /** Default thinking effort (default `high`); `off` disables thinking per request. */
   reasoningEffort: Volatile<'off' | 'low' | 'high' | 'max' | undefined>
+  /** Whether requests enable the provider's high-level content safety check (default `false`). */
+  safetyCheck: Volatile<boolean>
   /** Default per-request output cap (default 256,000); a model's own cap and explicit request values win. */
   maxTokens: Volatile<number>
   /** Positive context capacity used when the selected model has no exact value (default 1,000,000). */
@@ -93,6 +95,7 @@ export const deepSeekConfigFields = {
   baseURL: z.string().volatile(),
   thinking: z.union(['enabled', 'disabled']).volatile(),
   reasoningEffort: z.union(['off', 'low', 'high', 'max']).volatile(),
+  safetyCheck: z.boolean().default(false).volatile(),
   maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MAX_TOKENS).volatile(),
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW).volatile(),
   models: z.array(catalogModel).default(DEFAULT_MODELS).volatile(),
@@ -232,6 +235,9 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
     && config.reasoningEffort !== 'off') {
     throw new Error('llm-deepseek: only reasoningEffort "off" can be configured when thinking is disabled')
   }
+  if (config.safetyCheck !== undefined && typeof config.safetyCheck !== 'boolean') {
+    throw new Error('llm-deepseek: safetyCheck must be a boolean')
+  }
   if (config.defaultContextWindow !== undefined
     && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) {
     throw new Error('llm-deepseek: defaultContextWindow must be a positive integer')
@@ -319,6 +325,7 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
       thinking: config.thinking,
       reasoningEffort: config.reasoningEffort,
     },
+    safetyCheck: config.safetyCheck ?? false,
     maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
     defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
     models: resolveModels(config.models),

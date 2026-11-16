@@ -155,6 +155,7 @@ export function serialize(
     thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
     ...effort === 'off' ? {} : { output_config: { effort: effort as 'low' | 'high' | 'max' } },
     ...system.length === 0 ? {} : { system },
+    ...connection.safetyCheck ? { safety_check: { level: 'high' as const } } : {},
     ...options.temperature === undefined ? {} : { temperature: options.temperature },
     ...options.stop === undefined ? {} : { stop_sequences: options.stop },
     ...options.tools === undefined ? {} : {

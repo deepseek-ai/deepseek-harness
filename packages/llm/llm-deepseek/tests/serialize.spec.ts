@@ -333,6 +333,14 @@ describe('Messages request conversion', () => {
     expect(request.output_config).toEqual(effort === 'off' ? undefined : { effort })
   })
 
+  it('sends the high safety check only when enabled and rejects a non-boolean switch', () => {
+    expect(body([user()]).safety_check).toBeUndefined()
+    const messages = [user()]
+    const request = serialize(options({ messages }), resolveAdapterOptions({ safetyCheck: true }), messages, new Map(), () => undefined)
+    expect(request.safety_check).toEqual({ level: 'high' })
+    expect(() => resolveAdapterOptions(JSON.parse('{"safetyCheck":"high"}') as Config)).toThrow(/safetyCheck must be a boolean/)
+  })
+
   it('disables thinking for the off effort, passes temperature with thinking and refuses unsupported effort', () => {
     expect(body([user()], { reasoningEffort: ReasoningEffortId('off'), temperature: 0 }))
       .toMatchObject({ thinking: { type: 'disabled' }, temperature: 0 })

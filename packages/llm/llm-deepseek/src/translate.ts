@@ -87,11 +87,15 @@ function deltaChunk(block: Block, raw: unknown): StreamChunk | undefined {
   return malformed(`unsupported delta ${String(delta.type)} for ${content.type}`)
 }
 
-function stopReason(raw: unknown): FinishReason {
+function stopReason(raw: unknown, details: unknown): FinishReason {
   switch (raw) {
     case 'end_turn': case 'stop_sequence': return { kind: 'stop' }
     case 'tool_use': return { kind: 'tool-calls' }
     case 'max_tokens': return { kind: 'max-tokens' }
+    case 'refusal': {
+      const explanation = typeof details === 'object' && details !== null && 'explanation' in details ? details.explanation : undefined
+      throw new LlmError(`DeepSeek refused to answer under its content safety review${typeof explanation === 'string' && explanation ? `: ${explanation}` : ''}`, 'CONTENT_REFUSED')
+    }
     default: return malformed(`unsupported stop reason ${String(raw)}`)
   }
 }
@@ -142,7 +146,7 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
       }
     } else if (event.type === 'message_delta') {
       const delta = object(event.delta)
-      if (delta.stop_reason != null) reason = stopReason(delta.stop_reason)
+      if (delta.stop_reason != null) reason = stopReason(delta.stop_reason, delta.stop_details)
       if (event.usage !== undefined) updateUsage(usage, event.usage)
     } else {
       if (reason === undefined || [...blocks.values()].some(block => !block.closed)) return malformed('message_stop without settled blocks and stop reason')

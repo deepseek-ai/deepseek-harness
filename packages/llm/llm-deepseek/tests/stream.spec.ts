@@ -39,6 +39,14 @@ describe('Messages stream', () => {
     expect(result.at(-1)).toMatchObject({ reason: { kind: 'stop' } })
   })
 
+  it('fails a refused response with CONTENT_REFUSED after streamed text', async () => {
+    await expect(chunks(translate(events([...textEvents.slice(0, 4), ...end('refusal')]), MODEL)))
+      .rejects.toMatchObject({ code: 'CONTENT_REFUSED' })
+    const blocked = { type: 'message_delta', delta: { stop_reason: 'refusal', stop_details: { type: 'refusal', explanation: 'blocked: messages.1.content.0' } } }
+    await expect(chunks(translate(events([start, blocked]), MODEL)))
+      .rejects.toMatchObject({ code: 'CONTENT_REFUSED', message: expect.stringContaining('blocked: messages.1.content.0') as string })
+  })
+
   it.each([{}, { key: 'initial' }])('preserves initial tool input %j without JSON deltas', async (input) => {
     const result = await assemble(translate(events([start,
       { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'a', name: 'read', input } },

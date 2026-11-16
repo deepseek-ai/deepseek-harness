@@ -313,6 +313,20 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(serverB.headers[0]?.['x-api-key']).toBe('rotated-key')
   })
 
+  it('sends the safety check after the settings switch turns it on and fails a refused response', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    const refusal = textEvents.map(event => event.replace('"end_turn"', '"refusal"'))
+    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: refusal }])
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: server.url })
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.requests[0]).not.toHaveProperty('safety_check')
+    await ctx.settings.mutate(NS, [{ op: 'set', path: ['safetyCheck'], value: true }])
+    const refused = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.requests[1]).toMatchObject({ safety_check: { level: 'high' } })
+    expect(refused.finish).toMatchObject({ kind: 'error', failure: { code: 'CONTENT_REFUSED' } })
+  })
+
   it('keeps a stored key writable and rotatable across a real restart', async () => {
     // No ambient DEEPSEEK_API_KEY: the shipped surfaces do not hoist
     // the credentials document into process.env, so a stored key must stay file-sourced.
