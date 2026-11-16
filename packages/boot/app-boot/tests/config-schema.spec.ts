@@ -445,6 +445,21 @@ describe('collectConfigSchemas', () => {
     expect(result['x-cordis'].complete).toBe(false)
   })
 
+  it('resolves a drive-letter include path on Windows as Include does', async () => {
+    modules.set('good', { Config: Schema.string() })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
+    try {
+      const result = await collectConfigSchemas(profile, [
+        row('cordis:include', { path: 'C:/dsh-missing/extra.yml', initial: [row('good')] }),
+      ], resolution)
+      expect(result['x-cordis'].diagnostics).toEqual([])
+      expect(result['x-cordis'].entries.map(entry => [entry.path, entry.status])).toEqual([['/0', 'absent'], ['/0/include/0', 'schema']])
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
   it('leaves the caller\'s include patches unchanged when a patch replaces a group config', async () => {
     const patches = [{ id: 'group', config: [{ name: 'noop' }] }]
     await collectConfigSchemas(profile, [row('cordis:include', {

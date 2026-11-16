@@ -12,6 +12,7 @@ import type {} from './profile-resolution/service.ts'
 import type {} from './profile-context.ts'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileCompatibility } from './profile-compatibility.ts'
+import { includeFilename } from './include-filename.ts'
 
 function readManifest(filename: string): object {
   return JSON.parse(readFileSync(filename, 'utf8')) as object
@@ -144,7 +145,7 @@ function preflight(
       // A dynamic Include is resolved by the Include plugin itself; this walk cannot judge its rows.
       return undefined
     }
-    const requested = isAbsolute(config.path) ? config.path : fileURLToPath(new URL(config.path, base))
+    const requested = includeFilename(config.path, base)
     const filename = existsSync(requested) ? realpathSync(requested) : requested
     if (includes.has(filename)) return undefined
     includes.add(filename)
