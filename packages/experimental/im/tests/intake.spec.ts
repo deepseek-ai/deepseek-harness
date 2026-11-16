@@ -542,7 +542,7 @@ describe('ImIntake pump', () => {
     const { ctx, intake, dispatched, store } = harness
     ctx.on('im/message', async (event, next) => {
       if (event.message.text === 'huge') {
-        throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.')
+        throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.', { permanent: true })
       }
       return next()
     })
@@ -566,6 +566,30 @@ describe('ImIntake pump', () => {
     expect(store.state(ImMessageKey('fake:bot', 'huge-2'))?.dispatch).toBe('pending')
     expect(logged).toHaveBeenCalled()
     logged.mockRestore()
+  })
+
+  it('keeps transient capacity errors pending instead of settling them as ignored', async () => {
+    const harness = await boot()
+    const { ctx, intake, dispatched, store } = harness
+    let fail = true
+    ctx.on('im/message', async (_event, next) => {
+      if (fail) {
+        fail = false
+        throw new ImError('capacity', 'IM receipts are full of unresolved operations.')
+      }
+      return next()
+    })
+    await record(harness, inbound({ id: 'cmd-1', content: h('message', h.text('/help')) }))
+
+    intake.pump()
+    await intake.idle()
+    const key = ImMessageKey('fake:bot', 'cmd-1')
+    expect(store.state(key)?.dispatch).toBe('pending')
+
+    intake.pump()
+    await intake.idle()
+    expect(store.state(key)?.dispatch).toBe('done')
+    expect(dispatched).toHaveLength(2)
   })
 
   it('stops draining a chat whose first message failed and resumes in order', async () => {

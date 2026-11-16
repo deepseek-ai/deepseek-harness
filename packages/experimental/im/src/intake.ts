@@ -538,7 +538,7 @@ export class ImIntake {
       await this.store.settle(message.key, await this.ctx.waterfall('im/message', event, fallback))
       return true
     } catch (error) {
-      if (error instanceof ImError && error.code === 'capacity') {
+      if (error instanceof ImError && error.code === 'capacity' && error.permanent) {
         // The message can never be dispatched: it is over the size the delivery budget allows. Settling it keeps the
         // chat draining — one oversized message used to stay pending forever, so every later message of that chat
         // (including the `/stop` and `/clear` that would have unstuck it) waited behind it.

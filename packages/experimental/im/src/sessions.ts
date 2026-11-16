@@ -289,7 +289,7 @@ export class ImSessionHost implements ImSessions {
     // The same budget the intake applied to the message, measured on the same payload: the intent repeats the messages
     // it carries, not a second copy of each (`trigger` is derived at admission).
     if (inputBytes(delivery) > this.config.maxInputBytes) {
-      throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.')
+      throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.', { permanent: true })
     }
     await this.write(() => this.domainOf().table('deliveries').put(id, stored))
     this.deliveries.set(id, stored)

@@ -44,6 +44,7 @@ const booted: Harness[] = []
 async function mount(options: {
   retryIntervalMs?: number
   compositionWarnMs?: number
+  maxInputBytes?: number
   beforeMount?: (ctx: Context) => Promise<void>
 } = {}): Promise<Harness> {
   const retryIntervalMs = options.retryIntervalMs ?? 60_000
@@ -51,6 +52,7 @@ async function mount(options: {
     sources: SOURCES,
     retryIntervalMs,
     ...options.compositionWarnMs === undefined ? {} : { compositionWarnMs: options.compositionWarnMs },
+    ...options.maxInputBytes === undefined ? {} : { maxInputBytes: options.maxInputBytes },
   }
   // `withoutStart` leaves the harness's own sessions host inert: this context hosts exactly one IM service.
   const base = await boot({ withoutStart: true, config: configPatch })
@@ -231,6 +233,16 @@ describe('ImService facade', () => {
     await expect(service.members(CHAT)).rejects.toThrow(/cannot list the members/)
     bot.members = async (_ref, next, size) => ({ data: [{ id: 'allowed', name: `${next ?? 'first'}:${size ?? 0}` }] })
     await expect(service.members(CHAT, 'p2', 5)).resolves.toEqual({ data: [{ id: 'allowed', name: 'p2:5' }] })
+  })
+
+  it('rejects platform readMessage records that exceed maxInputBytes without storing them', async () => {
+    const { service, bot } = await mount({ maxInputBytes: 1_000 })
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    bot.getMessage = async () => inbound('m-huge', { content: h('message', h.text('x'.repeat(2_000))) })
+    await expect(service.readMessage(CHAT, 'm-huge')).rejects.toMatchObject({ code: 'capacity' })
+    expect(service.history.get(ImMessageKey('fake:bot', 'm-huge'))).toBeUndefined()
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {

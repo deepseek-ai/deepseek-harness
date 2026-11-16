@@ -684,6 +684,26 @@ describe('concurrent receipt capacity reservation', () => {
       error: 'the stub bot does not stream',
     })
   })
+
+  it('awaits in-flight stream receipt settlement before closing the domain on dispose', async () => {
+    const { sender, store, pool } = await boot()
+    let releasePut!: () => void
+    const putGate = new Promise<void>((resolve) => { releasePut = resolve })
+    const originalPut = store.put.bind(store)
+    vi.spyOn(store, 'put').mockImplementationOnce(async (...args) => {
+      await putGate
+      return await originalPut(...args)
+    })
+
+    const stream = await sender.stream(CHAT, { operationId: 'op-stream-dispose' })
+    await stream.close(h.text('hello'))
+
+    const disposing = sender.dispose()
+    releasePut()
+    await disposing
+
+    expect(receiptsOf(pool).get('op-stream-dispose')).toMatchObject({ status: 'confirmed' })
+  })
 })
 
 describe('operationId', () => {

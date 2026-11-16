@@ -29,7 +29,7 @@ import { ImMediaStore } from './media.ts'
 import { ImOutputRegistry } from './outputs.ts'
 import { ImSender } from './send.ts'
 import { ImSessionHost } from './sessions.ts'
-import { ImStore } from './store.ts'
+import { ImStore, inputBytes } from './store.ts'
 import { applyTools } from './tools.ts'
 
 export type * from './api.ts'
@@ -354,7 +354,11 @@ export class ImService extends Service implements ImApi {
     }
     const source = admit([...this.sources.values()], bot.id, message)
     if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
-    return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')
+    const draft = draftOf(bot, message, source, 'platform')
+    if (inputBytes(draft) > this.config.maxInputBytes) {
+      throw new ImError('capacity', `Message ${id} exceeds the configured byte limit (${this.config.maxInputBytes} bytes).`)
+    }
+    return await this.store.put(draft, 'none')
   }
 
   /**
