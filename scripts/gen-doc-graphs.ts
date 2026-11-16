@@ -113,7 +113,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Optional action cards',
     mode: 'service',
     consumers: ['creation-recommendations', 'client-ui-action-cards'],
-    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+    note: 'Owns card state, user actions and status notices; card kinds register their actions and handlers.',
   },
   {
     key: 'pluginRecommendations',

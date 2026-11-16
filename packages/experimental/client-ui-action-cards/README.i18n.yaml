@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/client-ui-action-cards/README.md
 /:
-  en: eec43de9002f4ab1
-  zh: 0d2fddca5a1f993a
+  en: 04e5b09d504b9c6d
+  zh: c477c03d68f696b4
 /deepseek-ai-dsh-client-ui-action-cards:
   en: c36a554629f96f79
   zh: 0ea837da87938e52
 /deepseek-ai-dsh-client-ui-action-cards/summary:
-  en: 89ea57734c42a481
-  zh: c7a4f5f0b59b78ad
+  en: edc6004ecea2e04d
+  zh: 7e66a631dc34791a
 /deepseek-ai-dsh-client-ui-action-cards/table-of-contents:
   en: d152484eb41ac6b4
   zh: b00dddf4c88f0a45
@@ -21,17 +21,17 @@
   en: 9ec9f9f8f3165d3e
   zh: 2d8154ec2fe0c9ab
 /deepseek-ai-dsh-client-ui-action-cards/understand-the-implementation:
-  en: 168ae39a83d6f4eb
-  zh: 312cc12876bca834
+  en: d81dd6582b58b34a
+  zh: 998196ebff842199
 /deepseek-ai-dsh-client-ui-action-cards/further-exploration:
-  en: 55e4d74a33cdeeb3
-  zh: f601d5a4dcf63ec5
+  en: 8a8fd260a90c34c2
+  zh: 5d3859326521d5b7
 /deepseek-ai-dsh-client-ui-action-cards/model-experience:
   en: f80a4b656c108f22
   zh: a3e30f46fa7136ac
 /deepseek-ai-dsh-client-ui-action-cards/model-experience/kv-cache-effect:
-  en: 9cb7131bde146341
-  zh: 1c7d1af00f58004d
+  en: 238b07582e981a18
+  zh: f026e4cfac22d8e7
 /deepseek-ai-dsh-client-ui-action-cards/known-limitations-and-deferred-work:
   en: df94821940e4e2b8
   zh: 490441ab06b153c9

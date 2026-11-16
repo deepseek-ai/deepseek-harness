@@ -1,5 +1,5 @@
 ---
-description: "可选操作卡片的浏览器端：已完成回答下方的卡片框架、供各实验包填入的正文注册表，以及 propose_action 调用的单行过程行。"
+description: "可选操作卡片的浏览器端：已完成回答下方的卡片框架、供各实验包填入的正文注册表，以及隐藏提供卡片的 action-card 代码块。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-用户在已完成的回答下方看到一张可选操作卡片：标题、过长时会折叠的说明，以及提议该卡片的实验所提供的控件。在过程区中，提议显示为一行，带卡片标题和调用是否被接受；被拒绝的调用可以展开查看原因。如果实验在当前浏览器中没有提供控件，卡片只提供“暂不需要”。展示、展开和折叠卡片都不会发起模型请求。
+用户在已完成的回答下方看到一张可选操作卡片：标题、过长时会折叠的说明，以及提议该卡片的实验所提供的控件。回答里提供卡片的 `action-card` 代码块不会显示。如果实验在当前浏览器中没有提供控件，卡片只提供“暂不需要”。展示、展开和折叠卡片都不会发起模型请求。
 
 ## 目录
 
@@ -39,17 +39,16 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-一个 `conversation.chat.turnTail` 条目读取 `actionCards` 会话投影，在某一轮以最终回答结束后展示该轮接受的卡片；没有回答文本就结束的轮次不显示卡片，若同一轮有多张卡片，显示调用 id 最小的一张。框架把 `data-action-card` 设为调用 id，并以卡片标题命名所在区域。折叠时，宽字素（如汉字）按两个拉丁字母宽度计算，约 260 个单位后折叠；折叠不测量布局，也不改动完整文本。
+一个 `conversation.chat.turnTail` 条目读取 `actionCards` 会话投影，在某一轮以最终回答结束后展示该轮接受的卡片；没有回答文本就结束的轮次不显示卡片，若同一轮有多张卡片，显示卡片 id 最小的一张。框架把 `data-action-card` 设为卡片 id，并以卡片标题命名所在区域。折叠时，宽字素（如汉字）按两个拉丁字母宽度计算，约 260 个单位后折叠；折叠不测量布局，也不改动完整文本。
 
-一个以 `propose_action` 为键的 `tool.call.toolview` 条目，根据记录的调用参数和结果渲染过程行。插件在顶层提供正文注册表，然后挂载生成的 `actionCards` Remote，并在同一生命周期内注册词典和插槽条目。
+一个以 `action-card` 为键的 `conversation.chat.markdown.fence` 层不渲染任何内容，因此 Chat 流中所有这类代码块都被隐藏：包括回答、思考内容和压缩摘要中的代码块，以及 Host 没有收下的代码块。插件在顶层提供正文注册表，然后挂载生成的 `actionCards` Remote，并在同一生命周期内注册词典和插槽条目。
 
 | 源码 | 内容 |
 |---|---|
 | [`src/client/mount.ts`](src/client/mount.ts) | 注册表、Remote、词典与插槽条目 |
-| [`src/client/Card.tsx`](src/client/Card.tsx) | 轮次尾部、框架、折叠与兜底正文 |
-| [`src/client/ProposeRow.tsx`](src/client/ProposeRow.tsx) | 过程行 |
+| [`src/client/Card.tsx`](src/client/Card.tsx) | 轮次尾部、框架、折叠、兜底正文与隐藏代码块 |
 | [`src/client/registry.ts`](src/client/registry.ts) | 正文注册表与正文属性 |
-| [`tests/`](tests/) | 位置、框架、兜底、过程行与注册测试 |
+| [`tests/`](tests/) | 位置、框架、兜底与注册测试 |
 
 </details>
 
@@ -60,7 +59,7 @@ kind: "package-reference"
 
 - [操作卡片](../action-cards/README.zh.md) — 框架背后的工具、卡片状态与用户操作。
 - [个性化页面卡片](../client-ui-creation-recommendations/README.zh.md)和[推荐卡片](../client-ui-plugin-recommendations/README.zh.md) — 随产品提供的卡片正文。
-- [插槽](../../client/ui-slots/README.zh.md) — 轮次尾部与工具行的注册。
+- [插槽](../../client/ui-slots/README.zh.md) — 轮次尾部与 Markdown 代码块层的注册。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -69,7 +68,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-渲染卡片和过程行不会改变任何模型请求。
+渲染卡片和隐藏代码块不会改变任何模型请求。
 
 ## 已知限制与后续工作
 

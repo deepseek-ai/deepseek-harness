@@ -5,7 +5,7 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
 import type { ActionCardBodyProps } from '@deepseek-ai/dsh-client-ui-action-cards/client'
 import type { PluginDetails, RecommendationDetails } from '@deepseek-ai/dsh-plugin-recommendations/types'
 import type { RecommendationKey } from './locales.ts'
@@ -21,10 +21,10 @@ export interface PluginCardServices {
   /**
    * Read the current catalog text of a card's plugin.
    * @param sessionId - the displayed Session.
-   * @param callId - the card's call id.
+   * @param cardId - the card's id.
    * @returns the Host's answer, or undefined when the reply was lost.
    */
-  readonly describe: (sessionId: SessionId, callId: ToolCallId) => Promise<RecommendationDetails | undefined>
+  readonly describe: (sessionId: SessionId, cardId: ActionCardId) => Promise<RecommendationDetails | undefined>
   /** Open the plugin's details page without enabling it. */
   readonly openDetails: (packageName: string) => void
   /** Pick the interface language's text. */
@@ -86,7 +86,7 @@ export function PluginCardBody({
   useEffect(() => {
     if (name === undefined) return undefined
     let current = true
-    describe(sessionId, proposal.callId).then(
+    describe(sessionId, proposal.cardId).then(
       (value) => {
         if (!current) return
         if (value?.status === 'available') catalog.set({ ...catalog.getSnapshot(), [name]: value })
@@ -95,7 +95,7 @@ export function PluginCardBody({
       () => { if (current) setLookup(null) },
     )
     return () => { current = false }
-  }, [catalog, describe, sessionId, proposal.callId, name, phase, attempt])
+  }, [catalog, describe, sessionId, proposal.cardId, name, phase, attempt])
   if (name === undefined) return <div className={css.body}>{summary}</div>
   // Remembered text shows at once; this card's own refusal or lost reply still decides what it offers.
   const current = lookup === null || lookup?.status === 'refused' ? lookup : cached ?? lookup

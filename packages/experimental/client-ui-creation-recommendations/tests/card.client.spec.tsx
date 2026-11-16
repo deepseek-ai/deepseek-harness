@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { FoldedText } from '@deepseek-ai/dsh-client-ui-action-cards/src/client/Card.tsx'
@@ -12,13 +12,13 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
-const callId = brandString<ToolCallId>('creation-1')
+const cardId = brandString<ActionCardId>('creation-1')
 const ACTION = 'create_personalized_page'
 type Act = (verb: string, payload?: ActionCardFields) => Promise<ActionCardResult | undefined>
 
 function props(decision?: { phase: string; data?: ActionCardFields }, chinese = true, details: ActionCardFields = { slot: 'sidebar-right' }): PageCardProps & { act: ReturnType<typeof vi.fn<Act>> } {
-  const proposal = { callId, turn: 1, action: ACTION, title: 'Counter', brief: 'Keep my task count visible.', details }
-  return { proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision },
+  const proposal = { cardId, turn: 1, action: ACTION, title: 'Counter', brief: 'Keep my task count visible.', details }
+  return { proposal, decision: decision === undefined ? undefined : { cardId, action: ACTION, ...decision },
     sessionId: brandString<SessionId>('session-1'), summary: <><strong>{proposal.title}</strong><p>{proposal.brief}</p></>, Folded: FoldedText,
     act: vi.fn<Act>(async () => ({ status: 'accepted' })), infoDismissed: createSnapshotStore(true),
     t: makeTranslate(chinese ? zh : en) }
@@ -117,7 +117,7 @@ it('disables pending decisions, labels only a pending Create as starting, and su
   fireEvent.click(screen.getByRole('button', { name: zh.creationInfo }))
   expect(screen.getByRole('note').textContent).toContain(zh.creationCost)
   expect(value.act).toHaveBeenCalledWith('dismiss', { slot: 'sidebar-right' })
-  await act(async () => { dismissal.resolve({ status: 'settled', decision: { callId, action: ACTION, phase: 'dismissed' } }) })
+  await act(async () => { dismissal.resolve({ status: 'settled', decision: { cardId, action: ACTION, phase: 'dismissed' } }) })
   fireEvent.click(screen.getByRole('button', { name: '创建' }))
   expect(screen.getByRole('button', { name: '开始创建…' }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
