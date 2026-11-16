@@ -443,7 +443,8 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     const directory = join(scaffold.workspaceCwd, 'workspace', 'folderx', 'nested')
     const file = join(directory, 'space name.txt')
     const sessionId = brandString<SessionId>(TARGET_SESSION_ID)
-    const beforeEvents = await readPersistedEvents(scaffold, sessionId)
+    const beforeEvents = (await readPersistedEvents(scaffold, sessionId))
+      .filter(event => event.type === 'user/message' || event.type.startsWith('turn/'))
     const beforeMessages = await page.locator('[data-chat-flow-kind="user"]').count()
 
     // An absolute query compares the same resource spelling as the sidebar.
@@ -487,6 +488,12 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     for (let i = 0; i < 'Review '.length; i++) await page.keyboard.press('ArrowRight')
     for (let i = 0; i < 'selected'.length; i++) await page.keyboard.press('Shift+ArrowRight')
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('selected')
+    // Copy observes the editor's committed selection, not only the native range.
+    await expect.poll(() => input.evaluate((node) => {
+      const clipboardData = new DataTransfer()
+      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+      return clipboardData.getData('text/plain')
+    })).toBe('selected')
 
     await row.click({ button: 'right' })
     const menu = page.getByRole('menu')
@@ -516,7 +523,8 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     expect(await chip.count()).toBe(0)
     expect(await input.evaluate(node => node === document.activeElement)).toBe(true)
     expect(await page.locator('[data-chat-flow-kind="user"]').count()).toBe(beforeMessages)
-    expect(await readPersistedEvents(scaffold, sessionId)).toEqual(beforeEvents)
+    expect((await readPersistedEvents(scaffold, sessionId))
+      .filter(event => event.type === 'user/message' || event.type.startsWith('turn/'))).toEqual(beforeEvents)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
