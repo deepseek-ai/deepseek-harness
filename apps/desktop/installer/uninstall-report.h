@@ -292,8 +292,8 @@ extern "C" __declspec(dllexport) void __cdecl UninstallImport(uninstall_report::
 
 extern "C" __declspec(dllexport) int __cdecl UninstallShowOwner(uninstall_report::Session* session, HWND parent,
     LPCWSTR title, LPCWSTR heading, LPCWSTR registered, LPCWSTR directory, LPCWSTR registeredLabel,
-    LPCWSTR directoryLabel, LPCWSTR scopeLabel, LPCWSTR primary, LPCWSTR save, LPCWSTR failed) {
+    LPCWSTR scopeLabel, LPCWSTR primary, LPCWSTR save, LPCWSTR failed) {
     const std::wstring body = std::wstring(registeredLabel) + L"\r\n" + registered + L"\r\n\r\n"
-        + directoryLabel + L"\r\n" + directory + L"\r\n\r\n" + scopeLabel + L" " + directory;
+        + scopeLabel + L"\r\n" + directory;
     return uninstall_report::Show(parent, *session, 1, title, heading, body.c_str(), primary, save, failed);
 }

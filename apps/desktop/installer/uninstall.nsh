@@ -16,7 +16,7 @@ Function un.ShowCleanup
   StrCpy $UnResult 0
   ${IfNot} ${Silent}
     ${If} $UnMode == 1
-      System::Call '$PLUGINSDIR\window-frame.dll::UninstallShowOwner(p $UnSession, p $HWNDPARENT, w "$(^SetupCaption)", w "$UnHeading", w "$UnRegistered", w "$INSTDIR", w "$(INSTALLER_UNINSTALL_REGISTERED)", w "$(INSTALLER_UNINSTALL_DIRECTORY)", w "$(INSTALLER_UNINSTALL_SCOPE)", w "$(INSTALLER_UNINSTALL_CONTINUE)", w "$(INSTALLER_UNINSTALL_SAVE)", w "$(INSTALLER_UNINSTALL_SAVE_FAILED)") i.r0 ?c'
+      System::Call '$PLUGINSDIR\window-frame.dll::UninstallShowOwner(p $UnSession, p $HWNDPARENT, w "$(^SetupCaption)", w "$UnHeading", w "$UnRegistered", w "$INSTDIR", w "$(INSTALLER_UNINSTALL_REGISTERED)", w "$(INSTALLER_UNINSTALL_SCOPE)", w "$(INSTALLER_UNINSTALL_CONTINUE)", w "$(INSTALLER_UNINSTALL_SAVE)", w "$(INSTALLER_UNINSTALL_SAVE_FAILED)") i.r0 ?c'
     ${Else}
     System::Call '$PLUGINSDIR\window-frame.dll::UninstallShow(p $UnSession, p $HWNDPARENT, i $UnMode, w "$(^SetupCaption)", w "$UnHeading", w "$UnBody", w "$(INSTALLER_UNINSTALL_CONTINUE)", w "$(INSTALLER_UNINSTALL_SAVE)", w "$(INSTALLER_UNINSTALL_SAVE_FAILED)") i.r0 ?c'
     ${EndIf}
