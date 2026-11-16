@@ -335,6 +335,8 @@ export class ScheduleService extends TypertRemoteService {
         },
         () => this.borrowSessionController())
       runtime.requestDrive()
+      // The composite effect owns resource teardown; this effect only joins initialization.
+      return () => undefined
     })
     // Host tasks outlive their Session's Agent, so archive admission reads the
     // stored rows rather than a live runtime: an idle Session that an active task
