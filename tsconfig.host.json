@@ -173,6 +173,7 @@
     "apps/web/tests/present-after-closing-reply.e2e.ts",
     "apps/web/tests/autolink-cjk-punctuation.e2e.ts",
     "apps/web/tests/composer-draft-scroll.e2e.ts",
+    "apps/web/tests/draft-attachment-session-switch.e2e.ts",
     "apps/web/tests/composer-focus.e2e.ts",
     "apps/web/tests/composer-placeholder.e2e.ts",
     "apps/web/tests/context-meter.e2e.ts",
@@ -316,6 +317,7 @@
     { "path": "./packages/client/ui-theme/tsconfig.host.json" },
     { "path": "./packages/client/ui-chat/tsconfig.host.json" },
     { "path": "./packages/client/ui-conversation/tsconfig.host.json" },
+    { "path": "./packages/client/ui-connector-account/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
 
@@ -442,6 +444,7 @@
     { "path": "./packages/experimental/forge-bundle" },
     { "path": "./packages/experimental/client-ui-forge/tsconfig.host.json" },
     { "path": "./packages/session/tool-working-directory" },
+    { "path": "./packages/session-query/tool-session-list" },
     { "path": "./packages/session/session-title-llm" },
     { "path": "./packages/session/session-title-first-prompt-llm" },
     { "path": "./packages/experimental/session-title-all-prompts-llm" },

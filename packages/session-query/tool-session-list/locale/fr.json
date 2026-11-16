@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Outils de liste des sessions",
+    "description": "Liste les espaces de travail et les sessions sans relancer les agents."
+  }
+}

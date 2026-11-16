@@ -33,6 +33,9 @@
       "path": "../../util/http-proxy"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../account/deepseek-auth"
     }
   ]
