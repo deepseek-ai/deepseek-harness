@@ -9,13 +9,12 @@ import * as viewerModel from '../src/client/viewer-model.tsx'
 import * as viewerPermission from '../src/client/viewer-permission.tsx'
 import * as viewerSession from '../src/client/viewer-session-plugin.ts'
 import * as viewerSessionRow from '../src/client/viewer-session-row.tsx'
-import * as viewerSharePath from '../src/client/viewer-share-path.tsx'
 
 /** The generated contribution is a build artifact; the mount boundary is what this face test covers. */
 vi.mock('@deepseek-ai/dsh-experimental-liveshare/remote', () => ({ default: { package: '@deepseek-ai/dsh-experimental-liveshare', methods: {} } }))
 
 const VIEWER_PLUGINS = [
-  viewerSession, viewerBrand, viewerModel, viewerPermission, viewerSessionRow, viewerSharePath,
+  viewerSession, viewerBrand, viewerModel, viewerPermission, viewerSessionRow,
 ]
 
 afterEach(() => {

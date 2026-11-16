@@ -10,7 +10,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { launchWebScaffold, selectedSessionFixture, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, openSettings, saveFailureShot, showSessionPanel } from './support.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const LABEL = 'event-sourcing researcher'
@@ -104,8 +104,7 @@ describe('web e2e: composer paste routing', () => {
       parent,
     })
     await waitForAgentToSettle(scaffold, started.childId)
-    await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) })
+    await (await showSessionPanel(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
       .getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
     await page.locator('[data-sidebar-chat] [data-composer-card]').waitFor({ timeout: 15_000 })
   })

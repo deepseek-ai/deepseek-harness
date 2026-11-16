@@ -104,7 +104,7 @@ kind: "package-reference"
 
 依赖补丁对原生安装探测应用环境覆盖，并允许 Claude 显式使用 `--permission-mode`，并在存在该参数时关闭 OAR 强制的权限绕过。示例传入 `--permission-mode dontAsk --permission-prompts none`。Codex 接收 `-c sandbox_mode="workspace-write"`。OAR 将 Codex 审批策略设为 `never`。两条路径均不将原生审批请求转发到 DSH 交互界面。Codex 启动失败时会停止 app-server 并等待其退出，包括响应中缺少线程 id 的情况。
 
-只有根智能体文本参与答复。当 OAR 提供消息 id 时，选择最后一条非空消息；否则拼接根文本。原生推理、工具事件和转录历史不会进入父 Session。原生历史遵循所选运行时自身的持久化行为。提供方错误保留原生原因供本地调试；默认日志仅输出安全的阶段和类别摘要，因为原生原因可能包含凭据。
+只有根智能体文本参与答复。当 OAR 提供消息 id 时，选择最后一条非空消息；否则拼接根文本。原生推理、工具事件和转录历史不会进入父 Session。原生历史遵循所选运行时自身的持久化行为。提供方错误保留原生原因供本地调试；默认日志仅输出安全的阶段和类别摘要，因为原生原因可能包含凭据。提供方失败抛出 `OarFailure`，其 `code` 为封闭集合：任务为空或含非文本内容时为 `OAR_INVALID_TASK`，运行时缺失、不受支持或探测失败时为 `OAR_RUNTIME_UNAVAILABLE`，会话启动失败为 `OAR_START_FAILED`，会话释放失败为 `OAR_DISPOSE_FAILED`；`OAR_TURN_FAILED` 和 `OAR_ABORT_FAILED` 用于分类报告给观察者的轮次失败与中断失败。运行开始前取消时以 name 为 `AbortError` 的 `DOMException` 拒绝，工具注册表将其记为 `ABORTED`。
 
 </details>
 

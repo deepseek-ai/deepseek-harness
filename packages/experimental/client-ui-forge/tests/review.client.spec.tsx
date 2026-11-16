@@ -12,8 +12,11 @@ import { ReviewThread } from '../src/client/ReviewThread.tsx'
 import { SubmitReview } from '../src/client/SubmitReview.tsx'
 import { ReviewComposer, type ReviewActions } from '../src/client/ReviewComposer.tsx'
 import { en } from '../src/client/locales.ts'
+import { hostCopy } from './client-fixtures.client.ts'
 
-const t = makeTranslate(en)
+const english = makeTranslate(en)
+/** Copy of a view of a GitHub pull request, which names the code host and the noun. */
+const t = (key: string, params?: Record<string, unknown>): string => english(key, { forge: 'GitHub', noun: 'PR', ...params })
 const file: ForgeDiffFile = { path: 'a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 3, deletions: 2,
   hunks: [
     { oldStart: 2, oldLines: 2, newStart: 2, newLines: 3, lines: [' unchanged', '-old', '+new', '+another'] },
@@ -68,7 +71,7 @@ describe('review references', () => {
     expect(view.getByRole('button', { name: en['review.publishing'] })).toHaveProperty('disabled', true)
     expect(view.getByRole('textbox')).toHaveProperty('disabled', true)
     await act(async () => { reject(new Error('transport lost')) })
-    expect(view.getByRole('alert')).toHaveProperty('textContent', en['review.unknown'])
+    expect(view.getByRole('alert')).toHaveProperty('textContent', hostCopy('review.unknown'))
     expect(publish).toHaveBeenCalledOnce()
   })
   it('dispatches at most once when two activations arrive in the same render batch', async () => {
@@ -352,7 +355,7 @@ describe('inline records', () => {
     expect(records.getSnapshot().comments).toHaveLength(1)
     queue.mockRejectedValueOnce(new Error('transport lost'))
     fireEvent.click(view.getByRole('button', { name: 'Add to review' }))
-    await vi.waitFor(() => { expect(view.getByRole('alert').textContent).toBe(en['review.unknown']) })
+    await vi.waitFor(() => { expect(view.getByRole('alert').textContent).toBe(hostCopy('review.unknown')) })
     queue.mockResolvedValueOnce(undefined)
     vi.spyOn(records, 'editThread').mockReturnValueOnce(false)
     fireEvent.click(view.getByRole('button', { name: 'Add to review' }))
@@ -383,7 +386,7 @@ describe('inline records', () => {
     const openLink = vi.fn()
     const view = render(<ReviewThread thread={{ key: 1, kind: 'published', selection, url: 'https://github.com/review' }}
       actions={{ source: selection.source, addToInput: () => true, openLink }} locked={false} outdated={false} t={t} />)
-    fireEvent.click(view.getByRole('button', { name: en['review.recheck'] }))
+    fireEvent.click(view.getByRole('button', { name: hostCopy('review.recheck') }))
     expect(openLink).toHaveBeenCalledWith('https://github.com/review')
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull()
   })
@@ -392,7 +395,7 @@ describe('inline records', () => {
 describe('submission availability', () => {
   it('explains why requesting changes needs a summary and enables submission when one is entered', () => {
     const queue = new ReviewQueue('review-test')
-    const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={null} own={false} busy={false} error={null}
+    const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={null} events={null} busy={false} error={null}
       submit={vi.fn()} discard={undefined} close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
     const button = view.getByRole('button', { name: 'Submit review' })
     const summary = view.getByRole('textbox')
@@ -415,6 +418,23 @@ describe('submission availability', () => {
     expect(view.getByRole('status')).toBe(announcement)
   })
 
+  it.each([
+    [['comment', 'approve'] as const],
+    [['approve'] as const],
+  ])('blocks a decision outside %j and explains no limit beyond comment-only', (events) => {
+    const queue = new ReviewQueue('review-test')
+    queue.summarize('Please fix the missing check.', 'request-changes')
+    const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={null} events={events}
+      busy={false} error={null} submit={vi.fn()} discard={undefined} close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
+    const button = view.getByRole('button', { name: 'Submit review' })
+    expect(view.getByRole('radio', { name: 'Request changes' })).toHaveProperty('disabled', true)
+    expect(view.getByRole('radio', { name: 'Comment' })).toHaveProperty('disabled', !events.includes('comment' as never))
+    expect(button).toHaveProperty('disabled', true)
+    expect(view.container.textContent).not.toContain('lets you comment on this')
+    fireEvent.click(view.getByRole('radio', { name: 'Approve' }))
+    expect(button).toHaveProperty('disabled', false)
+  })
+
   it.each(['local', 'different-pr', 'different-head', 'empty-comment', 'load', 'save'] as const)('blocks %s and retains the review in the modal', (kind) => {
     const source = kind === 'different-pr' ? { kind: 'change' as const, url: 'other', headSha: 'a'.repeat(40), commits: null }
       : kind === 'different-head' ? { kind: 'change' as const, url: 'https://github.com/octo/demo/pull/7', headSha: 'b', commits: null } : selection.source
@@ -426,7 +446,7 @@ describe('submission availability', () => {
       queue.summarize('Summary', 'comment')
     }
     if (kind === 'local') vi.spyOn(queue, 'getSnapshot').mockReturnValue({ ...queue.getSnapshot(), comments: [{ ...selection, source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null } }] })
-    const view = render(<SubmitReview queue={opened} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={null} own={false} busy={false} error={null}
+    const view = render(<SubmitReview queue={opened} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={null} events={null} busy={false} error={null}
       submit={vi.fn()} discard={undefined} close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
     expect(view.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
   })
@@ -436,7 +456,7 @@ describe('pending review submission', () => {
   function dialog(
     queue: ReviewQueue, props: { readonly busy?: boolean; readonly discard?: () => void; readonly submit?: () => void } = {},
   ) {
-    return render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={PENDING} own={false}
+    return render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} pending={PENDING} events={null}
       busy={props.busy ?? false} error={null} submit={props.submit ?? vi.fn()} discard={props.discard ?? vi.fn()}
       close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
   }
@@ -449,7 +469,7 @@ describe('pending review submission', () => {
   })
   it('refuses an empty comment review when the pending review holds no comments', () => {
     const view = render(<SubmitReview queue={new ReviewQueue('review-test')} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)}
-      pending={{ ...PENDING, comments: 0 }} own={false} busy={false} error={null} submit={vi.fn()} discard={vi.fn()}
+      pending={{ ...PENDING, comments: 0 }} events={null} busy={false} error={null} submit={vi.fn()} discard={vi.fn()}
       close={vi.fn()} check={vi.fn()}
       reconcile={vi.fn()} t={t} />)
     expect(view.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
@@ -481,25 +501,25 @@ describe('pending review submission', () => {
     const discard = view.getByRole('button', { name: 'Discard review' })
     expect(discard).toHaveProperty('disabled', true)
     view.rerender(<SubmitReview queue={new ReviewQueue('review-test')} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)}
-      pending={PENDING} own={false} busy={false} error={null} submit={vi.fn()} discard={vi.fn()}
+      pending={PENDING} events={null} busy={false} error={null} submit={vi.fn()} discard={vi.fn()}
       close={vi.fn()} check={vi.fn()} reconcile={vi.fn()}
       t={t} />)
     fireEvent.click(view.getByRole('button', { name: 'Discard review' }))
     view.rerender(<SubmitReview queue={new ReviewQueue('review-test')} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)}
-      pending={PENDING} own={false} busy error={null} submit={vi.fn()} discard={vi.fn()}
+      pending={PENDING} events={null} busy error={null} submit={vi.fn()} discard={vi.fn()}
       close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
     const confirm = within(view.getByRole('group', { name: 'Discard review' }))
     expect(confirm.getByRole('button', { name: 'Discarding…' })).toHaveProperty('disabled', true)
     expect(confirm.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', true)
     expect(view.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
   })
-  it('lets the author only comment on their own change request, keeping a stored decision until Comment is chosen', () => {
+  it('lets the reader only comment where the code host allows only comments, keeping a stored decision until Comment is chosen', () => {
     const queue = new ReviewQueue('review-test')
     queue.summarize('Looks done', 'approve')
     const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)}
-      pending={PENDING} own busy={false} error={null} submit={vi.fn()} discard={vi.fn()} close={vi.fn()} check={vi.fn()}
+      pending={PENDING} events={['comment']} busy={false} error={null} submit={vi.fn()} discard={vi.fn()} close={vi.fn()} check={vi.fn()}
       reconcile={vi.fn()} t={t} />)
-    expect(view.getByText(en['review.ownChangeRequest'])).toBeTruthy()
+    expect(view.getByText('GitHub lets you comment on this PR, but not approve it or request changes.')).toBeTruthy()
     expect(view.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', true)
     expect(view.getByRole('radio', { name: 'Request changes' })).toHaveProperty('disabled', true)
     expect(view.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)

@@ -9,7 +9,7 @@ export const PROTECTED_PLUGINS: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-plugin-manager', '@deepseek-ai/cordis-plugin-loader',
   '@deepseek-ai/cordis-plugin-include', '@deepseek-ai/dsh-api-gateway',
   '@deepseek-ai/dsh-host-webserver', '@deepseek-ai/dsh-client-modules',
-  '@deepseek-ai/dsh-client-ui-settings-plugin-inventory', '@deepseek-ai/dsh-client-ui-plugin-manager',
+  '@deepseek-ai/dsh-client-ui-plugin-manager',
   '@deepseek-ai/dsh-host-plugin-inventory', '@deepseek-ai/dsh-typert-registry',
   '@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-api-remote-access',
   '@deepseek-ai/cordis-plugin-timer', '@deepseek-ai/dsh-client-connection',
@@ -18,7 +18,8 @@ export const PROTECTED_PLUGINS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Built-in profile bundles, persistent terminals, and the standalone worktree tool, which have no plugin manager page.
+ * Built-in profile bundles, persistent terminals, the standalone worktree tool, and the Computer Use MCP profile
+ * bundle, which have no plugin manager page.
  * Their Host availability and activation stay intact.
  */
 export const HIDDEN_BUNDLES: ReadonlySet<string> = new Set([
@@ -30,6 +31,7 @@ export const HIDDEN_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-sdk-minimal',
   '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
+  '@deepseek-ai/dsh-cua-mcp',
 ])
 
 /**
@@ -50,11 +52,13 @@ export const MORE_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-personalized-recommendations',
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
+  '@deepseek-ai/dsh-timeline',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
+  '@deepseek-ai/dsh-deepseek-chat-import',
   '@deepseek-ai/dsh-subagent-codex',
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
@@ -63,6 +67,8 @@ export const MORE_BUNDLES: readonly string[] = [
 export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-personalized-recommendations',
   '@deepseek-ai/dsh-cua-bundle',
+  '@deepseek-ai/dsh-cua-mcp',
+  '@deepseek-ai/dsh-timeline',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
   '@deepseek-ai/dsh-experimental-inspector-profile',
@@ -75,4 +81,5 @@ export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-experimental-liveshare',
+  '@deepseek-ai/dsh-deepseek-chat-import',
 ])

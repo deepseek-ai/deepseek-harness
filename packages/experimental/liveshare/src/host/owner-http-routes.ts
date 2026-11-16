@@ -51,6 +51,14 @@ export interface OwnerHttpRouteDeps {
   readonly storedCredential: () => StoredOwnerCredential | undefined
   /** Replace the credential this host holds. */
   readonly setStoredCredential: (credential: StoredOwnerCredential) => void
+  /**
+   * Whether another running host owns the owner state directory.
+   *
+   * A credential is still stored here, because it is this host's own sign-in and a successor it
+   * restarts as presents it; the passes that reach the Relay for the shares belong to the host that
+   * owns the state, since they re-register its registrations.
+   */
+  readonly ownerStateHeld: () => boolean
   /** Whether this host has been disposed. */
   readonly disposed: () => boolean
 }
@@ -86,6 +94,7 @@ export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
   const ownerCredentialFile = deps.ownerCredentialFile
   const currentCredential = deps.storedCredential
   const setStoredCredential = deps.setStoredCredential
+  const ownerStateHeld = deps.ownerStateHeld
   const disposed = deps.disposed
 
   /**
@@ -95,6 +104,11 @@ export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
    * authorization code — so both attribute the same shares the same way. Synchronous persistence is
    * the commit point: later probes and claims use this credential and Relay even if another operation
    * commits afterwards. A changed operation is refused before persistence, never rebound to a new Relay.
+   *
+   * Only the host that owns the owner state claims or re-registers: its shares are the ones the Relay
+   * has registered, and a host that does not own the state holds a snapshot those claims and
+   * registrations would answer for. That host still stores the credential and shares nothing until it
+   * takes the state over on a later start.
    * @param operation - Captured Relay, configuration revision, and host instance.
    * @param credential - Signed credential the Relay issued for this host's instance.
    * @returns This operation's identity status, or the mismatch or storage failure to report.
@@ -119,20 +133,30 @@ export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
     }
     setStoredCredential(committed)
     delete tunnel.factsFor(relay).claim
-    await tunnel.probeRelayCredentialSupport(relay)
-    const claim = await tunnel.claimOwnedShares(relay, tunnel.credentialForRelay(relay, committed))
-    // The credential in hand is now the one a registration presents, so every share this host holds
-    // for that address that a refusal left offline reaches the Relay again on its own.
-    tunnel.reregisterOfflineShares(relay, committed)
+    const ownsState = !ownerStateHeld()
+    // A probe asks the Relay about the credential on behalf of the whole state, and the owner actions
+    // that read its answer here are refused to a host that does not own that state.
+    if (ownsState) await tunnel.probeRelayCredentialSupport(relay)
+    const claim = ownsState
+      ? await tunnel.claimOwnedShares(relay, tunnel.credentialForRelay(relay, committed))
+      : undefined
+    if (ownsState) {
+      // The credential in hand is now the one a registration presents, so every share this host holds
+      // for that address that a refusal left offline reaches the Relay again on its own.
+      tunnel.reregisterOfflineShares(relay, committed)
+    }
     // A claim may have adopted the horizon the Relay reported for this very token, which replaces the
     // record with an equal one; the status therefore reports whichever record is current for this Relay.
     const heldAfterCommit = currentCredential()
     /* v8 ignore next -- a claim adoption rewrites only the horizon of the same credential. */
     const effective = heldAfterCommit?.credential === committed.credential ? heldAfterCommit : committed
-    if (!disposed() && currentCredential() === effective) tunnel.factsFor(relay).claim = claim
+    if (claim !== undefined && !disposed() && currentCredential() === effective) tunnel.factsFor(relay).claim = claim
     const renewed = previous === undefined
       || (effective.expiresAt !== undefined && effective.expiresAt > previous)
-    return { ok: true, status: tunnel.ownerIdentityStatus(relay, { renewed, claim }, effective) }
+    return {
+      ok: true,
+      status: tunnel.ownerIdentityStatus(relay, { renewed, ...(claim === undefined ? {} : { claim }) }, effective),
+    }
   }
 
   connection.fetch.register({
@@ -195,7 +219,11 @@ export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
       if (relay === undefined) {
         return json({ error: 'owner-login-unavailable', reason: 'relay-required' }, 409)
       }
-      if (tunnel.factsFor(relay).supportsCredentials === undefined) await tunnel.probeRelayCredentialSupport(relay)
+      // An address whose support answer this host already read needs no second ask, and a host that
+      // does not own the state reads that answer rather than prompting the Relay again.
+      if (!ownerStateHeld() && tunnel.factsFor(relay).supportsCredentials === undefined) {
+        await tunnel.probeRelayCredentialSupport(relay)
+      }
       if (!ownerOperationCurrent(operation)) return json({ error: 'owner-login-mismatch' }, 403)
       if (tunnel.factsFor(relay).supportsCredentials === false) {
         return json({ error: 'owner-login-unavailable', reason: 'relay-upgrade-required' }, 409)

@@ -72,8 +72,31 @@ export interface DelegationModelRequest {
 }
 
 /**
+ * Whether an optional string tool argument carries a value. Some models send
+ * `""` for optional fields they leave unset.
+ * @param value - Parsed argument value.
+ * @returns Whether the value is present and non-empty.
+ */
+export function hasText(value: string | undefined): value is string {
+  return value !== undefined && value !== ''
+}
+
+/**
+ * Read model-facing route fields from tool arguments, treating an empty string as an omitted field.
+ * @param args - Parsed tool arguments carrying the route fields.
+ * @returns The non-empty route fields.
+ */
+export function delegationModelRequest(args: DelegationModelRequest): DelegationModelRequest {
+  return {
+    ...hasText(args.provider) ? { provider: args.provider } : {},
+    ...hasText(args.model) ? { model: args.model } : {},
+    ...hasText(args.reasoning_effort) ? { reasoning_effort: args.reasoning_effort } : {},
+  }
+}
+
+/**
  * Whether a call explicitly selects any child LLM value.
- * @param request - Model-facing route fields from the tool call.
+ * @param request - Route fields read by {@link delegationModelRequest}.
  * @returns Whether at least one route or effort field is present.
  */
 export function hasDelegationModelRequest(request: DelegationModelRequest): boolean {
@@ -82,26 +105,23 @@ export function hasDelegationModelRequest(request: DelegationModelRequest): bool
     || request.reasoning_effort !== undefined
 }
 
-/** Reject an empty model-facing route value at the tool JSON boundary. */
-function assertNonEmpty(value: string | undefined, field: keyof DelegationModelRequest): void {
-  if (value !== undefined && value.length === 0) {
-    throw new ToolArgsError([`child LLM \`${field}\` must be non-empty`])
-  }
-}
+/** Model-facing pointer to route discovery, appended to route-selection rejections. */
+const ROUTE_DISCOVERY_HINT = ' Call `list_subagent_models` to see the routes you may select.'
 
 /**
  * Validate explicit selection against the Session policy and merge it over child defaults.
  * Explicit selection requires both provider and model; an omitted effort then
  * uses the selected model's default, even when the route is unchanged.
  * @param configured - Tool-instance child defaults.
- * @param request - Model-facing route override.
+ * @param request - Route fields read by {@link delegationModelRequest}.
  * @param enabled - Whether this tool instance permits model-facing selection.
  * @param policy - Session allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent route used when no policy is recorded.
+ * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; rejections then point to it.
  * @returns Child Agent options, preserving omission when no layer contributes one.
  * @throws {SubagentError} `MODEL_SELECTION_DISABLED` when this tool instance
  *   forbids selection, or `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
- * @throws {ToolArgsError} when a field is empty or `provider` and `model` are not supplied together.
+ * @throws {ToolArgsError} when `provider` and `model` are not supplied together.
  */
 export function requestedAgentOptions(
   configured: AgentOptions | undefined,
@@ -109,21 +129,20 @@ export function requestedAgentOptions(
   enabled: boolean,
   policy: ModelSelectionPolicy | undefined,
   parentOptions: AgentOptions,
+  routeDiscoveryVisible: boolean,
 ): AgentOptions | undefined {
   if (!hasDelegationModelRequest(request)) return configured
   if (!enabled) {
     throw new SubagentError('child model selection is disabled for this tool instance', 'MODEL_SELECTION_DISABLED')
   }
-  assertNonEmpty(request.provider, 'provider')
-  assertNonEmpty(request.model, 'model')
-  assertNonEmpty(request.reasoning_effort, 'reasoning_effort')
+  const hint = routeDiscoveryVisible ? ROUTE_DISCOVERY_HINT : ''
   if (request.provider === undefined || request.model === undefined) {
-    throw new ToolArgsError([request.reasoning_effort === undefined
-      ? 'child LLM `provider` and `model` must be supplied together'
-      : 'child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields'])
+    throw new ToolArgsError([(request.reasoning_effort === undefined
+      ? 'child LLM `provider` and `model` must be supplied together.'
+      : 'child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields.') + hint])
   }
 
-  assertAllowedModelSelection(policy, parentOptions, { provider: request.provider, model: request.model })
+  assertAllowedModelSelection(policy, parentOptions, { provider: request.provider, model: request.model }, routeDiscoveryVisible)
   return {
     ...configured,
     provider: request.provider,
@@ -138,12 +157,14 @@ export function requestedAgentOptions(
  * @param policy - Session allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent route used when no policy is recorded.
  * @param route - Validated provider/model pair from the tool call.
+ * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; the rejection then points to it.
  * @throws {SubagentError} `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
  */
 export function assertAllowedModelSelection(
   policy: ModelSelectionPolicy | undefined,
   parentOptions: AgentOptions,
   route: AllowedModelRoute,
+  routeDiscoveryVisible: boolean,
 ): void {
   const { provider, model } = route
   const allowed = policy === undefined
@@ -153,7 +174,8 @@ export function assertAllowedModelSelection(
   throw new SubagentError(`child LLM route "${provider}/${model}" is not allowed for this Session`
     + (policy === undefined
       ? '; without a recorded model-selection policy, explicit selection is limited to the parent route'
-      : ''), 'MODEL_ROUTE_NOT_ALLOWED')
+      : '')
+    + '.' + (routeDiscoveryVisible ? ROUTE_DISCOVERY_HINT : ''), 'MODEL_ROUTE_NOT_ALLOWED')
 }
 
 /**

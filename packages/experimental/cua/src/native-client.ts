@@ -19,15 +19,21 @@ const ScreenshotDiagnostic = z.object({
 })
 const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal('diagnostic') })])
 
-/** Native refusal or transport failure with a stable machine-readable code. */
+/**
+ * Native refusal, transport failure, or host-side CUA refusal with a stable machine-readable code.
+ * The helper supplies its own codes, such as `APP_ACCESS_DENIED` or `STALE_SNAPSHOT`, so consumers
+ * tolerate unknown codes; the host adds `NATIVE_*` transport codes, application-access codes,
+ * and `MODEL_DOES_NOT_SUPPORT_IMAGES` for a screenshot requested by a model without image input.
+ */
 export class NativeError extends HarnessError {
   /**
-   * @param code - Native error code or a transport-owned NATIVE_* code.
+   * @param code - Native error code or a host-owned code.
    * @param message - Actionable diagnostic, without its code prefix.
    * @param options - Original failure when available.
    */
   constructor(code: string, message: string, options?: ErrorOptions) {
     super(`${code}: ${message}`, code, options)
+    this.name = 'NativeError'
   }
 }
 

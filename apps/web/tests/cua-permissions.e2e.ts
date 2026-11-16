@@ -333,3 +333,41 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await diagnostic.waitFor({ state: 'hidden' })
   expect(tripwire.pageErrors).toEqual([])
 })
+
+it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows Windows setup when the helper is missing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-missing-helper-'))
+  const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
+  onTestFinished(async () => {
+    try { await resources.browser?.close() } finally {
+      try { await resources.scaffold?.close() } finally { await rm(root, { recursive: true, force: true }) }
+    }
+  })
+  const patch = join(root, 'missing-helper.yml')
+  const row = process.platform === 'win32' ? 'cua-windows' : 'cua-macos'
+  await writeFile(patch, JSON.stringify([{ id: row, config: { helperPath: join(root, 'missing.exe') } }]))
+  const scaffold = resources.scaffold = await launchWebScaffold({
+    profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: patch,
+  })
+  if (process.platform === 'darwin') {
+    // The Host inventory reads this Loader flag; only the platform-specific input is substituted on macOS.
+    const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
+    if (!windows) throw new Error('CUA bundle has no Windows provider row')
+    vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false)
+  }
+  const browser = resources.browser = await chromium.launch()
+  const page = await newEnglishPage(browser)
+  await page.goto(scaffold.authenticatedUrl)
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+  await page.getByRole('button', { name: 'View Computer use', exact: true }).click()
+  const panel = page.locator('[data-cua-settings]')
+  const guidance = panel.locator('[data-cua-guidance]')
+  await guidance.getByText(/pnpm run build:native:x64/).waitFor()
+  await guidance.getByText(/helperPath/).waitFor()
+  const preview = page.locator('[data-detail-document] img')
+  await preview.evaluate(async (image) => { await (image as HTMLImageElement).decode() })
+  const firstSetting = panel.getByRole('group', { name: 'Default mode for new sessions', exact: true })
+  const previewBox = await preview.boundingBox(), guidanceBox = await guidance.boundingBox(), settingBox = await firstSetting.boundingBox()
+  expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(guidanceBox!.y)
+  expect(guidanceBox!.y + guidanceBox!.height).toBeLessThanOrEqual(settingBox!.y)
+  expect(await panel.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(0)
+})

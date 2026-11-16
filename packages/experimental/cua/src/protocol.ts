@@ -14,7 +14,7 @@ const nativeTraversalLimits = z.object({
 }).strict()
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
-  modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
+  modifiers: z.array(z.enum(['command', 'control', 'ctrl', 'option', 'alt', 'shift', 'win', 'fn'])).optional() }
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
@@ -44,7 +44,18 @@ export const MouseMoveTargets = [
   z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
 ] as const
 
-function requestSchema<T extends z.ZodType>(hover: T) {
+const dragTargets = [
+  z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(false).optional(),
+    fromX: point, fromY: point, toX: point, toY: point }).strict(),
+  z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: relativeCoordinate.relative,
+    fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
+] as const
+
+const systemPointerOption = {
+  useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
+}
+
+function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag: D) {
   return z.discriminatedUnion('method', [
     operation('getCapabilities', {}), operation('listApps', {}),
     operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
@@ -80,23 +91,19 @@ function requestSchema<T extends z.ZodType>(hover: T) {
       z.object({ ...relativeCoordinate,
         deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
     ]) }).strict(),
-    z.object({ method: z.literal('drag'), params: z.union([
-      z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(false).optional(),
-        fromX: point, fromY: point, toX: point, toY: point }).strict(),
-      z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: relativeCoordinate.relative,
-        fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
-    ]) }).strict(),
+    z.object({ method: z.literal('drag'), params: drag }).strict(),
     operation('screenshot', window),
   ])
 }
 
 /** Portable model operations, including standard hover without a system-pointer option. */
-export const Request = requestSchema(z.union(MouseMoveTargets))
+export const Request = requestSchema(z.union(MouseMoveTargets), z.union(dragTargets))
 
 /** Model operations for providers that can move the user's system pointer. */
-export const SystemPointerRequest = requestSchema(z.union(MouseMoveTargets.map(target => target.extend({
-  useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
-}))))
+export const SystemPointerRequest = requestSchema(
+  z.union(MouseMoveTargets.map(target => target.extend(systemPointerOption))),
+  z.union(dragTargets.map(target => target.extend(systemPointerOption))),
+)
 
 /** Native resource fields supplied or completed by the Host before dispatch. */
 export const NativeResourceParameters = {
@@ -147,7 +154,7 @@ export const StateResult = z.object({
   windowId: windowId.nullable(),
   focusedWindowId: windowId.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
-  tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
+  tree: z.string(), windows: WindowsResult, truncated: z.boolean(), hasUnreadableElements: z.boolean().optional(),
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())

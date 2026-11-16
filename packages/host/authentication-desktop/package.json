@@ -1,0 +1,38 @@
+{
+  "name": "@deepseek-ai/dsh-host-authentication-desktop",
+  "description": "Desktop private-channel authentication provider",
+  "version": "0.2.2-rc.3",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/host/authentication-desktop"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./locale/de.json": "./locale/de.json",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/es.json": "./locale/es.json",
+    "./locale/fr.json": "./locale/fr.json",
+    "./locale/ja.json": "./locale/ja.json",
+    "./locale/pt.json": "./locale/pt.json",
+    "./locale/ru.json": "./locale/ru.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": ["locale/de.json", "locale/en.json", "locale/es.json", "locale/fr.json", "locale/ja.json", "locale/pt.json", "locale/ru.json", "locale/zh.json", "lib/index.js", "lib/types/**/*.d.ts", "lib/types/**/*.d.ts.map", "lib/**/*.js.map", "src"],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-connection": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*"
+  }
+}

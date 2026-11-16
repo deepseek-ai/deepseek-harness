@@ -148,14 +148,18 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
+      let current
       try {
-        const current = await shares.relay()
-        if (cancelled || !current.ok) return
-        setRelayState({
-          ...(current.value.override === undefined ? {} : { override: current.value.override }),
-          ...(current.value.effective === undefined ? {} : { effective: current.value.effective }),
-        })
-      } catch { /* Keep the host-provided default when the read fails. */ }
+        current = await shares.relay()
+      } catch (_readFailed) {
+        // Keep the host-provided default when the read fails.
+        return
+      }
+      if (cancelled || !current.ok) return
+      setRelayState({
+        ...(current.value.override === undefined ? {} : { override: current.value.override }),
+        ...(current.value.effective === undefined ? {} : { effective: current.value.effective }),
+      })
     }
     void load()
     return () => { cancelled = true }

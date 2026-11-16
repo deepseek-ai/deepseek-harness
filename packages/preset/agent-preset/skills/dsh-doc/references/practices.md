@@ -1,6 +1,6 @@
 # Harness plugin practices
 
-These rules follow from Harness mechanisms. Confirm every Service method, Event name, and dispatch mode named here before relying on it, through `cordis_inspect_query` (`Service`, `Event`) when available or the owning package's README and source; the installed Harness is the authority.
+These rules follow from Harness mechanisms. Confirm every Service method, Event name, and dispatch mode named here before relying on it, through `cordis_inspect` (`Service`, `Event`) when available or the owning package's README and source; the installed Harness is the authority.
 
 ## Principles
 
@@ -31,7 +31,7 @@ These rules follow from Harness mechanisms. Confirm every Service method, Event 
 ## UI
 
 - Render plugin pages as React components in a slot. Do not serve an HTML page from the Host and embed it in an iframe: an iframe document does not receive the host's theme tokens, light/dark switching, or `ctx.locale`.
-- Style with the theme tokens (`--dsw-alias-*`) that `cordis_inspect_query` `Theme` lists when available; literal colors are for artwork only. A renamed token degrades appearance but never breaks rendering. Copy spacing, type sizes, and row patterns from an existing host page of the same kind; the Plugin Manager page is the reference for management lists.
+- Style with the theme tokens (`--dsw-alias-*`) that `cordis_inspect` `Theme` lists when available; literal colors are for artwork only. A renamed token degrades appearance but never breaks rendering. Copy spacing, type sizes, and row patterns from an existing host page of the same kind; the Plugin Manager page is the reference for management lists.
 - Do not `require('@deepseek-ai/dsh-client-ui-primitives')` or load any other Harness Client package as a module; `dsh.client.inject` entries only order activation and stay allowed. They change without notice, and a throwing component blanks your slot entry (console: `slot entry crashed in '<slot>'`). Write your own controls instead: copy markup, CSS, and behavior from the primitive's `src/*.tsx` and `*.module.css`, or from the rendered host control in the connected page. Rename copied classes under your plugin's prefix, keep only `--dsw-alias-*` token references, and keep behavior users rely on, such as Modal focus and Escape handling, `role="switch"` with `aria-checked`, and Tooltip placement.
 - Contribute through slots: `ctx.slots.inject(ownerKey, () => ctx.slots.register(...))`. The callback's registrations are disposed when the owning declaration collapses and reinstalled when it returns. Read session data through the slot props' selector hooks, subscribing to the smallest slice. Do not write DOM outside your component or append to `document.body`.
 - Add a Chat row by registering an event definition with `ctx.uiConversation.events.register()` and its view in the `conversation.chat.node` slot under the definition's `kind`, which is the renderer key; the Conversation layer owns paging, Turn and Step placement, and incremental assembly.

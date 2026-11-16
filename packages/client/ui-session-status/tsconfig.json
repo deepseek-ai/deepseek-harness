@@ -1,36 +1,7 @@
 {
-  "extends": "../../../tsconfig.base.client.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types"
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
-    {
-      "path": "../../../vendor/cordis"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
-      "path": "../../api/session-controller/tsconfig.client.json"
-    },
-    {
-      "path": "../../core/session"
-    },
-    {
-      "path": "../store"
-    },
-    {
-      "path": "../ui-renderer"
-    },
-    {
-      "path": "../ui-session"
-    },
-    {
-      "path": "../ui-slots"
-    }
+    { "path": "./tsconfig.host.json" },
+    { "path": "./tsconfig.client.json" }
   ]
 }

@@ -46,6 +46,46 @@ def stop_application(pid):
     raise AssertionError("fixture did not exit after SIGTERM")
 
 
+def check_system_drag(helper, owner, window, point, state_file):
+    call = helper.call
+    call("getState", {**window, "maxElements": 300, "maxDepth": 20})
+    count = len(json.loads(state_file.read_text())["events"])
+    params = {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
+              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemPointer": True}
+    call("drag", params, "FOREGROUND_REQUIRED")
+    assert len(json.loads(state_file.read_text())["events"]) == count
+    call("activate", owner)
+    wait_for_state(state_file, lambda v: v["active"] and v["keyWindow"])
+    call("getState", {**window, "maxElements": 300, "maxDepth": 20})
+    call("drag", params)
+    state = wait_for_state(state_file, lambda v: any(e["type"] == 2 for e in v["events"][count:]))
+    events = state["events"][count:]
+    assert [e["type"] for e in events] == [1, 6, 2], events
+    down, move, up = events
+    assert all(e["shift"] and e["eventNumber"] == down["eventNumber"] for e in events), events
+    assert move["pressedButtons"] & 1 and (move["deltaX"], move["deltaY"]) == (80, 20), events
+    # AppKit window coordinates count upward; Quartz movement deltas count downward.
+    assert (move["point"][0] - down["point"][0], down["point"][1] - move["point"][1]) == (80, 20), events
+    assert up["point"] == move["point"] and not up["pressedButtons"] & 1, events
+    key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
+    connection = Connection(Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock"), key)
+    try:
+        app = connection.call("getApp", {"selector": str(state["pid"])})
+        target = {**params, "appHandle": app["appHandle"], "durationMs": 5000, "steps": 2}
+        connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"], "maxElements": 300, "maxDepth": 20})
+        count = len(state["events"])
+        connection.send({"id": "cancel-drag", "method": "drag", "params": target})
+        wait_for_state(state_file, lambda v: any(e["type"] == 6 for e in v["events"][count:]))
+        connection.send({"type": "cancel", "id": "cancel-drag"})
+        assert connection.read()["error"]["code"] == "NATIVE_CANCELLED"
+        state = wait_for_state(state_file, lambda v: any(e["type"] == 2 for e in v["events"][count:]))
+        events = state["events"][count:]
+        assert [e["type"] for e in events] == [1, 6, 2], events
+        assert events[-1]["point"] == events[-2]["point"] and not events[-1]["pressedButtons"] & 1, events
+    finally:
+        connection.close()
+
+
 def check_clicks(helper, window, point, state_file):
     observed = helper.call("getState", {**window, "maxElements": 2000, "maxDepth": 25})
     pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
@@ -172,6 +212,7 @@ def main():
     only = parser.add_mutually_exclusive_group()
     only.add_argument("--click-only", action="store_true")
     only.add_argument("--keyboard-only", action="store_true")
+    only.add_argument("--drag-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -185,7 +226,7 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only,
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only,
                 "DSHFixtureKeyboard": args.keyboard_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
@@ -203,6 +244,13 @@ def main():
             app = call("launchApp", owner)
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
+            if args.drag_only:
+                state = json.loads(state_file.read_text())
+                pad = state["pad"]
+                check_system_drag(helper, owner, {**owner, "windowId": state["windowId"]},
+                                  {"x": pad[0] + 80, "y": pad[1] + 70}, state_file)
+                print("PASS: system drag delivers held-button movement and releases at the last point on cancellation")
+                return
             if args.keyboard_only:
                 check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
                 print("PASS: Shift+D shortcut, two-second W+D hold, independent D up, explicit W repeat and one final up")

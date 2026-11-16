@@ -19,7 +19,7 @@ function catalogEntry(taskId: string, sessionId: string, status: Entry['status']
 }
 
 /**
- * A task whose every delivery creates a fresh Session; the Host leaves created Sessions out of `involvedSessionIds`.
+ * Build a `new` task with no fixed delivery Session.
  * @param taskId - task identity.
  * @param latestRun - Session that the latest delivery created, if one ran.
  * @returns an active per-run task created from {@link CREATOR}.
@@ -45,28 +45,39 @@ function hostSnapshot(
 
 describe('shared Host catalog projection', () => {
   it('selects only the given Session’s active tasks from every lifecycle state', () => {
-    const mine = catalogEntry('mine', SESSION, 'active')
-    const other = catalogEntry('other', 'other-session', 'active')
+    const mine = { ...catalogEntry('mine', SESSION, 'active'), involvedSessionIds: [CREATOR, SESSION] }
+    const otherSession = 'other-session' as SessionId
+    const other = { ...catalogEntry('other', otherSession, 'active'), involvedSessionIds: [SESSION, otherSession] }
     const paused = catalogEntry('paused', SESSION, 'paused')
     const ended = catalogEntry('ended', SESSION, 'ended')
     const catalog = hostSnapshot('ready', [mine, other, paused, ended])
 
     expect(selectSessionScheduleFacts(catalog, SESSION)).toEqual({ hasActive: true, records: [mine] })
-    expect(selectSessionScheduleFacts(catalog, 'other-session' as SessionId))
+    expect(selectSessionScheduleFacts(catalog, otherSession))
       .toEqual({ hasActive: true, records: [other] })
-    expect(selectSessionScheduleFacts(catalog, 'empty-session' as SessionId))
+    expect(selectSessionScheduleFacts(catalog, CREATOR))
       .toEqual({ hasActive: false, records: [] })
   })
 
-  it('lists a per-run task under its creator and under the Session its latest delivery created', () => {
+  it('lists a new_once task only for its reserved Session before the first delivery', () => {
+    const waiting: Entry = {
+      ...catalogEntry('waiting', SESSION, 'active'),
+      target: { kind: 'new_once', sessionId: SESSION, create: {} },
+      involvedSessionIds: [CREATOR, SESSION],
+    }
+    const catalog = hostSnapshot('ready', [waiting])
+
+    expect(selectSessionScheduleFacts(catalog, SESSION)).toEqual({ hasActive: true, records: [waiting] })
+    expect(selectSessionScheduleFacts(catalog, CREATOR)).toEqual({ hasActive: false, records: [] })
+  })
+
+  it('leaves the creator and latest delivery Session empty for per-run tasks', () => {
     const ran = perRunEntry('ran', SESSION)
     const waiting = perRunEntry('waiting')
     const catalog = hostSnapshot('ready', [ran, waiting])
 
-    expect(selectSessionScheduleFacts(catalog, SESSION)).toEqual({ hasActive: true, records: [ran] })
-    expect(selectSessionScheduleFacts(catalog, CREATOR)).toEqual({ hasActive: true, records: [ran, waiting] })
-    expect(selectSessionScheduleFacts(catalog, 'other-session' as SessionId))
-      .toEqual({ hasActive: false, records: [] })
+    expect(selectSessionScheduleFacts(catalog, SESSION)).toEqual({ hasActive: false, records: [] })
+    expect(selectSessionScheduleFacts(catalog, CREATOR)).toEqual({ hasActive: false, records: [] })
   })
 
   it('answers no active task for a Session whose tasks are all paused or ended', () => {

@@ -586,8 +586,11 @@
                     "enum": [
                       "command",
                       "control",
+                      "ctrl",
                       "option",
+                      "alt",
                       "shift",
+                      "win",
                       "fn"
                     ]
                   }
@@ -656,8 +659,11 @@
                     "enum": [
                       "command",
                       "control",
+                      "ctrl",
                       "option",
+                      "alt",
                       "shift",
+                      "win",
                       "fn"
                     ]
                   }
@@ -1154,8 +1160,11 @@
                 "enum": [
                   "command",
                   "control",
+                  "ctrl",
                   "option",
+                  "alt",
                   "shift",
+                  "win",
                   "fn"
                 ]
               }
@@ -1189,6 +1198,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 240
+            },
+            "useSystemPointer": {
+              "type": "boolean"
             }
           },
           "required": [

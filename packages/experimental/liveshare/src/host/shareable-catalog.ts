@@ -67,12 +67,13 @@ export function packageRoot(
     const directory = join(searchPath, packageName)
     const manifestPath = join(directory, 'package.json')
     if (!existsSync(manifestPath)) continue
+    let name: unknown
     try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: unknown }
-      if (manifest.name === packageName) return directory
-    } catch {
+      name = (JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: unknown }).name
+    } catch (_unreadableManifest) {
       // A candidate whose manifest cannot be read is not this package; keep searching.
     }
+    if (name === packageName) return directory
   }
   return undefined
 }
@@ -87,13 +88,13 @@ export function readTitles(root: string): Readonly<Record<string, string>> | und
   for (const language of TITLE_LANGUAGES) {
     const path = join(root, 'locale', `${language}.json`)
     if (!existsSync(path)) continue
+    let title: unknown
     try {
-      const locale = JSON.parse(readFileSync(path, 'utf8')) as { meta?: { title?: unknown } }
-      const title = locale.meta?.title
-      if (typeof title === 'string' && title !== '') titles[language] = title
-    } catch {
+      title = (JSON.parse(readFileSync(path, 'utf8')) as { meta?: { title?: unknown } }).meta?.title
+    } catch (_unreadableLocale) {
       // One unreadable locale file does not hide the package's other names.
     }
+    if (typeof title === 'string' && title !== '') titles[language] = title
   }
   return Object.keys(titles).length === 0 ? undefined : titles
 }

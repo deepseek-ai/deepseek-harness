@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Autenticação por token",
+    "description": "Troca um token de inicialização por acesso pelo navegador e autentica solicitações com cookies assinados."
+  }
+}
