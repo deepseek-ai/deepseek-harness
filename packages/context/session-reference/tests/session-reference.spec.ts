@@ -821,7 +821,7 @@ describe('session reference discovery and preparation', () => {
     vi.restoreAllMocks()
   })
 
-  it('labels every session by id when no projection face is composed', async () => {
+  it('labels every session by id when no title projection is registered', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
