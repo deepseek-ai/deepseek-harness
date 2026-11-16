@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cli-account",
   "description": "Shared Host mechanism of CLI app plugins: run a third-party CLI by its absolute path and run one account operation at a time for the Plugins page",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
