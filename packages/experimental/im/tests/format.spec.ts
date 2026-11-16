@@ -267,7 +267,7 @@ describe('ImFormatter.format', () => {
 
   it('collapses and escapes sender and quote fields in line style', async () => {
     const msg = message({
-      sender: { id: 'u\n<1>', name: '张\n<三>' },
+      sender: { id: 'u\n<1>', name: '张\n<三>', self: false },
       quote: { key: 'lark:cli_a|m\n<10>' as never, sender: { id: 'u_2', name: '李\n<四>' }, text: '原文' },
       body: content(h('p', '正文')),
     })
