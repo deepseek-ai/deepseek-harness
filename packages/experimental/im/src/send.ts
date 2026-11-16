@@ -123,6 +123,8 @@ export class ImSender {
   private readonly chains = new Map<string, Promise<unknown>>()
   /** In-flight stream receipt settlement tasks awaited by {@link dispose}. */
   private readonly settlements = new Set<Promise<void>>()
+  /** Open streams with a durable receipt; aborted on {@link dispose} so settlements cannot hang forever. */
+  private readonly openStreams = new Set<MessageStream>()
   /** The receipt write chain. */
   private readonly writes = new WriteQueue()
 
@@ -138,6 +140,7 @@ export class ImSender {
   /** Finish the dispatches in flight and close the domain. */
   async dispose(): Promise<void> {
     await Promise.allSettled([...this.chains.values()])
+    await Promise.allSettled([...this.openStreams].map(stream => stream.abort({ reason: 'IM sender disposed' })))
     await Promise.allSettled([...this.settlements])
     await this.writes.drain()
     const domain = this.domain
@@ -210,6 +213,7 @@ export class ImSender {
         await this.settle(id, pending, { status: 'failed', error: messageOf(error) })
         throw error
       }
+      this.openStreams.add(stream)
       const settlement = stream.done.then(
         async (result) => {
           await this.settle(id, pending, await this.confirmed(result))
@@ -218,6 +222,7 @@ export class ImSender {
       ).catch((error: unknown) => {
         this.ctx.logger.error('IM stream receipt %s could not be saved; inspect the chat: %s', id, error)
       }).finally(() => {
+        this.openStreams.delete(stream)
         this.settlements.delete(settlement)
       })
       this.settlements.add(settlement)

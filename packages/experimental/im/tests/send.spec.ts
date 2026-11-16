@@ -704,6 +704,14 @@ describe('concurrent receipt capacity reservation', () => {
 
     expect(receiptsOf(pool).get('op-stream-dispose')).toMatchObject({ status: 'confirmed' })
   })
+
+  it('aborts an unclosed stream during dispose instead of hanging forever', async () => {
+    const { sender, pool } = await boot()
+    await sender.stream(CHAT, { operationId: 'op-stream-unclosed' })
+
+    await sender.dispose()
+    expect(receiptsOf(pool).get('op-stream-unclosed')).toMatchObject({ status: 'uncertain' })
+  })
 })
 
 describe('operationId', () => {
