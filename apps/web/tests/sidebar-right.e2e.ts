@@ -501,17 +501,20 @@ describe('web e2e: shipped right Sidebar', () => {
       if (viewport === null) throw new Error('expected a fixed viewport')
       const guide = column.locator('[data-sidebar-right-guide]')
       await page.setViewportSize({ width: viewport.width, height: 240 })
-      await expect.poll(async () => await guide.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
-      expect(await guide.evaluate(node => node.scrollTop)).toBe(0)
-      const lastEntry = guide.locator('[data-sidebar-right-guide-entry]').last()
-      await guide.evaluate((node) => { node.scrollTop = node.scrollHeight })
-      expect(await guide.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
-      expect(await lastEntry.evaluate((node) => {
-        const entry = node.getBoundingClientRect()
-        const pane = node.closest('[data-sidebar-right-guide]')?.getBoundingClientRect()
-        return pane !== undefined && entry.top >= pane.top && entry.bottom <= pane.bottom
-      })).toBe(true)
-      await page.setViewportSize(viewport)
+      try {
+        await expect.poll(async () => await guide.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
+        expect(await guide.evaluate(node => node.scrollTop)).toBe(0)
+        const lastEntry = guide.locator('[data-sidebar-right-guide-entry]').last()
+        await guide.evaluate((node) => { node.scrollTop = node.scrollHeight })
+        expect(await guide.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+        expect(await lastEntry.evaluate((node) => {
+          const entry = node.getBoundingClientRect()
+          const pane = node.closest('[data-sidebar-right-guide]')?.getBoundingClientRect()
+          return pane !== undefined && entry.top >= pane.top && entry.bottom <= pane.bottom
+        })).toBe(true)
+      } finally {
+        await page.setViewportSize(viewport)
+      }
       // Back to the seeded shape the cases below start from.
       await guideTab.hover()
       await guideTab.locator('[data-dockkit-tab-close]').click()
