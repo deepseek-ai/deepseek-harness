@@ -7,7 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, Scalar, stringify, visit, YAMLError, YAMLParseError,
-  type Document, type Range, type ScalarTag, type SchemaOptions,
+  type Alias, type Document, type Range, type ScalarTag, type SchemaOptions,
 } from 'yaml'
 import { stringifyString } from 'yaml/util'
 import { applyJournal, flatten, type Journal, merge, reconcile, record } from './journal.ts'
@@ -53,27 +53,13 @@ export interface EntryYamlStringifyOptions {
 export function parseEntryYaml(content: string): unknown {
   const lines = new LineCounter()
   const document = parseDocument(content, { ...yamlOptions, lineCounter: lines })
-  const [error] = [...document.errors, ...document.warnings, ...unresolvedAliases(document, lines)]
-  if (error) throw error
+  const [error] = [...document.errors, ...document.warnings, ...unresolvedAliases(document)]
+  if (error) {
+    // Alias errors carry offsets only; the parser's own errors already carry line positions.
+    error.linePos ??= [lines.linePos(error.pos[0]), lines.linePos(error.pos[1])]
+    throw error
+  }
   return document.contents === null ? undefined : document.toJS()
-}
-
-/**
- * The parser reports an alias without a preceding anchor only when `toJS()` throws an unlocated `ReferenceError`;
- * report each one as a located parse error instead.
- */
-function unresolvedAliases(document: Document, lines: LineCounter): YAMLParseError[] {
-  const errors: YAMLParseError[] = []
-  visit(document, {
-    Alias(_, node) {
-      if (node.resolve(document) || !node.range) return
-      const [start, end] = node.range
-      const error = new YAMLParseError([start, end], 'BAD_ALIAS', `Unresolved alias (the anchor must be set before the alias): ${node.source}`)
-      error.linePos = [lines.linePos(start), lines.linePos(end)]
-      errors.push(error)
-    },
-  })
-  return errors
 }
 
 /**
@@ -116,6 +102,31 @@ function parseSyntax(content: string): Syntax {
   const lines = new LineCounter()
   const document = parseDocument(content, { ...yamlOptions, prettyErrors: false, lineCounter: lines })
   return { document, lines }
+}
+
+/**
+ * The parser accepts an alias without a preceding anchor, which only fails in
+ * `toJS()` with an unlocated `ReferenceError`. Nodes are visited in document
+ * order, so an anchor is known exactly when it precedes the alias.
+ */
+function unresolvedAliases(document: Document) {
+  const anchors = new Set<string>()
+  const unresolved: Alias[] = []
+  visit(document, (_, node) => {
+    if (isAlias(node)) {
+      if (!anchors.has(node.source)) unresolved.push(node)
+    } else if (isNode(node) && node.anchor) {
+      anchors.add(node.anchor)
+    }
+  })
+  // every anchor is known once the scan ends
+  return unresolved.map((node) => {
+    const [start, end] = node.range!
+    const message = anchors.has(node.source)
+      ? `Alias *${node.source} must follow its anchor`
+      : `Unresolved alias: *${node.source}`
+    return new YAMLParseError([start, end], 'BAD_ALIAS', message)
+  })
 }
 
 interface Snapshot {
@@ -405,7 +416,7 @@ export class Include extends EntryTree {
       syntax = parseSyntax(content)
       const { document, lines } = syntax
       // unknown tags are only warnings to the parser, but leave the data incomplete
-      const errors: YAMLError[] = [...document.errors, ...document.warnings, ...unresolvedAliases(document, lines)]
+      const errors: YAMLError[] = [...document.errors, ...document.warnings, ...unresolvedAliases(document)]
       if (errors.length) {
         const issues = errors.map(error => ({ message: error.message, location: this._locate(lines, error.pos[0]) }))
         throw new ConfigFileError('parse', this.filename, undefined, issues)

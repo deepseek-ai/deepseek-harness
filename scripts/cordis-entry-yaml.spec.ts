@@ -46,5 +46,6 @@ describe('Include YAML dialect', () => {
       alias = caught
     }
     expect(entryYamlErrorPosition(alias)).toEqual({ line: 2, column: 11 })
+    expect(() => parseEntryYaml('- id: a\n  config: *later\n- id: b\n  config: &later {}\n')).toThrow('Alias *later must follow its anchor')
   })
 })
