@@ -87,12 +87,16 @@ class FakeSessions {
 class FakeHistory implements ImHistory {
   constructor(readonly messages: ImMessage[]) {}
 
-  after(chat: ImChatKey, seq: number, limit: number): ImMessage[] {
-    return this.messages.filter(entry => entry.chat.key === chat && entry.seq > seq).slice(0, limit)
+  after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[] {
+    return this.messages
+      .filter(entry => entry.chat.key === chat && entry.seq > seq && (keep === undefined || keep(entry)))
+      .slice(0, limit)
   }
 
-  before(chat: ImChatKey, seq: number, limit: number): ImMessage[] {
-    return this.messages.filter(entry => entry.chat.key === chat && entry.seq < seq).slice(-limit)
+  before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[] {
+    return this.messages
+      .filter(entry => entry.chat.key === chat && entry.seq < seq && (keep === undefined || keep(entry)))
+      .slice(-limit)
   }
 
   get(key: ImMessageKey): ImMessage | undefined {
@@ -914,5 +918,67 @@ describe('model-visible surface', () => {
     const bare = await bareMount.prompt(fakeAgent(SessionId('bare-pin')))
 
     expect({ writable, withRenderer, readOnly, bare }).toMatchSnapshot()
+  })
+})
+
+describe('thread confinement, subagent idempotency, and tiny maxReadBytes', () => {
+  it('enforces binding.thread on im_read, im_history, and im_reply', async () => {
+    const mounted = await mount()
+    const confined = mounted.im.sessions.add('confined', [{ chat: CHAT, writable: true, home: true, thread: 't1' }])
+    mounted.im.history.messages.push(
+      message(4, { key: ImMessageKey('fake:bot', 'm-t1'), thread: { id: 't1' }, text: 'in t1' }),
+      message(5, { key: ImMessageKey('fake:bot', 'm-t2'), thread: { id: 't2' }, text: 'in t2' }),
+    )
+
+    const hist = value(await mounted.call('im_history', {}, { agent: fakeAgent(confined.sessionId) })) as { messages: Array<{ key: string }> }
+    expect(hist.messages.map(m => m.key)).toEqual(['fake:bot|m-t1'])
+
+    const deniedRead = value(await mounted.call('im_read', { message: 'm-t2' }, { agent: fakeAgent(confined.sessionId) }))
+    expect(deniedRead).toMatchObject({ status: 'error', code: 'access' })
+
+    const deniedReply = value(await mounted.call('im_reply', { message: 'm-t2', text: 'hi' }, { agent: fakeAgent(confined.sessionId) }))
+    expect(deniedReply).toMatchObject({ status: 'error', code: 'access' })
+
+    const okRead = value(await mounted.call('im_read', { message: 'm-t1' }, { agent: fakeAgent(confined.sessionId) })) as { message: { key: string } }
+    expect(okRead.message.key).toBe('fake:bot|m-t1')
+  })
+
+  it('derives distinct operationIds for sibling subagents sharing one hosted ancestor', async () => {
+    const mounted = await mount()
+    mounted.im.sessions.add('sub-a', [], 'im-session')
+    mounted.im.sessions.add('sub-b', [], 'im-session')
+    const subA = fakeAgent(SessionId('sub-a'), SessionId('im-session'))
+    const subB = fakeAgent(SessionId('sub-b'), SessionId('im-session'))
+    await executeToolFixture(mounted.ctx, {
+      name: 'im_send',
+      arguments: { text: 'from A' },
+      callId: ToolCallId('call-1'),
+      signal: new AbortController().signal,
+      agent: subA,
+    })
+    await executeToolFixture(mounted.ctx, {
+      name: 'im_send',
+      arguments: { text: 'from B' },
+      callId: ToolCallId('call-1'),
+      signal: new AbortController().signal,
+      agent: subB,
+    })
+    expect(mounted.im.sends).toHaveLength(2)
+    expect(mounted.im.sends[0]!.options.operationId).not.toBe(mounted.im.sends[1]!.options.operationId)
+  })
+
+  it('never exceeds tiny maxReadBytes even when smaller than the truncation notice', async () => {
+    const mounted = await mount({
+      config: {
+        tools: {
+          readOnly: false, maxReadBytes: 10, maxHistoryItems: 50, maxMembers: 200, maxMemberPages: 10, fileDir: '.dsh/im',
+        },
+      },
+    })
+    mounted.im.history.messages.push(
+      message(4, { key: ImMessageKey('fake:bot', 'm-long'), text: 'x'.repeat(100) }),
+    )
+    const result = await mounted.call('im_read', { message: 'm-long' })
+    expect(Buffer.byteLength(textOf(result))).toBeLessThanOrEqual(10)
   })
 })

@@ -115,7 +115,8 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal)) }
+      const allowed = allowedThreadsOf(im, record, chat)
+      return { message: viewOf(await messageOf(im, chat, args.message, exec.signal, allowed)) }
     }),
   }))
 
@@ -129,10 +130,12 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(() => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
+      const allowed = allowedThreadsOf(im, record, chat)
+      const keep = allowed === undefined ? undefined : (message: ImMessage) => messageInThreads(message, allowed)
       const limit = Math.max(1, Math.min(args.limit ?? config.tools.maxHistoryItems, config.tools.maxHistoryItems))
       const messages = args.after === undefined
-        ? im.history.before(chat, args.before ?? Number.MAX_SAFE_INTEGER, limit)
-        : im.history.after(chat, args.after, limit)
+        ? im.history.before(chat, args.before ?? Number.MAX_SAFE_INTEGER, limit, keep)
+        : im.history.after(chat, args.after, limit, keep)
       return Promise.resolve({ chat, messages: messages.map(viewOf), total: messages.length })
     }),
   }))
@@ -234,10 +237,10 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     parameters: imSendParameters,
     output: { schema: imSendOutput, render },
     execute: (args, exec) => run(async () => {
-      const { record } = caller(im, exec)
+      const { agent, record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
       return sendValue(await im.send(chat, h.markdown(args.text), {
-        operationId: operationId(record.sessionId, exec.callId),
+        operationId: operationId(agent.session.id, exec.callId),
         session: record.sessionId,
         ...args.thread === undefined ? {} : { thread: args.thread },
         signal: exec.signal,
@@ -252,11 +255,12 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     parameters: imReplyParameters,
     output: { schema: imSendOutput, render },
     execute: (args, exec) => run(async () => {
-      const { record } = caller(im, exec)
+      const { agent, record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const quoted = await messageOf(im, chat, args.message, exec.signal)
+      const allowed = allowedThreadsOf(im, record, chat)
+      const quoted = await messageOf(im, chat, args.message, exec.signal, allowed)
       return sendValue(await im.send(chat, h.markdown(args.text), {
-        operationId: operationId(record.sessionId, exec.callId),
+        operationId: operationId(agent.session.id, exec.callId),
         session: record.sessionId,
         quote: quoted.key,
         ...args.thread === true ? { thread: true } : {},
@@ -284,9 +288,10 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
           throw new ImError('capacity', `Cannot publish "${args.path}": it is not a regular file.`)
         }
         const content = await fileContent(scoped.fs, target, info, config, exec.signal)
-        const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote, exec.signal)).key
+        const allowed = allowedThreadsOf(im, record, chat)
+        const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote, exec.signal, allowed)).key
         return sendValue(await im.send(chat, content, {
-          operationId: operationId(record.sessionId, exec.callId),
+          operationId: operationId(agent.session.id, exec.callId),
           session: record.sessionId,
           ...quote === undefined ? {} : { quote },
           signal: exec.signal,
@@ -340,14 +345,51 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
  * key is read from the platform when this deployment never stored it — done by the same call, because a merged forward
  * the store holds as a reference needs the platform read for its entries either way.
  */
-async function messageOf(im: ImToolHost, chat: ImChatKey, value: string, signal?: AbortSignal): Promise<ImMessage> {
+/** Thread restriction for `chat` across `record`'s grant chain; `undefined` means any thread/main timeline. */
+function allowedThreadsOf(im: ImToolHost, record: ImSessionRecord, chat: ImChatKey): Set<string> | undefined {
+  const bindings = grantChain(im.sessions, record.sessionId)
+    .flatMap(entry => entry.bindings)
+    .filter(binding => binding.chat === chat)
+  const threads = new Set<string>()
+  for (const binding of bindings) {
+    if (binding.thread === undefined) return undefined
+    threads.add(binding.thread)
+  }
+  return threads
+}
+
+/** Whether `message` belongs to one of the granted `threads`. */
+function messageInThreads(message: ImMessage, threads: ReadonlySet<string>): boolean {
+  const threadId = message.thread?.id
+  const rootId = message.thread?.root
+  const msgId = splitKey(message.key).id
+  return (threadId !== undefined && threads.has(threadId))
+    || (rootId !== undefined && threads.has(rootId))
+    || threads.has(msgId)
+}
+
+async function messageOf(
+  im: ImToolHost,
+  chat: ImChatKey,
+  value: string,
+  signal?: AbortSignal,
+  allowedThreads?: ReadonlySet<string>,
+): Promise<ImMessage> {
   const trimmed = value.trim()
   const seq = SEQ.exec(trimmed)
   const key = trimmed.includes('|') ? trimmed.slice(trimmed.lastIndexOf('|') + 1) : trimmed
-  if (seq === null) return await im.readMessage(chat, key, signal)
-  const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
-  if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
-  return await im.readMessage(chat, splitKey(message.key).id, signal)
+  let resolved: ImMessage
+  if (seq === null) {
+    resolved = await im.readMessage(chat, key, signal)
+  } else {
+    const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
+    if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
+    resolved = await im.readMessage(chat, splitKey(message.key).id, signal)
+  }
+  if (allowedThreads !== undefined && !messageInThreads(resolved, allowedThreads)) {
+    throw new ImError('access', `Message ${value} is outside the threads granted to this session.`)
+  }
+  return resolved
 }
 
 /** One chat member as `im_members` reports it. */
@@ -525,19 +567,27 @@ async function fileContent(
     data.byteLength)
 }
 
+/** Truncate one UTF-8 string so its byte length is at most `maxBytes`. */
+function truncateUtf8(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) return ''
+  let used = 0
+  let end = 0
+  for (const character of text) {
+    const bytes = Buffer.byteLength(character)
+    if (used + bytes > maxBytes) break
+    used += bytes
+    end += character.length
+  }
+  return text.slice(0, end)
+}
+
 /** Bound one model-facing text to `config.tools.maxReadBytes` UTF-8 bytes. */
 function bound(text: string, config: ImConfig): string {
   const maxBytes = config.tools.maxReadBytes
   if (Buffer.byteLength(text) <= maxBytes) return text
-  const budget = maxBytes - Buffer.byteLength(TRUNCATED)
-  let used = 0
-  let end = 0
-  for (const character of text) {
-    used += Buffer.byteLength(character)
-    if (used > budget) break
-    end += character.length
-  }
-  return text.slice(0, end) + TRUNCATED
+  const noticeBytes = Buffer.byteLength(TRUNCATED)
+  if (maxBytes <= noticeBytes) return truncateUtf8(TRUNCATED, maxBytes)
+  return truncateUtf8(text, maxBytes - noticeBytes) + TRUNCATED
 }
 
 /** Model guidance of one served session (the `tool:im` prompt section). */
