@@ -79,7 +79,7 @@ describe('dsh-tool-subagent', () => {
     expect(text(result)).toMatch(/^started subagent /)
   })
 
-  it('resolves an explicit child directory without changing the parent directory', async () => {
+  it('starts the child in the parent directory without changing it', async () => {
     let childCwd: string | undefined
     const ctx = await setup({ provider: 'mock' }, {
       onStart: (request) => { childCwd = request.cwd },
@@ -90,10 +90,9 @@ describe('dsh-tool-subagent', () => {
       const result = await callSubagent(ctx, {
         description: 'inspect packages',
         prompt: 'list the packages',
-        cwd: 'packages',
       }, { agent: parent })
       expect(result.isError).toBe(false)
-      expect(childCwd).toBe(path.resolve(parentCwd, 'packages'))
+      expect(childCwd).toBe(parentCwd)
       expect(ctx.workingDirectory.get(parent.session)).toBe(parentCwd)
     } finally {
       await ctx.fiber.dispose()
@@ -105,7 +104,6 @@ describe('dsh-tool-subagent', () => {
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual([
-      'cwd',
       'description',
       'name',
       'prompt',

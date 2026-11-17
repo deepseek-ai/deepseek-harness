@@ -90,7 +90,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await runtime.sessions.add({ id: SESSION })
-  let reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView' })
+  let reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView', facets: { conversation: true } })
   const feature = await runtime.mount({ inject: [...inject], apply })
   // The frame mounts the Conversation column before the right column, so a
   // Conversation component's mount effect runs before the seat's. The opener
@@ -161,7 +161,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     return controller.active()!
   }
   const selectSession = (id: SessionId): void => {
-    const next = runtime.sessions.retainFor(runtime.ctx, id, { source: 'mainView' })
+    const next = runtime.sessions.retainFor(runtime.ctx, id, { source: 'mainView', facets: { conversation: true } })
     reference.release()
     reference = next
   }

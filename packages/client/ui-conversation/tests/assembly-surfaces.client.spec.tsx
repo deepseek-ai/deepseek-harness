@@ -58,7 +58,7 @@ const LAYOUT_CHILDREN = {
 function provideWorkspaceNavigation(runtime: SlotTestRuntime): (id: SessionId) => void {
   let mainReference: ReturnType<typeof runtime.sessions.retain> | undefined
   const openSession = (id: SessionId): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     mainReference?.release()
     mainReference = next
   }
