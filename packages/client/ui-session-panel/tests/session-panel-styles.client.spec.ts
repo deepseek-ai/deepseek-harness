@@ -90,6 +90,8 @@ describe('SessionPanel.module.css docking geometry', () => {
     expect(pin).toMatchObject({
       'float': 'inline-end', 'width': '24px', 'height': '24px', 'background': 'transparent', 'color': 'var(--dsw-alias-label-tertiary)',
     })
+    // Above the positioned sections, which would otherwise cover a float and take its presses.
+    expect(pin).toMatchObject({ 'position': 'relative', 'z-index': '1' })
     // 4px down to the first section's title row, 2px in so the glyph's center is 14px from the rows' end,
     // and a bottom margin that ends the float 4px above the title row's end.
     expect(pin['margin']).toBe('4px 2px -4px 0')
@@ -100,6 +102,32 @@ describe('SessionPanel.module.css docking geometry', () => {
 
   it('floats the overlay narrower than the docked panel, at the same edge inset', () => {
     expect(declarationsOf(".panel[data-session-panel='overlay']")['width']).toBe('min(280px, calc(100% - 2 * var(--panel-edge)))')
+  })
+})
+
+describe('SessionPanel.module.css section reordering', () => {
+  it('makes the title row a drag source and ends it with a handle on the More column, whose room is always kept', () => {
+    expect(declarationsOf('.head')['cursor']).toBe('grab')
+    // A 16px column like the rows' menu part: the 24px target reaches 4px past it on both sides.
+    expect(declarationsOf('.grip')).toMatchObject({
+      'flex': 'none', 'width': '24px', 'height': '24px', 'margin': '0 -4px 0 auto', 'cursor': 'grab',
+      'color': 'var(--dsw-alias-label-tertiary)', 'background': 'transparent',
+    })
+    // It hides by opacity, never by display, so the trailing controls keep their place when it shows.
+    expect(declarationsOf('.grip')['display']).toBe('inline-flex')
+    const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
+    expect(hover).toMatch(/\.grip \{\s*opacity: 0;/)
+    expect(hover).toMatch(/\.head:hover > \.grip,\s*\.grip:focus-visible,\s*\.section\[data-dragging\] \.grip \{\s*opacity: 1;/)
+  })
+
+  it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {
+    expect(declarationsOf('.section')['position']).toBe('relative')
+    expect(declarationsOf('.section[data-dragging]')).toEqual({ opacity: '0.5' })
+    expect(declarationsOf('.section[data-drop-target]::after')).toMatchObject({
+      'position': 'absolute', 'height': '2px', 'background': 'var(--dsw-alias-state-business-primary)', 'pointer-events': 'none',
+    })
+    expect(declarationsOf(".section[data-drop-target='before']::after")).toEqual({ top: '-1px' })
+    expect(declarationsOf(".section[data-drop-target='after']::after")).toEqual({ bottom: '-2px' })
   })
 })
 

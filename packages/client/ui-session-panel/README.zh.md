@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。面板只出现在 Chat 视图中：Chat 视图末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板上的图钉让正文让出位置，使面板在更窄的宽度下也能停靠。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其工作目录行。
+`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。面板只出现在 Chat 视图中：Chat 视图末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板上的图钉让正文让出位置，使面板在更窄的宽度下也能停靠；用户还可以拖动分栏调整顺序。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其工作目录行。
 
 ## 目录
 
@@ -44,10 +44,17 @@ kind: "package-reference"
 
 固定面板同时会开启停靠偏好，因此在宽窗口中固定一个被开关隐藏的面板会让它显示出来。开关仍然可以隐藏和显示已固定的面板；隐藏后，让出的位置还给正文。取消固定一个仅靠图钉留在正文旁的面板时，面板保持打开并变为浮层，不会在指针下消失；下一次在面板外按下指针时关闭。
 
+<a id="section-order"></a>
+### 分栏顺序
+
+用户调整之前，分栏按 `order` 升序显示。每个分栏的标题行都可以拖动：指针移到标题行上时变为抓手，行末出现拖动图标，位于各行「更多」按钮所在的那一列。图标所在的列始终保留，因此图标出现时标题行末尾的控件不会移动；图标在悬停标题行、键盘聚焦、拖动期间显示，在不支持悬停的设备上始终显示。拖动标题行时，该分栏变淡，指针下方的分栏在上边缘或下边缘显示一条 2px 的线，取决于指针位于它的上半还是下半；松开后被拖动的分栏移到那里。
+
+拖动图标是一个按钮，名称为「调整」加分栏标题，提示文字说明调整顺序的方式。焦点在它上面时，上下方向键让分栏越过最近一个显示着的分栏，焦点留在图标上。顺序是所有会话共用的一个偏好，以全部有效分栏（包括当前没有内容的分栏）的 id 列表存放在 `localStorage` 的 `dsh.sessionPanel.sectionOrder` 中。用户调整之后才注册的分栏，排在按注册顺序位于它前面的那个分栏之后。
+
 <a id="contribute-a-section"></a>
 ### 贡献分栏
 
-一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
+一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 在用户[调整分栏顺序](#section-order)之前决定升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
 
 多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`，其中的行与分栏收到相同的 owner props；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。forge 套件在 order 20 与 30 处添加检出行与本地变更行。拥有共享分栏的插件用同样方式声明自己的行 slot。
 
@@ -84,15 +91,15 @@ kind: "package-reference"
 
 图钉和停靠偏好都开启时，留白探针带有 `data-session-panel-reserve`，面板样式表中的一条 `:has()` 规则据此在 Conversation 主体上把 `--dsh-chat-end-reserve` 设为 348px，主体随即给滚动容器的末端加上内边距（[末端预留](../ui-conversation/README.zh.md#end-reserve)）。侧边层发布的留白包含这段内边距，留白探针再把它减掉，因此两个探针都不依赖图钉：插件在固定或取消固定之前就知道结果，正文让出的位置也不会反过来改变提出让位的那项判断。
 
-面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，只在台账版本或语言版本变化时重新计算。它在各分栏自己的标题和正文容器里用 `renderSlot(..., { only: id })` 渲染内容；CSS `:has()` 规则隐藏正文出口为空的分栏，也包括行出口为空的共享分栏。
+面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，并按用户保存的顺序排列，只在台账版本、语言版本或该顺序变化时重新计算。它在各分栏自己的标题和正文容器里用 `renderSlot(..., { only: id })` 渲染内容；CSS `:has()` 规则隐藏正文出口为空的分栏，也包括行出口为空的共享分栏。
 
 | 文件 | 作用 |
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | 呈现方式、含图钉的共享可见性状态、空间探针与每个会话的停靠空间 |
-| [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
-| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、探针、图钉、分栏标题与 Esc 处理 |
+| [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影、用户保存的顺序，以及改变它的移动操作 |
+| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、探针、图钉、分栏标题及其拖动与键盘排序，以及 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、探针、图钉、向正文申请位置的规则，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
@@ -132,7 +139,8 @@ kind: "package-reference"
 - **正文让位期间没有宽度手柄**——手柄位于居中正文列的两侧，拖动时正文列以中心为基准变宽，因此已固定的面板让正文列偏离中心时不显示手柄。取消固定或隐藏面板后手柄恢复。
 - **嵌入的 Chat 视图不让位**——嵌入的正文跟随外框宽度，因此已固定的面板在其中只在留白本身放得下时停靠。
 - **没有运行环境行**——客户端没有区分本机、SSH 主机或沙箱模式的会话级信息，因此「环境」分栏只显示工作目录。
-- **不能自定义分栏**——所有有内容的分栏都会显示；面板不提供隐藏或重新排序分栏的功能。
+- **不能隐藏分栏**——所有有内容的分栏都会显示；用户可以调整分栏顺序，但不能隐藏某个分栏。
+- **触摸输入无法拖动**——拖动使用浏览器的拖放，触摸不会触发拖放，而拖动图标的方向键需要键盘。
 - **不能从其他视图切回 Chat**——`dsh-client-ui-conversation` 没有向插件开放视图选择，因此轨迹视图中的开关无法替用户切换到 Chat 视图。
 - **浮层会出现在其会话的每个 Chat 视图中**——每个 Chat 视图实例（主正文区或嵌入的）都会渲染侧边层，因此同一会话同时显示在主正文区和嵌入的对话中时，两处都会显示浮层。
 

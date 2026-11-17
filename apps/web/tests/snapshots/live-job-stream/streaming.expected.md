@@ -1,5 +1,6 @@
 - region "Background jobs":
   - heading "Background jobs" [level=2]
+  - button "Reorder Background jobs"
   - list:
     - listitem:
       - button "Hide live output of printf 'streamed-%s\\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done" [expanded]: printf 'streamed-%s\n' marker-line; for _ in $(seq 1 3000); do [ -e .live-job-stream.release ] && break; sleep 0.2; done bash · running {{duration}}

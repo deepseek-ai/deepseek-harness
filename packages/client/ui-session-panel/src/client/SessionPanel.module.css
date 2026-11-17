@@ -107,6 +107,9 @@
    glyph sits in the column of the rows' More buttons, 14px from the rows'
    end. Tertiary ink, and primary ink with the filled glyph while pinned. */
 .pin {
+  /* Positioned, so it paints and takes presses above the sections, which are positioned for their landing lines. */
+  position: relative;
+  z-index: 1;
   float: inline-end;
   display: inline-flex;
   align-items: center;
@@ -142,7 +145,40 @@
 }
 
 .section {
+  position: relative;
   padding: 4px 0 6px;
+}
+
+/* Reordering. The dragged section dims, and the section the pointer is over
+   shows a 2px line on the edge the dragged one would land at: on the
+   hairline between two sections, or 1px outside the first and last. */
+.section[data-dragging] {
+  opacity: 0.5;
+}
+
+.section[data-drop-target]::after {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-state-business-primary);
+  content: '';
+  pointer-events: none;
+}
+
+.section[data-drop-target='before']::after {
+  top: -1px;
+}
+
+.section[data-drop-target='after']::after {
+  bottom: -2px;
+}
+
+/* The copy of a title row that follows the pointer during a drag. */
+.dragPreview {
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 /* An empty body hides its section: a plain section renders into one outlet
@@ -159,12 +195,14 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+/* The title row is the section's drag source. */
 .head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 24px;
   padding: 0 6px;
+  cursor: grab;
 }
 
 /* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
@@ -193,6 +231,48 @@
 
 .actions:has(> [data-slot]:empty) {
   display: none;
+}
+
+/* The drag handle ends the title row in the column of the rows' More
+   buttons: a 16px column whose 24px target reaches past it, as theirs does.
+   The column is always there, so the title's trailing controls do not move
+   when the handle shows: on hover of the title row, on keyboard focus, during
+   a drag, and always without hover. The start margin keeps it at the row's
+   end when the section has no trailing controls. */
+.grip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 -4px 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: grab;
+}
+
+.grip:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .grip {
+    opacity: 0;
+  }
+
+  .head:hover > .grip,
+  .grip:focus-visible,
+  .section[data-dragging] .grip {
+    opacity: 1;
+  }
+
+  .grip:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 @keyframes dsh-session-panel-enter {

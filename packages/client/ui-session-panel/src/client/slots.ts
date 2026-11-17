@@ -16,9 +16,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
      * Sections of the Session panel. `id` addresses the section, `order` sorts
-     * the sections ascending, and the required `label` is the section title,
-     * which the panel draws. A section with nothing to show renders nothing,
-     * and the panel hides its title with it.
+     * the sections ascending until the reader drags them into another order,
+     * and the required `label` is the section title, which the panel draws. A
+     * section with nothing to show renders nothing, and the panel hides its
+     * title with it.
      */
     'conversation.session.panel.section': {
       kind: 'list'
@@ -210,6 +211,13 @@ export interface SessionPanelInjected {
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.
    */
   readonly closeOverlay: (sessionId: SessionId) => void
+  /**
+   * Move a section beside another in every Session's panel; the order persists across reloads.
+   * @param id - section to move.
+   * @param target - section it lands beside.
+   * @param placement - the side of the target it lands on.
+   */
+  readonly moveSection: (id: string, target: string, placement: 'before' | 'after') => void
 }
 
 /** Business face of the project row. */

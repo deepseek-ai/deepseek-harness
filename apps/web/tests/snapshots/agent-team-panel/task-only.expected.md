@@ -1,6 +1,7 @@
 - region "Shared tasks":
   - heading "Shared tasks" [level=2]
   - text: 1 pending
+  - button "Reorder Shared tasks"
   - list:
     - listitem:
       - button "Pending Plan before delegation":

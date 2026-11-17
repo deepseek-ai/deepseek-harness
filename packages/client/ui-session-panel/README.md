@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel lives in the Chat View: it docks in the Chat View's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. A pin on the panel has the transcript make room, so the panel docks at narrower widths too. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the working folder row.
+`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel lives in the Chat View: it docks in the Chat View's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. A pin on the panel has the transcript make room, so the panel docks at narrower widths too, and the reader can drag its sections into another order. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the working folder row.
 
 ## Table of Contents
 
@@ -44,10 +44,17 @@ While the pin and the docking preference are both on and the gutter is narrower 
 
 Pinning also sets the docking preference, so pinning a panel that the toggle had hidden in a wide window shows it. The toggle still hides and shows a pinned panel; hiding it gives the room back to the transcript. Unpinning a panel that only the pin kept beside the transcript leaves it open as the overlay, so it does not vanish under the pointer, and the next outside press closes it.
 
+<a id="section-order"></a>
+### Section order
+
+Sections show in ascending `order` until the reader arranges them. Each section's title row is a drag source: over it the pointer is a grab cursor and a drag handle shows at the row's end, in the column of the rows' More buttons. The handle's column is always kept, so the title's trailing controls do not move when the handle shows; it shows on hover of the title row, on keyboard focus, during a drag, and always without hover. Dragging the row dims its section, and the section under the pointer shows a 2px line on its top or bottom edge, whichever half the pointer is over; a drop moves the dragged section there.
+
+The handle is a button named “Reorder” with the section's title, and its tooltip says how to reorder. With focus on it, the up and down arrow keys move the section past the nearest section that shows, and focus stays on the handle. The order is one preference for every Session, persisted in `localStorage` under `dsh.sessionPanel.sectionOrder` as the ids of every live section, including the ones with nothing to show. A section registered after the reader arranged the others follows the section it follows in the registered order.
+
 <a id="contribute-a-section"></a>
 ### Contribute a section
 
-A section is one `conversation.session.panel.section` list registration: `id` addresses it, `order` sorts it ascending, and the required `label` is its title, which the panel draws in the active locale. The section component receives `presentation` (`docked` or `overlay`) and `dismissOverlay()` as owner props; it renders its body and renders nothing when it has nothing to show, which hides its title too. Register trailing title controls, such as a count or a refresh button, in the keyed `conversation.session.panel.section.actions` slot under the section's `id`. A section without a label is reported to the console and not shown. The shipped sections are Environment (`order: 0`), Change requests from the [forge bundle](../../experimental/client-ui-forge/README.md) (`100`), [Subagents](../ui-subagent/README.md) (`200`), [Shared tasks](../ui-agent-team/README.md) (`250`), and [Background jobs](../ui-jobs/README.md) (`300`).
+A section is one `conversation.session.panel.section` list registration: `id` addresses it, `order` sorts it ascending until the reader [arranges the sections](#section-order), and the required `label` is its title, which the panel draws in the active locale. The section component receives `presentation` (`docked` or `overlay`) and `dismissOverlay()` as owner props; it renders its body and renders nothing when it has nothing to show, which hides its title too. Register trailing title controls, such as a count or a refresh button, in the keyed `conversation.session.panel.section.actions` slot under the section's `id`. A section without a label is reported to the console and not shown. The shipped sections are Environment (`order: 0`), Change requests from the [forge bundle](../../experimental/client-ui-forge/README.md) (`100`), [Subagents](../ui-subagent/README.md) (`200`), [Shared tasks](../ui-agent-team/README.md) (`250`), and [Background jobs](../ui-jobs/README.md) (`300`).
 
 Plugins share a title by registering rows in a section owner's row slot. The built-in Environment section (`id: 'environment'`, `order: 0`) declares `conversation.session.panel.environment.row`, whose rows receive the same owner props as a section; its `project` row (`order: 0`) shows the Session's working folder: the current directory from the `workingDirectory` projection, or, before the projection arrives or when it records none, the directory the Session was created in, then the directory of the Workspace that lists the Session. The row shows the folder name followed by its parent folder in tertiary ink, which clips with an ellipsis; its tooltip, shown after 500ms of hover, names the working folder and gives the full path. Both abbreviate the Host home to `~`. Right-clicking the row or pressing its More button opens the shared `directory` context menu. The forge bundle adds its checkout and local changes rows at orders 20 and 30. A plugin that owns a shared section declares its own row slot the same way.
 
@@ -84,15 +91,15 @@ The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](..
 
 While the pin and the docking preference are both on, the gutter probe carries `data-session-panel-reserve`, and a `:has()` rule in the panel's stylesheet sets `--dsh-chat-end-reserve` to 348px on the Conversation body, which then pads its scrollport's end ([end reserve](../ui-conversation/README.md#end-reserve)). The gutter the aside layer publishes counts that inset, and the gutter probe subtracts it, so neither probe depends on the pin: the plugin knows what pinning and unpinning do before either happens, and the room the transcript makes never changes the decision that asked for it.
 
-The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows, recomputed only when the ledger version or the locale revision changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
+The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows and puts them in the reader's stored order, recomputed only when the ledger version, the locale revision, or that order changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
 
 | File | Role |
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | Presentation, the shared visibility state with the pin, the room probes, and each Session's room to dock |
-| [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
-| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its probes, the pin, its section titles, and Escape handling |
+| [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection, the reader's stored order, and the move that changes it |
+| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its probes, the pin, its section titles with their drag and keyboard reordering, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | The panel's geometry, the probes, the pin, the request for the transcript's room, and the rules for marked rows |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
@@ -132,7 +139,8 @@ These limits define current package constraints, not a task backlog.
 - **No width handles while the transcript makes room** — the handles sit at the centered column's edges and a drag widens the column about its center, so they do not show while a pinned panel holds the column off center. Unpinning or hiding the panel brings them back.
 - **Embedded Chat Views make no room** — an embedded transcript follows its frame's width, so a pinned panel docks there only in a gutter that holds it.
 - **No execution environment row** — the Client has no per-Session fact for the local machine, an SSH host, or the sandbox mode, so the Environment section names only the working folder.
-- **No section customization** — every live section shows; hiding or reordering sections from the panel is not offered.
+- **Sections cannot be hidden** — every live section shows; the reader can reorder sections but not hide one.
+- **No drag on touch input** — dragging uses the browser's drag and drop, which a touch does not start, and the handle's arrow keys need a keyboard.
 - **No switch back to Chat from other Views** — `dsh-client-ui-conversation` exposes no View selection to plugins, so the toggle in the trajectory View cannot select the Chat View for the user.
 - **An overlay shows in each Chat View of its Session** — every Chat View occurrence, main or embedded, renders the aside, so a Session shown in the main body and in an embedded Conversation at once shows its overlay in both.
 

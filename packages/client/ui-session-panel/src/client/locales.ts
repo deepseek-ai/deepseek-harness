@@ -13,6 +13,8 @@ export const zh = {
   'pin.pin': '固定面板',
   'pin.unpin': '取消固定',
   'section.environment': '环境',
+  'section.reorder': '调整「{name}」的顺序',
+  'section.reorderHelp': '拖动排序，或用上下方向键调整顺序',
   'project.label': '工作目录',
   'project.actions': '工作目录操作',
 } as const
@@ -30,6 +32,8 @@ export const en: Record<SessionPanelKey, string> = {
   'pin.pin': 'Pin panel',
   'pin.unpin': 'Unpin panel',
   'section.environment': 'Environment',
+  'section.reorder': 'Reorder {name}',
+  'section.reorderHelp': 'Drag to reorder, or use the up and down arrow keys',
   'project.label': 'Working folder',
   'project.actions': 'Working folder actions',
 }
@@ -44,6 +48,8 @@ export const ja = {
   'pin.pin': 'パネルを固定',
   'pin.unpin': '固定を解除',
   'section.environment': '環境',
+  'section.reorder': '「{name}」の順序を変更',
+  'section.reorderHelp': 'ドラッグ、または上下の矢印キーで順序を変更できます',
   'project.label': '作業フォルダー',
   'project.actions': '作業フォルダーの操作',
 } satisfies Record<keyof typeof en, string>
@@ -58,6 +64,8 @@ export const es = {
   'pin.pin': 'Fijar panel',
   'pin.unpin': 'Dejar de fijar',
   'section.environment': 'Entorno',
+  'section.reorder': 'Reordenar {name}',
+  'section.reorderHelp': 'Arrastra para reordenar o usa las teclas de flecha hacia arriba y hacia abajo',
   'project.label': 'Carpeta de trabajo',
   'project.actions': 'Acciones de la carpeta de trabajo',
 } satisfies Record<keyof typeof en, string>
@@ -72,6 +80,8 @@ export const fr = {
   'pin.pin': 'Épingler le panneau',
   'pin.unpin': 'Détacher le panneau',
   'section.environment': 'Environnement',
+  'section.reorder': 'Réorganiser {name}',
+  'section.reorderHelp': 'Faites glisser pour réorganiser ou utilisez les touches fléchées haut et bas',
   'project.label': 'Dossier de travail',
   'project.actions': 'Actions sur le dossier de travail',
 } satisfies Record<keyof typeof en, string>
@@ -86,6 +96,8 @@ export const de = {
   'pin.pin': 'Bereich anheften',
   'pin.unpin': 'Bereich lösen',
   'section.environment': 'Umgebung',
+  'section.reorder': '{name} neu anordnen',
+  'section.reorderHelp': 'Zum Neuanordnen ziehen oder die Pfeiltasten nach oben und unten verwenden',
   'project.label': 'Arbeitsordner',
   'project.actions': 'Aktionen für den Arbeitsordner',
 } satisfies Record<keyof typeof en, string>
@@ -100,6 +112,8 @@ export const ru = {
   'pin.pin': 'Закрепить панель',
   'pin.unpin': 'Открепить панель',
   'section.environment': 'Среда',
+  'section.reorder': 'Изменить порядок: {name}',
+  'section.reorderHelp': 'Перетащите, чтобы изменить порядок, или используйте клавиши со стрелками вверх и вниз',
   'project.label': 'Рабочая папка',
   'project.actions': 'Действия с рабочей папкой',
 } satisfies Record<keyof typeof en, string>
@@ -114,6 +128,8 @@ export const pt = {
   'pin.pin': 'Fixar painel',
   'pin.unpin': 'Desafixar painel',
   'section.environment': 'Ambiente',
+  'section.reorder': 'Reordenar {name}',
+  'section.reorderHelp': 'Arraste para reordenar ou use as teclas de seta para cima e para baixo',
   'project.label': 'Pasta de trabalho',
   'project.actions': 'Ações da pasta de trabalho',
 } satisfies Record<keyof typeof en, string>

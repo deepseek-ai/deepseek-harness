@@ -1,6 +1,7 @@
 - region "Shared tasks":
   - heading "Shared tasks" [level=2]
   - text: 1 completed · 1 in progress · 2 pending
+  - button "Reorder Shared tasks"
   - list:
     - listitem:
       - button "In progress Agent task":

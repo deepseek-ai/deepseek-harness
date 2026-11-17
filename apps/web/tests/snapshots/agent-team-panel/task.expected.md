@@ -2,15 +2,18 @@
   - button "Pin session panel"
   - region "Environment":
     - heading "Environment" [level=2]
+    - button "Reorder Environment"
     - text: workspace {{cwd}}
   - region "Subagents":
     - heading "Subagents" [level=2]
     - text: 1 external
+    - button "Reorder Subagents"
     - tree "Subagent sessions":
       - 'treeitem "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher · External task" [disabled] [level=1]': "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result."
   - region "Shared tasks":
     - heading "Shared tasks" [level=2]
     - text: 1 in progress
+    - button "Reorder Shared tasks"
     - list:
       - listitem:
         - button "In progress Agent task" [expanded]:

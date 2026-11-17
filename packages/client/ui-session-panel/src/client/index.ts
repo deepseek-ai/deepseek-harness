@@ -88,6 +88,7 @@ export function apply(ctx: ClientContext): void {
       createProbeRef: (sessionId, probe, member) => state.createProbeRef(sessionId, probe, member),
       setPinned: (sessionId, pinned) => { state.setPinned(sessionId, pinned) },
       closeOverlay: (sessionId) => { state.closeOverlay(sessionId) },
+      moveSection: (id, target, placement) => { sections.move(id, target, placement) },
     }),
   }, SessionPanel))
 

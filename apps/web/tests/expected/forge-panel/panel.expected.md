@@ -2,10 +2,12 @@
   - button "固定会话面板"
   - region "环境":
     - heading "环境" [level=2]
+    - button "调整「环境」的顺序"
     - text: dsh-{{worktree}} {{cwd}}/workspace/.agents/worktrees dsh-{{worktree}} 工作树 · 基于 release
   - region "变更请求":
     - heading "变更请求" [level=2]
     - text: "1"
+    - button "调整「变更请求」的顺序"
     - list:
       - listitem:
         - img "变更请求状态：需要处理"
