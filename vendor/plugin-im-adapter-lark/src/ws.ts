@@ -434,7 +434,9 @@ export class WsClient extends WsClientBase<LarkBot> {
       if (answered) return
       answered = true
       clearTimeout(timer)
-      if (!signal.aborted) this.acknowledge(socket, frame, body)
+      if (!signal.aborted) {
+        this.acknowledge(socket, frame, { code: 200, data: Buffer.from(JSON.stringify(body)).toString('base64') })
+      }
     }
     const timer = setTimeout(() => answer({}), this.bot.config.callbackAnswerMs)
     let deferred = false
