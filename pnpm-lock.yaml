@@ -465,6 +465,9 @@ importers:
       '@deepseek-ai/dsh-sdk-minimal':
         specifier: workspace:*
         version: link:../../packages/bundle/sdk-minimal
+      '@deepseek-ai/dsh-session-persistence-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/session/session-persistence-sqlite
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../packages/session/session-projection
@@ -16312,6 +16315,46 @@ importers:
       '@deepseek-ai/dsh-session-format-v0-to-v1':
         specifier: workspace:*
         version: link:../session-format-v0-to-v1
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:*
+        version: link:../session-persistence
+
+  packages/session/session-persistence-sqlite:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session-format':
+        specifier: workspace:*
+        version: link:../session-format
+      '@deepseek-ai/dsh-session-format-v3-to-v4':
+        specifier: workspace:*
+        version: link:../session-format-v3-to-v4
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../session-persistence-jsonl
+      '@deepseek-ai/node-addon-system':
+        specifier: workspace:~
+        version: link:../../../native/system/packages/entry
+      koffi:
+        specifier: 3.1.1
+        version: 3.1.1
+      p-limit:
+        specifier: 7.3.3
+        version: 7.3.3
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:*
         version: link:../session-persistence

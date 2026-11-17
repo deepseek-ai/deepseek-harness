@@ -225,7 +225,7 @@ describe('oversized plain-text replacement', () => {
 })
 
 describe('outer PTC mode failure capture', () => {
-  it('spills the bounded output-limit diagnostic through the ordinary outer-result policy', async () => {
+  it('spills a failure after output truncation through the ordinary outer-result policy', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
@@ -238,11 +238,11 @@ describe('outer PTC mode failure capture', () => {
 
     const result = await executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: brandString<ToolCallId>('code-output-limit'),
+      callId: brandString<ToolCallId>('code-truncated-failure'),
       name: 'run_code',
       arguments: {
-        code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); return "unreachable";',
-        description: 'Print oversized head and tail lines',
+        code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); throw "after output";',
+        description: 'Print oversized output before throwing',
       },
       agent: agent as never,
     })
@@ -251,7 +251,8 @@ describe('outer PTC mode failure capture', () => {
     const saved = (ctx.spillStore as StubStore).saves
     expect(saved).toHaveLength(1)
     expect(saved[0]?.source).toMatchObject({ toolName: 'run_code' })
-    expect(saved[0]?.content).toContain('code run failed (output-limit)')
+    expect(saved[0]?.content).toContain('code run failed (exception): after output')
+    expect(saved[0]?.content).toContain('Output was truncated.')
     expect(saved[0]?.content).toContain('HEAD-')
     expect(textOf(result.content)).toContain('Full formatted result stored at: /spill/run_code.txt')
     expect(events).toEqual([])

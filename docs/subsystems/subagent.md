@@ -86,7 +86,7 @@ interface SubagentStartRequest {
   readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
-  /** Content delivered as the child's user message. */
+  /** Initial task; local continuable children record it as a message from the parent agent. */
   readonly prompt: ContentBlock[]
   /**
    * The spawning agent. Its effective directory supplies the default cwd;

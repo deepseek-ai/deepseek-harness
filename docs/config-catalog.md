@@ -2953,7 +2953,7 @@ export interface Config {
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
   maxTimeoutMs?: number
-  /** Combined serialized logs, completion and diagnostic byte cap. */
+  /** Combined serialized output and completion or diagnostic cap; terminal data takes priority over captured output. */
   maxOutputBytes?: number
   /** V8 old-generation heap limit in MiB; native allocations are excluded. */
   maxOldGenerationSizeMb?: number
@@ -3269,7 +3269,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 ## `@deepseek-ai/dsh-session-persistence-jsonl`
 
-- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:95`](../packages/session/session-persistence-jsonl/src/index.ts)
+- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:107`](../packages/session/session-persistence-jsonl/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
@@ -3296,6 +3296,20 @@ export interface Config {
 export type JsonlCompression = 'zstd' | 'none'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-jsonl -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-sqlite -->
+<a id="deepseek-aidsh-session-persistence-sqlite"></a>
+
+## `@deepseek-ai/dsh-session-persistence-sqlite`
+
+- `refs`: [`JsonlConfigOptions`](#deepseek-aidsh-session-persistence-jsonl)
+- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:11`](../packages/session/session-persistence-sqlite/src/index.ts)
+
+```ts config-catalog
+/** Storage root and JSONL settings used when importing legacy Sessions. */
+export type Config = JsonlConfigOptions
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-sqlite -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-projection-cache -->
 <a id="deepseek-aidsh-session-projection-cache"></a>

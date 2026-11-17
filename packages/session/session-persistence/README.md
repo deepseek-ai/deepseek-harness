@@ -29,7 +29,7 @@ Mount one persistence backend to make sessions durable. The backend registers it
 
 ### Choosing a backend
 
-The seam ships the [JSONL](../session-persistence-jsonl/README.md) backend: one append-only `.jsonl.zstd` log per session. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
+Shipped profiles use the [JSONL](../session-persistence-jsonl/README.md) backend: one append-only `.jsonl.zstd` log per session. The separate [SQLite provider](../session-persistence-sqlite/README.md) saves logical events in a database and imports existing JSONL histories on first open. Both providers expose the same service and handle methods. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
 
 ### What the service provides
 
