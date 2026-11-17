@@ -4788,6 +4788,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'upstreamSkills',
+    summary: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    description: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    methods: [
+      {
+        signature: 'register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle',
+        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s provider name, entry, pinned files, and optional skills directory.' }],
+        returns: 'the handle the plugin\'s view observes and its check retries.',
+        throws: ['when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a skill provider named `name` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'userQuestions',
     summary: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
     description: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
@@ -11152,6 +11166,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateTeamTaskRequest',
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: SessionId;\n}',
+  },
+  {
+    name: 'UpstreamSkillSelection',
+    declaration: 'export interface UpstreamSkillSelection {\n    readonly repository: string;\n    readonly commit: string;\n    readonly directory: string;\n    readonly exclude: readonly string[];\n    readonly license: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillSet',
+    declaration: 'export interface UpstreamSkillSet extends UpstreamSkillSelection {\n    readonly bytes: number;\n    readonly sha256: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillsHandle',
+    declaration: 'export interface UpstreamSkillsHandle {\n    readonly directory: string;\n    readonly state: UpstreamSkillsState;\n    watch(listener: (state: UpstreamSkillsState) => void): () => void;\n    retry(): void;\n    dispose(): void;\n}',
+  },
+  {
+    name: 'UpstreamSkillsRegistration',
+    declaration: 'export interface UpstreamSkillsRegistration {\n    readonly name: string;\n    readonly entry: string;\n    readonly set: UpstreamSkillSet;\n    readonly skillsDir?: string | undefined;\n}',
+  },
+  {
+    name: 'UpstreamSkillsState',
+    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
   },
   {
     name: 'UserMessage',

@@ -4971,6 +4971,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-typert-loader -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-upstream-skills -->
+<a id="deepseek-aidsh-upstream-skills"></a>
+
+## `@deepseek-ai/dsh-upstream-skills`
+
+- `inject`: `skills`
+- `source`: [`packages/connector/upstream-skills/src/index.ts:32`](../packages/connector/upstream-skills/src/index.ts)
+
+```ts config-catalog
+/** Where every registered plugin's upstream files are downloaded from. */
+export interface Config {
+  /** Archive download prefixes tried in order; each serves `<owner>/<repository>/tar.gz/<commit>`. */
+  skillsUrls: string[]
+  /** How long one prefix may take to deliver the whole archive before the next one is tried. */
+  skillsTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-upstream-skills -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-user-approval -->
 <a id="deepseek-aidsh-user-approval"></a>
 

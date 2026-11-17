@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "CLI app upstream skills",
+    "description": "Downloads the upstream skill files each CLI app plugin pins from the vendor's GitHub repository and lists the plugin's entry skill once they are in place."
+  }
+}
