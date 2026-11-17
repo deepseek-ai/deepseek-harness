@@ -688,6 +688,8 @@ export class Session implements SessionFace {
    * without a request. Applies only to an open window longer than one page with no paging in progress.
    */
   bufferOlder(): void {
+    // A page that arrived but was not consumed joins the window first, so no remounted view finds it waiting.
+    this.consumeOlder()
     const events = this.events
     if (this.openState !== 'open' || events === undefined || this.olderRequest !== null || this.pendingHistory !== null) return
     const { entries } = this.eventSource.getSnapshot()

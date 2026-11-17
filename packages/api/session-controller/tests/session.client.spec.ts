@@ -306,6 +306,22 @@ describe('buffered older pages', () => {
     expect(mock.log.requests(PAGE)).toHaveLength(0)
   })
 
+  it('consumes an arrived older page before buffering', async ({ mock, start }) => {
+    const older = plainTurn(SessionSeq(0), 0, 'oldest', 'answer')
+    const window = turns(61).slice(6)
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(window, true)))
+    mock.remote.session.page.mockImplementation(pageRule(history(older)))
+    await session.open()
+    await session.loadOlder({ deferConsumption: true })
+    expect(session.getSnapshot().historyLoadStatus).toBe('pendingConsumption')
+    session.bufferOlder()
+    expect(session.getSnapshot()).toMatchObject({ historyLoadStatus: 'idle', hasMore: true })
+    while (session.getSnapshot().hasMore) await session.loadOlder()
+    expect(eventSeqs(session)).toEqual(turns(61).map(event => event.seq))
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+  })
+
   it('buffers nothing for a short, closed, or paging window', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.bufferOlder()
