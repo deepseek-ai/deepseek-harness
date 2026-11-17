@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Sidebar presentation and tab subscriptions through the production slot renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -81,7 +82,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
   const catalog = createSnapshotStore<readonly ShortcutCatalogEntry[]>([])
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog } as never)
   runtime.slots.installLocale(locale)
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.declare({
     'sidebar-right.test.opener': { kind: 'single', scope: 'session' },
     'rightbar': { kind: 'single', scope: 'root' },

@@ -26,7 +26,7 @@ const ORIGINAL_QUESTION_MAX_CHARS = 128
 
 /** Authentication, endpoint, and result settings snapshotted for one search. */
 export interface DeepSeekSearchApiOptions {
-  /** Ordered authentication sources of the search; `/search` is appended to the base of the source sent. */
+  /** Ordered authentication sources of the search, each bound to the Search endpoint its credential is sent to. */
   auth: DeepSeekWebAuth
   /** Settings that endpoint failures of the search name. */
   guidance: DeepSeekWebGuidance
@@ -92,7 +92,6 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
   available(): boolean {
     const options = this.resolveOptions()
     return hasDeepSeekWebCredential(options.auth)
-      && options.auth.sources.every(source => source.kind === 'misconfigured' || URL.canParse(source.baseURL))
       && isPositiveInteger(options.count) && isPositiveInteger(options.requestsPerSecond)
   }
 
@@ -100,7 +99,6 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
     const options = this.resolveOptions()
     const question = boundedQuestion(options.originalQuestion?.())
     return dispatchDeepSeekWeb(options.auth, {
-      path: '/search',
       body: {
         query: request.query,
         count: Math.min(options.count, request.maxResults ?? options.count),

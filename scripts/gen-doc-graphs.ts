@@ -113,7 +113,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Optional action cards',
     mode: 'service',
     consumers: ['creation-recommendations', 'client-ui-action-cards'],
-    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+    note: 'Owns card state, user actions and status notices; card kinds register their actions and handlers.',
   },
   {
     key: 'pluginRecommendations',
@@ -522,7 +522,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Credential seam',
     mode: 'seam',
     implementations: ['credentials-local'],
-    consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
+    consumers: ['api-settings-controller', 'deepseek-auth', 'llm-pi-ai'],
     note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
   },
   {
@@ -531,8 +531,17 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'DeepSeek account',
     mode: 'service',
     implementations: [],
-    consumers: ['llm-deepseek'],
-    note: 'The Host owns browser authorization and local credentials; UI consumers receive state without tokens.',
+    consumers: ['deepseek-auth', 'llm-deepseek-account'],
+    note: 'The Host owns browser authorization and local credentials and releases per-request credentials to DeepSeek request authentication; the account model route registers its running-task report, and UI consumers receive state without tokens.',
+  },
+  {
+    key: 'deepseekAuth',
+    pkg: 'deepseek-auth',
+    title: 'DeepSeek request authentication',
+    mode: 'service',
+    implementations: [],
+    consumers: ['llm-deepseek-account', 'llm-deepseek-api-key', 'web-deepseek-api', 'web-search-deepseek'],
+    note: 'Every DeepSeek API consumer names the credential kinds its API accepts; the service orders the API key and the account sign-in by billing, binds each to its deployment, and releases request headers.',
   },
   {
     key: 'authorization',
@@ -959,6 +968,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['harness-dev-context'],
     note: 'The web-runtime row advertises one URL for its Web GUI: the configured publicUrl, otherwise the listener origin; DSH_WEB_URL, the startup URL, and harness-dev-context read the same value.',
+  },
+  {
+    key: 'config',
+    pkg: 'client-config',
+    title: 'Browser synced configuration lookup',
+    mode: 'service',
+    implementations: ['client-modules'],
+    consumers: [],
+    note: 'Types-only declaration; the client-modules plugin face provides the read-only lookup of each package\'s current synced Config.',
   },
   {
     key: 'clientModules',

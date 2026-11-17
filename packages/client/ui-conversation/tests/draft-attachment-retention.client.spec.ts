@@ -3,6 +3,7 @@
 // a removed Session releases them, and a page unload reports what it discarded.
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { FileUploadValue } from '@deepseek-ai/dsh-client-file-upload/client'
 import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -59,7 +60,7 @@ async function bench(prepare?: () => void) {
   await runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
-    maxConcurrentFileUploads: 2,
+    maxConcurrentFileUploads: createSnapshotStore(2),
   }).await()
   const root = runtime.ctx.get('conversation') as ConversationController
   const shellNow = () => hub.shellFor(runtime.sessions.binding(SESSION)!)

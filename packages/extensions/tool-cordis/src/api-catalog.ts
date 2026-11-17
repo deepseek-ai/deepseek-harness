@@ -83,13 +83,13 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Card tool, kind registry, Session projection, user actions and status notices.',
-    description: 'Card tool, kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, Session projection, user actions and status notices.',
+    description: 'Kind registry, Session projection, user actions and status notices.',
     methods: [
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',
-        parameters: [{ name: 'kind', description: 'the kind\'s skill, details schema, verbs and handler.' }],
+        parameters: [{ name: 'kind', description: 'the kind\'s details schema, verbs and handler.' }],
         returns: 'disposer removing the kind; actions on its cards are then unavailable.',
         throws: ['when another kind already registered the same action.'],
       },
@@ -103,12 +103,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'view(session: Session): ActionCardView',
         description: 'Read the cards of one Session.',
         parameters: [{ name: 'session', description: 'a Session whose projections are prepared.' }],
-        returns: 'proposals and decisions by call id.',
+        returns: 'proposals and decisions by card id.',
       },
       {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
+        signature: '@Remote act(agent: Agent, cardId: ActionCardId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
         description: 'Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is recorded here and every other verb goes to the card\'s kind. `dismiss` also works on an unstarted card whose kind is no longer registered. Concurrent actions on one card share one operation.',
-        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'callId', description: 'the card\'s `propose_action` call id.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
+        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'cardId', description: 'the card\'s id in the Session\'s card view.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
         returns: 'acceptance of background work, the decision in effect, or a refusal.',
       },
     ],
@@ -599,9 +599,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'graph(): WebBootGraph',
-        description: 'Current composed entry graph (stable object between changes).',
+        description: 'Current composed entry graph (stable object between changes), carrying the configured synced values.',
         parameters: [],
-        returns: 'the graph served as `window.__DSH_BOOT__`.',
+        returns: 'the graph served as the owner\'s `window.__DSH_BOOT__`.',
+      },
+      {
+        signature: 'graphFor(principal: Principal | undefined): WebBootGraph',
+        description: 'The current graph as one Peer may see it: the owner receives the configured synced values, and every other Peer receives each row\'s schema defaults in their place.',
+        parameters: [{ name: 'principal', description: 'the Peer\'s principal; undefined for the owner or an in-process caller.' }],
+        returns: 'the graph served to that Peer at first render and in plugin-events frames.',
       },
       {
         signature: 'clientPath(id: string): string | undefined',
@@ -635,7 +641,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'onGraphChanged(listener: () => void): () => void',
-        description: 'Fires after any flush that recomposed the graph (row added/removed, or a rebuilt rev change). Pull model: listeners re-read graph.',
+        description: 'Fires after the graph\'s rows or rev change: a flush that recomposed the graph (row added/removed, or a rebuilt rev change), or a republication of synced configuration alone, which leaves the batch artifacts unchanged. Pull model: listeners re-read graph.',
         parameters: [{ name: 'listener', description: 'notified with no payload.' }],
         returns: 'the unsubscriber.',
       },
@@ -715,6 +721,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Reserve the sole provider slot until the contribution is disposed. A second registration fails even when it repeats the current name. Providers must stop their tools and await owned work before releasing this registration.',
         parameters: [{ name: 'name', description: 'provider-owned name used in registration diagnostics.' }],
         returns: 'the effect disposer for this exact registration.',
+      },
+    ],
+  },
+  {
+    key: 'config',
+    summary: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    description: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    methods: [
+      {
+        signature: 'resolveConfigByPackage<C>(packageName: string): SyncedConfig<C> | undefined',
+        description: 'The synced Config object of a package\'s current plugin activation, as that activation\'s `apply` received it. Each activation receives a new object, so the result changes when the plugin is replaced. The caller states the package\'s shared Config type.',
+        parameters: [{ name: 'packageName', description: 'package name of the graph row.' }],
+        returns: 'the object, or undefined while no activation of the package is running.',
       },
     ],
   },
@@ -1072,12 +1091,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'async rejectToken(token: string): Promise<void>',
-        description: 'Remove an inference-rejected token only while it still matches the stored login.',
-        parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
-        returns: 'after matching credentials are removed and the expiry notification is emitted.',
-      },
-      {
         signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
         description: 'Read existing login identity without creating a device or returning credentials.',
         parameters: [],
@@ -1090,10 +1103,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'async resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
+        signature: 'async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined>',
+        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called, and the signal this service aborts when it signs out of that credential. Host-only.',
         parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
+        returns: 'the request credential, or undefined for other origins or a signed-out account.',
       },
       {
         signature: '@Remote async startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
@@ -1114,10 +1127,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
+        signature: 'registerRunningTaskReport(report: () => boolean): () => void',
+        description: 'Register a report of running work that signing out would interrupt. The plugin billing the account to a model route registers one from within `ctx.effect()`; without any report nothing is known to be running.',
+        parameters: [{ name: 'report', description: 'answers whether such work is running now.' }],
+        returns: 'the disposer removing the report.',
+      },
+      {
         signature: '@Remote hasRunningAccountTasks(): boolean',
         description: 'Inspect running work before sign-out.',
         parameters: [],
-        returns: 'whether a running task\'s latest request uses the account route; false when the optional agents service is absent.',
+        returns: 'whether a registered report says a running task uses the account; false without reports.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) async *watchExpiry(signal: AbortSignal): AsyncIterable<\'session-expired\'>',
@@ -1136,6 +1155,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream account state without the Host-only identity subscription option.',
         parameters: [{ name: 'signal', description: 'subscription lifetime.' }],
         returns: 'initial state, login progress, and credential-change updates.',
+      },
+    ],
+  },
+  {
+    key: 'deepseekAuth',
+    summary: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    description: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    methods: [
+      {
+        signature: 'connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void',
+        description: 'Connect the deployment a model route plugin\'s settings name for one kind. Call it from within `ctx.effect()`.',
+        parameters: [{ name: 'kind', description: 'the kind the plugin\'s route bills.' }, { name: 'route', description: 'provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.' }, { name: 'connection', description: 'reads the plugin\'s current settings; a throw marks the kind unresolved for that operation.' }],
+        returns: 'the disposer removing the connection.',
+        throws: ['{DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.'],
+      },
+      {
+        signature: 'routeKind(route: string | undefined): DeepSeekAuthKind | undefined',
+        description: 'The kind that bills a conversation on one model route.',
+        parameters: [{ name: 'route', description: 'provider route of a model request; undefined names none.' }],
+        returns: 'the kind connected under that route, or undefined for a route no plugin connected.',
+      },
+      {
+        signature: 'candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]',
+        description: 'The kinds one request can authenticate with, in the order its billing tries them, each bound to its destination. Nothing is read from a credential store.',
+        parameters: [{ name: 'request', description: 'the request.' }],
+        returns: 'candidates and unresolved kinds, first preferred; empty when the destination accepts no kind the billing allows or no allowed kind serves an absolute destination.',
+      },
+      {
+        signature: 'async authorize(request: DeepSeekAuthRequest, signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>',
+        description: 'Release the credential of the first candidate that has one. A later candidate is not read once an earlier one has a credential, fails to read, or does not resolve.',
+        parameters: [{ name: 'request', description: 'the request.' }, { name: 'signal', description: 'cancellation for the lookups.' }],
+        returns: 'the authorization, or undefined when no candidate has a credential.',
+        throws: ['{DeepSeekAuthError} code `UNRESOLVED_CONNECTION` at an unresolved kind, `INVALID_CREDENTIAL` for an unusable API key; store failures propagate.'],
       },
     ],
   },
@@ -2694,9 +2746,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
     methods: [
       {
-        signature: '@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>',
+        signature: '@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>',
         description: 'Read the current catalog text for a logged card.',
-        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'The card\'s `propose_action` call id, never a package supplied by the browser.' }],
+        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'cardId', description: 'The card\'s id, never a package supplied by the browser.' }],
         returns: 'the plugin\'s title, description and selection, or a refusal when the card names no available official plugin.',
       },
     ],
@@ -3229,7 +3281,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>',
-        description: 'Open an existing stored session.\n\n`read` never takes ownership and works while another handle (or process) holds write ownership. `write` atomically claims single-writer ownership; an existing active owner rejects.',
+        description: 'Open an existing stored session.\n\nReturned `read` handles retain no write ownership and work while another handle (or process) holds write ownership. A first legacy read open may acquire ownership temporarily to import history into the selected backend. `write` atomically claims single-writer ownership; an existing active owner rejects.',
         parameters: [{ name: 'id', description: 'the stored session to open.' }, { name: 'access', description: '`read` or `write`.' }, { name: 'options', description: 'optional cancellation.' }],
         returns: 'the open handle.',
         throws: ['{SessionPersistenceNotFoundError} when the session does not exist.', '{SessionAlreadyOwnedError} for `write` when ownership is taken.'],
@@ -4023,9 +4075,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Host settings owner that records Session authorization before the first model request.',
-    description: 'Host settings owner that records Session authorization before the first model request.',
-    methods: [],
+    summary: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    description: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    methods: [
+      {
+        signature: 'allowedRoutes(): AllowedModelRoute[] | undefined',
+        description: 'Read the routes the setting currently authorizes. Each call samples the live setting, so an edit applies to the next delegation in every Session.',
+        parameters: [],
+        returns: 'a detached route list, or undefined when the setting is disabled.',
+        throws: ['{SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route, or its routes are malformed or repeated. Disabled settings do not read or validate routes.'],
+      },
+    ],
   },
   {
     key: 'subagents',
@@ -5391,7 +5451,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'emit',
     signature: '\'deepseek-account/signed-out\'(): void',
     summary: 'Local grant removal has completed.',
-    description: 'Local grant removal has completed.',
+    description: 'Local grant removal has completed. After the listeners return, the `revoked` signal of that grant\'s request credentials aborts.',
     parameters: [],
   },
   {
@@ -5955,6 +6015,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountProfile {\n    readonly id: AccountUserId | null;\n    readonly name: string | null;\n    readonly contact: string | null;\n    readonly avatarUrl?: string | null;\n}',
   },
   {
+    name: 'AccountRequestCredential',
+    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
+  },
+  {
     name: 'AccountUpdate',
     declaration: 'export interface AccountUpdate {\n    readonly type: \'snapshot\' | \'credentials-changed\';\n    readonly state: AccountView;\n}',
   },
@@ -5972,19 +6036,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ActionCardDecision',
-    declaration: 'export interface ActionCardDecision {\n    readonly callId: ToolCallId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
+    declaration: 'export interface ActionCardDecision {\n    readonly cardId: ActionCardId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
   },
   {
     name: 'ActionCardFields',
     declaration: 'export type ActionCardFields = Readonly<Record<string, JsonValue>>;',
   },
   {
+    name: 'ActionCardId',
+    declaration: 'export type ActionCardId = Branded<\'ActionCardId\'>;',
+  },
+  {
     name: 'ActionCardKind',
-    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly skill: string;\n    readonly invitation: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
+    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
   },
   {
     name: 'ActionCardProposal',
-    declaration: 'export interface ActionCardProposal {\n    readonly callId: ToolCallId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
+    declaration: 'export interface ActionCardProposal {\n    readonly cardId: ActionCardId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
   },
   {
     name: 'ActionCardProposalOf',
@@ -6085,6 +6153,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentTerminalRequest',
     declaration: 'export interface AgentTerminalRequest {\n    readonly title: string;\n    readonly cwd?: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly policy: SandboxExecutionPolicy;\n    readonly preferredShells: readonly string[];\n    readonly env?: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'AllowedModelRoute',
+    declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
     name: 'AnalyticsPreset',
@@ -6809,6 +6881,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DailyScheduleRecord',
     declaration: 'export interface DailyScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'daily\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly time: string;\n    readonly timeZone: string;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'DeepSeekApiKeyHeader',
+    declaration: 'export type DeepSeekApiKeyHeader = \'authorization\' | \'x-api-key\';',
+  },
+  {
+    name: 'DeepSeekAuthBilling',
+    declaration: 'export type DeepSeekAuthBilling = \'auto\' | DeepSeekAuthKind;',
+  },
+  {
+    name: 'DeepSeekAuthCandidate',
+    declaration: 'export interface DeepSeekAuthCandidate {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly reference?: CredentialRef;\n    configured(): Promise<boolean>;\n    resolve(signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>;\n}',
+  },
+  {
+    name: 'DeepSeekAuthConnection',
+    declaration: 'export interface DeepSeekAuthConnection {\n    readonly baseURL: string;\n    readonly reference?: CredentialRef;\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'DeepSeekAuthDestination',
+    declaration: 'export type DeepSeekAuthDestination = {\n    readonly path: string;\n} | {\n    readonly url: string;\n};',
+  },
+  {
+    name: 'DeepSeekAuthKind',
+    declaration: 'export type DeepSeekAuthKind = \'api-key\' | \'account\';',
+  },
+  {
+    name: 'DeepSeekAuthorization',
+    declaration: 'export interface DeepSeekAuthorization {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly headers: Readonly<Record<string, string>>;\n    readonly reference?: CredentialRef;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
+  },
+  {
+    name: 'DeepSeekAuthRequest',
+    declaration: 'export interface DeepSeekAuthRequest {\n    readonly consumer: string;\n    readonly accepts: readonly DeepSeekAuthKind[];\n    readonly billing?: DeepSeekAuthBilling;\n    readonly route?: string | undefined;\n    readonly destination: DeepSeekAuthDestination;\n    readonly connections?: Readonly<Partial<Record<DeepSeekAuthKind, DeepSeekAuthConnection>>>;\n    readonly apiKeyHeaders?: readonly DeepSeekApiKeyHeader[];\n}',
+  },
+  {
+    name: 'DeepSeekAuthUnresolved',
+    declaration: 'export interface DeepSeekAuthUnresolved {\n    readonly kind: DeepSeekAuthKind;\n    readonly unresolved: \'connection\' | \'deployment\';\n    readonly error: unknown;\n}',
   },
   {
     name: 'DeepSeekLlmApiExtensionMap',
@@ -8668,7 +8776,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PtcRunResult',
-    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    output: PtcOutput[];\n    error?: PtcRunFailure;\n}',
+    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    output: PtcOutput[];\n    outputTruncated?: boolean;\n    error?: PtcRunFailure;\n}',
   },
   {
     name: 'PtcRunSandbox',
@@ -10267,6 +10375,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SurfaceSnapshot {\n    readonly generation: number;\n    readonly tree: readonly SerializedNode[] | null;\n}',
   },
   {
+    name: 'SyncedConfig',
+    declaration: 'export type SyncedConfig<C> = {\n    readonly [K in keyof C as NonNullable<C[K]> extends Volatile<unknown> ? K : never]-?: NonNullable<C[K]> extends Volatile<infer V> ? SyncedConfigRef<V | undefined> : never;\n};',
+  },
+  {
+    name: 'SyncedConfigRef',
+    declaration: 'export interface SyncedConfigRef<T> extends Volatile<T>, ObservableSnapshot<VolatileSnapshot<T>> {\n}',
+  },
+  {
+    name: 'SyncedConfigValues',
+    declaration: 'export type SyncedConfigValues = {\n    readonly [field: string]: JsonValue;\n};',
+  },
+  {
     name: 'SystemMessage',
     declaration: 'export interface SystemMessage extends MessageBase {\n    readonly role: \'system\';\n    readonly source: MessageSourceMap[\'system-prompt\'];\n}',
   },
@@ -10888,7 +11008,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootEntry',
-    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n}',
+    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n}',
   },
   {
     name: 'WebBootGraph',

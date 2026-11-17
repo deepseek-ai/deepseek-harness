@@ -196,6 +196,30 @@ describe('registered program tool factory', () => {
     })
   })
 
+  it.each([false, true])('retains inspected images from private program tools, output overflow=%s', async (overflow) => {
+    type Attachment = Extract<ContentBlock, { type: 'image' }>['attachment']
+    const image: ContentBlock = { type: 'image', attachment: {
+      attachmentId: brandString<Attachment['attachmentId']>('sha256:inspected'),
+      mediaType: 'image/png', width: 1, height: 1, bytes: 1,
+    } }
+    const { runtime, execute } = await setup(privateTool(vi.fn(async () => 'private result')))
+    runtime.behavior = async () => ({
+      output: [{ type: 'text', text: 'before image' }, image],
+      ...overflow ? { outputTruncated: true } : {},
+    })
+
+    const result = (await execute()).results[0]!.result
+
+    expect(result.isError).toBe(false)
+    expect(result.content.slice(0, 2)).toEqual([{ type: 'text', text: 'before image' }, image])
+    if (overflow) {
+      expect(result.value).toMatchObject({ outputTruncated: true })
+      expect(result.content[2]).toMatchObject({
+        type: 'text', text: expect.stringContaining('Program completed. Output was truncated;') as string,
+      })
+    }
+  })
+
   it('cancels on owner disposal and awaits nested cleanup before releasing the factory', async () => {
     const entered = Promise.withResolvers<undefined>()
     const aborted = Promise.withResolvers<undefined>()

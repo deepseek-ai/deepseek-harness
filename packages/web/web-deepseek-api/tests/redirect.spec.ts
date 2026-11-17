@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { customGuidance } from './guidance.ts'
+import { keyCandidate } from './sources.ts'
 import { dispatchDeepSeekWeb } from '../src/transport.ts'
 
 const TEST_API_KEY = 'redirect-test-key'
@@ -47,9 +48,8 @@ afterAll(async () => {
 describe('dispatchDeepSeekWeb redirect policy', () => {
   it.each([301, 302, 303, 307, 308])('rejects HTTP %i before contacting Location', async (status) => {
     targetRequests.length = 0
-    await expect(dispatchDeepSeekWeb({ sources: [{ kind: 'api-key', baseURL: redirectOrigin, key: TEST_API_KEY }] }, {
-      path: `/${status}`, body: { query: TEST_QUERY }, decode: value => value,
-      apiKeyHeaders: key => ({ 'x-api-key': key }),
+    await expect(dispatchDeepSeekWeb({ sources: [keyCandidate(`${redirectOrigin}/${status}`, TEST_API_KEY, 'TEST_API_KEY')] }, {
+      body: { query: TEST_QUERY }, decode: value => value,
       guidance: customGuidance('search'),
     })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
     expect(targetRequests).toHaveLength(0)
@@ -57,10 +57,12 @@ describe('dispatchDeepSeekWeb redirect policy', () => {
 
   it('rejects a redirect of an account-token request before contacting Location', async () => {
     targetRequests.length = 0
+    const endpoint = `${redirectOrigin}/307`
+    const authorization = { kind: 'account', endpoint, headers: { 'x-dsh-auth-token': 'redirect-test-token' } } as const
     await expect(dispatchDeepSeekWeb({ sources: [{
-      kind: 'account', baseURL: redirectOrigin, resolveToken: async () => 'redirect-test-token', rejectToken: async () => {},
+      kind: 'account', endpoint, configured: async () => true, resolve: async () => authorization,
     }] }, {
-      path: '/307', body: { query: TEST_QUERY }, decode: value => value,
+      body: { query: TEST_QUERY }, decode: value => value,
       guidance: customGuidance('search'),
     })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
     expect(targetRequests).toHaveLength(0)

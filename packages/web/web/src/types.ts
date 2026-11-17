@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-web/types
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
 declare module '@deepseek-ai/cordis' {

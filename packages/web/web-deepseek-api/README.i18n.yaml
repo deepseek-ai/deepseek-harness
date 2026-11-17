@@ -15,17 +15,17 @@
   en: 76368b6b1da79c80
   zh: 1e8f931a56b7d34d
 /deepseek-ai-dsh-web-deepseek-api/use-this-package:
-  en: 673ba23a4e608cf2
-  zh: 042afa607aaf4335
+  en: 7a5307c0b8c8b7d4
+  zh: 124bb95be87aab88
 /deepseek-ai-dsh-web-deepseek-api/use-this-package/authentication:
-  en: b25cbe2a7894c03e
-  zh: db47f20dffe77a30
+  en: a54cbc8b38f54bc1
+  zh: d5e219a1439a8ff7
 /deepseek-ai-dsh-web-deepseek-api/use-this-package/results-and-failures:
-  en: 7dbb34d960c1344c
-  zh: 51a1459415857ab5
+  en: cb00c9329a964bbb
+  zh: 06eb9fcb23bc92e0
 /deepseek-ai-dsh-web-deepseek-api/understand-the-implementation:
-  en: 71549e32f0a69c81
-  zh: 9cafbeb60bdf0114
+  en: c13e3136583eefd0
+  zh: c397d8edf093ebb1
 /deepseek-ai-dsh-web-deepseek-api/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -33,8 +33,8 @@
   en: dfd3b61aff4a8aa8
   zh: 06e2b6cc71f461e2
 /deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results/what-the-model-sees:
-  en: a9fbb78ffe886f0b
-  zh: 813dc7ee283018d2
+  en: 84b1c849ae37668b
+  zh: 5a747293d8775f5e
 /deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results/token-effect:
   en: 1f33560e768d18c5
   zh: edeedeef2662e4bb
@@ -54,8 +54,8 @@
   en: 14f9af39f3be4fac
   zh: 3c7139fba0f17862
 /deepseek-ai-dsh-web-deepseek-api/known-limitations-and-deferred-work:
-  en: 689b26b5f3af8861
-  zh: 02cc62856a83cf48
+  en: f2e7c5945900e148
+  zh: eb76055ae634f6db
 /deepseek-ai-dsh-web-deepseek-api/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: 9f56528562c7c914

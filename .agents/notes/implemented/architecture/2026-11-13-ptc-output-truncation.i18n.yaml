@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-13-ptc-output-truncation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-13-ptc-output-truncation.md
+/agent-note-ptc-output-truncation-without-execution-cancellation:
+  en: 781fba10ab5fcd45
+  zh: 88276a5a9cdf8c19
+/agent-note-ptc-output-truncation-without-execution-cancellation/problem:
+  en: a6430b7910bebaa2
+  zh: dff6c3553e22283e
+/agent-note-ptc-output-truncation-without-execution-cancellation/decision:
+  en: b24a08b0037adab4
+  zh: 92fb390a0e460ba5
+/agent-note-ptc-output-truncation-without-execution-cancellation/alternatives-considered:
+  en: 717295afe374b2e5
+  zh: cf4fd1365169f9e3
+/agent-note-ptc-output-truncation-without-execution-cancellation/consequences:
+  en: 420e2556a878b48a
+  zh: bff5f63189562d57

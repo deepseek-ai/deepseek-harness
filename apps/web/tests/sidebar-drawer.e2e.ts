@@ -184,7 +184,11 @@ async function assertMaskFade(frame: Locator, from: number, to: number): Promise
   })
 }
 
-/** Sample both width transitions on the same clock to detect detached sidebar controls. */
+/**
+ * Sample both width transitions on the same clock to detect detached sidebar controls.
+ * Returns only after this sample's transitions can no longer dispatch an end event, so
+ * the caller's next posture change starts from a window that no pending event settles.
+ */
 async function assertFoldResize(toggle: Locator, from: number, to: number): Promise<void> {
   await expect.poll(() => toggle.evaluate((button, target) => {
     const frame = button.closest<HTMLElement>('[data-animating]')
@@ -208,7 +212,14 @@ async function assertFoldResize(toggle: Locator, from: number, to: number): Prom
     const start = at(0)
     const middle = at(0.5)
     const end = at(1)
-    for (const transition of transitions) transition.finish()
+    // Cancel instead of finish: a finished transition queues its transitionend for a
+    // later rendering update, and an end event arriving after the caller's next posture
+    // change settles the new window, drops data-animating and cancels the transition the
+    // next assertFoldResize looks for. A cancelled transition dispatches transitioncancel,
+    // which AppFrame does not observe, so this sample leaves no end event pending. Both
+    // values stay at the end state: cancelling drops the transition effect, and the
+    // computed grid lands on the same target the finished transition would show.
+    for (const transition of transitions) transition.cancel()
     frame.style.removeProperty('--ds-transition-duration-slow')
     return { endpoints: [start.width, end.width], start, middle }
   })
@@ -216,6 +227,13 @@ async function assertFoldResize(toggle: Locator, from: number, to: number): Prom
   expect(sample.middle.width).toBeGreaterThan(Math.min(from, to))
   expect(sample.middle.width).toBeLessThan(Math.max(from, to))
   expect(sample.middle.gap).toBeCloseTo(sample.start.gap, 1)
+  // AppFrame removes data-animating either from a transitionend or from its own 600 ms
+  // fallback, which is the only remaining settle path once the transitions are cancelled.
+  // Wait for that settle so the caller's next posture change starts from a clear window.
+  await expect.poll(
+    () => toggle.evaluate(button => button.closest('[data-animating]') === null),
+    { timeout: 5_000 },
+  ).toBe(true)
 }
 
 it('overlays the conversation and closes after navigation without losing its sidebar content', async () => {
