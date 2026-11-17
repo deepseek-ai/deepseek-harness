@@ -94,6 +94,10 @@ export interface SentPart {
   id: string
   kind: string
   time: number
+  /** Actual thread the platform placed this part in, when reported by the send answer. */
+  thread?: { id: string; root?: string }
+  /** Adapter-opaque reply context (referrer) of this published part, when reported by the send answer. */
+  referrer?: unknown
   raw?: unknown
 }
 

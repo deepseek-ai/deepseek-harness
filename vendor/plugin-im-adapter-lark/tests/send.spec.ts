@@ -470,3 +470,28 @@ describe('partKindOf', () => {
     expect(partKindOf({ msg_type: 'image', content: { image_key: 'k' } })).toBe('image')
   })
 })
+
+describe('SentPart thread and referrer', () => {
+  it('records thread_id, root_id, and an updated LarkReferrer from replyMessage when a new thread is created', async () => {
+    const { bot } = await mount({
+      '/open-apis/im/v1/messages/om_root/reply': () => Response.json({
+        code: 0,
+        data: { message_id: 'om_reply_1', thread_id: 'omt_new_1', root_id: 'om_root' },
+      }),
+    })
+    const part = await sendMessagePayload(
+      bot,
+      { msg_type: 'text', content: { text: 'hello' } },
+      { chat: { id: 'oc_1', type: 'group' }, thread: true },
+      { index: 0, quote: 'om_root', options: {}, previous: [] },
+    )
+    expect(part.thread).toEqual({ id: 'omt_new_1', root: 'om_root' })
+    expect(part.referrer).toMatchObject({
+      chatType: 'group',
+      chatId: 'oc_1',
+      messageId: 'om_reply_1',
+      threadId: 'omt_new_1',
+      rootId: 'om_root',
+    })
+  })
+})

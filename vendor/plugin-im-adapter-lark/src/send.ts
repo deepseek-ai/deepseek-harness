@@ -39,7 +39,7 @@
 import {
   PlatformError, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import { isDict, type LarkReferrer } from './api/events.ts'
+import { isDict, type LarkChatKind, type LarkReferrer } from './api/events.ts'
 import type { LarkReceiveIdType } from './api/client.ts'
 import type { LarkBot } from './bot.ts'
 import { idempotencyUuid } from './modes/shared.ts'
@@ -310,7 +310,24 @@ export async function sendMessagePayload(
       published: 'unknown',
     })
   }
-  return { id, kind: partKindOf(request), time: Date.now(), raw: answer }
+  const time = Date.now()
+  const chatType: LarkChatKind = target.chat.type === 'direct' ? 'p2p' : 'group'
+  const referrer: LarkReferrer = {
+    receivedAt: time,
+    chatType,
+    chatId: target.chat.id,
+    messageId: id,
+    ...answer.thread_id ? { threadId: answer.thread_id } : {},
+    ...answer.root_id ? { rootId: answer.root_id } : {},
+  }
+  return {
+    id,
+    kind: partKindOf(request),
+    time,
+    ...answer.thread_id ? { thread: { id: answer.thread_id, ...answer.root_id ? { root: answer.root_id } : {} } } : {},
+    referrer,
+    raw: answer,
+  }
 }
 
 /**
