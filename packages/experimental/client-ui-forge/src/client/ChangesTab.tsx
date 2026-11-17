@@ -17,9 +17,9 @@ import {
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
-  IconInfoOutlineRegular, IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
+  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
-  Menu, StateDot, Tooltip,
+  Menu, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -53,9 +53,11 @@ import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
-import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
+import { ChangesLoading } from './ChangesLoading.tsx'
+import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
+import { useForgeCopy } from './forge-copy.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
 import type { ForgeLensDescription } from './changes-service.ts'
@@ -199,7 +201,7 @@ interface WriteRefusal {
 interface Expansion {
   readonly source: string | Extract<ChangesData, { kind: 'local' }> | null
   readonly texts: Readonly<Record<string, readonly string[] | 'loading'>>
-  readonly open: Readonly<Record<string, ReadonlySet<number>>>
+  readonly open: Readonly<Record<string, ReadonlyMap<number, GapReveal>>>
 }
 
 /** Files whose hunks draw more lines show the large-file notice until revealed. */
@@ -208,7 +210,7 @@ const LARGE_FILE_LINES = 1000
 /** Lines the files above may change before a file starts collapsed. */
 const OPEN_LINES = 5000
 
-const NO_GAPS: ReadonlySet<number> = new Set()
+const NO_GAPS: ReadonlyMap<number, GapReveal> = new Map()
 
 const NO_FOLDS: ReadonlyMap<string, { readonly hunks: ReadonlySet<number>; readonly lens: string }> = new Map()
 
@@ -396,7 +398,7 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
           {t('review.submit')}{reviewCount > 0 ? ` (${reviewCount})` : ''}
         </Button>
       </span>
-      <Tooltip label={t('change.view')} side="bottom">
+      <Tooltip label={t('change.view')} side="bottom" delayMs={500}>
         <button type="button" className={css.tool} aria-label={t('change.view')} onClick={() => { openLink(href) }}>
           <IconRightUpOutlineRegular size={14} />
         </button>
@@ -430,7 +432,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
     <div className={css.header}>
       {scope === 'branch' ? <>
         <span className={css.headerIcon}><IconBranchOutlineRegular size={15} /></span>
-        <Tooltip label={head} side="bottom">
+        <Tooltip label={head} side="bottom" delayMs={500}>
           <span className={css.headerHead} tabIndex={0} data-forge-head="">{head}</span>
         </Tooltip>
         <span className={css.headerArrow} aria-hidden="true">→</span>
@@ -438,7 +440,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
           visible={visible} list={diffBases} choose={choose} t={t} />
         <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>
       </> : <>
-        <span className={css.headerIcon}><IconListPenOutlineRegular size={15} /></span>
+        <span className={css.headerIcon}><IconFilesDiffOutlineRegular size={15} /></span>
         <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
       </>}
       {(scope === 'branch' || creatable) && <span className={css.headerEnd}>
@@ -518,14 +520,18 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
   changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles, changeRequestViewed, setFileViewed,
-  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses, useExtensions,
-  useAnnotations, changesLens, renderSlot, t,
+  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses,
+  useExtensions, useAnnotations, changesLens, renderSlot, t: translate,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
   const target = useMemo(() => parseChangesAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`forge-panel: not a changes address "${tab.contentId}"`)
   const source = target.source
+  const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
+  const state = snapshot?.state ?? null
+  const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
+  const { t, host: hostCopy } = useForgeCopy(translate, source.kind === 'change' ? source.url : null, entry?.forge ?? null)
   const queue = reviewQueue(tab)
   useSyncExternalStore(queue.subscribe, queue.getStatus)
   const reviewState = queue.getSnapshot()
@@ -556,7 +562,8 @@ export function ChangesTab({
         return message
       }
       if (!complete(result.url)) return t('review.unknown')
-      report(request.kind === 'review' ? 'review.submitted' : 'review.published')
+      if (request.kind === 'review') report('review.submitted')
+      else report('review.published', hostCopy)
       if (request.kind === 'review') setReviewOpen(false)
       return undefined
     } catch (_error) {
@@ -613,15 +620,20 @@ export function ChangesTab({
   const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
   const [treePosition, setTreePosition] = useState<FileTreePosition>('left')
   const [treeWidth, setTreeWidth] = useState(0)
+  // The lens's labels set the least width of the tree they sit above.
+  const [lensWidth, setLensWidth] = useState(0)
   const treeId = useId()
   const [chosen, setChosen] = useState<Readonly<Record<string, boolean>>>({})
   // Each navigation applies once; its file, if it names one, opens and scrolls into view.
   useEffect(() => {
     if (choices?.navigated === navigation.revision) return
     actions.navigated(tab.id, navigation.revision)
-    const lensParam = navigation.params?.lens
+    // Every tab of this kind is a `forge-changes` resource address, so its params are that type's; the union is
+    // narrowed on the field read, not validated.
+    const params = navigation.params
+    const lensParam = params !== undefined && 'lens' in params ? params.lens : undefined
     if (lensParam !== undefined) actions.filtered(tab.id, lensParam)
-    const path = navigation.params?.path
+    const path = params !== undefined && 'path' in params ? params.path : undefined
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
@@ -635,8 +647,6 @@ export function ChangesTab({
   }, [signal, actions, tab.id])
   const [attempt, setAttempt] = useState(0)
   useEffect(() => tab.actions.bindCommands({ refresh: () => { setAttempt(value => value + 1) } }), [tab.actions])
-  const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
-  const state = snapshot?.state ?? null
   const scope = choices?.scope ?? 'branch'
   const base = choices?.base ?? null
   const chosenCommits = choices?.commits ?? null
@@ -653,7 +663,6 @@ export function ChangesTab({
   const listLocalCommits = useCallback((signal: AbortSignal) => localCommits(baseRef, signal), [localCommits, baseRef])
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
-  const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
   // A read starts once the panel state arrives and again when what it describes moves. A change request's read
   // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
@@ -787,11 +796,14 @@ export function ChangesTab({
   const hostOwner = useMemo(() => data?.kind === 'change' && data.viewed !== null
     ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
   const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
-    if (failure.kind === 'stale') report('viewed.syncStale')
+    if (failure.kind === 'stale') report('viewed.syncStale', hostCopy)
     else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
-    else report('viewed.syncFailed', { message: failure.message })
+    else report('viewed.syncFailed', { ...hostCopy, message: failure.message })
   })
   const marks = host?.marks ?? localMarks
+  // Files marked viewed at their current change, which the file tree draws subdued.
+  const viewedPaths = useMemo(() => new Set(files.filter(file => viewedStateOf(marks, file.path, file.digest) === 'viewed').map(file => file.path)),
+    [files, marks])
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
@@ -802,6 +814,8 @@ export function ChangesTab({
   const [expansion, setExpansion] = useState<Expansion>({ source: null, texts: {}, open: {} })
   const current = expansion.source === expansionSource ? expansion : { source: expansionSource, texts: {}, open: {} }
   const latest = useRef(expansionSource)
+  // Files whose new side was read ahead for highlighting in this comparison, each read at most once.
+  const contextReads = useRef<{ readonly source: typeof expansionSource; readonly paths: Set<string> }>({ source: null, paths: new Set() })
   useLayoutEffect(() => { latest.current = expansionSource }, [expansionSource])
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
   // The line budget counts the files not marked viewed when the diff loads, so later marks leave it unchanged. A file stays
@@ -873,9 +887,9 @@ export function ChangesTab({
       return change(previous.source === expansionSource ? previous : { source: expansionSource, texts: {}, open: {} })
     })
   }
-  const expand = (owner: ChangesData, file: ForgeDiffFile, index: number): void => {
+  const expand = (owner: ChangesData, file: ForgeDiffFile, index: number, expansion: GapExpansion): void => {
     const path = file.path
-    update(value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
+    update(value => ({ ...value, open: { ...value.open, [path]: revealGap(value.open[path], index, expansion) } }))
     if (current.texts[path] !== undefined) return
     update(value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
     const reading = owner.kind === 'local' ? localText(owner.scope, path) : changeRequestText(owner.url, owner.headSha, path)
@@ -892,6 +906,23 @@ export function ChangesTab({
         const { [path]: _open, ...open } = value.open
         return { ...value, texts, open }
       })
+    })
+  }
+  /**
+   * Read a local file's new side ahead of any expansion, once per comparison, so its rows can be highlighted with the
+   * lines before them. A change request's files are not read for this, since each read costs a request to the code host.
+   */
+  const readContext = (owner: ChangesData, file: ForgeDiffFile): void => {
+    const path = file.path
+    if (owner.kind !== 'local') return
+    if (contextReads.current.source !== expansionSource) contextReads.current = { source: expansionSource, paths: new Set() }
+    if (contextReads.current.paths.has(path)) return
+    contextReads.current.paths.add(path)
+    void localText(owner.scope, path).then((result) => {
+      const lines = result.ok ? textLines(result.value) : undefined
+      // A read that fails or no longer matches leaves the file as it is, and an expansion reads it again and says why.
+      if (lines === undefined || !matchesHunks(lines, file.hunks)) return
+      update(value => value.texts[path] !== undefined ? value : { ...value, texts: { ...value.texts, [path]: lines } })
     })
   }
   const fileActions = (owner: ChangesData, file: ForgeDiffFile): DiffFileAction[] => {
@@ -912,8 +943,6 @@ export function ChangesTab({
   // the code host is submitted or discarded there; without one, the summary and any comment drafts kept in the browser
   // are published as one review.
   const pendingReview = review?.pendingReview ?? null
-  // Logins compare without case, as GitHub's do.
-  const ownChangeRequest = review?.viewer != null && prAuthor !== null && review.viewer.toLowerCase() === prAuthor.toLowerCase()
   const finishWrite = async (send: () => Promise<string | undefined>, done: ForgePanelKey): Promise<void> => {
     if (reviewRunning.current) return
     reviewRunning.current = true
@@ -933,7 +962,8 @@ export function ChangesTab({
     }
   }
   const reviewForm = tab.visible && data !== null && reviewOpen && data.kind === 'change' && data.commits === null && <SubmitReview queue={queue}
-    url={data.url} headSha={data.headSha} pending={pendingReview} own={ownChangeRequest} busy={reviewBusy} error={reviewError}
+    url={data.url} headSha={data.headSha} pending={pendingReview} events={review?.reviewEvents ?? null} busy={reviewBusy}
+    error={reviewError}
     close={() => { setReviewOpen(false) }}
     check={() => { openLink(data.url) }} reconcile={() => { queue.finish(false); setReviewError(null) }}
     submit={() => {
@@ -1110,8 +1140,8 @@ export function ChangesTab({
   // an effect would hand them the previous diff's links. A render React discards leaves values derived from the same
   // props and state, which the retried render assigns again.
   const callbacks = {
-    data, expandedByDefault, expand, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread, lensTitle,
-    renderSlot, kept, t,
+    data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
+    lensTitle, renderSlot, kept, t,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1121,10 +1151,15 @@ export function ChangesTab({
       setChosen(value => ({ ...value, [file.path]: !(value[file.path] ?? byDefault) }))
     },
     reveal: (path) => { setRevealed(value => new Set([...value, path])) },
-    expand: (file, index) => {
+    expand: (file, index, expansion) => {
       const { data: owner, expand: open } = live.current
       /* v8 ignore next -- sections render only while changes are loaded */
-      if (owner !== null) open(owner, file, index)
+      if (owner !== null) open(owner, file, index, expansion)
+    },
+    readContext: (file) => {
+      const { data: owner, readContext: read } = live.current
+      /* v8 ignore next -- sections render only while changes are loaded */
+      if (owner !== null) read(owner, file)
     },
     view: (file, viewed) => {
       const { data: owner, markViewed: mark } = live.current
@@ -1152,9 +1187,9 @@ export function ChangesTab({
   }), [reach, target])
   const reviewStarted = pendingReview !== null
   const publishingBlocked = reviewState.uncertain !== null
-  // Comments on a commit range or on local changes go to the input only; a whole change request also takes GitHub comments:
-  // into its pending review once the threads say the user may review, and on their own while the user has no pending
-  // review, since GitHub refuses a single comment beside one.
+  // Comments on a commit range or on local changes go to the input only; a whole change request also takes comments on the
+  // code host: into its pending review once the threads say the user may review, and on their own while the user has no
+  // pending review, since GitHub refuses a single comment beside one and the view keeps one rule for every host.
   const whole = data?.kind === 'change' && data.commits === null
   const queueable = whole && review?.viewerCanReview === true
   const single = whole && pendingReview === null
@@ -1184,7 +1219,7 @@ export function ChangesTab({
         </div>
       )
     } else if (failed === null) {
-      body = <div className={css.centered}><StateDot state="ongoing" /></div>
+      body = <div className={css.files} aria-busy="true"><ChangesLoading split={split} t={t} /></div>
     } else {
       body = (
         <div className={css.centered} role="status">
@@ -1248,7 +1283,7 @@ export function ChangesTab({
     )
   }
   const navigator: ChangedFilesProps = {
-    files, state: treeState, t,
+    files, state: treeState, t, viewed: viewedPaths,
     filter: (query) => { setTreeState(value => ({ ...value, query })) },
     toggle: (path) => { setTreeState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: value.collapsed[path] !== true } })) },
     jump,
@@ -1295,10 +1330,12 @@ export function ChangesTab({
       {!reviewOpen && reviewError !== null && reviewState.uncertain === null && <Notice>{reviewError}</Notice>}
       <div className={css.toolbar} data-tree={treeShown ? treePosition : 'hidden'} style={toolbarStyle}>
         {/* Above the file tree, the lens spans the tree's width; elsewhere a menu in the toolbar takes its place. */}
-        {treeShown && <div className={css.lensCell}><LensControl {...lensProps} /></div>}
+        {treeShown && <div className={css.lensCell}><LensControl {...lensProps} need={setLensWidth} /></div>}
         <div ref={toolbarRow} className={css.toolbarMain}>
           {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-          {tab.visible && <span className={css.filesSlot}><ChangedFilesMenu {...navigator} visible /></span>}
+          {tab.visible && (
+            <span className={css.filesSlot}><ChangedFilesMenu {...navigator} loading={data === null && failed === null} visible /></span>
+          )}
           {tab.visible && allFiles.length > 0 && (
             <span className={css.lensMenu}><LensMenu {...lensProps} visible /></span>
           )}
@@ -1326,31 +1363,31 @@ export function ChangesTab({
             <span className={clsx(css.totals, css.foldViews)}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>
           )}
           <span className={css.tools}>
-            <Tooltip label={t('diff.refresh')} side="bottom">
+            <Tooltip label={t('diff.refresh')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldRefresh)} aria-label={t('diff.refresh')} onClick={refresh}>
                 <RefreshGlyph busy={rereading} size={16} />
               </button>
             </Tooltip>
-            <Tooltip label={expansionLabel} side="bottom">
+            <Tooltip label={expansionLabel} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} data-expanded={anyExpanded ? '' : undefined} aria-label={expansionLabel}
                 disabled={files.length === 0} onClick={toggleExpansion}>
                 <IconChevronsUpDownOutlineRegular />
               </button>
             </Tooltip>
-            <Tooltip label={t(split ? 'diff.unified' : 'diff.split')} side="bottom">
+            <Tooltip label={t(split ? 'diff.unified' : 'diff.split')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={split} aria-label={t('diff.splitAria')}
                 onClick={toggleSplit}>
                 <IconCompareSplitOutlineRegular className={css.compareIcon} />
               </button>
             </Tooltip>
-            <Tooltip label={t(wrap ? 'diff.nowrap' : 'diff.wrap')} side="bottom">
+            <Tooltip label={t(wrap ? 'diff.nowrap' : 'diff.wrap')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={wrap} aria-label={t('diff.wrapAria')}
                 onClick={toggleWrap}>
                 {wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
               </button>
             </Tooltip>
             <span className={css.treeToggle}>
-              <Tooltip label={treeAction} side="bottom">
+              <Tooltip label={treeAction} side="bottom" delayMs={500}>
                 <button type="button" className={css.tool} aria-label={treeAction} aria-expanded={treePosition !== 'hidden'}
                   aria-controls={treeId} disabled={allFiles.length === 0}
                   onClick={() => { setTreePosition(value => value === 'left' ? 'right' : value === 'right' ? 'hidden' : 'left') }}>
@@ -1403,7 +1440,9 @@ export function ChangesTab({
       {reviewForm}
       <div className={css.body}>
         {body}
-        {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
+        {allFiles.length > 0 && (
+          <FileTreePane {...navigator} id={treeId} position={treePosition} least={lensWidth} onWidth={setTreeWidth} />
+        )}
         {review !== null && data?.kind === 'change' && threadList.open && (
           <ThreadList entries={placed.entries} files={allFiles} truncated={review.truncated} url={data.url}
             filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }}

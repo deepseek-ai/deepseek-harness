@@ -318,6 +318,12 @@ export const IconDownloadOutlineRegular = productIcon('download-outline', 'regul
 /** Medium IconDownloadOutline artwork with a 1.3px stroke. */
 export const IconDownloadOutlineMedium = productIcon('download-outline', 'medium')
 
+/** Regular one-pixel IconUploadOutline artwork: the download tray with the arrow pointing up. */
+export const IconUploadOutlineRegular = productIcon('upload-outline', 'regular')
+
+/** Medium IconUploadOutline artwork with a 1.3px stroke. */
+export const IconUploadOutlineMedium = productIcon('upload-outline', 'medium')
+
 /** Regular one-pixel IconPlayOutline artwork. */
 export const IconPlayOutlineRegular = productIcon('play-outline', 'regular')
 
@@ -455,6 +461,12 @@ export const IconListPenOutlineRegular = productIcon('list-pen-outline', 'regula
 
 /** Medium IconListPenOutline artwork with a 1.3px stroke. */
 export const IconListPenOutlineMedium = productIcon('list-pen-outline', 'medium')
+
+/** Regular one-pixel IconFilesDiffOutline artwork. */
+export const IconFilesDiffOutlineRegular = productIcon('files-diff-outline', 'regular')
+
+/** Medium IconFilesDiffOutline artwork with a 1.3px stroke. */
+export const IconFilesDiffOutlineMedium = productIcon('files-diff-outline', 'medium')
 
 /** Regular one-pixel IconGoalOutline artwork. */
 export const IconGoalOutlineRegular = productIcon('goal-outline', 'regular')

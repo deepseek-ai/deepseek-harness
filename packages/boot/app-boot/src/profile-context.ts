@@ -1,7 +1,7 @@
 /** Launcher-owned profile locations and composition inputs. */
 import { join } from 'node:path'
 import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Profile } from './profile.ts'
-import { loadOptionalPatches } from './index.ts'
+import { loadOptionalPatches, loadOverlayPatches } from './index.ts'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 
 /** Application-owned package manager executable; environment applies only to package operations. */
@@ -23,8 +23,8 @@ export interface ProfileContext {
   readonly home: string
   /** Bundle packages used to start this process, before any persisted edits. */
   readonly startedBundles: readonly string[]
-  /** Parsed command-line overlays, applied above profile and home patches. */
-  readonly overlays: readonly PatchOptions[]
+  /** Absolute command-line overlay files in argv order, read on every composition and applied above profile and home patches. */
+  readonly overlayPaths: readonly string[]
   /** Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out. */
   readonly telemetryDisabledEnv: string | undefined
 }
@@ -65,18 +65,19 @@ export function readBundlePatches(binName: string, context: ProfileContext, init
   return profile.layers.flatMap(layer => layer.patches)
 }
 
-/** Read current bundle and user layers with the launch-time overlays.
+/** Read current bundle, user, and command-line overlay layers.
  * @param binName Diagnostic prefix for malformed or missing configuration.
  * @param context Data supplied by the profile launcher.
  * @param initialProfile Already loaded startup profile; omitted reads the current files.
  * @returns Detached ordered patches; this function does not update the Loader.
+ * @throws When a present patch file or any overlay file is missing, unreadable, or not a patch list.
  */
 export function readProfilePatches(binName: string, context: ProfileContext, initialProfile?: Profile): PatchOptions[] {
   const patches = structuredClone([
     ...readBundlePatches(binName, context, initialProfile),
     ...(initialProfile?.patches ?? loadOptionalPatches(binName, context.patchPath) ?? []),
     ...(loadOptionalPatches(binName, join(context.home, PROFILE_PATCH_FILENAME)) ?? []),
-    ...context.overlays,
+    ...context.overlayPaths.flatMap(path => loadOverlayPatches(binName, path)),
   ])
   const telemetryPatch = resolveTelemetryPatch(context.telemetryDisabledEnv,
     composeEntries([patches]).some(row => row.id === TELEMETRY_ROW_ID))

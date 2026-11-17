@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-session-status",
   "description": "Client Session status table over Host reading records: running state, the effective pending interaction, and read or unread reminders shared by clients of one Host",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },

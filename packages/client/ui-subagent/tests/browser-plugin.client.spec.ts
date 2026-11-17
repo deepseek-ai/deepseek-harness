@@ -11,9 +11,10 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
-import {
-  SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected,
-} from '../src/client/SubagentHeaderLineage.tsx'
+import { SubagentHeaderLineage } from '../src/client/SubagentHeaderLineage.tsx'
+import type { SubagentCatalogInjected } from '../src/client/SubagentCatalog.tsx'
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import { en } from '../src/client/locales.ts'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from '../src/client/SubagentReadOnlyComposer.tsx'
@@ -66,7 +67,9 @@ async function provideSlotFaces(ctx: Context): Promise<void> {
     name: 'root',
     children: {
       'conversation.session.header.lineage': { kind: 'single', scope: 'session' },
-      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.section': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
+      'conversation.session.panel.indicator': { kind: 'list', scope: 'session' },
       'conversation.composer': { kind: 'chain', scope: 'session' },
     },
   } as never, () => null)
@@ -114,14 +117,13 @@ describe('apply', () => {
   it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
     const { ctx } = await fullBench(FAMILY)
     onTestFinished(() => ctx.fiber.dispose())
-    ctx.slots.register({ name: 'conversation.session.header.actions.subagent.footer', id: 'test-content' }, () => null)
     const registerResource = vi.fn(() => () => {})
     const registerTab = vi.fn(() => () => {})
     ctx.provide('resources', { register: registerResource } as never)
     ctx.provide('sidebarRightTabs', { register: registerTab } as never)
     await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
     expect(registerTab).toHaveBeenCalledOnce()
-    expect(ctx.slots.entries('conversation.session.header.actions.subagent.footer')).toHaveLength(1)
+    expect(ctx.slots.entries('conversation.session.panel.section').map(entry => entry.options.id)).toEqual(['subagents'])
   })
 
   it('reads direct child catalogs sequentially after reading the parent', async () => {
@@ -183,26 +185,17 @@ describe('apply', () => {
       { method: 'refreshProjections', args: [sid('parent')] },
     ])
 
-    // The root-session catalog seat registers in the actions band with the
-    // same business face, between the preset label (-10) and background
-    // tasks (20).
-    const actionEntry = ctx.slots.entries('conversation.session.header.actions')
-      .find(entry => entry.options.id === 'subagent-catalog')!
-    expect(actionEntry.options.order).toBe(10)
-    const actionProps = (actionEntry.inject as (id: SessionId) => SubagentCatalogActionInjected)(sid('parent'))
-    const source = actionProps.hooks.footerAvailable
-    const changed = vi.fn()
-    const unsubscribe = source.subscribe(changed)
-    expect(source.getSnapshot()).toBe(false)
-    const remove = ctx.slots.register({
-      name: 'conversation.session.header.actions.subagent.footer', id: 'test-footer',
-    }, () => null)
-    expect(source.getSnapshot()).toBe(true)
-    await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
-    remove()
-    expect(source.getSnapshot()).toBe(false)
-    await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
-    unsubscribe()
+    // The Session panel section registers with the same business face,
+    // after change requests (100) and before background jobs (300), together
+    // with its progress control beside the title.
+    const sectionEntry = ctx.slots.entries('conversation.session.panel.section')
+      .find(entry => entry.options.id === 'subagents')!
+    expect(sectionEntry.options.order).toBe(200)
+    expect(resolveSlotLabel(sectionEntry.options.label)).toBe(en['section.title'])
+    expect(ctx.slots.entries('conversation.session.panel.section.actions').map(entry => entry.options.key)).toEqual(['subagents'])
+    expect(ctx.slots.entries('conversation.session.panel.indicator')[0]).toMatchObject({ options: { id: 'subagents.running', order: 10 } })
+    const sectionActions = (sectionEntry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
+    expect(Object.keys(sectionActions).sort()).toEqual(['openChild', 'openChildAside', 'prepareCatalog', 'refreshProjection'])
 
     const composerEntry = ctx.slots.entries('conversation.composer')
       .find(entry => entry.component === SubagentReadOnlyComposer)!

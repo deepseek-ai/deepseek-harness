@@ -137,8 +137,9 @@ describe('HoverCard', () => {
     expect(screen.getByText('card body')).toBeTruthy()
   })
 
-  it('opens after the dwell delay, positioned right of the anchor', () => {
+  it('opens after the dwell delay, anchored to its wrapper by name for the stylesheet to place', () => {
     const { wrapper } = mount()
+    expect(wrapper.style.anchorName).toBe('')
     fireEvent.pointerEnter(wrapper)
     expect(screen.queryByText('card body')).toBeNull()
     act(() => { vi.advanceTimersByTime(499) })
@@ -146,8 +147,29 @@ describe('HoverCard', () => {
     act(() => { vi.advanceTimersByTime(1) })
     const card = screen.getByText('card body').parentElement as HTMLElement
     expect(card.parentElement?.parentElement).toBe(document.body)
-    expect(card.style.left).toBe('208px')
-    expect(card.style.top).toBe('40px')
+    // The stylesheet places a compact card against the named anchor, so the script gives it no coordinates.
+    expect(wrapper.style.anchorName).toMatch(/^--dsh-hover-card-/)
+    expect(card.style.positionAnchor).toBe(wrapper.style.anchorName)
+    expect([card.style.left, card.style.top]).toEqual(['', ''])
+    // The name lasts as long as the card.
+    fireEvent.pointerLeave(wrapper)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(wrapper.style.anchorName).toBe('')
+  })
+
+  it('gives each compact card its own anchor name', () => {
+    render(
+      <>
+        <HoverCard anchor={<span>first</span>} content={<div>first body</div>} />
+        <HoverCard anchor={<span>second</span>} content={<div>second body</div>} />
+      </>,
+    )
+    const wrappers = ['first', 'second'].map(text => screen.getByText(text).parentElement as HTMLElement)
+    for (const wrapper of wrappers) fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    const names = wrappers.map(wrapper => wrapper.style.anchorName)
+    expect(new Set(names).size).toBe(2)
+    expect(['first body', 'second body'].map(text => (screen.getByText(text).parentElement as HTMLElement).style.positionAnchor)).toEqual(names)
   })
 
   it('insets a preview by 24px on each side and follows anchor resizing', () => {
@@ -600,46 +622,18 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
   })
 
-  it('corrects the bottom-edge clamp once the mounted card height is measurable', () => {
-    // First placement reads height 0 (card not yet mounted) and keeps the
-    // anchor top; the post-mount correction re-clamps with the real height.
-    window.innerHeight = 300
-    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 120 })
-    try {
-      const { wrapper } = mount()
-      stubAnchorRect(screen.getByText('row'), { top: 280, right: 200 })
-      fireEvent.pointerEnter(wrapper)
-      act(() => { vi.advanceTimersByTime(500) })
-      const card = screen.getByText('card body').parentElement as HTMLElement
-      // 300 - 120 - 8 = 172, instead of the anchor top 280.
-      expect(card.style.top).toBe('172px')
-    } finally {
-      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight)
-    }
-  })
-
-  it('clamps inside placement itself when the card is already measured (resize path)', () => {
-    window.innerHeight = 300
+  it('measures nothing for a compact card: not at open, on scroll, or on resize', () => {
     const { wrapper } = mount()
-    stubAnchorRect(screen.getByText('row'), { top: 280, right: 200 })
+    const rect = vi.spyOn(wrapper, 'getBoundingClientRect')
+    const listen = vi.spyOn(window, 'addEventListener')
     fireEvent.pointerEnter(wrapper)
     act(() => { vi.advanceTimersByTime(500) })
     const card = screen.getByText('card body').parentElement as HTMLElement
-    Object.defineProperty(card, 'offsetHeight', { value: 120 })
-    act(() => { fireEvent.resize(window) })
-    expect(card.style.top).toBe('172px')
-  })
-
-  it('repositions on capture-phase scroll while open and stops listening after close', () => {
-    const { wrapper } = mount()
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(500) })
-    stubAnchorRect(screen.getByText('row'), { top: 90, right: 300 })
     act(() => { fireEvent.scroll(document) })
-    const card = screen.getByText('card body').parentElement as HTMLElement
-    expect(card.style.left).toBe('308px')
-    expect(card.style.top).toBe('90px')
+    act(() => { fireEvent.resize(window) })
+    expect(rect).not.toHaveBeenCalled()
+    expect(listen.mock.calls.map(([type]) => type).filter(type => type === 'scroll' || type === 'resize')).toEqual([])
+    expect([card.style.left, card.style.top]).toEqual(['', ''])
     fireEvent.pointerLeave(wrapper)
     act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
     expect(screen.queryByText('card body')).toBeNull()

@@ -35,6 +35,8 @@ Set `discardCompletion: true` to omit the successful completion without JSON val
 
 Host bindings can return `new PtcImage(path, attachment)` to expose a stored image in Node programs. Explicit inspection appends `{ type: 'image', attachment }` entries to `result.output`, alongside `{ type: 'text', text }` entries in emission order. Text entries retain emitted newline characters; concatenate adjacent text without separators.
 
+Host bindings can return `new PtcInspectableValue(value, text)` to attach inspection text to a JSON object or array. The Node provider exposes the original data to the program and uses the supplied text only when that unchanged result is passed directly to `inspect`. The descriptor is host-only; copies, selected fields, modified results, and nested values use ordinary formatting. The [runtime reference](../../../docs/subsystems/ptc-runtime.md) defines the provider obligations.
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',
@@ -59,7 +61,7 @@ Binding-global and error-class names must match `[A-Za-z_$][A-Za-z0-9_$]*` and e
 
 ### What can go wrong
 
-Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal. Contract misuse rejects with `PtcRuntimeError`: `PTC_RUNTIME_INVALID_ARGUMENT` for an invalid request or spec, `PTC_RUNTIME_UNAVAILABLE` after disposal or while a retained environment's cleanup is incomplete, and `PTC_RUNTIME_CONFLICT` for a concurrent run for one owner or a retained environment launched under another sandbox policy.
+Providers mark truncated captured output or diagnostics with `result.outputTruncated`; this flag does not imply execution failure. Required completion values are never truncated into successful results. Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal. Contract misuse rejects with `PtcRuntimeError`: `PTC_RUNTIME_INVALID_ARGUMENT` for an invalid request or spec, `PTC_RUNTIME_UNAVAILABLE` after disposal or while a retained environment's cleanup is incomplete, and `PTC_RUNTIME_CONFLICT` for a concurrent run for one owner or a retained environment launched under another sandbox policy.
 
 -----
 

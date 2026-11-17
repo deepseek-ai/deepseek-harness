@@ -96,7 +96,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
-Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
+Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
 
 The packaged skill uses the custom skill root: a same-named project skill overrides it, and it overrides same-named user skills. One catalog entry wins without an error; see [skill-root priority](../../skill/skill-filesystem/README.md).
 

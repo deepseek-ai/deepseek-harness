@@ -39,7 +39,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
     const connection = resolveAdapterOptions({ baseURL: http.url })
     const adapter = new DeepSeekAdapter({
       options: () => connection,
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key' }),
       resolveUserId: () => '00000000-0000-4000-8000-000000000001' as AnonymousUserId,
       prepareExtensions: () => Promise.resolve({ fields: {}, accept: () => Promise.resolve() }),
     })

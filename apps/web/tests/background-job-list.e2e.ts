@@ -1,6 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-// Session-header background jobs driven by a real `ctx.jobs` entry. No model
-// call is involved.
+// The Session panel's background-jobs section driven by a real `ctx.jobs`
+// entry. No model call is involved.
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -16,12 +16,13 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { foldControlLayout, newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/background-job-list', import.meta.url))
 const RUNNING_EXPECTED = join(SNAPSHOT_DIR, 'running.expected.md')
 const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
+const SECTION = '[data-session-panel-section="background-jobs"]'
 const MODE = webSnapshotMode()
 const SEED_ID = 'background-job-list-web-e2e'
 // A hold on a barrier file the test owns in the job's cwd: the process never
@@ -82,12 +83,18 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     await scaffold?.close()
   })
 
-  it('shows a running background job in the header without a refresh, then kills it from the two-press stop control', async () => {
+  it('shows a running background job in the Session panel without a refresh, then kills it from the two-press stop control', async () => {
     let phase = 'running'
     onTestFailed(() => saveFailureShot(page, `web-e2e-background-job-${phase}`))
-    // Polling for zero would pass at t=0 before delivery and prove nothing.
-    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
-    expect(await trigger.count()).toBe(0)
+    const toggle = sessionPanelToggle(page)
+    const section = (await showSessionPanel(page)).locator(SECTION)
+    const list = section.getByRole('list')
+    // The mounted section keeps the roster stream open but renders no rows
+    // yet, so the panel hides it with its title. A one-shot check: polling for
+    // zero would pass at t=0 before delivery and prove nothing.
+    expect(await section.count()).toBe(1)
+    expect(await section.isVisible()).toBe(false)
+    expect(await list.count()).toBe(0)
 
     const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
@@ -101,31 +108,26 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
     const jobId = brandString<JobId>(matched[0])
 
-    await trigger.waitFor({ timeout: 15_000 })
-    expect(await trigger.locator('[data-state="ongoing"]').count()).toBe(1)
-    expect(await trigger.locator('[data-icon="dsw-icon-chevron-down-outline-regular"]').count()).toBe(0)
-    await trigger.hover()
-    const list = page.getByRole('list', { name: 'Background jobs' })
     const row = list.getByRole('listitem').first()
-    await row.waitFor({ timeout: 10_000 })
+    await row.waitFor({ timeout: 15_000 })
     await expect.poll(() => row.textContent()).toContain(COMMAND)
-    expect(await trigger.getAttribute('aria-expanded')).toBe('true')
-    await row.hover()
-    await row.getByRole('button', { name: /Show live output/ }).focus()
-    await page.mouse.move(2, 2)
-    // Focusing a menu control pins it beyond the 120ms hover-leave deadline.
-    await page.waitForTimeout(180)
-    expect(await list.count()).toBe(1)
-    await trigger.click()
+    expect(await section.getByRole('heading', { name: 'Background jobs', level: 2 }).isVisible()).toBe(true)
+    expect(await row.locator('[data-state="ongoing"]').count()).toBe(1)
+    expect(await page.locator('[data-jobs-running]').count()).toBe(0)
+    // Hiding the panel unmounts the section, and a blue dot on the toggle reports the running job.
+    await toggle.click()
     await list.waitFor({ state: 'detached' })
-    await trigger.click()
-    await list.waitFor()
-    await page.mouse.move(2, 2)
-    await page.waitForTimeout(180)
-    expect(await list.count()).toBe(1)
-    expect(await trigger.getAttribute('aria-label')).toBe('1 background job')
+    const dot = page.locator('[data-jobs-running]')
+    await dot.waitFor()
+    await page.getByRole('button', { name: 'Session panel Background jobs running: 1', exact: true }).waitFor()
+    expect(await dot.evaluate(element => getComputedStyle(element).width)).toBe('6px')
+    // Showing it again lists the live job, and the dot goes away.
+    await showSessionPanel(page)
+    await row.waitFor({ timeout: 10_000 })
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true')
+    await dot.waitFor({ state: 'detached' })
 
-    const running = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd, { runningJobs: 'keep' })
+    const running = await captureStableAria(page, SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(RUNNING_EXPECTED, running, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
@@ -133,150 +135,170 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     phase = 'settled'
     // The whole human path: arm, confirm, job.kill, registry kill, jobs
     // frames flipping the row — no registry call from the test.
-    const stop = page.locator('[data-kill-state]')
+    const stop = section.locator('[data-kill-state]')
     await stop.waitFor({ timeout: 10_000 })
     await stop.click()
     await expect.poll(() => stop.getAttribute('data-kill-state')).toBe('armed')
     await stop.click()
 
-    expect(await trigger.getAttribute('aria-label')).toBe('1 background job')
-    // The unclaimed report's reason lands in the settled row's detail.
-    await expect.poll(
-      () => page.getByRole('list', { name: 'Background jobs' }).textContent(),
-      { timeout: 15_000 },
-    ).toContain('cancelled by the user')
+    // The unclaimed report's reason lands in the settled row's detail; presses
+    // inside the overlay leave it open.
+    await expect.poll(() => list.textContent(), { timeout: 15_000 }).toContain('cancelled by the user')
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true')
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('killed')
 
-    const settled = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)
+    const settled = await captureStableAria(page, SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(SETTLED_EXPECTED, settled, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 90_000)
 
-  it('keeps the open list above the expanded right sidebar and in the header Tab order', async () => {
+  it('opens the section over the conversation beside the expanded right sidebar and closes it with Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-right-sidebar'))
-    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
-    if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+    const toggle = sessionPanelToggle(page)
     await page.getByRole('button', { name: 'Open right sidebar' }).click()
     const sidebar = page.locator('[data-rightbar-col]')
     // A toggle holds data-animating on the frame until its tracks settle.
     await expect.poll(() => sidebar.evaluate(column => column.parentElement?.hasAttribute('data-animating'))).toBe(false)
-    await trigger.click()
-    const list = page.getByRole('list', { name: 'Background jobs' })
-    await list.waitFor({ timeout: 10_000 })
-    // The list crosses into the sidebar column, so the hit test below covers it.
-    const [menuBox, sidebarBox] = await Promise.all([list.boundingBox(), sidebar.boundingBox()])
-    if (menuBox === null || sidebarBox === null) throw new Error('job list geometry is unavailable')
-    expect(menuBox.x + menuBox.width).toBeGreaterThan(sidebarBox.x)
-    // Every corner of the list hit-tests to the list itself; the inset clears its rounded corners.
-    const covered = await list.evaluate((menu) => {
-      const rect = menu.getBoundingClientRect()
+    const panel = await showSessionPanel(page)
+    expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
+    const section = panel.locator(SECTION)
+    const settledToggle = section.getByRole('button', { name: 'Finished 1', exact: true })
+    await settledToggle.waitFor({ timeout: 10_000 })
+    // The overlay stays in the conversation body, clear of the sidebar column.
+    const [panelBox, sidebarBox] = await Promise.all([panel.boundingBox(), sidebar.boundingBox()])
+    if (panelBox === null || sidebarBox === null) throw new Error('Session panel geometry is unavailable')
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(sidebarBox.x)
+    // Every corner of the panel hit-tests to the panel itself; the inset clears its rounded corners.
+    const covered = await panel.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
       const inset = 20
       const points: Array<[number, number]> = [
         [rect.left + inset, rect.top + inset], [rect.right - inset, rect.top + inset],
         [rect.left + inset, rect.bottom - inset], [rect.right - inset, rect.bottom - inset],
       ]
-      return points.filter(([x, y]) => !menu.contains(document.elementFromPoint(x, y)))
+      return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y)))
     })
     expect(covered).toEqual([])
 
-    // Keyboard order matches the in-place list: the trigger leads into the
-    // list, and Tab off its last control reaches the control after the trigger.
-    const after = await trigger.evaluate((node) => {
-      const all = [...document.querySelectorAll<HTMLElement>('button, a[href], [tabindex]:not([tabindex="-1"])')]
-      const outside = all.filter(el => el.closest('[aria-label="Background jobs"]') === null && el.tabIndex >= 0)
-      return outside[outside.indexOf(node as HTMLElement) + 1]?.outerHTML.slice(0, 120)
-    })
-    expect(after).toMatch(/^<button/)
-    await trigger.focus()
-    await page.keyboard.press('Tab')
-    expect(await list.evaluate(menu => menu.contains(document.activeElement))).toBe(true)
-    const controls = await list.evaluate(menu => menu.querySelectorAll('button:not(:disabled)').length)
-    for (let i = 1; i < controls; i += 1) await page.keyboard.press('Tab')
-    await page.keyboard.press('Tab')
-    expect(await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 120))).toBe(after)
-    await trigger.focus()
-    await page.keyboard.press('Tab')
+    // Escape from a control in the section closes the overlay and returns focus to the toggle.
+    await settledToggle.focus()
     await page.keyboard.press('Escape')
-    await list.waitFor({ state: 'detached', timeout: 10_000 })
-    expect(await trigger.evaluate(node => node === document.activeElement)).toBe(true)
+    await panel.waitFor({ state: 'detached', timeout: 10_000 })
+    expect(await toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(await toggle.evaluate(node => node === document.activeElement)).toBe(true)
   }, 60_000)
 
-  it('keeps the compact Layers trigger focused and opens jobs only on click or keyboard', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-compact-trigger'))
-    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
-    const list = page.getByRole('list', { name: 'Background jobs' })
-    const count = trigger.locator('[data-job-count]')
+  it('fits the section into the narrow overlay and closes it on a press outside', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-narrow-overlay'))
+    const toggle = sessionPanelToggle(page)
     const viewport = page.viewportSize()!
     await page.getByRole('button', { name: 'Collapse right sidebar', exact: true }).click()
     await expect.poll(() => page.locator('[data-rightbar-col]')
       .evaluate(column => column.parentElement?.hasAttribute('data-animating'))).toBe(false)
     await page.getByRole('button', { name: 'Open right sidebar', exact: true }).waitFor()
-    await page.mouse.move(2, 2)
-    expect(await count.isVisible()).toBe(true)
-    expect(await trigger.locator('[data-icon="dsw-icon-layers-outline-regular"]').count()).toBe(1)
-    expect(await trigger.locator('svg').count()).toBe(1)
-    expect(await trigger.locator('svg').evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      return [bounds.width, bounds.height]
-    })).toEqual([14, 14])
-    await trigger.focus()
-    const original = await trigger.elementHandle()
-    if (original === null) throw new Error('Background jobs trigger is missing')
+    await toggle.focus()
+    const original = await toggle.elementHandle()
+    if (original === null) throw new Error('Session panel toggle is missing')
     try {
       await page.setViewportSize({ width: 390, height: 700 })
-      await expect.poll(() => count.evaluate(element => getComputedStyle(element).display)).toBe('none')
       expect(await original.evaluate(element => element.isConnected && element === document.activeElement)).toBe(true)
-      const expandSidebar = page.locator('[data-sidebar-right-expand]')
-      const compactStyles = await Promise.all([trigger, expandSidebar].map(control => control.evaluate((element) => {
-        const style = getComputedStyle(element)
-        const bounds = element.getBoundingClientRect()
-        const icon = element.querySelector('svg')!.getBoundingClientRect()
-        return { width: bounds.width, height: bounds.height, padding: style.padding, radius: style.borderRadius,
-          color: style.color, iconWidth: icon.width, iconHeight: icon.height }
-      })))
-      expect(compactStyles[0]).toEqual(compactStyles[1])
-      expect(compactStyles[0]).toMatchObject({ width: 28, height: 28, padding: '0px', iconWidth: 15, iconHeight: 15 })
-      expect(await trigger.evaluate(element => getComputedStyle(element.closest('[data-slot="conversation.session.header.actions"]')!.parentElement!).gap)).toBe('8px')
-      await expandSidebar.hover()
-      const expandHover = await expandSidebar.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return { background: style.backgroundColor, color: style.color }
-      })
-      await expect.poll(() => trigger.evaluate((element) => {
-        const bounds = element.getBoundingClientRect()
-        return element.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2))
-      })).toBe(true)
-      await trigger.hover()
-      expect(await trigger.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return { background: style.backgroundColor, color: style.color }
-      })).toEqual(expandHover)
-      expect(expandHover.background).not.toBe('rgba(0, 0, 0, 0)')
-      // Compact hover stays closed beyond the wide trigger's 150ms open deadline.
-      await page.waitForTimeout(200)
-      expect(await list.count()).toBe(0)
-      await trigger.click()
-      await list.waitFor()
+      const panel = await showSessionPanel(page)
+      expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
+      const list = panel.locator(SECTION).getByRole('list')
       await list.getByRole('button', { name: 'Finished 1', exact: true }).waitFor()
-      await trigger.click()
-      await list.waitFor({ state: 'detached' })
-      await trigger.press('ArrowDown')
-      await list.waitFor()
-      expect(await list.getByRole('button').first().evaluate(element => element === document.activeElement)).toBe(true)
-      await page.mouse.move(2, 2)
-      // Keyboard activation remains pinned after leaving both trigger and menu.
-      await page.waitForTimeout(180)
-      expect(await list.count()).toBe(1)
-      await page.mouse.click(2, 2)
-      await list.waitFor({ state: 'detached' })
-      expect(await trigger.getAttribute('aria-expanded')).toBe('false')
+      // The long command truncates inside its row instead of widening the panel past the viewport.
+      const fit = await panel.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        const rows = [...element.querySelectorAll<HTMLElement>('[data-jobs-section] li')]
+        return {
+          inViewport: rect.left >= 0 && rect.right <= innerWidth,
+          panelOverflow: element.scrollWidth > element.clientWidth,
+          rowOverflow: rows.some(row => row.getBoundingClientRect().right > rect.right),
+        }
+      })
+      expect(fit).toEqual({ inViewport: true, panelOverflow: false, rowOverflow: false })
+      // The overlay's inline margin is transcript: a press there is outside the panel.
+      const box = await panel.boundingBox()
+      if (box === null) throw new Error('Session panel geometry is unavailable')
+      expect(box.x).toBeGreaterThan(4)
+      await page.mouse.click(box.x / 2, box.y + box.height / 2)
+      await panel.waitFor({ state: 'detached' })
+      expect(await toggle.getAttribute('aria-expanded')).toBe('false')
     } finally {
-      await page.keyboard.press('Escape')
       await page.setViewportSize(viewport)
       await original.dispose()
     }
   })
+
+  it('marks a job that finished with a nonzero exit code with the warning dot', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-nonzero-exit'))
+    await executeToolFixture(scaffold.ctx, {
+      signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('background-job-list-nonzero-e2e'),
+      name: 'bash',
+      arguments: { command: 'exit 3', description: 'Exit with a failure', run_in_background: true },
+      agent: scaffold.ctx.agents.list()[0]!,
+    })
+    const panel = await showSessionPanel(page)
+    const row = panel.locator(SECTION).getByRole('listitem').filter({ hasText: 'exit 3' })
+    await row.getByText('bash · exit code: 3', { exact: true }).waitFor({ timeout: 15_000 })
+    expect(await row.locator('[data-state]').getAttribute('data-state')).toBe('warning')
+  })
+
+  it('holds back the rows past five in each group behind its fold control and keeps the choice while the panel is hidden', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-folds'))
+    // Seven jobs on the suite's barrier file: they run until this case, or `afterAll`, releases it.
+    for (let index = 0; index < 7; index++) {
+      await executeToolFixture(scaffold.ctx, {
+        signal: new AbortController().signal,
+        callId: brandString<ToolCallId>(`background-job-list-fold-${String(index)}`),
+        name: 'bash',
+        arguments: { command: `: fold-${String(index)}; ${COMMAND}`, description: 'Hold a slot for the fold', run_in_background: true },
+        agent,
+      })
+    }
+    const section = (await showSessionPanel(page)).locator(SECTION)
+    const rows = section.locator('[data-job-row]')
+    const liveRows = section.locator('[data-job-row]:has([data-state="ongoing"])')
+    const folds = section.locator('[data-session-panel-row="fold"]')
+    const names = async (): Promise<(string | undefined)[]> => (await liveRows.allTextContents()).map(text => /fold-\d/.exec(text)?.[0])
+    // The five jobs started last show, the most recent first, and the group's fold control follows them.
+    await expect.poll(names, { timeout: 20_000 }).toEqual(['fold-6', 'fold-5', 'fold-4', 'fold-3', 'fold-2'])
+    expect(await folds.allTextContents()).toEqual(['Show 2 more running'])
+    expect(await section.locator('li:has([data-session-panel-row="fold"])').count()).toBe(1)
+    // The control is one more row: the row height, its chevron under the state marks, its text under the commands.
+    expect(await foldControlLayout(folds.first(), liveRows.first(), '[data-job-label]'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    const more = section.getByRole('button', { name: 'Show 2 more running (running background jobs)', exact: true })
+    await more.click()
+    await expect.poll(names).toEqual(['fold-6', 'fold-5', 'fold-4', 'fold-3', 'fold-2', 'fold-1', 'fold-0'])
+    const less = section.getByRole('button', { name: 'Show less (running background jobs)', exact: true })
+    expect([await less.textContent(), await less.getAttribute('aria-expanded')]).toEqual(['Show less', 'true'])
+    // The same button stays under the pointer's focus across the change.
+    expect(await less.evaluate(element => element === document.activeElement)).toBe(true)
+    // The choice is the Session's: hiding the panel unmounts the section, and showing it again lists every live row.
+    await sessionPanelToggle(page).click()
+    await section.getByRole('list').waitFor({ state: 'detached' })
+    await showSessionPanel(page)
+    await expect.poll(() => liveRows.count(), { timeout: 10_000 }).toBe(7)
+
+    // Released, the jobs settle. With nothing live the settled group opens, with its five latest rows and its own control.
+    await writeFile(join(scaffold.workspaceCwd, RELEASE), '')
+    await expect.poll(() => liveRows.count(), { timeout: 30_000 }).toBe(0)
+    const header = section.getByRole('button', { name: /^Finished \d+$/ })
+    await expect.poll(async () => Number(/\d+/.exec(await header.textContent() ?? '')?.[0]), { timeout: 15_000 }).toBeGreaterThanOrEqual(7)
+    const settled = Number(/\d+/.exec(await header.textContent() ?? '')?.[0])
+    expect(await header.getAttribute('aria-expanded')).toBe('true')
+    await expect.poll(() => rows.count()).toBe(5)
+    expect(await folds.allTextContents()).toEqual([`Show ${String(settled - 5)} more finished`])
+    expect(await foldControlLayout(folds.first(), rows.first(), '[data-job-label]'))
+      .toEqual({ heights: [28, 28], chevronOffset: 0, textOffset: 0, fontSize: '12px', expanded: 'false' })
+    await folds.first().getByRole('button').click()
+    await expect.poll(() => rows.count()).toBe(settled)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 120_000)
 
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['running.expected.md', 'settled.expected.md'])

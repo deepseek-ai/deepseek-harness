@@ -493,6 +493,7 @@ describe('model-relative reference budgets', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     const resolverFiber = ctx.plugin(SessionReferenceResolver, config)
     await resolverFiber
@@ -664,6 +665,17 @@ describe('session reference discovery and preparation', () => {
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'LATEST', 1)).resolves.toEqual([
       { sessionId: brandString<SessionId>('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
     ])
+    // Titles match fuzzily; the working directory matches only contiguous text.
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'lttl', 1)).resolves.toEqual([
+      { sessionId: brandString<SessionId>('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
+    ])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '/se')).resolves.toEqual([])
+    // An untitled Session's label falls back to its id, which matches only as a substring:
+    // `a1` occurs in this id only as scattered characters.
+    ctx.sessions.create(brandString<SessionId>('a0000000-0000-4000-8000-000000000001'), { meta: { cwd: '/same', createdAt: 50 } })
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'a1')).resolves.toEqual([])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '0001')).resolves
+      .toMatchObject([{ sessionId: brandString<SessionId>('a0000000-0000-4000-8000-000000000001'), label: 'a0000000-0000-4000-8000-000000000001' }])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 0))
       .rejects.toThrow(expectCode('SESSION_REFERENCE_INVALID_REFERENCE'))
 
@@ -809,9 +821,10 @@ describe('session reference discovery and preparation', () => {
     vi.restoreAllMocks()
   })
 
-  it('labels every session by id when no projection face is composed', async () => {
+  it('labels every session by id when no title projection is registered', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     await ctx.plugin(SessionReferenceResolver)
     const target = ctx.sessions.create(brandString<SessionId>('target'), { meta: { cwd: '/same' } })
@@ -1306,18 +1319,21 @@ describe('session reference discovery and preparation', () => {
   it('rejects direct invalid configuration before service publication', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(ctx, { maxReferences: 0 }))
       .toThrow(expectCode('SESSION_REFERENCE_INVALID_CONFIG'))
 
     const oversizedCtx = new Context()
     await oversizedCtx.plugin(SessionStore)
+    await oversizedCtx.plugin(SessionProjectionRegistry)
     await oversizedCtx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(oversizedCtx, { maxReferences: 4 }))
       .toThrow(expectCode('SESSION_REFERENCE_INVALID_CONFIG'))
 
     const defaultCtx = new Context()
     await defaultCtx.plugin(SessionStore)
+    await defaultCtx.plugin(SessionProjectionRegistry)
     await defaultCtx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(defaultCtx)).not.toThrow()
   })

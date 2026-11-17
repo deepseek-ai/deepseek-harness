@@ -11,6 +11,7 @@ const methodDetails = new Map<string, string>([
   ['listActions', 'Actions use case-sensitive Pattern.Action names, such as "Invoke.Invoke", "Toggle.Toggle", and "ExpandCollapse.Expand". Each pattern has a known set of native UI Automation operations. One pattern can expose multiple actions. Use a known operation of an advertised pattern directly; call listActions when you need to confirm the exposed operations. Query methods are not exposed through performAction.'],
   ['toggleMouse', 'Windows sends system input. The selected window must be in the foreground for both events; only the press requires the pointer over it. Use try/finally to release the button if the program fails.'],
   ['invoke', 'The provider chooses default action for well-known patterns. A failed operation is not retried through another pattern or simulated input.'],
+  ['paste', 'Write text or HTML to the system clipboard and send Ctrl+V to the target window. The new clipboard contents remain in place. Return dispatch evidence, not confirmation that the target applied the content; observe the target before continuing. A failure is reported without substituting typeText.'],
   ['performAction', 'Use the exact Pattern.Action name. Omit argument or pass null for a parameter-free operation. Pass a single parameter as its direct JSON value; pass multiple parameters as an object using their native names. Enum values use their exact names as strings. Examples: await win.performAction(id, "Value.SetValue", "hello"); await win.performAction(id, "Window.SetWindowVisualState", "Normal"); await win.performAction(id, "Transform.Resize", { width: 800, height: 600 }).'],
 ])
 
@@ -20,6 +21,6 @@ export const GUIDANCE = `${PLATFORM_GUIDANCE}
 ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
   const detail = methodDetails.get(method)
   if (!detail) return entry
-  if (method === 'getAccessibilityTree') return `${entry.replace(/ — .*$/, '')} — ${detail}`
+  if (method === 'getAccessibilityTree' || method === 'paste') return `${entry.replace(/ — .*$/, '')} — ${detail}`
   return `${entry} ${detail}`
 })}`

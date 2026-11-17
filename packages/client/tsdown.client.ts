@@ -73,15 +73,17 @@ function compiledClientStyle(
   fileId: string,
   expression: string,
 ): CompiledClientStyle {
-  const path = relative(packageDir, fileId).split(sep).join('/').replace(/^lib\/types\//, 'src/')
-  if (!path.startsWith('../')) return { path, expression }
-  let directory = dirname(fileId)
+  // Rolldown canonicalizes module ids through symbolic links; the package directory arrives as the caller wrote it.
+  const file = realpathSync(fileId)
+  const local = pathBelow(realpathSync(packageDir), file)
+  if (local !== undefined) return { path: local.split(sep).join('/').replace(/^lib\/types\//, 'src/'), expression }
+  let directory = dirname(file)
   while (dirname(directory) !== directory) {
     const manifestPath = join(directory, 'package.json')
     if (existsSync(manifestPath)) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
       if (typeof manifest.name === 'string') {
-        return { path: `node_modules/${manifest.name}/${relative(directory, fileId).split(sep).join('/')}`, expression }
+        return { path: `node_modules/${manifest.name}/${relative(directory, file).split(sep).join('/')}`, expression }
       }
     }
     directory = dirname(directory)
@@ -95,7 +97,7 @@ function compiledClientStyle(
  * Everything else under @deepseek-ai/* is either a module-table entry
  * (external) or a leak the purity gate rejects.
  */
-export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|error|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
+export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|error|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-text-search|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-plugin-market-index\/source$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
 
 /**
  * Vendored framework libraries: rescoped into @deepseek-ai, so the gate below

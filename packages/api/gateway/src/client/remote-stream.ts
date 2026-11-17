@@ -224,7 +224,7 @@ async function closeRemoteStreamIterator<Item>(
 ): Promise<void> {
   try {
     await iterator.return?.()
-  } catch {
+  } catch (_iteratorReturnFailed) {
     // The disposed logical stream has no remaining consumer for cancellation failures.
   }
 }

@@ -2,10 +2,9 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
-import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -21,7 +20,7 @@ interface Manifest {
 }
 
 const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as Manifest
-const patches = load(readFileSync(resolve(root, manifest.dsh.bundle.patch), 'utf8'), { schema: entryListSchema }) as Array<
+const patches = parseEntryYaml(readFileSync(resolve(root, manifest.dsh.bundle.patch), 'utf8')) as Array<
   { id?: string; disabled?: unknown; insert?: EntryOptions[] }
 >
 const inserted = patches.flatMap(patch => patch.insert ?? [])

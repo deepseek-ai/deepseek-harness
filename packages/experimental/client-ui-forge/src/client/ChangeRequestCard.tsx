@@ -1,16 +1,21 @@
 /**
- * One change request as a card: its title links to the host, a one-line
- * summary shows while collapsed, and while expanded one sentence per fact
- * (checks, review, merge state, the changed lines, which open its changes, and
- * the linked issues) above the ready-for-review or merge action.
+ * One change request as a card: its one-line title links to the host and
+ * crawls into view while the pointer rests on the card's head, a one-line
+ * summary shows while collapsed, taking the short wording of failed checks
+ * while the full one does not fit and crawling with the title past that, and
+ * while expanded one row per fact (checks, review, merge state, the changed
+ * lines, which open its changes, and the linked issues) above the merge
+ * action. Opening, copying, viewing changes, marking a draft ready, and
+ * removing live in the card's actions menu.
  */
 
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular, IconListPenOutlineRegular,
-  IconRightUpOutlineRegular, IconTriangleRightFillRegular, Menu, MenuItemButton, StateDot, Tooltip,
-  type MenuEntry,
+  Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
+  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, MarqueeText, Menu,
+  MenuItemButton, StateDot, Tooltip, useHoverMarquee,
+  type MenuEntry, type MenuItem,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -23,7 +28,7 @@ import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
 import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
 
@@ -129,7 +134,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   const threads = snapshot.unresolvedThreads > 0 || snapshot.threadsTruncated ? threadCount(snapshot, locale) : undefined
   const threadsText = threads === undefined ? undefined : t('change.threads', { count: threads })
   const trailing = threadsText === undefined ? undefined : (
-    <Tooltip label={threadsText} side="top">
+    <Tooltip label={threadsText} side="top" delayMs={500}>
       <span className={css.threads} data-forge-threads={threads} aria-hidden="true"><ThreadGlyph size={14} />{threads}</span>
     </Tooltip>
   )
@@ -137,7 +142,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   // The count shows only a number, so the threads are named in full for assistive technology.
   const parts = (
     <>
-      <RowParts label={t('change.row.changes')} icon={<IconListPenOutlineRegular size={16} />}
+      <RowParts label={t('change.row.changes')} icon={<IconFilesDiffOutlineRegular size={16} />}
         value={<DiffSize snapshot={snapshot} locale={locale} />} trailing={trailing} opens={opens} />
       {threadsText !== undefined && <span id={described} className={css.visuallyHidden}>{threadsText}</span>}
     </>
@@ -167,10 +172,14 @@ function finished(snapshot: ChangeRequestSnapshot, now: number, t: Translate): s
   return ago === undefined ? state : t('time.finished', { state, time: ago })
 }
 
-/** Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress. */
-function Summary({ snapshot, now, t }: {
+/**
+ * Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress.
+ * With `short`, failed checks take the wording without their count.
+ */
+function Summary({ snapshot, now, short, t }: {
   readonly snapshot: ChangeRequestSnapshot | null
   readonly now: number
+  readonly short: boolean
   readonly t: Translate
 }): ReactNode {
   if (snapshot === null) return <StateDot state="ongoing" size={11} />
@@ -184,12 +193,67 @@ function Summary({ snapshot, now, t }: {
       <span className={css.ci} data-tone={ci.kind === 'failed' ? 'error' : undefined}>
         {ci.kind !== 'none' && <CheckGlyph state={ci.kind === 'cancelled' ? 'cancelled' : ROLLUP[snapshot.checksRollup]} size={12} />}
         {ci.kind === 'failed'
-          ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
+          ? ci.count > 0 && !short ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
           : ci.kind === 'cancelled' ? t('change.ci.cancelled', { count: ci.count }) : t(`change.ci.${ci.kind}`)}
       </span>
       {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
     </>
   )
+}
+
+/**
+ * What the collapsed status line shows when its failed checks can take the shorter wording without their count: the full
+ * wording and the flag, which decide the line's width. Null for any other status, and where the language's short wording
+ * is no shorter.
+ * @param snapshot - change request status.
+ * @param t - copy.
+ * @returns the line's full text after the number, or null.
+ */
+function shortenable(snapshot: ChangeRequestSnapshot | null, t: Translate): string | null {
+  if (snapshot?.state !== 'open') return null
+  const ci = ciSummary(snapshot)
+  if (ci.kind !== 'failed' || ci.count === 0) return null
+  const full = t('change.ci.failed', { count: ci.count })
+  if (t('change.ci.failedUnlisted').length >= full.length) return null
+  const flag = flagOf(snapshot)
+  return flag === undefined ? full : `${full} ${t(`change.flag.${flag}`)}`
+}
+
+/**
+ * Whether the collapsed status line shows the short wording of failed checks: only while the line with the full wording
+ * does not fit. A change of the line's width, of the fonts, or of `full` shows the full wording again for one layout pass,
+ * which measures it and switches before the frame is painted.
+ * @param line - the clipping status line.
+ * @param full - the line's full text after the number, from {@link shortenable}; null measures nothing.
+ * @returns whether the line takes the short wording.
+ */
+function useShortWording(line: RefObject<HTMLElement | null>, full: string | null): boolean {
+  const [measured, setMeasured] = useState<{ readonly full: string | null; readonly short: boolean }>({ full: null, short: false })
+  const short = full !== null && measured.full === full && measured.short
+  useLayoutEffect(() => {
+    if (full === null || short) return
+    const element = line.current
+    /* v8 ignore next -- the status line is mounted whenever there is a full wording to measure */
+    if (element === null) return
+    if (element.scrollWidth > element.clientWidth) setMeasured({ full, short: true })
+  })
+  useEffect(() => {
+    if (full === null) return
+    const element = line.current
+    /* v8 ignore next -- the status line is mounted whenever there is a full wording to measure */
+    if (element === null) return
+    // A new object renders again even when the line already shows the full wording, so the layout effect measures.
+    const measure = (): void => { setMeasured({ full, short: false }) }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    const fonts = document.fonts
+    fonts.addEventListener('loadingdone', measure)
+    return () => {
+      observer.disconnect()
+      fonts.removeEventListener('loadingdone', measure)
+    }
+  }, [line, full])
+  return short
 }
 
 /** Expanded identity after the number: draft state and the head and base branches. */
@@ -272,7 +336,7 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   )
 }
 
-/** The footer with the action of an open change request: mark a draft ready, or merge one the host would merge now. */
+/** The footer with the merge action of an open change request the host would merge now. */
 function Primary({ entry, snapshot, name, actions, t }: {
   readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
@@ -286,18 +350,8 @@ function Primary({ entry, snapshot, name, actions, t }: {
     setBusy(true)
     void action().finally(() => { setBusy(false) })
   }
-  const { markReady, merge } = actions
-  if (snapshot.state !== 'open') return null
-  if (snapshot.draft) {
-    if (markReady === undefined) return null
-    return (
-      <div className={css.footer}>
-        <Button size="sm" variant="outline" className={css.primaryAction} disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
-          {t('change.markReady')}
-        </Button>
-      </div>
-    )
-  }
+  const { merge } = actions
+  if (snapshot.state !== 'open' || snapshot.draft) return null
   const [usual] = snapshot.mergeMethods
   if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
   return (
@@ -311,6 +365,76 @@ function Primary({ entry, snapshot, name, actions, t }: {
         t={t}
       />
     </div>
+  )
+}
+
+/**
+ * The card's actions menu: open on the host, copy the link, view the changes
+ * of a served change request, mark an open draft ready, and remove the binding.
+ */
+function CardMenu({ entry, snapshot, name, url, actions, t }: {
+  readonly entry: ForgePanelChangeRequest
+  readonly snapshot: ChangeRequestSnapshot | null
+  readonly name: string
+  readonly url: string
+  readonly actions: ChangeRequestActions
+  readonly t: Translate
+}): ReactNode {
+  const [open, setOpen] = useState(false)
+  // One ready request at a time: the item stays disabled until the previous one settles.
+  const [busy, setBusy] = useState(false)
+  const { remove, markReady, viewChanges } = actions
+  const ready = markReady !== undefined && snapshot?.state === 'open' && snapshot.draft
+    ? () => {
+      setBusy(true)
+      void markReady(entry).finally(() => { setBusy(false) })
+    }
+    : undefined
+  // Each item carries the action it runs, so a selection never reaches another item's action.
+  const choices: { readonly item: MenuItem; readonly run: () => void }[] = [
+    { item: { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> }, run: () => { actions.openLink(url) } },
+    { item: { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> }, run: () => { actions.copyLink(url) } },
+    ...viewChanges !== undefined && snapshot !== null && entry.ref !== null ? [{
+      item: { id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> },
+      run: () => { viewChanges(entry) },
+    }] : [],
+    ...ready === undefined ? [] : [{
+      item: { id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy },
+      run: ready,
+    }],
+    ...remove === undefined ? [] : [{
+      item: { id: 'remove', label: t('change.remove'), icon: <IconCloseOutlineRegular size={14} />, danger: true },
+      run: () => { remove(entry) },
+    }],
+  ]
+  // Removing sits apart from the other actions.
+  const items: MenuEntry[] = choices.flatMap(({ item }) => item.id === 'remove'
+    ? [{ type: 'separator' as const, id: 'remove-separator' }, item] : [item])
+  const select = (id: string): void => {
+    setOpen(false)
+    for (const choice of choices) if (choice.item.id === id) choice.run()
+  }
+  return (
+    <Menu
+      open={open}
+      onClose={() => { setOpen(false) }}
+      portal
+      align="end"
+      anchor={(
+        <button
+          type="button"
+          className={`${css.iconButton} ${css.moreButton}`}
+          aria-label={t('change.actions', { name })}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => { setOpen(!open) }}
+        >
+          <IconEllipsisOutlineRegular size={14} />
+        </button>
+      )}
+      items={items}
+      onSelect={select}
+    />
   )
 }
 
@@ -368,14 +492,36 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
   const notice = entry.ref === null ? 'change.unserved' : failure === undefined ? undefined : FAILURE[failure.code]
   const tone = toneOf(snapshot)
   const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
+  const titleRef = useRef<HTMLSpanElement>(null)
+  const lineRef = useRef<HTMLSpanElement>(null)
+  const titleMarquee = useHoverMarquee(titleRef)
+  const lineMarquee = useHoverMarquee(lineRef)
+  // One hover on the head carries every text it clips: the title, and the collapsed number and status line.
+  const marquee = useMemo(() => ({
+    onPointerEnter: (event: PointerEvent): void => {
+      titleMarquee.onPointerEnter(event)
+      lineMarquee.onPointerEnter(event)
+    },
+    onPointerLeave: (): void => {
+      titleMarquee.onPointerLeave()
+      lineMarquee.onPointerLeave()
+    },
+  }), [titleMarquee, lineMarquee])
+  const short = useShortWording(lineRef, expanded || notice !== undefined ? null : shortenable(snapshot, t))
   // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
   const meta = expanded
     ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
-    : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
-  const { remove } = actions
+    : notice === undefined ? <Summary snapshot={snapshot} now={now} short={short} t={t} /> : null
+  const parts = (
+    <>
+      {number !== null && <span>{t('change.number', { number })}</span>}
+      {number !== null && meta !== null && <span className={css.dot} aria-hidden="true">·</span>}
+      {meta}
+    </>
+  )
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
-      <div className={css.changeHead}>
+      <div className={css.changeHead} {...marquee}>
         <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
         <div className={css.headText}>
           <a
@@ -388,34 +534,16 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
               actions.openLink(url)
             }}
           >
-            {snapshot?.title ?? url.replace(/^https?:\/\//i, '')}
+            <MarqueeText ref={titleRef}>{snapshot?.title ?? url.replace(/^https?:\/\//i, '')}</MarqueeText>
           </a>
           {(number !== null || meta !== null) && (
             <div className={css.meta}>
-              {number !== null && <span>{t('change.number', { number })}</span>}
-              {number !== null && meta !== null && <span aria-hidden="true">·</span>}
-              {meta}
+              {expanded ? parts : <MarqueeText ref={lineRef} className={css.statusLine}>{parts}</MarqueeText>}
             </div>
           )}
         </div>
         {actions.renderActions?.({ url: entry.url, ref: entry.ref, headSha: snapshot?.headSha ?? null, state: snapshot?.state ?? null })}
-        <Tooltip label={t('change.view')} side="top">
-          <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
-            <IconRightUpOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        <Tooltip label={t('change.copy')} side="top">
-          <button type="button" className={css.iconButton} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
-            <IconCopyOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        {remove !== undefined && (
-          <Tooltip label={t('change.remove')} side="top">
-            <button type="button" className={css.iconButton} aria-label={t('change.removeAria', { name })} onClick={() => { remove(entry) }}>
-              <IconCloseOutlineRegular size={14} />
-            </button>
-          </Tooltip>
-        )}
+        <CardMenu entry={entry} snapshot={snapshot} name={name} url={url} actions={actions} t={t} />
         <button
           type="button"
           className={css.iconButton}

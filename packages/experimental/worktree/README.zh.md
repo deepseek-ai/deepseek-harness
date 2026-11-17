@@ -32,7 +32,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-`ctx.worktrees.create(agent, { name?, from? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.set` 进入规范化的检出目录。`from` 在创建前解析为本地提交，默认是 `HEAD`；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
+`ctx.worktrees.create(agent, { name?, from?, fetch? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.set` 进入规范化的检出目录。`from` 在创建前解析为本地提交，默认是 `HEAD`。`fetch: true` 时，`from` 必须是某个已配置远程的远程跟踪分支完整引用名 `refs/remotes/<remote>/<branch>`，远程名相互嵌套时取最长的；创建前先运行 `git fetch --no-tags --no-recurse-submodules --no-write-fetch-head --no-auto-maintenance <remote> +refs/heads/<branch>:<from>`，只获取这一个分支，再解析获取到的提交。获取在 Session 的沙箱策略与命令期限下运行，不会提示输入，获取失败时不创建任何东西；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在请求要求获取时先收到 `fetch`，在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 
@@ -89,7 +89,7 @@ Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调�
 <a id="known-limitations-and-deferred-work"></a>
 
 - **保留的产物**——离开工作树时保留其分支和文件，归档清理也从不删除分支。安装失败同样可能保留部分产物；删除失败可能留下部分目录，可在保留的分支上恢复覆盖。
-- **仅限本地提交**——创建操作不会获取远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
+- **默认仅限本地提交**——创建操作只获取请求指定的那一个远程分支，不会获取其他远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
 - **过滤器处理前的内容**——检出时跳过已配置的过滤器，以避免执行仓库配置的程序或隐式下载。Git LFS 指针与加密 blob 保持存储时的形式；拉取实体内容或解密由用户另行执行。
 - **执行要求**——子进程提供方必须在与文件系统提供方相同的执行环境中提供 Git 与 Node。Git 必须识别 `GIT_NO_LAZY_FETCH`：Git 2.45 及 2.39.4、2.40.2、2.41.1、2.42.2、2.43.4、2.44.1 维护版本均支持；更早的版本会忽略该变量并继续执行而不报错，因此创建操作可能从 promisor 远程获取缺失的部分克隆对象。`git --no-lazy-fetch` 选项会拒绝这些版本，但它仅在 Git 2.45 及以后存在，也会拒绝上述已修补的维护版本。现有沙箱必须允许写入检出目录与共享 Git 元数据。
 

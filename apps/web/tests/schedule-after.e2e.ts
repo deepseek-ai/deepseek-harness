@@ -8,10 +8,9 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { dump } from 'js-yaml'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { bundlePatchPaths, composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { type MessageId, type ToolCallId, createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
@@ -99,9 +98,9 @@ async function writeEveryStepOverlay(dir: string): Promise<string> {
     ? { ...plugin, config: { refreshIntervalMs: 0 } }
     : plugin)
   const path = join(dir, 'time-context-every-step.patch.yml')
-  await writeFile(path, dump([
+  await writeFile(path, stringifyEntryYaml([
     { id: 'preset-standard', config: { ...config, plugins } },
-  ], { schema: entryListSchema, noRefs: true, lineWidth: -1 }))
+  ], { lineWidth: -1 }))
   return path
 }
 
@@ -846,12 +845,14 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
   it('manages cross-Session tasks from the sidebar without activating their Sessions', async () => {
     const otherSessionId = brandString<SessionId>('schedule-manager-other-session')
     await seedSession(scaffold, await readFile(CATALOG_FIXTURE, 'utf8'), otherSessionId, 'standard')
-    const other = await scaffold.ctx.schedule.create({ prompt: 'Inspect the second workspace deployment', title: 'Second workspace deployment', timing: { kind: 'at', at: '2099-08-25T12:08:00.000Z' }, target: { kind: 'session', sessionId: otherSessionId } }, otherSessionId)
+    const other = await scaffold.ctx.schedule.create({ prompt: 'Inspect the second workspace deployment', title: 'Second workspace deployment', timing: { kind: 'at', at: '2099-08-25T12:08:00.000Z' }, target: { kind: 'session', sessionId: otherSessionId } }, CATALOG_SESSION_ID)
     await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
     const manager = page.getByTestId('task-manager-page')
     await manager.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
     const tasks = manager.getByRole('list', { name: 'Task catalog' })
     await expect.poll(() => tasks.getByRole('listitem').count()).toBe(4)
+    const creatorMark = page.locator(`[data-row-key="session:${CATALOG_SESSION_ID}"] [data-session-schedule-mark]`)
+    await expect.poll(() => creatorMark.textContent()).toBe('3 automation tasks')
     expect(scaffold.ctx.agents.get(CATALOG_SESSION_ID)).toBeUndefined()
     expect(scaffold.ctx.agents.get(otherSessionId)).toBeUndefined()
 

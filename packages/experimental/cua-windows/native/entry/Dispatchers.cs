@@ -78,15 +78,9 @@ internal sealed class MtaDispatcher : IAsyncDisposable
 
 internal sealed class ServiceControl : Forms.Control
 {
-    internal Func<int, nint, bool>? ClipboardMessage;
     protected override Forms.CreateParams CreateParams
     {
         get { var value = base.CreateParams; value.Parent = -3; return value; }
-    }
-    protected override void WndProc(ref Forms.Message message)
-    {
-        if (ClipboardMessage?.Invoke(message.Msg, message.WParam) == true) return;
-        base.WndProc(ref message);
     }
 }
 
@@ -162,7 +156,8 @@ internal sealed class StaDispatcher : IAsyncDisposable
     }
 }
 
-internal sealed class RequestContext(NativeConfig config, CancellationToken cancellation, MtaDispatcher mta, StaDispatcher sta)
+internal sealed class RequestContext(NativeConfig config, CancellationToken cancellation, MtaDispatcher mta, StaDispatcher sta,
+    Action<NativeFailure> reportFailure)
 {
     internal NativeConfig Config { get; } = config;
     internal CancellationToken Cancellation { get; } = cancellation;
@@ -174,12 +169,18 @@ internal sealed class RequestContext(NativeConfig config, CancellationToken canc
     {
         Check();
         var completed = 0;
+        NativeFailure TimedOut() => new("AX_TIMEOUT", "A Windows accessibility call did not return within its configured deadline; its outcome is unknown");
         using var timer = new Timer(_ =>
         {
-            if (Interlocked.Exchange(ref completed, 1) == 0)
-                NativeServer.Fatal("AX_TIMEOUT", "A Windows accessibility call did not return within its configured deadline");
+            if (Interlocked.CompareExchange(ref completed, 2, 0) == 0) reportFailure(TimedOut());
         }, null, Config.AxTimeoutMs, Timeout.Infinite);
-        try { var result = call(); Cancellation.ThrowIfCancellationRequested(); return result; }
-        finally { Interlocked.Exchange(ref completed, 1); }
+        try
+        {
+            var result = call();
+            if (Interlocked.CompareExchange(ref completed, 1, 0) == 2) throw TimedOut();
+            Check();
+            return result;
+        }
+        finally { Interlocked.CompareExchange(ref completed, 1, 0); }
     }
 }

@@ -55,7 +55,7 @@ kind: "package-reference"
 
 搜索快捷键会先展开已关闭的侧栏，包括保留展开内容的抽屉，再聚焦搜索框。
 
-折叠搜索是视图和添加操作旁的一枚区头按钮：激活后输入框会扩展并占据区头。在展开的侧栏中打开或关闭搜索时，区头间距与输入框展开采用同步的 180 ms 过渡，减少动态效果模式下禁用。从折叠栏展开侧栏时，区头直接采用最终几何位置，同时保留内容淡入。折叠栏搜索会在展开侧栏前准备好输入框的打开状态，因此首个宽栏渲染就包含已展开的输入框。搜索标题即使被截断，也会在取消归档的点击区域前留出间距。非空白查询会以单一扁平结果列表替代任一浏览模式——不区分大小写的标题、Workspace 和 Session id 子串匹配项会立即显示，经 250 ms 防抖的 Host 请求则会加入经过排序的当前对话内容匹配项及其摘要片段。每次新查询都会中止前一个请求；内容搜索失败时，元数据匹配项仍会显示，不另给警告。列表最多显示 20 条结果。选择未归档结果会清空并收起搜索、打开 Session，并在当前浏览模式中将其行滚动到可见区域；分组浏览还会按需展开所属 Workspace 和完整 Session 列表。已归档结果提供取消归档操作；尝试打开时会说明限制，不清空查询，也不导航。
+折叠搜索是视图和添加操作旁的一枚区头按钮：激活后输入框会扩展并占据区头。在展开的侧栏中打开或关闭搜索时，区头间距与输入框展开采用同步的 180 ms 过渡，减少动态效果模式下禁用。从折叠栏展开侧栏时，区头直接采用最终几何位置，同时保留内容淡入。折叠栏搜索会在展开侧栏前准备好输入框的打开状态，因此首个宽栏渲染就包含已展开的输入框。搜索标题即使被截断，也会在取消归档的点击区域前留出间距。非空白查询会以单一扁平结果列表替代任一浏览模式——标题、Workspace 和 Session id 经共享[文本搜索](../../util/text-search/README.zh.md)得到的匹配项会立即显示，最佳匹配在前，经 250 ms 防抖的 Host 请求则会加入经过排序的当前对话内容匹配项及其摘要片段。每次新查询都会中止前一个请求；内容搜索失败时，元数据匹配项仍会显示，不另给警告。列表最多显示 20 条结果。选择未归档结果会清空并收起搜索、打开 Session，并在当前浏览模式中将其行滚动到可见区域；分组浏览还会按需展开所属 Workspace 和完整 Session 列表。已归档结果提供取消归档操作；尝试打开时会说明限制，不清空查询，也不导航。
 
 ### 管理会话
 
@@ -121,7 +121,41 @@ Session 行可通过 Tab 聚焦，使用不带修饰键的 Enter 或空格打开
 
 ### 目录流子 slot
 
-每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。侧栏的添加工作区操作保留已有空白 Session 及其草稿。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
+每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），`workspace.picker` Factory 则声明 `workspace.picker.directoryFlow`；组合的选择器包 client half 向这三处填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。侧栏的添加工作区操作保留已有空白 Session 及其草稿。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
+
+### 可复用的 Workspace 选择器
+
+其他插件通过 root 作用域的 `workspace.picker` Component Factory 渲染 hero 的 Workspace 选择器，而不导入本包的组件。其调用方输入即 `ui-workspace/client` 中的 `WorkspacePickerInput` 类型，与 hero 的 owner props 相同：`open`、`anchorRef`、`selectedId`、`onPick` 与 `onClose`。调用方持有锚点控件、打开状态以及选中的含义，并在 `onPick` 中关闭菜单。每个实例列出现有 Workspace；当某个目录选择器包占用 `workspace.picker.directoryFlow` 时，还会显示**添加工作区…**，它运行该流程、调用 `workspaces.create({ path })`，并把新 Workspace 的 id 传给 `onPick`；接纳失败留在本包的文件夹错误对话框中。该定义及其子 slot 直接在 `apply` 中注册，因为它们不依赖其他声明，并随本插件一起卸载。
+
+调用方只需每个已注册组件都会收到的标准 `renderFactorySlot` prop，以及加载该 Factory 声明的纯类型 `ui-workspace/client` import；调用方自己的注册无需为此声明任何内容。未加载 ui-workspace 时，该调用渲染其可选的 `fallback`。菜单 portal 到 document body，并相对 `anchorRef` 定位，层级高于 primitives 的 `Modal`，因此实例可以渲染在调用方的对话框内。
+
+```tsx
+import { useRef, useState } from 'react'
+import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+
+function WorkspaceField({ label, renderFactorySlot }: PropsRenderFactories & { label: string }) {
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<WorkspaceId | undefined>(undefined)
+  return (
+    <>
+      <button ref={anchorRef} type="button" onClick={() => { setOpen(value => !value) }}>{label}</button>
+      {renderFactorySlot('workspace.picker', {
+        open,
+        anchorRef,
+        selectedId: workspaceId,
+        onPick: (picked) => {
+          setOpen(false)
+          setWorkspaceId(picked)
+        },
+        onClose: () => { setOpen(false) },
+      })}
+    </>
+  )
+}
+```
 
 <a id="session-row-actions"></a>
 ### Session 行 action

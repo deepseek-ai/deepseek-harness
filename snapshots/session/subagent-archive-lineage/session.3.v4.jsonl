@@ -3,7 +3,7 @@
 {"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}
-{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Reply with DONE."}],"source":{"kind":"user"},"role":"user","id":"{{message:15}}"}]}}
+{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Agent agent-1/agent-1 sent a message: "},{"type":"text","text":"Reply with DONE."}],"source":{"kind":"agent-message","form":"relay","senderSessionId":"{{session:3}}"},"role":"user","id":"{{message:15}}"}]}}
 {"type":"turn/start","data":{"turn":1}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"aborted","reason":{"kind":"parent"}}}}

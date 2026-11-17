@@ -41,7 +41,7 @@ export async function readColdSessionLog(
   } catch (error: unknown) {
     try {
       await handle.close()
-    } catch {
+    } catch (_closeAfterReadFailed) {
       // The read failure is the actionable cause; a close failure on the same broken handle adds nothing.
     }
     throw error

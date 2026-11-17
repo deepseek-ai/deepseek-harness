@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 4e5bb11e4664bb1c
-  zh: 4855556d38701373
+  en: 9a75613dfc69ce8b
+  zh: 5f52b86658f1dff7
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -72,8 +72,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: cff92e5a2476af7e
-  zh: 8d56bc41053f0a85
+  en: 93d8526bbc4936d2
+  zh: 963af83582d289c5
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9
@@ -113,12 +113,9 @@
 /tool-schema-catalog/deepseek-ai-dsh-tool-cordis:
   en: 76c7c62f9029b6f5
   zh: 76c7c62f9029b6f5
-/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect-list:
-  en: 594e5b42047969cc
-  zh: 72189ca21345c210
-/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect-query:
-  en: 42a647ba98527f9e
-  zh: c53ade6a47ea523f
+/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect:
+  en: f804c4e7fccc1c45
+  zh: 7538d8201ef16ed9
 /tool-schema-catalog/deepseek-ai-dsh-tool-bash-persistent:
   en: bdd9e88c49029e05
   zh: bdd9e88c49029e05
@@ -237,8 +234,17 @@
   en: 927a5ac0974b7642
   zh: 927a5ac0974b7642
 /tool-schema-catalog/deepseek-ai-dsh-tool-skill/skill:
-  en: 9b159d5831855afb
-  zh: 275ee82af0e0f59a
+  en: c1124b6642c57712
+  zh: ede0a9f1479b4ecd
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list:
+  en: 6d68942100dd76e7
+  zh: 6d68942100dd76e7
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list/list-session:
+  en: 8a04c79a2d8ef256
+  zh: 06e93b69aa95c6e9
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list/list-workspace:
+  en: 7b1f0bed364dfcd2
+  zh: c907d8ff78f54268
 /tool-schema-catalog/deepseek-ai-dsh-tool-session-query:
   en: eac1dff4b6d9e195
   zh: eac1dff4b6d9e195
@@ -267,8 +273,8 @@
   en: 841abe0dd5913ea7
   zh: 841abe0dd5913ea7
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/list-subagent-models:
-  en: 0e21650bbe8c71c7
-  zh: fe4033efb38d51a3
+  en: 1fa8a23ffccd029f
+  zh: 5d1b9d618976d580
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/subagent:
   en: 9912eeda5bc40b43
   zh: 0cb70f9a0d923bee
@@ -312,8 +318,8 @@
   en: 8001eda7e9ff6a25
   zh: 2414761029f21404
 /tool-schema-catalog/deepseek-ai-dsh-tool-agent-team/team-task-update:
-  en: 9acd1c5b2fac9853
-  zh: 3bd81e9cd1f1c28d
+  en: 3c25013abbe19446
+  zh: 9552eaab1a25adb2
 /tool-schema-catalog/deepseek-ai-dsh-tool-todo:
   en: dea62d26fb18ff68
   zh: dea62d26fb18ff68

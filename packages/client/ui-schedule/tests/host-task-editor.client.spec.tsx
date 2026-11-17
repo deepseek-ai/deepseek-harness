@@ -67,7 +67,7 @@ function mount(rows: readonly ScheduleCatalogEntry[] = [task], overrides: Partia
     useSessionStatus: select => select(new Map()), useSessionRetainInfo: () => undefined,
     useResource: () => { throw new Error('Task editor loads no document resources') },
     useContextMenu: contextMenuHook(),
-    onNewTask: vi.fn(), onClearEnded: vi.fn(async () => {}),
+    onNewTask: vi.fn(), onUseRecommendation: vi.fn(), onClearEnded: vi.fn(async () => {}),
     onCreateTask: vi.fn<TaskManagerPageProps['onCreateTask']>(async () => ({ created: task })),
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'), onRetry: vi.fn(async () => {}), onOpenSession: vi.fn(),
     hostActions: hostActions(),
@@ -1622,6 +1622,38 @@ describe('time zone menu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
     await save(detail)
     expectSavedRule(h, 'DTSTART;TZID=Europe/Bucharest:20990101T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE')
+  })
+
+  it("keeps the row's own zone when a search names several zones of the row or none alone", () => {
+    pinSystemZone('UTC')
+    vi.mocked(Intl.supportedValuesOf).mockReturnValue(['Europe/Athens', 'Europe/Bucharest'])
+    // The stored zone makes Bucharest the shared row's own zone, while Athens is the row's first zone.
+    mount([{ ...task, rrule: task.rrule.replace('TZID=UTC', 'TZID=Europe/Bucharest') }])
+    const detail = openEdit()
+    // `eur` names both zones; `athens bucharest` names neither zone with both terms.
+    for (const query of ['eur', 'athens bucharest']) {
+      openZones(detail)
+      searchZones(query)
+      fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
+      expect((JSON.parse(localStorage.getItem(RECENT)!) as string[])[0]).toBe('Europe/Bucharest')
+    }
+  })
+
+  it('saves the zone a fuzzy or full-width search names inside a shared row', async () => {
+    pinSystemZone('UTC')
+    vi.mocked(Intl.supportedValuesOf).mockReturnValue(['Europe/Athens', 'Europe/Bucharest'])
+    expect(zoneName('Europe/Bucharest', 'UTC', t)).toContain('European')
+    // The last query's second term matches only the shared label, not a zone id.
+    for (const query of ['bchrst', 'ＢＵＣＨＡＲＥＳＴ', 'bucharest european']) {
+      const h = mount()
+      const detail = openEdit()
+      openZones(detail)
+      searchZones(query)
+      fireEvent.click(screen.getByRole('menuitem', { name: zoneName('Europe/Bucharest', 'UTC', t) }))
+      await save(detail)
+      expectSavedRule(h, 'DTSTART;TZID=Europe/Bucharest:20990101T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE')
+      cleanup()
+    }
   })
 
   it('offers the system zone alone without a separator and says when no zone matches', () => {

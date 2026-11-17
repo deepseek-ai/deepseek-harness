@@ -265,7 +265,7 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
-  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION - 1], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
+  it.each([[], [0], [3], [4], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
     const h = await setup()
     const result = await h.start(request, { t: 'q', m: 'ready', a: args })
     expect(result.error).toEqual({ kind: 'protocol', message: 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host' })
@@ -379,7 +379,7 @@ describe('Node runtime host failures', () => {
     expect(result.error).toEqual({ kind: 'protocol', message: 'control output exceeds 256 queued bytes' })
   })
 
-  it('keeps an output overflow delivered beside the program result', async () => {
+  it('keeps the actual failure and sandbox denial when output overflows beside the result', async () => {
     const h = await setup({ maxOutputBytes: 64 }, 'read-only')
     vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
     h.receive((message) => {
@@ -390,8 +390,9 @@ describe('Node runtime host failures', () => {
       h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
     })
     const result = await h.start()
-    expect(result.error?.kind).toBe('output-limit')
-    expect(result.sandbox?.denied).toBe(false)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.outputTruncated).toBe(true)
+    expect(result.sandbox?.denied).toBe(true)
   })
 
   it('retains admitted logs when the program reports its own output limit', async () => {
@@ -447,11 +448,95 @@ describe('Node runtime host failures', () => {
       h.stdout.end()
       h.direct.resolve({ exitCode: 0, signal: null })
     })
-    h.onBoot(() => { h.stdout.write('x'.repeat(1024)) })
+    h.onBoot(() => { h.stdout.write('x'.repeat(1024)); h.complete({}) })
     const result = await h.start()
-    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error).toBeUndefined()
+    expect(result.outputTruncated).toBe(true)
     expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toMatch(/^x+$/)
     expect(Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text)))).toBeLessThanOrEqual(256)
+  })
+
+  describe.each(['stdout', 'stderr'] as const)('overflow while draining %s', (stream) => {
+    it.each([undefined, { kind: 'exception', message: 'program failed' }] as const)('preserves the completed outcome %j after control closure', async (failure) => {
+      const h = await setup({ maxOutputBytes: 256 })
+      vi.mocked(h.terminate).mockImplementation(() => {
+        expect(h.control.destroyed).toBe(true)
+        h[stream].write('x'.repeat(1024))
+        h.stdout.end()
+        h.stderr.end()
+        h.direct.resolve({ exitCode: 0, signal: null })
+      })
+      h.onBoot(() => { h.complete(failure === undefined ? {} : { error: failure }) })
+      const result = await h.start()
+      await setImmediate()
+      expect(result.error).toEqual(failure)
+      expect(result.outputTruncated).toBe(true)
+      const text = result.output.filter(block => block.type === 'text').map(block => block.text)
+      expect(text.join('')).toMatch(/^x+$/)
+      expect(Buffer.byteLength(JSON.stringify(text))).toBeLessThanOrEqual(256)
+      expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'discardOutput' }))
+      expect(h.terminate).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('reports a failed output-suppression send while execution is active', async () => {
+    const h = await setup({ maxOutputBytes: 256 })
+    h.onBoot(() => {
+      vi.spyOn(h.control, 'write').mockImplementation(() => { throw new Error('notification transport failed') })
+      h.stdout.write('x'.repeat(1024))
+    })
+    const result = await h.start()
+    expect(result.error).toEqual({ kind: 'protocol', message: 'failed to send output-discard notification: notification transport failed' })
+    expect(result.outputTruncated).toBe(true)
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('continues binding calls after notifying the program to suppress output', async () => {
+    const h = await setup({ maxOutputBytes: 256 })
+    const binding = vi.fn(async () => null)
+    h.receive((message) => {
+      if (typeof message !== 'object' || message === null) return
+      if ('m' in message && message.m === 'run') h.stdout.write('x'.repeat(1024))
+      if ('m' in message && message.m === 'discardOutput') h.emit(call(1))
+      if ('t' in message && message.t === 's') h.complete({})
+    })
+    const result = await h.start(withBinding(binding))
+    expect(binding).toHaveBeenCalledOnce()
+    expect(result.error).toBeUndefined()
+    expect(result.outputTruncated).toBe(true)
+  })
+
+  it('keeps the transport diagnostic when an output-suppression send closes the channel', async () => {
+    const h = await setup({ maxOutputBytes: 256 })
+    h.onBoot(() => {
+      vi.spyOn(h.control, 'write').mockImplementation(() => {
+        const failure = new Error('notification transport failed')
+        h.control.emit('error', failure)
+        throw failure
+      })
+      h.stdout.write('x'.repeat(1024))
+    })
+    const result = await h.start()
+    expect(result.error).toEqual({ kind: 'worker-exit', message: 'Node process exited (0, signal null); control channel failed: notification transport failed' })
+    expect(result.outputTruncated).toBe(true)
+    expect(h.stdout.destroyed).toBe(true)
+    expect(h.stderr.destroyed).toBe(true)
+  })
+
+  it('preserves cancellation when an output-suppression send rejects during shutdown', async () => {
+    const h = await setup({ maxOutputBytes: 256 })
+    const controller = new AbortController()
+    h.onBoot(() => {
+      vi.spyOn(h.control, 'write').mockImplementation(() => {
+        controller.abort(new Error('caller canceled'))
+        throw new Error('notification transport failed')
+      })
+      h.stdout.write('x'.repeat(1024))
+    })
+    const result = await h.start({ ...request, signal: controller.signal })
+    expect(result.error).toEqual({ kind: 'abort', message: 'caller canceled' })
+    expect(result.outputTruncated).toBe(true)
+    expect(h.terminate).toHaveBeenCalledOnce()
   })
 
   it.each(['stdout', 'stderr'] as const)('reports a broken raw %s pipe', async (name) => {
@@ -540,7 +625,7 @@ it('preserves execution context for bindings delivered by an external control st
   h.receive((raw) => {
     const message = raw as { t: string; m?: string; r?: unknown }
     if ('m' in message && message.m === 'run') booted.resolve(undefined)
-    if (message.t === 's') h.complete({ value: message.r })
+    if (message.t === 's') h.complete(message.r)
   })
   const context = new AsyncLocalStorage<string>()
   const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),

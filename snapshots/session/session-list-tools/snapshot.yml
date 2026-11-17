@@ -1,0 +1,9 @@
+version: 1
+scenario: session-list-tools
+profile: headless
+composition: session-list-tools
+recording: authored
+header:
+  class: session-list-tools
+  pin: true
+  systemPromptSource: text-turn

@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Use cua_run_code to select test.fixture,
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

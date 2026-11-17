@@ -24,7 +24,7 @@ Discover Windows applications, obtain consent, then inspect and operate their wi
 
 In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to build the helper for the current architecture under `native/bin/win-<arch>`. Set `helperPath` to the absolute path of an existing executable to use it instead. For a manual build, run `pnpm run build:native:x64` or `pnpm run build:native:arm64` in this package. To use the standalone win-x64 ZIP, extract the entire archive and point `helperPath` at its exe. The framework-dependent `build:native` output in `native/bin/local` requires a matching Windows .NET runtime and an explicit `helperPath`.
 
-`buildTimeoutMs` defaults to 300000, `connectTimeoutMs` to 30000, and `pollIntervalMs` to 25. Accessibility reads default to 2000 nodes and depth 25. Pass `maxElements` and `maxDepth` to override either limit for one read. The bundle loads this provider only on native Windows. When configured explicitly in WSL, `windowsPowerShellPath` defaults to `powershell.exe`. The WSL cache currently copies only the exe, so a multi-file publish cannot start from that cache.
+`buildTimeoutMs` defaults to 300000, `connectTimeoutMs` to 600000, and `pollIntervalMs` to 25. Accessibility reads default to 2000 nodes and depth 25. Pass `maxElements` and `maxDepth` to override either limit for one read. The bundle loads this provider only on native Windows. When configured explicitly in WSL, `windowsPowerShellPath` defaults to `powershell.exe`. The WSL cache currently copies only the exe, so a multi-file publish cannot start from that cache.
 
 <a id="interface-semantics"></a>
 ## Interface semantics

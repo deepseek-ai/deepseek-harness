@@ -24,7 +24,7 @@ kind: "package-reference"
 
 在原生 Windows 的源码检出中，提供方启用时通过 PATH 中的 .NET 10 SDK 构建当前架构的 helper，输出到 `native/bin/win-<arch>`。`helperPath` 可指定现有 exe 的绝对路径。手动构建时，在本包中执行 `pnpm run build:native:x64` 或 `pnpm run build:native:arm64`。使用独立 win-x64 ZIP 时，需要完整解压，并将 `helperPath` 指向其中的 exe。使用 `build:native` 生成的 `native/bin/local` 产物时，需要匹配的 Windows .NET 运行时，并显式配置 `helperPath`。
 
-`buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 30000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
+`buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 600000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
 
 <a id="interface-semantics"></a>
 ## 接口语义
