@@ -619,7 +619,7 @@ export function admit(sources: readonly ImSourceConfig[], bot: string, message: 
  * @param bot - the bot that received the message.
  * @param message - the received platform message.
  * @param source - the admitting rule, which names the chat's source id.
- * @param via - how the message reached the host: `platform`, `button` or `self`.
+ * @param via - how the message reached the host: `platform` (received or read) or `self` (published by this host).
  * @returns the draft the store turns into an {@link ImMessage} by assigning the chat's next seq.
  */
 export function draftOf(bot: Bot, message: InboundMessage, source: ImSourceConfig, via: ImMessage['via']): ImMessageDraft {
