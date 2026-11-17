@@ -1,0 +1,7 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - status:
+    - paragraph: 当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - code: {{access-address}}

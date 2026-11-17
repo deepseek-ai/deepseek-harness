@@ -1,0 +1,6 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - alert: 无法加载远程连接设置，请重试
+    - button "重试"

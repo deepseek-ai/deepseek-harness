@@ -349,7 +349,7 @@ describe('remote connection settings registration', () => {
     }
   })
 
-  it('prefetches the login link only after deployment becomes available', async () => {
+  it('refreshes deployment on every reconnect and prefetches the login link once available', async () => {
     let available = false
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
@@ -365,11 +365,13 @@ describe('remote connection settings registration', () => {
     await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1) })
     const face = slots.spec('settings.remoteConnection.content')!.inject
     available = false
-    act(() => { face.reload() })
+    act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.availability).toBe('untrusted-host') })
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(4)
+    await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2) })
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(5) })
-    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2)
   })
 
   it('keeps plugin disposal pending until a clipboard write settles', async () => {

@@ -1,4 +1,4 @@
-/** Access address and QR login controls for browser sign-in. */
+/** Access address and QR login for browser sign-in. */
 import { QRCodeSVG } from 'qrcode.react'
 import { Button, IconWarningOutlineMedium, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -9,43 +9,53 @@ import css from './RemoteConnectionSection.module.css'
 export type RemoteConnectionSectionProps = RemoteConnectionContentProps & PropsLocale<'remoteConnection'>
 
 /**
- * Present shared sign-in guidance followed by access address and QR login cards.
+ * Present address prerequisites, an access address, available QR login.
  * @param props - Section injection and standard slot props.
  * @returns Remote connection settings content.
  */
 export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
   const { t, useRemoteConnection } = props
+  const available = useRemoteConnection(state => state.deployment?.availability === 'available')
   const loading = useRemoteConnection(state => state.phase === 'loading' && state.deployment === null)
   if (loading) return <div className={css.loading} role="status" aria-label={t('loading')}><StateDot state="ongoing" size={20} /></div>
   return <section className={css.section} aria-label={t('title')}>
     <header className={css.header}>
       <h2 className={css.title}>{t('title')}</h2>
-      <p className={css.description}>{t('addressDescription')}</p>
+      <ConnectionNotice {...props} />
     </header>
     <AccessAddressCard {...props} />
-    <QrLoginCard {...props} />
+    {available && <QrLoginCard {...props} />}
   </section>
+}
+
+function ConnectionNotice({ t, useRemoteConnection }: Pick<RemoteConnectionSectionProps, 't' | 'useRemoteConnection'>) {
+  const deployment = useRemoteConnection(state => state.deployment)
+  if (deployment === null) return null
+  if (deployment.availability === 'available') return <p className={css.description}>{t('addressDescription')}</p>
+  return <div className={css.caution} role="status">
+    <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
+    <div className={css.cautionBody}><p className={css.warning}>{t(deployment.availability)}</p></div>
+  </div>
 }
 
 function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<RemoteConnectionSectionProps,
   't' | 'useRemoteConnection' | 'create' | 'cancel' | 'reload'>) {
   const { deployment, phase, ticket, error, remainingSeconds, retainDetails } = useRemoteConnection(state => state)
   const busy = phase === 'loading' || phase === 'creating' || phase === 'cancelling'
-  const available = deployment?.availability === 'available'
   const http = deployment?.url.startsWith('http:') === true
   const visibleTicket = phase === 'pending' && ticket !== null ? ticket : null
   const showQrPreview = visibleTicket !== null || busy
   const showDetails = visibleTicket !== null || retainDetails
-  const showQrBody = (phase !== 'ready' && phase !== 'cancelled') || !available
+  const showQrBody = phase !== 'ready' && phase !== 'cancelled'
   return <section className={css.card} aria-label={t('qrTitle')} aria-busy={busy || undefined}>
     <header className={css.cardHeader}>
       <h3 className={css.methodTitle}>{t('qrTitle')}</h3>
-      {(available || ticket !== null) && <div className={css.qrActions}>
-        {available && <Button variant="primary" size="sm" disabled={busy} onClick={create}>
+      <div className={css.qrActions}>
+        <Button variant="primary" size="sm" disabled={busy} onClick={create}>
           {t(phase === 'ready' ? 'generate' : 'regenerate')}
-        </Button>}
+        </Button>
         {(ticket !== null || phase === 'creating') && <Button variant="outline" size="sm" disabled={busy} onClick={cancel}>{t('cancel')}</Button>}
-      </div>}
+      </div>
     </header>
     {showQrBody && <div className={css.cardBody}>
       {showQrPreview && <div className={css.symbol}>
@@ -60,7 +70,6 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
           </p>
           <CredentialWarning t={t} http={http} method="qr" />
         </div>}
-        {deployment !== null && deployment.availability !== 'available' && <p className={css.notice} role="status">{t(deployment.availability)}</p>}
         {phase === 'expired' && <div className={css.caution} role="status">
           <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
           <div className={css.cautionBody}><p className={css.warning}>{t('expired')}</p></div>
@@ -76,9 +85,10 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
   </section>
 }
 
-function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, reloadLink }: Pick<RemoteConnectionSectionProps,
-  't' | 'useRemoteConnection' | 'useLoginLink' | 'copyLink' | 'reloadLink'>) {
+function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, reloadLink, reload }: Pick<RemoteConnectionSectionProps,
+  't' | 'useRemoteConnection' | 'useLoginLink' | 'copyLink' | 'reloadLink' | 'reload'>) {
   const deployment = useRemoteConnection(state => state.deployment)
+  const error = useRemoteConnection(state => state.error)
   const link = useLoginLink(state => state)
   const available = deployment?.availability === 'available'
   const http = deployment?.url.startsWith('http:') === true
@@ -87,9 +97,13 @@ function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, rel
     <header className={css.header}>
       <h3 className={css.methodTitle}>{t('addressTitle')}</h3>
     </header>
+    {!available && error !== null && <>
+      <p className={css.error} role="alert">{t(error)}</p>
+      <div className={css.actions}><Button variant="outline" size="sm" onClick={reload}>{t('retry')}</Button></div>
+    </>}
     {deployment !== null && <div className={css.linkRow}>
       <div className={css.linkPreview}>
-        <code className={css.linkUrl}>{link.url ?? deployment.url}</code>
+        <code className={css.linkUrl}>{(available ? link.url : null) ?? deployment.url}</code>
       </div>
       {available && <Button variant="outline" size="sm" disabled={link.phase === 'loading' || link.phase === 'copying'}
         onClick={retryLink ? reloadLink : copyLink}>
@@ -101,7 +115,7 @@ function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, rel
       </Button>}
     </div>}
     {available && retryLink && <p className={css.error} role="alert">{t('linkFailed')}</p>}
-    {link.copied && <CredentialWarning t={t} http={http} method="link" />}
+    {available && link.copied && <CredentialWarning t={t} http={http} method="link" />}
   </section>
 }
 

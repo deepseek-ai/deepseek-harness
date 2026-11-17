@@ -27,6 +27,8 @@ The Web bundle mounts this plugin. Its Host half requires `connection`, `connect
 
 The advertised application URL supports HTTP and HTTPS, must name a non-loopback address reachable by the phone, and must pass Connection's trusted-host checks. Configure the listener, optional certificate or reverse proxy, `publicUrl`, and trusted hosts through the existing [Web application](../../bundle/web-app/README.md) configuration. This plugin never changes the listening interface or discovers a network address. A reverse proxy must preserve the external Host, remove its configured path prefix, and protect its upstream connection. A plain HTTP listener issuing a cookie for an HTTP public URL omits `Secure`; HTTPS listeners and HTTPS public URLs behind a TLS-terminating proxy retain `Secure`. An HTTPS proxy must enforce HTTPS for its public origin. The settings panel allows HTTP login and reminds the user that HTTP transmits login credentials without encryption.
 
+The panel shows unmet address prerequisites in a shared notice above the cards. An unreachable or untrusted address displays only its clean URL in the address card, with no copy action or credential warning, and hides QR login. Deployment-read failures remain retryable in the address card while QR login is unavailable. Reconnecting checks the address prerequisites again.
+
 `cookieMaxAgeDays` defaults to 30 and fixes each Remote cookie's absolute lifetime. `ticketLifetimeMs` defaults to 120000. `pollIntervalMs` defaults to 1000 and controls the settings panel's status checks while its code is displayed. Only one invitation is outstanding per plugin instance: generating another replaces the previous one, and cancelling an old invitation does not cancel its replacement.
 
 ## Authentication and failures

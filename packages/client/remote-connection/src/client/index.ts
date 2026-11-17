@@ -53,7 +53,7 @@ export async function apply(ctx: Context): Promise<void> {
     }), 'remote-connection: link availability')
     scope.on('connection/reset', () => {
       if (linkAvailable) void link.refresh()
-      else void controller.load()
+      void controller.load()
     })
     scope.slots.inject('settings.section', () => scope.slots.register({
       name: 'settings.section', id: 'remote-connection', order: 25,

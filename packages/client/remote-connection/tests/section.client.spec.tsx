@@ -90,12 +90,29 @@ describe('Remote connection section', () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
-  it.each(['unreachable-host', 'untrusted-host'] as const)('explains the %s prerequisite and offers no code', (availability) => {
-    panel({ deployment: { ...ready.deployment!, availability } })
-    expect(screen.getByRole('status').textContent).toBe(en[availability])
-    expect(screen.queryByRole('button')).toBeNull()
+  it.each([
+    ['en', 'unreachable-host'], ['en', 'untrusted-host'],
+    ['zh', 'unreachable-host'], ['zh', 'untrusted-host'],
+  ] as const)('shows %s guidance for %s before the address', (language, availability) => {
+    const copy = language === 'en' ? en : zh
+    const url = availability === 'unreachable-host' ? 'http://127.0.0.1:5432/' : 'https://untrusted.example/app/'
+    panel({ deployment: { ...ready.deployment!, url, availability } }, language, { copied: true })
+    const section = screen.getByRole('region', { name: copy.title })
+    const notice = within(section).getByText(copy[availability])
+    expect(notice.closest('[role="status"]')).not.toBeNull()
+    for (const card of within(section).getAllByRole('region')) {
+      expect(within(card).queryByText(copy[availability])).toBeNull()
+      expect(notice.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    const address = within(section).getByRole('region', { name: copy.addressTitle })
+    expect(within(address).getByText(url)).toBeTruthy()
+    expect(within(address).queryByRole('button')).toBeNull()
+    expect(within(section).queryByRole('region', { name: copy.qrTitle })).toBeNull()
     expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.queryByText(en.warning)).toBeNull()
+    expect(screen.queryByText(copy.addressDescription)).toBeNull()
+    expect(screen.queryByText(copy.warning)).toBeNull()
+    expect(screen.queryByText(copy.linkWarning)).toBeNull()
+    expect(document.body.textContent).not.toContain('private-login-token')
   })
 
   it.each(['en', 'zh'] as const)('allows HTTP code creation with a plaintext reminder in %s', (language) => {
@@ -195,14 +212,23 @@ describe('Remote connection section', () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
-  it('allows retry when deployment loading failed and shows a centered pending state while reading', () => {
-    const { reload } = panel({ phase: 'error', deployment: null, error: 'loadFailed' })
-    expect(screen.getByRole('alert').textContent).toBe(en.loadFailed)
-    fireEvent.click(screen.getByRole('button', { name: en.retry }))
+  it.each([
+    { language: 'en', cached: false }, { language: 'zh', cached: false },
+    { language: 'en', cached: true }, { language: 'zh', cached: true },
+  ] as const)('keeps a failed address read recoverable in $language (cached address: $cached)', ({ language, cached }) => {
+    const copy = language === 'en' ? en : zh
+    const deployment = cached ? { ...ready.deployment!, availability: 'untrusted-host' as const } : null
+    const { reload } = panel({ phase: 'error', deployment, error: 'loadFailed' }, language)
+    const address = screen.getByRole('region', { name: copy.addressTitle })
+    expect(within(address).getByRole('alert').textContent).toBe(copy.loadFailed)
+    if (deployment !== null) expect(within(address).getByText(deployment.url)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: copy.qrTitle })).toBeNull()
+    expect(screen.queryByText(copy.addressDescription)).toBeNull()
+    fireEvent.click(within(address).getByRole('button', { name: copy.retry }))
     expect(reload).toHaveBeenCalledOnce()
     cleanup()
-    panel({ phase: 'loading', deployment: null })
-    expect(screen.getByRole('status', { name: en.loading })).toBeTruthy()
+    panel({ phase: 'loading', deployment: null }, language)
+    expect(screen.getByRole('status', { name: copy.loading })).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
 

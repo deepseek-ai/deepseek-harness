@@ -28,6 +28,8 @@ Web bundle 挂载此插件。Host 端依赖 `connection`、`connection.authentic
 
 公布的应用 URL 支持 HTTP 和 HTTPS，必须指向手机可访问的非回环地址，并通过 Connection 的可信 Host 检查。通过现有 [Web 应用](../../bundle/web-app/README.zh.md) 配置设置监听器、可选证书或反向代理、`publicUrl` 和可信 Host。此插件不会更改监听接口或发现网络地址。反向代理必须保留外部 Host、移除配置的路径前缀，并保护上游连接。普通 HTTP 监听器为 HTTP 公布地址签发的 cookie 不带 `Secure`；HTTPS 监听器以及终止 TLS 的代理后的 HTTPS 公布地址仍使用 `Secure`。HTTPS 代理必须对外部源强制使用 HTTPS。设置面板允许 HTTP 登录，并提醒用户 HTTP 会明文传输登录凭据。
 
+面板在卡片上方以共用提示说明尚未满足的地址前提。地址不可达或不受信任时，访问地址卡片只显示不带凭据的 URL，不提供复制操作或凭据告警，并隐藏二维码登录。二维码登录不可用时，部署信息的读取错误和重试操作保留在访问地址卡片中。重连后会重新检查地址前提。
+
 `cookieMaxAgeDays` 默认为 30，固定每份 Remote cookie 的绝对有效期。`ticketLifetimeMs` 默认为 120000。`pollIntervalMs` 默认为 1000，控制设置面板显示二维码时的状态检查间隔。每个插件实例同一时间只有一个待使用邀请：生成新邀请会替换旧邀请，取消旧邀请不会取消替代它的新邀请。
 
 <a id="authentication-and-failures"></a>

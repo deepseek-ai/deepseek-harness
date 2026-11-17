@@ -119,6 +119,25 @@ describe('Remote connection invitation state', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it.each(['unreachable-host', 'untrusted-host'] as const)('forgets a pending credential and stops polling when the address becomes %s', async (availability) => {
+    const { remote, controller, state } = setup()
+    await controller.load()
+    await controller.create()
+    expect(state()).toMatchObject({ phase: 'pending', ticket })
+    remote.status.mockResolvedValueOnce({ ok: true, value: { ...deployment, availability, ticket: 'pending' } })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(state()).toMatchObject({ deployment: { availability }, ticket: null, retainDetails: false })
+    expect(vi.getTimerCount()).toBe(0)
+    const reads = remote.status.mock.calls.length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(remote.status).toHaveBeenCalledTimes(reads)
+    remote.status.mockResolvedValueOnce({ ok: true, value: { ...deployment, ticket: 'pending' } })
+    await controller.load()
+    expect(remote.status).toHaveBeenLastCalledWith(null)
+    expect(state()).toMatchObject({ phase: 'ready', ticket: null })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('polls a live code and drops it if another owner replaces it', async () => {
     const { remote, controller, state } = setup()
     await controller.load()

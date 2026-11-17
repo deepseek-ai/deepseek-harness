@@ -14,6 +14,7 @@ const MOBILE = { width: 390, height: 844 }
 const REPLACEMENT_FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-remote-connection', import.meta.url))
 const EXTENSION_FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-remote-connection-extension', import.meta.url))
 const REPLACEMENT_OVERLAY = fileURLToPath(new URL('./remote-connection-replacement.overlay.yml', import.meta.url))
+const UNTRUSTED_OVERLAY = fileURLToPath(new URL('./remote-connection-untrusted.overlay.yml', import.meta.url))
 
 async function remoteSettings(page: Page): Promise<Locator> {
   await openSettings(page, 'zh')
@@ -142,6 +143,98 @@ describe('web e2e: one-use QR browser login', () => {
       expect(console.pageErrors).toEqual([])
     } finally {
       await phone.close()
+    }
+  })
+
+  it.each([
+    {
+      name: 'unreachable', hostname: '127.0.0.1', options: {},
+      warning: '当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址',
+    },
+    {
+      name: 'untrusted', hostname: 'untrusted-remote.test', options: { extraOverlayPath: UNTRUSTED_OVERLAY },
+      warning: '请先将此访问地址加入 Host 的可信主机配置，才能使用下方的登录方式',
+    },
+  ])('explains unavailable address prerequisites before sign-in methods for $name', async ({ name, hostname, options, warning }) => {
+    const scaffold = await launchWebScaffold(options)
+    onTestFinished(() => scaffold.close())
+    // The shared QR browser's proxy setup rejects the scaffold's loopback URL.
+    const localBrowser = await chromium.launch()
+    onTestFinished(() => localBrowser.close())
+    const plainUrl = scaffold.ctx.webApp.getAdvertisedUrl()
+    expect(new URL(plainUrl).hostname).toBe(hostname)
+    for (const [viewport, colorScheme, suffix] of [
+      [{ width: 1200, height: 1000 }, 'light', 'desktop'],
+      [MOBILE, 'dark', 'mobile-dark'],
+    ] as const) {
+      const context = await localBrowser.newContext({ locale: ZH_BROWSER_LOCALE, viewport, colorScheme })
+      try {
+        const page = await context.newPage()
+        const console = watchConsole(page)
+        await page.goto(scaffold.authenticatedUrl)
+        await openSettings(page, 'zh')
+        await page.getByRole('dialog', { name: '设置', exact: true })
+          .getByRole('button', { name: '远程连接', exact: true }).click()
+        const section = page.getByRole('region', { name: '远程连接', exact: true })
+        const address = section.getByRole('region', { name: '访问地址', exact: true })
+        await expect.poll(() => address.locator('code').textContent()).toBe(plainUrl)
+        const notice = section.getByRole('status').filter({ hasText: warning })
+        await notice.getByText(warning, { exact: true }).waitFor()
+        expect(await section.getByRole('region').count()).toBe(1)
+        expect(await section.getByRole('heading', { level: 3 }).allTextContents()).toEqual(['访问地址'])
+        expect(await address.getByText(warning, { exact: true }).count()).toBe(0)
+        expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
+        expect(await section.getByRole('img').count()).toBe(0)
+        expect(await address.getByRole('button').count()).toBe(0)
+        expect(await section.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+        expect(await section.getByText('请勿分享登录二维码', { exact: true }).count()).toBe(0)
+        expect(new URL((await address.locator('code').textContent())!).searchParams.has('token')).toBe(false)
+        const titleBox = await section.getByRole('heading', { level: 2 }).boundingBox()
+        const noticeBox = await notice.boundingBox()
+        const addressBox = await address.boundingBox()
+        expect(titleBox).not.toBeNull()
+        expect(noticeBox).not.toBeNull()
+        expect(addressBox).not.toBeNull()
+        expect(noticeBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height)
+        expect(addressBox!.y).toBeGreaterThan(noticeBox!.y + noticeBox!.height)
+        expect(noticeBox!.x).toBeCloseTo(addressBox!.x)
+        expect(noticeBox!.x).toBeGreaterThanOrEqual(0)
+        expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(viewport.width)
+        await compareOrRefreshGolden(join(EXPECTED, `${name}-${suffix}.expected.md`),
+          await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd, {
+            replacements: [[plainUrl, '{{access-address}}']],
+          }), MODE)
+        const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+        if (screenshots !== undefined) {
+          await mkdir(screenshots, { recursive: true })
+          await page.screenshot({ path: join(screenshots, `${name}-${suffix}.png`) })
+        }
+        if (name === 'unreachable' && suffix === 'desktop') {
+          await page.route('**/api/remoteConnection/status', route => route.abort('failed'))
+          await page.reload()
+          await openSettings(page, 'zh')
+          await page.getByRole('dialog', { name: '设置', exact: true })
+            .getByRole('button', { name: '远程连接', exact: true }).click()
+          const failure = address.getByRole('alert')
+          await failure.waitFor()
+          expect(await failure.textContent()).toBe('无法加载远程连接设置，请重试')
+          const retry = address.getByRole('button', { name: '重试', exact: true })
+          expect(await retry.isEnabled()).toBe(true)
+          expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
+          await compareOrRefreshGolden(join(EXPECTED, 'unreachable-load-failed.expected.md'),
+            await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd), MODE)
+          if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'unreachable-load-failed.png') })
+          await page.unroute('**/api/remoteConnection/status')
+          await retry.click()
+          await expect.poll(() => address.locator('code').textContent()).toBe(plainUrl)
+          await notice.getByText(warning, { exact: true }).waitFor()
+          expect(await address.getByRole('alert').count()).toBe(0)
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+        expect(console.pageErrors).toEqual([])
+      } finally {
+        await context.close()
+      }
     }
   })
 
