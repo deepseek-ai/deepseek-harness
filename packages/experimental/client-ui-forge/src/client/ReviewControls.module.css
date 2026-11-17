@@ -55,6 +55,45 @@
   outline-offset: -2px;
 }
 
+/* Segments as wide as their labels, sharing what remains equally. */
+.segmented[data-sizing='content'] {
+  display: flex;
+}
+
+.segmented[data-sizing='content'] > .segment {
+  flex: 1 1 auto;
+}
+
+/* The lens above the file tree with hidden copies that measure the width each form needs. */
+.lensFit {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.measures {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.measures > div,
+.measures .segmented {
+  width: max-content;
+}
+
+/* A count left out of view stays in the segment's accessible name. */
+.hiddenCount {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .segmentLabel {
   min-width: 0;
   overflow: hidden;

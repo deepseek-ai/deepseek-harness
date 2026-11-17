@@ -1,0 +1,482 @@
+/* Change request cards in the Session panel section, at the panel's 13px row size. */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 20px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One change request: a filled block without a border, on the panel's row columns. The platform fill stands apart
+   from the panel's surface in both themes; the card fill is nearly that surface's own color in the dark theme. */
+.change {
+  min-width: 0;
+  border-radius: var(--dsw-radius-sm);
+  /* Named for what the block draws on itself, such as the ring that sets overlapping avatars apart. */
+  --forge-card-surface: var(--dsw-alias-bg-module-platform);
+  background: var(--forge-card-surface);
+}
+
+/* The card's line is a panel row, 36px instead of 28px: the glyph in the icon column, the title, the number and the
+   checks outcome, the actions menu the panel reveals on hover, and the expansion toggle in the end column. */
+.change .changeHead {
+  min-height: 36px;
+}
+
+.change .changeHead > [data-row-part='body'] {
+  height: 36px;
+}
+
+/* The number and the checks outcome after the title. */
+.status {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.number {
+  white-space: nowrap;
+}
+
+/* The expansion toggle in the row's end column, 16px wide like the menu column: a 24px target around the chevron. */
+.change .changeHead > .end {
+  justify-content: center;
+  width: 16px;
+}
+
+.expand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.expand:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .expand:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.rowButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* Lifecycle glyph; drawn in the current color unless the state tints it. */
+.glyph {
+  display: inline-flex;
+  flex: none;
+}
+
+.tinted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.tinted[data-tone='open'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* Orange, because the closed glyph already takes red. */
+.tinted[data-tone='blocked'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.tinted[data-tone='merged'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+.tinted[data-tone='closed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Checks outcome filling the glyph's head branch end. */
+.checksMark[data-checks='failure'] {
+  fill: var(--dsw-alias-state-error-primary);
+}
+
+.checksMark[data-checks='pending'] {
+  fill: var(--dsw-alias-state-warn-primary);
+}
+
+.checksMark[data-checks='success'] {
+  fill: var(--dsw-alias-state-success-primary);
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff {
+  display: inline-flex;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Read failure or unsupported host below the card's line, from where the title starts, with its one action. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 8px 30px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Expanded facts inside the card's block, one sentence per row: an icon under the title's start, the value, an
+   optional trailing part, and a chevron in the card's end column on a row that opens something. */
+.rows {
+  /* Contains the visually hidden row labels, so they never extend a scroll area outside the panel. */
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto 12px;
+  gap: 0 8px;
+  padding: 0 8px 4px 22px;
+}
+
+.row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  column-gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+}
+
+.rowWide {
+  grid-column: 2 / 4;
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.rowButton {
+  cursor: pointer;
+}
+
+.rowButton[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .rowButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowIcon {
+  display: inline-flex;
+  grid-column: 1;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowChevron {
+  grid-column: 4;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowValue {
+  display: inline-flex;
+  grid-column: 2;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Trailing detail of a row, such as the reviewers' avatars or the unresolved thread count. */
+.rowTrailing {
+  display: inline-flex;
+  grid-column: 3;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowValue[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rowValue[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.rowValue[data-tone='merged'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+.rowValue[data-tone='closed'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The checks menu anchors to the whole row. */
+.checksAnchor {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.checksList {
+  min-width: 280px;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.checkTime {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.checkGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pass {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.fail {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.running {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The action of an open change request below its rows. */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 8px 26px;
+}
+
+.primaryAction {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/*
+ * The merge action takes the blue button fill, moved toward the label color so its 13px label keeps 4.5:1 contrast
+ * in both themes. The doubled class outranks the shared primary fill in any stylesheet order.
+ */
+.primaryAction.mergeAction {
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 92%, var(--dsw-alias-label-primary));
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+@media (hover: hover) {
+  .primaryAction.mergeAction:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 85%, var(--dsw-alias-label-primary));
+  }
+}
+
+/* A solid caret that points down, and up while the menu is open. */
+.mergeCaret {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.mergeCaretOpen {
+  transform: rotate(-90deg);
+}
+
+/* A merge method row: its name with the note on what it does below. */
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.methodNote {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.titleIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.titleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Change request count beside the Session panel section title. */
+.count {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Environment rows: the kind or size trails the name; the Session panel's row rules reveal the More button. */
+.envName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envName:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.envNote {
+  max-width: 120px;
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envRow[data-missing] .envName,
+.envRow[data-missing] .envNote,
+.envRow[data-failed] .envName {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The title of a status row: what failed or needs the user, in the warning color the checkout row's failure uses. */
+.statusTitle {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The command a sign-in row asks the user to run, in code type on its detail line. */
+.signinCommand {
+  font-family: var(--ds-font-family-code);
+}
+
+/* A failure's info button: a 24px target in the trailing area whose 16px glyph darkens on hover, focus, or while its
+   reason shows, without a fill; it stays visible so touch screens can press it. */
+.reason {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.reason[aria-describedby],
+.reason:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .reason:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* Attention mark over the Session panel toggle; the toggle sizes and places it. */
+.attention {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+/* The unresolved review thread count at the end of the changes row. */
+.threads {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Text read only by assistive technology: a fact row's name and the attention mark's description. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

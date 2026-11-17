@@ -3,7 +3,7 @@ from .client import HarnessClient, HarnessConfig, UserQuestionHandler
 from .errors import SdkProtocolError
 from .models import (
     ApprovalRequestParams, ApprovalRequestResult, IncomingRequest, InitializeResponse,
-    JsonObject, Notification, ServerInfo, UserQuestionAnswer, UserQuestionAnswerItem, UserQuestionRequest,
+    JsonObject, Notification, ResumeSessionOptions, ServerInfo, UserQuestionAnswer, UserQuestionAnswerItem, UserQuestionRequest,
 )
 
 __all__ = [
@@ -11,6 +11,7 @@ __all__ = [
     "DeepSeekHarnessConfig",
     "Session",
     "RunResult",
+    "ResumeSessionOptions",
     "HarnessClient",
     "HarnessConfig",
     "UserQuestionHandler",

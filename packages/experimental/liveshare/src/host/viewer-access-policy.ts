@@ -107,24 +107,44 @@ const VIEWER_GLOBAL_ROLE: RemoteAccessRole<'global'> = {
     'session/control',
     'session/list',
     'session/modelCatalog',
+    'pluginEvents/follow',
+    'productAnalytics/enabled',
+    'productAnalytics/report',
+    'productAnalytics/watchPolicy',
+    'speech/cancelPreparation',
+    'speech/catalog',
+    'speech/follow',
+    'speech/prepare',
+    'speech/transcribe',
     'workspace/follow',
   ],
 }
 
 /**
- * Reads of one Session the reader can see, the Session notifications forwarded about it, and attachment
- * upload.
+ * Reads of one Session the reader can see, its goal and background jobs, the @ reference candidates,
+ * the Session notifications forwarded about it, and attachment upload.
  *
  * The role binds every Session this share serves the reader — the shared source and each of its own
- * forks — so attachment upload follows visibility alone: neither the tier nor the fork switch decides it.
+ * forks — so these actions follow visibility alone: neither the tier nor the fork switch decides them.
+ * That is why every goal mutation and answer submission a reader owns ride this role; only the actions
+ * that start or steer a turn need the drivable tier and its confined layer.
  */
 const VIEWER_SESSION_READ_ROLE: RemoteAccessRole<'session'> = {
   name: 'liveshare:viewer-session-read',
   resource: 'session',
   actions: [
     'commands/list',
+    'fileReferences/list',
     'fileUploads/upload',
     'goals/get',
+    'goals/edit',
+    'goals/clear',
+    'goals/complete',
+    'goals/create',
+    'goals/pause',
+    'goals/resume',
+    'job/list',
+    'job/follow',
     'session/attachment',
     'session/control',
     'session/events',
@@ -136,6 +156,9 @@ const VIEWER_SESSION_READ_ROLE: RemoteAccessRole<'session'> = {
     'session/page',
     'session/projections',
     'session/state',
+    'sessionReferenceResolver/candidates',
+    'userQuestions/answer',
+    'userQuestions/attachWait',
     'session/wait',
     'skills/list',
     'toolResults/watch',

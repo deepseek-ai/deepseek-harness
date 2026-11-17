@@ -884,7 +884,7 @@ describe('TextPreview — workspace navigator Factories', () => {
     const toggle = view.container.querySelector('[data-textpreview-path]')?.parentElement?.lastElementChild
     const handoff = view.container.querySelector('[data-slot="sidebar.right.tab.document.actions"]')
     expect(handoff?.getAttribute('data-slot-path')).toBe(ABSOLUTE_PATH)
-    expect(toggle?.previousElementSibling).toBe(handoff)
+    expect(toggle?.previousElementSibling).toBe(handoff?.parentElement)
     navigator.tabIndex = 0
     navigator.focus()
     navigator.scrollTop = 64
@@ -898,7 +898,7 @@ describe('TextPreview — workspace navigator Factories', () => {
     expect(view.container.querySelector('[data-textpreview-path]')?.parentElement?.lastElementChild).toBe(toggle)
     // The handoff keeps its seat between the tools and the toggle in every state.
     expect(view.container.querySelector('[data-slot="sidebar.right.tab.document.actions"]')).toBe(handoff)
-    expect(toggle?.previousElementSibling).toBe(handoff)
+    expect(toggle?.previousElementSibling).toBe(handoff?.parentElement)
     expect(document.activeElement).toBe(navigator)
     expect(navigator.scrollTop).toBe(64)
   })

@@ -26,7 +26,9 @@ Validator without runtime dependencies for format 1 of the plugin market index, 
 
 It is a library, not a service or plugin: no `ctx`, no registrations, no state, no I/O.
 
-Parse the fetched document as JSON, then pass the value and the URL it was read from to `parseMarketIndex`. The first violated rule throws `MarketIndexError` with the JSON path of the offending value. A successful result drops members the format does not define, fills absent `metadata` groups, `keywords`, `labels`, `sortKeys`, and `engines` with empty values, orders each plugin's `versions` by descending SemVer precedence, and replaces each relative `icon` reference with its absolute URL.
+Parse the fetched document as JSON, then pass the value and the URL it was read from to `parseMarketIndex`. The first violated rule throws `MarketIndexError` with the JSON path of the offending value. A successful result drops members the format does not define, fills absent `metadata` groups, `keywords`, `labels`, `sortKeys`, and `engines` with empty values, and orders each plugin's `versions` by descending SemVer precedence.
+
+For HTTP or HTTPS indexes, the parser resolves relative `icon` references against the index URL. For `git+https` and `git+ssh` indexes, an icon must be an absolute HTTPS URL or a base64 data URL.
 
 Within plugin metadata, `null` means unavailable: the metadata object and its fields normalize like absent input, and null sort values are omitted. Numeric zero is retained. Generators omit unavailable metadata and values. Unknown object fields are ignored, while declared map entries, known fields, and source discriminators remain validated.
 
@@ -39,6 +41,7 @@ Install one version with `marketInstallTarget(name, version)`: it returns the ex
 
 ```ts
 import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepseek-ai/dsh-plugin-market-index'
+import { gitMarketIndexSource, isGitMarketIndexSourceAddress, parseGitMarketIndexSource } from '@deepseek-ai/dsh-plugin-market-index/source'
 ```
 
 | Export | Role |
@@ -47,6 +50,9 @@ import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepse
 | `marketInstallTarget(name, version)` | `{ spec, registry? }` that installs that exact version. |
 | `MarketIndexError` | Validation failure carrying `path` and `reason`. |
 | `MAX_INLINE_ICON_BYTES` | Largest decoded payload of an inline `data:` icon, 32 KiB. |
+| `parseGitMarketIndexSource(input)` | Canonical Git index address, Git remote, and file location. |
+| `gitMarketIndexSource(input, path?, ref?)` | Canonical Git index address from a pasted repository link and optional file location. |
+| `isGitMarketIndexSourceAddress(input)` | Whether an address identifies a Git repository. |
 | `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketRepository`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | Validated record types. |
 
 <a id="model-experience"></a>

@@ -15,6 +15,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { WorkingDirectoryError } from './error.ts'
 
+export type * from './types.ts'
 export { WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -51,18 +52,22 @@ declare module '@deepseek-ai/dsh-llm' {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** Effective working directory; the immutable Session header retains the original project. */
+    /**
+     * Directory change recorded by releases whose model could move the directory. Readers ignore it: a
+     * Session that holds one resumes in its original project, or in the directory of its last
+     * `workspace-root/change`.
+     * @deprecated No writer records this event. `WorkingDirectoryService.set` records
+     * `workspace-root/change`.
+     */
     'working-directory/change': {
-      /** Absolute directory used by subsequent directory-based operations. */
+      /** Absolute directory the Session worked in after the change. */
       cwd: string
     }
-  }
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionMap {
-    /** Recorded current directory for Session observations, or null when none is recorded. */
-    workingDirectory: string | null
+    /** Host move of the Session's directory; the immutable Session header retains the original project. */
+    'workspace-root/change': {
+      /** Absolute directory the Session works in from this event on. */
+      cwd: string
+    }
   }
 }
 
@@ -72,7 +77,14 @@ export interface Config {
   defaultDirectory?: string
 }
 
-/** One owner for each Session's effective directory and its model-visible changes. */
+/**
+ * One owner for each Session's directory and its model-visible changes.
+ *
+ * A Session works in one directory. Relative paths resolve from it, and it is the workspace root that
+ * the write boundary, file views, and discovery follow. Only Host operations move it, through {@link set}
+ * or the recovery of {@link ensure}. The `working-directory/change` events of a log written while the
+ * model could move the directory do not move it.
+ */
 export class WorkingDirectoryService extends Service {
   static inject = ['fs', 'sessionProjections', 'systemPrompt']
 
@@ -100,10 +112,10 @@ export class WorkingDirectoryService extends Service {
     const directorySchema = zod.string().min(1).refine(isAbsolute).nullable()
     this.workingDirectoryProjectionHandle = await ctx.sessionProjections.register({
       key: 'workingDirectory',
-      stateVersion: 1,
+      stateVersion: 3,
       stateSchema: directorySchema,
       init: header => header.cwd ?? null,
-      apply: (state, event) => event.type === 'working-directory/change' ? event.data.cwd : state,
+      apply: (state, event) => event.type === 'workspace-root/change' ? event.data.cwd : state,
       wire: { viewSchema: directorySchema, view: state => state },
     })
     ctx.systemPrompt.context({
@@ -134,9 +146,11 @@ export class WorkingDirectoryService extends Service {
   }
 
   /**
-   * Read the committed directory without filesystem I/O.
+   * Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace
+   * root of everything that follows the Session's checkout.
    * @param session - Session whose directory is requested.
-   * @returns its effective absolute directory.
+   * @returns the directory of the last Host move, the original project before any, or the deployment
+   * default when none is recorded.
    */
   get(session: Session): string {
     return this.workingDirectoryProjectionHandle.stateOf(session) ?? this.defaultDirectory
@@ -146,8 +160,8 @@ export class WorkingDirectoryService extends Service {
    * Validate the current directory and restore the original project when it disappeared.
    * @param agent - live or unpublished Agent owning the Session.
    * @param signal - cancellation for filesystem inspection.
-   * @returns the existing directory; recovery is committed before fulfillment.
-   * A notice failure is warned without reverting the committed state.
+   * @returns the existing directory; recovery is committed before fulfillment. A notice failure is
+   * warned without reverting the committed state.
    * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
    *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
    */
@@ -160,7 +174,7 @@ export class WorkingDirectoryService extends Service {
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
         if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
-          agent.session.append('working-directory/change', { cwd: current })
+          agent.session.append('workspace-root/change', { cwd: current })
         }
         return current
       }
@@ -175,7 +189,9 @@ export class WorkingDirectoryService extends Service {
   }
 
   /**
-   * Change one Session's directory without changing existing processes or permissions.
+   * Move one Session's directory to `path`. Existing processes keep their directories. Callers are
+   * Host operations that chose the directory; a model-supplied path would move the workspace-write
+   * boundary with it.
    * @param agent - live or unpublished Agent owning the Session.
    * @param path - absolute path or a path relative to its current directory.
    * @param signal - cancellation before the durable change.
@@ -187,7 +203,7 @@ export class WorkingDirectoryService extends Service {
    */
   set(agent: Agent, path: string, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path, signal: control }, async () => {
-      if (path.length === 0) throw new WorkingDirectoryError('working-directory: cd must not be empty', 'WORKING_DIRECTORY_INVALID')
+      if (path.length === 0) throw new WorkingDirectoryError('working-directory: path must not be empty', 'WORKING_DIRECTORY_INVALID')
       const directory = await this.directory(path, this.get(agent.session), control)
       this.commit(agent, directory, false, control)
       return directory
@@ -219,7 +235,7 @@ export class WorkingDirectoryService extends Service {
     agent.ctx.fiber.assertActive()
     const previous = this.get(agent.session)
     if (previous === directory) return
-    agent.session.append('working-directory/change', { cwd: directory })
+    agent.session.append('workspace-root/change', { cwd: directory })
     const notice = createUserMessage({
       content: [{
         type: 'text',

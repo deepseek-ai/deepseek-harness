@@ -1,6 +1,9 @@
 /** OAuth lifecycle regressions against the real SDK, callback server, and file-backed store. */
+import { IncomingMessage, ServerResponse } from 'node:http'
+import { Socket } from 'node:net'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Client, UnauthorizedError } from '@modelcontextprotocol/client'
+import * as Connection from '@deepseek-ai/dsh-client-connection'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -118,6 +121,66 @@ describe('MCP OAuth', () => {
     const received = await fetch(url)
     expect(received.status).toBe(200)
     expect(await received.text()).toContain('Authorization received.')
+    await phase(() => owner.current(), 'authorized')
+  })
+
+  it('accepts the cross-site return from the authorization server while Connection refuses other cross-site requests', async () => {
+    const world = await oauthWorld()
+    await world.ctx.plugin(Connection)
+    const stop = world.ctx.webServer.register({ kind: 'exact', path: '/public', auth: 'anonymous', handler: (_req, res) => { res.end('public') } })
+    onTestFinished(stop)
+    const headers = { 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
+    const owner = world.owner()
+    await owner.start()
+    const waiting = await phase(() => owner.current(), 'waiting-browser')
+    const authorization = new URL(waiting.authorizationUrl!)
+    const url = new URL(authorization.searchParams.get('redirect_uri')!)
+    expect((await fetch(new URL('/public', url), { headers })).status).toBe(403)
+    url.searchParams.set('state', 'wrong-state')
+    url.searchParams.set('iss', authorization.origin)
+    url.searchParams.set('code', 'fixture-code')
+    expect((await fetch(url, { headers })).status).toBe(400)
+    expect(world.tokens()).toBe(0)
+    url.searchParams.set('state', authorization.searchParams.get('state')!)
+    expect((await fetch(url, { headers })).status).toBe(200)
+    await phase(() => owner.current(), 'authorized')
+    expect(world.tokens()).toBe(1)
+  })
+
+  it('leaves requests for another authority or path, and malformed targets, to the Web server', async () => {
+    const world = await oauthWorld()
+    const owner = world.owner()
+    await owner.start()
+    const waiting = await phase(() => owner.current(), 'waiting-browser')
+    const authorization = new URL(waiting.authorizationUrl!)
+    const redirect = new URL(authorization.searchParams.get('redirect_uri')!)
+    redirect.searchParams.set('state', authorization.searchParams.get('state')!)
+    redirect.searchParams.set('iss', authorization.origin)
+    redirect.searchParams.set('code', 'fixture-code')
+    const target = redirect.pathname + redirect.search
+    for (const input of [
+      { url: target, host: undefined },
+      { url: target, host: '[' },
+      { url: target, host: 'untrusted.invalid' },
+      { url: 'http://untrusted.invalid' + target },
+      { url: '/mcp/oauth/callback/other' + redirect.search },
+      { url: undefined },
+    ]) {
+      const socket = new Socket()
+      const req = new IncomingMessage(socket)
+      req.method = 'GET'
+      req.url = input.url
+      req.headers.host = 'host' in input ? input.host : redirect.host
+      const res = new ServerResponse(req)
+      const next = vi.fn(async () => {})
+      try {
+        await world.ctx.waterfall(world.ctx.webServer, 'webserver/request', req, res, next)
+        expect(next).toHaveBeenCalledOnce()
+        expect(res.writableEnded).toBe(false)
+      } finally { res.destroy(); socket.destroy() }
+    }
+    expect(owner.current()?.phase).toBe('waiting-browser')
+    expect(await callback(waiting)).toBe(200)
     await phase(() => owner.current(), 'authorized')
   })
 

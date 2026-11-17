@@ -1,12 +1,16 @@
+import { spawn } from 'node:child_process'
 import { createServer, type AddressInfo } from 'node:net'
 import { createServer as createHttpServer } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { ownerHostClaimPath } from '../src/host/owner-host-claim.ts'
 import { Context } from '@deepseek-ai/cordis'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { WebSocketServer } from 'ws'
 import { apply, type Config } from '../src/host/share-host.ts'
+import { TunnelWorker, type TunnelWorkerInput } from '../src/host/tunnel-worker.ts'
 import type {} from '../src/index.ts'
 
 interface GatewayUpgrade {
@@ -321,12 +325,54 @@ describe('liveshare owner host', () => {
     // The first snapshot states access this host already held, so nothing is cancelled.
     expect(cancel).not.toHaveBeenCalled()
 
-    // The Relay narrows the share to a stored allowlist that does not name this viewer: the host cannot
-    // attribute the running turn, so it stops the turn the Session is running now.
+    // The Relay narrows the share to a stored allowlist that does not name this viewer, and this turn has
+    // no origin record, so the host cannot place it: it stops the turn the Session is running now.
     authority = { version: 2, accessMode: 'selected', allowedSubjectIds: [], sessionMode: 'write' }
     await host.liveshareShares.list()
     await expect.poll(() => cancel.mock.calls.length, { timeout: 5_000 }).toBe(1)
     expect(cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
+  }, 20_000)
+
+  it('keeps an owner-started turn when a share narrows', async () => {
+    const cancel = vi.fn()
+    const live = liveAgent('session-1', cancel)
+    let authority: Record<string, unknown> = {
+      version: 1, accessMode: 'open', allowedSubjectIds: [], sessionMode: 'write',
+    }
+    const relay = createHttpServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify(request.url?.includes('owner-credential') === true
+        ? { supported: true }
+        : authority))
+    })
+    await new Promise<void>((resolve) => { relay.listen(0, '127.0.0.1', resolve) })
+    closers.push(async () => { await new Promise<void>((resolve) => { relay.close(() => { resolve() }) }) })
+    const port = (relay.address() as AddressInfo).port
+    const { host } = ownerRoutes({ agents: { get: () => live } })
+    const dispose = await apply(host, {
+      ownerIdentity: { providerId: 'mock', tenantId: 'tenant-a', subjectId: 'owner', displayName: 'Owner' },
+      ownerStateFile: ownerStateFile(`http://127.0.0.1:${String(port)}`,
+        [storedRecord('share-1', { sessionId: 'session-1', sessionMode: 'write', allowsFork: true })]),
+    } satisfies Config)
+    closers.push(dispose)
+
+    await host.liveshareShares.list()
+    // The owner starts turn 7 and its first step admits no share-viewer input, which the host records
+    // before the narrowing read below.
+    const ownerMessage = createUserMessage({ content: [{ type: 'text', text: 'owner' }], source: { kind: 'user' } })
+    await host.waterfall('agent/pre-step', {
+      modelSelection: { provider: 'mock', model: 'mock' },
+      agent: live as never,
+      turn: 7,
+      step: 1,
+      messages: [ownerMessage],
+      signal: new AbortController().signal,
+    }, async () => ({ kind: 'enter', messages: [ownerMessage] }))
+
+    authority = { version: 2, accessMode: 'selected', allowedSubjectIds: [], sessionMode: 'write' }
+    await host.liveshareShares.list()
+    // The narrowed grant stops only work the share admitted, so the owner's turn keeps running.
+    expect(cancel).not.toHaveBeenCalled()
   }, 20_000)
 
   it('registers no route for the retired approval flow', async () => {
@@ -435,5 +481,123 @@ describe('liveshare owner host', () => {
     expect(upgrade?.search.get('accessMode')).toBe('selected')
     // The stored ACL travels with the revived registration, so the mode change never widens it.
     expect(upgrade?.search.getAll('allowedSubjectId')).toEqual(['mock:acceptance-tenant:viewer'])
+  }, 20_000)
+
+  it('keeps the claim until the worker has stopped registering its shares', async () => {
+    // A successor that takes the claim while this worker is still stopping would register the same
+    // shares, and the handshake this host is finishing could overwrite that registration.
+    const upgrades: GatewayUpgrade[] = []
+    const relay = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+    await new Promise<void>((resolve) => { relay.once('listening', resolve) })
+    relay.on('connection', (_socket, request) => {
+      const url = new URL(request.url ?? '/', 'http://relay.local')
+      upgrades.push({ shareId: url.searchParams.get('shareId') ?? '', authorization: request.headers.authorization, search: url.searchParams })
+    })
+    closers.push(async () => {
+      await new Promise<void>((resolve) => { relay.close(() => { resolve() }) })
+    })
+    const port = (relay.address() as AddressInfo).port
+    const file = ownerStateFile(`http://127.0.0.1:${String(port)}`, [storedRecord('held-share', {})])
+    const { host } = ownerRoutes()
+    const dispose = await apply(host, { ownerStateFile: file } satisfies Config)
+    closers.push(dispose)
+    await expect.poll(() => upgrades.length, { timeout: 15_000 }).toBeGreaterThan(0)
+
+    const claimPath = ownerHostClaimPath(dirname(file))
+    // The claim names this host for as long as the worker that registers the shares is stopping, and
+    // the teardown has not resolved while it does.
+    const running = dispose()
+    let settled = false
+    void running.then(() => { settled = true })
+    await vi.waitFor(() => {
+      expect(settled).toBe(false)
+      expect(JSON.parse(readFileSync(claimPath, 'utf8'))).toMatchObject({ pid: process.pid })
+    }, { timeout: 5_000, interval: 1 })
+    await running
+    expect(existsSync(claimPath)).toBe(false)
+  }, 20_000)
+
+  it('refuses to start when the owner state cannot be claimed', async () => {
+    // The state directory is a file, so the claim cannot be created and that is not a second host.
+    const root = mkdtempSync(join(tmpdir(), 'liveshare-claim-failure-'))
+    temporaryRoots.push(root)
+    const blocked = join(root, 'state')
+    writeFileSync(blocked, '')
+    await expect(apply(ownerRoutes().host, { ownerStateFile: join(blocked, 'owner-shares.json') } satisfies Config))
+      .rejects.toThrow(/EEXIST|ENOTDIR|not a directory/)
+  })
+
+  it('releases the claim when the host fails to finish mounting', async () => {
+    // A setup step that throws after the claim must not leave owner-host.json naming this live pid:
+    // another host would stay read-only until this process exited.
+    const root = mkdtempSync(join(tmpdir(), 'liveshare-mount-failure-'))
+    temporaryRoots.push(root)
+    const file = join(root, 'owner-shares.json')
+    writeFileSync(file, JSON.stringify({ shares: [] }))
+    const { host } = ownerRoutes()
+    const mounting = {
+      apply: async (context: Context, config: Config) => {
+        await apply(context, config)
+        // The claim is held at this point, so this stands for any later setup step that throws.
+        throw new Error('mount aborted after the claim')
+      },
+    }
+    const fiber = host.plugin(mounting, { ownerStateFile: file } satisfies Config)
+    await fiber.inertia
+    await vi.waitFor(() => { expect(existsSync(ownerHostClaimPath(root))).toBe(false) })
+    // The claim names no holder, so the next start takes the state over instead of reading it.
+    closers.push(await apply(ownerRoutes().host, { ownerStateFile: file } satisfies Config))
+    expect(JSON.parse(readFileSync(ownerHostClaimPath(root), 'utf8'))).toMatchObject({ pid: process.pid })
+  }, 20_000)
+
+  it('leaves restored shares unregistered while another live host holds the owner state', async () => {
+    // A second dsh on the same home must not move the holder's Relay registrations: the holder's next
+    // authority read would then answer for a registration the Relay has already replaced.
+    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await new Promise<void>((resolve) => { holder.once('spawn', resolve) })
+    onTestFinished(() => { holder.kill() })
+    const file = ownerStateFile(`http://127.0.0.1:${String(await closedPort())}`, [storedRecord('held-share', {})])
+    writeFileSync(ownerHostClaimPath(dirname(file)), JSON.stringify({ hostId: 'other-host', pid: holder.pid }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => { warn.mockRestore() })
+    // A registration reaches the Relay only as a tunnel command, so the command is what this case
+    // watches: a host that sent none never starts the worker, and no upgrade can follow from it.
+    const commands: TunnelWorkerInput[] = []
+    const send = vi.spyOn(TunnelWorker.prototype, 'send').mockImplementation((command) => { commands.push(command) })
+
+    const { host } = ownerRoutes()
+    closers.push(await apply(host, { ownerStateFile: file } satisfies Config))
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`pid ${String(holder.pid)}`))
+    // The claim still names the holder while this host serves: it did not take the state over.
+    expect(JSON.parse(readFileSync(ownerHostClaimPath(dirname(file)), 'utf8'))).toMatchObject({ hostId: 'other-host' })
+    // The owner page lists shares while it is open, which is the read a working host is seen through.
+    await host.liveshareShares.list()
+    expect(commands).toEqual([])
+    send.mockRestore()
+  }, 20_000)
+
+  it('arms no restored deadline while another live host holds the owner state', async () => {
+    // The restored record can name a deadline the holder has since changed, so this host must not stop the
+    // Sessions sharing it: only the holder knows when the State's shares end.
+    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await new Promise<void>((resolve) => { holder.once('spawn', resolve) })
+    onTestFinished(() => { holder.kill() })
+    const cancel = vi.fn()
+    const file = ownerStateFile(`http://127.0.0.1:${String(await closedPort())}`, [
+      storedRecord('held-share', { sessionMode: 'write', expiresAt: '2026-09-02T00:00:00.000Z' }),
+    ])
+    writeFileSync(ownerHostClaimPath(dirname(file)), JSON.stringify({ hostId: 'other-host', pid: holder.pid }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => { warn.mockRestore() })
+
+    const { host } = ownerRoutes({ agents: { get: () => liveAgent('session-held-share', cancel) } })
+    closers.push(await apply(host, { ownerStateFile: file } satisfies Config))
+
+    await host.liveshareShares.list()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`pid ${String(holder.pid)}`))
+    // The stored deadline has already passed; an armed timer would have stopped this turn by now.
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(cancel).not.toHaveBeenCalled()
   }, 20_000)
 })

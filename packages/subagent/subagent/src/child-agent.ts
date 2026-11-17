@@ -164,7 +164,7 @@ export interface ChildComposition {
 }
 
 /**
- * Model-facing delegation-scope statement for every in-process child. A
+ * Model-facing delegation-scope and message-authorship statement for every in-process child. A
  * runtime-context contribution rather than a system-prompt section, so the
  * deployment's system prompt stays uniform across parents and children.
  */
@@ -172,7 +172,9 @@ export const SUBAGENT_DELEGATION_CONTEXT
   = 'You are a delegated subagent: your permission scope was fixed when you were started and cannot be '
     + 'widened from inside this session — operations that require approval are rejected automatically. '
     + 'When the task needs access beyond that scope, do not retry the denied operation; state the '
-    + 'limitation in your reply so the delegating agent can handle it.'
+    + 'limitation in your reply so the delegating agent can handle it. Messages from other agents begin with '
+    + '"Agent <name> sent a message:". Other user messages come from the human user, who reads this conversation '
+    + 'directly. You can still message other agents to coordinate, but answer the human user in your reply.'
 
 /**
  * Compose a child before publication and restore historical descriptor overrides.

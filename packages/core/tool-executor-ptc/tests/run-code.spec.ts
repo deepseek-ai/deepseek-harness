@@ -15,7 +15,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createRunCodeTool, RunCodeConfig } from '../src/run-code.ts'
 
 class ControlledRuntime extends PtcRuntime {
-  readonly language = 'typescript'
+  readonly language: string = 'typescript'
   readonly isolation = 'fixture'
   override get retainsState() { return true }
   override get programFormat() { return 'repl' as const }
@@ -79,6 +79,16 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
 }
 
 describe('registered program tool factory', () => {
+  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s before creating a program tool', async (language) => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    class UnsupportedRuntime extends ControlledRuntime { override readonly language = language }
+    await ctx.plugin(UnsupportedRuntime)
+    expect(() => createRunCodeTool(ctx, {
+      name: 'unsupported_program', description: 'Run a program.', runtime: ctx.ptcRuntime, tools: [],
+    })).toThrow(expect.objectContaining({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }))
+  })
+
   it('uses the explicit runtime and binds only private definitions under native execution', async () => {
     const body = vi.fn(async () => 'private result')
     const definition = privateTool(body)
@@ -184,6 +194,30 @@ describe('registered program tool factory', () => {
       rootCallId: 'program', parentCallId: 'program', subCallId: 'program:ptc:1', name: 'capture', arguments: {},
       isError: false, content: [{ type: 'text', text: 'durable screenshot preview' }], meta: { screen: 1 },
     })
+  })
+
+  it.each([false, true])('retains inspected images from private program tools, output overflow=%s', async (overflow) => {
+    type Attachment = Extract<ContentBlock, { type: 'image' }>['attachment']
+    const image: ContentBlock = { type: 'image', attachment: {
+      attachmentId: brandString<Attachment['attachmentId']>('sha256:inspected'),
+      mediaType: 'image/png', width: 1, height: 1, bytes: 1,
+    } }
+    const { runtime, execute } = await setup(privateTool(vi.fn(async () => 'private result')))
+    runtime.behavior = async () => ({
+      output: [{ type: 'text', text: 'before image' }, image],
+      ...overflow ? { outputTruncated: true } : {},
+    })
+
+    const result = (await execute()).results[0]!.result
+
+    expect(result.isError).toBe(false)
+    expect(result.content.slice(0, 2)).toEqual([{ type: 'text', text: 'before image' }, image])
+    if (overflow) {
+      expect(result.value).toMatchObject({ outputTruncated: true })
+      expect(result.content[2]).toMatchObject({
+        type: 'text', text: expect.stringContaining('Program completed. Output was truncated;') as string,
+      })
+    }
   })
 
   it('cancels on owner disposal and awaits nested cleanup before releasing the factory', async () => {

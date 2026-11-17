@@ -137,6 +137,45 @@
       }
     },
     {
+      "name": "cordis_inspect",
+      "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "platform": {
+                "type": "string",
+                "description": "Provider platform.",
+                "enum": [
+                  "host",
+                  "client"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "description": "Provider ID from the directory."
+              },
+              "method": {
+                "type": "string",
+                "description": "Method name from the directory."
+              },
+              "input": {
+                "description": "Arguments matching the method's input schema."
+              }
+            },
+            "required": [
+              "platform",
+              "provider",
+              "method"
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "create_goal",
       "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
       "parameters": {
@@ -312,13 +351,13 @@
     },
     {
       "name": "list_subagent_models",
-      "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.",
+      "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts.",
       "parameters": {
         "type": "object",
         "properties": {
           "provider": {
             "type": "string",
-            "description": "Registered LLM provider id."
+            "description": "Provider id from the no-argument listing."
           },
           "model": {
             "type": "string",
@@ -329,7 +368,7 @@
     },
     {
       "name": "plugin_manager",
-      "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
+      "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. The application field of a change result is authoritative: applied means the change is in effect and needs no restart; any other value carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -627,14 +666,10 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -649,7 +684,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Child LLM provider id; requires `model`."
+            "description": "LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. Use a provider id listed by `list_subagent_models`."
           },
           "model": {
             "type": "string",
@@ -657,7 +692,7 @@
           },
           "reasoning_effort": {
             "type": "string",
-            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use the selected model's default, even when it matches the parent or configured route."
+            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use that model's default effort."
           }
         },
         "required": [
@@ -672,10 +707,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -903,19 +934,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {

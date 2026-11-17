@@ -1,8 +1,8 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-// Session-header job list driven by a real background bash run: the job row
-// arrives over the job roster stream, expanding it opens the output
-// observation stream, and the panel shows the process's real output while it
-// is still running. No model call is involved.
+// The Session panel's background-jobs section driven by a real background
+// bash run: the job row arrives over the job roster stream, expanding it opens
+// the output observation stream, and the row shows the process's real output
+// while it is still running. No model call is involved.
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -18,12 +18,13 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { hideSessionPanel, newEnglishPage, saveFailureShot, showSessionPanel } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v2.jsonl', import.meta.url))
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/live-job-stream', import.meta.url))
 const STREAMING_EXPECTED = join(SNAPSHOT_DIR, 'streaming.expected.md')
 const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
+const SECTION = '[data-session-panel-section="background-jobs"]'
 const MODE = webSnapshotMode()
 const SEED_ID = 'live-job-stream-web-e2e'
 // One fixed line of early output, then a hold on a barrier file the test owns
@@ -83,11 +84,12 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
     await scaffold?.close()
   })
 
-  it('streams a running job\'s real output into the expanded panel, then settles it in place on kill', async () => {
+  it('streams a running job\'s real output into the expanded row, then settles it in place on kill', async () => {
     let phase = 'streaming'
     onTestFailed(() => saveFailureShot(page, `web-e2e-live-job-${phase}`))
-    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
-    expect(await trigger.count()).toBe(0)
+    const list = page.locator(SECTION).getByRole('list')
+    await showSessionPanel(page)
+    expect(await list.count()).toBe(0)
 
     const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
@@ -109,43 +111,41 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
     const readyOutput = scaffold.ctx.jobs.readAt(jobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
     expect(readyJob.status, `${readyJob.detail ?? ''}\n${readyOutput}`).toBe('running')
 
-    // The job row reaches the header over the job roster stream.
-    await trigger.waitFor({ timeout: 15_000 })
-    await trigger.click()
-
-    // Expanding the row opens the output observation stream; the panel then renders
-    // the command's real stdout while the process is still running.
-    const expand = page.getByRole('button', { name: /Show live output/ })
-    await expand.waitFor({ timeout: 10_000 })
+    // The job row reaches the open section over the job roster stream.
+    // Expanding the row opens the output observation stream; the row then
+    // renders the command's real stdout while the process is still running.
+    const expand = list.getByRole('button', { name: /Show live output/ })
+    await expand.waitFor({ timeout: 15_000 })
     await expand.click()
-    await page.getByText('streamed-marker-line').waitFor({ timeout: 15_000 })
+    await list.getByText('streamed-marker-line').waitFor({ timeout: 15_000 })
 
-    const streaming = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd, { runningJobs: 'keep' })
+    const streaming = await captureStableAria(page, SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(STREAMING_EXPECTED, streaming, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
 
-    await trigger.click()
-    await page.getByRole('list', { name: 'Background jobs' }).waitFor({ state: 'detached' })
+    // Hiding the panel unmounts the section, which closes the observation
+    // stream; showing it again lists the row collapsed, and expanding it
+    // reopens the stream from the retained output.
+    await hideSessionPanel(page)
+    await list.waitFor({ state: 'detached' })
     expect(await page.getByText('streamed-marker-line', { exact: true }).count()).toBe(0)
-    await page.mouse.move(2, 2)
-    await trigger.hover()
-    await page.getByRole('list', { name: 'Background jobs' }).waitFor()
-    await page.getByRole('button', { name: /Hide live output/ }).waitFor()
-    await page.getByText('streamed-marker-line', { exact: true }).waitFor()
+    await showSessionPanel(page)
+    await list.getByRole('button', { name: /Show live output/ }).click()
+    await list.getByRole('button', { name: /Hide live output/ }).waitFor()
+    await list.getByText('streamed-marker-line', { exact: true }).waitFor({ timeout: 15_000 })
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('running')
 
     phase = 'settled'
     expect(scaffold.ctx.jobs.kill(jobId, agent.id, 'web e2e cancellation')).toBe('requested')
 
-    // The unchanged count label is not a settlement signal; the output row owns that state.
-    await page.getByRole('button', { name: 'Finished 1', exact: true }).waitFor({ timeout: 20_000 })
-    await expect.poll(() => page.getByRole('list', { name: 'Background jobs' }).textContent()).toContain('web e2e cancellation')
-    expect(await trigger.getAttribute('aria-label')).toBe('1 background job')
+    // The settled section line owns the settlement signal; the expanded row moves under it.
+    await list.getByRole('button', { name: 'Finished 1', exact: true }).waitFor({ timeout: 20_000 })
+    await expect.poll(() => list.textContent()).toContain('web e2e cancellation')
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('killed')
-    await page.getByText('streamed-marker-line').waitFor({ timeout: 10_000 })
+    await list.getByText('streamed-marker-line').waitFor({ timeout: 10_000 })
 
-    const settled = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)
+    const settled = await captureStableAria(page, SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(SETTLED_EXPECTED, settled, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

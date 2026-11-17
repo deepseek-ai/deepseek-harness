@@ -24,9 +24,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { ConnectionAuthentication } from '@deepseek-ai/dsh-client-connection'
 import { HostConnectionService } from '../../../client/connection/src/rpc-host.ts'
-import { BrowserAuth } from '../../../client/connection/src/browser-auth.ts'
-import { provideBrowserCredentials } from '../../../api/gateway/tests/browser-credentials.ts'
 import { createSessionTestController } from '../../../api/session-controller/tests/test-remote.ts'
 import { SessionController, type SessionCancelRequest } from '../../../api/session-controller/src/index.ts'
 import type { TypertLookup } from '../../../typert/protocol/src/types.ts'
@@ -86,9 +85,8 @@ async function readerHarness(creator: ShareRpcActor, target: 'fork' | 'source' =
   await ctx.plugin(TypertRegistry)
   await mountAgentLoopTestDependencies(ctx)
   const driver = await mountAgentLoopTestHarness(ctx)
-  provideBrowserCredentials(ctx)
-  const auth = await BrowserAuth.create(ctx, ctx.credentials, 1)
-  new HostConnectionService(ctx, [], auth)
+  new ConnectionAuthentication(ctx)
+  new HostConnectionService(ctx, [])
   // Provided on the root Context that also constructs the Session controller below, which re-reads
   // access from that Context's own fiber while a Gateway call runs.
   new RemoteAccessService(ctx)

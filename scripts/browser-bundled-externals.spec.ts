@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { browserBundledExternals, browserPackageOfFile, browserSourceAliases } from './browser-bundled-externals.ts'
 
@@ -79,6 +80,56 @@ describe('browser dependency discovery', () => {
     ].join('\n'))
 
     expect(await browserBundledExternals(root)).toEqual(new Set(['browser-lib']))
+    expect(existsSync(join(root, 'packages/client/dynamic/lib'))).toBe(false)
+  })
+
+  it.each([false, true])('preserves source Client output hooks without writing artifacts (styles: %s)', async (styles) => {
+    const root = fixture()
+    library(root, 'browser-lib')
+    dynamicPlugin(root, [
+      'import { value } from "browser-lib"',
+      ...(styles ? ['import "./theme.css"'] : []),
+      'export const output = value',
+    ].join('\n'))
+    if (styles) write(root, 'packages/client/dynamic/src/client/theme.css', '.fixture { color: red }')
+    write(root, 'packages/client/dynamic/tsdown.config.ts', `
+      import { clientBundle } from ${JSON.stringify(pathToFileURL(resolve(repositoryRoot, 'packages/client/tsdown.client.ts')).href)}
+      export default async (...args) => {
+        const configs = await clientBundle(import.meta.dirname, ['src/index.ts'], {
+          clientBanner: () => '/* fixture-client-banner */',
+        })(...args)
+        const client = configs.find(config => config.name === '@fixture/dynamic/client')
+        client.plugins.push({
+          name: 'fixture-client-output',
+          generateBundle(_options, bundle) {
+            const output = bundle['client.js']
+            if (output?.type !== 'chunk') throw new Error('missing configured Client filename')
+            for (const text of ['fixture-client-banner', 'window.__ModuleLoader__.load', 'return module.exports', 'var module =']) {
+              if (!output.code.includes(text)) throw new Error('missing Client output hook: ' + text)
+            }
+            if (output.code.includes('__dshChunkStyles_')) throw new Error('unexpanded metadata marker')
+            if (output.code.includes('stylesheets:') !== ${JSON.stringify(styles)}) throw new Error('unexpected stylesheet metadata')
+            if (output.code.includes('text:') !== ${JSON.stringify(styles)}) throw new Error('unexpected stylesheet text producer')
+          },
+        })
+        return configs
+      }
+    `)
+
+    expect(await browserBundledExternals(root)).toEqual(new Set(['browser-lib']))
+    expect(existsSync(join(root, 'packages/client/dynamic/lib'))).toBe(false)
+  })
+
+  it('rejects unresolved Client output options before walking the build', async () => {
+    const root = fixture()
+    dynamicPlugin(root, 'export const output = 1')
+    write(root, 'packages/client/dynamic/tsdown.config.ts', `
+      export default {
+        name: '@fixture/dynamic/client', entry: 'src/client/index.ts',
+        outputOptions: () => ({}),
+      }
+    `)
+    await expect(browserBundledExternals(root)).rejects.toThrow('needs resolved output options')
     expect(existsSync(join(root, 'packages/client/dynamic/lib'))).toBe(false)
   })
 

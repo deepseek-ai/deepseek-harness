@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Show server-authored account notifications beside the account menu. Displayed cards survive later list omissions and refresh their content when the interface language changes.
+Show server-authored account notifications above the account menu. Displayed cards survive later list omissions and refresh their content when the interface language changes.
 
 ## Table of Contents
 
@@ -20,13 +20,13 @@ Show server-authored account notifications beside the account menu. Displayed ca
 <a id="use-this-package"></a>
 ## Use this package
 
-The Web bundle includes this plugin with [account settings](../ui-settings-account/README.md). It contributes to `settings.launcher.notifications`; the account menu supplies visibility and the action that opens Account settings. The notification plugin owns cards, polling, localized content, and interaction reports.
+The Web bundle includes this plugin with [account settings](../ui-settings-account/README.md). It contributes to `settings.launcher.notifications`; account settings fills the settings shell's row above the account launcher with this slot and supplies visibility and the action that opens Account settings. The notification plugin owns cards, polling, localized content, and interaction reports.
 
-Startup with a stored account, sign-in, and each Settings entry start a new polling cycle with an immediate request. `notificationPollIntervalMs` on the `ui-account-notifications` row supplies the initial delay, defaulting to 600,000 ms. A successful list response replaces it with `next_poll_after` seconds, including empty lists. The delay starts after the request settles; failures retain the latest delay, and restarting restores the configured initial value. Polling continues in the background.
+Startup with a stored account, sign-in, and each Settings entry start a new polling cycle with an immediate request. `notificationPollIntervalMs` on the `ui-account-notifications` row supplies the initial delay, defaulting to 600,000 ms. It is a volatile field of the Host entry's Config, so a change in `cordis.yml` reaches open pages without remounting the plugin and applies from the next read a poll schedules before any server-provided delay. A successful list response replaces it with `next_poll_after` seconds, including empty lists. The delay starts after the request settles; failures retain the latest delay, and restarting restores the configured initial value. Polling continues in the background.
 
 Account settings owns the sole account stream and exposes its current state and lifecycle events through `accountUi` and `account-ui/change`. Login-progress updates retain cards and polling. Credential replacement, disconnection, access revocation, sign-out, and plugin disposal clear cards, stop polling, and discard late replies. Notification requests do not wait for profile or avatar data. Notification state is not stored in the browser.
 
-Cards render inside the sidebar above the account launcher and below menus and dialogs without taking focus. Their width follows the expanded launcher up to 280px, leaving 10px on the left and at least 10px on the right. Collapsing the sidebar hides the cards; expanding it restores them without another display report. Closing a card promotes the next with a 250ms position and scale transition, disabled by reduced-motion preferences.
+Cards float over the sidebar list, anchored 4px above the account launcher row, below menus and dialogs, without taking focus or space from the list. Status indicators beside the launcher do not narrow them. Title and body text taller than 40% of the viewport scrolls inside the card, so a long notice does not cover the whole sidebar. Their width follows the expanded sidebar up to 280px, leaving 10px on the left and at least 10px on the right. Collapsing the sidebar hides the cards; expanding it restores them without another display report. Closing a card promotes the next with a 250ms position and scale transition, disabled by reduced-motion preferences.
 
 Notifications wait for Desktop and model-credential onboarding to finish. Only the foreground card is interactive and reports `displayed`, once per mount after a painted frame while it intersects the viewport and the sidebar and document are visible. The Settings overlay does not exclude that frame. A displayed foreground card remains until close or expiry even when a later list omits it; waiting cards follow server order.
 
@@ -54,4 +54,4 @@ No model request prefix changes.
 <a id="dev-note"></a>
 ### Dev Note
 
-The package tests cover lifecycle ownership; the Web notification scenario checks the assembled account menu.
+The package tests cover lifecycle ownership; the Web notification scenario checks the assembled sidebar account rows.

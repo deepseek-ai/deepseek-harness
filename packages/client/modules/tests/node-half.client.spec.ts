@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIndexInjections, type WebServer, type WebResourceRoute, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import * as modulesClient from '../src/client/index.ts'
@@ -178,7 +178,8 @@ function constructWithRoute(
       for (const packageName of packageNames) {
         yield {
           options: { name: packageName },
-          fiber: {},
+          // The Loader addresses an entry's plugin instance as `entry.fiber.ctx.fiber`.
+          fiber: { ctx: { fiber: {} } },
           disabled: false,
           parent: { tree: { ctx: { baseUrl: options.entryBaseUrl ?? ctx.baseUrl } } },
         }
@@ -270,7 +271,7 @@ describe('HTML bootstrap facade', () => {
     target.load({ id: MODULES_ID, factory: () => modulesClient })
     const system = target.create({
       boot: graph,
-      staticModules: {},
+      staticModules: [],
       loadBundle: async (url) => {
         expect(url).toBe(APPLICATION_URL)
         target.load({ id: UI_RENDERER_ID, factory: () => ({ marker: 'ui-renderer' }) })
@@ -282,7 +283,7 @@ describe('HTML bootstrap facade', () => {
     expect(system.manifest.rev).toBe('graph')
     expect(await system.import(MODULES_ID)).toBe(modulesClient)
     expect(await system.import(`${UI_RENDERER_ID}/client`)).toEqual({ marker: 'ui-renderer' })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow('create called after module-system boot')
   })
 
@@ -299,7 +300,7 @@ describe('HTML bootstrap facade', () => {
   it('rejects a page that did not preload the modules bundle', () => {
     const graph = bootGraph()
     const { target } = injectedFacade(graph)
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`HTML did not preload ${MODULES_ID}/client.js`)
   })
 
@@ -313,7 +314,7 @@ describe('HTML bootstrap facade', () => {
         return modulesClient
       },
     })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`${MODULES_ID}/client.js requested external "react"`)
   })
 
@@ -325,7 +326,7 @@ describe('HTML bootstrap facade', () => {
     const graph = bootGraph()
     const { target } = injectedFacade(graph)
     target.load({ id: MODULES_ID, factory: () => exports as unknown as Record<string, unknown> })
-    expect(() => target.create({ boot: graph, staticModules: {} }))
+    expect(() => target.create({ boot: graph, staticModules: [] }))
       .toThrow(`${MODULES_ID}/client.js did not export the bootstrap module face`)
   })
 })
@@ -1289,7 +1290,8 @@ describe('client bundle activation', () => {
 function emitLoaderEntryChange(context: Context, name: string): void {
   context.emit('internal/plugin', {
     entry: { options: { name } },
-  } as unknown as Fiber)
+    parent: { fiber: {} },
+  } as never)
 }
 
 describe('shared module declarations', () => {

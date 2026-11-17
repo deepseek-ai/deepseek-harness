@@ -5,7 +5,7 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -61,7 +61,8 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
         async run(spec: PtcRunSpec): Promise<PtcRunResult> {
           const tool = spec.bindings.find(binding => binding.global === 'tools')?.functions[name]
           if (tool === undefined) throw new Error('missing fixture binding')
-          const blocks = await tool(shellArgs)
+          const resolved = await tool(shellArgs)
+          const blocks = resolved instanceof PtcInspectableValue ? resolved.value : resolved
           expect(blocks).toEqual([{ type: 'text', text }])
           return { output: [{ type: 'text', text: 'true' }] }
         }

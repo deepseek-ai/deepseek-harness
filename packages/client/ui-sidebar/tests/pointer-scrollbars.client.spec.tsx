@@ -8,7 +8,7 @@ import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
  */
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SidebarRootComponentProps, SidebarSectionOwnerProps } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
@@ -31,7 +31,6 @@ const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = selector
 
 afterEach(() => {
   cleanup()
-  vi.useRealTimers()
 })
 
 /**
@@ -79,96 +78,50 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
  */
 function movePointer(column: HTMLElement, direction: 'in' | 'out'): void {
   const outside = document.body
-  if (direction === 'in') fireEvent.pointerOver(column, { relatedTarget: outside })
-  else fireEvent.pointerOut(column, { relatedTarget: outside })
+  if (direction === 'in') fireEvent.pointerOver(column, { relatedTarget: outside, clientX: 40, clientY: 300 })
+  else fireEvent.pointerOut(column, { relatedTarget: outside, clientX: COLUMN_WIDTH + 40, clientY: 300 })
 }
 
 /**
- * Move the pointer over the document, as a pointer crossing a fixed overlay
- * that is a DOM descendant of the column does.
+ * Move the pointer over a descendant of the column, as a pointer crossing a
+ * fixed-position overlay rendered inside it does: the move bubbles to the
+ * column without any leave.
+ * @param target - the descendant the pointer is over.
  * @param x - client x coordinate.
  * @param y - client y coordinate.
  */
-function movePointerOverDocument(x: number, y: number): void {
-  fireEvent.pointerMove(document, { clientX: x, clientY: y })
+function movePointerOver(target: Element, x: number, y: number): void {
+  fireEvent.pointerMove(target, { clientX: x, clientY: y })
 }
 
 describe('SidebarRoot pointer-revealed scrollbars', () => {
-  it('draws them only while the pointer is inside, and lingers on the way out', () => {
-    vi.useFakeTimers()
+  it('draws them only while the pointer is inside', () => {
     const { column, quiet } = mountColumn()
     // At rest — the pointer has never been over the column — the bars are off.
     expect(quiet()).toBe(true)
     movePointer(column, 'in')
     expect(quiet()).toBe(false)
+    // The quiet state applies on the leave itself; its stylesheet owns the
+    // delay and fade (scrollbar-quiet-styles.client.spec.ts).
     movePointer(column, 'out')
-    // The linger: still drawn just before the window closes, gone just after.
-    act(() => { vi.advanceTimersByTime(1999) })
-    expect(quiet()).toBe(false)
-    act(() => { vi.advanceTimersByTime(1) })
     expect(quiet()).toBe(true)
-  })
-
-  it('cancels a pending hide when the pointer comes back', () => {
-    vi.useFakeTimers()
-    const { column, quiet } = mountColumn()
     movePointer(column, 'in')
-    movePointer(column, 'out')
-    act(() => { vi.advanceTimersByTime(1000) })
-    movePointer(column, 'in')
-    // The first leave's timer would fire here; a cancelled one leaves the bars
-    // drawn, which is what keeps a pointer skirting the edge from blinking them.
-    act(() => { vi.advanceTimersByTime(5000) })
     expect(quiet()).toBe(false)
   })
 
-  it('hides when the pointer moves outside the column box without leaving its subtree', () => {
+  it('follows the column box while the pointer is over a descendant overlay', () => {
     // ui-settings renders its full-viewport panel as a fixed-position
     // DESCENDANT of the column, so DOM containment reports the pointer as
     // still inside while it is visually somewhere else entirely.
-    vi.useFakeTimers()
     const { column, quiet } = mountColumn()
+    const overlay = column.querySelector('[data-testid="region"]')
+    if (overlay === null) throw new Error('region not rendered')
     movePointer(column, 'in')
-    expect(quiet()).toBe(false)
-    movePointerOverDocument(COLUMN_WIDTH + 400, 300)
-    act(() => { vi.advanceTimersByTime(2000) })
+    movePointerOver(overlay, COLUMN_WIDTH + 400, 300)
     expect(quiet()).toBe(true)
-  })
-
-  it('does not restart the window when the pointer keeps moving outside', () => {
-    vi.useFakeTimers()
-    const { column, quiet } = mountColumn()
-    movePointer(column, 'in')
-    movePointer(column, 'out')
-    act(() => { vi.advanceTimersByTime(1500) })
-    // A pending hide is left alone rather than re-armed: otherwise a pointer
-    // resting outside the column would keep pushing the bars' disappearance
-    // out, one move at a time.
-    movePointerOverDocument(COLUMN_WIDTH + 400, 300)
-    act(() => { vi.advanceTimersByTime(600) })
-    expect(quiet()).toBe(true)
-  })
-
-  it('keeps them drawn while the pointer moves inside the column box', () => {
-    vi.useFakeTimers()
-    const { column, quiet } = mountColumn()
-    movePointer(column, 'in')
-    movePointer(column, 'out')
-    // A move landing back inside the box cancels the pending hide, the same
-    // way re-entering the element does.
-    movePointerOverDocument(COLUMN_WIDTH - 10, 300)
-    act(() => { vi.advanceTimersByTime(5000) })
+    movePointerOver(overlay, COLUMN_WIDTH - 10, COLUMN_HEIGHT - 10)
     expect(quiet()).toBe(false)
-  })
-
-  it('drops the pending hide when the column unmounts', () => {
-    vi.useFakeTimers()
-    const { column } = mountColumn()
-    movePointer(column, 'in')
-    movePointer(column, 'out')
-    cleanup()
-    // A timer surviving the unmount would call setState on a dead component.
-    expect(() => { vi.advanceTimersByTime(5000) }).not.toThrow()
-    expect(vi.getTimerCount()).toBe(0)
+    movePointerOver(overlay, 10, COLUMN_HEIGHT + 10)
+    expect(quiet()).toBe(true)
   })
 })

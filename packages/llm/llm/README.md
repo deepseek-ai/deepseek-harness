@@ -37,10 +37,11 @@ Choose this package whenever a plugin or composition needs to call a model: it i
 
 ### Minimal composition
 
-Mount the service and at least one adapter, then select the provider by name in every request:
+Mount the service and at least one adapter, then select the provider by name in every request. The DeepSeek route below also requires [`dsh-deepseek-auth`](../../account/deepseek-auth/README.md), which releases its API key:
 
 ```yaml
 - name: '@deepseek-ai/dsh-llm'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
@@ -85,6 +86,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### What you can do
 
+- **Extract content text** — `extractTextContent(content, options?)` from `@deepseek-ai/dsh-llm/message` joins only `text` blocks in order, preserving whitespace and empty text blocks while omitting all other block types without placeholders. The optional `options.separator` defaults to `''`. It accepts read-only content and returns `''` when no text blocks exist.
 - **Stream one model call** — `ctx.llm.stream(options)` yields raw chunks (token-level deltas) for any registered provider and model; consumers assemble them with `BlockAssembler`.
 - **Register provider adapters** — an adapter owns one or more provider routes, and its registration captures that route's retry policy; registering the same route twice fails with `DUPLICATE_ADAPTER`.
 - **Expose and activate providers through configuration** — adapters declare configurable-provider routes plus a settings namespace, so configuration surfaces can activate dormant providers and edit connection facts without a restart. `LlmConfigurableProvider.error` reports a configuration diagnostic for repair; unaffected models can remain serviceable. An entry can also carry `defaultBaseURL`, the endpoint the adapter uses when the profile sets none, and `nativeAuth`, the environment variables and OAuth sign-in that the adapter's authentication reads when the profile names no credential reference; `baseURLEnv` lists environment variables used to configure the endpoint. Configuration UIs read these fields from the directory without calling the adapter.
@@ -116,14 +118,13 @@ The service is built on one separation: **the logical contract is provider-neutr
 |---|---|
 | [`src/index.ts`](src/index.ts) | The `LlmRuntime` service: adapter registry, configurable-provider directory, model discovery, call preparation, and the streaming boundary |
 | [`src/types.ts`](src/types.ts) | The `StreamChunk` protocol, content-block map, finish reasons, and shared vocabulary |
-| [`src/message.ts`](src/message.ts) | Immutable message constructors shared by delivery, history, and requests |
+| [`src/message.ts`](src/message.ts) | Content text extraction and immutable message constructors shared by delivery, history, and requests |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`: incremental chunk-to-block assembly |
 | [`src/assistant-stream.ts`](src/assistant-stream.ts) | Compact timed Assistant stream accumulation, strict validation, exact expansion, and record-level readers |
 | [`src/call-config.ts`](src/call-config.ts) | Call-config validation, adapter-default materialization, and request freezing |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | Provider-owned retry policy resolution (normal and always modes) |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` taxonomy and provider-neutral failure codes |
 | [`src/content.ts`](src/content.ts) | Shared file and image helpers: content walks, file projection, image offload accounting, and offloaded-image projection |
-| [`src/api-key.ts`](src/api-key.ts) | Credential format check shared by every adapter |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | Failure normalization into terminal finish chunks |
 
 ### Main flow

@@ -239,9 +239,10 @@ export default defineConfig({
     // no entry: pnpm links each of them to a single directory.
     dedupe: ['react', 'react-dom'],
     // Workspace packages are consumed as built lib products: each resolves
-    // through its own package.json exports from the importer's directory, and
-    // CSS still rides Vite's pipeline because the client build preset emits it
-    // beside the bundle. Plugin packages never enter this graph; they arrive as
+    // through its own package.json exports from the importer's directory. A
+    // static library's own CSS arrives as module metadata for the renderer;
+    // only the third-party stylesheets it imports, such as KaTeX's, ride Vite's
+    // pipeline. Plugin packages never enter this graph; they arrive as
     // runtime bundles through the client module system. The node:module alias
     // supports Loader initialization; its filesystem resolver's other Node
     // imports must stay default imports for Vite's browser-external stubs.
@@ -258,6 +259,8 @@ export default defineConfig({
     // internal slot the shell boot fills with the client module loader).
     'process.versions.node': '"0.0.0"',
     'process.execArgv': '[]',
+    // vendored loader tree.ts: import() converts drive-letter names only on win32.
+    'process.platform': '"browser"',
     // vendored loader index.ts: envData falls to its default branch.
     'process.env.CORDIS_SHARED': 'undefined',
   },

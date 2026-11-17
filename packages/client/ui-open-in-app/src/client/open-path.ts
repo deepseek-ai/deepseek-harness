@@ -96,7 +96,7 @@ export class OpenInAppPathController {
     let ok = false
     try {
       ok = (await this.remote.session.openWorkspacePath(request)).ok
-    } catch {
+    } catch (_hostUnreachable) {
       // Swallows carrier rejections: a Host that cannot be reached failed the
       // gesture like a Host that refused it, and the control announces that.
     }
@@ -173,14 +173,13 @@ export class OpenInAppPathController {
   }
 
   private async run(): Promise<void> {
-    let available = false
+    let result: RemoteResult<boolean> | undefined
     try {
-      const result = await this.remote.session.canOpenWorkspacePath()
-      available = result.ok && result.value
-    } catch {
+      result = await this.remote.session.canOpenWorkspacePath()
+    } catch (_hostUnreachable) {
       // Swallows carrier rejections: an unreachable Host reads as no desktop,
       // so the preview shows no path control rather than a broken one.
     }
-    this.desktop.set(available)
+    this.desktop.set(result?.ok === true && result.value)
   }
 }

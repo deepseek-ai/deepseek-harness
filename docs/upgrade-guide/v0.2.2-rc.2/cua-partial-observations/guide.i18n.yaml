@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/cua-partial-observations/guide.md
+/:
+  en: b1b2790b59940f60
+  zh: 21258f0f55de1e47
+/macos-cua-isolates-unavailable-ax-branches:
+  en: 24c320421e003cc8
+  zh: 7d0335e6d6fac199
+/macos-cua-isolates-unavailable-ax-branches/change:
+  en: 5d78693d9484cdb9
+  zh: 67388e7154cb12dc
+/macos-cua-isolates-unavailable-ax-branches/migration:
+  en: 56212468902daaee
+  zh: de313a71ad67dec4

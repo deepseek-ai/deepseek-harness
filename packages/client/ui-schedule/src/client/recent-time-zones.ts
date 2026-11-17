@@ -38,7 +38,7 @@ export function rememberTimeZone(recent: readonly string[], zone: string): reado
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
+    } catch (_storageUnavailable) {
       // A private or full browser store must not block editing the rule.
     }
   }

@@ -10,7 +10,7 @@ A Session that needs an isolated checkout otherwise has to coordinate Git comman
 
 ## Decision
 
-The experimental [worktree runtime](../../../../packages/experimental/worktree/README.md) creates a new named branch and checkout from a pinned local commit, then enters its canonical directory through the shared working-directory service. The [tool](../../../../packages/experimental/tool-worktree/README.md) exposes `create_worktree({ name?, from? })`. These packages use ordinary explicit composition, with no additional runtime feature flag.
+The experimental [worktree runtime](../../../../packages/experimental/worktree/README.md) creates a new named branch and checkout from a pinned local commit, then enters its canonical directory through the shared working-directory service. The [tool](../../../../packages/experimental/tool-worktree/README.md) exposes it as `enter_worktree({ name?, from? })`, which also enters an existing worktree of that name. These packages use ordinary explicit composition, with no additional runtime feature flag.
 
 The source repository comes from the calling Session's current directory. Creation does not fetch or copy uncommitted files. The default pool is `.agents/worktrees` under the current checkout’s top-level directory, including when the caller is in a linked checkout. The process that creates a pool writes its self-ignoring `.gitignore`; existing directories and ignore files are preserved. Names must be new branches and unused checkout paths.
 

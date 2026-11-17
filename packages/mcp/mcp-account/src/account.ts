@@ -145,7 +145,8 @@ function reconnectDetail(reason: Exclude<McpAuthorizationReason, 'missing'>, cop
 
 /**
  * What the section shows for one server: the manager's status and the latest authorization, in the shared copy and the
- * connector's text. A server that needs authorization again shows as disconnected, with the reason in its detail.
+ * connector's text. A server that needs authorization again shows as disconnected, with the reason in its detail; a
+ * connected server can authorize again without signing out first.
  * @param view - the server as the manager lists it.
  * @param copy - the connector's text.
  * @returns the section's display.
@@ -173,10 +174,14 @@ export function present(view: McpAccountView, copy: McpAccountCopy): ConnectorAc
       const signOut = text('action.signOut')
       return {
         phase: 'connected', status: text('status.connected'), badge: text('badge.connected'), detail: copy.detail.connected, notes: [],
-        buttons: [{
-          label: signOut, command: { kind: 'start', operation: 'sign-out' },
-          confirm: { title: copy.signOut.title, body: copy.signOut.body, label: signOut },
-        }],
+        buttons: [
+          // Authorizing again changes the account or workspace; the manager keeps the saved grant until the new one is saved.
+          { label: text('action.reauthorize'), command: CONNECT },
+          {
+            label: signOut, command: { kind: 'start', operation: 'sign-out' },
+            confirm: { title: copy.signOut.title, body: copy.signOut.body, label: signOut },
+          },
+        ],
       }
     }
     case 'connecting':

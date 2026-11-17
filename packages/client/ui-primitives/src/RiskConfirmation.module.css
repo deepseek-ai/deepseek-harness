@@ -25,6 +25,7 @@
 
 .confirmation .acknowledgement {
   align-items: flex-start;
+  gap: 6px;
   margin-top: 16px;
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
@@ -32,10 +33,14 @@
   line-height: 20px;
 }
 
+.confirmation .acknowledgement > :first-child {
+  margin-top: 3px;
+}
+
 .confirmation .acknowledgement input {
   width: 14px;
   height: 14px;
-  margin-top: 3px;
+  margin: 0;
 }
 
 .modalAction {

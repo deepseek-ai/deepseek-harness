@@ -35,7 +35,7 @@ export function parseBrowserAddress(input: string, applicationOrigin?: string): 
     if (applicationOrigin !== undefined && applicationOrigin !== 'null') {
       try {
         if (url.origin === new URL(applicationOrigin).origin) return { ok: false, reason: 'application-origin' }
-      } catch {
+      } catch (_invalidApplicationOrigin) {
         // An unavailable application origin cannot grant access to a target.
       }
     }

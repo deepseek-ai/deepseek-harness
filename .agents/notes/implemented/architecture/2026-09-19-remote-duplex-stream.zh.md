@@ -305,7 +305,7 @@ credit 帧留待需要持续大流量上行的消费者出现时再加；inbox �
 
 | 项 | 规则 |
 | --- | --- |
-| 鉴权 | 与今天相同：升级时 `connection.requestRejection(req)`；打开时描述符与查找参数校验。上行项属于一条已鉴权的流，不重复鉴权 |
+| 鉴权 | 升级时由 WebServer 准入提供 Peer；打开时校验描述符与查找参数。上行项属于一条已鉴权的流，不重复鉴权 |
 | Peer | 升级时接纳为一个 `PeerScope`，该 socket 上所有流的 `invocation.peer` 都是它 |
 | 项校验 | 有 uplink codec 时逐项严格解码，失败即整条流以既有的 `gateway/input-invalid` 失败（details `{ endpoint, field: 'uplink' }`）；无 codec 时只做 JSON 安全校验 |
 | 帧大小 | 单帧沿用 `ws` 的 `maxPayload`；inbox 上限限制累计量 |

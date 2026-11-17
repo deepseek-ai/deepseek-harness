@@ -37,10 +37,11 @@ kind: "package-reference"
 
 ### 最小组合
 
-挂载服务与至少一个适配器，然后在每个请求中按名称选择提供方：
+挂载服务与至少一个适配器，然后在每个请求中按名称选择提供方。下面的 DeepSeek 路由还要求挂载 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md)，由它释放 API 密钥：
 
 ```yaml
 - name: '@deepseek-ai/dsh-llm'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
@@ -85,6 +86,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### 你可以做什么
 
+- **提取内容文本**——从 `@deepseek-ai/dsh-llm/message` 导入的 `extractTextContent(content, options?)` 按顺序仅拼接 `text` 块，保留空白与空文本块，忽略所有其他块类型且不生成占位符。可选的 `options.separator` 默认为 `''`。它接受只读内容，没有文本块时返回 `''`。
 - **流式发起一次模型调用**——`ctx.llm.stream(options)` 为任何已注册提供方与模型产出原始分片（token 级增量）；消费方用 `BlockAssembler` 组装。
 - **注册提供方适配器**——一个适配器拥有一个或多个提供方路由，其注册会捕获该路由的重试策略；重复注册同一路由会以 `DUPLICATE_ADAPTER` 失败。
 - **通过配置暴露并激活提供方**——适配器声明可配置提供方路由与 settings namespace，配置界面因此可以激活休眠提供方并编辑连接信息，无需重启。`LlmConfigurableProvider.error` 报告供修复的配置诊断；未受影响的模型仍可提供服务。条目还可携带 `defaultBaseURL`，即配置未设置端点时适配器使用的端点；以及 `nativeAuth`，即配置未指定凭据引用时适配器认证读取的环境变量与 OAuth 登录；`baseURLEnv` 列出配置端点所用的环境变量。配置界面直接从目录读取这些字段，无需调用适配器。
@@ -116,14 +118,13 @@ const configure = (maxTokens: number): ConfigureCall =>
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LlmRuntime` 服务：适配器注册表、可配置提供方目录、模型发现、调用准备与流式边界 |
 | [`src/types.ts`](src/types.ts) | `StreamChunk` 协议、内容块映射、结束原因与共享词汇 |
-| [`src/message.ts`](src/message.ts) | 投递、历史与请求共享的不可变消息构造函数 |
+| [`src/message.ts`](src/message.ts) | 内容文本提取与投递、历史、请求共享的不可变消息构造函数 |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`：分片到块的增量组装 |
 | [`src/assistant-stream.ts`](src/assistant-stream.ts) | 带时间信息的紧凑 Assistant 流累积、严格校验、精确展开与记录级读取器 |
 | [`src/call-config.ts`](src/call-config.ts) | 调用配置校验、适配器默认值填入与请求冻结 |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | 提供方自有重试策略解析（normal 与 always 模式） |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` 分类体系与提供方无关失败 code |
 | [`src/content.ts`](src/content.ts) | 共享文件与图片辅助函数：内容遍历、文件投影、图片卸载计数与已卸载图片投影 |
-| [`src/api-key.ts`](src/api-key.ts) | 每个适配器共享的凭据格式校验 |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | 把失败归一化为终止 finish 分片 |
 
 ### 主流程

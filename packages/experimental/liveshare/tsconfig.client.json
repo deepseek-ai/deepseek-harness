@@ -39,7 +39,6 @@
     "src/client/viewer-plugin-warning.ts",
     "src/client/viewer-session-plugin.ts",
     "src/client/viewer-session-row.tsx",
-    "src/client/viewer-share-path.tsx",
     "src/client/viewer-status.ts",
     "src/client/viewer-status-banner.ts",
     "src/client/viewer-session.ts",
@@ -100,7 +99,7 @@
       "path": "../../client/ui-slots/tsconfig.json"
     },
     {
-      "path": "../../client/ui-workspace/tsconfig.json"
+      "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../../core/session"

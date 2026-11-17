@@ -95,7 +95,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const profile = app.loadProfileDirectory('bundle-test', directory, installAnchor)
     const profileContext: ProfileContext = {
       name: 'web', dir: directory, patchPath: profile.patchPath, installAnchor, cwd: workspace, home,
-      startedBundles: profile.layers.map(layer => layer.packageName), overlays: [], telemetryDisabledEnv: '1',
+      startedBundles: profile.layers.map(layer => layer.packageName), overlayPaths: [], telemetryDisabledEnv: '1',
     }
     const resolution = await app.createRuntimeResolution({ installAnchor, home, profile })
     const listeners = new Set<() => void>()
@@ -172,8 +172,8 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('keeps the default host and minimal tool catalogs while every optional bundle is off', async () => {
     const minimal = await agent('minimal')
     const standard = await agent()
-    expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
+    expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
     for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'user_terminal_list', 'ralph']) expect(names(standard.agent)).not.toContain(name)
     expect((await ctx.skills.list({ cwd: workspace, scope: standard.agent })).some(skill => skill.name === 'dsh-badge')).toBe(false)
   })
@@ -247,7 +247,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'badge-on')).toContain('dsh-badge.png')
     const minimal = await agent('minimal')
     expect((await ctx.skills.list({ cwd: workspace, scope: minimal.agent })).map(skill => skill.name)).toContain('dsh-badge')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
     await select(bundles.badge, false)
     expect((await load('badge-after')).isError).toBe(true)
   })
@@ -347,7 +347,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     ])
     expect(toolResult(coded, 'combined-program')).toContain(coded.session.id)
     expect(toolResult(coded, 'combined-program')).toContain('dsh-badge')
-    expect(names()).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph', 'working_directory']))
+    expect(names()).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
     for (const name of [...Object.values(bundles)].reverse()) await select(name, false)
     expect(names((await agent()).agent)).not.toContain('session_search')
   })

@@ -23,7 +23,7 @@ async function route(hooks: Pick<DeepSeekAdapterOptions, 'connect' | 'admit'>) {
     inject: ['llm'],
     apply: (child: Context) => {
       registerDeepSeekProvider(child, 'fixture-route', {
-        options: () => endpoint(), resolveAuth: () => Promise.resolve({ headers: {} }), ...hooks,
+        options: () => endpoint(), resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'fixture-key' } }), ...hooks,
       })
     },
   })
@@ -59,7 +59,7 @@ it('refuses a model before a prepared call exists', async () => {
 it('refuses a model on a direct adapter stream', () => {
   const adapter = new DeepSeekAdapter({
     options: () => endpoint(),
-    resolveAuth: () => Promise.resolve({ headers: {} }),
+    resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'fixture-key' } }),
     resolveUserId: () => 'fixture-user' as AnonymousUserId,
     prepareExtensions,
     admit: () => { throw new LlmError('blocked by fixture', 'MODEL_UNSUPPORTED') },

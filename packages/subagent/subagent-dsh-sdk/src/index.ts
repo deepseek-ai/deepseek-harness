@@ -90,7 +90,7 @@ function resolveConfiguredFile(field: string, value: string): string {
   const path = resolve(value)
   try {
     if (statSync(path).isFile()) return path
-  } catch {
+  } catch (_unreadablePath) {
     // The diagnostic below owns missing, inaccessible, and non-file paths uniformly.
   }
   throw new TypeError(`subagent-dsh-sdk ${field} must name an existing file: ${path}`)

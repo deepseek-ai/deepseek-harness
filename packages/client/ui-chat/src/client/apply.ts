@@ -105,18 +105,35 @@ export function apply(ctx: Context): void {
       // replacement or paging never does, because an old failure scrolling
       // back into view is not news.
       const dispose = binding.ctx.effect(() => {
-        const stop = binding.eventSource.subscribe(() => {
-          const { change } = binding.eventSource.getSnapshot()
-          if (change.kind !== 'append') return
-          for (const { event } of change.entries) {
-            if (event.type !== 'turn/end' || event.data.reason.kind !== 'error') continue
-            const { code } = event.data.reason.error
-            if (quotaNoticeHolds.size > 0 || (code !== 'QUOTA' && code !== 'ACCOUNT_QUOTA')) continue
-            quotaNotice.set({ code, seq: ++quotaNoticeSeq })
+        // Live quota failures are reported only while a rendering reference retains the Session's Conversation.
+        const retainInfo = ctx.sessions.retainInfo(binding.sessionId)
+        const retained = (): boolean => ctx.sessions.binding(binding.sessionId) === binding
+          && (retainInfo.getSnapshot().retainedFacets?.conversation ?? 0) > 0
+        let stopEvents: (() => void) | undefined
+        const follow = (): void => {
+          if (!retained()) {
+            stopEvents?.()
+            stopEvents = undefined
+            return
           }
-        })
+          stopEvents ??= binding.eventSource.subscribe(() => {
+            // A dispatch in progress keeps calling copied listeners after unsubscription.
+            if (!retained()) return
+            const { change } = binding.eventSource.getSnapshot()
+            if (change.kind !== 'append') return
+            for (const { event } of change.entries) {
+              if (event.type !== 'turn/end' || event.data.reason.kind !== 'error') continue
+              const { code } = event.data.reason.error
+              if (quotaNoticeHolds.size > 0 || (code !== 'QUOTA' && code !== 'ACCOUNT_QUOTA')) continue
+              quotaNotice.set({ code, seq: ++quotaNoticeSeq })
+            }
+          })
+        }
+        const stopRetained = retainInfo.subscribe(follow)
+        follow()
         return () => {
-          stop()
+          stopRetained()
+          stopEvents?.()
           chatSources.delete(binding)
           quotaSubscriptions.delete(dispose)
         }
@@ -245,6 +262,7 @@ export function apply(ctx: Context): void {
         'conversation.chat.flow': { kind: 'single', scope: 'session', inject: CHAT_FLOW_INJECT },
         'conversation.chat.text-interaction': { kind: 'keyed', scope: 'session' },
         'conversation.chat.markdown.fence': { kind: 'hoc', scope: 'session' },
+        'conversation.chat.aside': { kind: 'single', scope: 'session' },
       },
       store: chatStore,
       inject: (sessionId: SessionId): ChatViewInjected => {
