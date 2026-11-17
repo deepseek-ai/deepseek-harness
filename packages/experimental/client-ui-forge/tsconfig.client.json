@@ -7,6 +7,7 @@
   },
   "include": [
     "src/client",
+    "src/branch-name.ts",
     "src/commit-range.ts",
     "src/css-modules.d.ts",
     "src/lens-version.ts",

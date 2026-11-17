@@ -168,7 +168,8 @@ it('charges inspection text only when emitted and bounds its complete output', a
   const shown = await runtime.run(runtime.resolve({
     program: 'inspect(await tools.read({}));', bindings: binding, discardCompletion: true,
   }))
-  expect(shown.error?.kind).toBe('output-limit')
+  expect(shown.error).toBeUndefined()
+  expect(shown.outputTruncated).toBe(true)
 })
 
 it('rejects a non-JSON wrapped binding value instead of replacing it with rendered text', async () => {

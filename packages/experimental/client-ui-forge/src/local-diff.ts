@@ -17,6 +17,7 @@ import { gitIn, GitOutputTooLarge } from './git.ts'
 import type { Git, GitConfig, GitOutput, Inspection } from './git.ts'
 import { ATTRIBUTES_PATH } from './layers.ts'
 import type { FileLayers } from './layers.ts'
+import { branchLabel } from './branch-name.ts'
 import { BASE_REF_PREFIXES, parseBaseBranches, parseName, remoteOrder } from './parse.ts'
 import type {
   ForgeCommitRange, ForgeLocalChanges, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeBaseBranches, ForgeSessionWorktree,
@@ -114,7 +115,8 @@ const BINARY_PROBE = 8000
  */
 export async function forkPoint(git: Git, inspection: Inspection, created: ForgeSessionWorktree | null): Promise<ForkPoint | null> {
   if (created !== null && created.path === inspection.checkout.root) {
-    return { commit: created.baseCommit, label: created.from ?? created.baseCommit.slice(0, 7), worktree: true }
+    const label = created.from === null ? created.baseCommit.slice(0, 7) : branchLabel(created.from)
+    return { commit: created.baseCommit, label, worktree: true }
   }
   for (const remote of remoteOrder(inspection.upstream, inspection.remotes)) {
     const head = await git('remote-head', ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote.name}/HEAD`], [0, 1, 128])

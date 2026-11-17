@@ -214,10 +214,11 @@
     - id: harness-dev-context
       name: '@deepseek-ai/dsh-harness-dev-context'
 
-    # The client-plugin reload chain, always mounted: it is idle until a
-    # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
-    # is a row rather than a child of web-runtime because its node half is a
-    # client-side package, which a host-side bundle cannot import.
+    # The plugin-events stream, always mounted: it delivers graph changes,
+    # synced configuration, and rebuilt bundles (the last only while a rebuild
+    # watcher such as pnpm run dev:web rewrites client bundles). It is a row
+    # rather than a child of web-runtime because its node half is a client-side
+    # package, which a host-side bundle cannot import.
     - id: client-hmr
       name: '@deepseek-ai/dsh-client-hmr'
 

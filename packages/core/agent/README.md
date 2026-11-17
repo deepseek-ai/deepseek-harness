@@ -31,6 +31,8 @@ Mount `dsh-agent` with `dsh-session-projection`: it provides `ctx.agents`, the `
 
 `ctx.agents.create()` builds a fresh agent and session under one identity; `ctx.agents.resume()` loads a persisted session and rebuilds the agent on it. Both delegate to the registered factory and return an `AgentHandle` — the only object that can tear that agent down. See [`AgentFactory`](src/index.ts) for publication and failure-cleanup timing. `get(id)` and `list()` find live agents. The [subagent service](../../subagent/subagent/README.md) owns delegated execution and runtime tree membership.
 
+`seed` carries the complete constructor history. A fork additionally passes `parentSource: { sessionId, endSeq }`: the parent whose stored events the first `endSeq` seed events reproduce, as a live log or a persistence read returned them. The [loop's creation lifecycle](../agent-loop/README.md#understand-the-implementation) owns seed validation, storage, and cancellation.
+
 ```text
 const handle = await ctx.agents.create({
   sessionId,

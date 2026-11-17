@@ -18,7 +18,7 @@
 }
 
 .avatars > .avatar {
-  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 0 0 1.5px var(--forge-card-surface, var(--dsw-alias-bg-layer-1));
 }
 
 .moreCount {

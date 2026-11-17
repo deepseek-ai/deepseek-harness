@@ -34,9 +34,10 @@ export function apply(ctx: Context): void {
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args, exec) {
+    async execute({ name, from }, exec) {
       if (exec.agent === undefined) throw new ToolContextUnavailableError('create_worktree requires a calling agent')
-      return ctx.worktrees.create(exec.agent, args, exec.signal)
+      // The parameter object is open, so only the declared fields reach the runtime; it never fetches for this tool.
+      return ctx.worktrees.create(exec.agent, { ...name === undefined ? {} : { name }, ...from === undefined ? {} : { from } }, exec.signal)
     },
     presentCall: args => ({ card: 'generic', title: 'create_worktree', rawInput: args }),
   }))

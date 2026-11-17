@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -160,7 +161,7 @@ function isCancellation(error: unknown, signal: AbortSignal): boolean {
 }
 
 /** Canonical value returned by the outer PTC mode transport. */
-type RunCodeOutput = { logs: string[]; sandbox?: PtcRunSandbox }
+type RunCodeOutput = { logs: string[]; outputTruncated?: boolean; sandbox?: PtcRunSandbox }
 
 /** Render captured text, selected images, and the applied file policy in emission order. */
 function renderRunOutput(
@@ -182,6 +183,7 @@ function renderRunOutput(
   }
   appendText(remaining.join(''))
   const details: string[] = []
+  if (value.outputTruncated) details.push('Program completed. Output was truncated; read current state for missing information without repeating completed actions.')
   if (value.sandbox?.enforcement === 'partial') details.push('File sandbox enforcement is partial on this host.')
   if (value.sandbox?.denied) details.push(`The ${value.sandbox.mode} file sandbox denied an operation.${guidance}`)
   appendText(details.filter(text => text.length > 0).join('\n'))
@@ -277,6 +279,7 @@ export function createRunCodeTransport(
         additionalProperties: false,
         properties: {
           logs: { type: 'array', required: true, items: { type: 'string' } },
+          outputTruncated: { type: 'boolean' },
           sandbox: {
             type: 'object',
             additionalProperties: false,
@@ -621,7 +624,7 @@ export function createRunCodeTransport(
             if (first !== undefined && images.length === 1) return programImage(first.attachment)
             if (outcome.imageRemoved) {
               throw new Error('Image output was removed by a tool output policy.\n'
-                + outcome.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+                + extractTextContent(outcome.content, { separator: '\n' }))
             }
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
           }
@@ -702,7 +705,8 @@ export function createRunCodeTransport(
               ? runController.signal.reason : undefined
             let failure: HarnessError
             if (result.error.kind === 'abort' && exec.signal.aborted && limitError === undefined) {
-              const message = runtime.retainsState ? `tool call aborted: ${result.error.message}` : 'tool call aborted'
+              const message = (runtime.retainsState ? `tool call aborted: ${result.error.message}` : 'tool call aborted')
+                + (result.outputTruncated ? '\nOutput was truncated.' : '')
               failure = new HarnessError(message, TOOL_ABORTED)
               failure.name = 'AbortError'
             } else {
@@ -712,7 +716,8 @@ export function createRunCodeTransport(
                 : `${logsText.endsWith('\n') ? '' : '\n'}File sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
               const failureText = limitError === undefined || limitError.message === result.error.message
                 ? result.error.message : `${limitError.message}\n${result.error.message}`
-              failure = new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
+              const truncation = result.outputTruncated ? '\nOutput was truncated.' : ''
+              failure = new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}${truncation}`)
             }
             if (hasImages) inspections.set(exec, {
               failure: {
@@ -725,6 +730,7 @@ export function createRunCodeTransport(
           }
           const value: RunCodeOutput = {
             logs,
+            ...result.outputTruncated ? { outputTruncated: true } : {},
             ...result.sandbox === undefined ? {} : { sandbox: result.sandbox },
           }
           if (hasImages) inspections.set(exec, { value, output: result.output })

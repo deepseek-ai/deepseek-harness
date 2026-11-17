@@ -3,13 +3,13 @@
  * Worktree card: a running creation, which can be stopped while a message waits for it; the failed or stopped attempt a
  * message waits after; and a removed worktree.
  */
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
-import { WorktreeProgress } from '../src/client/WorktreeProgress.tsx'
+import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import css from '../src/client/WorktreeProgress.module.css'
 import type { ForgePanelState } from '../src/types.ts'
 import { created, creation, failure, ready, removed, requested, worktree } from './client-fixtures.client.ts'
@@ -21,8 +21,9 @@ const t = makeTranslate(en)
 function card(state: ForgePanelState | null) {
   const panel = createSnapshotStore<PanelSnapshot>({ state, disconnected: false })
   const stop = vi.fn<() => void>()
-  const retry = vi.fn<() => void>()
+  const retry = vi.fn<WorktreeProgressInjected['retry']>()
   const withdraw = vi.fn<() => void>()
+  const request = vi.fn<WorktreeProgressInjected['request']>(async () => 'accepted')
   const restore = vi.fn(async (): Promise<string | undefined> => undefined)
   const leave = vi.fn<() => void>()
   const view = render(
@@ -31,6 +32,7 @@ function card(state: ForgePanelState | null) {
       stop={stop}
       retry={retry}
       withdraw={withdraw}
+      request={request}
       restore={restore}
       leave={leave}
       t={t}
@@ -40,7 +42,7 @@ function card(state: ForgePanelState | null) {
   const publish = (next: ForgePanelState | null): void => {
     act(() => { panel.set({ state: next, disconnected: false }) })
   }
-  return { view, stop, retry, withdraw, restore, leave, root, publish }
+  return { view, stop, retry, withdraw, request, restore, leave, root, publish }
 }
 
 /** Glyph a step shows for its state. */
@@ -66,7 +68,7 @@ function details(view: ReturnType<typeof render>): string[][] | null {
 
 /** Names of the action buttons the card offers, in order. */
 function actions(view: ReturnType<typeof render>): string[] {
-  const names = [en['creation.retry'], en['creation.skip'], en['creation.cancel']]
+  const names = [en['creation.retry'], en['creation.skip'], en['creation.cancel'], en['creation.useFetched'], en['creation.rename']]
   return view.getAllByRole('button').map(button => button.textContent).filter(name => names.includes(name))
 }
 
@@ -194,9 +196,56 @@ describe('WorktreeProgress waiting after a failed attempt', () => {
     const b = card(requested('main', { failure: failure(), waiting: 'creation' }))
     fireEvent.click(b.view.getByRole('button', { name: en['creation.retry'] }))
     fireEvent.click(b.view.getByRole('button', { name: en['creation.skip'] }))
-    expect(b.retry).toHaveBeenCalledOnce()
+    expect(b.retry).toHaveBeenCalledExactlyOnceWith(true)
     expect(b.withdraw).toHaveBeenCalledOnce()
     expect(b.stop).not.toHaveBeenCalled()
+  })
+
+  it('offers to start from the last fetched version after a failed fetch of a remote base branch', () => {
+    const fetchFailure = failure({ from: 'refs/remotes/origin/main', fetch: true, phase: 'fetch', message: 'fatal: unable to access' })
+    const b = card(requested('refs/remotes/origin/main', { failure: fetchFailure, waiting: 'creation' }))
+    expect(steps(b.view)).toEqual([
+      ['Fetch origin/main', 'failed', 'cross'], [en['creation.prepare'], 'waiting', 'ring'], [en['creation.checkout'], 'waiting', 'ring'],
+    ])
+    expect(details(b.view)).toEqual([['Branch', 'dsh/0a1b2c3d'], ['From', 'origin/main'], ['Reason', 'fatal: unable to access']])
+    expect(actions(b.view)).toEqual([en['creation.retry'], en['creation.useFetched'], en['creation.skip']])
+    fireEvent.click(b.view.getByRole('button', { name: en['creation.useFetched'] }))
+    fireEvent.click(b.view.getByRole('button', { name: en['creation.retry'] }))
+    expect(b.retry.mock.calls).toEqual([[false], [true]])
+  })
+
+  it('renames a chosen branch that already exists, then tries again on the new name', async () => {
+    const taken = failure({ branch: 'fix/login', exists: true, message: 'worktree branch already exists: fix/login' })
+    const b = card(requested('refs/heads/main', { failure: taken, waiting: 'creation' }, 'fix/login'))
+    expect(actions(b.view)).toEqual([en['creation.rename'], en['creation.retry'], en['creation.skip']])
+    fireEvent.click(b.view.getByRole('button', { name: en['creation.rename'] }))
+    const dialog = screen.getByRole('dialog', { name: en['nameDialog.retryTitle'] })
+    const field = within(dialog).getByRole('textbox')
+    expect((field as HTMLInputElement).value).toBe('fix/login')
+
+    b.request.mockResolvedValueOnce('branch-exists')
+    fireEvent.change(field, { target: { value: 'fix/login-2' } })
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: en['nameDialog.retry'] })) })
+    expect(b.retry).not.toHaveBeenCalled()
+    fireEvent.change(field, { target: { value: 'fix/login-3' } })
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: en['nameDialog.retry'] })) })
+    expect(b.request.mock.calls).toEqual([['refs/heads/main', 'fix/login-2'], ['refs/heads/main', 'fix/login-3']])
+    expect(b.retry).toHaveBeenCalledExactlyOnceWith(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('offers no rename for a taken generated name, whose next attempt takes another one', () => {
+    const b = card(requested('main', { failure: failure({ exists: true }), waiting: 'creation' }))
+    expect(actions(b.view)).toEqual([en['creation.retry'], en['creation.skip']])
+  })
+
+  it('shows the fetch step of a running creation from a remote base branch', () => {
+    const b = card(requested('refs/remotes/origin/main', { creation: creation({ from: 'refs/remotes/origin/main', fetch: true, phase: 'fetch' }), waiting: 'creation' }))
+    expect(steps(b.view)).toEqual([
+      ['Fetch origin/main', 'running', 'spinner'], [en['creation.prepare'], 'waiting', 'ring'], [en['creation.checkout'], 'waiting', 'ring'],
+    ])
+    b.publish(requested('refs/remotes/origin/main', { creation: creation({ from: 'refs/remotes/origin/main', fetch: true, phase: 'checkout' }), waiting: 'creation' }))
+    expect(steps(b.view).map(step => step[1])).toEqual(['done', 'done', 'running'])
   })
 
   it('shows a stopped attempt without steps, with the request\'s base and the same choices', () => {

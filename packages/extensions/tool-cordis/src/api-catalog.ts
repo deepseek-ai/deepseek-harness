@@ -83,13 +83,13 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Card tool, kind registry, Session projection, user actions and status notices.',
-    description: 'Card tool, kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, Session projection, user actions and status notices.',
+    description: 'Kind registry, Session projection, user actions and status notices.',
     methods: [
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',
-        parameters: [{ name: 'kind', description: 'the kind\'s skill, details schema, verbs and handler.' }],
+        parameters: [{ name: 'kind', description: 'the kind\'s details schema, verbs and handler.' }],
         returns: 'disposer removing the kind; actions on its cards are then unavailable.',
         throws: ['when another kind already registered the same action.'],
       },
@@ -103,12 +103,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'view(session: Session): ActionCardView',
         description: 'Read the cards of one Session.',
         parameters: [{ name: 'session', description: 'a Session whose projections are prepared.' }],
-        returns: 'proposals and decisions by call id.',
+        returns: 'proposals and decisions by card id.',
       },
       {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
+        signature: '@Remote act(agent: Agent, cardId: ActionCardId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
         description: 'Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is recorded here and every other verb goes to the card\'s kind. `dismiss` also works on an unstarted card whose kind is no longer registered. Concurrent actions on one card share one operation.',
-        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'callId', description: 'the card\'s `propose_action` call id.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
+        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'cardId', description: 'the card\'s id in the Session\'s card view.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
         returns: 'acceptance of background work, the decision in effect, or a refusal.',
       },
     ],
@@ -593,15 +593,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cliAccounts',
+    summary: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    description: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    methods: [
+      {
+        signature: 'register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>',
+        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s CLI, account operations, and Plugins page text.' }],
+        returns: 'the handle for the plugin\'s own reads and updates of the account.',
+        throws: ['when the runtime-context name `<name>:cli` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
     methods: [
       {
         signature: 'graph(): WebBootGraph',
-        description: 'Current composed entry graph (stable object between changes).',
+        description: 'Current composed entry graph (stable object between changes), carrying the configured synced values.',
         parameters: [],
-        returns: 'the graph served as `window.__DSH_BOOT__`.',
+        returns: 'the graph served as the owner\'s `window.__DSH_BOOT__`.',
+      },
+      {
+        signature: 'graphFor(principal: Principal | undefined): WebBootGraph',
+        description: 'The current graph as one Peer may see it: the owner receives the configured synced values, and every other Peer receives each row\'s schema defaults in their place.',
+        parameters: [{ name: 'principal', description: 'the Peer\'s principal; undefined for the owner or an in-process caller.' }],
+        returns: 'the graph served to that Peer at first render and in plugin-events frames.',
       },
       {
         signature: 'clientPath(id: string): string | undefined',
@@ -635,7 +655,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'onGraphChanged(listener: () => void): () => void',
-        description: 'Fires after any flush that recomposed the graph (row added/removed, or a rebuilt rev change). Pull model: listeners re-read graph.',
+        description: 'Fires after the graph\'s rows or rev change: a flush that recomposed the graph (row added/removed, or a rebuilt rev change), or a republication of synced configuration alone, which leaves the batch artifacts unchanged. Pull model: listeners re-read graph.',
         parameters: [{ name: 'listener', description: 'notified with no payload.' }],
         returns: 'the unsubscriber.',
       },
@@ -715,6 +735,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Reserve the sole provider slot until the contribution is disposed. A second registration fails even when it repeats the current name. Providers must stop their tools and await owned work before releasing this registration.',
         parameters: [{ name: 'name', description: 'provider-owned name used in registration diagnostics.' }],
         returns: 'the effect disposer for this exact registration.',
+      },
+    ],
+  },
+  {
+    key: 'config',
+    summary: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    description: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    methods: [
+      {
+        signature: 'resolveConfigByPackage<C>(packageName: string): SyncedConfig<C> | undefined',
+        description: 'The synced Config object of a package\'s current plugin activation, as that activation\'s `apply` received it. Each activation receives a new object, so the result changes when the plugin is replaced. The caller states the package\'s shared Config type.',
+        parameters: [{ name: 'packageName', description: 'package name of the graph row.' }],
+        returns: 'the object, or undefined while no activation of the package is running.',
       },
     ],
   },
@@ -1072,12 +1105,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'async rejectToken(token: string): Promise<void>',
-        description: 'Remove an inference-rejected token only while it still matches the stored login.',
-        parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
-        returns: 'after matching credentials are removed and the expiry notification is emitted.',
-      },
-      {
         signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
         description: 'Read existing login identity without creating a device or returning credentials.',
         parameters: [],
@@ -1090,10 +1117,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'async resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
+        signature: 'async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined>',
+        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called, and the signal this service aborts when it signs out of that credential. Host-only.',
         parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
+        returns: 'the request credential, or undefined for other origins or a signed-out account.',
       },
       {
         signature: '@Remote async startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
@@ -1114,10 +1141,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
+        signature: 'registerRunningTaskReport(report: () => boolean): () => void',
+        description: 'Register a report of running work that signing out would interrupt. The plugin billing the account to a model route registers one from within `ctx.effect()`; without any report nothing is known to be running.',
+        parameters: [{ name: 'report', description: 'answers whether such work is running now.' }],
+        returns: 'the disposer removing the report.',
+      },
+      {
         signature: '@Remote hasRunningAccountTasks(): boolean',
         description: 'Inspect running work before sign-out.',
         parameters: [],
-        returns: 'whether a running task\'s latest request uses the account route; false when the optional agents service is absent.',
+        returns: 'whether a registered report says a running task uses the account; false without reports.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) async *watchExpiry(signal: AbortSignal): AsyncIterable<\'session-expired\'>',
@@ -1136,6 +1169,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream account state without the Host-only identity subscription option.',
         parameters: [{ name: 'signal', description: 'subscription lifetime.' }],
         returns: 'initial state, login progress, and credential-change updates.',
+      },
+    ],
+  },
+  {
+    key: 'deepseekAuth',
+    summary: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    description: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    methods: [
+      {
+        signature: 'connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void',
+        description: 'Connect the deployment a model route plugin\'s settings name for one kind. Call it from within `ctx.effect()`.',
+        parameters: [{ name: 'kind', description: 'the kind the plugin\'s route bills.' }, { name: 'route', description: 'provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.' }, { name: 'connection', description: 'reads the plugin\'s current settings; a throw marks the kind unresolved for that operation.' }],
+        returns: 'the disposer removing the connection.',
+        throws: ['{DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.'],
+      },
+      {
+        signature: 'routeKind(route: string | undefined): DeepSeekAuthKind | undefined',
+        description: 'The kind that bills a conversation on one model route.',
+        parameters: [{ name: 'route', description: 'provider route of a model request; undefined names none.' }],
+        returns: 'the kind connected under that route, or undefined for a route no plugin connected.',
+      },
+      {
+        signature: 'candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]',
+        description: 'The kinds one request can authenticate with, in the order its billing tries them, each bound to its destination. Nothing is read from a credential store.',
+        parameters: [{ name: 'request', description: 'the request.' }],
+        returns: 'candidates and unresolved kinds, first preferred; empty when the destination accepts no kind the billing allows or no allowed kind serves an absolute destination.',
+      },
+      {
+        signature: 'async authorize(request: DeepSeekAuthRequest, signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>',
+        description: 'Release the credential of the first candidate that has one. A later candidate is not read once an earlier one has a credential, fails to read, or does not resolve.',
+        parameters: [{ name: 'request', description: 'the request.' }, { name: 'signal', description: 'cancellation for the lookups.' }],
+        returns: 'the authorization, or undefined when no candidate has a credential.',
+        throws: ['{DeepSeekAuthError} code `UNRESOLVED_CONNECTION` at an unresolved kind, `INVALID_CREDENTIAL` for an unusable API key; store failures propagate.'],
       },
     ],
   },
@@ -1491,11 +1557,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
       },
       {
-        signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
-        description: 'List the local branches that can start a worktree of the Session\'s current checkout.',
-        parameters: [{ name: 'session', description: 'Session whose current directory is listed.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the checked-out branch and at most `maxBranches` local branches, the checked-out one first.',
-        throws: ['when the current directory is not inside a checkout or Git fails.'],
+        signature: '@Remote async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases>',
+        description: 'List the branches that can start a worktree of the Session\'s current checkout: the checked-out branch, each remote\'s default branch, other local branches, and each remote\'s other remote-tracking branches, remotes in the order the panel recognizes code hosts.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the branches, at most `maxBranches` local branches and `maxBranches` per remote, most recently committed first.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
@@ -1661,10 +1727,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not confirm whether it started the update.'],
       },
       {
-        signature: '@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>',
-        description: 'Ask for a new worktree before the Session\'s first turn, replacing an open request and forgetting a failed attempt. While the next message waits in the inbox, or else at the first step proposal, the panel creates a branch from `from`, or from HEAD of the current checkout when it is null, and enters its checkout. A message that already waits after a failed or stopped attempt keeps waiting for ForgePanelController.retryWorktree.',
-        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'from', description: 'local base branch, or null for HEAD.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
+        signature: '@Remote async requestWorktree(session: Session, from: string | null, name: string | null, signal: AbortSignal): Promise<void>',
+        description: 'Ask for a new worktree before the Session\'s first turn, replacing an open request and forgetting a failed attempt. While the next message waits in the inbox, or else at the first step proposal, the panel creates the branch `name`, or a generated branch per attempt when it is null, from `from`, or from HEAD of the current checkout when it is null, and enters its checkout; a remote-tracking `from` is fetched first. A message that already waits after a failed or stopped attempt keeps waiting for ForgePanelController.retryWorktree.',
+        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'from', description: 'full name of a local or remote-tracking base branch, or null for HEAD.' }, { name: 'name', description: 'new branch name, or null to generate one per attempt.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/invalid-branch` when `from` is empty; `forgePanel/invalid-name` when `name` breaks a branch-name rule; `forgePanel/branch-exists` when the checkout has a local branch named `name`; `forgePanel/not-a-checkout` when a name is checked outside a checkout; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
       },
       {
         signature: '@Remote async cancelWorktree(session: Session, signal: AbortSignal): Promise<void>',
@@ -1678,9 +1744,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'session', description: 'Session whose creation stops.' }, { name: 'signal', description: 'request cancellation.' }],
       },
       {
-        signature: '@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>',
-        description: 'Make another attempt, with a new branch name, at the worktree a message of the Session waits for after a failed or stopped attempt.',
-        parameters: [{ name: 'session', description: 'Session whose message waits.' }, { name: 'signal', description: 'request cancellation.' }],
+        signature: '@Remote async retryWorktree(session: Session, fetch: boolean, signal: AbortSignal): Promise<void>',
+        description: 'Make another attempt, on the requested branch name or a new generated one, at the worktree a message of the Session waits for after a failed or stopped attempt.',
+        parameters: [{ name: 'session', description: 'Session whose message waits.' }, { name: 'fetch', description: 'false skips fetching a remote-tracking base branch for this attempt, which then starts from the commit last fetched.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/not-waiting` when no message waits or an attempt is running.'],
       },
       {
@@ -2694,9 +2760,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
     methods: [
       {
-        signature: '@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>',
+        signature: '@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>',
         description: 'Read the current catalog text for a logged card.',
-        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'The card\'s `propose_action` call id, never a package supplied by the browser.' }],
+        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'cardId', description: 'The card\'s id, never a package supplied by the browser.' }],
         returns: 'the plugin\'s title, description and selection, or a refusal when the card names no available official plugin.',
       },
     ],
@@ -3222,14 +3288,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>',
-        description: 'Create a new stored session and take its write ownership.',
-        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'optional cancellation.' }],
+        description: 'Create a new stored session and take its write ownership. With `parentSource`, store the complete fork history before resolving; a backend may share the parent\'s stored prefix or copy it. A failed creation releases acquired write ownership; already committed history remains stored.',
+        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'cancellation, inherited-prefix count, and optional fork source.' }],
         returns: 'a `write` handle owned by the caller; close it to release ownership.',
-        throws: ['{SessionAlreadyExistsError} when the id already exists.'],
+        throws: ['{SessionAlreadyExistsError} when the id already exists.', '{SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.', '{HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.'],
       },
       {
         signature: 'abstract open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>',
-        description: 'Open an existing stored session.\n\n`read` never takes ownership and works while another handle (or process) holds write ownership. `write` atomically claims single-writer ownership; an existing active owner rejects.',
+        description: 'Open an existing stored session.\n\nReturned `read` handles retain no write ownership and work while another handle (or process) holds write ownership. A first legacy read open may acquire ownership temporarily to import history into the selected backend. `write` atomically claims single-writer ownership; an existing active owner rejects.',
         parameters: [{ name: 'id', description: 'the stored session to open.' }, { name: 'access', description: '`read` or `write`.' }, { name: 'options', description: 'optional cancellation.' }],
         returns: 'the open handle.',
         throws: ['{SessionPersistenceNotFoundError} when the session does not exist.', '{SessionAlreadyOwnedError} for `write` when ownership is taken.'],
@@ -3370,6 +3436,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Unified live-preferred session query service.',
     description: 'Unified live-preferred session query service.\n\nExact reads, filters, and traces are backend-independent concrete behavior. A backend implements full-text observation, reconciliation, ranking, cursor generations, and query execution on the same `ctx.sessionQuery` service.',
     methods: [
+      {
+        signature: 'getListMetadata(session: Session): SessionListMetadata',
+        description: 'Read the metadata that summarizes one live or prepared Session in a Session list.',
+        parameters: [{ name: 'session', description: 'live or prepared Session to summarize.' }],
+        returns: 'whether the Session has no turn, and its latest human-authored prompt time.',
+      },
       {
         signature: 'observeSession( sessionId: SessionId, options: SessionObservationOptions = {}, ): Promise<SessionObservation>',
         description: 'Observe one exact live or prepared Session without a persistence listing preflight.',
@@ -4017,9 +4089,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Host settings owner that records Session authorization before the first model request.',
-    description: 'Host settings owner that records Session authorization before the first model request.',
-    methods: [],
+    summary: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    description: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    methods: [
+      {
+        signature: 'allowedRoutes(): AllowedModelRoute[] | undefined',
+        description: 'Read the routes the setting currently authorizes. Each call samples the live setting, so an edit applies to the next delegation in every Session.',
+        parameters: [],
+        returns: 'a detached route list, or undefined when the setting is disabled.',
+        throws: ['{SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route, or its routes are malformed or repeated. Disabled settings do not read or validate routes.'],
+      },
+    ],
   },
   {
     key: 'subagents',
@@ -5084,15 +5164,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
-        description: 'Create a fresh branch and checkout at a pinned local revision, then enter it. Existing branches or checkout paths fail. Uncommitted files stay in the source checkout. Checkout disables configured clean, smudge, and process filters without changing Git config. Repository-local replacement refs still apply; baseCommit reports the resolved object name. The new checkout becomes current only after Git setup succeeds. Failures may retain newly allocated Git/filesystem artifacts; no branch or checkout is removed automatically.',
-        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name and local revision; defaults are generated name and HEAD.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
+        description: 'Create a fresh branch and checkout at a pinned local revision, then enter it. A request that asks to fetch first fetches its remote-tracking branch, only that branch and without tags, then pins the fetched commit. Existing branches or checkout paths fail. Uncommitted files stay in the source checkout. Checkout disables configured clean, smudge, and process filters without changing Git config. Repository-local replacement refs still apply; baseCommit reports the resolved object name. The new checkout becomes current only after Git setup succeeds. Failures may retain newly allocated Git/filesystem artifacts; no branch or checkout is removed automatically.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name, local revision, and fetch switch; defaults are generated name, HEAD, and no fetch.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'canonical checkout path, branch name, pinned commit, and source repository root.',
-        throws: ['{WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
+        throws: ['{WorktreeError} for an invalid request, a fetch request whose `from` is not a remote-tracking branch of a configured remote, an existing branch or path, or a failed, oversized, or timed-out command, including the fetch; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
       },
       {
-        signature: 'async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>',
+        signature: 'async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: Exclude<CreateWorktreePhase, \'fetch\'>) => void, ): Promise<RestoredWorktree>',
         description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
-        parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
+        parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins, never `fetch`; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
       },
@@ -5385,7 +5465,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'emit',
     signature: '\'deepseek-account/signed-out\'(): void',
     summary: 'Local grant removal has completed.',
-    description: 'Local grant removal has completed.',
+    description: 'Local grant removal has completed. After the listeners return, the `revoked` signal of that grant\'s request credentials aborts.',
     parameters: [],
   },
   {
@@ -5949,6 +6029,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountProfile {\n    readonly id: AccountUserId | null;\n    readonly name: string | null;\n    readonly contact: string | null;\n    readonly avatarUrl?: string | null;\n}',
   },
   {
+    name: 'AccountRequestCredential',
+    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
+  },
+  {
     name: 'AccountUpdate',
     declaration: 'export interface AccountUpdate {\n    readonly type: \'snapshot\' | \'credentials-changed\';\n    readonly state: AccountView;\n}',
   },
@@ -5966,19 +6050,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ActionCardDecision',
-    declaration: 'export interface ActionCardDecision {\n    readonly callId: ToolCallId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
+    declaration: 'export interface ActionCardDecision {\n    readonly cardId: ActionCardId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
   },
   {
     name: 'ActionCardFields',
     declaration: 'export type ActionCardFields = Readonly<Record<string, JsonValue>>;',
   },
   {
+    name: 'ActionCardId',
+    declaration: 'export type ActionCardId = Branded<\'ActionCardId\'>;',
+  },
+  {
     name: 'ActionCardKind',
-    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly skill: string;\n    readonly invitation: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
+    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
   },
   {
     name: 'ActionCardProposal',
-    declaration: 'export interface ActionCardProposal {\n    readonly callId: ToolCallId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
+    declaration: 'export interface ActionCardProposal {\n    readonly cardId: ActionCardId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
   },
   {
     name: 'ActionCardProposalOf',
@@ -6079,6 +6167,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentTerminalRequest',
     declaration: 'export interface AgentTerminalRequest {\n    readonly title: string;\n    readonly cwd?: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly policy: SandboxExecutionPolicy;\n    readonly preferredShells: readonly string[];\n    readonly env?: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'AllowedModelRoute',
+    declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
     name: 'AnalyticsPreset',
@@ -6385,8 +6477,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
   },
   {
+    name: 'CliAccountDictionaries',
+    declaration: 'export type CliAccountDictionaries<Key extends string> = {\n    readonly en: Readonly<Record<Key, string>>;\n} & {\n    readonly [language: string]: Readonly<Record<Key, string>>;\n};',
+  },
+  {
+    name: 'CliAccountHandle',
+    declaration: 'export interface CliAccountHandle<Account, Kind extends string, Phase extends string, Command extends string> {\n    snapshot(): CliAccountView<Account, Kind, Phase, Command>;\n    publish(account: Account): void;\n    refresh(): void;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'CliAccountRegistration',
+    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'CliAccountText',
+    declaration: 'export type CliAccountText<Key extends string> = (key: Key, params?: Readonly<Record<string, string>>) => LocalizedText;',
+  },
+  {
+    name: 'CliAccountView',
+    declaration: 'export type CliAccountView<Account, Kind extends string, Phase extends string, Command extends string = string> = ConnectorAccountView<Account, Kind, Phase | \'checking\' | \'cancelling\', CliCommandFailure<Command>>;',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
+    name: 'CliCommandResult',
+    declaration: 'export interface CliCommandResult {\n    readonly exitCode: number | null;\n    readonly stdout: string;\n    readonly stderr: string;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperationControl',
+    declaration: 'export interface CliOperationControl<Account, Phase extends string, Command extends string> {\n    stage(phase: Phase | \'checking\'): void;\n    offer(url: string): boolean;\n    run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>;\n    publish(account: Account): void;\n}',
+  },
+  {
+    name: 'CliPathContext',
+    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n    readonly ready?: () => boolean;\n}',
+  },
+  {
+    name: 'CliRunOptions',
+    declaration: 'export interface CliRunOptions {\n    readonly awaitsUser?: boolean;\n    readonly onLine?: (stream: \'stdout\' | \'stderr\', line: string) => void;\n}',
   },
   {
     name: 'CollectedOutput',
@@ -6702,7 +6834,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n    };\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreatedShare',
@@ -6734,11 +6866,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateWorktreePhase',
-    declaration: 'export type CreateWorktreePhase = \'prepare\' | \'checkout\';',
+    declaration: 'export type CreateWorktreePhase = \'fetch\' | \'prepare\' | \'checkout\';',
   },
   {
     name: 'CreateWorktreeRequest',
-    declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n}',
+    declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n    fetch?: boolean;\n}',
   },
   {
     name: 'CredentialInfo',
@@ -6803,6 +6935,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DailyScheduleRecord',
     declaration: 'export interface DailyScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'daily\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly time: string;\n    readonly timeZone: string;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'DeepSeekApiKeyHeader',
+    declaration: 'export type DeepSeekApiKeyHeader = \'authorization\' | \'x-api-key\';',
+  },
+  {
+    name: 'DeepSeekAuthBilling',
+    declaration: 'export type DeepSeekAuthBilling = \'auto\' | DeepSeekAuthKind;',
+  },
+  {
+    name: 'DeepSeekAuthCandidate',
+    declaration: 'export interface DeepSeekAuthCandidate {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly reference?: CredentialRef;\n    configured(): Promise<boolean>;\n    resolve(signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>;\n}',
+  },
+  {
+    name: 'DeepSeekAuthConnection',
+    declaration: 'export interface DeepSeekAuthConnection {\n    readonly baseURL: string;\n    readonly reference?: CredentialRef;\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'DeepSeekAuthDestination',
+    declaration: 'export type DeepSeekAuthDestination = {\n    readonly path: string;\n} | {\n    readonly url: string;\n};',
+  },
+  {
+    name: 'DeepSeekAuthKind',
+    declaration: 'export type DeepSeekAuthKind = \'api-key\' | \'account\';',
+  },
+  {
+    name: 'DeepSeekAuthorization',
+    declaration: 'export interface DeepSeekAuthorization {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly headers: Readonly<Record<string, string>>;\n    readonly reference?: CredentialRef;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
+  },
+  {
+    name: 'DeepSeekAuthRequest',
+    declaration: 'export interface DeepSeekAuthRequest {\n    readonly consumer: string;\n    readonly accepts: readonly DeepSeekAuthKind[];\n    readonly billing?: DeepSeekAuthBilling;\n    readonly route?: string | undefined;\n    readonly destination: DeepSeekAuthDestination;\n    readonly connections?: Readonly<Partial<Record<DeepSeekAuthKind, DeepSeekAuthConnection>>>;\n    readonly apiKeyHeaders?: readonly DeepSeekApiKeyHeader[];\n}',
+  },
+  {
+    name: 'DeepSeekAuthUnresolved',
+    declaration: 'export interface DeepSeekAuthUnresolved {\n    readonly kind: DeepSeekAuthKind;\n    readonly unresolved: \'connection\' | \'deployment\';\n    readonly error: unknown;\n}',
   },
   {
     name: 'DeepSeekLlmApiExtensionMap',
@@ -7029,10 +7197,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeBaseBranches {\n    readonly automatic: ForgeAutomaticBase | null;\n    readonly remote: readonly ForgeBaseBranch[];\n    readonly local: readonly ForgeBaseBranch[];\n}',
   },
   {
-    name: 'ForgeBranches',
-    declaration: 'export interface ForgeBranches {\n    readonly current: string | null;\n    readonly branches: readonly string[];\n}',
-  },
-  {
     name: 'ForgeChangedFile',
     declaration: 'export interface ForgeChangedFile {\n    readonly path: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly binary: boolean;\n}',
   },
@@ -7198,7 +7362,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePanelWorktree',
-    declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
+    declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly namePrefix: string;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
   },
   {
     name: 'ForgePendingReview',
@@ -7215,6 +7379,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRegisteredLens',
     declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'ForgeRemoteBranches',
+    declaration: 'export interface ForgeRemoteBranches {\n    readonly name: string;\n    readonly repository: string | null;\n    readonly branches: readonly ForgeBaseBranch[];\n}',
+  },
+  {
+    name: 'ForgeRemoteDefault',
+    declaration: 'export interface ForgeRemoteDefault extends ForgeBaseBranch {\n    readonly remote: string;\n}',
   },
   {
     name: 'ForgeRepository',
@@ -7293,20 +7465,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeViewedState = \'viewed\' | \'unviewed\' | \'dismissed\';',
   },
   {
+    name: 'ForgeWorktreeBases',
+    declaration: 'export interface ForgeWorktreeBases {\n    readonly current: ForgeBaseBranch | null;\n    readonly defaults: readonly ForgeRemoteDefault[];\n    readonly local: readonly ForgeBaseBranch[];\n    readonly remotes: readonly ForgeRemoteBranches[];\n}',
+  },
+  {
     name: 'ForgeWorktreeBlocker',
     declaration: 'export type ForgeWorktreeBlocker = \'not-git\' | \'outside-writable-root\' | \'read-only\';',
   },
   {
     name: 'ForgeWorktreeCreation',
-    declaration: 'export interface ForgeWorktreeCreation {\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly branch: string;\n    readonly from: string | null;\n    readonly held: boolean;\n}',
+    declaration: 'export interface ForgeWorktreeCreation {\n    readonly phase: \'fetch\' | \'prepare\' | \'checkout\';\n    readonly branch: string;\n    readonly from: string | null;\n    readonly fetch: boolean;\n    readonly held: boolean;\n}',
   },
   {
     name: 'ForgeWorktreeFailure',
-    declaration: 'export interface ForgeWorktreeFailure {\n    readonly branch: string | null;\n    readonly from: string | null;\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeWorktreeFailure {\n    readonly branch: string | null;\n    readonly from: string | null;\n    readonly fetch: boolean;\n    readonly phase: \'fetch\' | \'prepare\' | \'checkout\';\n    readonly message: string;\n    readonly exists: boolean;\n}',
   },
   {
     name: 'ForgeWorktreeRequest',
-    declaration: 'export interface ForgeWorktreeRequest {\n    readonly from: string | null;\n}',
+    declaration: 'export interface ForgeWorktreeRequest {\n    readonly from: string | null;\n    readonly name: string | null;\n}',
   },
   {
     name: 'ForgeWorktreeRestoration',
@@ -8654,7 +8830,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PtcRunResult',
-    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    output: PtcOutput[];\n    error?: PtcRunFailure;\n}',
+    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    output: PtcOutput[];\n    outputTruncated?: boolean;\n    error?: PtcRunFailure;\n}',
   },
   {
     name: 'PtcRunSandbox',
@@ -9353,6 +9529,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionLineageTrace = {\n    target: SessionRecord;\n    ancestors: SessionRecord[];\n    descendants: SessionLineageNode[];\n} & ({\n    complete: true;\n    root: SessionRecord;\n} | {\n    complete: false;\n    unresolvedParentId: SessionId;\n});',
   },
   {
+    name: 'SessionListMetadata',
+    declaration: 'export interface SessionListMetadata {\n    readonly blank: boolean;\n    readonly lastPromptAt: number | null;\n}',
+  },
+  {
     name: 'SessionListRequest',
     declaration: 'export interface SessionListRequest {\n    readonly cursor?: string;\n}',
   },
@@ -9410,7 +9590,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionObservation',
-    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
+    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly persistedEventCount?: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
   },
   {
     name: 'SessionObservationOptions',
@@ -9442,7 +9622,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceCreateOptions',
-    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n}',
+    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n        readonly events: readonly SessionEvent[];\n    };\n}',
   },
   {
     name: 'SessionPersistenceListOptions',
@@ -10249,6 +10429,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SurfaceSnapshot {\n    readonly generation: number;\n    readonly tree: readonly SerializedNode[] | null;\n}',
   },
   {
+    name: 'SyncedConfig',
+    declaration: 'export type SyncedConfig<C> = {\n    readonly [K in keyof C as NonNullable<C[K]> extends Volatile<unknown> ? K : never]-?: NonNullable<C[K]> extends Volatile<infer V> ? SyncedConfigRef<V | undefined> : never;\n};',
+  },
+  {
+    name: 'SyncedConfigRef',
+    declaration: 'export interface SyncedConfigRef<T> extends Volatile<T>, ObservableSnapshot<VolatileSnapshot<T>> {\n}',
+  },
+  {
+    name: 'SyncedConfigValues',
+    declaration: 'export type SyncedConfigValues = {\n    readonly [field: string]: JsonValue;\n};',
+  },
+  {
     name: 'SystemMessage',
     declaration: 'export interface SystemMessage extends MessageBase {\n    readonly role: \'system\';\n    readonly source: MessageSourceMap[\'system-prompt\'];\n}',
   },
@@ -10870,7 +11062,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootEntry',
-    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n}',
+    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n}',
   },
   {
     name: 'WebBootGraph',
@@ -11066,7 +11258,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Workspace',
-    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
+    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    getSessionHeaders(): readonly SessionHeader[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
   },
   {
     name: 'WorkspaceArchiveSessionRequest',

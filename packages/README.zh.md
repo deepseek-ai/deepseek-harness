@@ -49,6 +49,7 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`fs/`](fs/README.zh.md) | 文件系统能力系列：seam、本地实现、面向模型的文件工具、发现工具 |
 | [`lsp/`](lsp/README.zh.md) | LSP 能力系列：seam、通用 stdio 提供方和 `lsp` 工具 |
 | [`skill/`](skill/README.zh.md) | skill（技能）能力系列：提供方注册表、本地提供方、面向模型的目录／loader |
+| [`connector/`](connector/README.zh.md) | 通过现有能力接入第三方服务的插件 |
 | [`compaction/`](compaction/README.zh.md) | 压缩（compaction）能力系列：Service Definition + 基础提供方 + 命令 Consumer |
 | [`context/`](context/README.zh.md) | 模型可见请求上下文：workspace 指令、时间上下文、引用 |
 | [`subagent/`](subagent/README.zh.md) | subagent 能力系列：提供方注册表约定和面向模型的委托工具 |
@@ -71,6 +72,7 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`session-query/`](session-query/README.zh.md) | 会话检索系列：逻辑语料库、有界读取、血缘、语义过滤、SQLite 全文搜索 |
 | [`settings/`](settings/README.zh.md) | 用户设置 seam + 基于文件的提供方 |
 | [`credentials/`](credentials/README.zh.md) | 凭据引用与凭据记录 seam + 环境变量优先于 `.env` 的提供方 + 需要向人询问的授权流程 |
+| [`account/`](account/README.zh.md) | DeepSeek 账号登录与仅限 Host 的请求凭据 |
 | [`storage/`](storage/README.zh.md) | 非会话存储中枢 + 后端 + 领域形式 |
 | [`workspace/`](workspace/README.zh.md) | Workspace 实体 |
 | [`sdk/`](sdk/README.zh.md) | 进程外 SDK：JSON-RPC 协议与 TypeScript 客户端／服务器 |

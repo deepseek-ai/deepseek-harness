@@ -98,7 +98,7 @@
     "id": "two_cards_ambiguous_counter",
     "setup": "Both experiments enabled; badge disabled.",
     "prompt": "我需要每个 PR 的 DSH 标识，以及一个右侧栏计数器。请给两个入口：已有插件一张卡，创造一张卡，但先别执行。",
-    "expected": "Exactly one badge proposal, no rejected extra call. Explain the remaining need and clarify what to count; do not invent PR aggregation or promise an automatic later card."
+    "expected": "Exactly one badge proposal, no second card block. Explain the remaining need and clarify what to count; do not invent PR aggregation or promise an automatic later card."
   },
   {
     "id": "creation_first_without_priority",
@@ -116,11 +116,11 @@
     "id": "later_independent_need",
     "setup": "Same conversation after a badge-only recommendation; both experiments enabled.",
     "prompt": "现在给计数器方案：当前会话右侧的手动小成就计数器，可以加一、归零并按会话保存，先不要创建。",
-    "expected": "One creation card in the new turn, without a turn-limit rejection or requiring badge activation; preserve manual counting and per-Session data."
+    "expected": "One creation card in the new turn, not suppressed by the earlier card or requiring badge activation; preserve manual counting and per-Session data."
   },
   {
     "id": "two_existing_plugins",
     "prompt": "我看展开的英文思考很费劲，也希望每个 PR 都有 DSH 标识。两个现成插件都给推荐入口，先不要启用。",
-    "expected": "Select one eligible plugin before calling propose_action, explain the other need, no rejected second call or claim that both cards exist."
+    "expected": "Select one eligible plugin for the single card block, explain the other need, no second block or claim that both cards exist."
   }
 ]

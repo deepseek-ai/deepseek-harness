@@ -1,0 +1,53 @@
+/* Naming dialog of a worktree branch: the Modal body's field, its message line, and the footer's left action. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.field {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.field input {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
+.field.invalid,
+.field.invalid:focus-within {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* Reserves two lines, so a longer reason replacing the hint does not move the footer. */
+.message {
+  min-height: 36px;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.auto {
+  margin-right: auto;
+}
+
+@media (pointer: coarse) {
+  .field input {
+    font-size: 16px;
+  }
+}

@@ -14,11 +14,11 @@ Selecting credentials from login state changes the billing identity of an existi
 
 Account cancellation reads each running Agent’s latest `Session.requestContext()` instead of maintaining another provider field. This logged value remains through tools and retries and follows the next bound request. Idle Agents are excluded. During a new turn’s first preparation it can still name the previous turn’s account route, so sign-out can also interrupt an API-key turn that has not bound its new request yet. A missing account credential rejects a first request without a previous context before transport.
 
-Successful local sign-out publishes an account event. The platform account provider installs the account module’s listener, which enumerates the Agent registry and cancels matching account routes through `Agent.cancel`, preserving inboxes. The account controller shares its predicate for sign-out confirmation. Each registered child is classified independently; existing parent-owned cancellation still applies to children whose lifetime is attached to a cancelled parent. The existing HTTP signal carries cancellation to transport.
+Successful local sign-out publishes an account event. The account route plugin installs a listener, which enumerates the Agent registry and cancels matching account routes through `Agent.cancel`, preserving inboxes. It registers the same predicate with the account service as the running-task report behind sign-out confirmation. Each registered child is classified independently; existing parent-owned cancellation still applies to children whose lifetime is attached to a cancelled parent. The existing HTTP signal carries cancellation to transport. Requests this listener cannot reach end through the withdrawal signal of their credential, which the [DeepSeek request authentication decision](2026-11-10-deepseek-request-authentication.md) owns.
 
 ## Alternatives considered
 
-A historical set of providers wrongly cancels a turn after it switches to an API-key route. Current settings misclassify an older in-flight request. A second provider field or module-global map duplicates information already recorded in request context. A login-level cancellation signal duplicates the existing Agent and HTTP cancellation chain.
+A historical set of providers wrongly cancels a turn after it switches to an API-key route. Current settings misclassify an older in-flight request. A second provider field or module-global map duplicates information already recorded in request context. A login-level cancellation signal in place of this chain duplicates the existing Agent and HTTP cancellation; the credential's withdrawal signal only supplements it.
 
 ## Consequences
 

@@ -67,6 +67,7 @@ export type SettingsRootComponentProps =
   PropsRuntime<'sidebar.settings'>
   & PropsRenderSlots<
     | 'settings.launcher'
+    | 'settings.notice'
     | 'settings.trigger'
     | 'settings.header'
     | 'settings.action'

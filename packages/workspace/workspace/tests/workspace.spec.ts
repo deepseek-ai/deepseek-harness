@@ -668,7 +668,23 @@ describe('Workspace session ordering', () => {
     expect(workspace.sessionIds).toEqual(['s2', 's1'])
     await workspace.attachSession(brandString<SessionId>('s1'))
     expect(workspace.sessionIds).toEqual(['s2', 's1'])
+    expect(workspace.getSessionHeaders()).toEqual([header('s2', dir, 2), header('s1', dir, 1)])
     expect(storedRecord(result.pool, workspace.id).sessionIds).toEqual(['s2', 's1'])
+  })
+
+  it('includes a newly created and attached Session in later header lists', async () => {
+    const dir = await makeDir('attach-headers')
+    const result = await harness()
+    result.setSessions([header('s1', dir, 1)])
+    const workspace = await result.registry.create(dir)
+    await workspace.attachSession(brandString<SessionId>('s1'))
+    const before = workspace.getSessionHeaders()
+    expect(before).toEqual([header('s1', dir, 1)])
+
+    result.setSessions([header('s1', dir, 1), header('s2', dir, 2)])
+    await workspace.attachSession(brandString<SessionId>('s2'))
+    expect(workspace.getSessionHeaders()).toEqual([header('s2', dir, 2), header('s1', dir, 1)])
+    expect(before).toEqual([header('s1', dir, 1)])
   })
 
   it('moves one id before an anchor or to the end, durably', async () => {
@@ -891,6 +907,7 @@ describe('header-validated membership projection', () => {
     onTestFinished(() => result.ctx.fiber.dispose())
     const workspace = result.registry.get(id)!
     expect(workspace.sessionIds).toEqual(['missing-dir'])
+    expect(workspace.getSessionHeaders()).toEqual([header('missing-dir', missing)])
     await workspace.setTitle('Validated')
     expect(storedRecord(pool, id).sessionIds).toEqual(['missing-dir'])
   })

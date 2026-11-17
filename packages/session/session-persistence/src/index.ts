@@ -77,6 +77,22 @@ export interface SessionPersistenceCreateOptions {
    * mismatch at create.
    */
   readonly inheritedEventCount?: SessionLogOffset
+  /**
+   * Fork history durably stored before creation resolves; omission creates an
+   * empty stored session. A backend that shares the parent's stored prefix
+   * requires the parent to exist with at least `endSeq` persisted events and
+   * writes only the events from `endSeq`; a copying backend writes all of
+   * them. When `header.isSeeded` is true, the events include an inherited
+   * `session/end-seed` marker at `inheritedEventCount`.
+   */
+  readonly parentSource?: {
+    /** Parent Session identity. */
+    readonly sessionId: SessionId
+    /** Exclusive end of the parent prefix within `events`. */
+    readonly endSeq: SessionLogOffset
+    /** Complete child history from seq 0: the parent's stored prefix through `endSeq`, then the child's events. */
+    readonly events: readonly SessionEvent[]
+  }
 }
 
 /**
@@ -151,18 +167,25 @@ export abstract class SessionPersistence extends Service {
 
   /**
    * Create a new stored session and take its write ownership.
+   * With `parentSource`, store the complete fork history before resolving; a
+   * backend may share the parent's stored prefix or copy it. A failed creation
+   * releases acquired write ownership; already committed history remains stored.
    * @param header - the immutable header (id, version, cwd, lineage) to store.
-   * @param options - optional cancellation.
+   * @param options - cancellation, inherited-prefix count, and optional fork source.
    * @returns a `write` handle owned by the caller; close it to release ownership.
    * @throws {SessionAlreadyExistsError} when the id already exists.
+   * @throws {SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.
+   * @throws {HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.
    */
   abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>
 
   /**
    * Open an existing stored session.
    *
-   * `read` never takes ownership and works while another handle (or process)
-   * holds write ownership. `write` atomically claims single-writer ownership;
+   * Returned `read` handles retain no write ownership and work while another
+   * handle (or process) holds write ownership. A first legacy read open may
+   * acquire ownership temporarily to import history into the selected backend.
+   * `write` atomically claims single-writer ownership;
    * an existing active owner rejects.
    * @param id - the stored session to open.
    * @param access - `read` or `write`.

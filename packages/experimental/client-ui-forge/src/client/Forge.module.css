@@ -1,132 +1,88 @@
 /* Change request cards in the Session panel section, at the panel's 13px row size. */
 .cards {
-  --forge-fill: var(--dsw-alias-card-fill);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 20px;
 }
 
-.iconButton {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-}
-
-.iconButton:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-@media (hover: hover) {
-  .iconButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-/* A More button shares its surface: the glyph darkens without a fill, as on Session panel rows. */
-.iconButton.moreButton:focus-visible {
-  background: transparent;
-}
-
-@media (hover: hover) {
-  .iconButton.moreButton:hover {
-    background: transparent;
-  }
-}
-
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* One change request: a filled block without a border, on the panel's row columns. The platform fill stands apart
+   from the panel's surface in both themes; the card fill is nearly that surface's own color in the dark theme. */
 .change {
   min-width: 0;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
+  border-radius: var(--dsw-radius-sm);
+  /* Named for what the block draws on itself, such as the ring that sets overlapping avatars apart. */
+  --forge-card-surface: var(--dsw-alias-bg-module-platform);
+  background: var(--forge-card-surface);
 }
 
-/* Glyph, title link with the number line below it, then the actions menu
-   and the expansion toggle. */
-.changeHead {
-  display: flex;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 12px 8px 10px 14px;
+/* The card's line is a panel row, 36px instead of 28px: the glyph in the icon column, the title, the number and the
+   checks outcome, the actions menu the panel reveals on hover, and the expansion toggle in the end column. */
+.change .changeHead {
+  min-height: 36px;
 }
 
-.changeHead > .glyph {
-  margin: 3px 10px 0 0;
+.change .changeHead > [data-row-part='body'] {
+  height: 36px;
 }
 
-/* The buttons center on the title's first line. */
-.changeHead > .iconButton {
-  margin-top: -3px;
+/* The number and the checks outcome after the title. */
+.status {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-.headText {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding-top: 1px;
+.number {
+  white-space: nowrap;
 }
 
-.changeTitle {
-  display: block;
-  min-width: 0;
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
-  line-height: 20px;
-  text-decoration: none;
+/* The expansion toggle in the row's end column, 16px wide like the menu column: a 24px target around the chevron. */
+.change .changeHead > .end {
+  justify-content: center;
+  width: 16px;
+}
+
+.expand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.expand:focus-visible {
+  outline-offset: -2px;
 }
 
 @media (hover: hover) {
-  .changeTitle:hover {
+  .expand:hover {
     color: var(--dsw-alias-label-primary);
-    text-decoration: underline;
-    text-underline-offset: 2px;
   }
 }
 
-.changeTitle:focus-visible,
 .rowButton:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
-}
-
-/* Number line below the title: the status while collapsed, the branches while expanded. */
-.meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  padding: 1px 0;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 18px;
 }
 
 /* Lifecycle glyph; drawn in the current color unless the state tints it. */
@@ -200,59 +156,27 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.ci {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.ci[data-tone='error'],
-.flag[data-flag='changesRequested'],
-.flag[data-flag='conflicting'] {
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.flag {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-/* Only the branch names shorten; the number, checks, and flags keep whole words on one line. */
-.meta > :not(.ellipsis) {
-  flex: none;
-  white-space: nowrap;
-}
-
-.finished {
-  color: var(--dsw-alias-label-secondary);
-}
-
-.finished[data-tone='merged'] {
-  color: var(--dsw-alias-state-done-primary);
-}
-
-/* Read failure or unsupported host below the head, with its one action. */
+/* Read failure or unsupported host below the card's line, from where the title starts, with its one action. */
 .notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 10px 10px 33px;
+  padding: 0 8px 8px 30px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
 }
 
-/* Expanded facts, one sentence per row: an icon under the glyph, the value, an optional trailing part, and a chevron
-   on a row that opens something. */
+/* Expanded facts inside the card's block, one sentence per row: an icon under the title's start, the value, an
+   optional trailing part, and a chevron in the card's end column on a row that opens something. */
 .rows {
   /* Contains the visually hidden row labels, so they never extend a scroll area outside the panel. */
   position: relative;
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto 12px;
   gap: 0 8px;
-  padding: 4px 6px 6px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding: 0 8px 4px 22px;
 }
 
 .row {
@@ -263,7 +187,7 @@
   column-gap: 8px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 32px;
+  min-height: 28px;
   margin: 0;
   padding: 0 8px;
   border: 0;
@@ -392,7 +316,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 14px 12px;
+  padding: 4px 8px 8px 26px;
 }
 
 .primaryAction {

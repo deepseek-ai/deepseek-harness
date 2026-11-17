@@ -62,7 +62,7 @@ export interface CuaCoordinateOptions {
 export type CuaShowResult = z.output<typeof ShowResult>
 /** Modifiers attached to a window-directed pointer gesture. */
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
-/** Buttons supported by window-directed clicks and drags. */
+/** Buttons supported by window-directed mouse input. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
@@ -142,9 +142,8 @@ export interface CuaSurface {
   /**
    * Paste text or HTML at the target's current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
    * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @param options - Clipboard format.
    * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
@@ -191,6 +190,14 @@ export interface CuaWindow extends CuaSurface {
    */
   mouseMove(target: CuaElementId | readonly [number, number],
     options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
+  /**
+   * Send one mouse-button down or up event without moving the pointer.
+   * Does not send the opposite event; callers explicitly release a pressed button.
+   * @param mouseButton - Mouse button to press or release.
+   * @param direction - Explicit event direction.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up'): Promise<CuaActionResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.

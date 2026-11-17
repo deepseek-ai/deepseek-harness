@@ -867,7 +867,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[SessionTitleEventData](subsystems/session-title.zh.md)
 
-来源：[`packages/session/session-title/src/index.ts:77`](../packages/session/session-title/src/index.ts)
+来源：[`packages/session/session-title/src/index.ts:78`](../packages/session/session-title/src/index.ts)
 
 <a id="sessiontitle-llm-request--log-only"></a>
 
@@ -965,18 +965,17 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Records this Session’s authorized child provider/model routes. Appended
- * before the first model request; absence restricts explicit selection
- * to the current parent route. Log-only: it carries
- * no `surfaceOp` and never enters model history.
+ * Child provider/model routes recorded by earlier releases. Current
+ * releases neither append nor read it: delegation reads the Host setting
+ * at each call. Log-only: it carries no `surfaceOp` and never enters model history.
  */
 'subagent/model-selection-policy': {
-  /** Exact routes this Session may select explicitly for a child. */
+  /** Exact routes the Session could select explicitly for a child. */
   allowedModels: AllowedModelRoute[]
 }
 ```
 
-来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
+来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:12`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
 
 ### `system/*`
 
@@ -1315,7 +1314,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'web/deepseek-search-llm-request': DeepSeekSearchLlmRequest
 ```
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:89`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:90`](../packages/web/web-search-deepseek/src/provider.ts)
 
 ### `working-directory/*`
 
@@ -3428,7 +3427,7 @@ SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
 
 SHA-256: `abd6ca62a5ab166553848324a23fef90eed7f59c8021bd63e7ea5bc6fd666b0c`
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:55`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:56`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5146,7 +5145,7 @@ SHA-256: `b2d2a01e51341a3bfec809198952c8c830a7899f4cb6ecd3c1dc0b5d9a2af943`
 
 SHA-256: `4e887768586528565381dadbddee6cef555874148089f4579e0b4b1ad096fc9c`
 
-来源：[`packages/llm/llm/src/types.ts:69`](../packages/llm/llm/src/types.ts) · [`packages/web/web-search-deepseek/src/provider.ts:66`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/llm/llm/src/types.ts:69`](../packages/llm/llm/src/types.ts) · [`packages/web/web-search-deepseek/src/provider.ts:67`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5668,7 +5667,7 @@ SHA-256: `5d03ba38734809bcbd2a55221bd938b3b3fc34b49bb686c6113e9e4931e3aa78`
 
 SHA-256: `4cd48f3e5108bd6ebedf7301c3638839b8b2b9db8dbd493974177fbdeb91a01b`
 
-来源：[`packages/api/session-controller/src/types.ts:391`](../packages/api/session-controller/src/types.ts) · [`packages/attachment/attachment/src/brand.ts:6`](../packages/attachment/attachment/src/brand.ts) · [`packages/compaction/compaction/src/brand.ts:4`](../packages/compaction/compaction/src/brand.ts) · [`packages/core/session/src/types.ts:21`](../packages/core/session/src/types.ts) · [`packages/experimental/webhook/src/brand.ts:12`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:6`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:9`](../packages/experimental/webhook/src/brand.ts) · [`packages/feedback/message-feedback/src/types.ts:14`](../packages/feedback/message-feedback/src/types.ts) · [`packages/goal/goal/src/types.ts:17`](../packages/goal/goal/src/types.ts) · [`packages/interaction/commands/src/brand.ts:22`](../packages/interaction/commands/src/brand.ts) · [`packages/interaction/user-approval/src/types.ts:17`](../packages/interaction/user-approval/src/types.ts) · [`packages/jobs/jobs/src/brand.ts:9`](../packages/jobs/jobs/src/brand.ts) · [`packages/llm/llm-retry/src/brand.ts:4`](../packages/llm/llm-retry/src/brand.ts) · [`packages/llm/llm/src/brand.ts:16`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:31`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:43`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:67`](../packages/llm/llm/src/brand.ts) · [`packages/schedule/schedule/src/types.ts:14`](../packages/schedule/schedule/src/types.ts) · [`packages/session/session-title/src/types.ts:17`](../packages/session/session-title/src/types.ts) · [`packages/team/agent-team/src/types.ts:20`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:32`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:8`](../packages/team/agent-team/src/types.ts) · [`packages/workflow/workflow/src/types.ts:14`](../packages/workflow/workflow/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:383`](../packages/api/session-controller/src/types.ts) · [`packages/attachment/attachment/src/brand.ts:6`](../packages/attachment/attachment/src/brand.ts) · [`packages/compaction/compaction/src/brand.ts:4`](../packages/compaction/compaction/src/brand.ts) · [`packages/core/session/src/types.ts:21`](../packages/core/session/src/types.ts) · [`packages/experimental/webhook/src/brand.ts:12`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:6`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:9`](../packages/experimental/webhook/src/brand.ts) · [`packages/feedback/message-feedback/src/types.ts:14`](../packages/feedback/message-feedback/src/types.ts) · [`packages/goal/goal/src/types.ts:17`](../packages/goal/goal/src/types.ts) · [`packages/interaction/commands/src/brand.ts:22`](../packages/interaction/commands/src/brand.ts) · [`packages/interaction/user-approval/src/types.ts:17`](../packages/interaction/user-approval/src/types.ts) · [`packages/jobs/jobs/src/brand.ts:9`](../packages/jobs/jobs/src/brand.ts) · [`packages/llm/llm-retry/src/brand.ts:4`](../packages/llm/llm-retry/src/brand.ts) · [`packages/llm/llm/src/brand.ts:16`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:31`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:43`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:67`](../packages/llm/llm/src/brand.ts) · [`packages/schedule/schedule/src/types.ts:14`](../packages/schedule/schedule/src/types.ts) · [`packages/session/session-title/src/types.ts:17`](../packages/session/session-title/src/types.ts) · [`packages/team/agent-team/src/types.ts:20`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:32`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:8`](../packages/team/agent-team/src/types.ts) · [`packages/workflow/workflow/src/types.ts:14`](../packages/workflow/workflow/src/types.ts)
 
 `string`
 
@@ -5903,7 +5902,7 @@ SHA-256: `6e52dd55a1d48954ed5464ec46fe34d9eb65f709baabc9561e7a279910b0c406`
 
 SHA-256: `0d47a8f3d847243c4488e755ad4cab7a04ac5d4621b9c81865524cf3f4d8536f`
 
-来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
+来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:12`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7314,7 +7313,7 @@ SHA-256: `db06ef35b27a38425046b2228fa6bce9582abe140d781d363137eb2f4d233a1c`
 
 SHA-256: `8f1062573ea9184129dfdec43df1e8136eb5808746fd809bf6b539f3fd11362e`
 
-来源：[`packages/api/session-controller/src/types.ts:402`](../packages/api/session-controller/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:394`](../packages/api/session-controller/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7847,7 +7846,7 @@ SHA-256: `8fcb0b44a575e998665c053643d1ab04c82f39253ebd190ac0c975b78e40b543`
 
 SHA-256: `a4afec59b75aad5d13ef82d6931f35cc2d98918503916cf069355b77c5e42302`
 
-来源：[`packages/api/session-controller/src/types.ts:400`](../packages/api/session-controller/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:392`](../packages/api/session-controller/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7984,7 +7983,7 @@ SHA-256: `2235d957bf4b7c6cf959231d480f0ba1f3a6d72d82981493fb6c7c963021d3d5`
 
 SHA-256: `9c001ecb5e1d3c3894410db2a1e383842e5f8454fb52182338686158abc1b3ee`
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:61`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:62`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -8108,7 +8107,7 @@ SHA-256: `e481c46af3813e0010558e93f578b2986acd658404cec2d1679e3ac2a6c48654`
 
 SHA-256: `9a2a9029f8d7ede05336980d8342737557f487b913bfd28853d0ab5214600ab5`
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:64`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:65`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -8511,7 +8510,7 @@ SHA-256: `7ee5a828196d9e4b1672f94f977e68f37125da4297c23029dd682823c09e12fd`
 
 SHA-256: `37ff65426bcf130f045d3a59ef2a4648eb170cd30280cbd024108a2e9b4401d1`
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:82`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:83`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -9386,7 +9385,7 @@ SHA-256: `0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52`
 
 SHA-256: `2d11ca7b0d4493e244b74eba093227866b33249841e59a1e9bf56afed38604c3`
 
-来源：[`packages/web/web-search-deepseek/src/provider.ts:71`](../packages/web/web-search-deepseek/src/provider.ts)
+来源：[`packages/web/web-search-deepseek/src/provider.ts:72`](../packages/web/web-search-deepseek/src/provider.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
