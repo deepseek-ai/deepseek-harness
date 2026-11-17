@@ -282,7 +282,7 @@ The following constraints apply to `@deepseek-ai/dsh-im`:
 - **Listeners must supply idempotency keys** — a throwing listener leaves the message `pending` for re-dispatch; plugins must pass deterministic delivery ids and `operationId` values to avoid duplicate actions on retry.
 - **Platform ACK precedes model execution** — intake acknowledges the platform event as soon as the message record is persisted; model turns and tool calls run asynchronously afterwards.
 - **Recovery scans session logs linearly** — reconciling a pending delivery reads the target session's log events to check for prior inbox insertion.
-- **Bounded retention is not an archive** — settled messages and event digests expire after `retentionMs` or when a chat exceeds `maxRecords`; there is no automatic export.
+- **Bounded retention is not an archive** — settled messages expire after `retentionMs` or when a chat exceeds `maxRecords`, and event digests expire after `retentionMs`; there is no automatic export.
 - **Pending and uncertain records require operator inspection** — unresolved pending messages and `uncertain` send receipts are visible only through `ctx.im.status()` and logs.
 - **Hosted agents stay resident in memory** — non-`ephemeral` sessions keep their `Agent` instance loaded after first use until reset or service shutdown; the host does not evict idle agents.
 - **`reset` changes `sessionId`** — resetting a session increments `generation` and derives a new `sessionId`, so external references to the previous `sessionId` (such as task ownership records) do not follow the reset session.

@@ -282,7 +282,7 @@ You are the default IM session: you receive every message that addresses the bot
 - **监听器必须自行保证幂等键** — 监听器抛错会让消息保持 `pending` 并在后续重试；插件在投递或发送时必须传入稳定的幂等 id，否则重试时会重复执行。
 - **平台 ACK 不代表模型处理完成** — 接收层在消息记录持久化后立即向平台返回 ACK，模型的轮次推理与工具调用在后台异步进行。
 - **恢复投递需线性扫描会话日志** — 核对待恢复投递是否已写入收件箱时，需要读取目标会话的日志事件。
-- **有限保留策略不是历史归档** — 已完成的消息与事件摘要在超过 `retentionMs` 或超出每聊 `maxRecords` 上限时会被清理，不提供自动归档导出。
+- **有限保留策略不是历史归档** — 已完成的消息在超过 `retentionMs` 或超出每聊 `maxRecords` 上限时会被清理，事件摘要在超过 `retentionMs` 后过期，不提供自动归档导出。
 - **待处理消息与不确定回执无图形界面** — 未决的 `pending` 消息与 `uncertain` 发送回执只能通过 `ctx.im.status()` 和进程日志排查。
 - **托管会话的 agent 常驻内存** — 非 `ephemeral` 会话在首次打开后会将 `Agent` 实例保留在内存中，直到会话重置或服务关闭，宿主不会按空闲时间自动卸载。
 - **`reset` 会更换 `sessionId`** — 重置会话会递增 `generation` 并生成新的 `sessionId`，因此指向旧 `sessionId` 的外部记录（如后台任务归属记录）不会自动迁移到新会话。

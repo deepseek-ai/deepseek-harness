@@ -252,24 +252,32 @@ export class ImStore implements ImHistory {
     return this.serialize(async () => {
       const domain = this.domainOf()
       const cutoff = now - this.config.retentionMs
-      for (const [key, record] of this.records.entries()) {
-        if (record.dispatch === 'pending' || record.storedAt >= cutoff) continue
-        await domain.table('messages').delete(key)
-        this.records.delete(key)
-        this.dropAliases(record.message)
+      const expiredMessages: ImMessage[] = []
+      for (const record of this.records.values()) {
+        if (record.dispatch !== 'pending' && record.storedAt < cutoff) expiredMessages.push(record.message)
       }
-      // Rebuild the per-chat indexes from the survivors; they are short (bounded by maxRecords) and seq-ascending.
-      for (const messages of this.chatMessages.values()) {
-        const kept = messages.filter(message => this.records.has(message.key))
-        if (kept.length === messages.length) continue
-        messages.length = 0
-        messages.push(...kept)
+      if (expiredMessages.length > 0) {
+        await domain.table('messages').deleteMany(expiredMessages.map(message => message.key))
+        for (const message of expiredMessages) {
+          this.records.delete(message.key)
+          this.dropAliases(message)
+        }
+        // Rebuild the per-chat indexes from the survivors; they are short (bounded by maxRecords) and seq-ascending.
+        for (const messages of this.chatMessages.values()) {
+          const kept = messages.filter(message => this.records.has(message.key))
+          if (kept.length === messages.length) continue
+          messages.length = 0
+          messages.push(...kept)
+        }
       }
       // Dedupe receipts outlive nothing: once their retention passed, a redelivery is a new delivery.
-      for (const [key, event] of domain.table('events').entries()) {
-        if (event.receivedAt >= cutoff) continue
-        await domain.table('events').delete(key)
-        this.events.delete(key)
+      const expiredEvents: string[] = []
+      for (const [key, event] of this.events) {
+        if (event.receivedAt < cutoff) expiredEvents.push(key)
+      }
+      if (expiredEvents.length > 0) {
+        await domain.table('events').deleteMany(expiredEvents)
+        for (const key of expiredEvents) this.events.delete(key)
       }
     })
   }
