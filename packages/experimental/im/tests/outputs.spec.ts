@@ -70,6 +70,7 @@ describe('ImOutputRegistry lifecycle', () => {
     const hosted = harness.host({ output: 'probe' })
     const trigger = inbound('thread-1')
 
+    harness.messages.set(trigger.key, trigger)
     harness.ctx.emit('im/activity', activity(hosted, { trigger }), 'start')
     await flush()
     expect(probe.calls).toEqual(['begin:1'])
@@ -108,10 +109,16 @@ describe('ImOutputRegistry lifecycle', () => {
 
     // A trigger outside a thread is quoted without a thread of its own.
     const top = inbound()
+    harness.messages.set(top.key, top)
     harness.ctx.emit('im/activity', activity(hosted, { turn: 2, trigger: top }), 'start')
     await flush()
     await probe.ios[1]!.send('hello')
     expect(harness.sender.sends[1]?.options).toEqual({ session: hosted.sessionId, quote: top.key })
+
+    // If the trigger is evicted from history before or during the turn, `quote` is omitted rather than failing with access.
+    harness.messages.delete(top.key)
+    await probe.ios[1]!.send('after-eviction')
+    expect(harness.sender.sends[2]?.options).toEqual({ session: hosted.sessionId })
   })
 
   it('renders nothing for `none`, an unknown renderer or no writable home binding', async () => {
@@ -237,6 +244,7 @@ describe('ImOutputRegistry lifecycle', () => {
 
     // A writable binding of the trigger's chat wins: the trigger is quoted inside that binding's thread.
     const elsewhere = { ...inbound(), key: ImMessageKey(BOT.id, 'm-other'), chat: other }
+    harness.messages.set(elsewhere.key, elsewhere)
     harness.ctx.emit('im/activity', activity(hosted, { trigger: elsewhere }), 'start')
     await flush()
     expect(probe.ios[0]?.chat).toBe(other.key)

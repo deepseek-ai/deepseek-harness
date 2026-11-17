@@ -357,11 +357,15 @@ describe('ImService facade', () => {
   })
 
   it('binds reply and send to the chat of the message it dispatches', async () => {
-    const { base, bot } = await mount()
+    const { base, bot, service } = await mount()
     const handled: string[] = []
     base.ctx.on('im/message', async (event: ImMessageEvent): Promise<ImOutcome> => {
       handled.push(event.message.key)
       const tag = event.message.key
+      if (tag === ImMessageKey('fake:bot', 'm2')) {
+        // Simulate the trigger being evicted from store before `event.reply` runs: reply still sends without quote.
+        vi.spyOn(service.store, 'get').mockReturnValueOnce(undefined)
+      }
       await event.reply(h('message', h.text(`reply ${tag}`)))
       await event.send(h('message', h.text(`direct ${tag}`)))
       return { kind: 'handled', by: 'facade-spec' }

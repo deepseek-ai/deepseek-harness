@@ -312,16 +312,23 @@ export class ImOutputRegistry implements ImOutputs {
     const { chat } = target
     const trigger = activity.trigger?.chat.key === chat ? activity.trigger : undefined
     const thread = trigger?.thread?.id ?? target.thread
-    const options: ImSendOptions = {
-      session: activity.session.sessionId,
-      ...trigger === undefined ? {} : { quote: trigger.key },
-      ...thread === undefined ? {} : { thread },
+    // Quote the trigger only while it is still stored in `im_messages`: if retention or `maxRecords` evicted it
+    // before or during the turn, `quoteId()` would reject the send with `access` and drop the turn output.
+    const sendOptions = (): ImSendOptions => {
+      const quote = trigger !== undefined && this.deps.im.history.get(trigger.key) !== undefined
+        ? trigger.key
+        : undefined
+      return {
+        session: activity.session.sessionId,
+        ...quote === undefined ? {} : { quote },
+        ...thread === undefined ? {} : { thread },
+      }
     }
     return {
       chat,
       stream: (streamOptions?: StreamOptions): Promise<MessageStream> =>
-        this.deps.sender.stream(chat, { ...options, ...streamOptions }),
-      send: (content: Fragment): Promise<ImSendResult> => this.deps.sender.send(chat, content, options),
+        this.deps.sender.stream(chat, { ...sendOptions(), ...streamOptions }),
+      send: (content: Fragment): Promise<ImSendResult> => this.deps.sender.send(chat, content, sendOptions()),
     }
   }
 

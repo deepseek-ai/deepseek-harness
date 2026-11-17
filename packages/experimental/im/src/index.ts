@@ -437,7 +437,9 @@ export class ImService extends Service implements ImApi {
     return {
       message, source, bot,
       reply: (content, options) => this.send(chat, content, {
-        quote: message.key, ...message.thread && { thread: message.thread.id }, ...options,
+        ...this.store.get(message.key) === undefined ? {} : { quote: message.key },
+        ...message.thread && { thread: message.thread.id },
+        ...options,
       }),
       send: (content, options) => this.send(chat, content, options),
       deliver: (target, options) => this.sessions.deliver(target, {
