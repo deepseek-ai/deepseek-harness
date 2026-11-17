@@ -217,7 +217,7 @@ export class WsClient extends WsClientBase<QQBot> {
     if (!this.acked) {
       this.bot.ctx.logger.warn('QQ gateway heartbeat was not acknowledged; reconnecting')
       this.stopHeartbeat()
-      socket.close(1011, 'heartbeat not acknowledged')
+      socket.close(3000, 'heartbeat not acknowledged')
       return
     }
     this.send(socket, { op: Opcode.HEARTBEAT, s: this.seq })
@@ -322,7 +322,7 @@ export class WsClient extends WsClientBase<QQBot> {
     } catch (error) {
       // Persistence failed: keep `this.seq` at the last persisted frame and reconnect so `RESUME` replays this frame.
       this.stopHeartbeat()
-      socket.close(1011, 'receive failed')
+      socket.close(3000, 'receive failed')
       throw error
     }
   }

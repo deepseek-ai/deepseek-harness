@@ -104,7 +104,7 @@ export abstract class WsClientBase<B extends Bot = Bot> {
           } catch (error) {
             connection.abort(error)
             reconnect(initial, error instanceof Error ? error : new Error(String(error)))
-            socket.close(1011, 'adapter initialization failed')
+            socket.close(3000, 'adapter initialization failed')
           }
         })())
       })

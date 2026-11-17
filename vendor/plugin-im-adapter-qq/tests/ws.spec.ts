@@ -38,6 +38,13 @@ class Socket extends EventTarget {
   }
 
   close(code = 1000, reason = '') {
+    if (code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new DOMException(`Invalid close code: ${code}`, 'InvalidAccessError')
+    }
+    this.drop(code, reason)
+  }
+
+  drop(code = 1006, reason = '') {
     if (this.closed) return
     this.closed = true
     this.closeCode = code
@@ -253,7 +260,7 @@ describe('QQ gateway heartbeat', () => {
     expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT, s: 7 })
     mounted.adapter.heartbeat()
     expect(socket.closed).toBe(true)
-    expect(socket.closeCode).toBe(1011)
+    expect(socket.closeCode).toBe(3000)
   })
 
   it('answers a heartbeat request from the platform', async () => {
@@ -292,7 +299,7 @@ describe('QQ gateway reconnect', () => {
     first.receive({ op: Opcode.DISPATCH, s: 11, t: 'GROUP_AT_MESSAGE_CREATE', d: {} })
     await vi.waitFor(() => { expect(mounted.adapter.seq).toBe(11) })
     // A socket closed by the network (1006) is not an invalid session, so the sequence survives.
-    first.close(1006)
+    first.drop(1006)
     const second = await dial(mounted, 1)
     expect(second.sent[0]).toMatchObject({ op: Opcode.RESUME, d: { session_id: 'session-9', seq: 11 } })
   })

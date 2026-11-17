@@ -343,13 +343,13 @@ export class WsClient extends WsClientBase<LarkBot> {
         timer = setTimeout(ping, this._pingInterval)
       } catch (error) {
         this.bot.ctx.logger.error('Lark heartbeat failed; reconnecting: %s', error)
-        socket.close(1011, 'heartbeat failed')
+        socket.close(3000, 'heartbeat failed')
       }
     }
     const receive = ({ data }: WebSocket.MessageEvent) => {
       if (signal.aborted) return
       if (this.pendingEvents >= this.bot.config.ws.maxPendingEvents) {
-        socket.close(1008, 'intake capacity exceeded')
+        socket.close(3000, 'intake capacity exceeded')
         return
       }
       this.pendingEvents++

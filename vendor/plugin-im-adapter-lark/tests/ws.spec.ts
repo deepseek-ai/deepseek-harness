@@ -47,6 +47,9 @@ class Socket extends EventTarget {
   }
 
   close(code = 1000, reason = '') {
+    if (code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new DOMException(`Invalid close code: ${code}`, 'InvalidAccessError')
+    }
     if (this.closed) return
     this.closed = true
     this.closeCode = code
