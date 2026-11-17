@@ -43,9 +43,9 @@ import type { WorktreeSettingsInjected, WorktreeSettings as WorktreeSettingsFiel
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
-  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgeLensFrame,
+  ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgeLensFrame,
   ForgeLensRequest,
-  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState, ForgeWorktreeBases,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -53,7 +53,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-forge', descriptors: [] }
 const S1 = brandString<SessionId>('s1')
 const S2 = brandString<SessionId>('s2')
-const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
+const BASES: ForgeWorktreeBases = { current: { ref: 'refs/heads/main', name: 'main' }, defaults: [], local: [], remotes: [] }
 const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
 const COMMITS: ForgeCommitList = { headSha: 'a'.repeat(40), commits: [], truncated: false }
@@ -98,6 +98,8 @@ const REFUSED = {
   busy: { ok: false, error: new RemoteError('forgePanel/session-busy', 'busy', {}) },
   restore: { ok: false, error: new RemoteError('forgePanel/restore-failed', 'fatal: \'/work/repo-dsh\' already exists', {}) },
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
+  exists: { ok: false, error: new RemoteError('forgePanel/branch-exists', 'taken', {}) },
+  invalidName: { ok: false, error: new RemoteError('forgePanel/invalid-name', 'invalid', {}) },
   stale: { ok: false, error: new RemoteError('forgePanel/stale-head', 'Head branch was modified', {}) },
   refused: { ok: false, error: new RemoteError('forgePanel/action-failed', 'Pull Request is not mergeable', {}) },
   unknown: { ok: false, error: new RemoteError('forgePanel/action-unknown', 'Something went wrong', {}) },
@@ -128,7 +130,7 @@ function isAttentionFace(value: Record<string, unknown>): value is Record<string
 }
 
 function isWorktreeFace(value: Record<string, unknown>): value is Record<string, unknown> & WorktreeToggleInjected {
-  return typeof value.request === 'function' && typeof value.branches === 'function'
+  return typeof value.request === 'function' && typeof value.bases === 'function'
 }
 
 function isProgressFace(value: Record<string, unknown>): value is Record<string, unknown> & WorktreeProgressInjected {
@@ -204,13 +206,14 @@ async function base() {
     ): Read<ForgeViewedFiles | null> => ({ ok: true, value: null })),
     setFileViewed: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     refresh: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
-    requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null): Promise<RemoteResult<void>> => OK),
+    requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null, _name: string | null): Promise<RemoteResult<void>> => OK),
     cancelWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     stopCreation: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
-    retryWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
+    retryWorktree: vi.fn(async (_sessionId: SessionId, _fetch: boolean): Promise<RemoteResult<void>> => OK),
     restoreWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     continueInProject: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
-    branches: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<ForgeBranches>> => ({ ok: true, value: BRANCHES })),
+    worktreeBases: vi.fn(async (_sessionId: SessionId, _query: string, _signal?: AbortSignal): Read<ForgeWorktreeBases> =>
+      ({ ok: true, value: BASES })),
     localDiff: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _signal?: AbortSignal): Read<ForgeLocalDiff> =>
       ({ ok: true, value: LOCAL })),
     localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
@@ -854,10 +857,10 @@ describe('mountForgePanel worktree actions', () => {
   it('requests and withdraws a worktree through the Remote', async () => {
     const f = await fixture()
     const option = f.worktree(S1)
-    expect(await option.request('release')).toBe(true)
-    expect(await option.request(null)).toBe(true)
+    expect(await option.request('refs/heads/release', 'fix/x')).toBe('accepted')
+    expect(await option.request(null, null)).toBe('accepted')
     expect(await option.cancel()).toBe(true)
-    expect(f.forgePanel.requestWorktree.mock.calls).toEqual([[S1, 'release'], [S1, null]])
+    expect(f.forgePanel.requestWorktree.mock.calls).toEqual([[S1, 'refs/heads/release', 'fix/x'], [S1, null, null]])
     expect(f.forgePanel.cancelWorktree).toHaveBeenCalledWith(S1)
     expect(f.notice()).toBeNull()
     await f.dispose()
@@ -871,7 +874,7 @@ describe('mountForgePanel worktree actions', () => {
     const f = await fixture()
     const option = f.worktree(S1)
     f.forgePanel.requestWorktree.mockResolvedValueOnce(refusal)
-    expect(await option.request('main')).toBe(false)
+    expect(await option.request('refs/heads/main', null)).toBe('failed')
     expect(f.notice()).toMatchObject({ key, tone: 'failure', seq: 1 })
     f.forgePanel.cancelWorktree.mockResolvedValueOnce(refusal)
     expect(await option.cancel()).toBe(false)
@@ -879,33 +882,42 @@ describe('mountForgePanel worktree actions', () => {
     await f.dispose()
   })
 
-  it('lists the branches of the Session checkout and reports when they cannot be read', async () => {
+  it.each([
+    ['branch-exists', REFUSED.exists],
+    ['invalid-name', REFUSED.invalidName],
+  ] as const)('returns a branch name refused as %s to the naming dialog without a notice', async (result, refusal) => {
     const f = await fixture()
-    expect(await f.worktree(S1).branches()).toEqual(BRANCHES)
-    expect(f.forgePanel.branches).toHaveBeenCalledWith(S1)
+    f.forgePanel.requestWorktree.mockResolvedValueOnce(refusal)
+    expect(await f.worktree(S1).request(null, 'taken')).toBe(result)
+    f.forgePanel.requestWorktree.mockResolvedValueOnce(refusal)
+    expect(await f.progress(S1).request(null, 'taken')).toBe(result)
     expect(f.notice()).toBeNull()
+    await f.dispose()
+  })
 
-    f.forgePanel.branches.mockResolvedValueOnce(REFUSED.failed)
-    expect(await f.worktree(S1).branches()).toBeUndefined()
-    expect(f.notice()).toMatchObject({ key: 'toast.branchesFailed', tone: 'failure' })
+  it('lists the bases of a new worktree through the Remote', async () => {
+    const f = await fixture()
+    const signal = new AbortController().signal
+    expect(await f.worktree(S1).bases('rel', signal)).toEqual({ ok: true, value: BASES })
+    expect(f.forgePanel.worktreeBases).toHaveBeenCalledWith(S1, 'rel', signal)
     await f.dispose()
   })
 })
 
 describe('mountForgePanel worktree card actions', () => {
   it.each([
-    ['stops the attempt a message waits for', 'stop' as const, 'stopCreation' as const],
-    ['makes another attempt for the waiting message', 'retry' as const, 'retryWorktree' as const],
-    ['withdraws the request so the waiting message goes on', 'withdraw' as const, 'cancelWorktree' as const],
-  ])('%s through the Remote and reports only a failure', async (_label, action, method) => {
+    ['stops the attempt a message waits for', 'stop' as const, 'stopCreation' as const, []],
+    ['makes another attempt for the waiting message', 'retry' as const, 'retryWorktree' as const, [false]],
+    ['withdraws the request so the waiting message goes on', 'withdraw' as const, 'cancelWorktree' as const, []],
+  ])('%s through the Remote and reports only a failure', async (_label, action, method, args) => {
     const f = await fixture()
-    f.progress(S1)[action]()
+    f.progress(S1)[action](false)
     await settle()
-    expect(f.forgePanel[method]).toHaveBeenCalledWith(S1)
+    expect(f.forgePanel[method]).toHaveBeenCalledWith(S1, ...args)
     expect(f.notice()).toBeNull()
 
     f.forgePanel[method].mockResolvedValueOnce(REFUSED.busy)
-    f.progress(S1)[action]()
+    f.progress(S1)[action](false)
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.worktreeFailed', tone: 'failure' })
     await f.dispose()

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 选择后端
 
-seam 随产品交付 [JSONL](../session-persistence-jsonl/README.zh.md) 后端。它为每个会话存储一份仅追加的 `.jsonl.zstd` 日志。第三方后端可以直接实现该服务；必须遵守的[后端约定](#understand-the-implementation)见下文。
+内置 profile 使用 [JSONL](../session-persistence-jsonl/README.zh.md) 后端，为每个会话存储一份仅追加的 `.jsonl.zstd` 日志。独立的 [SQLite 提供者](../session-persistence-sqlite/README.zh.md) 在数据库中保存逻辑事件，并在首次打开时导入现有 JSONL 历史。两个提供者暴露相同的服务和句柄方法。第三方后端可以直接实现该服务；必须遵守的[后端约定](#understand-the-implementation)见下文。
 
 ### 服务提供什么
 

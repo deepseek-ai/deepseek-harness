@@ -659,7 +659,7 @@ describe('background summaries through a real agent loop', () => {
   it('hard-codes no activity without calling the model, including later empty intervals', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running({}, adapter)
+    const f = await running({ language: 'en' }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]).toMatchObject({

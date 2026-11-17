@@ -28,7 +28,7 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
     .filter(row => row.name === '@deepseek-ai/dsh-office-kit')
   expect(rows.map(row => row.id)).toEqual(['office-kit'])
   const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1, outputDirectory } }],
-    (message) => { throw new Error(message) })
+    (message) => { throw new Error(message) }).data
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(configured))
   ctx.baseUrl = pathToFileURL(directory).href + '/'

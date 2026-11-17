@@ -49,6 +49,7 @@ import {
   createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource,
 } from './source.ts'
 import { numberOf } from './status.ts'
+import type { WorktreeRequestResult } from './WorktreeNameDialog.tsx'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
 import { WorktreeSettings } from './WorktreeSettings.tsx'
 import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
@@ -388,6 +389,15 @@ function registerUi(ctx: Context): void {
       },
     }
   }
+  /** Request a worktree; a refused branch name goes back to the naming dialog, any other failure to a toast. */
+  const requestWorktree = async (sessionId: SessionId, from: string | null, name: string | null): Promise<WorktreeRequestResult> => {
+    const result = await ctx.remote.forgePanel.requestWorktree(sessionId, from, name)
+    if (result.ok) return 'accepted'
+    if (result.error.code === 'forgePanel/branch-exists') return 'branch-exists'
+    if (result.error.code === 'forgePanel/invalid-name') return 'invalid-name'
+    settled(result, 'toast.worktreeFailed', { 'forgePanel/session-started': 'toast.worktreeStarted' })
+    return 'failed'
+  }
   const progressFace = (sessionId: SessionId): WorktreeProgressInjected => {
     const store = storesOf(sessionId)
     return {
@@ -395,9 +405,10 @@ function registerUi(ctx: Context): void {
       stop: () => {
         void ctx.remote.forgePanel.stopCreation(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
       },
-      retry: () => {
-        void ctx.remote.forgePanel.retryWorktree(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
+      retry: (fetch) => {
+        void ctx.remote.forgePanel.retryWorktree(sessionId, fetch).then(result => settled(result, 'toast.worktreeFailed'))
       },
+      request: async (from, name) => await requestWorktree(sessionId, from, name),
       withdraw: () => {
         void ctx.remote.forgePanel.cancelWorktree(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
       },
@@ -408,16 +419,13 @@ function registerUi(ctx: Context): void {
     }
   }
   const worktreeFace = (sessionId: SessionId): WorktreeToggleInjected => {
-    const worktreeCodes: Partial<Record<string, ForgePanelKey>> = { 'forgePanel/session-started': 'toast.worktreeStarted' }
     const store = storesOf(sessionId)
     return {
       hooks: { panel: store.panel.hooks.panel },
-      request: async from => settled(await ctx.remote.forgePanel.requestWorktree(sessionId, from), 'toast.worktreeFailed', worktreeCodes),
-      cancel: async () => settled(await ctx.remote.forgePanel.cancelWorktree(sessionId), 'toast.worktreeFailed', worktreeCodes),
-      branches: async () => {
-        const result = await ctx.remote.forgePanel.branches(sessionId)
-        return settled(result, 'toast.branchesFailed') && result.ok ? result.value : undefined
-      },
+      request: async (from, name) => await requestWorktree(sessionId, from, name),
+      cancel: async () => settled(await ctx.remote.forgePanel.cancelWorktree(sessionId), 'toast.worktreeFailed',
+        { 'forgePanel/session-started': 'toast.worktreeStarted' }),
+      bases: (query, signal) => ctx.remote.forgePanel.worktreeBases(sessionId, query, signal),
     }
   }
   ctx.slots.inject('conversation.session.panel.section', function* () {

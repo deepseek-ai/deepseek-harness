@@ -56,7 +56,7 @@ export function bundleRoster(
   const layers = bundles.map(name => readLayer(name, anchor))
   const entries = applyEntryPatches([], layers.flatMap(layer => layer.patches), (message: string, ...args: unknown[]) => {
     throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
-  })
+  }).data
   const anchors = layers.map(layer => layer.manifestPath)
   const rows: ClientRosterRow[] = []
   const seen = new Set<string>()

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmConfigurableProvider, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmConfigurableProvider, ProviderCredential, StreamChunk } from '@deepseek-ai/dsh-llm'
 
 class NoopAdapter extends LlmAdapter {
 
@@ -337,5 +337,27 @@ describe('imageRequestPricing resolution', () => {
     expect(ctx.llm.imageRequestPricing('missing', 'vision')).toBeUndefined()
     dispose()
     expect(ctx.llm.imageRequestPricing('a', 'vision')).toBeUndefined()
+  })
+})
+
+describe('providerCredential resolution', () => {
+  it('forwards to the owning adapter and answers undefined everywhere else', async () => {
+    const ctx = await setup()
+    const credential: ProviderCredential = {
+      kind: 'api-key', baseURL: 'https://a.example/v1',
+      configured: () => Promise.resolve(true),
+      resolve: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
+    }
+    class CredentialAdapter extends NoopAdapter {
+      override providerCredential(provider: string) { return provider === 'a' ? credential : undefined }
+    }
+    const dispose = ctx.llm.registerAdapter(['a', 'b'], new CredentialAdapter())
+    ctx.llm.registerAdapter(['plain'], new NoopAdapter())
+    expect(ctx.llm.providerCredential('a')).toBe(credential)
+    expect(ctx.llm.providerCredential('b')).toBeUndefined()
+    expect(ctx.llm.providerCredential('plain')).toBeUndefined()
+    expect(ctx.llm.providerCredential('missing')).toBeUndefined()
+    dispose()
+    expect(ctx.llm.providerCredential('a')).toBeUndefined()
   })
 })

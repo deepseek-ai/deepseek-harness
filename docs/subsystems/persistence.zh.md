@@ -336,9 +336,10 @@ interface SessionPersistenceSnapshot {
 
 ## 后端
 
-随产品交付的 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
+随产品交付的多个 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——逐会话仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；具备崩溃安全的原子实体化、逐批 `fsync` 的 append，以及在第一次新 append 之前截断撕裂尾部。`stat`/`list` 携带 `sizeBytes` 与尽力而为的、由 `fs.stat` 派生的修订号。
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)**——带索引元数据及前驱关联 Segment 的逻辑 JSON 事件存储。此可选提供者在首次打开时导入现有 JSONL，并协调并发读者及每个 Session 的唯一写者；`stat`/`list` 不导入历史。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -392,8 +393,10 @@ abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions
 /**
  * Open an existing stored session.
  *
- * `read` never takes ownership and works while another handle (or process)
- * holds write ownership. `write` atomically claims single-writer ownership;
+ * Returned `read` handles retain no write ownership and work while another
+ * handle (or process) holds write ownership. A first legacy read open may
+ * acquire ownership temporarily to import history into the selected backend.
+ * `write` atomically claims single-writer ownership;
  * an existing active owner rejects.
  * @param id - the stored session to open.
  * @param access - `read` or `write`.

@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -206,7 +207,7 @@ export function apply(ctx: Context, config: Config): void {
     const payload = {
       ...base(agent, 'UserPromptSubmit', model),
       turn_id: String(turn),
-      prompt: blocksToText(messages.flatMap(message => message.content)),
+      prompt: extractTextContent(messages.flatMap(message => message.content)),
     }
     const merged = await runPoint('UserPromptSubmit', '', payload, {
       agent, turn, plainStdoutAsContext: true, signal,
@@ -283,16 +284,11 @@ export function apply(ctx: Context, config: Config): void {
 // --- Codex DIALECT payloads: snake_case, model on every event, turn_id on
 // turn-scoped events. ---
 
-// These small payload helpers intentionally remain next to the dialect shape;
-// sharing them would pull bridge-only agent/LLM dependencies into hook-protocol.
+// Shared hook-protocol code has no Agent dependency, so turn lookup stays in the bridge.
 /* jscpd:ignore-start */
 function lastTurn(ctx: Context, agent: Agent | undefined): number {
   if (!agent) return 0
   return ctx.agents.turnBoundaryOf(agent.session).lastTurn
-}
-
-function blocksToText(content: ContentBlock[]): string {
-  return content.filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text').map(b => b.text).join('')
 }
 /* jscpd:ignore-end */
 
@@ -332,5 +328,5 @@ function preToolPayload(ctx: Context, exec: ToolExecution, model: string): Recor
 }
 
 function postToolPayload(ctx: Context, exec: ToolExecution, result: ToolExecutionResult, model: string): Record<string, unknown> {
-  return { ...turnBase(ctx, exec.agent, 'PostToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId, tool_response: blocksToText(result.content) }
+  return { ...turnBase(ctx, exec.agent, 'PostToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId, tool_response: extractTextContent(result.content) }
 }
