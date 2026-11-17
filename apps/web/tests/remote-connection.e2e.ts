@@ -591,16 +591,27 @@ describe('web e2e: one-use QR browser login', () => {
     })
     let releaseRead!: () => void
     const gate = new Promise<void>((resolve) => { releaseRead = resolve })
-    let pendingRead: Promise<void> | undefined
+    const pendingReads: Promise<void>[] = []
+    const deployment = Promise.withResolvers<undefined>()
     let readStarted!: () => void
     const started = new Promise<void>((resolve) => { readStarted = resolve })
     try {
       const page = await context.newPage()
       const console = watchConsole(page)
+      let initialDeploymentRead = true
+      // Initial connection readiness reloads deployment; keep the pre-connect reply from starting a Token read.
+      await page.route('**/api/remoteConnection/status', (route) => {
+        if (initialDeploymentRead) initialDeploymentRead = false
+        else deployment.resolve(undefined)
+        const reading = deployment.promise.then(() => route.continue())
+        pendingReads.push(reading)
+        return reading
+      })
       await page.route('**/api/remoteConnection/loginUrl', (route) => {
         readStarted()
-        pendingRead = gate.then(() => route.continue())
-        return pendingRead
+        const reading = gate.then(() => route.continue())
+        pendingReads.push(reading)
+        return reading
       })
       await page.goto(secure.authenticatedUrl)
       const section = await remoteSettings(page)
@@ -648,9 +659,10 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await copy.isEnabled()).toBe(true)
       expect(console.pageErrors).toEqual([])
     } finally {
+      deployment.resolve(undefined)
       releaseRead()
       try {
-        await pendingRead
+        await Promise.all(pendingReads)
       } finally {
         await context.close()
       }
