@@ -8,6 +8,7 @@ import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 import { SessionLogOffset, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
+import { isDurableEntry, tailPageStart } from './buffered-pages.ts'
 import { SessionEventStream } from '../transport.ts'
 import type { SessionJournalChange } from '../transport.ts'
 import type {
@@ -584,11 +585,13 @@ export class Session implements SessionFace {
    *  reconnecting control stream and remains untouched. */
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
-    this.openGeneration++
+    const generation = ++this.openGeneration
     this.clearOlderHistory()
     const events = this.events
     this.events = undefined
     await events?.dispose()
+    // A disconnect during teardown ends this rebuild; the Session stays cold.
+    if (generation !== this.openGeneration) return
     this.openPromise = null
     this.openState = 'cold'
     this.openError = null
@@ -678,6 +681,49 @@ export class Session implements SessionFace {
   handleAgentError(message: string): void {
     this.lastAgentError = message
     this.notifier.markDirty()
+  }
+
+  /**
+   * Keep only the last page visible and buffer the older entries in the event stream, so paging back returns them
+   * without a request. Applies only to an open window longer than one page with no paging in progress.
+   */
+  bufferOlder(): void {
+    // A page that arrived but was not consumed joins the window first, so no remounted view finds it waiting.
+    this.consumeOlder()
+    const events = this.events
+    if (this.openState !== 'open' || events === undefined || this.olderRequest !== null || this.pendingHistory !== null) return
+    const { entries } = this.eventSource.getSnapshot()
+    const start = tailPageStart(entries, HISTORY_PAGE_OPTIONS.turnWindow)
+    const first = entries[start]
+    const older = entries.slice(0, start)
+    if (first === undefined || older.length === 0 || !older.every(isDurableEntry)) return
+    events.bufferOlder(older, first.event.seq, this.hasMore)
+    this.baseSeq = SessionLogOffset(first.event.seq)
+    this.hasMore = true
+    this.historyWasPartial = true
+    this.eventSource.replace(entries.slice(start), true)
+    this.notifier.markDirty()
+  }
+
+  /**
+   * Close the event connection and drop the window while keeping the Session object, including pending
+   * submission echoes; the next `open()` connects as the first open did.
+   * @returns when the Remote iterator has completed teardown.
+   */
+  async disconnect(): Promise<void> {
+    if (this.openState === 'cold') return
+    this.openGeneration++
+    this.clearOlderHistory()
+    const events = this.events
+    this.events = undefined
+    this.openPromise = null
+    this.openState = 'cold'
+    this.openError = null
+    this.baseSeq = SessionLogOffset(0)
+    this.hasMore = false
+    this.eventSource.replace([], false)
+    this.notifier.markDirty()
+    await events?.dispose()
   }
 
   /**

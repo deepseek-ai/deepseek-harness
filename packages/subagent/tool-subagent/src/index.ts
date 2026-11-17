@@ -216,10 +216,6 @@ export function apply(ctx: Context, config: Config): void {
           ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
           : ''),
       parameters: {
-        cwd: {
-          type: 'string',
-          description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
-        },
         description: {
           type: 'string',
           required: true,
@@ -322,7 +318,6 @@ export function apply(ctx: Context, config: Config): void {
         exec.signal.throwIfAborted()
         const maxDepth = ctx.subagents.resolveMaxDepth(config.maxDepth)
         const request = {
-          ...args.cwd === undefined ? {} : { cwd: args.cwd },
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
           ...agentPreset === undefined ? {} : { agentPreset },

@@ -26,8 +26,8 @@ export type AccountNotice = AccountNotification
 
 /** Collaborators and polling interval of one account notification lifecycle. */
 export interface NotificationControllerOptions {
-  /** Initial delay for each poll, retained until the server provides a new one. */
-  readonly pollIntervalMs: number
+  /** @returns the current initial delay in milliseconds; called whenever a poll schedules a read before any server-provided delay. */
+  readonly pollIntervalMs: () => number
   /** UI language in effect when the controller starts. */
   readonly locale: string
   /** Read the signed-in account's unconsumed notifications. @returns the batch, or null when no account is signed in. */
@@ -80,7 +80,8 @@ export interface NotificationController {
 
 /** One replaceable query cycle; an obsolete request cannot publish or schedule another read. */
 interface NotificationPoll {
-  intervalMs: number
+  /** Delay from the latest successful server response; absent until one arrives. */
+  intervalMs?: number
   timer?: ReturnType<typeof setTimeout>
 }
 
@@ -177,7 +178,7 @@ export function createNotificationController(options: NotificationControllerOpti
       if (requestedLocale !== locale) await refreshContent()
     }
     if (poll !== pollAtRead) return
-    pollAtRead.timer = setTimeout(() => { void runRead(pollAtRead) }, pollAtRead.intervalMs)
+    pollAtRead.timer = setTimeout(() => { void runRead(pollAtRead) }, pollAtRead.intervalMs ?? options.pollIntervalMs())
   }
 
   const stopPolling = (): void => {
@@ -186,7 +187,7 @@ export function createNotificationController(options: NotificationControllerOpti
   }
   const restartPolling = (): Promise<void> => {
     stopPolling()
-    poll = { intervalMs: options.pollIntervalMs }
+    poll = {}
     return runRead(poll)
   }
 

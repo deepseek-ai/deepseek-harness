@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Draft attachments outlive their Session's composer: a switch keeps them registered,
-// a removed Session releases them, and a page unload reports what it discarded.
+// A draft with attachments holds its Session without the event connection, so leaving every view keeps the same
+// composer and its attachments; a removed Session releases them, and a page unload reports what it discarded.
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -66,13 +66,12 @@ async function bench(prepare?: () => void) {
   const shellNow = () => hub.shellFor(runtime.sessions.binding(SESSION)!)
   const shell = shellNow()
   const behavior = () => runtime.sessions.behavior(SESSION) as UploadBehavior
-  /** Retire the Session's composer, as a switch to another Session does. */
+  /** Release the viewing reference, as leaving every view of the Session does. */
   const switchAway = async (): Promise<void> => {
     reference.release()
     await runtime.flush()
-    expect(runtime.sessions.binding(SESSION)).toBeUndefined()
   }
-  /** Mount a fresh composer for the Session again. */
+  /** Retain the Session for a view again. */
   const switchBack = async () => {
     reference = runtime.sessions.retain(sessionId())
     await reference.ready
@@ -89,7 +88,7 @@ beforeEach(() => { localStorage.clear() })
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('draft attachments across a Session switch', () => {
-  it('re-adopts settled files and images without uploading them again', async () => {
+  it('holds the Session without its connection and keeps the same composer and attachments', async () => {
     const b = await bench()
     const revoked = vi.spyOn(URL, 'revokeObjectURL')
     try {
@@ -100,13 +99,30 @@ describe('draft attachments across a Session switch', () => {
         for (const draft of drafts) expect(b.root.fileUploads.getSnapshot()[draft.id]?.status).toBe('ready')
       })
       await b.switchAway()
-      expect(b.root.draftAttachmentIds(sessionId())).toEqual(drafts.map(draft => draft.id))
+      expect(b.runtime.sessions.retainInfo(sessionId()).getSnapshot()).toEqual({ referenceCount: 1, retainedBy: { draft: 1 } })
       const back = await b.switchBack()
+      expect(back).toBe(b.shell)
       expect(back.snapshot.attachmentIds).toEqual(drafts.map(draft => draft.id))
       expect(b.root.resolveDraftAttachments(back.snapshot.attachmentIds)).toEqual(drafts)
       expect(b.upload).toHaveBeenCalledOnce()
       expect(revoked).not.toHaveBeenCalled()
       expect(back.notices.getSnapshot()).toBeNull()
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
+  it('releases the hold once the draft has no attachments', async () => {
+    const b = await bench()
+    try {
+      const [draft] = b.root.createDrafts(sessionId(), [new File([Uint8Array.of(9)], 'pic.png', { type: 'image/png' })], true)
+      if (draft === undefined) throw new Error('draft missing')
+      b.shell.addAttachments([draft.id])
+      await b.switchAway()
+      expect(b.runtime.sessions.binding(SESSION)).toBeDefined()
+      b.shell.removeAttachment(draft.id)
+      await b.runtime.flush()
+      expect(b.runtime.sessions.binding(SESSION)).toBeUndefined()
     } finally {
       await b.runtime.dispose()
     }
@@ -156,7 +172,7 @@ describe('draft attachments across a Session switch', () => {
 })
 
 describe('removed Sessions', () => {
-  it('releases the draft attachments of a Session removed while no composer is mounted', async () => {
+  it('releases the draft attachments of a Session removed while no view holds it', async () => {
     const b = await bench()
     try {
       b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
@@ -164,17 +180,16 @@ describe('removed Sessions', () => {
       if (draft === undefined) throw new Error('draft missing')
       b.shell.addAttachments([draft.id])
       await b.switchAway()
-      localStorage.setItem(UNLOAD_MARK, '1')
       await b.runtime.sessions.remove(SESSION)
-      await vi.waitFor(() => { expect(b.root.draftAttachmentIds(sessionId())).toEqual([]) })
+      await b.runtime.flush()
+      expect(b.runtime.sessions.binding(SESSION)).toBeUndefined()
       expect(b.root.resolveDraftAttachments([draft.id])).toEqual([])
-      expect(localStorage.getItem(UNLOAD_MARK)).toBeNull()
     } finally {
       await b.runtime.dispose()
     }
   })
 
-  it('releases the draft attachments when the mounted composer of a removed Session retires', async () => {
+  it('releases the draft attachments when the last view of a removed Session closes', async () => {
     const b = await bench()
     try {
       b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
@@ -183,7 +198,7 @@ describe('removed Sessions', () => {
       b.shell.addAttachments([draft.id])
       await b.runtime.sessions.remove(SESSION)
       await b.switchAway()
-      expect(b.root.draftAttachmentIds(sessionId())).toEqual([])
+      expect(b.root.resolveDraftAttachments([draft.id])).toEqual([])
     } finally {
       await b.runtime.dispose()
     }
@@ -213,7 +228,7 @@ describe('page unload report', () => {
     }
   })
 
-  it('does not report attachments a switch kept, and drops marks a back-forward restore made stale', async () => {
+  it('drops marks a back-forward restore made stale', async () => {
     const b = await bench()
     try {
       b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
@@ -229,30 +244,24 @@ describe('page unload report', () => {
       Object.defineProperty(cached, 'persisted', { value: true })
       window.dispatchEvent(cached)
       expect(localStorage.getItem(UNLOAD_MARK)).toBeNull()
-      localStorage.setItem(UNLOAD_MARK, '1')
-      await b.switchAway()
-      const back = await b.switchBack()
-      expect(back.notices.getSnapshot()).toBeNull()
-      expect(localStorage.getItem(UNLOAD_MARK)).toBeNull()
     } finally {
       await b.runtime.dispose()
     }
   })
 
   it('keeps working when browser storage refuses the marks', async () => {
-    const b = await bench()
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const b = await bench(() => {
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+    })
     try {
       b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
       const [draft] = b.root.createDrafts(sessionId(), [draftFile()], true)
       if (draft === undefined) throw new Error('draft missing')
       b.shell.addAttachments([draft.id])
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
       window.dispatchEvent(new Event('pagehide'))
-      await b.switchAway()
-      const back = await b.switchBack()
-      expect(back.snapshot.attachmentIds).toEqual([draft.id])
+      expect(b.shell.snapshot.attachmentIds).toEqual([draft.id])
       expect(errors).toHaveBeenCalledTimes(2)
     } finally {
       await b.runtime.dispose()
@@ -261,7 +270,7 @@ describe('page unload report', () => {
 })
 
 describe('submitted attachments', () => {
-  it('does not re-adopt or report attachments of an accepted message whose echo has not retired', async () => {
+  it('does not hold or report attachments of an accepted message', async () => {
     const b = await bench()
     try {
       b.behavior().uploadFile = vi.fn(() => Promise.resolve({ ok: true, value: uploadValue('notes.txt') }))
@@ -275,19 +284,15 @@ describe('submitted attachments', () => {
       await b.runtime.flush()
       // The registry still holds the attachment for the echo; the draft no longer owns it.
       expect(b.root.resolveDraftAttachments([draft.id])).toHaveLength(1)
-      expect(b.root.draftAttachmentIds(sessionId())).toEqual([])
-      expect(b.root.draftAttachmentSessions()).toEqual([])
+      expect(b.runtime.sessions.retainInfo(sessionId()).getSnapshot().retainedBy.draft).toBeUndefined()
       window.dispatchEvent(new Event('pagehide'))
       expect(localStorage.getItem(UNLOAD_MARK)).toBeNull()
-      await b.switchAway()
-      const back = await b.switchBack()
-      expect(back.snapshot.attachmentIds).toEqual([])
     } finally {
       await b.runtime.dispose()
     }
   })
 
-  it('keeps the attachments of a slash line whose adjudication a switch aborted', async () => {
+  it('keeps a slash line adjudicating with its attachments while the Session is switched away', async () => {
     const adjudicate = vi.fn(() => new Promise<never>(() => undefined))
     const b = await bench()
     try {
@@ -303,8 +308,8 @@ describe('submitted attachments', () => {
       expect(b.shell.snapshot.phase).toBe('adjudicating')
       expect(adjudicate).toHaveBeenCalledOnce()
       await b.switchAway()
-      expect(b.root.draftAttachmentIds(sessionId())).toEqual([draft.id])
       const back = await b.switchBack()
+      expect(back.snapshot.phase).toBe('adjudicating')
       expect(back.snapshot.attachmentIds).toEqual([draft.id])
     } finally {
       await b.runtime.dispose()

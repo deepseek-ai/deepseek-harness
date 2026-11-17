@@ -23,8 +23,7 @@
       "job_list",
       "job_output",
       "subagent",
-      "workflow",
-      "working_directory"
+      "workflow"
     ]
   },
   {
@@ -51,8 +50,7 @@
       "job_list",
       "job_output",
       "subagent",
-      "workflow",
-      "working_directory"
+      "workflow"
     ]
   }
 ]

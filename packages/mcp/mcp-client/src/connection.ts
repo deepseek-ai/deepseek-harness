@@ -17,6 +17,7 @@
 
 import { Client } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
+import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -29,6 +30,7 @@ import { McpGeneration } from './generation.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { MissingTemplateValue } from './templates.ts'
 import { McpToolRegistrationError, syncTools } from './tools.ts'
+import { McpToolLoader } from './tool-loading.ts'
 import type { ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
 
@@ -137,6 +139,9 @@ export function startConnection(
   const diagnostic = (error: unknown, operation: string): string => binding.diagnostic(error, operation)
   const lifetime = new AbortController()
   const readiness = Promise.withResolvers<ConnectionOutcome>()
+  const loader = config.toolLoading === 'on-demand'
+    ? new McpToolLoader(ctx, config.serverName, config.catalogDescriptionMaxLength)
+    : undefined
   type Generation = { wire: McpGeneration; connectedAt?: number }
   let current: Generation | undefined
   let bindingValue: { config?: Config; grantId?: string } | undefined
@@ -214,6 +219,7 @@ export function startConnection(
           toolCallTimeoutMs: config.toolCallTimeoutMs,
           signal,
           ...binding.redacting ? { redact: (text: string) => binding.redact(text) } : {},
+          ...loader === undefined ? {} : { loader },
         }, disposers, () => isCurrent(record))
       })
     })
@@ -338,7 +344,7 @@ export function startConnection(
       try {
         await enqueueSync(record)
         if (isCurrent(record) && record.connectedAt !== undefined) {
-          status.update({ state: 'connected', toolCount: disposers.size, connectedAt: record.connectedAt })
+          status.update({ state: 'connected', toolCount: loader?.size ?? disposers.size, connectedAt: record.connectedAt })
         }
       } catch (error) {
         if (error instanceof McpToolRegistrationError) lost(record, diagnostic(error, 'tool synchronization'))
@@ -371,7 +377,7 @@ export function startConnection(
       record.wire.assertOpen()
       serverInstructions = instructions
       record.connectedAt = Date.now()
-      status.update({ state: 'connected', toolCount: disposers.size, connectedAt: record.connectedAt })
+      status.update({ state: 'connected', toolCount: loader?.size ?? disposers.size, connectedAt: record.connectedAt })
       readiness.resolve({})
       if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
     } catch (error) {
@@ -402,6 +408,7 @@ export function startConnection(
   return {
     ready: readiness.promise,
     instructions: () => serverInstructions,
+    ...loader === undefined ? {} : { catalog: (scope: ScopeKey | undefined) => loader.catalog(scope) },
     resources: {
       async request(request, exec): Promise<JsonValue> {
         const record = current
