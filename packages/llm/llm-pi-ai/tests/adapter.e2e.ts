@@ -6,6 +6,7 @@ import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { assemble, type AssembledResult } from './assemble.ts'
 
 /**
@@ -150,6 +151,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-pi-ai e2e (real API)', () =>
     const deepseekCtx = new Context()
     contexts.push(deepseekCtx)
     await deepseekCtx.plugin(LlmRuntime)
+    await deepseekCtx.plugin(DeepSeekAuth)
     await deepseekCtx.plugin(LlmDeepSeek, { thinking: 'disabled' })
 
     const piCtx = await harness(FLASH)

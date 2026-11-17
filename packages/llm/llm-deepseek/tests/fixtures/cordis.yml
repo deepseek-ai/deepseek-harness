@@ -12,6 +12,7 @@
   config:
     path: {{credentials}}
     watch: false
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY

@@ -1,6 +1,7 @@
 /** First-party Host inspect providers registered by the Cordis tool package. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import { InspectError, type HostCordisInspectProviderRegistration } from '@deepseek-ai/dsh-cordis-host-runner'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EVENT_API, queryEventApi, queryServiceApi } from './api-catalog.ts'
@@ -28,6 +29,9 @@ const CONFIG_INPUT: JsonValue = {
 }
 const CONFIG_OUTPUT = {
   description: 'One directory page of live entries with patch ids, Config status, total, and nextOffset, or one entry\'s projected JSON Schema with shared definitions, omission acceptance, and projection limitations.',
+} as const
+const RUNTIME_OUTPUT = {
+  description: 'Object whose version field is the exact running DSH version.',
 } as const
 const HOST_EVENTS = EVENT_API.filter(event => !event.name.startsWith('cordis/'))
 
@@ -61,6 +65,14 @@ export function hostInspectProviders(ctx: Context): HostCordisInspectProviderReg
       input => queryLiveConfig(ctx, input),
       CONFIG_INPUT,
       CONFIG_OUTPUT,
+    ),
+    registration(
+      'Runtime',
+      'Running DSH version, the version that plugin engines.dsh ranges and DSH peer dependencies are checked against.',
+      'getVersion',
+      () => ({ version: getDshRuntimeVersion() }),
+      undefined,
+      RUNTIME_OUTPUT,
     ),
     {
       manifest: {

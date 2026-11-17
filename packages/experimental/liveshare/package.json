@@ -93,6 +93,7 @@
     "@deepseek-ai/dsh-api-workspace-files": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-client-file-upload": "workspace:*",
+    "@deepseek-ai/dsh-client-hmr": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",

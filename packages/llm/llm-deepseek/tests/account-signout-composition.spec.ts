@@ -22,6 +22,7 @@ import LocalCredentials from '@deepseek-ai/dsh-credentials-local'
 import DeepSeekAccount, { type AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account'
 import LlmRuntime, { type StreamChunk } from '@deepseek-ai/dsh-llm'
 import * as AccountRoute from '@deepseek-ai/dsh-llm-deepseek-account'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -115,6 +116,7 @@ async function boot(origin: string) {
     ['@deepseek-ai/dsh-deepseek-account', { module: DeepSeekAccount, config: {
       platformOrigin: origin, inferenceOrigin: origin, allowLoopbackHttp: true, logoutRetryDelayMs: 1,
     } }],
+    ['@deepseek-ai/dsh-deepseek-auth', { module: DeepSeekAuth }],
     ['@deepseek-ai/dsh-llm-deepseek-account', { module: AccountRoute, config: { baseURL: `${origin}/anthropic` } }],
   ])
   await writeFile(join(home, 'cordis.yml'), JSON.stringify(

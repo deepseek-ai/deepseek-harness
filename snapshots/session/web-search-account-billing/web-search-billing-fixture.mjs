@@ -37,7 +37,7 @@ export async function apply(ctx, config) {
   const signedOut = new AbortController()
   ctx.provide('deepseekAccount', {
     resolveRequestCredential: async endpoint => endpoint.startsWith('https://api.deepseek.com/')
-      ? { headers: { 'x-dsh-auth-token': ACCOUNT_TOKEN }, value: ACCOUNT_TOKEN, revoked: signedOut.signal, reject: async () => {} }
+      ? { headers: { 'x-dsh-auth-token': ACCOUNT_TOKEN }, revoked: signedOut.signal, reject: async () => {} }
       : undefined,
   })
   let restoreFetch = () => {}

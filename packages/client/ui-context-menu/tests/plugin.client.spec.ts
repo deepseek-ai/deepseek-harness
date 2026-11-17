@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { MenuAction } from '../src/client/types.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
@@ -28,7 +29,7 @@ it('lets an external contribution open another menu and withdraws its actions wh
     },
   } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
-  const menuFiber = ctx.plugin({ inject, apply })
+  const menuFiber = ctx.plugin({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await menuFiber.await()
   expect(hostApply).not.toThrow()
   const run = vi.fn()
@@ -101,7 +102,8 @@ it('waits for metadata, toggles nearby repeated gestures, replaces occurrences, 
     register: (entry: { store: ReturnType<typeof createMenuStore> }) => { store = entry.store.create(); return () => {} },
   } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
-  const fiber = ctx.plugin({ inject, apply })
+  // No budget from the Host: preparation uses the 1000ms the Client used before the field moved to the Host.
+  const fiber = ctx.plugin({ inject, apply }, syncedConfig({}))
   await fiber.await()
   let finish!: (actions: readonly MenuAction[]) => void
   ctx.contextMenus.register({ target: 'pluginDocument', id: 'slow', order: 0,
@@ -148,7 +150,7 @@ it('keeps trigger focus through replacement and ignores non-dismissal events and
     register: (entry: { inject: () => MenuOverlayInjected }) => { overlay = entry.inject(); return () => {} },
   } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
-  const fiber = ctx.plugin({ inject, apply })
+  const fiber = ctx.plugin({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await fiber.await()
   const notify = ctx.contextMenus.notify.bind(ctx.contextMenus)
   ctx.contextMenus.register({ target: 'pluginDocument', id: 'plain', order: 0, resolve: () => [{ id: 'copy', label: 'Copy' }] })
@@ -194,7 +196,7 @@ it('leaves unbound keyboard gestures native', async () => {
     inject: () => () => {},
   } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
-  const fiber = ctx.plugin({ inject, apply })
+  const fiber = ctx.plugin({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await fiber.await()
   try {
     const event = new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true })

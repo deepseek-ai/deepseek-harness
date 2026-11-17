@@ -20,7 +20,10 @@ export class MenuRegistry {
   private readonly providers = new Map<string, Provider>()
   private readonly occurrences = new Set<() => void>()
   private disposed = false
-  constructor(private readonly failed: (message?: string) => void, private readonly timeoutMs?: number) {}
+  constructor(
+    private readonly failed: (message?: string) => void,
+    private readonly timeoutMs: () => number | undefined = () => undefined,
+  ) {}
 
   /**
    * Register actions for subsequent openings.
@@ -110,9 +113,10 @@ export class MenuRegistry {
           const result = provider.resolve(target, signal)
           if (result instanceof Promise) clear()
           preparing = result instanceof Promise ? new Promise<void>((settle) => {
-            const timer = this.timeoutMs === undefined ? undefined : setTimeout(() => {
+            const timeoutMs = this.timeoutMs()
+            const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
               deadline.abort(); this.failed()
-            }, this.timeoutMs)
+            }, timeoutMs)
             const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); settle() }
             signal.addEventListener('abort', finish, { once: true })
             void result.then(accept).catch(() => { if (!signal.aborted) this.failed() }).finally(finish)
