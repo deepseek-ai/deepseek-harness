@@ -1000,4 +1000,20 @@ describe('abort', () => {
     expect(editSignal?.aborted).toBe(true)
     await expect(stream.done).rejects.toBeInstanceOf(StreamAbortError)
   })
+
+  it('detaches the caller AbortSignal listener when the stream closes or fails', async () => {
+    const controller = new AbortController()
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener')
+    const stream = createMessageStream(fakeHost(undefined), { signal: controller.signal })
+    await closeAll(stream, 'done')
+    expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function))
+
+    const controller2 = new AbortController()
+    const removeSpy2 = vi.spyOn(controller2.signal, 'removeEventListener')
+    const host2 = fakeHost(undefined)
+    host2.send = async () => { throw new PlatformError('invalid', 'bad') }
+    const stream2 = createMessageStream(host2, { signal: controller2.signal })
+    await expect(closeAll(stream2, 'x')).rejects.toThrow('bad')
+    expect(removeSpy2).toHaveBeenCalledWith('abort', expect.any(Function))
+  })
 })

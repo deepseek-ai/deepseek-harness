@@ -321,6 +321,8 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   private closing: Promise<void> | undefined
   private readonly sleepers = new Set<{ wake: () => void; interruptible: boolean }>()
   private readonly registered = new Map<string, InteractionAction['callback']>()
+  private readonly callerSignal: AbortSignal | undefined
+  private readonly onCallerAbort: (() => void) | undefined
 
   constructor(private readonly host: StreamHost<T>, private readonly options: StreamOptions) {
     this.driver = host.driver
@@ -339,8 +341,13 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     // `done` is informational; an unobserved failure must not become an unhandled rejection.
     this.done.catch(() => {})
     if (signal) {
-      if (signal.aborted) void this.abort({ reason: 'signal' })
-      else signal.addEventListener('abort', () => void this.abort({ reason: 'signal' }), { once: true })
+      if (signal.aborted) {
+        void this.abort({ reason: 'signal' })
+      } else {
+        this.callerSignal = signal
+        this.onCallerAbort = () => void this.abort({ reason: 'signal' })
+        signal.addEventListener('abort', this.onCallerAbort, { once: true })
+      }
     }
   }
 
@@ -382,6 +389,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       result => {
         if (!result || this.aborted || this.settled) return
         this.settled = true
+        this.unlisten()
         this._state = 'closed'
         this.resolveDone(result)
       },
@@ -393,6 +401,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   async abort(options: { recall?: boolean; reason?: string } = {}): Promise<boolean> {
     if (this.aborted || this.settled) return false
     this.aborted = true
+    this.unlisten()
     this._state = 'closing'
     this.clearTimer()
     this.wake(false)
@@ -788,9 +797,14 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     }
   }
 
+  private unlisten() {
+    if (this.onCallerAbort) this.callerSignal?.removeEventListener('abort', this.onCallerAbort)
+  }
+
   private fail(error: unknown) {
     if (this.settled || this.aborted) return
     this.settled = true
+    this.unlisten()
     this._state = 'failed'
     this.clearTimer()
     this.wake(false)

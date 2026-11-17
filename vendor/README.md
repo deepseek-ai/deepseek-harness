@@ -34,7 +34,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V108.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V109.
 
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
@@ -144,6 +144,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V105 · `plugin-im-adapter-qq` exempts live ticketed windows from passive LRU eviction**: `PassiveManager.shrink()` only evicts entries with `tickets.size === 0` when enforcing `max` (and `PassiveManagerOptions.max` / `DEFAULT_MAX_WINDOWS` document this soft bound) so an in-flight retry's `(msg_id, msg_seq)` dedupe ticket is retained until its window expires. Covered by `vendor/plugin-im-adapter-qq/tests/passive.spec.ts`.
 - **V106 · `plugin-im-adapter-qq` and `plugin-im-adapter-lark` match structural `ResponseLike` in `responseOf`**: `responseOf()` in both adapters' `errors.ts` checks `typeof status === 'number' && typeof headers?.get === 'function'` instead of `instanceof Response`, because `ctx.http` uses `undici.fetch` whose `Response` is not an instance of global `Response`. Covered by `vendor/plugin-im-adapter-qq/tests/token.spec.ts`.
 - **V107 · `plugin-im-core` and `plugin-im-adapter-lark` forward `AbortSignal` through `editPayload` and bound abort-close**: `Adapter.editPayload`, `EditDriverAdapter.editPayload`, `createEditDriver` (`tick`/`close`), `Bot.applyEdit`, and Lark's `editMessagePayload` forward `signal` to `updateMessage`/`patchMessage`, and `Scheduler.abort()` bounds its best-effort `driver.close` with `AbortSignal.timeout(STREAM_ABORT_CLOSE_TIMEOUT_MS)`. Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
+- **V108 · `plugin-im-core` detaches the caller `AbortSignal` listener when a stream settles**: `Scheduler` keeps a reference to its `abort` listener and removes it in `close()`, `fail()`, and `abort()`, preventing settled streams from accumulating on a long-lived `AbortSignal`. Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
 
 ### Resolver adaptations
 
