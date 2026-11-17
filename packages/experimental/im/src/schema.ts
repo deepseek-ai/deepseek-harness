@@ -42,7 +42,7 @@ export interface ImSendInput {
   chat?: string
   /** Markdown published as one message. */
   text: string
-  /** Thread to publish into (a thread id; omit for the chat itself). */
+  /** Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none. */
   thread?: string
 }
 /** `im_reply` arguments. */
@@ -62,7 +62,7 @@ export interface ImSendFileInput {
   chat?: string
   /** Local file to publish; its extension picks the platform message kind. */
   path: string
-  /** Message to answer, by key or seq; omit to publish into the chat. */
+  /** Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none. */
   quote?: string
 }
 /** `im_read_image` arguments. */
