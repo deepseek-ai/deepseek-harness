@@ -11,7 +11,7 @@ import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistenceCreateOptions } from '@deepseek-ai/dsh-session-persistence'
 import { SqliteStore } from '../src/sqlite.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
-import { sqliteLogs } from './fixtures/store.ts'
+import { sqliteLogs, storedEvents, tailSegment } from './fixtures/store.ts'
 import { SessionWriteLease } from '../src/lease.ts'
 import { sessionDir } from '../src/paths.ts'
 
@@ -164,9 +164,7 @@ it.each(prefixCases)('flushes the selected cut $cut after initially persisting u
   try {
     expect(db.prepare('SELECT base_seq, parent_end_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.id))
       .toEqual({ base_seq: shared, parent_end_seq: shared === 0 ? null : shared })
-    const rows = db.prepare('SELECT payload FROM events WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?) ORDER BY seq').all(child.id)
-    const payloads = rows.map((row) => { const payload: unknown = JSON.parse(String(row.payload)); return payload })
-    expect(payloads).toEqual(expectedSeed.slice(shared))
+    expect(storedEvents(db, tailSegment(db, child.id))).toEqual(expectedSeed.slice(shared))
   } finally { db.close() }
   await parent.append(history.slice(cut))
   const childOwn = event(cut + 1, 'child continues')
@@ -205,8 +203,7 @@ it('keeps a cold-history repair before the inherited marker in the child segment
   try {
     expect(db.prepare('SELECT base_seq, parent_end_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.id))
       .toEqual({ base_seq: 1, parent_end_seq: 1 })
-    const rows = db.prepare('SELECT payload FROM events WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?) ORDER BY seq').all(child.id)
-    expect(rows.map((row) => { const payload: unknown = JSON.parse(String(row.payload)); return payload })).toEqual([interrupted, marker])
+    expect(storedEvents(db, tailSegment(db, child.id))).toEqual([interrupted, marker])
   } finally { db.close() }
   const restarted = store()
   const reader = await restarted.open(child.id, 'read')

@@ -43,6 +43,8 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
+嵌套阶段和成员的前导槽承接父级文字列；缩进随前导槽及图文间距变化，窄布局也保留该关系。
+
 节点是持久化会话事件的确定性回放：`tool-workflow/run-start` 以 `runId` 创建唯一上下文，成员开始、成员结束与运行结束事件按日志顺序更新该上下文。只有 update 的历史尾页会保持 pending，直到更早页面补入唯一 start；此后 prepend、完整回放与实时 append 得到相同状态。
 
 ### 展开选择

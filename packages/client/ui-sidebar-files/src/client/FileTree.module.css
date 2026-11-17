@@ -7,7 +7,7 @@
 
 /* Every nested level indents by one step; the root level sits flush. */
 .level .level {
-  padding-left: 18px;
+  padding-left: calc(16px + 6px);
 }
 
 .item {

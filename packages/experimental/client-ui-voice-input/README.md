@@ -35,6 +35,8 @@ Before downloading or retrying, **Model download source** offers Automatic and t
 
 -----
 
+Activation prompts use the shared modal description, so the heading and explanatory text form one group above the actions.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

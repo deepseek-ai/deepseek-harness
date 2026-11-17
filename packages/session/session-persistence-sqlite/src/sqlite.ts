@@ -25,6 +25,8 @@ import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import { sessionDir } from './paths.ts'
+import { decodeFrame, encodeFrame } from './frame.ts'
+import type { EncodedFrame, FrameCompression } from './frame.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
 export const SCHEMA_VERSION = 1
@@ -32,10 +34,10 @@ const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 /**
- * Internal scheduling constant, not deployment configuration: decoded events
- * between two event-loop yields while reading a stored history slice.
+ * Internal scheduling constant, not deployment configuration: frames decoded
+ * concurrently on the thread pool between two event-loop yields of a read.
  */
-const READ_DECODE_YIELD_EVENTS = 2048
+const READ_DECODE_GROUP_FRAMES = 8
 /** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
 const BUSY_TIMEOUT_MS = 5000
 /** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
@@ -47,8 +49,10 @@ const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
   tail_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
 const traceIdentity = z.object({ trace_uuid: z.string().transform(sessionIdentity) })
+const frameRow = z.object({ start_seq: z.number().int().nonnegative(), end_seq: z.number().int().positive(),
+  codec: z.number().int(), payload: z.instanceof(Uint8Array) })
 const TRACE_METADATA_SQL = `SELECT t.trace_uuid, header, tail_segment_uuid, inherited_count, base_seq,
-  base_seq + COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count
+  base_seq + COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count
   FROM traces t LEFT JOIN segments s ON s.segment_uuid = t.tail_segment_uuid`
 const segmentFields = { segment_uuid: z.string().transform(segmentId), event_count: z.number().int().nonnegative() }
 const segmentRow = z.union([
@@ -89,6 +93,10 @@ export interface SqliteStoreOptions {
   readonly path: string
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
   readonly legacyRoot: string
+  /** Physical frame encoding for new writes; stored frames decode by their own codec regardless. */
+  readonly compression: FrameCompression
+  /** Maximum events per new frame; stored frames keep their written size. */
+  readonly frameEvents: number
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
@@ -102,6 +110,8 @@ export class SqliteStore {
   /** Absolute database path, recorded in routing records. */
   readonly path: string
   private readonly legacyRoot: string
+  private readonly compression: FrameCompression
+  private readonly frameEvents: number
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
@@ -122,6 +132,8 @@ export class SqliteStore {
   constructor(options: SqliteStoreOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
+    this.compression = options.compression
+    this.frameEvents = options.frameEvents
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -268,12 +280,13 @@ export class SqliteStore {
       inherited_count INTEGER NOT NULL CHECK(inherited_count >= 0)
     ) STRICT;
     CREATE UNIQUE INDEX exclusive_trace_head ON traces(tail_segment_uuid);
-    CREATE TABLE events (
-      segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid), seq INTEGER NOT NULL CHECK(seq >= 0),
-      payload TEXT NOT NULL, PRIMARY KEY(segment_uuid, seq)
-    ) STRICT, WITHOUT ROWID;
-    CREATE TRIGGER events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT, 'events are append-only'); END;
-    CREATE TRIGGER events_no_delete BEFORE DELETE ON events BEGIN SELECT RAISE(ABORT, 'events are append-only'); END;
+    CREATE TABLE frames (
+      segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid),
+      start_seq INTEGER NOT NULL CHECK(start_seq >= 0), end_seq INTEGER NOT NULL CHECK(end_seq > start_seq),
+      codec INTEGER NOT NULL CHECK(codec IN (0, 1)), payload BLOB NOT NULL, PRIMARY KEY(segment_uuid, start_seq)
+    ) STRICT;
+    CREATE TRIGGER frames_no_update BEFORE UPDATE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
+    CREATE TRIGGER frames_no_delete BEFORE DELETE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
     CREATE TRIGGER segments_no_reparent BEFORE UPDATE OF parent_segment_uuid, parent_end_seq, base_seq ON segments
       BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
     PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${SCHEMA_VERSION};`)
@@ -354,7 +367,7 @@ export class SqliteStore {
   }
 
   private segment(db: DatabaseSync, id: SegmentId): Segment {
-    const row = this.statement(db, 'SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segments s WHERE segment_uuid = ?').get(id)
+    const row = this.statement(db, 'SELECT s.*, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segments s WHERE segment_uuid = ?').get(id)
     if (row === undefined) throw new HarnessError('Trace references a missing segment', 'SESSION_STORAGE_CORRUPT')
     try { return segmentRow.parse(row) }
     catch (error: unknown) { throw this.corruption(`stored SQLite segment "${id}" metadata is invalid`, error) }
@@ -362,8 +375,7 @@ export class SqliteStore {
 
   /** Fetch indexed ancestor metadata together, retaining the authoritative chain checks during reads. */
   private parents(db: DatabaseSync, id: SegmentId, offset: number, nodes: Map<SegmentId, Segment>): void {
-    const rows = this.statement(db, `SELECT s.*, COALESCE((SELECT seq + 1 FROM events WHERE segment_uuid = s.segment_uuid
-      ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
+    const rows = this.statement(db, `SELECT s.*, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
       JOIN segments s ON s.segment_uuid = a.ancestor_uuid
       WHERE a.segment_uuid = ? AND (s.base_seq > ? OR s.base_seq + a.end_seq > ?)`).all(id, offset, offset)
     for (const row of rows) {
@@ -380,10 +392,29 @@ export class SqliteStore {
   }
 
   private insertTrace(db: DatabaseSync, header: SessionHeader, head: SegmentId,
-    inheritedCount: number, payloads: readonly string[]): void {
+    inheritedCount: number, frames: readonly EncodedFrame[]): void {
     this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(header), head, inheritedCount)
-    const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
-    for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
+    this.insertFrames(db, head, 0, frames)
+  }
+
+  /** Store consecutive frames from `start`; the last frame's end becomes the Segment's event count. */
+  private insertFrames(db: DatabaseSync, segment: SegmentId, start: number, frames: readonly EncodedFrame[]): void {
+    const insert = this.statement(db, 'INSERT INTO frames (segment_uuid, start_seq, end_seq, codec, payload) VALUES (?, ?, ?, ?, ?)')
+    let seq = start
+    for (const frame of frames) {
+      insert.run(segment, seq, seq + frame.count, frame.codec, frame.bytes)
+      seq += frame.count
+    }
+  }
+
+  /** Serialize and compress a batch before its transaction: one frame per chunk, yielding between chunks of a long batch. */
+  private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedFrame[]> {
+    const frames: EncodedFrame[] = []
+    for (let start = 0; start < batch.length; start += this.frameEvents) {
+      if (start > 0) await setImmediate()
+      frames.push(encodeFrame(batch.slice(start, start + this.frameEvents).map(event => JSON.stringify(event)), this.compression))
+    }
+    return frames
   }
 
   /**
@@ -399,8 +430,7 @@ export class SqliteStore {
     const tail = this.segment(db, source.tail_segment_uuid)
     if (end >= tail.base_seq) return { parent: tail, end: end - tail.base_seq }
     // Among ancestors starting at or before the cut, the deepest one holds it; an empty-prefix tie is logically equivalent.
-    const raw = this.statement(db, `SELECT s.*, a.end_seq AS visible_end, COALESCE((SELECT seq + 1 FROM events
-      WHERE segment_uuid = s.segment_uuid ORDER BY seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
+    const raw = this.statement(db, `SELECT s.*, a.end_seq AS visible_end, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
       JOIN segments s ON s.segment_uuid = a.ancestor_uuid
       WHERE a.segment_uuid = ? AND s.base_seq <= ? ORDER BY s.base_seq DESC, a.end_seq DESC LIMIT 1`).get(tail.segment_uuid, end)
     if (raw === undefined) throw new HarnessError('Invalid Trace segment chain', 'SESSION_STORAGE_CORRUPT')
@@ -461,7 +491,7 @@ export class SqliteStore {
     signal?.throwIfAborted()
     const events = materializeAppendBatch(source.events.slice(source.endSeq))
     assertContiguous(header.id, events, source.endSeq)
-    const payloads = events.map(event => JSON.stringify(event))
+    const frames = await this.encodeBatch(events)
     const handle = await this.admit(header, 'write', inheritedCount, false,
       await this.acquireWriteLease(header, true))
     try {
@@ -477,7 +507,7 @@ export class SqliteStore {
         const cut = this.cut(db, parent, source.endSeq)
         const head = segmentId(randomUUID())
         this.newSegment(db, head, cut.parent, cut.end)
-        this.insertTrace(db, header, head, inheritedCount, payloads)
+        this.insertTrace(db, header, head, inheritedCount, frames)
       })
       await this.route(header.id)
       return handle
@@ -547,14 +577,14 @@ export class SqliteStore {
     const storedHeader = materializeHeader(header, inheritedCount)
     const batch = materializeAppendBatch(events)
     assertContiguous(header.id, batch, 0)
-    const payloads = batch.map(event => JSON.stringify(event))
+    const frames = await this.encodeBatch(batch)
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
     this.transaction(db, () => {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = segmentId(randomUUID())
       this.newSegment(db, head, undefined, 0)
-      this.insertTrace(db, storedHeader, head, inheritedCount, payloads)
+      this.insertTrace(db, storedHeader, head, inheritedCount, frames)
     })
     await this.route(header.id)
   }
@@ -670,33 +700,51 @@ export class SqliteStore {
         end = child.parent_end_seq
         if (current.base_seq + end !== child.base_seq) throw new HarnessError('Invalid segment offset', 'SESSION_STORAGE_CORRUPT')
       }
-      const payloads: string[] = [], stop = offset + Math.min(length, Math.max(0, meta.event_count - offset))
-      const select = this.statement(db, 'SELECT payload FROM events WHERE segment_uuid = ? AND seq >= ? AND seq < ? ORDER BY seq')
+      // Frames overlapping each Segment range, with the slice of their events the read covers.
+      const frames: { codec: number; bytes: Uint8Array; skip: number; take: number }[] = []
+      const stop = offset + Math.min(length, Math.max(0, meta.event_count - offset))
+      const select = this.statement(db, `SELECT start_seq, end_seq, codec, payload FROM frames
+        WHERE segment_uuid = ? AND end_seq > ? AND start_seq < ? ORDER BY start_seq`)
       for (const { segment, end } of ranges.reverse()) {
         const start = Math.max(0, offset - segment.base_seq), finish = Math.min(end, stop - segment.base_seq)
         if (finish <= start) continue
-        const rows = select.all(segment.segment_uuid, start, finish)
-        if (rows.length !== finish - start) throw new HarnessError('SQLite segment is incomplete', 'SESSION_STORAGE_CORRUPT')
-        for (const row of rows) {
-          const payload = row['payload']
-          if (typeof payload !== 'string') {
-            throw this.corruption(`session "${header.id}": stored SQLite event payload is not text`,
-              new TypeError('expected a SQLite TEXT payload'))
-          }
-          payloads.push(payload)
+        let expected = start
+        for (const row of select.all(segment.segment_uuid, start, finish)) {
+          const frame = frameRow.safeParse(row)
+          if (!frame.success) throw this.corruption(`session "${header.id}": stored SQLite frame is invalid`, frame.error)
+          if (frame.data.start_seq > expected) break
+          const until = Math.min(finish, frame.data.end_seq)
+          frames.push({ codec: frame.data.codec, bytes: frame.data.payload, skip: expected - frame.data.start_seq, take: until - expected })
+          expected = until
         }
+        if (expected !== finish) throw new HarnessError('SQLite segment is incomplete', 'SESSION_STORAGE_CORRUPT')
       }
-      return { payloads, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
+      return { frames, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
     const decoded: (SessionFormatEvent & SessionEvent)[] = []
-    for (const [index, payload] of stored.payloads.entries()) {
-      // One synchronous transaction fetched the rows; decoding yields so a long history does not stall the event loop.
-      if (index > 0 && index % READ_DECODE_YIELD_EVENTS === 0) await setImmediate()
-      try {
-        decoded.push(decodeEvent(JSON.parse(payload)))
-      } catch (error: unknown) {
-        if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
-        throw this.corruption(`session "${header.id}": stored event at index ${offset + index} is invalid`, error)
+    // One synchronous transaction fetched the frames; compressed frames decode on the thread pool a group at a
+    // time, and parsing each group yields the event loop before the next, so a long history does not stall it.
+    for (let group = 0; group < stored.frames.length; group += READ_DECODE_GROUP_FRAMES) {
+      if (group > 0) await setImmediate()
+      const frames = stored.frames.slice(group, group + READ_DECODE_GROUP_FRAMES)
+      const texts = await Promise.all(frames.map(async (frame, index) => {
+        try { return await decodeFrame(frame.codec, frame.bytes) } catch (error: unknown) {
+          throw this.corruption(`session "${header.id}": stored frame holding event ${offset + decoded.length + index} cannot be decoded`, error)
+        }
+      }))
+      for (const [index, lines] of texts.entries()) {
+        const frame = frames[index]
+        /* v8 ignore next -- a frame group only holds the frames it was built from. */
+        if (frame === undefined) continue
+        if (lines.length < frame.skip + frame.take) throw new HarnessError('SQLite frame is shorter than its recorded range', 'SESSION_STORAGE_CORRUPT')
+        for (const text of lines.slice(frame.skip, frame.skip + frame.take)) {
+          try {
+            decoded.push(decodeEvent(JSON.parse(text)))
+          } catch (error: unknown) {
+            if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
+            throw this.corruption(`session "${header.id}": stored event at index ${offset + decoded.length} is invalid`, error)
+          }
+        }
       }
     }
     if (stored.complete) {
@@ -720,13 +768,11 @@ export class SqliteStore {
    */
   async append(header: SessionHeader, batch: readonly SessionEvent[]): Promise<void> {
     const db = await this.database()
-    const payloads = batch.map(event => JSON.stringify(event))
+    const frames = await this.encodeBatch(batch)
     this.transaction(db, () => {
       const row = this.ensureRow(db, header)
       assertContiguous(header.id, batch, row.event_count)
-      const start = row.event_count - row.base_seq
-      const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
-      for (const [index, payload] of payloads.entries()) insert.run(row.tail_segment_uuid, start + index, payload)
+      this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, frames)
     })
     this.pendingCreates.delete(header.id)
     await this.route(header.id)
