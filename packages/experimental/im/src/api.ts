@@ -521,6 +521,11 @@ export interface ImSendOptions extends SendOptions {
    * message of the same chat — its `referrer` becomes the target's, so passive replies and thread placement work.
    */
   quote?: ImMessageKey
+  /**
+   * Thread placement: a `string` targets that explicit thread id; `true` answers inside `quote`'s thread. When both
+   * `thread` and `quote` are omitted for a `session`, defaults to the thread of the message `ImSessions.trigger(session)`
+   * answered last in memory (falling back to the chat's main timeline when none exists or after a restart).
+   */
   thread?: string | true
   /** For grants check + attribution. */
   session?: SessionId

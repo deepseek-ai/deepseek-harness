@@ -7848,7 +7848,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSenderDeps',
-    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
+    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
   },
   {
     name: 'ImSendOptions',
