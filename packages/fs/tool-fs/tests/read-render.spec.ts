@@ -84,6 +84,21 @@ describe('buildWindow', () => {
       expect(result.lines[0]?.text).toBe('abcde... (line truncated to 5 chars)')
     })
 
+    it('truncates a long line whose lone \\r falls right after the truncation point', async () => {
+      const result = await buildWindow(whole('abcde\rXYZ\nnext'), { offset: 1, limit: 10, maxLineLength: 5, maxBytes: READ_MAX_BYTES }, 'f')
+      expect(result.lines[0]?.text).toBe('abcde... (line truncated to 5 chars)')
+    })
+
+    it('keeps a CRLF line of exactly maxLineLength chars whole', async () => {
+      const result = await buildWindow(chunked('abcde\r\nnext', 3), { offset: 1, limit: 10, maxLineLength: 5, maxBytes: READ_MAX_BYTES }, 'f')
+      expect(result.lines).toEqual([{ number: 1, text: 'abcde' }, { number: 2, text: 'next' }])
+    })
+
+    it('keeps the lone high surrogate left by truncating inside a surrogate pair', async () => {
+      const result = await buildWindow(whole('abcd😀z'), { offset: 1, limit: 10, maxLineLength: 5, maxBytes: READ_MAX_BYTES }, 'f')
+      expect(result.lines[0]?.text).toBe('abcd\uD83D... (line truncated to 5 chars)')
+    })
+
     it('caps output at a custom maxBytes', async () => {
       const result = await buildWindow(whole('aaaa\nbbbb\ncccc'), { offset: 1, limit: 10, maxLineLength: 2000, maxBytes: 9 }, 'f')
       expect(result.lines.map(l => l.text)).toEqual(['aaaa', 'bbbb'])
