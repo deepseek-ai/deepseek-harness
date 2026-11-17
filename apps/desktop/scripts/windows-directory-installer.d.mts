@@ -15,6 +15,13 @@ export function directoryInstallSection(source: string): string
 export function directoryInstallerExits(source: string): string
 
 /**
+ * Preserve data but clean old registrations when replacing another installation directory.
+ * @param source Pinned NSIS installUtil.nsh contents.
+ * @returns Helper reserving --updated for replacement at the same path.
+ */
+export function directoryInstallUtil(source: string): string
+
+/**
  * Retain the original uninstall directory, reject another installation owner, and use native data cleanup.
  * @param source - Pinned upstream uninstaller source.
  * @returns Uninstaller with long-path removal and upgrade rollback, without upstream RMDir data removal.

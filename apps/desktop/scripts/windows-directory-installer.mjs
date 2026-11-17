@@ -52,6 +52,17 @@ export function directoryInstallerExits(source) {
   return source.replaceAll(/^(\s*)Quit\s*$/gm, '$1!ifndef BUILD_UNINSTALLER\n$1Call dshCleanupDirectories\n$1!endif\n$1Quit')
 }
 
+/**
+ * Preserve data but clean old registrations when replacing another installation directory.
+ * @param {string} source - Pinned NSIS installUtil.nsh contents.
+ * @returns {string} Helper reserving --updated for replacement at the same path.
+ */
+export function directoryInstallUtil(source) {
+  return replaceOnce(source.replaceAll('\r\n', '\n'),
+    '    # always pass --updated flag - to ensure that if DELETE_APP_DATA_ON_UNINSTALL is defined, user data will be not removed\n    StrCpy $0 "$0 --updated"',
+    '    # /KEEP_APP_DATA retains data during relocation; old path registrations must be removed.\n    ${if} $installationDir == $INSTDIR\n      StrCpy $0 "$0 --updated"\n    ${endif}')
+}
+
 /** Install the build-only NSIS adapter without replacing electron-builder's signed bootstrap path. */
 export function installWindowsDirectoryInstaller() {
   // The package entry initializes the platform classes before their mutually dependent leaves.
@@ -74,7 +85,8 @@ export function installWindowsDirectoryInstaller() {
     let adapted = replaceOnce(source, '!include "installSection.nsh"', `!include "${section}"`)
     for (const helper of ['allowOnlyOneInstallerInstance.nsh', 'installUtil.nsh']) {
       const path = join(directory, helper)
-      await writeFile(path, directoryInstallerExits(await readFile(join(templates, 'include', helper), 'utf8')))
+      const original = await readFile(join(templates, 'include', helper), 'utf8')
+      await writeFile(path, directoryInstallerExits(helper === 'installUtil.nsh' ? directoryInstallUtil(original) : original))
       adapted = replaceOnce(adapted, `!include "${helper}"`, `!include "${path}"`)
     }
     const uninstaller = join(directory, 'uninstaller.nsh')

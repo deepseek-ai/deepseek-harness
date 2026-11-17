@@ -3,11 +3,22 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { directoryInstallerExits, directoryInstallSection, directoryUninstaller } from '../scripts/windows-directory-installer.mjs'
+import { directoryInstallerExits, directoryInstallSection, directoryInstallUtil, directoryUninstaller } from '../scripts/windows-directory-installer.mjs'
 
 const require = createRequire(import.meta.url)
 const section = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')),
   'templates/nsis/installSection.nsh'), 'utf8')
+
+it('retains data without preserving obsolete registrations when uninstalling another directory', () => {
+  const source = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/include/installUtil.nsh'), 'utf8')
+  const adapted = directoryInstallUtil(source)
+  expect(adapted).toContain('${if} $installationDir == $INSTDIR\n      StrCpy $0 "$0 --updated"\n    ${endif}')
+  expect(adapted).toContain('"$uninstallerFileNameTemp" /S /KEEP_APP_DATA $0 _?=$installationDir')
+  expect(adapted).toContain('"$uninstallerFileName" /S /KEEP_APP_DATA $0 _?=$installationDir')
+  expect(directoryInstallUtil(source.replaceAll('\n', '\r\n'))).toBe(adapted)
+  expect(() => directoryInstallUtil(source.replace('StrCpy $0 "$0 --updated"', ''))).toThrow('template changed')
+  expect(() => directoryInstallUtil(source + source)).toThrow('template changed')
+})
 
 it('keeps data cleanup out of the upstream template while retaining application removal and registration cleanup', () => {
   const source = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/uninstaller.nsh'), 'utf8')

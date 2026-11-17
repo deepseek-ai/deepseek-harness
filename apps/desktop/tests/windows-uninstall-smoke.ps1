@@ -202,9 +202,23 @@ try {
     $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $installPath) -PassThru -WindowStyle Hidden
     try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover A setup failed' } } finally { $setup.Dispose() }
     Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
+    $oldCommand = Join-Path $installPath 'resources\runtime\cli\bin'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
+    try { $key.SetValue('Directory', $oldCommand); $key.SetValue('RetainedEntries', 0) } finally { $key.Dispose() }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($environmentKey)
+    try { $key.SetValue('Path', $oldCommand + ';C:\Windows') } finally { $key.Dispose() }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
+    try { $key.SetValue('', '"' + (Join-Path $installPath ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
+    New-Item -ItemType Directory -Force -Path $userDataPath | Out-Null
+    $relocationData = Join-Path $userDataPath 'relocation-state.txt'
+    [IO.File]::WriteAllText($relocationData, 'retained during relocation')
     $newPath = Join-Path $OutputDirectory 'Replacement App'
     $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $newPath) -PassThru -WindowStyle Hidden
     try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover B setup failed' } } finally { $setup.Dispose() }
+    if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory) { throw 'Relocation retained old command owner' }
+    if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne 'C:\Windows') { throw 'Relocation retained old command PATH' }
+    if (Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) { throw 'Relocation retained old protocol' }
+    if ([IO.File]::ReadAllText($relocationData) -ne 'retained during relocation') { throw 'Relocation removed user data' }
     $newCommand = Join-Path $newPath 'resources\runtime\cli\bin'
     $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
     try { $key.SetValue('Directory', $newCommand) } finally { $key.Dispose() }
