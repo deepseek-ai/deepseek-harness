@@ -14,6 +14,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as AccountProvider from '@deepseek-ai/dsh-llm-deepseek-account'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { assemble } from './assemble.ts'
 
 const contexts: Context[] = []
@@ -39,6 +40,7 @@ async function harness() {
     await ctx.plugin(plugin)
   }
   await ctx.plugin(AgentLoop, { agents: [] })
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(DeepSeek, {})
   await ctx.plugin(AccountProvider, {})
   return ctx
@@ -58,6 +60,7 @@ it('never falls back to an API key while signed out', async () => {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(DeepSeek, {})
   await ctx.plugin(AccountProvider, {})
   const fetch = vi.spyOn(globalThis, 'fetch')
@@ -187,6 +190,7 @@ it('never borrows an account token for a missing API key', async () => {
   const resolveToken = vi.fn(async (_url: string) => 'fixture-account-token')
   ctx.provide('deepseekAccount', accountStub({ token: url => resolveToken(url) }))
   await ctx.plugin(LlmRuntime)
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(DeepSeek, {})
   await ctx.plugin(AccountProvider, {})
   const fetch = vi.spyOn(globalThis, 'fetch')

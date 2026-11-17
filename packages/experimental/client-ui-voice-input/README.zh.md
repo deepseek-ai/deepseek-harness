@@ -35,6 +35,8 @@ kind: "package-reference"
 
 -----
 
+启用提示使用共享弹窗的说明区域，使标题与解释文字在操作区上方组成一组。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

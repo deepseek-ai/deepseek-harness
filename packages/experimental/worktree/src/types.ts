@@ -1,4 +1,7 @@
-/** Public requests and results for creating a Git worktree and entering it, and for restoring a removed one. */
+/**
+ * Public requests and results for creating a Git worktree and entering it, for entering an existing one, and
+ * for restoring a removed one.
+ */
 
 /** A new checkout from a locally available Git commit, branch, or tag, or from a remote branch fetched first. */
 export interface CreateWorktreeRequest {
@@ -22,6 +25,22 @@ export interface CreatedWorktree {
   /** Resolved commit object name; repository-local replacement refs can change its checked-out content. */
   baseCommit: string
   /** Canonical root of the source checkout. */
+  repositoryRoot: string
+}
+
+/** An existing checkout in the worktree pool of the checkout the calling Session works in. */
+export interface EnterWorktreeRequest {
+  /** Checkout directory relative to the pool: the name `create` gave the worktree. */
+  name: string
+}
+
+/** An existing checkout the calling Session entered. */
+export interface EnteredWorktree {
+  /** Canonical absolute checkout directory in the filesystem provider's execution world. */
+  path: string
+  /** Branch checked out there at entry; absent on a detached HEAD. */
+  branch?: string
+  /** Canonical root of the checkout whose pool holds the worktree; `exit` returns the Session there. */
   repositoryRoot: string
 }
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, createEvent, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createPortal } from 'react-dom'
@@ -85,7 +86,7 @@ it('injects the hook through the root Slot and withdraws both its prop and retai
     retained = useContextMenu().getTriggerProps(target('injected'))
     return <button {...retained}>Injected</button>
   })
-  const plugin = await runtime.mount({ inject, apply })
+  const plugin = await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   const view = runtime.renderRoot()
   expect(received).toBe(true)
   act(() => { fireEvent.contextMenu(view.getByRole('button')) })

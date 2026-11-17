@@ -1,10 +1,11 @@
 /** Session creation, blank-Session reuse, and Agent preset identity through `session.create`. */
 
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
@@ -206,6 +207,24 @@ function completedTurn(seq: number): SessionEvent[] {
 }
 
 describe('session.create Agent preset identity', () => {
+  it('records the canonical spelling of the requested project directory', async () => {
+    const { ctx, remote, cwd } = await harness({ presets: ['standard'] })
+    await ctx.plugin(LocalFileSystem, { cwd })
+    const real = join(cwd, 'real')
+    const link = join(cwd, 'link')
+    mkdirSync(real)
+    symlinkSync(real, link)
+    await remote.create({ sessionId: brandString<SessionId>('canonical'), cwd: link })
+    // The filesystem canonicalizes with native semantics, which also expands Windows short names.
+    expect(ctx.agents.get(brandString<SessionId>('canonical'))?.session.header.cwd).toBe(realpathSync.native(real))
+    // The same request names that Session again; another directory does not, whether or not it exists.
+    expect(await remote.create({ sessionId: brandString<SessionId>('canonical'), cwd: link }))
+      .toMatchObject({ ok: true, value: { sessionId: 'canonical' } })
+    expect(await remote.create({ sessionId: brandString<SessionId>('canonical'), cwd: join(cwd, 'missing') }))
+      .toMatchObject({ ok: false, error: { code: 'session/conflict', details: { existingCwd: realpathSync.native(real) } } })
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual(['canonical'])
+  })
+
   it('records the requested preset on the Session header', async () => {
     const { ctx, remote } = await harness({ presets: ['standard', 'minimal'] })
 
@@ -451,6 +470,24 @@ describe('session.create reuse of a live blank Session', () => {
 })
 
 describe('session.create reuse of a stored blank Session', () => {
+  it('resumes a blank Session whose header records the canonical spelling of a symlinked request', async () => {
+    const draft = brandString<SessionId>('linked-draft')
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-session-preset-stored-')))
+    tempDirs.push(base)
+    const real = join(base, 'real')
+    const link = join(base, 'link')
+    mkdirSync(real)
+    symlinkSync(real, link)
+    const { ctx, remote, resumed } = await harness({
+      presets: ['standard'],
+      stored: new Map([[draft, { header: storedHeader(draft, realpathSync.native(real)), events: [modelSelection(0)] }]]),
+    })
+    await ctx.plugin(LocalFileSystem, { cwd: base })
+
+    expect(await remote.create({ sessionId: draft, cwd: link })).toMatchObject({ ok: true, value: { sessionId: 'linked-draft' } })
+    expect(resumed).toEqual(['linked-draft'])
+  })
+
   it('resumes a blank Session whose recorded preset is no longer declared under the default', async () => {
     const draft = brandString<SessionId>('stale-draft')
     const cwd = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-session-preset-stored-')))

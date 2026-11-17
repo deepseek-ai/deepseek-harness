@@ -143,7 +143,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   if (account === undefined) throw new Error('Shipped native Account service is absent')
   // Only credential acquisition is nondeterministic; the Loader-owned native route and wire remain real.
   const credential = {
-    headers: { 'x-dsh-auth-token': 'paid-browser-fixture-token' }, value: 'paid-browser-fixture-token',
+    headers: { 'x-dsh-auth-token': 'paid-browser-fixture-token' },
     revoked: new AbortController().signal, reject: () => Promise.resolve(),
   }
   const auth = vi.spyOn(account, 'resolveRequestCredential').mockImplementation(async (url: string) =>

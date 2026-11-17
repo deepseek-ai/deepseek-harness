@@ -6,7 +6,7 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 720px;
   color: var(--dsw-alias-label-primary);
 }
@@ -42,12 +42,11 @@
 
 .rows {
   list-style: none;
-  /* Extra air between the title/intro block and the first provider card. */
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 /* Provider cards share the settings material; editors use the inset module fill. */
@@ -58,7 +57,7 @@
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .rowHead {
@@ -345,6 +344,10 @@
   gap: 8px;
 }
 
+.addBlock > .editorActions {
+  margin-top: 12px;
+}
+
 .addBlock {
   display: flex;
   flex-direction: column;
@@ -474,8 +477,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
+  gap: 12px;
+  padding-top: 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -501,9 +504,11 @@
 }
 
 .modelList {
+  --model-row-gap: 12px;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--model-row-gap);
 }
 
 .modelListHead {
@@ -515,6 +520,9 @@
 
 .modelEntry {
   container: model-row / inline-size;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 1fr) 28px 28px;
+  column-gap: 6px;
   position: relative;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
@@ -523,7 +531,8 @@
 
 .modelRow {
   display: grid;
-  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: 6px;
 }
@@ -538,6 +547,11 @@
 }
 
 @container model-row (max-width: 440px) {
+  .modelRow > .modelAdvanced {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .modelRow {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
   }
@@ -574,7 +588,7 @@
   background: var(--dsw-alias-bg-module-platform);
 }
 
-/* Each row owns half of the 8px gap so native drops reach the insertion line. */
+/* Cover half the row gap plus the border's inward, pixel-rounded positioning edge. */
 .modelEntry::before,
 .modelEntry::after {
   content: '';
@@ -582,15 +596,15 @@
   z-index: 1;
   left: 0;
   right: 0;
-  height: 4px;
+  height: calc(var(--model-row-gap) / 2 + 1px);
 }
 
 .modelEntry::before {
-  top: -4px;
+  top: calc(-1 * (var(--model-row-gap) / 2 + 1px));
 }
 
 .modelEntry::after {
-  bottom: -4px;
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 1px));
 }
 
 .modelEntry[data-drop-target='before']::before,
@@ -615,11 +629,11 @@
 }
 
 .modelEntry[data-drop-target='before']::before {
-  top: -10px;
+  top: calc(-1 * (var(--model-row-gap) / 2 + 6px));
 }
 
 .modelEntry[data-drop-target='after']::after {
-  bottom: -10px;
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 6px));
 }
 
 /* Square, label-free affordances: the row's own inputs carry the meaning, so
@@ -660,10 +674,10 @@
 
 .modelAdvanced {
   display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 2px 4px;
+  grid-column: 2 / 4;
+  grid-template-columns: subgrid;
+  row-gap: 16px;
+  padding: 16px 0 6px;
 }
 
 /* Retry-policy fields under the mode select: codes and count, then the folded backoff values. */
@@ -706,7 +720,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 4px;
+  gap: 6px;
 }
 
 .modelInputTypes {
@@ -719,7 +733,7 @@
 
 .modelInputTypes legend {
   padding: 0;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .modelInputChoices {
@@ -786,17 +800,18 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
+  gap: 6px;
+  height: 32px;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
+  margin-top: 4px;
 }
 
 @media (hover: hover) {
@@ -832,7 +847,7 @@ select.input {
 }
 
 .input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .input:disabled {
@@ -1000,4 +1015,16 @@ select.input {
   font-size: 13px;
   line-height: 20px;
   text-align: center;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (pointer: coarse) {
+  .input {
+    font-size: 16px;
+  }
 }

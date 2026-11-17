@@ -45,7 +45,7 @@ Plan disclosure depends on omitted text, not rendered height. Long previews coll
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin registers its body with the shared card frame, which places the card after its Turn and supplies the title, the folded brief, the fold component and card-bound actions. The body validates the card's details and recorded data, then renders the header with the cost notice toggle, the location picker, written placement, folded initial content, progress, Undo and Restore. The cost notice preference is a browser-local store owned by the plugin. The shared Menu handles portal positioning, keyboard selection and dismissal. The body registration and its dictionaries share one plugin lifetime.
+The plugin registers its body with the shared card frame, which places the card after its Turn and supplies the title, the folded brief, the fold component and card-bound actions. The body validates the card's details and recorded data, then renders the header with the cost notice toggle, the location picker, written placement, folded initial content, progress, Undo and Restore. A card whose details fail validation shows the frame's fallback, which offers only Not now. The cost notice preference is a browser-local store owned by the plugin. The shared Menu handles portal positioning, keyboard selection and dismissal. The body registration and its dictionaries share one plugin lifetime.
 
 - [Source](src/client/Card.tsx)
 - [Tests](tests/)

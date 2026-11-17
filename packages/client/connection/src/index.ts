@@ -11,6 +11,7 @@ import { assertTrustedAuthority } from './api-request-trust.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { ConnectionAuthentication } from './authentication.ts'
 import { ConnectionRecoveryConfigSchema, resolveConnectionConfig, type ConnectionRecoveryConfig } from './recovery-config.ts'
+import type { ConnectionConfig } from './types.ts'
 
 export type {
   AuthenticationProvider,
@@ -88,23 +89,11 @@ function assertImageBodyCapacity(ctx: Context, maxRequestBodyBytes: number): voi
 /** Services required before providing Connection. */
 export const inject: string[] = []
 
-/** Browser authentication, request limits, and connection recovery configuration. */
-export interface ConnectionConfig {
-  /** Browser recovery timing, injected into each served page. */
-  recovery?: ConnectionRecoveryConfig
-  /**
-   * Authorities this deployment serves beyond loopback: exact `host:port`, or
-   * port-less `host` matching any port. The fence accepts loopback and the
-   * listener's own bind IP independently; other remote authorities require
-   * an entry here. A non-canonical or non-bare authority fails plugin load.
-   */
-  trustedHosts?: string[]
-  /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
-  maxRequestBodyBytes?: number
-}
+export type { ConnectionConfig } from './types.ts'
 
-export const Config: z<ConnectionConfig> = z.object({
-  recovery: ConnectionRecoveryConfigSchema.default({}),
+/** Host request limits and trusted authorities; `recovery` is synced to the browser. */
+export const Config: z<Omit<ConnectionConfig, 'recovery'> & { recovery?: ConnectionRecoveryConfig }, ConnectionConfig> = z.object({
+  recovery: ConnectionRecoveryConfigSchema.default({}).volatile(),
   trustedHosts: z.array(String).default([]),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
 })
@@ -117,7 +106,9 @@ export const Config: z<ConnectionConfig> = z.object({
  * @param config - resolved plugin config (schema defaults applied).
  */
 export function apply(ctx: Context, config?: ConnectionConfig): void {
-  const recovery = resolveConnectionConfig(config?.recovery)
+  // Config boundary: the schema admits a NaN backoff factor, which the synced Config projection cannot carry as lossless
+  // JSON; rejecting it at load keeps a row with an unprojectable recovery value off the graph.
+  resolveConnectionConfig(config?.recovery?.get())
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
   const trustedHosts = config?.trustedHosts ?? []
   const maxRequestBodyBytes = config?.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
@@ -130,9 +121,6 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
     const connection = new HostConnectionService(connectionCtx, trustedHosts)
     connectionCtx.inject(['webServer'], (webCtx) => {
       assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
-      webCtx.on('webserver/index-inject', (table) => {
-        table.push({ kind: 'global', name: '__DSH_CONNECTION_RECOVERY__', value: recovery })
-      })
       const fetchHandler = connection.createSharedFetchHandler(API_PATH)
       const route: WebRoute = {
         kind: 'prefix',

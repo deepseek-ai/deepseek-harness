@@ -15,7 +15,7 @@ import { OfficeBody, type OfficeBodyInjected } from './OfficeBody.tsx'
 import { OfficeFontAction } from './OfficeFontAction.tsx'
 import { officeFace } from './face.ts'
 import { createOfficeStore } from './store.ts'
-import type { Config } from '../../config.ts'
+import type { OfficeLimits } from '../../types.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -28,7 +28,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * @param ctx - Client renderer registry, localized copy, and optional Host Remotes.
  * @param config - Resolved Office preview cache limits.
  */
-export function apply(ctx: Context, config: Config['office']): void {
+export function apply(ctx: Context, config: OfficeLimits): void {
   const id = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office'
   const extensions = ['doc', 'docx', 'ppt', 'pptx']
   ctx.effect(() => ctx.locale.register('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt }))

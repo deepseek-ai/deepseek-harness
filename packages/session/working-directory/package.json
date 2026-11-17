@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-working-directory",
   "description": "Session working directories with durable changes and model context",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },
@@ -59,9 +59,6 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
-    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
-    "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dependencies": {

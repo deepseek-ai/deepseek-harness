@@ -27,7 +27,7 @@ Review each Session's change requests, checks, and diffs, start a new Session in
 
 Open Plugins and enable Change requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the Session panel toggle in the header shows the checkout and its change requests. GitHub pull requests that the Session creates with `gh pr create`, opens with `gh pr view`, `gh pr edit`, or `gh pr checkout`, or works on as its branch or updates with a later `git push`, appear as change requests without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
 
-The same switch enables the model's [`create_worktree`](../tool-worktree/README.md) tool. Turning it off removes both the panel and the tool while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
+The same switch enables the model's [worktree tools](../tool-worktree/README.md): `enter_worktree` and `exit_worktree`. Turning it off removes both the panel and the tools while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
 
 -----
 
@@ -53,7 +53,7 @@ The bundle mounts the forge registry, the GitHub and GitLab providers, Session b
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the [`create_worktree`](../tool-worktree/README.md#model-experience) tool and the [panel’s directory notice](../client-ui-forge/README.md#model-experience) for Sessions that start in a worktree.
+Indirectly, through the [worktree tools](../tool-worktree/README.md#model-experience) and the [panel’s directory notice](../client-ui-forge/README.md#model-experience) for Sessions that start in a worktree.
 
 #### KV Cache effect
 

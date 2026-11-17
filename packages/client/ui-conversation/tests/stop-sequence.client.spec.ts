@@ -5,9 +5,9 @@ import { StopSequence, type StopTarget } from '../src/client/stop-sequence.ts'
 
 const id = (value: string): SessionId => value as SessionId
 const sequences: StopSequence[] = []
-function setup(interval = 500) {
+function setup(interval: number | (() => number) = 500) {
   vi.useFakeTimers()
-  const sequence = new StopSequence(interval, () => {})
+  const sequence = new StopSequence(typeof interval === 'number' ? () => interval : interval, () => {})
   sequences.push(sequence)
   const cancel = vi.fn()
   const target: StopTarget = { sessionId: id('s1'), turn: 1, generation: {}, region: document.createElement('div'), cancel }
@@ -43,6 +43,18 @@ describe('double Escape stop sequence', () => {
     expect(cancel).not.toHaveBeenCalled()
     vi.advanceTimersByTime(99)
     expect(sequence.press(target)).toBe(true)
+  })
+
+  it('reads the current interval at each first press', () => {
+    let interval = 500
+    const { sequence, target } = setup(() => interval)
+    sequence.press(target)
+    interval = 100
+    vi.advanceTimersByTime(300)
+    expect(sequence.press(target)).toBe(true)
+    sequence.press(target)
+    vi.advanceTimersByTime(101)
+    expect(sequence.press(target)).toBe(false)
   })
 
   it.each(['session', 'turn', 'region', 'generation'] as const)('does not combine presses across %s changes', (field) => {

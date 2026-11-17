@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+紧凑分体控件在文档工具栏的 28px 控件行内保持 24px 高度，各分段最小宽度为 24px；带文字的大号变体保持标准控件几何。
+
 把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂载到 Web 组合；本行不接受配置。会话目录已知且至少有一个已安装、已本地化的目录应用时，显示在应用中打开子菜单。Host 通过 `session.canOpenWorkspacePath` 报告桌面可用时，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览显示文件控件；删除本行会移除其全部控件与菜单贡献。
 
 头部入口使用 [`ui-conversation`](../ui-conversation/README.zh.md) 持有的更多按钮，由 [`ui-context-menu`](../ui-context-menu/README.zh.md) 提供共享按钮行为。未挂载导出插件时，在应用中打开仍可通过该入口使用；本包提供菜单项，而不创建自己的头部按钮。

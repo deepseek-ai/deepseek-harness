@@ -117,7 +117,7 @@ describe('Sidebar chat registration', () => {
     const stream = provider!.open(subagentChatAddress(ADDRESS), { signal: controller.signal })[Symbol.asyncIterator]()
     expect(await stream.next()).toEqual({ done: false, value: { ok: true, value: { address: ADDRESS, reference } } })
     expect(refreshProjections).not.toHaveBeenCalled()
-    expect(retain).toHaveBeenCalledWith(ADDRESS, { source: 'sidebarChat', signal: controller.signal })
+    expect(retain).toHaveBeenCalledWith(ADDRESS, { source: 'sidebarChat', facets: { conversation: true }, signal: controller.signal })
     const completion = stream.next()
     await Promise.resolve()
     controller.abort()

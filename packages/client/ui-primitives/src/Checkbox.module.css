@@ -1,20 +1,61 @@
 .checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
 }
 
+.control {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
 .checkbox input {
+  appearance: none;
+  box-sizing: border-box;
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: var(--dsw-alias-brand-primary);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-1);
   cursor: inherit;
+}
+
+.checkbox input:checked {
+  border-color: var(--dsw-alias-button-primary-fill);
+  background: var(--dsw-alias-button-primary-fill);
+}
+
+.mark {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: flex;
+  width: 12px;
+  height: 12px;
+  visibility: hidden;
+  pointer-events: none;
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.checkbox input:checked + .mark {
+  visibility: visible;
+}
+
+@media (forced-colors: active) {
+  .checkbox input {
+    appearance: auto;
+  }
+
+  .checkbox input:checked + .mark {
+    visibility: hidden;
+  }
 }
 
 .checkbox input:focus-visible {

@@ -11,9 +11,9 @@ import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
@@ -77,7 +77,7 @@ function changedDirectoryFixture(path: string): string {
     content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('session/title', { title: 'Changed directory links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
-  session.append('working-directory/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
+  session.append('workspace-root/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
   session.append('step/start', { turn: 1, step: 1 })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
@@ -161,7 +161,52 @@ describe('web e2e: Markdown file links', () => {
     expect(page.url()).toBe(beforeUrl)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'links.expected.md', 'preview.expected.md'])
+  })
+
+  it('adds a recorded line-labeled file to the draft without its line suffix or a new turn', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-file-add-to-chat'))
+    const sessionId = brandString<SessionId>('markdown-file-links')
+    const beforeEvents = await readPersistedEvents(scaffold, sessionId)
+    const beforeMessages = await page.locator('[data-chat-flow-kind="user"]').count()
+    const input = page.locator('[data-composer-input]').first()
+    const draft = 'Review this file next: '
+    await writeComposerDraft(page, input, draft)
+    await page.getByRole('button', { name: 'src/example.txt:24–30', exact: true }).click({ button: 'right' })
+    const menu = page.getByRole('menu')
+    const action = menu.getByRole('menuitem', { name: 'Add to chat', exact: true })
+    await action.waitFor()
+    expect(await menu.getByRole('menuitem').last().textContent()).toBe('Add to chat')
+    const menuAria = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
+    await action.click()
+    await menu.waitFor({ state: 'hidden' })
+    await expect.poll(() => input.evaluate(node => node === document.activeElement)).toBe(true)
+    await expect.poll(() => input.textContent()).toBe(`${draft}example.txt `)
+    const chip = input.locator('[data-composer-chip]')
+    expect(await chip.count()).toBe(1)
+    expect(await chip.textContent()).toBe('example.txt')
+    expect(await chip.locator('svg').count()).toBe(1)
+    const composerAria = await captureStableAria(page, '[data-composer-input]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'add-to-chat.expected.md'),
+      `## File menu\n\n${menuAria}\n\n## Composer\n\n${composerAria}`, MODE)
+
+    await page.keyboard.press('ControlOrMeta+A')
+    const copied = await input.evaluate((node) => {
+      const clipboardData = new DataTransfer()
+      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+      return clipboardData.getData('text/plain')
+    })
+    const path = join(scaffold.workspaceCwd, 'src/example.txt')
+    expect(copied).toBe(`${draft}@${path} `)
+    expect(copied).not.toContain(':24')
+    expect(copied).not.toContain('#L24')
+    expect(await page.locator('[data-chat-flow-kind="user"]').count()).toBe(beforeMessages)
+    expect(await readPersistedEvents(scaffold, sessionId)).toEqual(beforeEvents)
+    await writeComposerDraft(page, input, '')
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'session.v3.jsonl', 'links.expected.md', 'preview.expected.md', 'add-to-chat.expected.md',
+    ])
   })
 
   it('replays colon line suffixes as locations and shares tabs with fragment links', async () => {
