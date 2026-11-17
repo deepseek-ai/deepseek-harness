@@ -139,7 +139,19 @@ describe('AccessToken', () => {
     const error = await token.get().catch(error => error)
     expect(error).toBeInstanceOf(PlatformError)
     expect(error.kind).toBe('retryable')
+    expect(error.published).toBe('no')
     expect(token.token).toBeUndefined()
+  })
+
+  it('marks transport errors and empty token responses as published: no', async () => {
+    const net = createToken(() => Promise.reject(new Error('ECONNRESET')))
+    await expect(net.token.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+
+    const passthrough = createToken(() => Promise.reject(new PlatformError('rate-limit', '429')))
+    await expect(passthrough.token.get()).rejects.toMatchObject({ kind: 'rate-limit', published: 'no' })
+
+    const empty = createToken(() => Promise.resolve({ access_token: '', expires_in: 0 }))
+    await expect(empty.token.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
   })
 
   it('refetches after invalidate()', async () => {

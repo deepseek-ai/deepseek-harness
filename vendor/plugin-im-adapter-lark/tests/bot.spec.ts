@@ -544,4 +544,22 @@ describe('LarkBot client surface', () => {
     await expect(pendingB).resolves.toBe('shared-token')
     expect(post).toHaveBeenCalledOnce()
   })
+
+  it('marks token refresh transport and missing-token failures as published: no', async () => {
+    const net = new AccessToken({
+      appId: 'cli_lark',
+      appSecret: 'secret',
+      baseUrl: 'https://open.feishu.cn/open-apis/',
+      post: () => Promise.reject(new Error('ECONNRESET')),
+    })
+    await expect(net.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+
+    const empty = new AccessToken({
+      appId: 'cli_lark',
+      appSecret: 'secret',
+      baseUrl: 'https://open.feishu.cn/open-apis/',
+      post: () => Promise.resolve({ code: 0, tenant_access_token: '', expire: 0 }),
+    })
+    await expect(empty.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+  })
 })

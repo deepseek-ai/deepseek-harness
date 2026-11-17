@@ -128,13 +128,13 @@ export class AccessToken {
  // A refresh that fails while the cached token is still accepted must not break the caller: the platform
  // keeps the old token valid for the remaining window.
       if (this.live) return this.value!
-      if (PlatformError.is(error)) throw error
-      throw new PlatformError('retryable', 'failed to obtain a QQ access token', { cause: error })
+      if (PlatformError.is(error)) throw asUnpublishedTokenError(error)
+      throw new PlatformError('retryable', 'failed to obtain a QQ access token', { cause: error, published: 'no' })
     }
     const accessToken = result?.access_token
     if (typeof accessToken !== 'string' || !accessToken) {
       if (this.live) return this.value!
-      const init: { code?: string } = {}
+      const init: { code?: string; published: 'no' } = { published: 'no' }
       if (!result || typeof result !== 'object') init.code = 'invalid-token-response'
       throw new PlatformError('retryable', 'QQ access-token response carried no access_token', init)
     }
@@ -148,12 +148,22 @@ export class AccessToken {
 /** Pre-request cancellation during token acquisition: no publication request has been sent yet (`published: 'no'`). */
 function cancelledTokenError(signal: AbortSignal): PlatformError {
   const { reason } = signal
-  if (PlatformError.is(reason)) return reason
+  if (PlatformError.is(reason)) return asUnpublishedTokenError(reason)
   const message = reason instanceof Error && reason.name !== 'AbortError' && reason.message
     ? reason.message
     : 'the request was cancelled'
   return new PlatformError('fatal', message, {
     published: 'no',
     ...reason === undefined ? {} : { cause: reason },
+  })
+}
+
+function asUnpublishedTokenError(error: PlatformError): PlatformError {
+  if (error.published === 'no') return error
+  return new PlatformError(error.kind, error.message, {
+    published: 'no',
+    cause: error,
+    ...error.code === undefined ? {} : { code: error.code },
+    ...error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs },
   })
 }

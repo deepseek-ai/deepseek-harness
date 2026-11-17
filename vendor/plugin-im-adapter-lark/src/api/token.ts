@@ -136,18 +136,28 @@ export class AccessToken {
     } catch (error) {
       // A refresh that fails while the cached token is still accepted must not break the caller.
       if (this.live) return this.value!
-      if (PlatformError.is(error) || LarkApiError.is(error)) throw error
-      throw new PlatformError('retryable', 'failed to obtain a Lark tenant access token', { cause: error })
+      if (PlatformError.is(error)) return Promise.reject(asUnpublishedTokenError(error))
+      if (LarkApiError.is(error)) {
+        throw error.published === 'no'
+          ? error
+          : new LarkApiError(error.message, {
+              code: error.code, status: error.status, response: error.response, cause: error, published: 'no',
+            })
+      }
+      throw new PlatformError('retryable', 'failed to obtain a Lark tenant access token', { cause: error, published: 'no' })
     }
     const token = result?.tenant_access_token
     if (typeof token !== 'string' || !token) {
       if (this.live) return this.value!
       // A credential failure comes back as a code in a 200 answer, so it is a platform answer, not a transport one.
       if (typeof result?.code === 'number' && result.code !== 0) {
-        throw new LarkApiError(`tenant access token rejected: ${result.msg ?? 'unknown error'}`, { code: result.code, status: 200 })
+        throw new LarkApiError(`tenant access token rejected: ${result.msg ?? 'unknown error'}`, {
+          code: result.code, status: 200, published: 'no',
+        })
       }
       throw new PlatformError('retryable', 'Lark tenant access-token response carried no tenant_access_token', {
         code: 'invalid-token-response',
+        published: 'no',
       })
     }
     const expire = Number(result?.expire)
@@ -160,12 +170,22 @@ export class AccessToken {
 /** Pre-request cancellation during token acquisition: no publication request has been sent yet (`published: 'no'`). */
 function cancelledTokenError(signal: AbortSignal): PlatformError {
   const { reason } = signal
-  if (PlatformError.is(reason)) return reason
+  if (PlatformError.is(reason)) return asUnpublishedTokenError(reason)
   const message = reason instanceof Error && reason.name !== 'AbortError' && reason.message
     ? reason.message
     : 'the request was cancelled'
   return new PlatformError('fatal', message, {
     published: 'no',
     ...reason === undefined ? {} : { cause: reason },
+  })
+}
+
+function asUnpublishedTokenError(error: PlatformError): PlatformError {
+  if (error.published === 'no') return error
+  return new PlatformError(error.kind, error.message, {
+    published: 'no',
+    cause: error,
+    ...error.code === undefined ? {} : { code: error.code },
+    ...error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs },
   })
 }
