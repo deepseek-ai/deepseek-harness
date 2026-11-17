@@ -8,7 +8,6 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
-    "snapshots/im/**/*.ts",
     "snapshots/session/headless.snapshot.ts",
     "apps/web/tests/home-whale.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
