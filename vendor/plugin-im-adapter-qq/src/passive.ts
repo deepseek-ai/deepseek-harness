@@ -248,20 +248,22 @@ export class PassiveManager {
   }
 
   /**
- * Drop closed windows, then the oldest ones above the bound.
- *
- * @param keep - the window that was just booked; it was inserted last, so it is the newest entry of the map and is
- * never the one dropped.
- */
+   * Drop closed windows, then the oldest un-ticketed ones above the bound. Live windows holding `idempotencyKey`
+   * tickets are retained until their window expires so an in-flight retry never loses its `(msg_id, msg_seq)` dedupe.
+   *
+   * @param keep - the window that was just booked; it was inserted last, so it is the newest entry of the map and is
+   * never the one dropped.
+   */
   private shrink(keep: string) {
     const now = this.now()
     for (const [id, entry] of this.entries) {
       if (id !== keep && now >= entry.until) this.entries.delete(id)
     }
-    while (this.entries.size > this.max) {
-      const oldest = this.entries.keys().next()
-      if (oldest.done || oldest.value === keep) break
-      this.entries.delete(oldest.value)
+    if (this.entries.size <= this.max) return
+    for (const [id, entry] of this.entries) {
+      if (this.entries.size <= this.max) break
+      if (id === keep || entry.tickets.size > 0) continue
+      this.entries.delete(id)
     }
   }
 }

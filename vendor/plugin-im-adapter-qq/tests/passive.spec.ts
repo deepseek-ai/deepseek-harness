@@ -205,6 +205,20 @@ describe('PassiveManager claim', () => {
     // The newest window is the one that survived.
     expect(manager.claim(second)?.seq).toBe(3)
   })
+
+  it('retains live windows with idempotency tickets across LRU eviction until they expire', () => {
+    const { manager, clock, config } = createManager({}, { max: 2 })
+    const first = groupReferrer(clock, { msg_id: 'ROBOT1.0_1' })
+    expect(manager.claim(first, { idempotencyKey: 'op-1' })).toMatchObject({ seq: 2, reused: false })
+    expect(manager.claim(groupReferrer(clock, { msg_id: 'ROBOT1.0_2' }))?.seq).toBe(2)
+    expect(manager.claim(groupReferrer(clock, { msg_id: 'ROBOT1.0_3' }))?.seq).toBe(2)
+    // Entry 2 (un-ticketed) was evicted; entry 1 kept its ticket so a retry still reuses seq 2.
+    expect(manager.claim(first, { idempotencyKey: 'op-1' })).toMatchObject({ seq: 2, reused: true })
+
+    clock.now += config.groupWindowMs
+    expect(manager.claim(groupReferrer(clock, { msg_id: 'ROBOT1.0_4' }))?.seq).toBe(2)
+    expect(manager.size).toBe(1)
+  })
 })
 
 describe('referrerOf', () => {
