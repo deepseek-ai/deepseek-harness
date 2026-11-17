@@ -268,7 +268,6 @@ Each delivery adds fixed framing and content-dependent payload tokens. A batch i
 
 Reminder messages append to the target Session's history and preserve earlier message content; they do not replace the existing request prefix. Each delivery of a `new` target starts a fresh Session whose history contains none of the earlier deliveries.
 
-<a id="source-observations-in-the-target-session"></a>
 ### Source observations in the target Session
 
 #### What the model sees
