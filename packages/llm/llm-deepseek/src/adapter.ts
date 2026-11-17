@@ -1,7 +1,7 @@
 /** Direct Messages transport with one cancellable lifecycle per model request. */
 
 import { attributionHeaders, LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, ProviderCredential, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekLlmApiExtensionRequest, DeepSeekLlmApiJson } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { modelInfo } from './model-info.ts'
@@ -46,31 +46,6 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     const entry = this.dependencies.options().models.find(entry => entry.id === model)
     if (entry === undefined) throw new LlmError(`DeepSeek model "${model}" has no declared image projection`, 'UNKNOWN_MODEL')
     return resolveRequestImageTarget(entry, image)
-  }
-  override providerCredential(_provider: string): ProviderCredential | undefined {
-    const publication = this.dependencies.credential
-    if (publication === undefined) return undefined
-    // One configuration generation serves the whole published object, as it does one model request.
-    const connection = this.dependencies.options()
-    const reference = publication.reference?.(connection)
-    return {
-      kind: publication.kind,
-      baseURL: connection.baseURL,
-      ...reference === undefined ? {} : { reference },
-      configured: endpoint => publication.configured(connection, endpoint),
-      resolve: async (endpoint, signal) => {
-        signal?.throwIfAborted()
-        const auth = await this.dependencies.resolveAuth(connection, endpoint)
-        if (auth === undefined) return undefined
-        // The adapter's failure classification stays behind the seam.
-        const reject = auth.reject?.bind(auth)
-        return {
-          headers: auth.headers, value: auth.value,
-          ...reject === undefined ? {} : { reject },
-          ...auth.revoked === undefined ? {} : { revoked: auth.revoked },
-        }
-      },
-    }
   }
   override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
     const connection = await this.connection(signal)

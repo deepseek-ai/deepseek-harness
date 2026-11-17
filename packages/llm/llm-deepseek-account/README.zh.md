@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-account` 注册鉴权、账号模型列表和模型门控。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包负责凭据解析、账号目录和模型准入。
 
-鉴权解析返回账号服务为目标地址释放的请求凭据，携带 `x-dsh-auth-token`，并附带使同一凭据失效的失败回调。HTTP 401 的分类由此提供方负责；被拒绝的旧请求不能清除替换后的登录。路由通过 `ctx.llm.providerCredential('deepseek-account')` 连同其基础地址发布账号凭据，使 DeepSeek Web 提供方把它发往同一部署。
+鉴权解析向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取账号服务为目标地址释放的账号登录凭据，携带 `x-dsh-auth-token`，并附加使同一凭据失效的失败回调。HTTP 401 的分类由此提供方负责；被拒绝的旧请求不能清除替换后的登录。路由把自己的路由 id 和基础地址登记到该服务，使 DeepSeek Web 提供方把账号登录凭据发往同一部署。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-账号凭据仅由 `deepseekAccount.resolveRequestCredential(url)` 提供，目标地址必须通过账号服务的来源校验。未登录或目标不允许账号鉴权时，请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，目录为空；不会回退到 API key。其他凭据查询错误继续向调用者报告。
+凭据只来自账号登录：`ctx.deepseekAuth` 调用 `deepseekAccount.resolveRequestCredential(url)`，目标地址必须通过账号服务的来源校验。未登录或目标不允许账号鉴权时，请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，目录为空；不会回退到 API key。其他凭据查询错误继续向调用者报告。本插件只在挂载了 `@deepseek-ai/dsh-deepseek-auth` 的组合中启动；`base` 组合包挂载它。
 
 路由的目录来自账号的 `GET /models` 列表，地址为 Messages `baseURL` 的 origin 加 `/models`（官方端点即 `https://api.deepseek.com/models`），不可配置。列表请求用 `x-dsh-auth-token` 携带账号 token，带上 harness 的 `User-Agent`，并拒绝重定向。
 
@@ -63,7 +63,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-账号凭据的读取与作废经由账号服务的 `resolveRequestCredential`；本插件保留 HTTP 错误分类，并在 [`account-tasks.ts`](src/account-tasks.ts) 中拥有针对运行中 Agent 的退登策略。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求；在途的模型请求会把它的凭据和失败回调保留到请求结束，因此二者可能在释放之后执行。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和凭据请求头的 SHA-256 为键。
+账号凭据的读取与作废经由 `ctx.deepseekAuth`，后者调用账号服务的 `resolveRequestCredential`；本插件保留 HTTP 错误分类，并在 [`account-tasks.ts`](src/account-tasks.ts) 中拥有针对运行中 Agent 的退登策略。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求；在途的模型请求会把它的凭据和失败回调保留到请求结束，因此二者可能在释放之后执行。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和凭据请求头的 SHA-256 为键。
 
 共享传输判定为 `QUOTA` 的失败请求离开本提供方前会被改写为 `ACCOUNT_QUOTA`，HTTP 402 响应与流内 SSE 错误都适用。共享传输与 `deepseek-official` 路由保留 `QUOTA`，因此账号路由的充值操作不会出现在 API Key 或第三方失败上。
 

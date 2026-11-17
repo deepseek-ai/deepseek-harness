@@ -60,7 +60,7 @@ BootManifest { ...; release?: WebBootRelease }
 ```
 
 - [ClientModuleRegistry](../../../../packages/client/modules/src/index.ts) computes the release once at construction and `compose()` writes it into every graph; `release` stays outside `graph.rev`. There is no new config field and the composition is unchanged.
-- `__DSH_BOOT__` and every SSE `graph` frame carry the field, so one graph frame carries both the Host release and its complete module graph; the client-hmr Host half is unchanged. A rebuilt frame comes from the same Host process as the graph frame before it on that SSE connection, so it inherits that frame's release.
+- `__DSH_BOOT__` and every plugin-events `baseline` and `graph` frame carry the field, so one graph frame carries both the Host release and its complete module graph; the client-hmr Host half is unchanged. A rebuilt frame comes from the same Host process as the graph frame before it on that stream generation, so it inherits that frame's release.
 - `parseBootManifest` accepts an absent `release`, rejects a non-string `version` or `commit`, and drops members outside the identity, so equality compares only those two fields. `readRelease` reads only the `release` member of a received graph, so a page compares releases before it validates anything else; a release it cannot read counts as absent. Older pages that do not know the field ignore it.
 
 ### Page side
@@ -136,8 +136,7 @@ Order of operations:
 - While the Host serves another release, plugin updates, including enabling or disabling a plugin on the Host, reach the page only after a reload.
 - When a Host returns to the page's release, only modules whose revisions differ are replaced. Revisions come from artifact metadata, so a rebuild of identical code still replaces the rebuilt modules once, without a prompt.
 - A composition without the dialog registered still pauses updates from another release and logs the warning; the user sees no prompt.
-- The API connection and SSE are independent channels, so an old page can show a protocol error before the dialog appears.
-- If a restarting Host answers `/plugins/events` with a non-200 status before registering the route, the browser closes that SSE stream for good, and the page cannot detect a release change until it reloads.
+- After a terminal plugin-events stream failure the page cannot detect a release change until it reloads.
 - A source launch without dev-web has no commit, so development detection falls back to version changes.
 - Each tab prompts and remembers independently.
 - Unit tests pin the gate through `ClientEntries` (same-release replacement, another release applying nothing, the return to the boot release replacing only changed modules, dismissal, absent releases), the manifest parser, the Host-published release, the shared preset's Node-half defines, and the dialog's rendering and callbacks.

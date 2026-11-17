@@ -297,20 +297,12 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
       expect(await target.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(1)
     }
 
-    const disconnected = other.waitForEvent('requestfailed', request => request.url().includes('/plugins/events'))
-    await otherContext.setOffline(true)
-    // Chromium offline emulation leaves established SSE sockets open. Cycling this
-    // fixture's transport plugin closes them without replacing the Host or profile.
+    // Restarting the Host transport ends every plugin-events stream; each page reopens it and reconciles from the
+    // new baseline, so a later change still reaches both pages.
     const transport = [...scaffold.ctx.loader.entries()].find(entry => entry.options.name === '@deepseek-ai/dsh-client-hmr')!.fiber!
-    const reconnected = page.waitForResponse(response => response.url().includes('/plugins/events') && response.status() === 200)
     await transport.restart()
-    await disconnected
-    await reconnected
     await toggle()
-    await expect.poll(() => live(page).count()).toBe(0)
-    expect(await live(other).count()).toBe(1)
-    await otherContext.setOffline(false)
-    await expect.poll(() => live(other).count(), { timeout: 20_000 }).toBe(0)
+    for (const target of [page, other]) await expect.poll(() => live(target).count(), { timeout: 20_000 }).toBe(0)
     expect(await draft.inputValue()).toBe('unfinished-draft')
     expect(navigations).toBe(0)
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)

@@ -261,7 +261,7 @@ function validCategory(path: string, category: ProductPackagePolicy['category'])
     case 'sdk': return path === 'packages/sdk/client'
     case 'build': return path === 'packages/typert/generator'
     case 'web-distribution': return path === 'packages/client/web' || path === 'packages/client/ui-dockkit'
-    case 'declarations': return path === 'packages/util/package-manifest'
+    case 'declarations': return path === 'packages/util/package-manifest' || path === 'packages/client/config'
     default: return assertNever(category)
   }
 }

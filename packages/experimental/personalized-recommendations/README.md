@@ -29,14 +29,14 @@ Open Plugins → More → Experimental plugins and enable Personalized recommend
 
 | Row | Package | Contributes |
 |---|---|---|
-| Action cards | [`action-cards`](../action-cards/README.md) | The card tool, card state, user actions and status notices |
+| Action cards | [`action-cards`](../action-cards/README.md) | Card blocks, card state, user actions and status notices |
 | Action card display | [`client-ui-action-cards`](../client-ui-action-cards/README.md) | The card frame below answers |
 | Personalized pages | [`creation-recommendations`](../creation-recommendations/README.md) | Page proposals and their background creation |
 | Personalized page cards | [`client-ui-creation-recommendations`](../client-ui-creation-recommendations/README.md) | The page card body |
 | Plugin recommendations | [`plugin-recommendations`](../plugin-recommendations/README.md) | Built-in plugin recommendations and enabling |
 | Plugin recommendation cards | [`client-ui-plugin-recommendations`](../client-ui-plugin-recommendations/README.md) | The plugin card body |
 
-Switch off Personalized pages or Plugin recommendations to keep only the other feature: the switched-off feature withdraws its skill and card kind, and its earlier cards accept only Not now. Both features need the Action cards row; switching it off stops both until it is on again. Without a card body row, a card shows its proposal title and brief with Not now only. The Action cards row's `queuedMessageLimit` field sets how many queued next-turn messages make the card tool refuse the current turn's card. The Plugins page has no settings page for that row, so change the field with an `id: action-cards` override in the profile's `cordis.patch.yml`.
+Switch off Personalized pages or Plugin recommendations to keep only the other feature: the switched-off feature withdraws its skill and card kind, and its earlier cards accept only Not now. Both features need the Action cards row; switching it off stops both until it is on again. Without a card body row, a card shows its proposal title and brief with Not now only.
 
 -----
 
@@ -62,11 +62,11 @@ The static `cordis.patch.yml` inserts the six rows with their package-owned ids 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the two features' skills, the shared `propose_action` tool and the card status notice, which the row packages document.
+Indirectly, through the two features' skills, the card blocks they ask for and the card status notice, which the row packages document.
 
 #### KV Cache effect
 
-Enabling the bundle adds the two skills' catalog entries to requests; the card tool joins the declarations only after a card skill loads, as described on the [action cards](../action-cards/README.md#model-experience) page.
+Enabling the bundle adds the two skills' catalog entries to requests and no tool declaration, as described on the [action cards](../action-cards/README.md#model-experience) page.
 
 ## Known Limitations and Deferred Work
 

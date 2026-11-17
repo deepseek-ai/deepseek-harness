@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Typen für synchronisierte Konfiguration",
+    "description": "Typen zum Lesen der Live-Host-Konfiguration in Browser-Plugins."
+  }
+}

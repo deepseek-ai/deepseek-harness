@@ -191,11 +191,6 @@ class ResizeObserverStub {
   unobserve(): void {}
 }
 
-class EventSourceStub {
-  addEventListener(): void {}
-  close(): void {}
-}
-
 const win = window as FixtureWindow
 let unmount: (() => Promise<void>) | undefined
 let mountedRemote: RemoteMock | undefined
@@ -244,7 +239,6 @@ export function installAssembledBootEnv(): void {
     Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
     document.title = 'DeepSeek Harness'
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
-    vi.stubGlobal('EventSource', EventSourceStub)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
       setTimeout(() => { callback(0) }, 0) as unknown as number)
     vi.stubGlobal('cancelAnimationFrame', (id: number) => { clearTimeout(id) })
