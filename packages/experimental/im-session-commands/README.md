@@ -65,7 +65,7 @@ When no matching session is active or present, the plugin replies with `没有�
 
 ### Command matching rules
 
-The plugin handles a message only when `message.addressed` is `true` and `message.command` is present (in group chats, leading `@bot` mentions are stripped before parsing `/name`). If a message does not address the bot, does not start with a slash command, or names a command that is neither built-in nor registered under `passthrough`, the plugin calls `next()` so downstream routing plugins receive the message unchanged.
+The plugin handles a message only when `message.addressed` is `true` and `message.command` is present (in group chats, leading `@bot` mentions are stripped before parsing `/name`; only a `/name` token followed by whitespace or end-of-text is parsed as a command, so paths or calls like `/new/project` and `/clear()` remain plain text). If a message does not address the bot, does not start with a slash command, or names a command that is neither built-in nor registered under `passthrough`, the plugin calls `next()` so downstream routing plugins receive the message unchanged.
 
 -----
 

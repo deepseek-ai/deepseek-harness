@@ -65,7 +65,7 @@ kind: "package-reference"
 
 ### 命令匹配规则
 
-本插件仅处理 `message.addressed` 为 `true` 且解析出了 `message.command` 的消息（在群聊中，消息开头的 `@bot` 提及会在解析 `/name` 前去除）。如果群消息未 `@` 机器人、不包含斜杠命令，或命令名既不是内置命令也未在 `passthrough` 中配置并注册，插件会调用 `next()` 将消息原样交给后续路由插件处理。
+本插件仅处理 `message.addressed` 为 `true` 且解析出了 `message.command` 的消息（在群聊中，消息开头的 `@bot` 提及会在解析 `/name` 前去除；只有 `/name` 后紧跟空白或文本结束才会被解析为命令，因此 `/new/project`、`/clear()` 等属于普通文本）。如果群消息未 `@` 机器人、不包含斜杠命令，或命令名既不是内置命令也未在 `passthrough` 中配置并注册，插件会调用 `next()` 将消息原样交给后续路由插件处理。
 
 -----
 
