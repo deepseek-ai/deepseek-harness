@@ -62,10 +62,35 @@ export interface ResourceCache {
   set(key: string, value: ResolvedResource): void
 }
 
-/** The cache key (`${adapterId}|${scope}|${kind}|${sha256(src)}`). */
-export function resourceCacheKey(adapterId: string, scope: string, kind: ResourceKind, src: string): string {
-  const digest = createHash('sha256').update(src).digest('hex')
-  return `${adapterId}|${scope}|${kind}|${digest}`
+/**
+ * The cache key (`${adapterId}|${scope}|${kind}|${sha256(src, meta)}`).
+ * @param adapterId - adapter id owning the upload.
+ * @param scope - upload scope returned by `resourceScope`.
+ * @param kind - resource kind (`image`, `audio`, `video`, `file`).
+ * @param src - resource source URL or path.
+ * @param meta - optional upload metadata (`name`, `mime`, `duration`, `width`, `height`).
+ * @returns deterministic cache key for `(adapterId, scope, kind, src, meta)`.
+ */
+export function resourceCacheKey(
+  adapterId: string,
+  scope: string,
+  kind: ResourceKind,
+  src: string,
+  meta: ResourceMeta = {},
+): string {
+  const hash = createHash('sha256').update(src)
+  const hasMeta = meta.name !== undefined || meta.mime !== undefined || meta.duration !== undefined
+    || meta.width !== undefined || meta.height !== undefined
+  if (hasMeta) {
+    hash.update('\0').update(JSON.stringify([
+      meta.name ?? null,
+      meta.mime ?? null,
+      meta.duration ?? null,
+      meta.width ?? null,
+      meta.height ?? null,
+    ]))
+  }
+  return `${adapterId}|${scope}|${kind}|${hash.digest('hex')}`
 }
 
 /**
@@ -253,7 +278,7 @@ export async function prepare<D>(drafts: readonly D[], options: PrepareOptions):
       const tasks: UploadTask[] = []
       for (const ref of unseen) {
         const scope = adapter.resourceScope(target, ref.kind)
-        const key = resourceCacheKey(adapter.id, scope, ref.kind, ref.src)
+        const key = resourceCacheKey(adapter.id, scope, ref.kind, ref.src, ref.meta)
         // A `file:` src names bytes this host can change between two publications, and a platform key usually has no
         // expiry: caching it would publish the old content for the new path forever. It is still deduplicated within
         // this call by `inflight`.

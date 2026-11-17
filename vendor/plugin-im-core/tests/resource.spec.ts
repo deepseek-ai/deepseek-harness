@@ -63,6 +63,20 @@ describe('resourceCacheKey', () => {
     expect(resourceCacheKey('lark:app', 'app', 'image', src)).toBe(resourceCacheKey('lark:app', 'app', 'image', src))
     expect(resourceCacheKey('lark:app', 'app', 'image', src)).not.toContain(src)
   })
+
+  it('separates uploads whose src is identical but upload metadata differs', () => {
+    const dataUrl = 'data:text/plain;base64,aGVsbG8='
+    const plain = resourceCacheKey('lark:app', 'app', 'file', dataUrl)
+    const namedA = resourceCacheKey('lark:app', 'app', 'file', dataUrl, { name: 'a.txt' })
+    const namedB = resourceCacheKey('lark:app', 'app', 'file', dataUrl, { name: 'b.txt' })
+    const mimeDiff = resourceCacheKey('lark:app', 'app', 'file', dataUrl, { name: 'a.txt', mime: 'text/csv' })
+    const durationDiff = resourceCacheKey('lark:app', 'app', 'audio', dataUrl, { name: 'a.opus', duration: 12 })
+    expect(namedA).not.toBe(plain)
+    expect(namedA).not.toBe(namedB)
+    expect(namedA).not.toBe(mimeDiff)
+    expect(durationDiff).not.toBe(resourceCacheKey('lark:app', 'app', 'audio', dataUrl, { name: 'a.opus', duration: 15 }))
+    expect(resourceCacheKey('lark:app', 'app', 'file', dataUrl, { mime: 'text/csv', name: 'a.txt' })).toBe(mimeDiff)
+  })
 })
 
 // ---- MemoryResourceCache ----------------------------------------------------------------------------------------
