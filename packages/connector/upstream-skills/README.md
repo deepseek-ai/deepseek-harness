@@ -1,6 +1,6 @@
 ---
-description: "Download the upstream files that a CLI app plugin's entry skill indexes from one directory of the vendor's GitHub repository at a pinned commit, verify them, publish them in the DSH cache, and list the entry skill over them."
-kind: "package-library"
+description: "Register a CLI app plugin's entry skill with the Host Service `ctx.upstreamSkills`: it downloads the upstream files the entry indexes from one directory of the vendor's GitHub repository at a pinned commit, verifies them, publishes them in the DSH cache, and lists the entry skill over them."
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-upstream-skills
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-CLI app plugins such as WeCom and Tencent Meeting use this library for guides that their vendor publishes only in its GitHub repository. The plugin keeps its own entry `SKILL.md` and pins one directory of that repository by commit, total size, and digest. `registerUpstreamSkills` downloads the commit's archive when the plugin loads, keeps the directory and the license file, verifies them, publishes them in the DSH cache, and then lists the entry skill with the published directory as its base directory. The repository and the plugins' npm packages carry no copy of the upstream files.
+CLI app plugins such as WeCom and Tencent Meeting register with `ctx.upstreamSkills` for guides their vendor publishes only in its GitHub repository. The plugin keeps its own entry `SKILL.md` and pins one directory of that repository by commit, total size, and digest. The Service downloads the commit's archive when the plugin loads, verifies the kept files, publishes them in the DSH cache, and lists the entry skill with the published directory as its base directory. The repository and the plugins' npm packages carry no copy of those files. The base bundle loads the Service, which downloads nothing until one registers.
 
 ## Table of Contents
 
@@ -25,22 +25,36 @@ CLI app plugins such as WeCom and Tencent Meeting use this library for guides th
 <a id="use-this-package"></a>
 ## Use this package
 
-### When to use it
+A CLI app plugin's Host row injects `upstreamSkills` and calls `register` once; the registration lasts until the plugin unloads or disposes the returned handle.
 
-Use it in the Host row of a CLI app plugin whose upstream skills exist only in the vendor's GitHub repository, so that each user's computer downloads them from the vendor at run time. A plugin whose CLI embeds its guides reads them through the CLI, as Feishu does, and a plugin whose release ships a checksummed skills archive downloads it together with the executable, as DingTalk does.
+### When to choose it
 
-### Entry point
+Register from the Host row of a CLI app plugin whose upstream skills exist only in the vendor's GitHub repository, so that each user's computer downloads them from the vendor at run time. A plugin whose CLI embeds its guides reads them through the CLI, as Feishu does, and a plugin whose release ships a checksummed skills archive downloads it together with the executable, as DingTalk does.
 
-A plugin pins the upstream files, adds the shared config fields to its own `Config`, and registers its entry skill at load:
+### Minimal configuration
+
+The [base bundle](../../bundle/base/cordis.patch.yml) loads the Service in every profile built on it, after the `skills` registry it injects:
+
+```yaml
+- id: upstream-skills
+  name: '@deepseek-ai/dsh-upstream-skills'
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order; they apply to every registered plugin |
+| `skillsTimeoutMs` | `120000` | Whole milliseconds one prefix may take to deliver the whole archive before the next is tried; it applies to every registered plugin |
+
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-upstream-skills) is the exhaustive source for every accepted field. An empty `skillsUrls`, a prefix that does not parse as such a URL, or a `skillsTimeoutMs` below 1 or above 2147483647 fails at load.
+
+### Register an entry skill
+
+The plugin's Host row lists `upstreamSkills` in `inject`, pins the upstream files, and registers from `apply`:
 
 ```ts
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import { registerUpstreamSkills, type UpstreamSkillsConfig, type UpstreamSkillSet } from '@deepseek-ai/dsh-upstream-skills'
-import type {} from '@deepseek-ai/dsh-skill'
-
-declare const ctx: Context
-declare const config: UpstreamSkillsConfig
+import type { UpstreamSkillSet } from '@deepseek-ai/dsh-upstream-skills'
 
 const VENDOR_SKILLS: UpstreamSkillSet = {
   repository: 'vendor/vendor-cli',
@@ -52,31 +66,37 @@ const VENDOR_SKILLS: UpstreamSkillSet = {
   sha256: 'c75045cc5297d5886c8a7ff01c993a782e50cbd4aa6f6559394b695157d52e10',
 }
 
-const skills = registerUpstreamSkills(ctx, {
-  name: 'vendor',
-  entry: fileURLToPath(new URL('../skills/vendor/SKILL.md', import.meta.url)),
-  set: VENDOR_SKILLS,
-  config,
-})
+export interface Config { skillsDir?: string }
+
+export const inject = ['upstreamSkills']
+
+export function apply(ctx: Context, config: Config): void {
+  const skills = ctx.upstreamSkills.register({
+    name: 'vendor',
+    entry: fileURLToPath(new URL('../skills/vendor/SKILL.md', import.meta.url)),
+    set: VENDOR_SKILLS,
+    skillsDir: config.skillsDir,
+  })
+  skills.watch((state) => { ctx.logger.info(`vendor: upstream skills ${state}`) })
+}
 ```
 
-`registerUpstreamSkills` reads the entry's name and description from its YAML frontmatter, registers a skill provider under `name`, and starts the download unless the files are already in place. `skills.directory` is `skillsDir`, or `$DSH_HOME/cache/<name>/skills-<first 16 digest digits>`. `skills.state` is `downloading` while a download runs, otherwise `installed` when that directory exists and `failed` when it does not. `skills.watch(listener)` reports each start and end of a download, and `skills.retry()` starts another download after a failure and returns at once. A plugin shows the state beside its account and calls `retry()` from its check without waiting, so a slow download never holds its account operations. A failed download is logged as a warning. Disposing the plugin aborts the download, removes the provider, and ends the notifications. The entry's body refers to the upstream files by their repository paths, such as `skills/<guide>/SKILL.md`. The contracts in [`src/index.ts`](src/index.ts) and [`src/types.ts`](src/types.ts) are authoritative.
+`register` reads the entry's name and description from its YAML frontmatter, registers a skill provider under `name`, and starts the download unless the files are already in place. The registration belongs to the plugin whose `ctx` made the call: unloading that plugin aborts the download, removes the provider, and ends the notifications. A second registration under one `name` throws and leaves the first in place.
+
+- `name` is the skill provider's name, the prefix of the plugin's errors and log records, and the directory under `$DSH_HOME/cache` that receives the download.
+- `entry` is the absolute path of the packaged entry `SKILL.md`, whose body refers to the upstream files by their repository paths, such as `skills/<guide>/SKILL.md`.
+- `set` is the pin that `scripts/upstream-skills-digest.ts` prints.
+- `skillsDir` is the plugin's own optional config field: a directory that already holds the kept files at their repository paths. When it is set, nothing is downloaded, and a path that is not a directory makes `register` throw.
+
+The returned handle serves the plugin's account view and check. `directory` is `skillsDir`, or `$DSH_HOME/cache/<name>/skills-<first 16 digest digits>`. `state` is `downloading` while a download runs, otherwise `installed` when that directory exists and `failed` when it does not. `watch(listener)` reports each start and end of a download, and `retry()` starts another download after a failure and returns at once. A plugin shows the state beside its account and calls `retry()` from its check without waiting, so a slow download never holds its account operations. A failed download is logged as a warning. `dispose()` withdraws the registration before the plugin unloads. The contracts in [`src/index.ts`](src/index.ts) and [`src/types.ts`](src/types.ts) are authoritative.
 
 ### Kept files and verification
 
-The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with the prefix, and the next prefix is tried; disposing the plugin stops at once. The library keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the library reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to `skills.directory`; a directory that another process, such as Desktop beside Web, published first is kept.
+The Service downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with the prefix, and the next prefix is tried; unloading the plugin stops at once. The Service keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the Service reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to the handle's `directory`; a directory that another process, such as Desktop beside Web, published first is kept.
 
 ### Pinning a commit
 
 `pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE] [--url <prefix>]` downloads the archive from the `--url` prefix, `https://codeload.github.com` by default, keeps the same files, prints the pin as JSON, and lists the kept `SKILL.md` paths on stderr.
-
-### Shared config
-
-| Field | Default | Meaning |
-|---|---|---|
-| `skillsDir` | none | Directory holding the kept files at their repository paths; when set, nothing is downloaded, and a path that is not a directory fails the load |
-| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order; a value that does not parse as a URL fails the configuration |
-| `skillsTimeoutMs` | `120000` | Whole milliseconds one prefix may take to deliver the whole archive before the next is tried |
 
 -----
 
@@ -86,13 +106,13 @@ The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider lists the entry only while `skills.directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time, and the provider registration's signal aborts it when the plugin is disposed. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
+`register` runs in the calling plugin's context, so the skill provider is an effect of that plugin and is removed with it. The provider lists the entry only while the handle's `directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time, and the provider registration's signal aborts it when the plugin unloads. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Shared config fields, registration, the provider, and publishing |
+| [`src/index.ts`](src/index.ts) | The `ctx.upstreamSkills` Service, its config, `register`, the provider, and publishing |
 | [`src/archive.ts`](src/archive.ts) | Download, archive reading, path and size checks, the digest, and file writing |
-| [`src/types.ts`](src/types.ts) | The pin and handle types |
+| [`src/types.ts`](src/types.ts) | The pin, registration, and handle types |
 
 </details>
 
@@ -101,17 +121,18 @@ The provider lists the entry only while `skills.directory` exists, with source `
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Connector packages](../README.md) — the group this library and the CLI app plugins belong to.
+- [Connector packages](../README.md) — the group this package and the CLI app plugins belong to.
 - [Runtime download of upstream skills](../../../.agents/notes/implemented/architecture/2026-10-28-upstream-skills-runtime-download.md) — why the plugins download the files instead of carrying a copy.
-- [Skill registry](../../skill/skill/README.md) — the provider and catalog API this library implements.
+- [Skill registry](../../skill/skill/README.md) — the provider and catalog API the Service registers each entry skill with.
 - [Skill subsystem reference](../../../docs/subsystems/skills.md) — how skills reach the model.
+- [Base bundle](../../bundle/base/README.md) — the bundle that loads the Service, and how a profile overrides one of its rows.
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-skill`, which lists the entry skill in its catalog once the upstream files are published and returns the entry body with `skills.directory` as the skill's base directory.
+Indirectly, through `dsh-tool-skill`, which lists the entry skill in its catalog once the upstream files are published and returns the entry body with the handle's `directory` as the skill's base directory. While no plugin is registered, the Service adds nothing to a model request.
 
 #### KV Cache effect
 

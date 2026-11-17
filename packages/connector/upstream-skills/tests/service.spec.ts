@@ -1,11 +1,11 @@
-/** The entry skill over its upstream files: a configured directory, the load-time download, retries, publishing, and disposal. */
+/** `ctx.upstreamSkills` lists a plugin's entry skill over its upstream files: a configured directory, downloads, retries, withdrawal. */
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerUpstreamSkills, UpstreamSkillsConfig, type UpstreamSkills, type UpstreamSkillSet, type UpstreamSkillsState } from '../src/index.ts'
+import UpstreamSkills, { type Config, type UpstreamSkillsHandle, type UpstreamSkillSet, type UpstreamSkillsState } from '../src/index.ts'
 import { KEPT, archivePath, pin, repository, serve, startHost, type ArchiveHost } from './harness.ts'
 
 const renameHook = vi.hoisted(() => ({ before: undefined as ((from: string, to: string) => Promise<void>) | undefined }))
@@ -26,6 +26,8 @@ const ENTRY = '---\nname: vendor\ndescription: Vendor plugin guides.\n---\n\n# V
 const BODY = '# Vendor\n\nOpen `skills/alpha/SKILL.md`.'
 /** The logger level that exports warnings; the default level keeps only errors and information. */
 const WARN_LEVEL = 2
+/** The HTTPS prefix the Service downloads from; the tests send its requests to the local archive host. */
+const BASE = 'https://skills.test'
 
 let host: ArchiveHost
 let fixtures: string
@@ -48,8 +50,11 @@ let home: string
 let release: () => void
 
 beforeEach(async () => {
+  const request = fetch
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => request(url.replace(BASE, host.base), init))
   ctx = new Context()
   await ctx.plugin(SkillRegistry)
+  service = await load()
   host.routes = {}
   host.requests.length = 0
   home = await mkdtemp(join(tmpdir(), 'dsh-upstream-skills-home-'))
@@ -60,6 +65,7 @@ beforeEach(async () => {
 afterEach(async () => {
   release()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   renameHook.before = undefined
   await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true })
@@ -71,13 +77,19 @@ const published = () => join(cache(), `skills-${set.sha256.slice(0, 16)}`)
 const warning = (message: unknown, error: unknown) => ({ message, error })
 const logged = () => ctx.logger.buffer.filter(entry => entry.type === 'warn').map(entry => warning(entry.args[0], entry.args[1]))
 const warnings = (): unknown[] => logged().map(({ message }) => message)
-const options = (config: Partial<UpstreamSkillsConfig> = {}, pinned: UpstreamSkillSet = set, path = entry) => ({
-  name: 'vendor', entry: path, set: pinned, config: { skillsUrls: [host.base], skillsTimeoutMs: 10_000, ...config },
-})
-const register = (config: Partial<UpstreamSkillsConfig> = {}, pinned: UpstreamSkillSet = set, path = entry): UpstreamSkills =>
-  registerUpstreamSkills(ctx.intercept('logger', { level: WARN_LEVEL }), options(config, pinned, path))
+/** Load the Service; `BASE` is its only source unless a test names others. */
+const load = (config: Partial<Config> = {}) => ctx.plugin(UpstreamSkills, { skillsUrls: [BASE], skillsTimeoutMs: 10_000, ...config })
+let service: Awaited<ReturnType<typeof load>>
+/** Load the Service again with other sources. */
+async function sources(config: Partial<Config>): Promise<void> {
+  await service.dispose()
+  service = await load(config)
+}
+const registration = (skillsDir?: string, pinned: UpstreamSkillSet = set, path = entry) => ({ name: 'vendor', entry: path, set: pinned, skillsDir })
+const register = (skillsDir?: string, pinned: UpstreamSkillSet = set, path = entry): UpstreamSkillsHandle =>
+  ctx.intercept('logger', { level: WARN_LEVEL }).upstreamSkills.register(registration(skillsDir, pinned, path))
 /** Resolve with the state once no download runs. */
-const settled = (skills: UpstreamSkills) => new Promise<UpstreamSkillsState>((resolve) => {
+const settled = (skills: UpstreamSkillsHandle) => new Promise<UpstreamSkillsState>((resolve) => {
   if (skills.state !== 'downloading') {
     resolve(skills.state)
     return
@@ -101,27 +113,26 @@ const listed = (directory: string) => [{
   source: 'bundled', provider: 'vendor', resourceBase: { kind: 'directory', path: directory },
 }]
 
-describe('UpstreamSkillsConfig', () => {
+describe('Config', () => {
   it('defaults to GitHub with a two-minute limit and accepts only HTTPS URL prefixes without a query, fragment, or credentials', () => {
-    expect(UpstreamSkillsConfig({})).toEqual({ skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
-    expect(UpstreamSkillsConfig({ skillsDir: '/opt/skills', skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 }))
-      .toEqual({ skillsDir: '/opt/skills', skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 })
+    expect(UpstreamSkills.Config({})).toEqual({ skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
+    expect(UpstreamSkills.Config({ skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 }))
+      .toEqual({ skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 })
     for (const url of [
       'http://codeload.github.com', 'https://mirror.example/?a=1', 'https://mirror.example/#a', 'https://user@mirror.example',
       'https://mirror.example:bad', 'https://[', 'https://:',
     ]) {
-      expect(() => UpstreamSkillsConfig({ skillsUrls: [url] })).toThrow()
+      expect(() => UpstreamSkills.Config({ skillsUrls: [url] })).toThrow()
     }
-    expect(() => UpstreamSkillsConfig({ skillsUrls: [] })).toThrow()
-    expect(() => UpstreamSkillsConfig({ skillsDir: '' })).toThrow()
-    expect(() => UpstreamSkillsConfig({ skillsTimeoutMs: 0 })).toThrow()
-    expect(() => UpstreamSkillsConfig({ skillsTimeoutMs: 1500.5 })).toThrow()
+    expect(() => UpstreamSkills.Config({ skillsUrls: [] })).toThrow()
+    expect(() => UpstreamSkills.Config({ skillsTimeoutMs: 0 })).toThrow()
+    expect(() => UpstreamSkills.Config({ skillsTimeoutMs: 1500.5 })).toThrow()
   })
 })
 
-describe('registerUpstreamSkills', () => {
+describe('register', () => {
   it('lists the entry over a configured skills directory at once and downloads nothing', async () => {
-    const skills = register({ skillsDir: fixtures })
+    const skills = register(fixtures)
     expect(skills.directory).toBe(fixtures)
     expect(skills.state).toBe('installed')
     skills.retry()
@@ -132,10 +143,10 @@ describe('registerUpstreamSkills', () => {
 
   it('names a skills directory that is missing at load, and reports one removed later as failed without downloading', async () => {
     const missing = join(home, 'missing')
-    expect(() => register({ skillsDir: missing }))
+    expect(() => register(missing))
       .toThrow(`vendor: skillsDir ${missing} is not a directory; set it to a directory holding the files of skills at their repository paths`)
     await mkdir(missing)
-    const skills = register({ skillsDir: missing })
+    const skills = register(missing)
     expect(await ctx.skills.list()).toEqual(listed(missing))
     await rm(missing, { recursive: true })
     expect(await ctx.skills.get('vendor')).toBeUndefined()
@@ -155,7 +166,7 @@ describe('registerUpstreamSkills', () => {
     ] as const) {
       const path = join(fixtures, file)
       await writeFile(path, text)
-      expect(() => register({ skillsDir: fixtures }, set, path)).toThrow(`vendor: ${path} needs YAML frontmatter with a skill name and a description`)
+      expect(() => register(fixtures, set, path)).toThrow(`vendor: ${path} needs YAML frontmatter with a skill name and a description`)
     }
   })
 
@@ -179,19 +190,21 @@ describe('registerUpstreamSkills', () => {
 
   it('tries the next skills URL after one fails and logs the failed prefix', async () => {
     host.routes[archivePath(set, '/mirror')] = serve(repository())
-    const skills = register({ skillsUrls: [`${host.base}/missing`, `${host.base}/mirror/`] })
+    await sources({ skillsUrls: [`${BASE}/missing`, `${BASE}/mirror/`] })
+    const skills = register()
     expect(await settled(skills)).toBe('installed')
     expect(await ctx.skills.list()).toEqual(listed(published()))
-    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base}/missing failed`])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE}/missing failed`])
   })
 
   it('moves on from a skills URL that does not deliver the whole archive within the time limit', async () => {
     host.routes[archivePath(set, '/slow')] = (response) => { response.writeHead(200).write(repository().subarray(0, 64)) }
     host.routes[archivePath(set, '/mirror')] = serve(repository())
     // The limit applies to each URL, so it also bounds the mirror on a loaded machine.
-    const skills = register({ skillsUrls: [`${host.base}/slow`, `${host.base}/mirror`], skillsTimeoutMs: 3_000 })
+    await sources({ skillsUrls: [`${BASE}/slow`, `${BASE}/mirror`], skillsTimeoutMs: 3_000 })
+    const skills = register()
     expect(await settled(skills)).toBe('installed')
-    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base}/slow failed`])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE}/slow failed`])
     // Depending on which stream observes the abort first, the time limit arrives as the TimeoutError or as its cause.
     const timedOut = (error: unknown) => error instanceof Error && [error.name, error.cause instanceof Error ? error.cause.name : ''].includes('TimeoutError')
     expect(logged()[0]?.error).toSatisfy(timedOut)
@@ -200,16 +213,17 @@ describe('registerUpstreamSkills', () => {
   it('refuses every source whose files differ from the pin, publishes nothing, and logs the failure', async () => {
     host.routes[archivePath(set, '/empty')] = (response) => { response.writeHead(204).end() }
     host.routes[archivePath(set, '/changed')] = serve(repository({ ...KEPT, LICENSE: 'MIT-License\n' }))
-    const skills = register({ skillsUrls: [`${host.base}/empty`, `${host.base}/changed`] })
+    await sources({ skillsUrls: [`${BASE}/empty`, `${BASE}/changed`] })
+    const skills = register()
     expect(await settled(skills)).toBe('failed')
     expect(warnings()).toEqual([
-      `vendor: downloading the upstream skills from ${host.base}/empty failed`,
-      `vendor: downloading the upstream skills from ${host.base}/changed failed`,
+      `vendor: downloading the upstream skills from ${BASE}/empty failed`,
+      `vendor: downloading the upstream skills from ${BASE}/changed failed`,
       'vendor: the upstream skills are not available',
     ])
     expect(logged()[2]?.error).toMatchObject({
       message: `could not download the upstream skills of vendor/skills-repo at ${set.commit} from any skills URL`,
-      cause: { message: `the kept files of ${host.base}/changed${archivePath(set)} do not match the pinned digest` },
+      cause: { message: `the kept files of ${BASE}/changed${archivePath(set)} do not match the pinned digest` },
     })
     expect(await readdir(home)).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
@@ -266,7 +280,7 @@ describe('registerUpstreamSkills', () => {
     release()
     expect(await settled(skills)).toBe('installed')
     expect(await ctx.skills.list()).toEqual(listed(published()))
-    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base} failed`])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE} failed`])
   })
 
   it('reports a publish that fails without another process publishing', async () => {
@@ -278,11 +292,17 @@ describe('registerUpstreamSkills', () => {
     expect(await readdir(cache())).toEqual([])
   })
 
-  it('removes the entry and aborts a running download without a warning or a state change when its plugin is disposed', async () => {
-    let skills!: UpstreamSkills
-    const apply = (inner: Context) => { skills = registerUpstreamSkills(inner, options()) }
+  it('refuses a second registration under one name and keeps the first', async () => {
+    register(fixtures)
+    expect(() => register(fixtures)).toThrow('a skill provider named "vendor" is already registered')
+    expect(await ctx.skills.list()).toEqual(listed(fixtures))
+  })
+
+  it('removes the entry and aborts a running download without a warning or a state change when the registering plugin unloads', async () => {
+    let skills!: UpstreamSkillsHandle
+    const app = Object.assign((inner: Context) => { skills = inner.upstreamSkills.register(registration()) }, { inject: ['upstreamSkills'] })
     host.routes[archivePath(set)] = gated(repository())
-    const fiber = await ctx.intercept('logger', { level: WARN_LEVEL }).plugin({ name: 'vendor-upstream-skills', inject: ['skills'], apply })
+    const fiber = await ctx.intercept('logger', { level: WARN_LEVEL }).plugin(app)
     const states: UpstreamSkillsState[] = []
     skills.watch((state) => { states.push(state) })
     await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
@@ -294,9 +314,35 @@ describe('registerUpstreamSkills', () => {
     expect(host.requests).toEqual([archivePath(set)])
 
     await mkdir(published(), { recursive: true })
-    const loaded = await ctx.plugin({ name: 'vendor-upstream-skills', inject: ['skills'], apply })
+    const loaded = await ctx.plugin(app)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     await loaded.dispose()
+    expect(await ctx.skills.list()).toEqual([])
+  })
+
+  it('withdraws only the unloading plugin\'s entry', async () => {
+    const other = join(fixtures, 'other.md')
+    await writeFile(other, ENTRY.replace('name: vendor', 'name: other'))
+    const app = (name: string, path: string) => Object.assign((inner: Context) => {
+      inner.upstreamSkills.register({ name, entry: path, set, skillsDir: fixtures })
+    }, { inject: ['upstreamSkills'] })
+    const first = await ctx.plugin(app('vendor', entry))
+    await ctx.plugin(app('other', other))
+    expect((await ctx.skills.list()).map(skill => skill.name).toSorted()).toEqual(['other', 'vendor'])
+    await first.dispose()
+    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['other'])
+  })
+
+  it('withdraws the entry through the handle before the plugin unloads and aborts its download', async () => {
+    host.routes[archivePath(set)] = gated(repository())
+    const skills = register()
+    await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
+    skills.dispose()
+    await vi.waitFor(() => { expect(skills.state).toBe('failed') })
+    skills.retry()
+    expect(host.requests).toEqual([archivePath(set)])
+    expect(warnings()).toEqual([])
+    await mkdir(published(), { recursive: true })
     expect(await ctx.skills.list()).toEqual([])
   })
 })

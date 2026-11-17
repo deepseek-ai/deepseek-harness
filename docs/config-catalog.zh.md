@@ -4944,6 +4944,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-typert-loader -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-upstream-skills -->
+<a id="deepseek-aidsh-upstream-skills"></a>
+
+## `@deepseek-ai/dsh-upstream-skills`
+
+- `inject`: `skills`
+- `source`: [`packages/connector/upstream-skills/src/index.ts:32`](../packages/connector/upstream-skills/src/index.ts)
+
+```ts config-catalog
+/** Where every registered plugin's upstream files are downloaded from. */
+export interface Config {
+  /** Archive download prefixes tried in order; each serves `<owner>/<repository>/tar.gz/<commit>`. */
+  skillsUrls: string[]
+  /** How long one prefix may take to deliver the whole archive before the next one is tried. */
+  skillsTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-upstream-skills -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-user-approval -->
 <a id="deepseek-aidsh-user-approval"></a>
 
@@ -5468,7 +5487,6 @@ export interface Config {
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |
 | `@deepseek-ai/dsh-typert-protocol` | — | [`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts) |
 | `@deepseek-ai/dsh-typert-registry` | — | [`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts) |
-| `@deepseek-ai/dsh-upstream-skills` | — | [`packages/connector/upstream-skills/src/index.ts`](../packages/connector/upstream-skills/src/index.ts) |
 | `@deepseek-ai/dsh-util-code-language` | — | [`packages/util/code-language/src/index.ts`](../packages/util/code-language/src/index.ts) |
 | `@deepseek-ai/dsh-util-crypto` | — | [`packages/util/crypto/src/index.ts`](../packages/util/crypto/src/index.ts) |
 | `@deepseek-ai/dsh-util-file-drag` | — | [`packages/util/file-drag/src/index.ts`](../packages/util/file-drag/src/index.ts) |

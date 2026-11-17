@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/connector/upstream-skills/README.md
 /:
-  en: a027a2cdcf7631e7
-  zh: 0bcc9c5ad299bb5c
+  en: 2901b7fe88b3d1e8
+  zh: 231b9b01a75b317f
 /deepseek-ai-dsh-upstream-skills:
   en: f3158e9291ae2f3d
   zh: 58b89910c6fa6980
 /deepseek-ai-dsh-upstream-skills/summary:
-  en: fbba750a184bcc37
-  zh: 8243965fcde1aa56
+  en: 985af9365ec4f322
+  zh: 62bf184310772f11
 /deepseek-ai-dsh-upstream-skills/table-of-contents:
   en: d152484eb41ac6b4
   zh: 5b6bd00fce5371c3
 /deepseek-ai-dsh-upstream-skills/use-this-package:
-  en: bbff250eba0f1b89
-  zh: b20a47f82d8ab6e0
-/deepseek-ai-dsh-upstream-skills/use-this-package/when-to-use-it:
-  en: 572b474112a3b1d2
-  zh: ddca0ffabad5eaca
-/deepseek-ai-dsh-upstream-skills/use-this-package/entry-point:
-  en: c3e1b60c8e4e023a
-  zh: e51792ead0b00e7f
+  en: 4fb803d56a5f4160
+  zh: a0746a984d3cb313
+/deepseek-ai-dsh-upstream-skills/use-this-package/when-to-choose-it:
+  en: 864a01de5a4ba7aa
+  zh: 06db4091df86a934
+/deepseek-ai-dsh-upstream-skills/use-this-package/minimal-configuration:
+  en: 2ac0be96902c0c7c
+  zh: a6412287a1ac4487
+/deepseek-ai-dsh-upstream-skills/use-this-package/register-an-entry-skill:
+  en: a4adb17bd22ccf36
+  zh: 0afd5dbd5e6d4c11
 /deepseek-ai-dsh-upstream-skills/use-this-package/kept-files-and-verification:
-  en: 49a8b6fe1e1df41a
-  zh: 4cff59da21ae3dcb
+  en: 0633b5470e6b4e6c
+  zh: 419916b5b305aa7d
 /deepseek-ai-dsh-upstream-skills/use-this-package/pinning-a-commit:
-  en: 5c7edfe292e3ed4e
-  zh: 4f8fbac5a4ac9a71
-/deepseek-ai-dsh-upstream-skills/use-this-package/shared-config:
-  en: 590e7c5cc0c2ceaf
-  zh: 09df0db0fc260a7e
+  en: ea5587081cc3b471
+  zh: e0993a154ae79dc1
 /deepseek-ai-dsh-upstream-skills/understand-the-implementation:
-  en: 97bd13a3bb1c31d9
-  zh: cb827ed3fb450148
+  en: 620b702a4b6c162c
+  zh: 209f776f7c49ddd0
 /deepseek-ai-dsh-upstream-skills/further-exploration:
-  en: 60965f68389a4cad
-  zh: dc8e251f38301b9f
+  en: 95c015940a49bef1
+  zh: d1d3c6162cd4fa68
 /deepseek-ai-dsh-upstream-skills/model-experience:
-  en: c9e4d94bb8653482
-  zh: b07dbd392f17bab0
+  en: 330d735bd7263f89
+  zh: 26096e961db1acc5
 /deepseek-ai-dsh-upstream-skills/model-experience/kv-cache-effect:
   en: 2a09699bc1130758
   zh: 972fc624936c8c2f
