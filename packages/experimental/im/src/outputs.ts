@@ -306,7 +306,7 @@ export class ImOutputRegistry implements ImOutputs {
 
   /**
    * The per-turn sink: attribution to the session; the trigger is quoted (in its thread, else the binding's) only
-   * when it belongs to the target chat.
+   * when it belongs to the target chat and is still stored in `im_messages` (omitting `quote` otherwise).
    */
   private io(activity: ImActivity, target: ImBinding): ImOutputIO {
     const { chat } = target

@@ -123,6 +123,8 @@ export interface ImMessageEvent {
   readonly bot: Bot
   /**
    * Send into the chat quoting this message (and in its thread, if any); its adapter referrer rides on the target.
+   * `quote` is attached only while this message remains stored in `im_messages`: if `maxRecords` or `retentionMs`
+   * removed it, the reply still publishes into the same chat (and thread) without a quote instead of failing.
    * The publication carries no session, so the chat's admission is its only gate (`sources[].writable` governs the
    * publications a session claims).
    */
@@ -493,7 +495,11 @@ export interface ImSessions {
   list(filter?: ImSessionFilter): ImSessionRecord[]
   /** Sessions whose bindings include the chat (commands plugin, /stop). */
   forChat(chat: ImChatKey): ImSessionRecord[]
-  /** Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. */
+  /**
+   * Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. Throws
+   * `ImError('unavailable')` if a concurrent `reset()` discards the pending intent before admission completes so
+   * callers can re-deliver into the replacement generation.
+   */
   deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>
   /**
    * Session id of any generation of `key` (including generations retired by reset) that already admitted
