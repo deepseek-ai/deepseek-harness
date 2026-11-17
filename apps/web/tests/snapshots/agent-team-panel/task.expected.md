@@ -1,5 +1,4 @@
 - complementary "Session panel":
-  - button "Pin session panel"
   - region "Environment":
     - heading "Environment" [level=2]
     - text: workspace {{cwd}}

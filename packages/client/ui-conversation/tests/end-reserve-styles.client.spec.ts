@@ -11,9 +11,9 @@ import { describe, expect, it } from 'vitest'
 const css = readFileSync(fileURLToPath(new URL('../src/client/skeleton/ConversationRoot.module.css', import.meta.url)), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
 
-/** Declarations of the rule with exactly this class selector, with whitespace collapsed. */
+/** Declarations of the rule with exactly this selector, with whitespace collapsed. */
 function declarationsOf(selector: string): Record<string, string> {
-  const rule = new RegExp(`(?:^|[{}])\\s*\\${selector}\\s*\\{([^{}]*)\\}`).exec(css)
+  const rule = new RegExp(`(?:^|[{}])\\s*${selector.replace(/[.[\]():*+^$\\'=]/g, '\\$&')}\\s*\\{([^{}]*)\\}`).exec(css)
   if (rule === null) throw new Error(`ConversationRoot.module.css has no \`${selector}\` rule`)
   return Object.fromEntries((rule[1] ?? '').split(';').map(part => part.trim()).filter(Boolean).map((part): [string, string] => {
     const colon = part.indexOf(':')
@@ -27,41 +27,43 @@ describe('Conversation body end reserve', () => {
   it('derives the largest reserve and the inset from the scrollport width, the content width, and the side inset', () => {
     expect(body['--dsh-composer-side-clearance']).toBe('16px')
     expect(body['--dsh-chat-end-reserve-max']).toBe(
-      'calc(var(--dsh-conversation-viewport-width, 0px) - 480px - var(--dsh-composer-side-clearance) - 16px)',
+      'calc(var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width) - var(--dsh-composer-side-clearance) - 16px)',
     )
     expect(body['--dsh-chat-end-inset']).toBe(
-      'min(max(0px, calc((var(--dsh-chat-end-reserve-max) - var(--dsh-chat-end-reserve, 0px) + 1px) * 9999)),'
+      'min(max(0px, calc((var(--dsh-chat-end-reserve-max) - var(--dsh-chat-end-reserve, 0px)) * 10000000 + 1000px)),'
       + ' calc(2 * max(0px, var(--dsh-chat-end-reserve, 0px)'
-      + ' - (var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width)) / 2)),'
-      + ' max(0px, var(--dsh-chat-end-reserve, 0px) - var(--dsh-composer-side-clearance) - 16px))',
+      + ' - (var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width)) / 2)))',
     )
   })
 
-  it('moves the column aside by twice the missing gutter, then narrows it, and makes no room under a 480px column', () => {
+  it('moves the column aside by twice the missing gutter at its own width, and makes no room once the start gutter is at the side inset', () => {
     // The declarations above, evaluated for a scrollport `viewport` wide and a transcript `content` wide.
     const side = 32
+    const reserveMax = (viewport: number, content: number): number => viewport - content - side
     const inset = (viewport: number, content: number, reserve: number): number => Math.min(
-      Math.max(0, (viewport - 480 - side - reserve + 1) * 9999),
+      Math.max(0, (reserveMax(viewport, content) - reserve) * 10000000 + 1000),
       2 * Math.max(0, reserve - (viewport - content) / 2),
-      Math.max(0, reserve - side),
     )
-    /** The space after the column once the scrollport pads its end: the column keeps `side` at least on both sides. */
-    const after = (viewport: number, content: number, reserve: number): number => {
+    /** The space before and after the column once the scrollport pads its end. */
+    const gutters = (viewport: number, content: number, reserve: number): [number, number] => {
       const frame = viewport - inset(viewport, content, reserve)
       const column = Math.min(content, frame - 2 * side)
-      return viewport - (frame - column) / 2 - column
+      return [(frame - column) / 2, viewport - (frame + column) / 2]
     }
     // No reserve, or a gutter that already holds it: no inset.
     expect([inset(1153, 742, 0), inset(1576, 880, 348), inset(2013, 880, 348)]).toEqual([0, 0, 0])
-    // The start gutter lasts: the column keeps its width and the space after it is the reserve.
-    expect(inset(1153, 742, 348)).toBe(285)
-    expect(after(1153, 742, 348)).toBe(348)
-    // The start gutter is down to the side inset: the column narrows, and the space after it stays the reserve.
-    expect([inset(993, 680, 348), after(993, 680, 348)]).toEqual([316, 348])
-    expect(993 - 316 - 2 * side).toBe(613)
-    // The narrowest scrollport that makes room leaves a 480px column; one pixel less makes none.
-    expect([inset(860, 680, 348), 860 - 316 - 2 * side]).toEqual([316, 480])
-    expect(inset(859, 680, 348)).toBe(0)
+    // A gutter one pixel short: the column moves by that pixel.
+    expect([inset(1574, 880, 348), gutters(1574, 880, 348)]).toEqual([2, [346, 348]])
+    expect([inset(1400, 880, 348), gutters(1400, 880, 348)]).toEqual([176, [172, 348]])
+    // The narrowest scrollport that makes room leaves the column its side inset before it.
+    expect([reserveMax(1260, 880), inset(1260, 880, 348), gutters(1260, 880, 348)]).toEqual([348, 316, [32, 348]])
+    // One pixel less makes none: the column stays centered at its width.
+    expect([inset(1259, 880, 348), gutters(1259, 880, 348)]).toEqual([0, [189.5, 189.5]])
+    // A fraction of a pixel short makes none either: the inset is all or nothing.
+    expect(inset(1259.96, 880, 348)).toBe(0)
+    expect(inset(1260.04, 880, 348)).toBeCloseTo(315.96, 6)
+    // A scrollport narrower than the content width has no reserve to give, with or without a request.
+    expect([inset(600, 680, 348), inset(600, 680, 0)]).toEqual([0, 0])
   })
 
   it('pads the scrollport end by the inset and makes no room in an embedded occurrence', () => {
@@ -70,9 +72,16 @@ describe('Conversation body end reserve', () => {
     expect([embedded['--dsh-chat-end-reserve-max'], embedded['--dsh-chat-end-inset']]).toEqual(['0px', '0px'])
   })
 
-  it('drops the width handles while the inset moves the column off the body center', () => {
-    expect(declarationsOf('.widthHandle')['width']).toBe(
-      'min(10px, calc((100% - var(--dsh-chat-content-width)) / 2 - 24px - 24px), calc(10px - var(--dsh-chat-end-inset) * 9999))',
-    )
+  it('moves each width handle with the column and sizes it from the gutter on its own side', () => {
+    // Half the inset toward the start edge, as the column's center moves; the start gutter loses that half and the end gutter gains it.
+    expect(declarationsOf(".widthHandle[data-side='left']")).toEqual({
+      right: 'calc(50% + var(--dsh-chat-end-inset) / 2 + var(--dsh-chat-content-width) / 2 + 24px)',
+      width: 'min(10px, calc((100% - var(--dsh-chat-end-inset) - var(--dsh-chat-content-width)) / 2 - 24px - 24px))',
+    })
+    expect(declarationsOf(".widthHandle[data-side='right']")).toEqual({
+      left: 'calc(50% - var(--dsh-chat-end-inset) / 2 + var(--dsh-chat-content-width) / 2 + 24px)',
+      width: 'min(10px, calc((100% + var(--dsh-chat-end-inset) - var(--dsh-chat-content-width)) / 2 - 24px - 24px))',
+    })
+    expect(declarationsOf('.widthHandle')['width']).toBeUndefined()
   })
 })

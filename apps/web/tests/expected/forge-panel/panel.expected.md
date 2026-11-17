@@ -1,5 +1,4 @@
 - complementary "会话面板":
-  - button "固定会话面板"
   - region "环境":
     - heading "环境" [level=2]
     - text: dsh-{{worktree}} {{cwd}}/workspace/.agents/worktrees dsh-{{worktree}} 工作树 · 基于 release

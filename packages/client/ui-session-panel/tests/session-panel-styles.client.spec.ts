@@ -1,9 +1,9 @@
 /**
  * The Session panel's stylesheet as CSS text. jsdom has no layout, so the
- * component suite cannot show that each probe is 1px wide exactly from the
- * room it reports, what a pinned panel asks of the Conversation body, or
- * that marked rows get one geometry; this reads the declarations and
- * evaluates the docking ones around their boundaries.
+ * component suite cannot show that the dock probe is 1px wide exactly from
+ * the gutter that holds the docked panel, or that marked rows get one
+ * geometry; this reads the declarations and evaluates the docking ones for
+ * gutters around that boundary.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -31,7 +31,7 @@ const px = (value: string | undefined): number => {
 }
 
 describe('SessionPanel.module.css docking geometry', () => {
-  const metrics = declarationsOf('.panel, .dockProbe, .reserveProbe')
+  const metrics = declarationsOf('.panel, .dockProbe')
   const clear = px(metrics['--panel-clear'])
   const edge = px(metrics['--panel-edge'])
   const minWidth = px(metrics['--panel-min-width'])
@@ -43,19 +43,18 @@ describe('SessionPanel.module.css docking geometry', () => {
     expect(panel['width']).toBe(
       'clamp(var(--panel-min-width), calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge)), 360px)',
     )
-    expect(declarationsOf('.dockProbe')['width']).toBe(
-      'calc(var(--dsh-chat-aside-gutter, 0px) - var(--dsh-chat-end-inset, 0px) * 9999'
-      + ' - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px)',
+    const probe = declarationsOf('.dockProbe')
+    expect(probe['width']).toBe(
+      'max(calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),'
+      + ' calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px))',
     )
-    expect(declarationsOf('.reserveProbe')['width']).toBe(
-      'calc(var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px)',
-    )
-    expect(declarationsOf('.dockProbe, .reserveProbe')['max-width']).toBe('1px')
+    expect(probe['max-width']).toBe('1px')
   })
 
   it('makes the probe 1px wide exactly from the gutter that holds the panel at its minimum width', () => {
     // The declarations above, evaluated: a width below 0 is used as 0, and max-width caps the probe at 1px.
-    const probeWidth = (gutter: number, inset = 0): number => Math.min(1, Math.max(0, gutter - inset * 9999 - clear - edge - minWidth + 1))
+    const probeWidth = (gutter: number, reserveMax = 0): number =>
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
     const dockedWidth = (gutter: number): number => Math.min(360, Math.max(minWidth, gutter - clear - edge))
     expect([probeWidth(0), probeWidth(347), probeWidth(347.5), probeWidth(348), probeWidth(900)]).toEqual([0, 0, 0.5, 1, 1])
     // At the first gutter that docks, the panel is at its minimum width and keeps both clearances.
@@ -64,40 +63,28 @@ describe('SessionPanel.module.css docking geometry', () => {
     expect([dockedWidth(377), dockedWidth(500)]).toEqual([329, 360])
   })
 
-  it('leaves a gutter the transcript made to the reserve probe, which is 1px wide exactly from the reserve that docks the panel', () => {
-    const probeWidth = (gutter: number, inset: number): number =>
-      Math.min(1, Math.max(0, gutter - inset * 9999 - clear - edge - minWidth + 1))
-    // The body's end inset made this 348px gutter, so the gutter probe stays at 0, whatever the inset's size.
-    expect([probeWidth(348, 285), probeWidth(348, 0.5)]).toEqual([0, 0])
-    const reserveWidth = (reserveMax: number): number => Math.min(1, Math.max(0, reserveMax - clear - edge - minWidth + 1))
-    expect([reserveWidth(0), reserveWidth(347), reserveWidth(347.5), reserveWidth(348), reserveWidth(900)]).toEqual([0, 0, 0.5, 1, 1])
+  it('gives the probe room as well from the largest end reserve that covers the gutter, whatever the gutter is', () => {
+    const probeWidth = (gutter: number, reserveMax: number): number =>
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
+    // A 260px gutter holds no panel, and the transcript can leave 348px: room. This term is a step at 348px, as the
+    // body's end inset is, so the probe has room exactly where the body makes it.
+    expect([probeWidth(260, 347), probeWidth(260, 347.96), probeWidth(260, 348), probeWidth(260, 900)]).toEqual([0, 0, 1, 1])
+    // The same answer once the transcript has made the 348px gutter, so making room does not change the decision.
+    expect(probeWidth(348, 348)).toBe(1)
+    // An embedded Chat View's body gives no reserve: only its gutter counts.
+    expect([probeWidth(347, 0), probeWidth(348, 0)]).toEqual([0, 1])
   })
 
-  it('has a pinned panel ask the Conversation body for exactly the gutter that docks it', () => {
+  it('asks the Conversation body for exactly the gutter that docks the panel while the probe carries the mark', () => {
     const request = declarationsOf(':global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve])')
     expect(request).toEqual({ '--dsh-chat-end-reserve': 'calc(40px + 8px + 300px)' })
     expect(40 + 8 + 300).toBe(clear + edge + minWidth)
   })
 
-  it('keeps the probes out of sight, out of the layout flow, and away from the pointer', () => {
-    expect(declarationsOf('.dockProbe, .reserveProbe')).toMatchObject({
+  it('keeps the probe out of sight, out of the layout flow, and away from the pointer', () => {
+    expect(declarationsOf('.dockProbe')).toMatchObject({
       'position': 'absolute', 'height': '0', 'visibility': 'hidden', 'pointer-events': 'none',
     })
-  })
-
-  it('floats the pin at the panel end on the first title line, clear of the rows under it', () => {
-    const pin = declarationsOf('.pin')
-    expect(pin).toMatchObject({
-      'float': 'inline-end', 'width': '24px', 'height': '24px', 'background': 'transparent', 'color': 'var(--dsw-alias-label-tertiary)',
-    })
-    // Above the positioned sections, which would otherwise cover a float and take its presses.
-    expect(pin).toMatchObject({ 'position': 'relative', 'z-index': '1' })
-    // 4px down to the first section's title row, 2px in so the glyph's center is 14px from the rows' end,
-    // and a bottom margin that ends the float 4px above the title row's end.
-    expect(pin['margin']).toBe('4px 2px -4px 0')
-    expect(declarationsOf(".pin[aria-pressed='true']")).toEqual({ color: 'var(--dsw-alias-label-primary)' })
-    // The pressed fill follows the hover fill, so a press on a hovered pin shows.
-    expect(css.indexOf('.pin:active {')).toBeGreaterThan(css.indexOf('.pin:hover {'))
   })
 
   it('floats the overlay narrower than the docked panel, at the same edge inset', () => {
@@ -115,6 +102,8 @@ describe('SessionPanel.module.css section reordering', () => {
       'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px',
       'color': 'var(--dsw-alias-label-tertiary)', 'opacity': '0',
     })
+    // A mark over the row's end: presses reach the title row, and at rest the trailing content, through it.
+    expect(declarationsOf('.grip')['pointer-events']).toBe('none')
   })
 
   it('shows the handle in place of the trailing content on title-row hover and during a drag', () => {

@@ -1,13 +1,13 @@
 /**
  * Session panel layout in the shipped Web composition. The panel's stylesheet
- * decides whether the Chat View's end gutter holds the docked panel, or the
- * transcript can make that room for a pinned panel, and tells the plugin
- * through two 1px probes, and it lays out the rows that contributors mark.
- * jsdom cannot evaluate that stylesheet, so this measures the probes, the
- * panel, and the toggle around the docking boundary, the transcript, the
- * composer, and the width handles around a pinned panel, the drag that
- * reorders sections, and the working folder row without and with a directory
- * context menu.
+ * decides whether the docked panel has room, in the Chat View's end gutter or
+ * by the transcript moving into its start gutter, and tells the plugin
+ * through a 1px dock probe, and it lays out the rows that contributors mark.
+ * jsdom cannot evaluate that stylesheet, so this measures the probe, the
+ * panel, the toggle, the transcript, the composer, and the width handles
+ * around the docking boundaries, a width drag beside the docked panel, the
+ * drag that reorders sections, and the working folder row without and with a
+ * directory context menu.
  */
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +18,7 @@ import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environ
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { saveFailureShot } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
@@ -28,12 +28,21 @@ const TRANSCRIPT = 880
 /** The gutter that holds the docked panel: 40px clear of the transcript, its 300px minimum width, and the 8px edge inset. */
 const DOCK_GUTTER = 348
 
+/**
+ * A page at the lane's baseline size whose origin stores no docking choice.
+ * The lane's standard page starts with docking off; this file measures the
+ * panel as a reader first meets it.
+ */
+function newPanelPage(browser: Browser): Promise<Page> {
+  return browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'en-US', timezoneId: 'Asia/Shanghai' })
+}
+
 /** What the layout says about docking: the gutter, the probe, the panel's presentation and insets, and the toggle. */
 function docking(page: Page) {
   return page.evaluate(() => {
     const layer = document.querySelector<HTMLElement>('[data-chat-aside]')
     const column = document.querySelector<HTMLElement>('[data-chat-flow]')
-    const probe = document.querySelector<HTMLElement>('[data-session-panel-probe="gutter"]')
+    const probe = document.querySelector<HTMLElement>('[data-session-panel-probe]')
     const toggle = document.querySelector<HTMLElement>('[data-session-panel-toggle]')
     if (layer === null || column === null || probe === null || toggle === null) {
       throw new Error('aside layer, transcript column, dock probe, or panel toggle is missing')
@@ -62,17 +71,16 @@ async function openSeed(page: Page): Promise<void> {
     return session.isVisible()
   }, { timeout: 15_000 }).toBe(true)
   await session.click()
-  await page.locator('[data-session-panel-probe="gutter"]').waitFor({ state: 'attached', timeout: 30_000 })
+  await page.locator('[data-session-panel-probe]').waitFor({ state: 'attached', timeout: 30_000 })
 }
 
 /**
- * What the layout says around a pinned panel: the frame and the transcript
- * column in it, the scrollport's end inset, how far the composer card's
- * center sits from the column's, the width handles, both probes, the panel,
- * and its pin. `pin.center` is the glyph column's distance from the panel's
- * end edge and `pin.top` the button's from its top edge.
+ * What the layout says around the panel: the frame and the transcript column
+ * in it, the scrollport's end inset, how far the composer card's center sits
+ * from the column's, each width handle's width and its distance from the
+ * column edge it follows, the dock probe, the panel, and the toggle.
  */
-function pinning(page: Page) {
+function layout(page: Page) {
   return page.evaluate(() => {
     const need = (selector: string): HTMLElement => {
       const element = document.querySelector<HTMLElement>(selector)
@@ -84,8 +92,10 @@ function pinning(page: Page) {
     const card = need('[data-composer-card]').getBoundingClientRect()
     const panel = document.querySelector<HTMLElement>('[data-session-panel]')
     const box = panel?.getBoundingClientRect()
-    const pin = panel?.querySelector<HTMLElement>('[data-session-panel-pin]')
-    const pinBox = pin?.getBoundingClientRect()
+    const handle = (side: 'left' | 'right'): { width: number; gap: number } => {
+      const strip = need(`[data-width-handle="${side}"]`).getBoundingClientRect()
+      return { width: strip.width, gap: side === 'left' ? flow.left - strip.right : strip.left - flow.right }
+    }
     return {
       frame: frame.width,
       column: flow.width,
@@ -93,22 +103,11 @@ function pinning(page: Page) {
       after: frame.right - flow.right,
       inset: getComputedStyle(need('[data-conversation-scroll]')).paddingInlineEnd,
       composerOffset: (card.left + card.right - flow.left - flow.right) / 2,
-      handles: [...document.querySelectorAll<HTMLElement>('[data-width-handle]')].map(handle => handle.getBoundingClientRect().width),
-      probes: {
-        gutter: need('[data-session-panel-probe="gutter"]').getBoundingClientRect().width,
-        reserve: need('[data-session-panel-probe="reserve"]').getBoundingClientRect().width,
-      },
+      handles: { left: handle('left'), right: handle('right') },
+      probe: need('[data-session-panel-probe]').getBoundingClientRect().width,
       presentation: panel?.dataset['sessionPanel'] ?? null,
       expanded: need('[data-session-panel-toggle]').getAttribute('aria-expanded'),
       panel: box === undefined ? null : { width: box.width, clear: box.left - flow.right, edge: frame.right - box.right },
-      pin: pin === null || pin === undefined || pinBox === undefined || box === undefined
-        ? null
-        : {
-          pressed: pin.getAttribute('aria-pressed'),
-          target: [pinBox.width, pinBox.height],
-          center: box.right - (pinBox.left + pinBox.width / 2),
-          top: pinBox.top - box.top,
-        },
     }
   })
 }
@@ -162,12 +161,6 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
   /** Viewport width the application keeps outside the Chat frame. */
   let chrome = 0
 
-  /** Resize the window so the Chat View's end gutter is exactly `gutter`, and wait for the layout to follow. */
-  async function setGutter(gutter: number): Promise<void> {
-    await page.setViewportSize({ width: TRANSCRIPT + 2 * gutter + chrome, height: page.viewportSize()!.height })
-    await expect.poll(async () => (await docking(page)).gutter, { timeout: 10_000 }).toBe(gutter)
-  }
-
   /**
    * Resize the window so the Chat frame is exactly `width` wide, and wait for
    * the layout to follow: the body publishes the scrollport's width a frame
@@ -185,11 +178,21 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     }), { timeout: 10_000 }).toBe(width)
   }
 
+  /** Resize the window so the gutter on each side of the centered 880px transcript is exactly `gutter`. */
+  function setGutter(gutter: number): Promise<void> {
+    return setFrame(TRANSCRIPT + 2 * gutter)
+  }
+
+  /** Forget a dragged transcript width, so the next resize publishes the default again. */
+  function forgetWidth(): Promise<void> {
+    return page.evaluate(() => { localStorage.removeItem('dsh.conversation.contentWidth') })
+  }
+
   beforeAll(async () => {
     scaffold = await launchWebScaffold()
     await seedSession(scaffold, await readFile(FIXTURE, 'utf8'), SEED_ID)
     browser = await chromium.launch()
-    page = await newEnglishPage(browser)
+    page = await newPanelPage(browser)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -210,155 +213,156 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     if (failures.length > 0) throw new AggregateError(failures, 'Session panel layout teardown failed')
   })
 
-  it('docks exactly from the gutter that holds the panel at its minimum width', async () => {
+  it('docks in the end gutter where it holds the panel, and elsewhere has the transcript move into its start gutter', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-dock'))
     await openSession()
     expect(Number.isInteger(chrome)).toBe(true)
+    const toggle = page.locator('[data-session-panel-toggle]')
+    const docked = { probe: 1, presentation: 'docked', expanded: 'true' }
 
-    await setGutter(DOCK_GUTTER - 1)
-    await shows(page, null)
-    expect(await docking(page)).toEqual({ gutter: DOCK_GUTTER - 1, probe: 0, presentation: null, expanded: 'false', panel: null })
-
-    // Half a pixel short, the probe is half a pixel wide and the panel stays hidden.
-    await setGutter(DOCK_GUTTER - 0.5)
-    expect(await docking(page)).toEqual({ gutter: DOCK_GUTTER - 0.5, probe: 0.5, presentation: null, expanded: 'false', panel: null })
-
-    await setGutter(DOCK_GUTTER)
-    await shows(page, 'docked')
-    expect(await docking(page)).toEqual({
-      gutter: DOCK_GUTTER, probe: 1, presentation: 'docked', expanded: 'true', panel: { width: 300, clear: 40, edge: 8 },
-    })
-
-    // A wider gutter widens the panel to its maximum at the same edge inset; the probe stays 1px.
+    // A wide gutter: the transcript is centered and the panel is at its maximum width.
     await setGutter(DOCK_GUTTER + 100)
-    expect(await docking(page)).toEqual({
-      gutter: DOCK_GUTTER + 100, probe: 1, presentation: 'docked', expanded: 'true', panel: { width: 360, clear: 80, edge: 8 },
+    await shows(page, 'docked')
+    const wide = await layout(page)
+    expect(wide).toMatchObject({
+      column: TRANSCRIPT, before: DOCK_GUTTER + 100, after: DOCK_GUTTER + 100, inset: '0px', composerOffset: 0, ...docked,
+      panel: { width: 360, clear: 80, edge: 8 },
     })
+    expect([wide.handles.left.width, wide.handles.right.width]).toEqual([10, 10])
 
-    await setGutter(DOCK_GUTTER - 1)
-    await shows(page, null)
-    expect((await docking(page)).expanded).toBe('false')
-    expect(tripwire.pageErrors).toEqual([])
-  })
-
-  it('floats narrower than it docks, at the same edge inset, and docks once the gutter holds it', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-overlay'))
-    await openSession()
-    const toggle = page.locator('[data-session-panel-toggle]')
-    await setGutter(260)
-    await shows(page, null)
-    await toggle.click()
-    await shows(page, 'overlay')
-    const overlay = await docking(page)
-    expect(overlay).toMatchObject({ probe: 0, presentation: 'overlay', expanded: 'true', panel: { width: 280, edge: 8 } })
-    // The overlay covers part of the transcript instead of keeping clear of it.
-    expect(overlay.panel?.clear).toBeLessThan(0)
-
-    await page.keyboard.press('Escape')
-    await shows(page, null)
-    expect((await docking(page)).expanded).toBe('false')
-
-    // An open overlay gives way to the docked panel when the window widens enough.
-    await toggle.click()
-    await shows(page, 'overlay')
+    // The narrowest gutter that holds the panel by itself.
     await setGutter(DOCK_GUTTER)
-    await shows(page, 'docked')
-    expect(await docking(page)).toMatchObject({ probe: 1, expanded: 'true', panel: { width: 300, clear: 40, edge: 8 } })
-    expect(tripwire.pageErrors).toEqual([])
-  })
-
-  it('has the transcript make room for a pinned panel, down to a 480px column, and gives the room back when unpinned', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-pin'))
-    await openSession()
-    const toggle = page.locator('[data-session-panel-toggle]')
-    const pin = page.locator('[data-session-panel] [data-session-panel-pin]')
-    const stored = (): Promise<string | null> => page.evaluate(() => localStorage.getItem('dsh.sessionPanel.held'))
-    /** Press the scrollport's start corner, outside the panel and off the transcript. */
-    const pressOutside = (): Promise<void> => page.locator('[data-conversation-scroll]').click({ position: { x: 8, y: 8 } })
-    const held = { presentation: 'docked', expanded: 'true', panel: { width: 300, clear: 40, edge: 8 } }
-    const pressed = { pressed: 'true', target: [24, 24], center: 22, top: 10 }
-
-    // A 260px gutter: the 880px column leaves no room to dock, and the transcript could make it.
-    await setFrame(TRANSCRIPT + 2 * 260)
-    await shows(page, null)
-    expect(await pinning(page)).toMatchObject({
-      column: TRANSCRIPT, before: 260, after: 260, inset: '0px', handles: [10, 10], probes: { gutter: 0, reserve: 1 }, expanded: 'false',
+    expect(await layout(page)).toMatchObject({
+      before: DOCK_GUTTER, after: DOCK_GUTTER, inset: '0px', ...docked, panel: { width: 300, clear: 40, edge: 8 },
     })
-    await toggle.click()
-    await shows(page, 'overlay')
-    // The pin sits on the first title line, its glyph in the column of the rows' More buttons: 8px of panel inset and 14px.
-    expect((await pinning(page)).pin).toEqual({ ...pressed, pressed: 'false' })
-    expect(await stored()).toBeNull()
 
-    // Pinned, the panel docks: the column and the composer move aside by the missing 88px, twice over, and keep their width.
-    await pin.click()
-    await shows(page, 'docked')
-    expect(await pinning(page)).toEqual({
-      frame: TRANSCRIPT + 2 * 260, column: TRANSCRIPT, before: 172, after: DOCK_GUTTER, inset: '176px', composerOffset: 0,
-      handles: [0, 0], probes: { gutter: 0, reserve: 1 }, ...held, pin: pressed,
+    // One pixel short: the column moves that pixel toward the start edge, at its own width, and the panel stays docked.
+    await setGutter(DOCK_GUTTER - 1)
+    expect(await layout(page)).toMatchObject({
+      column: TRANSCRIPT, before: DOCK_GUTTER - 2, after: DOCK_GUTTER, inset: '2px', composerOffset: 0, ...docked,
+      panel: { width: 300, clear: 40, edge: 8 },
     })
-    expect(await stored()).toBe('true')
-    // Neither an outside press nor Escape closes it.
-    await pressOutside()
+
+    // A 260px gutter: the column and the composer move 88px, twice over, and keep their width.
+    await setGutter(260)
+    const moved = await layout(page)
+    expect(moved).toMatchObject({
+      column: TRANSCRIPT, before: 172, after: DOCK_GUTTER, inset: '176px', composerOffset: 0, ...docked,
+      panel: { width: 300, clear: 40, edge: 8 },
+    })
+    // The width handles moved with the column and keep their width.
+    expect([moved.handles.left.width, moved.handles.right.width]).toEqual([10, 10])
+    expect(moved.handles.left.gap).toBeCloseTo(wide.handles.left.gap, 1)
+    expect(moved.handles.right.gap).toBeCloseTo(wide.handles.right.gap, 1)
+    // Neither a press in the transcript's start gutter nor Escape closes the docked panel.
+    await page.locator('[data-conversation-scroll]').click({ position: { x: 8, y: 8 } })
     await page.keyboard.press('Escape')
-    expect(await pinning(page)).toMatchObject(held)
+    expect(await layout(page)).toMatchObject({ before: 172, after: DOCK_GUTTER, ...docked })
 
-    // The start gutter is down to the transcript's 32px side inset: the column narrows instead.
-    await setFrame(1000)
-    expect(await pinning(page)).toMatchObject({ column: 620, before: 32, after: DOCK_GUTTER, inset: '316px', composerOffset: 0, ...held })
-    // The narrowest frame that makes room leaves a 480px column.
-    await setFrame(860)
-    expect(await pinning(page)).toMatchObject({ column: 480, before: 32, after: DOCK_GUTTER, inset: '316px', ...held })
-    // One pixel less makes none: the transcript centers again and the panel is left to the overlay.
-    await setFrame(859)
-    await shows(page, null)
-    expect(await pinning(page)).toMatchObject({
-      column: 680, before: 89.5, after: 89.5, inset: '0px', handles: [10, 10], probes: { gutter: 0, reserve: 0 }, expanded: 'false', panel: null,
-    })
+    // The toggle hides it, which gives the room back, and shows it again.
     await toggle.click()
-    await shows(page, 'overlay')
-    expect(await pinning(page)).toMatchObject({ inset: '0px', panel: { width: 280, edge: 8 }, pin: pressed })
-    await page.keyboard.press('Escape')
     await shows(page, null)
-    // Once the frame makes room again, the pinned panel docks without the toggle.
-    await setFrame(860)
+    expect(await layout(page)).toMatchObject({ before: 260, after: 260, inset: '0px', probe: 1, presentation: null, expanded: 'false' })
+    await toggle.click()
     await shows(page, 'docked')
-    expect(await pinning(page)).toMatchObject({ column: 480, after: DOCK_GUTTER, ...held })
+    expect(await layout(page)).toMatchObject({ before: 172, after: DOCK_GUTTER, inset: '176px', ...docked })
 
-    // The pin survives a reload: the panel comes back beside the transcript.
-    await setFrame(TRANSCRIPT + 2 * 260)
+    // A reload docks it again, with the transcript already moved.
     await page.reload({ waitUntil: 'load' })
     await openSeed(page)
     await shows(page, 'docked')
-    expect(await pinning(page)).toMatchObject({ column: TRANSCRIPT, before: 172, after: DOCK_GUTTER, inset: '176px', ...held, pin: pressed })
+    expect(await layout(page)).toMatchObject({ column: TRANSCRIPT, before: 172, after: DOCK_GUTTER, inset: '176px', ...docked })
+    expect(tripwire.pageErrors).toEqual([])
+  })
 
-    // The toggle hides a pinned panel, which gives the room back, and shows it again.
-    await toggle.click()
-    await shows(page, null)
-    expect(await pinning(page)).toMatchObject({ before: 260, after: 260, inset: '0px', handles: [10, 10], expanded: 'false' })
-    await toggle.click()
+  it('leaves the transcript centered where its start gutter cannot give the room, floats on request, and docks once it can', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-overlay'))
+    await openSession()
+    const toggle = page.locator('[data-session-panel-toggle]')
+    // A stored width holds the column at 880px in these frames, so the boundary is 880 + 32 + 348.
+    await page.evaluate(() => { localStorage.setItem('dsh.conversation.contentWidth', '880') })
+    onTestFinished(forgetWidth)
+
+    // The narrowest frame that makes room leaves the column its 32px side inset at the start edge.
+    await setFrame(TRANSCRIPT + 32 + DOCK_GUTTER)
     await shows(page, 'docked')
-    expect(await pinning(page)).toMatchObject({ before: 172, after: DOCK_GUTTER, inset: '176px', handles: [0, 0], ...held })
+    const last = await layout(page)
+    expect(last).toMatchObject({
+      column: TRANSCRIPT, before: 32, after: DOCK_GUTTER, inset: '316px', composerOffset: 0, probe: 1, expanded: 'true',
+      panel: { width: 300, clear: 40, edge: 8 },
+    })
+    // The start handle has no gutter left to sit in; the end handle keeps its place before the panel.
+    expect([last.handles.left.width, last.handles.right.width]).toEqual([0, 10])
 
-    // A gutter that holds the panel by itself needs no room made: the transcript stays centered and keeps its handles.
-    await setFrame(TRANSCRIPT + 2 * (DOCK_GUTTER + 100))
-    expect(await pinning(page)).toMatchObject({
-      before: DOCK_GUTTER + 100, after: DOCK_GUTTER + 100, inset: '0px', handles: [10, 10], probes: { gutter: 1, reserve: 1 },
-      presentation: 'docked', panel: { width: 360, clear: 80, edge: 8 }, pin: pressed,
+    // One pixel less makes none: the column stays centered at its width and the panel hides.
+    await setFrame(TRANSCRIPT + 32 + DOCK_GUTTER - 1)
+    await shows(page, null)
+    expect(await layout(page)).toMatchObject({
+      column: TRANSCRIPT, before: 189.5, after: 189.5, inset: '0px', probe: 0, expanded: 'false', panel: null,
     })
 
-    // Unpinned where only the pin held it, the panel stays open as the overlay, which an outside press closes.
-    await setFrame(TRANSCRIPT + 2 * 260)
-    await shows(page, 'docked')
-    await pin.click()
+    // The toggle then opens it over the transcript, narrower than docked and at the same edge inset.
+    await toggle.click()
     await shows(page, 'overlay')
-    expect(await pinning(page)).toMatchObject({
-      before: 260, after: 260, inset: '0px', handles: [10, 10], expanded: 'true', panel: { width: 280, edge: 8 },
-      pin: { ...pressed, pressed: 'false' },
-    })
-    expect(await stored()).toBe('false')
-    await pressOutside()
+    const overlay = await layout(page)
+    expect(overlay).toMatchObject({ before: 189.5, inset: '0px', probe: 0, presentation: 'overlay', expanded: 'true', panel: { width: 280, edge: 8 } })
+    expect(overlay.panel?.clear).toBeLessThan(0)
+    await page.keyboard.press('Escape')
     await shows(page, null)
+    expect((await layout(page)).expanded).toBe('false')
+
+    // An open overlay gives way to the docked panel once the frame can make the room.
+    await toggle.click()
+    await shows(page, 'overlay')
+    await setFrame(TRANSCRIPT + 32 + DOCK_GUTTER)
+    await shows(page, 'docked')
+    expect(await layout(page)).toMatchObject({ before: 32, after: DOCK_GUTTER, expanded: 'true', panel: { width: 300, clear: 40, edge: 8 } })
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('resizes the transcript from either width handle beside the docked panel, moving only its start edge', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-width'))
+    await openSession()
+    await forgetWidth()
+    onTestFinished(forgetWidth)
+    await setGutter(260)
+    await shows(page, 'docked')
+    /** Drag a width handle `dx` pixels in one move and wait for the width it stores. */
+    const drag = async (side: 'left' | 'right', dx: number, stored: string): Promise<void> => {
+      const strip = (await page.locator(`[data-width-handle="${side}"]`).boundingBox())!
+      const x = strip.x + strip.width / 2
+      await page.mouse.move(x, 400)
+      await page.mouse.down()
+      await page.mouse.move(x + dx, 400)
+      await page.mouse.up()
+      await expect.poll(() => page.evaluate(() => localStorage.getItem('dsh.conversation.contentWidth'))).toBe(stored)
+    }
+    const beside = { presentation: 'docked', panel: { width: 300, clear: 40, edge: 8 } }
+
+    // The panel holds the column's end edge: 40px of travel on the start handle moves the start edge 40px.
+    await drag('left', -40, '920')
+    expect(await layout(page)).toMatchObject({ column: 920, before: 132, after: DOCK_GUTTER, ...beside })
+    // The end handle sits between the column and the panel; travel toward the panel widens the column the same way.
+    await drag('right', 20, '940')
+    expect(await layout(page)).toMatchObject({ column: 940, before: 112, after: DOCK_GUTTER, ...beside })
+    await drag('left', 60, '880')
+    expect(await layout(page)).toMatchObject({ column: TRANSCRIPT, before: 172, after: DOCK_GUTTER, ...beside })
+
+    // In a gutter that holds the panel the column is centered, and both edges move with the pointer.
+    await setGutter(DOCK_GUTTER + 100)
+    await drag('right', 20, '920')
+    expect(await layout(page)).toMatchObject({ column: 920, before: 428, after: 428, inset: '0px', presentation: 'docked' })
+
+    // Dragged wider than the start gutter can give, the column takes its room back: the panel hides and the column centers.
+    await setGutter(260)
+    expect(await layout(page)).toMatchObject({ column: 920, before: 132, after: DOCK_GUTTER, ...beside })
+    await drag('left', -110, '1030')
+    await shows(page, null)
+    expect(await layout(page)).toMatchObject({ column: 1030, before: 185, after: 185, inset: '0px', probe: 0, expanded: 'false' })
+    // Narrowed again, the panel docks without the toggle.
+    await drag('left', 20, '990')
+    await shows(page, 'docked')
+    expect(await layout(page)).toMatchObject({ column: 990, before: 62, after: DOCK_GUTTER, ...beside })
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -415,7 +419,7 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     await expect.poll(async () => (await handle('subagents')).opacity).toBe('1')
     expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', shown: false })
     expect(await head('background-jobs').locator('[data-session-panel-grip]').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
-    // Environment does not move: its title row is no drag source and has no handle, so only the pin sits at its end.
+    // Environment does not move: its title row is no drag source and has no handle.
     expect(await head('environment').evaluate(element => ({
       draggable: (element as HTMLElement).draggable,
       cursor: getComputedStyle(element).cursor,
@@ -461,8 +465,6 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     await page.mouse.up()
     await expect.poll(order).toEqual(registered)
     expect(await stored()).toEqual(['environment', 'subagents', 'background-jobs', 'shared-tasks'])
-    // The pin stays alone at the end of Environment's title line.
-    expect((await pinning(page)).pin).toEqual({ pressed: 'false', target: [24, 24], center: 22, top: 10 })
 
     // The order survives a reload.
     await dragOnto('background-jobs', 'subagents', 6)
@@ -503,7 +505,7 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     ]) })
     onTestFinished(() => withMenu.close())
     await seedSession(withMenu, await readFile(FIXTURE, 'utf8'), SEED_ID)
-    const other = await newEnglishPage(browser)
+    const other = await newPanelPage(browser)
     onTestFinished(() => other.close())
     onTestFailed(() => saveFailureShot(other, 'web-e2e-session-panel-row-menu'))
     await other.emulateMedia({ reducedMotion: 'reduce' })

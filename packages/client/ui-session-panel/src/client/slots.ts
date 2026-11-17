@@ -107,7 +107,7 @@ export interface PanelFoldProps {
 
 /** How the panel currently shows. */
 export type SessionPanelPresentation =
-  /** Beside the transcript: in the Chat View's end gutter, or in the room the transcript makes for a pinned panel. */
+  /** Beside the transcript in the Chat View's end gutter, which the transcript moves aside to leave where it is narrower. */
   | 'docked'
   /** Over the transcript, opened from the toggle while the panel has no room to dock. */
   | 'overlay'
@@ -136,34 +136,25 @@ export interface SessionPanelSectionEntry {
 
 /** Panel visibility shared by the toggle and the panel. */
 export interface SessionPanelVisibility {
-  /** Whether the panel docks while it has room, which the header toggle flips; persisted across reloads. */
-  readonly docks: boolean
-  /**
-   * Whether the pin is on: the transcript then makes room for the panel where
-   * the gutter alone is too narrow. Persisted across reloads.
-   */
+  /** Whether the panel docks while it has room, in the gutter or where the transcript moves aside for it; persisted across reloads. */
   readonly pinned: boolean
   /** Session whose overlay is open, or null. */
   readonly overlay: SessionId | null
 }
 
-/** The room one Chat View, or one Session across its Chat Views, has for the docked panel. */
-export interface SessionPanelRoom {
-  /** The end gutter holds the docked panel as the transcript stands. */
-  readonly gutter: boolean
-  /** The transcript can move aside or narrow to leave the docked panel its room, which it does only for a pinned panel. */
-  readonly reserve: boolean
-}
-
 /**
- * The room each Session whose Chat View holds a panel has to dock it: a
- * member is true when at least one of the Session's Chat Views reports it. A
+ * Whether each Session whose Chat View holds a panel has room to dock it:
+ * true when, in at least one of its Chat Views, the end gutter holds the
+ * docked panel or the transcript can move aside to leave that gutter. A
  * Session without an entry shows no Chat View.
  */
-export type SessionPanelDockable = ReadonlyMap<SessionId, SessionPanelRoom>
+export type SessionPanelDockable = ReadonlyMap<SessionId, boolean>
 
-/** The room of each mounted panel's Chat View, by the id the panel gave its probes. */
-export type SessionPanelProbes = ReadonlyMap<string, SessionPanelRoom>
+/**
+ * Whether each mounted panel's Chat View has room for the docked panel, by
+ * the id the panel gave its dock probe.
+ */
+export type SessionPanelProbes = ReadonlyMap<string, boolean>
 
 /** Business face of the header toggle. */
 export interface SessionPanelToggleInjected {
@@ -184,7 +175,7 @@ export interface SessionPanelToggleInjected {
 /** Business face of the panel. */
 export interface SessionPanelInjected {
   /**
-   * Shared visibility, the projected section roster, and each mounted panel's
+   * Shared visibility, the projected section roster, and each dock probe's
    * room; the renderer binds them as `useVisibility`, `useSections`, and `useProbes`.
    */
   readonly hooks: {
@@ -193,24 +184,15 @@ export interface SessionPanelInjected {
     readonly probes: ObservableSnapshot<SessionPanelProbes>
   }
   /**
-   * Create the ref of one probe of a mounted panel, an element whose
-   * stylesheet width says whether the Chat View has one kind of room for the
-   * docked panel. The plugin observes the element while it is attached and
-   * records what it decides under `probe`, and the Session's for the toggle.
+   * Create the ref of one mounted panel's dock probe, the element whose
+   * stylesheet width says whether the Chat View has room for the docked
+   * panel. The plugin observes the element while it is attached and records
+   * the probe's room under `probe`, and the Session's for the toggle.
    * @param sessionId - Session the panel's Chat View shows.
    * @param probe - identity of the panel within the page.
-   * @param member - the room the probe decides.
    * @returns the ref callback for the probe element; detaching withdraws the probe.
    */
-  readonly createProbeRef: (sessionId: SessionId, probe: string, member: keyof SessionPanelRoom) => (element: HTMLElement | null) => void
-  /**
-   * Pin or unpin the panel. Pinning also sets the docking preference;
-   * unpinning a panel that only the pin kept beside the transcript leaves it
-   * open as the Session's overlay.
-   * @param sessionId - Session whose panel holds the pin.
-   * @param pinned - the new pin.
-   */
-  readonly setPinned: (sessionId: SessionId, pinned: boolean) => void
+  readonly createProbeRef: (sessionId: SessionId, probe: string) => (element: HTMLElement | null) => void
   /**
    * Close the Session's overlay.
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.

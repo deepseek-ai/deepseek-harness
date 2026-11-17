@@ -9,18 +9,18 @@
    panel's width and the dock probe both derive from them, so the gutter that
    docks the panel is exactly the one that holds its minimum width. */
 .panel,
-.dockProbe,
-.reserveProbe {
+.dockProbe {
   --panel-clear: 40px;
   --panel-edge: 8px;
   --panel-min-width: 300px;
 }
 
-/* A pinned panel has the Conversation body keep the gutter that docks it:
-   the three metrics above, 348px. The body moves the transcript and the
-   composer aside for it (ui-conversation's end reserve) and makes no room
-   when that would leave the transcript column under 480px. The gutter probe
-   carries the mark while the pin and the docking preference are both on. */
+/* While the docking preference is on, the dock probe carries a mark, and
+   the panel asks the Conversation body to keep the gutter that docks it:
+   the three metrics above, 348px. Where the gutter is narrower, the body
+   moves the transcript and the composer into the start gutter for it
+   (ui-conversation's end reserve) and makes no room when the start gutter
+   cannot give it. */
 :global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve]) {
   --dsh-chat-end-reserve: calc(40px + 8px + 300px);
 }
@@ -66,82 +66,29 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* The probes tell the plugin where the docked panel has room without a pixel
-   measurement: each is 1px wide while its condition holds and 0 otherwise, a
-   width under 0 being used as 0. A size observer on one therefore reports
-   only when its decision flips, not while the window resizes on one side of
-   it or the transcript grows. They have no height and take no pointer
-   events. */
-.dockProbe,
-.reserveProbe {
+/* The dock probe tells the plugin whether the docked panel has room without
+   a pixel measurement: it is 1px wide while the gutter holds the panel's
+   minimum width, or while the Conversation body's largest end reserve covers
+   that gutter, and 0 otherwise, a width under 0 being used as 0. A size
+   observer on it therefore reports only when the docking decision flips,
+   not while the window resizes on one side of it or the transcript grows.
+   The second term does not depend on whether the body is making room, so
+   the room the transcript makes never changes the decision that asked for
+   it; it is the step the body takes its end inset from, so the probe has
+   room exactly where the body makes it. It has no height and takes no
+   pointer events. */
+.dockProbe {
   position: absolute;
   top: 0;
   right: 0;
+  width: max(
+    calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),
+    calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px)
+  );
   max-width: 1px;
   height: 0;
   visibility: hidden;
   pointer-events: none;
-}
-
-/* The gutter holds the panel's minimum width as the transcript stands. The
-   gutter counts the body's end inset, so any inset takes the probe to 0: a
-   gutter the transcript made is the reserve probe's to report. */
-.dockProbe {
-  width: calc(
-    var(--dsh-chat-aside-gutter, 0px) - var(--dsh-chat-end-inset, 0px) * 9999
-    - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px
-  );
-}
-
-/* The transcript can make the room: the body's largest end reserve covers
-   the gutter that docks the panel. It does not depend on the pin, so the
-   plugin knows what pinning would do before the pin is on. */
-.reserveProbe {
-  width: calc(var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px);
-}
-
-/* The pin: the panel's top end corner, on the first shown section's title
-   line. It floats, so that title row, which is a formatting context of its
-   own, ends before it whichever section shows first; its bottom margin keeps
-   the float clear of the rows under the title. A 24px target whose 14px
-   glyph sits in the column of the rows' More buttons, 14px from the rows'
-   end. Tertiary ink, and primary ink with the filled glyph while pinned. */
-.pin {
-  /* Positioned, so it paints and takes presses above the sections, which are positioned for their landing lines. */
-  position: relative;
-  z-index: 1;
-  float: inline-end;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: 4px 2px -4px 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--dsw-radius-xs);
-  color: var(--dsw-alias-label-tertiary);
-  background: transparent;
-  cursor: pointer;
-}
-
-.pin[aria-pressed='true'] {
-  color: var(--dsw-alias-label-primary);
-}
-
-.pin:focus-visible {
-  outline-offset: -2px;
-}
-
-@media (hover: hover) {
-  .pin:hover {
-    color: var(--dsw-alias-label-primary);
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.pin:active {
-  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .section {
@@ -240,12 +187,13 @@
 
 /* The drag handle lies over the end of a draggable title row, in the column
    of the rows' More buttons: a 24px box whose center is 14px from the row's
-   end. It is a mark, not a control: the whole title row is the drag source.
-   It takes no room in the row, so the title's trailing content runs to the
-   row's end as it does without the handle. The row's end shows one of the
-   two: the trailing content at rest, and the handle in its place while the
-   pointer is over the title row and during a drag. The hidden content keeps
-   its box, so the title does not move. */
+   end. It is a mark, not a control: the whole title row is the drag source,
+   and the mark passes pointer events through to it and, at rest, to the
+   trailing content under it. It takes no room in the row, so the title's
+   trailing content runs to the row's end as it does without the handle. The
+   row's end shows one of the two: the trailing content at rest, and the
+   handle in its place while the pointer is over the title row and during a
+   drag. The hidden content keeps its box, so the title does not move. */
 .grip {
   position: absolute;
   top: 0;
@@ -257,6 +205,7 @@
   height: 24px;
   color: var(--dsw-alias-label-tertiary);
   opacity: 0;
+  pointer-events: none;
 }
 
 .section[data-dragging] .grip {

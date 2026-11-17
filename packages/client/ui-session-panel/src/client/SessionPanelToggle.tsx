@@ -17,9 +17,9 @@ import css from './SessionPanelToggle.module.css'
 export function SessionPanelToggle({
   sessionId, useDockable, useVisibility, toggle, renderSlot, t,
 }: SessionPanelToggleProps): ReactNode {
-  const room = useDockable(entries => entries.get(sessionId))
-  const shown = useVisibility(visibility => presentationOf(room, visibility, sessionId) !== 'hidden')
-  const available = room !== undefined
+  const dockable = useDockable(entries => entries.get(sessionId))
+  const shown = useVisibility(visibility => presentationOf(dockable === true, visibility, sessionId) !== 'hidden')
+  const available = dockable !== undefined
   const open = available && shown
   const label = available ? t(open ? 'toggle.hide' : 'toggle.show') : t('toggle.unavailable')
   const nameId = useId()

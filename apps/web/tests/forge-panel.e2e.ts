@@ -18,7 +18,8 @@ import {
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspaceZh, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel, writeComposerDraft, ZH_BROWSER_LOCALE,
+  connectFreshWorkspaceZh, dismissSessionPanel, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel,
+  writeComposerDraft, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 declare global {
@@ -855,6 +856,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(notice).toBeLessThan(events.findIndex(event => event.type === 'assistant/message'))
 
   // A change request bound the way a `gh pr create` result binds one.
+  // The panel docked beside the conversation above; the toggle's attention mark is read with it hidden.
+  await dismissSessionPanel(page)
   scaffold.ctx.forgeSession.track(session, PULL)
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   expect(await sessionPanelToggle(page).getAttribute('aria-expanded')).toBe('false')

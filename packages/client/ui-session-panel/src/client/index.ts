@@ -1,10 +1,9 @@
 /**
  * Session panel plugin, browser half: a Session header toggle and a floating
- * panel in the Chat View's aside, with a pin that has the transcript make room
- * for it. The panel draws the titles of the sections other plugins register,
- * lays out the rows they mark, offers the fold control their lists end with
- * and the details their rows show on hover, and ships the Environment section
- * with the working folder row.
+ * panel in the Chat View's aside. The panel draws the titles of the sections
+ * other plugins register, lays out the rows they mark, offers the fold control
+ * their lists end with and the details their rows show on hover, and ships the
+ * Environment section with the working folder row.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -34,7 +33,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export type {
   EnvironmentSectionProps, PanelDetailsFact, PanelDetailsProps, PanelFoldProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable,
-  SessionPanelIndicatorOwnerProps, SessionPanelInjected, SessionPanelPresentation, SessionPanelProbes, SessionPanelProps, SessionPanelRoom,
+  SessionPanelIndicatorOwnerProps, SessionPanelInjected, SessionPanelPresentation, SessionPanelProbes, SessionPanelProps,
   SessionPanelSectionEntry, SessionPanelSectionOwnerProps, SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
 
@@ -51,7 +50,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-session-panel: dictionaries')
   const t = ctx.locale.bind(NS)
   const state = new SessionPanelState()
-  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay follower and room probes')
+  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay follower and dock probes')
   const sections = sectionSource(ctx)
   const host: ObservableSnapshot<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,
@@ -85,8 +84,7 @@ export function apply(ctx: ClientContext): void {
     },
     inject: (): SessionPanelInjected => ({
       hooks: { visibility: state.visibility, sections, probes: state.probes },
-      createProbeRef: (sessionId, probe, member) => state.createProbeRef(sessionId, probe, member),
-      setPinned: (sessionId, pinned) => { state.setPinned(sessionId, pinned) },
+      createProbeRef: (sessionId, probe) => state.createProbeRef(sessionId, probe),
       closeOverlay: (sessionId) => { state.closeOverlay(sessionId) },
       moveSection: (id, target, placement) => { sections.move(id, target, placement) },
     }),
