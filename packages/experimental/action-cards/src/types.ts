@@ -1,6 +1,6 @@
 /** Card proposals, recorded decisions and user-action results shared by every action kind. */
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -8,13 +8,18 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 /** Kind-defined JSON fields of a proposal or decision; each kind validates its own fields. */
 export type ActionCardFields = Readonly<Record<string, JsonValue>>
 
-/** One card admitted from a successful `propose_action` call. */
+/** Id of one card in its Session: the id of the assistant message whose answer holds the card's block. */
+export type ActionCardId = Branded<'ActionCardId'>
+
+/** Language of the fenced answer block that offers a card. The Host reads cards from these blocks and the Web client hides them. */
+export type ActionCardFence = 'action-card'
+
+/** One card admitted from an `action-card` block. */
 export interface ActionCardProposal {
-  /** Id of the logged tool call. */
-  readonly callId: ToolCallId
+  readonly cardId: ActionCardId
   /** Turn whose answer the card follows. */
   readonly turn: number
-  /** Registered action kind named by the call. */
+  /** Registered action kind the card names. */
   readonly action: string
   readonly title: string
   /** What the action does, in the user's language. */
@@ -29,14 +34,14 @@ export interface ActionCardProposal {
  * log and never recorded.
  */
 export interface ActionCardDecision {
-  readonly callId: ToolCallId
+  readonly cardId: ActionCardId
   readonly action: string
   readonly phase: string
   /** Kind-defined fields such as a chosen location or a created package. */
   readonly data?: ActionCardFields | undefined
 }
 
-/** Open-Session proposals and decisions by call id, excluded from Session summaries. */
+/** Open-Session proposals and decisions by card id, excluded from Session summaries. */
 export interface ActionCardView {
   readonly proposals: Readonly<Record<string, ActionCardProposal>>
   readonly decisions: Readonly<Record<string, ActionCardDecision>>
