@@ -9,7 +9,6 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../../typert/protocol" },
     { "path": "../../llm/llm" },
-    { "path": "../../core/tools" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
     { "path": "../../session/session-projection" },
@@ -20,6 +19,7 @@
   "files": [
     "src/index.ts",
     "src/types.ts",
-    "src/projection.ts"
+    "src/projection.ts",
+    "src/fence.ts"
   ]
 }

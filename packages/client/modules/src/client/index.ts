@@ -14,6 +14,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { ClientModuleSystem } from './system.ts'
 import { parseBootManifest } from './manifest.ts'
+import type { SyncedConfig, SyncedConfigService } from '@deepseek-ai/dsh-client-config/types'
 import type {
   ClientBootstrapModule, ClientModuleCreateOptions, ClientModuleLoader, ClientModuleLoaderTarget,
 } from './manifest.ts'
@@ -52,11 +53,11 @@ export function createClientModuleSystem(
   })
 }
 
-/** Required service: the Loader whose internal module system this plugin publishes. */
+/** Required service: the Loader whose internal module system and synced configuration this plugin publishes. */
 export const inject = ['loader']
 
 /**
- * Enroll the kernel-built module system as `ctx.modules`.
+ * Enroll the kernel-built module system as `ctx.modules` and its synced configuration lookup as `ctx.config`.
  * @param ctx - client root context.
  */
 export function apply(ctx: Context): void {
@@ -66,4 +67,8 @@ export function apply(ctx: Context): void {
     throw new Error('client-modules: the Loader has no client module system')
   }
   ctx.reflect.provide('modules', modules)
+  const config: SyncedConfigService = {
+    resolveConfigByPackage: <C>(packageName: string) => modules.entries.resolveConfigByPackage(packageName) as SyncedConfig<C> | undefined,
+  }
+  ctx.reflect.provide('config', config)
 }

@@ -9,9 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../util/launch-environment"
-    },
-    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -33,13 +30,13 @@
       "path": "../../credentials/credentials"
     },
     {
-      "path": "../../account/deepseek-account"
-    },
-    {
       "path": "../../util/http-proxy"
     },
     {
       "path": "../../llm/llm"
+    },
+    {
+      "path": "../../account/deepseek-auth"
     }
   ]
 }

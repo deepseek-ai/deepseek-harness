@@ -984,6 +984,28 @@ describe('provider profile lifecycle', () => {
     expect(server.requests).toHaveLength(0)
   })
 
+  it.each([
+    ['   ', 'is blank; set PI_CUSTOM_REF_KEY to the raw key (the web Models page writes it) or export it in the launching environment'],
+    ['sk-\u{1F600}supersecret', 'contains characters no HTTP header can carry; set PI_CUSTOM_REF_KEY to the raw key alone (the web Models page writes it)'],
+  ])('refuses the unusable key %j behind apiKeyEnv before any request, naming the reference and never the key', async (value, detail) => {
+    vi.stubEnv('PI_CUSTOM_REF_KEY', value)
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, { apiKey: undefined, apiKeyEnv: 'PI_CUSTOM_REF_KEY' })
+    const result = await assemble(ctx, { model: 'deepseek-flash', messages: [] })
+    expect(result.finish).toEqual({
+      kind: 'error', failure: { message: `llm-pi-ai: the API key resolved from PI_CUSTOM_REF_KEY ${detail}`, code: 'INVALID_CREDENTIAL' },
+    })
+    expect(server.requests).toHaveLength(0)
+  })
+
+  it('trims whitespace around the key behind apiKeyEnv', async () => {
+    vi.stubEnv('PI_CUSTOM_REF_KEY', '  custom-ref-key\t\n')
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, { apiKey: undefined, apiKeyEnv: 'PI_CUSTOM_REF_KEY' })
+    await assemble(ctx, { model: 'deepseek-flash', messages: [] })
+    expect(server.headers[0]?.authorization).toBe('Bearer custom-ref-key')
+  })
+
   it('validates empty, underspecified, legacy-shaped, and explicitly blank profiles', () => {
     expect(DEFAULT_MAX_REQUEST_IMAGE_BYTES).toBe(20 * 1024 * 1024)
     // Empty and omitted dicts are the dormant zero-route posture, not errors.

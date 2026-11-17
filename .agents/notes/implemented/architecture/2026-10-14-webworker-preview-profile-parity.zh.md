@@ -61,7 +61,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 ### 文件监听与 Client 插件下发
 
 - Worker 的 `fs.watch` 和 `fs.watchFile` 监听器在创建 watcher 时的异步上下文里运行，与 Node 从 watch 句柄派发事件一致，而不是在写入方的上下文里运行。因此 HMR 的配置 watcher 在写入方的 HMR 事务之外运行，事务内的配置写入不会让随后的重载因嵌套事务而失败。
-- `@deepseek-ai/dsh-client-hmr` 的浏览器部分在 shell 提供 `__DSH_TRANSPORT__.fetch` 时（Worker preview 隧道）经它读取 `/plugins/events`，否则经 `EventSource` 读取。因此在 Preview 里启用 bundle 后，其 Client 插件无需刷新页面即可挂载。
+- `@deepseek-ai/dsh-client-hmr` 的浏览器部分经页面 Connection 提供的 Remote 载体（包括 Worker preview 隧道）跟随 `pluginEvents/follow` Remote 流。因此在 Preview 里启用 bundle 后，其 Client 插件无需刷新页面即可挂载。
 
 ## 考虑过的替代方案
 

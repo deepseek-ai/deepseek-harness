@@ -1,5 +1,5 @@
 ---
-description: "Package map for the DeepSeek account family: browser sign-in, the stored account grant, and the Host-only request credentials released to the account model route and the DeepSeek web providers."
+description: "Package map for the DeepSeek account family: browser sign-in, the stored account grant, and the request authentication that chooses between the account sign-in and the API key for every DeepSeek API request."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `account/` group signs the user in to DeepSeek through the system browser and keeps the account grant in the local credential store that [`credentials/`](../credentials/README.md) owns. Host consumers never read the token: the `deepseek-account` model route and the DeepSeek web providers ask `ctx.deepseekAccount` for the credential of one request destination and receive its request headers, the bare value, and an invalidation for an HTTP 401. Clients receive account state through the `account` Remote namespace without credentials.
+The `account/` group signs the user in to DeepSeek through the system browser and keeps the account grant in the local credential store that [`credentials/`](../credentials/README.md) owns. Host consumers never read the token: `ctx.deepseekAuth` asks `ctx.deepseekAccount` for the credential of one request destination and hands the DeepSeek model routes and web providers its request headers, an invalidation for an HTTP 401, and a signal that aborts at sign-out. The same service releases the API key for consumers the key bills. Clients receive account state through the `account` Remote namespace without credentials.
 
 ## Table of Contents
 
@@ -22,11 +22,12 @@ The `account/` group signs the user in to DeepSeek through the system browser an
 <a id="packages"></a>
 ## Packages
 
-One package provides the account feature; its README covers day-to-day use, and the subsystem reference owns the exhaustive contracts.
+Two packages provide the account feature and DeepSeek request authentication; their READMEs cover day-to-day use, and the subsystem reference owns the exhaustive contracts.
 
 | Package | Role | ctx key |
 |---|---|---|
 | [`deepseek-account/`](deepseek-account/README.md) | Browser sign-in, the stored grant, Platform profile, balance, and notification reads, and Host-only request credentials for allowed destinations | `ctx.deepseekAccount` |
+| [`deepseek-auth/`](deepseek-auth/README.md) | Request authentication for every DeepSeek API consumer: orders the API key and the account sign-in by billing, binds each to its deployment, and releases request headers | `ctx.deepseekAuth` |
 
 -----
 
