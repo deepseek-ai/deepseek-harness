@@ -647,7 +647,7 @@ describe('ImSender.stream', () => {
 
   it('settles a recalled stream abort or limit recall as failed without message attribution', async () => {
     const { bot, sender, pool } = await boot()
-    const makeStream = (err: Error, handleAfterFail?: MessageHandle): { stream: MessageStream; reject: (e: unknown) => void } => {
+    const makeStream = (handleAfterFail?: MessageHandle): { stream: MessageStream; reject: (e: unknown) => void } => {
       let rejectDone!: (reason: unknown) => void
       const done = new Promise<never>((_resolve, reject) => { rejectDone = reject })
       done.catch(() => {})
@@ -677,7 +677,7 @@ describe('ImSender.stream', () => {
       }
     }
 
-    const abortRecalled = makeStream(new StreamAbortError('empty', true))
+    const abortRecalled = makeStream()
     const spy1 = vi.spyOn(bot, 'stream').mockReturnValueOnce(abortRecalled.stream)
     const s1 = await sender.stream(CHAT, { operationId: 'op-abort-recalled' })
     abortRecalled.reject(new StreamAbortError('empty', true))
@@ -686,7 +686,7 @@ describe('ImSender.stream', () => {
     expect(receiptsOf(pool).get('op-abort-recalled')?.message).toBeUndefined()
     spy1.mockRestore()
 
-    const limitRecalled = makeStream(new StreamLimitError({ kind: 'size', message: 'too big' }))
+    const limitRecalled = makeStream()
     const spy2 = vi.spyOn(bot, 'stream').mockReturnValueOnce(limitRecalled.stream)
     const s2 = await sender.stream(CHAT, { operationId: 'op-limit-recalled' })
     limitRecalled.reject(new StreamLimitError({ kind: 'size', message: 'too big' }))
