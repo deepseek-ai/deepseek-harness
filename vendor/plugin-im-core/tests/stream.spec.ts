@@ -14,7 +14,7 @@ import type { RenderReport } from '../src/fallback.ts'
 import type { Mode } from '../src/mode.ts'
 import type { Prepared } from '../src/resource.ts'
 import {
-  createEditDriver, createMessageStream, type MessageStream, nextSequence, StreamAbortError, streamBackoff,
+  createEditDriver, createMessageStream, type EditDriverAdapter, type MessageStream, nextSequence, StreamAbortError, streamBackoff,
   type StreamDriver, type StreamFrame, type StreamHost, type StreamOptions, type StreamTickContext,
 } from '../src/stream.ts'
 
