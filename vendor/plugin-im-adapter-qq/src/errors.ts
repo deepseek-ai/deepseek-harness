@@ -117,7 +117,7 @@ export function ruleFor(code: number): QqErrorRule | undefined {
 }
 
 /** `Retry-After` of a response, in milliseconds (the header is in seconds). */
-function retryAfterOf(response: Response | undefined): number | undefined {
+function retryAfterOf(response: ResponseLike | undefined): number | undefined {
   if (!response) return undefined
   const value = Number(response.headers.get('retry-after'))
   return Number.isFinite(value) && value > 0 ? value * SECOND : undefined
@@ -133,9 +133,18 @@ function ruleForStatus(status: number): QqErrorRule {
 }
 
 /** Whether a failure carried an HTTP answer at all. */
-function responseOf(error: unknown): Response | undefined {
+interface ResponseLike {
+  readonly status: number
+  readonly headers: { get(name: string): string | null }
+}
+
+/** `Response` (including `undici.Response`) attached by `ctx.http` when an error carries an HTTP answer. */
+function responseOf(error: unknown): ResponseLike | undefined {
   const response = (error as { response?: unknown } | undefined)?.response
-  return response instanceof Response ? response : undefined
+  if (typeof response !== 'object' || response === null) return undefined
+  const candidate = response as { status?: unknown; headers?: { get?: unknown } }
+  if (typeof candidate.status !== 'number' || typeof candidate.headers?.get !== 'function') return undefined
+  return response as ResponseLike
 }
 
 /** Whether the failure is a cancellation. */

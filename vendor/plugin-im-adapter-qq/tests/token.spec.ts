@@ -169,6 +169,15 @@ describe('AccessToken', () => {
       kind: 'permission',
       published: 'no',
     })
+
+    const undiciLike429 = createToken(() => Promise.reject(Object.assign(new Error('Too Many Requests'), {
+      response: { status: 429, headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '2' : null } },
+    })))
+    await expect(undiciLike429.token.get()).rejects.toMatchObject({
+      kind: 'rate-limit',
+      published: 'no',
+      retryAfterMs: 2000,
+    })
   })
 
   it('refetches after invalidate()', async () => {
