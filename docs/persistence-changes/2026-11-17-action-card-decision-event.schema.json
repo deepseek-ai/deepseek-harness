@@ -1,0 +1,20 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"event:action-cards/decision","kind":"event","event":"action-cards/decision","surface":false,"digest":"492fa1aa4c50b0476e236570fe9865de7959d2a4eeffc044ec47dcedf02909ec"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "0d10bbf431159e22": {"kind":"object","properties":[{"name":"action","type":"4cd48f3e5108bd6e","optional":false},{"name":"cardId","type":"4cd48f3e5108bd6e","optional":false},{"name":"data","type":"529e0ccd0e34079a","optional":true},{"name":"phase","type":"4cd48f3e5108bd6e","optional":false}],"indices":[]},
+    "492fa1aa4c50b047": {"kind":"object","properties":[{"name":"data","type":"0d10bbf431159e22","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"5e559db420e9d8d7","optional":false}],"indices":[]},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "529e0ccd0e34079a": {"kind":"object","properties":[],"indices":[{"key":"4cd48f3e5108bd6e","value":"c592ce75aab73fca"}]},
+    "5e559db420e9d8d7": {"kind":"literal","value":"action-cards/decision"},
+    "72ec79127a9c0d02": {"kind":"array","element":"c592ce75aab73fca"},
+    "938f7c7357bc403e": {"kind":"primitive","type":"null"},
+    "aa93010d0e521ad7": {"kind":"primitive","type":"boolean"},
+    "c592ce75aab73fca": {"kind":"union","types":["0657d3ca5ac4e7bf","4cd48f3e5108bd6e","529e0ccd0e34079a","72ec79127a9c0d02","938f7c7357bc403e","aa93010d0e521ad7"]},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true}
+  }
+}

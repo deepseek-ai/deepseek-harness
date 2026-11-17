@@ -112,9 +112,9 @@ export interface SkillLookupOptions {
 
 /**
  * Registry read options: provider lookup context plus the viewing scope.
- * The registry consumes `scope` to select layers; providers receive the same
- * borrowed options object and read only their {@link SkillLookupOptions}
- * contract from it.
+ * The registry consumes `scope` to select layers and hands the same borrowed
+ * options object to each provider's `list`, whose result may depend on the
+ * viewer because completed catalogs are cached per scope chain.
  */
 export interface SkillViewOptions extends SkillLookupOptions {
   /** Viewing scope (the calling agent); omitted reads the global layer alone. */
@@ -255,11 +255,11 @@ export interface SkillProvider {
    * plugins register synchronously during `apply()`; remote initialization,
    * authentication, and discovery are awaited inside this method. Implementations
    * should settle promptly when `options.signal` aborts.
-   * @param options - lookup options; `cwd` selects workspace-sensitive skills and `signal` cancels work.
+   * @param options - lookup options; `cwd` selects workspace-sensitive skills, `scope` names the viewing Agent and `signal` cancels work.
    * @returns provider candidates as a complete-array shorthand, or an explicit
    *   observation when usable candidates came from incomplete discovery.
    */
-  readonly list: (options: SkillLookupOptions) => Promise<readonly SkillCandidate[] | SkillProviderObservation>
+  readonly list: (options: SkillViewOptions) => Promise<readonly SkillCandidate[] | SkillProviderObservation>
   /**
    * Load a complete skill body for a previously listed candidate.
    * @param candidate - the winning candidate originally returned by this provider.
@@ -567,7 +567,7 @@ export class SkillRegistry extends Service {
     return { entries: merged, cacheable }
   }
 
-  private async collectLayer(layer: SkillLayer, options: SkillLookupOptions): Promise<LayerCollectResult> {
+  private async collectLayer(layer: SkillLayer, options: SkillViewOptions): Promise<LayerCollectResult> {
     const collected = await this.listLayerCandidates(layer, options)
     collected.entries.sort(compareIndexedCandidates)
     const seen = new Set<string>()
@@ -584,7 +584,7 @@ export class SkillRegistry extends Service {
     return { entries: result, cacheable: collected.cacheable }
   }
 
-  private async listLayerCandidates(layer: SkillLayer, options: SkillLookupOptions): Promise<LayerCollectResult> {
+  private async listLayerCandidates(layer: SkillLayer, options: SkillViewOptions): Promise<LayerCollectResult> {
     throwIfAborted(options.signal)
     const candidates: IndexedCandidate[] = []
     let cacheable = true

@@ -207,7 +207,13 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "commander": "^15.0.0",
     "open": "^11.0.2",
-    "@deepseek-ai/dsh-client-remote-connection": "workspace:*"
+    "@deepseek-ai/dsh-client-remote-connection": "workspace:*",
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-creation-recommendations": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-creation-recommendations": "workspace:*",
+    "@deepseek-ai/dsh-plugin-recommendations": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-plugin-recommendations": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
