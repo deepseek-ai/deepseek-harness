@@ -32,21 +32,19 @@ import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as WebDeepSeekApi from '@deepseek-ai/dsh-web-deepseek-api'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import ActionCards from '@deepseek-ai/dsh-action-cards'
-import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
@@ -268,19 +266,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
         mode: 'launch', model: { modelName: 'openai/gpt-5.4-mini', apiKey: 'catalog-placeholder' },
       })
     },
-  },
-  {
-    pkg: '@deepseek-ai/dsh-action-cards',
-    dir: 'action-cards',
-    source: 'packages/experimental/action-cards/src/index.ts',
-    requires: ['ctx.tools', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
-    writes: ['tool/call', 'tool/result', 'plugin:action-cards/decision', 'user/message'],
-    async mount(ctx) {
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(RemoteAccess)
-      await ctx.plugin(ActionCards)
-    },
-    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized recommendations bundle supplies the shipped kinds.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
@@ -721,29 +706,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-working-directory',
-    dir: 'tool-working-directory',
-    source: 'packages/session/tool-working-directory/src/index.ts',
-    requires: ['ctx.tools', 'ctx.workingDirectory'],
-    writes: ['tool/call', 'working-directory/change', 'user context for directory changes', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(ToolWorkingDirectory)
-    },
-    note: 'Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-experimental-tool-worktree',
     dir: 'tool-worktree',
     source: 'packages/experimental/tool-worktree/src/index.ts',
     requires: ['ctx.tools', 'ctx.worktrees', 'a calling Agent'],
-    writes: ['tool/call', 'Git branch and checkout', 'working-directory/change', 'tool/result'],
+    writes: ['tool/call', 'Git branch and checkout', 'workspace-root/change', 'tool/result'],
     async mount(ctx) {
       ctx.provide('worktrees', {
         create: () => Promise.reject(new Error('gen-tool-catalog: worktree creation is unavailable during schema harvest')),
+        enter: () => Promise.reject(new Error('gen-tool-catalog: entering a worktree is unavailable during schema harvest')),
+        exit: () => Promise.reject(new Error('gen-tool-catalog: leaving a worktree is unavailable during schema harvest')),
       })
       await ctx.plugin(ToolWorktree)
     },
-    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
+    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',
@@ -777,8 +753,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       // Mount search and fetch providers so both tools register. Their schemas
-      // do not depend on provider identity or availability.
+      // do not depend on provider identity or availability. The DeepSeek
+      // provider starts only beside the authentication service.
       await ctx.plugin(WebRuntime)
+      await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(WebDeepSeekApi)
       await ctx.plugin(WebFetchLocal)
       await ctx.plugin(ToolWeb)

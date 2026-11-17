@@ -39,7 +39,9 @@ import { apply as registerPdf } from './pdf/index.ts'
 import { apply as registerCode } from './code/index.ts'
 import { apply as registerOffice } from './office/index.ts'
 import { apply as registerExcel } from './excel/index.ts'
-import { Config } from '../config.ts'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { DocumentPreviewConfig } from '../types.ts'
+import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../defaults.ts'
 
 // Values stay package-private unless another package needs them; the plugin
 // surface is `apply`, `inject`, and the store factory another registration may
@@ -85,9 +87,9 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.
 /**
  * Client plugin body: register the type, its dictionaries, its body, and its chip title.
  * @param ctx - client root context carrying the registry, slots, copy, and file readers.
+ * @param config - Host-synced Office and Excel limits, read once here; an absent value uses the schema defaults.
  */
-export function apply(ctx: ClientContext): void {
-  const config = Config((globalThis as { __DSH_DOCUMENT_PREVIEW_CONFIG__?: unknown }).__DSH_DOCUMENT_PREVIEW_CONFIG__ ?? {})
+export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewConfig>): void {
   const previews = new DocumentPreviewRegistry()
   const disposePreviews = ctx.reflect.provide('documentPreviews', previews)
   ctx.effect(() => disposePreviews)
@@ -126,7 +128,7 @@ export function apply(ctx: ClientContext): void {
   registerHtml(ctx)
   registerImage(ctx)
   registerPdf(ctx)
-  registerOffice(ctx, config.office)
-  registerExcel(ctx, config.excel)
+  registerOffice(ctx, config.office.get() ?? OFFICE_DEFAULTS)
+  registerExcel(ctx, config.excel.get() ?? EXCEL_DEFAULTS)
   registerCode(ctx)
 }

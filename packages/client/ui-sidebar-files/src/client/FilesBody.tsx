@@ -111,7 +111,9 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
             <IconSearchOutlineRegular />
           </button>
         </Tooltip>
-        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
+        <div className={css.externalActions}>
+          {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
+        </div>
       </div>
       <div className={css.content} data-files-content data-files-navigator-row>{navigator}</div>
     </div>

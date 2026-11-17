@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once per Host. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
+Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
 
 ### When to choose it
 
@@ -71,7 +71,7 @@ A profile’s `cordis.patch.yml` replaces the entry’s complete `servers` map. 
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `enabled` | `true` | Durable intent: `false` unmounts the instance and keeps the entry |
 | `startupTimeoutMs` | `30,000` | Budget for template resolution, negotiation, connection, and initial tool discovery |
-| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` | mcp-client defaults | Per-server overrides |
+| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` / `toolLoading` | mcp-client defaults | Per-server overrides; `toolLoading: on-demand` lets agents [load the server's tools when they need them](../mcp-client/README.md#on-demand-tool-loading) |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 
@@ -107,11 +107,20 @@ export function apply(ctx: Context): void {
 
 `ctx.mcpManager.list()` returns each server's `name`, `configured` flag, and live `status`, listing configured entries before registered ones. The list includes removed entries whose cleanup is still pending or failed, with `configured: false`; a cleanup failure retains the row until the Host restarts. Cleanup status retains the first diagnostic and reports `closeConfirmed: false` if any instance or probe could not confirm closure. Published status changes emit `mcp-manager/status` while the manager is live, including cleanup failures after an entry's removal. Lifecycle operations do not wait for listeners; synchronous throws and returned promise rejections are logged without skipping other listeners.
 
-Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
+Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed. On an OAuth entry, a probe may refresh an expired grant and save the new tokens. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
+
+<a id="oauth-authorization"></a>
+### OAuth authorization
+
+Configure or register an entry with the [client OAuth options](../mcp-client/README.md#oauth). Each entry, including disabled entries, requires its own stable `oauth.credentialKey`: keep it when renaming or overriding an inherited entry, and choose a new key when copying. The manager rejects a key that another configured or registered entry owns. A plugin registering an OAuth server keeps one fixed key, so a reinstalled plugin reuses its saved grant.
+
+With credentials, Authorization, and WebServer services loaded, `startAuthorization(name)` starts an attempt or returns the active one. `list()` exposes its progress and browser URL; `mcp-manager/status` also announces authorization updates and removal after successful cleanup. `cancelAuthorization(name, id)` cancels only that attempt. Failure or cancellation preserves the previous grant; an already admitted commit completes. Entry replacement retires authorization immediately, so a pending retry cannot start with obsolete configuration.
+
+`signOut(name)` drains authorization, probes, and connections, then deletes the local grant while retaining compatible client registration. Starts and probes are rejected throughout that operation. A configuration change before deletion, such as a rename that keeps the key, preserves the grant and rejects the sign-out. Incomplete cleanup preserves the grant and requires a Host restart. Sign-out does not revoke tokens remotely. A rejected dynamic client registration is removed after an explicit authorization failure so the next explicit attempt can register again.
 
 ### Remote operations
 
-Browser clients reach the manager as `ctx.remote.mcpManager` through [`dsh-api-remotes`](../../api/remotes/README.md). `watch(signal)` yields the complete server list on subscription and again after every status or entry change, coalescing changes the subscriber has not read yet; aborting the signal ends that stream, and manager disposal ends every stream. `restart(name)` and `probe(name, signal)` run the operations above. Configuration writes stay on the Settings Remote; the manager adds no write method, so a browser cannot define a server command.
+Browser clients reach the manager as `ctx.remote.mcpManager` through [`dsh-api-remotes`](../../api/remotes/README.md). `watch(signal)` yields the complete server list on subscription and again after every status or entry change, coalescing changes the subscriber has not read yet; aborting the signal ends that stream, and manager disposal ends every stream. `restart(name)` and `probe(name, signal)` run the operations above. Authorization, cancellation, and sign-out stay on the Host: the Plugins page reaches them through [`dsh-mcp-account`](../mcp-account/README.md), so a browser never names a server to authorize. Configuration writes stay on the Settings Remote; the manager adds no write method, so a browser cannot define a server command.
 
 -----
 
@@ -129,8 +138,9 @@ This section explains the design decisions and points at the code; the observabl
 - **Registrations are effects.** A registration is an effect of the calling plugin, so its owner's lifecycle decides when the server exists; no plugin writes another plugin's configuration or leaves an entry behind on removal.
 - **One serialized operation tail.** Reconciles and restarts queue on one chain, so two lifecycle operations cannot interleave one instance's unmount/mount. Probes run independently; entry changes and disposal cancel them before waiting for the operation tail and owned cleanup.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
-- **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
-- **Connection handling stays in mcp-client.** Children are ordinary plugin instances mounted under the manager's fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through `connectionStatusOf` rather than duplicating supervision.
+- **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not. The MCP client host validates the fields mcp-client owns — the entry key as `serverName`, template tokens, `reconnect`, and `oauth` — through each transport's own schema, so those refusals name the field too; the manager's schema passes `reconnect` and `oauth` through unresolved.
+- **Connection handling stays in mcp-client.** Children are ordinary mcp-client instances that the host mounts below its own Fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through the handle the host returns rather than duplicating supervision.
+- **The host is the manager's only reach into mcp-client.** Besides mcp-client types, the manager imports only the `McpClientHost` class and creates the host at construction, so the host and every instance it mounts run below the manager's fiber and end with it.
 
 ### Source map
 
@@ -141,7 +151,7 @@ This section explains the design decisions and points at the code; the observabl
 
 ### Lifecycle notes
 
-The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point. Child startup does not hold the operation queue open. A changed or removed entry stops forwarding child status and cancels its probes before queued cleanup; replacement waits for both probes and the child to finish cleanup. Equal status publications are absorbed. Cleanup failures remain observable after an entry's removal; disposal stops all further events and ends every `watch` stream.
+The manager starts only while the host is provided; withdrawing the host stops the manager, and providing a host again starts it with its configured and registered entries. The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point. Child startup does not hold the operation queue open. A changed or removed entry stops forwarding child status and cancels its probes before queued cleanup; replacement waits for both probes and the child to finish cleanup. Equal status publications are absorbed. Cleanup failures remain observable after an entry's removal; disposal stops all further events and ends every `watch` stream.
 
 </details>
 
@@ -175,7 +185,7 @@ No direct invalidation; mounting, rebuilding, and unmounting instances changes t
 
 These limits describe what you cannot do with this manager today. They are current package constraints, not a task backlog.
 
-- **No OAuth flow** — a server answering with an authorization challenge surfaces as an ordinary connection failure and reconnect churn; there is no needs-auth state, token storage, or interactive sign-in.
+- **OAuth sign-in ships only for plugin accounts** — [`dsh-mcp-account`](../mcp-account/README.md) shows the **Plugins** page account for servers that plugins register with it; no browser surface authorizes any other server, because authorization runs only through Host callers.
 - **Global plane only** — instances mounted by agent presets or static `cordis.yml` rows are neither listed nor governed; a static instance shows up only as a `serverName` collision when a managed entry tries to reuse its name.
 - **A rebuild has a tool gap** — a changed entry is disposed and remounted, so its tools disappear from the model's set until the new instance finishes its initial sync; there is no keep-serving-until-replacement handover.
 - **Registered entries are fixed by their plugin** — Settings cannot override a registered entry's budgets; the registering plugin exposes any tunable it needs in its own configuration.
@@ -189,7 +199,6 @@ These limits describe what you cannot do with this manager today. They are curre
 
 This Dev Note is working context for maintainers: open design questions and directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Note.
 
-- OAuth belongs on the credential-record and authorization seams plus the MCP SDK's `OAuthClientProvider`; a `needs-auth` status state is reserved for it.
 - Rolling replacement (start the new instance before disposing the old, keeping public tool names stable) would close the rebuild gap; peer products do this with a proxy generation.
 - Per-server tool allow/deny lists are a natural entry extension once a consumer needs them.
 

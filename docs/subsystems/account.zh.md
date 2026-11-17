@@ -8,7 +8,7 @@
 
 ## 请求凭据
 
-`resolveRequestCredential(url)` 仅限 Host。未登录、凭据删除进行中，以及目标地址不在配置的 `inferenceOrigin` 之内时，它回答 `undefined`；否则返回一个 `AccountRequestCredential`：`headers` 以 `x-dsh-auth-token` 携带 token，`value` 是裸 token，`reject()` 仅在已存授权仍与该 token 一致时删除它，并隔离存储失败，使调用方报告的是目标地址的拒绝。其 `revoked` 信号在账号退出该 token 所属的登录时中止，无论退登由用户发起还是由拒绝触发，且在 `deepseek-account/signed-out` 的监听器返回之后；账号模型路由和 DeepSeek Web 提供方让携带该 token 的每个模型、Files、Search 与 Fetch 请求受它约束，因此即使发出请求的插件已卸载，退登仍会结束这些请求。`deepseek-account` 模型路由通过 `ctx.llm.providerCredential('deepseek-account')`（[LLM 流式](llm-streaming.zh.md)）发布这份凭据；DeepSeek Web 提供方在那里消费它，没有该路由时直接询问账号服务。`reject()` 在被调用时挂载的账号服务上执行，因此请求与目的地应答之间发生的重载仍会移除授权；没有挂载的服务时，授权留给下一个挂载的服务处理。已被替换的账号服务释放的凭据，其信号保持未中止，因为替换后的服务只撤回自己释放的凭据。
+`resolveRequestCredential(url)` 仅限 Host。未登录、凭据删除进行中，以及目标地址不在配置的 `inferenceOrigin` 之内时，它回答 `undefined`；否则返回一个 `AccountRequestCredential`：`headers` 以 `x-dsh-auth-token` 携带 token，`reject()` 仅在已存授权仍与该 token 一致时删除它，并隔离存储失败，使调用方报告的是目标地址的拒绝。其 `revoked` 信号在账号退出该 token 所属的登录时中止，无论退登由用户发起还是由拒绝触发，且在 `deepseek-account/signed-out` 的监听器返回之后；账号模型路由和 DeepSeek Web 提供方让携带该 token 的每个模型、Files、Search 与 Fetch 请求受它约束，因此即使发出请求的插件已卸载，退登仍会结束这些请求。消费方不直接调用它：[`ctx.deepseekAuth`](../../packages/account/deepseek-auth/README.zh.md) 代 `deepseek-account` 模型路由和 DeepSeek Web 提供方索取这份凭据，目标地址位于该路由基础地址的 origin 之下；没有该路由时，位于 `DEEPSEEK_BASE_URL` 的 origin 之下。`reject()` 在被调用时挂载的账号服务上执行，因此请求与目的地应答之间发生的重载仍会移除授权；没有挂载的服务时，授权留给下一个挂载的服务处理。已被替换的账号服务释放的凭据，其信号保持未中止，因为替换后的服务只撤回自己释放的凭据。
 
 按账号计费的模型路由在 `ctx.effect()` 内用 `registerRunningTaskReport(report)` 注册运行中任务报告；只要有报告回答 true，`hasRunningAccountTasks()` 就回答 true，使退登确认能够提醒退登将打断的工作。`deepseek-account/signed-out` 之后取消这些工作由路由插件负责；比插件存活更久的请求通过其凭据的 `revoked` 信号结束，插件为该请求提供的失败回调随后取消这些工作。
 
@@ -166,6 +166,53 @@ watch(signal: AbortSignal, includeIdentityChanges: boolean = false): AsyncIterab
 ```
 
 Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/account/deepseek-account/src/index.ts)
+
+<a id="ctxdeepseekauth--deepseekauth"></a>
+
+### `ctx.deepseekAuth` — `DeepSeekAuth`
+
+`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.
+
+```ts cordis-catalog
+/**
+ * Connect the deployment a model route plugin's settings name for one kind. Call it from within `ctx.effect()`.
+ * @param kind - the kind the plugin's route bills.
+ * @param route - provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.
+ * @param connection - reads the plugin's current settings; a throw marks the kind unresolved for that operation.
+ * @returns the disposer removing the connection.
+ * @throws {DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.
+ */
+connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void
+
+/**
+ * The kind that bills a conversation on one model route.
+ * @param route - provider route of a model request; undefined names none.
+ * @returns the kind connected under that route, or undefined for a route no plugin connected.
+ */
+routeKind(route: string | undefined): DeepSeekAuthKind | undefined
+
+/**
+ * The kinds one request can authenticate with, in the order its billing tries them, each bound to its destination.
+ * Nothing is read from a credential store.
+ * @param request - the request.
+ * @returns candidates and unresolved kinds, first preferred; empty when the destination accepts no kind the
+ *   billing allows or no allowed kind serves an absolute destination.
+ */
+candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]
+
+/**
+ * Release the credential of the first candidate that has one. A later candidate is not read once an earlier one
+ * has a credential, fails to read, or does not resolve.
+ * @param request - the request.
+ * @param signal - cancellation for the lookups.
+ * @returns the authorization, or undefined when no candidate has a credential.
+ * @throws {DeepSeekAuthError} code `UNRESOLVED_CONNECTION` at an unresolved kind, `INVALID_CREDENTIAL` for an
+ *   unusable API key; store failures propagate.
+ */
+async authorize(request: DeepSeekAuthRequest, signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>
+```
+
+Source: [`packages/account/deepseek-auth/src/index.ts`](../../packages/account/deepseek-auth/src/index.ts)
 
 <a id="deepseek-account-events"></a>
 

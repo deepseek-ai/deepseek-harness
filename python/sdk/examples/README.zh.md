@@ -23,7 +23,6 @@ python python/sdk/examples/minimal.py \
 
 - Linux／macOS 上所有者作用域内的持久 `bash`，或 Windows 上的 `pwsh`
 - 配合支持图片输入的模型读取 PNG/JPEG/WebP/GIF 文件的 `read_image`
-- 查询或修改 Session 目录的 `working_directory`
 
 该组合包不包含 `dsh-base`，因此每一个新增配置项都是显式 profile 变更。运行时上下文、文本文件工具、本地指令发现、设置、托管凭据、遥测、Web 工具、subagent 与完整默认工具清单均不存在。配置树保留 SDK 启动与 JSON-RPC 服务、一个由环境配置的 DeepSeek 适配器、本地执行和 JSONL 持久化。[自动上下文压缩](../../../packages/bundle/sdk-minimal/README.zh.md#model-experience)通过额外模型请求生成较早历史的摘要，同时保留完整日志。这个最小组合将不支持的斜杠输入保留在普通提示词路径上。
 

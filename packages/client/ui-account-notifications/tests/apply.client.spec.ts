@@ -7,10 +7,19 @@ import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-clie
 import type { AccountNotificationBatch, AccountNotificationId, AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { AccountSectionInjected } from '@deepseek-ai/dsh-client-ui-settings-account/client'
 import type { AccountNotificationsInjected } from '../src/client/AccountNotifications.tsx'
-import { NOTIFICATIONS_CONFIG_GLOBAL } from '../src/config.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
+import { apply as notificationsApply, inject as notificationsInject } from '../src/client/index.ts'
+import type { AccountNotificationsConfig } from '../src/types.ts'
 import { notification } from './notification-fixture.ts'
 
 const it = createClientTest({ roster: webApp })
+/** The same composition with a one-second initial polling delay synced from the Host. */
+const itWithInterval = createClientTest({ roster: webApp, provide: {
+  '@deepseek-ai/dsh-client-ui-account-notifications': { inject: notificationsInject, apply: (ctx: Context) => {
+    notificationsApply(ctx, syncedConfig<AccountNotificationsConfig>({ notificationPollIntervalMs: 1_000 }))
+  } },
+} })
 const SELF = '@deepseek-ai/dsh-client-ui-settings-account'
 const view: AccountView = { status: 'signed-out', attempt: null,
   links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }
@@ -201,8 +210,7 @@ it('refreshes balances and notifications immediately on Settings entry', async (
   expect(c.mock.remote.account.getNotifications).toHaveBeenLastCalledWith(expect.objectContaining({ locale: 'en' }))
 }, 60_000)
 
-it('replaces polling on startup, sign-in and Settings entry and stops on sign-out or unload', async ({ start }) => {
-  vi.stubGlobal(NOTIFICATIONS_CONFIG_GLOBAL, { notificationPollIntervalMs: 1_000 })
+itWithInterval('replaces polling on startup, sign-in and Settings entry and stops on sign-out or unload', async ({ start }) => {
   const c = await start()
   c.mock.remote.account.getNotifications.mockResolvedValue(ok(null))
   c.mock.streams.push('account/watch', { type: 'snapshot', state: stored })

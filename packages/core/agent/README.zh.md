@@ -31,6 +31,8 @@ kind: "package-reference"
 
 `ctx.agents.create()` 在一个身份下构建全新 agent 与会话；`ctx.agents.resume()` 加载持久化会话并在此基础上重建 agent。两者都委托给已注册工厂，并返回 `AgentHandle`——唯一能拆除该 agent 的对象。发布和失败清理的时序见 [`AgentFactory`](src/index.ts)。`get(id)` 与 `list()` 用于查找实时 agent。[subagent 服务](../../subagent/subagent/README.zh.md) 拥有委派执行和运行时树成员关系。
 
+`seed` 携带完整的构造历史。fork 另外传入 `parentSource: { sessionId, endSeq }`：前 `endSeq` 条 seed 事件所复现的父会话（按实时 log 或持久化读出的原样）。[循环的创建生命周期](../agent-loop/README.zh.md#understand-the-implementation)负责 seed 校验、存储与取消。
+
 ```text
 const handle = await ctx.agents.create({
   sessionId,

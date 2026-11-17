@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-deepseek-api",
   "description": "DeepSeek Search and Fetch API providers for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },
@@ -35,11 +35,10 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
-    "@deepseek-ai/dsh-launch-environment": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*"
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"
@@ -59,11 +58,7 @@
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-deepseek-account": {
-      "optional": true
-    }
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   }
 }

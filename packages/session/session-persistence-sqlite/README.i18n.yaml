@@ -1,0 +1,55 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/session/session-persistence-sqlite/README.md
+/:
+  en: 45c507cd1be83a49
+  zh: 0892f22bc67f3c2b
+/deepseek-ai-dsh-session-persistence-sqlite:
+  en: 22cf683fb8ec6976
+  zh: c4c0244b1b7340bd
+/deepseek-ai-dsh-session-persistence-sqlite/summary:
+  en: fe7d7d6b65eb14b8
+  zh: e979ace0de85182b
+/deepseek-ai-dsh-session-persistence-sqlite/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 3a2f21ff0dc3420d
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package:
+  en: e9211101131a5db2
+  zh: 0d34955cfaadbbeb
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package/minimal-configuration:
+  en: edf21925e6b20d77
+  zh: 13719460563497fa
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package/opening-existing-history:
+  en: 3a0476996102dcce
+  zh: c0692ddc53045ff2
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package/durability-and-shutdown:
+  en: e420c74a70699060
+  zh: 83d37ea617216ac9
+/deepseek-ai-dsh-session-persistence-sqlite/understand-the-implementation:
+  en: 61c2c58ba3d83988
+  zh: 9eb1c37d4f7cef38
+/deepseek-ai-dsh-session-persistence-sqlite/further-exploration:
+  en: 6c9f517924d25414
+  zh: 0a8400a08ec55dbf
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/restored-history:
+  en: af9a6e2fdfb3eb09
+  zh: 5cee3d5d560a6df8
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/restored-history/what-the-model-sees:
+  en: 37ef7b6c32cafb45
+  zh: a0b53fe40abc64de
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/restored-history/token-effect:
+  en: 9f80b2e96a1c9c01
+  zh: 23c96e7f02d087be
+/deepseek-ai-dsh-session-persistence-sqlite/model-experience/restored-history/kv-cache-effect:
+  en: 3a849c807fae4040
+  zh: cb3a122553040b79
+/deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work:
+  en: a50bf9d3b012d7c4
+  zh: 880fd4c27465ba5c
+/deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

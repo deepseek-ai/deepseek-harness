@@ -45,6 +45,17 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }
 }
 
+it('discards output on host request without cancelling binding calls or the next evaluation', async () => {
+  const h = await setup()
+  await h.peer.discardOutput()
+  h.methods.invoke = async () => { await h.peer.discardOutput(); return { value: encodePtcJsonWire(42) } }
+  const result = await h.run('inspect("before"); const value = await tools.echo({}); inspect("dropped"); return value')
+  expect(decodePtcJsonWire(result.value)).toBe(42)
+  expect(h.logs).toEqual(['before\n'])
+  await h.run('inspect("next")')
+  expect(h.logs).toEqual(['before\n', 'next\n'])
+})
+
 it('clears the environment and returns a binding result after captured output', async () => {
   const h = await setup()
   h.methods.invoke = async (_global, _name, wire) => {
@@ -127,8 +138,8 @@ it.each([4, 64])('reports exhausted output accounting during the run with a %s-b
   const h = await setup()
   const limited = vi.fn()
   h.methods.outputLimit = limited
-  expect(await h.run('inspect("x".repeat(100)); return null', maxOutputBytes))
-    .toEqual({ error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } })
+  expect(await h.run('inspect("x".repeat(100)); return 0', maxOutputBytes))
+    .toEqual({ value: encodePtcJsonWire(0) })
   if (maxOutputBytes === 4) expect(h.logs).toEqual([])
   await vi.waitFor(() => { expect(limited).toHaveBeenCalledOnce() })
 })
@@ -148,7 +159,10 @@ it.each([
 
 it.each(['throw "x".repeat(1_000_000)', 'throw new Error("x".repeat(1_000_000))'])('bounds large diagnostics for %s', async (code) => {
   const h = await setup()
-  expect(await h.run(code, 64)).toEqual({ error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' } })
+  const result = await h.run(code, 64)
+  expect(result.error?.kind).toBe('exception')
+  expect(result.outputTruncated).toBe(true)
+  expect(Buffer.byteLength(JSON.stringify(result.error?.message))).toBeLessThanOrEqual(62)
 })
 
 it.each([

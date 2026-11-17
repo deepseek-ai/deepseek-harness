@@ -78,7 +78,7 @@ XLSX preview omits DrawingML parts from an in-memory copy before parsing and ign
 
 CSV and TSV default to the spreadsheet viewer and also offer Plain text; CSV additionally offers syntax-highlighted Code. Commas and tabs delimit their fields respectively; quoted separators, escaped quotes, multiline fields, empty fields, and unequal row lengths are supported. The first row remains data. Values remain literal strings, including leading zeros, dates, booleans, and formula-looking text. Text files accept UTF-8 or BOM-marked UTF-16; invalid encoding receives conversion guidance. Malformed quoted fields fail the table preview rather than silently dropping data.
 
-Configure `excel` on the same `ui-sidebar-documentpreview` entry. These limits complement the Host's complete-file read limit; they do not cap browser process memory or decompression allocations.
+Configure `excel` on the same `ui-sidebar-documentpreview` entry. These limits complement the Host's complete-file read limit; they do not cap browser process memory or decompression allocations. The browser applies them as described for [`office`](#office-preview).
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -97,7 +97,7 @@ The pinned [ExcelJS patch](../../../patches/exceljs@4.4.0.patch) resolves the wo
 
 Open `.doc`, `.docx`, `.ppt`, and `.pptx` as PDF previews with the same loading state, zoom controls, cancellation, and selectable text as PDF files. The [Host provider](../../document/office-kit/README.md) performs local conversion and retains its spreadsheet conversion API for other consumers. Invalid supported files, conversion failures, and timeouts receive localized messages. Missing Host services show configuration guidance.
 
-The [Web bundle](../../bundle/web-app/README.md) mounts this package as `ui-sidebar-documentpreview`. Configure its transient Office cache through that entry's `office` settings; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-ui-sidebar-documentpreview) defines accepted values. Settings are embedded in each served page; reload the browser page after changing YAML.
+The [Web bundle](../../bundle/web-app/README.md) mounts this package as `ui-sidebar-documentpreview`. Configure its transient Office cache through that entry's `office` settings; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-ui-sidebar-documentpreview) defines accepted values. The `office` and `excel` objects reach the browser through the plugin's [synced Config](../modules/README.md#synced-plugin-configuration); the browser reads both once when the plugin activates, so a change takes effect on the next page load or plugin reactivation. A page that receives no value uses the defaults below.
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -113,6 +113,8 @@ A yellow rounded-triangle warning appears before Reload in the document toolbar 
 
 <details>
 <summary>Office implementation — click to expand</summary>
+
+The compact external-open frame precedes the workspace navigator toggle in the preview header. It leaves a separate gap after the display controls. When the action slot has no rendered content, its group contributes no gap, and the remaining icons align with the upper toolbar columns.
 
 Office registration, loading, caching, and font notices live in `src/client/office/`. The injected Office face writes converted PDF bytes, font metadata, and failures through the declared store actions. The Office body triggers loading, binds cancellation to its lifecycle, and declares a nested PDF slot that reuses the lazy PDF body and its tab viewing state. The keyed `sidebar.right.tab.document.action` slot places renderer controls before Reload. The Office action shares the body’s store and reads only the current revision’s font metadata. Registration remains available without the Host renderer; optional `remote.officeKit` and `remote.workspaceFiles` injections supply conversion and freshness callbacks, and their removal restores unavailable guidance. Registrations and tab retention follow effect lifetimes. The [conversion service](../../document/office-kit/README.md) owns the Host Remote methods, mounted by `api/remotes`.
 

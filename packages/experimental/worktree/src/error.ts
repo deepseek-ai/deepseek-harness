@@ -1,4 +1,4 @@
-/** Machine-routable worktree creation and restoration failures. @module */
+/** Machine-routable worktree creation, entry, exit, and restoration failures. @module */
 
 import { HarnessError } from '@deepseek-ai/dsh-error'
 
@@ -8,6 +8,9 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
  *   constraint; correct it and retry.
  * - `WORKTREE_ALREADY_EXISTS` — the branch or checkout path already exists; choose another name or reuse the existing checkout.
  * - `WORKTREE_LOCKED` — Git keeps the missing checkout's registration locked; unlock it before restoring.
+ * - `WORKTREE_NOT_FOUND` — the pool of the checkout the Session works in holds no registered worktree of that name;
+ *   create one, or list the repository's worktrees.
+ * - `WORKTREE_NOT_ENTERED` — the Session's working directory lies in no worktree its log records, so there is none to exit.
  * - `WORKTREE_COMMAND_FAILED` — a Git or directory-allocation command exited unsuccessfully; the message carries its status and stderr.
  * - `WORKTREE_OUTPUT_TOO_LARGE` — a command's output exceeded the configured `maxOutputBytes`; raise the limit or inspect the repository.
  * - `WORKTREE_TIMEOUT` — a command exceeded the configured `timeoutMs`; its effects are unknown, so inspect the repository before retrying.
@@ -17,6 +20,8 @@ export const WORKTREE_ERROR_CODES = [
   'WORKTREE_INVALID_ARGUMENT',
   'WORKTREE_ALREADY_EXISTS',
   'WORKTREE_LOCKED',
+  'WORKTREE_NOT_FOUND',
+  'WORKTREE_NOT_ENTERED',
   'WORKTREE_COMMAND_FAILED',
   'WORKTREE_OUTPUT_TOO_LARGE',
   'WORKTREE_TIMEOUT',

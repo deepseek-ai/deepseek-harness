@@ -1,6 +1,6 @@
 /** Model catalog and request-local dependencies for DeepSeek Messages. */
 import type {
-  ImageAttachmentAccess, LlmCredentialKind, LlmError, LlmModelInfo, ModelModality, ProviderCredentialGrant, ResolvedRetryPolicy,
+  ImageAttachmentAccess, LlmError, LlmModelInfo, ModelModality, ResolvedRetryPolicy,
   SystemPromptUpdate, ToolUpdate,
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -85,31 +85,23 @@ export interface DeepSeekConnectionOptions {
 }
 
 /**
- * Authentication released for one request and its file operations: the route
- * credential grant the provider plugin builds, plus the request-failure
- * classification bound to that credential. The grant's `revoked` signal ends
- * the request and its file operations as the caller's cancellation does.
+ * Authentication the provider plugin releases for one request and its file operations, with the request-failure
+ * classification bound to that credential.
  */
-export interface DeepSeekRequestAuth extends ProviderCredentialGrant {
+export interface DeepSeekRequestAuth {
+  /** Request headers carrying the credential. */
+  readonly headers: Readonly<Record<string, string>>
+  /**
+   * Aborts when the owner withdraws the credential while the request may carry it, as an account sign-out does. It
+   * ends the request and its file operations as the caller's cancellation does. Absent for credentials that are
+   * never withdrawn.
+   */
+  readonly revoked?: AbortSignal
   /**
    * Classify a failure using the captured credential; callback failure preserves the original error. The end a
    * withdrawn credential causes arrives here too, for the provider plugin to name.
    */
   onRequestError?: (error: unknown) => Promise<unknown>
-}
-
-/**
- * What `providerCredential()` publishes about the route's credential beside the
- * request-path hooks, so consumers outside the model request path share the
- * route's credential without reading its configuration.
- */
-export interface DeepSeekProviderCredentialOptions<Connection extends DeepSeekConnectionOptions = DeepSeekConnectionOptions> {
-  /** Kind of credential the route sends. */
-  kind: LlmCredentialKind
-  /** Credential reference the route resolves, named by diagnostics; omission publishes none. */
-  reference?: (connection: Connection) => string | undefined
-  /** Report whether a credential exists for `endpoint` without reading its value. */
-  configured: (connection: Connection, endpoint: string) => Promise<boolean>
 }
 
 /** Constructor options for {@link DeepSeekAdapter}: the operation-local resolution hooks the plugin owns. */
@@ -137,8 +129,7 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   /**
    * Release authentication for `endpoint` from this request's connection
    * snapshot, or `undefined` when the route has no credential for it; never
-   * re-read the endpoint. Model requests pass the connection's own base URL;
-   * `providerCredential()` consumers pass theirs.
+   * re-read the endpoint. Model requests pass the connection's own base URL.
    */
   resolveAuth: (connection: Connection, endpoint: string) => Promise<DeepSeekRequestAuth | undefined>
   /**
@@ -146,11 +137,6 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
    * credential for the route's own endpoint; omission reports `MISSING_CREDENTIAL`.
    */
   missingCredential?: (connection: Connection, provider: string) => LlmError
-  /**
-   * Publish the route's credential through `providerCredential()`, whose `resolve` forwards the headers, value,
-   * rejection, and withdrawal signal of {@link resolveAuth} without its failure classification; omission publishes none.
-   */
-  credential?: DeepSeekProviderCredentialOptions<Connection>
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */
   resolveUserId: () => AnonymousUserId
   /** Resolve the current durable attachment service; absence rejects image input. */

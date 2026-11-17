@@ -8,6 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
@@ -37,7 +38,7 @@ interface Setup {
   config?: Record<string, unknown>
   /** Launch-environment variables. */
   environment?: Record<string, string>
-  /** Model routes the provider directory lists. */
+  /** Model routes connected to the authentication service. */
   routes?: readonly RouteRow[]
   /** Account service stand-in. */
   account?: DeepSeekAccount
@@ -70,6 +71,7 @@ async function mount(setup: Setup): Promise<{ ctx: Context; sent: () => Sent[] }
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: setup.environment ?? {} }]))
   if (setup.account !== undefined) ctx.provide('deepseekAccount', setup.account)
   if (setup.credentials !== undefined) ctx.provide('credentials', setup.credentials as never)
+  await ctx.plugin(DeepSeekAuth)
   if (setup.routes !== undefined) provideRoutes(ctx, setup.routes)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
@@ -290,6 +292,24 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
   })
 
+  it.each(['deepseek-account', 'deepseek-official'])('orders route %s as any other route while no plugin connected it', async (route) => {
+    const asked: string[] = []
+    const withKey = await mount({ account: signedIn(asked), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(withKey.ctx, operation, route)).toBe(true)
+    await operate(withKey.ctx, operation, route)
+    expect(withKey.sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+    expect(asked).toEqual([])
+    const signedInOnly = await mount({ account: signedIn() })
+    expect(await ready(signedInOnly.ctx, operation, route)).toBe(true)
+    await operate(signedInOnly.ctx, operation, route)
+    expect(signedInOnly.sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
+    const neither = await mount({ account: signedOut() })
+    expect(await ready(neither.ctx, operation, route)).toBe(false)
+    const failure = operate(neither.ctx, operation, route)
+    await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
+    await expect(failure).rejects.toThrow('uses the DeepSeek API key, then the DeepSeek account sign-in, and neither is available')
+  })
+
   it('is not ready and names both recoveries without a key and a sign-in', async () => {
     const subject = operation === 'search' ? 'Search' : 'Fetch'
     for (const account of [signedOut(), undefined]) {
@@ -356,7 +376,7 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
   it.each<[string, readonly RouteRow[] | undefined]>([
     ['no model service is mounted', undefined],
     ['no route registers deepseek-official', [accountRoute()]],
-    ['the registered deepseek-official adapter publishes no credential', [{ provider: 'deepseek-official', config: { apiKeyEnv: 'TEAM_KEY' }, withoutCredential: true }]],
+    ['the registered deepseek-official adapter connects no deployment', [{ provider: 'deepseek-official', config: { apiKeyEnv: 'TEAM_KEY' }, withoutConnection: true }]],
   ])('sends DEEPSEEK_API_KEY to the official base when %s', async (_label, routes) => {
     const { ctx, sent } = await mount({
       ...routes === undefined ? {} : { routes },
@@ -604,6 +624,7 @@ describe.each(OPERATIONS)('%s with its own endpoint settings', (operation) => {
     ['only a base URL', { [baseURL]: OWN }, { endpoint: `${OWN}/${operation}`, authorization: 'Bearer chat-key', token: null }],
     ['only a key reference', { [apiKeyEnv]: 'OWN_KEY' }, { endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer own-key', token: null }],
     ['both', { [baseURL]: OWN, [apiKeyEnv]: 'OWN_KEY' }, { endpoint: `${OWN}/${operation}`, authorization: 'Bearer own-key', token: null }],
+    ['a base URL with trailing slashes', { [baseURL]: `${OWN}//` }, { endpoint: `${OWN}/${operation}`, authorization: 'Bearer chat-key', token: null }],
   ])('uses %s on every conversation route and never the account token', async (_label, config, expected) => {
     const asked: string[] = []
     const { ctx, sent } = await mount({
@@ -639,54 +660,10 @@ describe.each(OPERATIONS)('%s with its own endpoint settings', (operation) => {
     expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
   })
 
-  it('reports an unparseable base URL as an unavailable provider', async () => {
-    const { ctx, sent } = await mount({ config: { [baseURL]: 'not a url' }, environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+  it.each(['not a url', 'https://user:secret@own.deepseek.test/api/v1/tools'])('reports the base URL %s, which does not parse or embeds credentials, as an unavailable provider', async (value) => {
+    const { ctx, sent } = await mount({ config: { [baseURL]: value }, environment: { DEEPSEEK_API_KEY: 'chat-key' } })
     await expect(operate(ctx, operation)).rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' })
     expect(sent()).toEqual([])
-  })
-})
-
-describe.each(OPERATIONS)('%s beside an adapter that publishes the other credential kind under a DeepSeek route id', (operation) => {
-  const accountUnderOfficial: RouteRow = { provider: 'deepseek-official', publishes: 'account', config: { baseURL: 'https://route.deepseek.test/anthropic' } }
-  const keyUnderAccount: RouteRow = { provider: 'deepseek-account', publishes: 'api-key', config: { baseURL: 'https://account.deepseek.test/anthropic' } }
-
-  it.each(['api-key', 'auto'])('sends DEEPSEEK_API_KEY to the official base under %s billing, never the account credential published as the API-key route', async (billing) => {
-    const asked: string[] = []
-    const { ctx, sent } = await mount({
-      config: { [`${operation}Billing`]: billing }, routes: [accountUnderOfficial], account: signedIn(asked),
-      environment: { DEEPSEEK_API_KEY: 'chat-key' },
-    })
-    expect(await ready(ctx, operation, 'deepseek-official')).toBe(true)
-    await operate(ctx, operation, 'deepseek-official')
-    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
-    expect(asked).toEqual([])
-  })
-
-  it('is not ready under API-key billing without a key, and never sends that account credential', async () => {
-    const asked: string[] = []
-    const { ctx, sent } = await mount({ config: { [`${operation}Billing`]: 'api-key' }, routes: [accountUnderOfficial], account: signedIn(asked) })
-    expect(await ready(ctx, operation, 'deepseek-official')).toBe(false)
-    await expect(operate(ctx, operation, 'deepseek-official')).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
-    expect(sent()).toEqual([])
-    expect(asked).toEqual([])
-  })
-
-  it('sends the signed-in account token to the default account origin under account billing, never the API key published as the account route', async () => {
-    const { ctx, sent } = await mount({
-      config: { [`${operation}Billing`]: 'account' }, routes: [keyUnderAccount], account: signedIn(),
-      environment: { DEEPSEEK_API_KEY: 'chat-key' },
-    })
-    expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
-    await operate(ctx, operation, 'deepseek-account')
-    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
-  })
-
-  it('treats a conversation on that account route id as one without an account route under automatic billing', async () => {
-    const { ctx, sent } = await mount({ routes: [keyUnderAccount], account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
-    expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
-    await operate(ctx, operation, 'deepseek-account')
-    // The key goes to the official base, not to the base URL that adapter publishes.
-    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
   })
 })
 
@@ -722,7 +699,7 @@ describe('independent capabilities', () => {
   })
 })
 
-describe('route credential failures', () => {
+describe('model route settings failures', () => {
   it('reports a thrown non-Error value as its string', async () => {
     const { ctx, sent } = await mount({
       routes: [{ provider: 'deepseek-official', throws: 'route resolver unavailable' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
@@ -733,9 +710,9 @@ describe('route credential failures', () => {
     expect(sent()).toEqual([])
   })
 
-  it('reports a route publishing an unparsable base URL as misconfigured, before readiness and without sending', async () => {
+  it('reports a route whose base URL does not parse as misconfigured, before readiness and without sending', async () => {
     const { ctx, sent } = await mount({
-      routes: [{ provider: 'deepseek-official', publishedBaseURL: 'not a url' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
+      routes: [{ provider: 'deepseek-official', connectedBaseURL: 'not a url' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
     })
     expect(await ready(ctx, 'search', 'deepseek-official')).toBe(false)
     const failure = operate(ctx, 'search', 'deepseek-official')

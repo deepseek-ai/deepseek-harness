@@ -14,7 +14,7 @@ import type {
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
@@ -178,7 +178,7 @@ export class ForgePanelController extends TypertRemoteService {
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
     })
-    const inbox = ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
+    const inbox = ctx.on('agent/inbox/inserted', ({ agent, message }) => { this.holdTurn(agent, message) })
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
@@ -967,14 +967,17 @@ export class ForgePanelController extends TypertRemoteService {
   /* oxlint-enable typescript/require-await */
 
   /**
-   * Hold the turn of a message entering a Session's inbox while the
+   * Hold the turn of a message entering a Session's next-turn queue while the
    * Session's requested worktree does not exist yet, or while the worktree
    * the Session works in is checked and, when gone, until it is restored or
    * left. The message is entering, so the delivery has not woken the Agent
-   * yet and its wake waits for the hold.
+   * yet and its wake waits for the hold. A message for the next step, such as
+   * a notice another plugin queues, opens no turn and gets no hold.
    * @param agent - Agent whose inbox receives the message.
+   * @param message - the entering message.
    */
-  private holdTurn(agent: Agent): void {
+  private holdTurn(agent: Agent, message: UserMessage): void {
+    if (!agent.inbox.nextTurn.some(queued => queued.id === message.id)) return
     const session = agent.session
     const state = this.worktreeState(session)
     if (state.request !== null && state.created === null && !state.locked) {
