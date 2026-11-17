@@ -1040,12 +1040,19 @@ describe('stored delivery validation', () => {
     const initial = await harness.host.ensure(spec())
     const reset1 = harness.host.reset(initial.key, 'first')
     const reset2 = harness.host.reset(initial.key, 'second')
-    const admit = harness.host.admit(initial.sessionId, 'missing-delivery')
-    const [replaced1, replaced2] = await Promise.all([reset1, reset2, admit])
 
+    const replaced1 = await reset1
     expect(replaced1).toBe(initial.sessionId)
-    expect(replaced2).toBeDefined()
-    expect(replaced2).not.toBe(replaced1)
+    const afterFirst = harness.host.get(initial.key)!
+    expect(afterFirst.sessionId).not.toBe(initial.sessionId)
+
+    // `admit` targets `afterFirst.sessionId` while `reset2` (started before `reset1` settled) is still pending:
+    // both must serialize on the stable `key` so `reset2` finishes advancing before `admit` inspects `hosted()`.
+    const [replaced2] = await Promise.all([
+      reset2,
+      harness.host.admit(afterFirst.sessionId, 'missing-delivery'),
+    ])
+    expect(replaced2).toBe(afterFirst.sessionId)
     const finalRecord = harness.host.get(initial.key)
     expect(finalRecord?.generation).toBe(2)
     expect(finalRecord?.sessionId).not.toBe(replaced2)
