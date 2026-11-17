@@ -12,7 +12,7 @@
  */
 
 import { PlatformError } from '@deepseek-ai/cordis-plugin-im-core'
-import { LarkApiError } from '../errors.ts'
+import { classify, LarkApiError } from '../errors.ts'
 
 /** Body of a successful `tenant_access_token/internal` call; `expire` is the lifetime in seconds. */
 export interface TenantAccessTokenResult {
@@ -141,10 +141,15 @@ export class AccessToken {
         throw error.published === 'no'
           ? error
           : new LarkApiError(error.message, {
-              code: error.code, status: error.status, cause: error, published: 'no',
+              code: error.code,
+              status: error.status,
+              body: error.body,
+              retryAfterMs: error.retryAfterMs,
+              cause: error,
+              published: 'no',
             })
       }
-      throw new PlatformError('retryable', 'failed to obtain a Lark tenant access token', { cause: error, published: 'no' })
+      throw asUnpublishedTokenError(classify(error))
     }
     const token = result?.tenant_access_token
     if (typeof token !== 'string' || !token) {

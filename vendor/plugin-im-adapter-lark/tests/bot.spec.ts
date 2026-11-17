@@ -561,5 +561,39 @@ describe('LarkBot client surface', () => {
       post: () => Promise.resolve({ code: 0, tenant_access_token: '', expire: 0 }),
     })
     await expect(empty.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+
+    const rateLimitedHttp = new AccessToken({
+      appId: 'cli_lark',
+      appSecret: 'secret',
+      baseUrl: 'https://open.feishu.cn/open-apis/',
+      post: () => Promise.reject(Object.assign(new Error('Too Many Requests'), {
+        response: new Response(null, { status: 429, headers: { 'retry-after': '3' } }),
+      })),
+    })
+    await expect(rateLimitedHttp.get()).rejects.toMatchObject({
+      kind: 'rate-limit',
+      published: 'no',
+      retryAfterMs: 3000,
+    })
+
+    const apiError = new LarkApiError('rate limited', {
+      code: 99991400,
+      status: 429,
+      retryAfterMs: 5000,
+      body: { code: 99991400 },
+    })
+    const rateLimitedApi = new AccessToken({
+      appId: 'cli_lark',
+      appSecret: 'secret',
+      baseUrl: 'https://open.feishu.cn/open-apis/',
+      post: () => Promise.reject(apiError),
+    })
+    await expect(rateLimitedApi.get()).rejects.toMatchObject({
+      code: 99991400,
+      status: 429,
+      retryAfterMs: 5000,
+      body: { code: 99991400 },
+      published: 'no',
+    })
   })
 })
