@@ -101,6 +101,8 @@ interface PtcRunResult {
    * the outer result.
    */
   output: PtcOutput[]
+  /** Captured output or diagnostic text was truncated; execution still follows its normal completion, timeout and cancellation rules. */
+  outputTruncated?: boolean
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -202,7 +204,7 @@ declare class PtcInspectableValue {
 
 ## 捕获的输出与失败分类体系
 
-`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
+`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；捕获输出截断通过 `outputTruncated` 独立报告，要求返回的完成值保持无损。预算优先级与执行语义见 [Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)。
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -239,7 +241,7 @@ type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: I
  * - `'abort'` — {@link PtcRunRequest.signal} fired.
  * - `'worker-exit'` — the execution substrate died without settling (e.g. OOM).
  * - `'invalid-output'` — the completion value was not lossless JSON.
- * - `'output-limit'` — the serialized outer logs/value/diagnostic exceeded the configured cap.
+ * - `'output-limit'` — the required completion value exceeded the configured cap.
  * - `'protocol'` — the program sent invalid or over-budget control traffic.
  * - `'sandbox-unavailable'` — required confinement could not be established.
  */

@@ -35,11 +35,10 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
-    "@deepseek-ai/dsh-launch-environment": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*"
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"
@@ -59,11 +58,7 @@
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-deepseek-account": {
-      "optional": true
-    }
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   }
 }

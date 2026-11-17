@@ -154,6 +154,11 @@
       name: '@deepseek-ai/dsh-mcp-manager'
       inject: [credentials]
 
+    # MCP connector accounts on the Plugins page; connectors register their
+    # OAuth server with `ctx.mcpAccounts`.
+    - id: mcp-account
+      name: '@deepseek-ai/dsh-mcp-account'
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
@@ -214,10 +219,11 @@
     - id: harness-dev-context
       name: '@deepseek-ai/dsh-harness-dev-context'
 
-    # The client-plugin reload chain, always mounted: it is idle until a
-    # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
-    # is a row rather than a child of web-runtime because its node half is a
-    # client-side package, which a host-side bundle cannot import.
+    # The plugin-events stream, always mounted: it delivers graph changes,
+    # synced configuration, and rebuilt bundles (the last only while a rebuild
+    # watcher such as pnpm run dev:web rewrites client bundles). It is a row
+    # rather than a child of web-runtime because its node half is a client-side
+    # package, which a host-side bundle cannot import.
     - id: client-hmr
       name: '@deepseek-ai/dsh-client-hmr'
 

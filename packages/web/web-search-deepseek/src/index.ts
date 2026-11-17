@@ -1,9 +1,9 @@
 /**
  * Register a DeepSeek-backed provider in `ctx.web`. It calls the Anthropic-compatible Messages API
- * with native `web_search_20250305`. A search initiated by a Session whose latest model request used
- * a route that publishes an account credential through `ctx.llm.providerCredential()` authenticates with
- * that credential when the search endpoint has the origin of that route's base URL and the
- * credential's owner allows the endpoint; every other search reuses `DEEPSEEK_API_KEY`. The provider
+ * with native `web_search_20250305`. `ctx.deepseekAuth` releases its credential: a search initiated by
+ * a Session whose latest model request used the DeepSeek account route authenticates with the account
+ * sign-in when the search endpoint has the origin of that route's base URL and the account service
+ * allows the endpoint; every other search reuses `DEEPSEEK_API_KEY`. The provider
  * does not reuse `DEEPSEEK_BASE_URL`; auxiliary search has its own endpoint configuration. The
  * provider reports itself not ready for a model request whose search would have no credential.
  * @module @deepseek-ai/dsh-web-search-deepseek
@@ -13,11 +13,9 @@ import type { Volatile } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
-import { credentialRef, credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
-import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { DeepSeekAuthRequest } from '@deepseek-ai/dsh-deepseek-auth'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertUsableApiKey } from '@deepseek-ai/dsh-llm'
-import type { ProviderCredential } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import {
@@ -44,8 +42,8 @@ export type { DeepSeekSearchLlmRequest, DeepSeekSearchProviderOptions } from './
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'web-search-deepseek'
 
-/** The web seam this provider registers into. */
-export const inject = ['web']
+/** The web seam this provider registers into, and the DeepSeek authentication its searches ask for credentials. */
+export const inject = ['web', 'deepseekAuth']
 
 const DEFAULT_API_KEY_ENV = 'DEEPSEEK_API_KEY'
 
@@ -89,57 +87,62 @@ const SEARCH_BASE_URL_ENV = 'DEEPSEEK_SEARCH_BASE_URL'
 /** Settings namespace carrying this provider's endpoint, model, and key reference. */
 export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
 
-/** Options for one search, with the key reference the readiness check reads. */
-type SearchOptions = DeepSeekSearchProviderOptions & { readonly apiKeyEnv: CredentialRef }
-
-/**
- * The account credential the model route `route` publishes for the deployment that serves `endpoint`. A route's
- * account credential is sent only to the origin of that route's base URL, whatever destinations its owner would
- * release it for.
- * @param ctx - plugin context supplying the optional model service.
- * @param route - provider route of a model request; undefined names none.
- * @param endpoint - absolute URL the search dispatches to.
- * @returns the route's account credential, or undefined for another kind, another origin, no credential, or no route.
- * @throws when the route's settings do not resolve, or its published base URL or `endpoint` does not parse.
- */
-function accountCredentialOf(ctx: Context, route: string | undefined, endpoint: string): ProviderCredential | undefined {
-  const credential = route === undefined ? undefined : ctx.get('llm')?.providerCredential(route)
-  if (credential?.kind !== 'account') return undefined
-  return new URL(credential.baseURL).origin === new URL(endpoint).origin ? credential : undefined
+/** Options for one search, with what the search asks `ctx.deepseekAuth`. */
+type SearchOptions = DeepSeekSearchProviderOptions & {
+  /**
+   * The request a search to `endpoint` makes for a model request on `route`, or `undefined` when the literal key is
+   * the only credential it can send.
+   */
+  readonly authRequest: (route: string | undefined, endpoint: string) => DeepSeekAuthRequest | undefined
 }
 
 /**
  * Project one resolved section into the options the provider serves its next
  * search with. Environment fallbacks stay here rather than in the provider:
  * every value it reads is already fully defaulted.
- * @param ctx - plugin context supplying the credential, model, and environment planes.
+ * @param ctx - plugin context supplying the DeepSeek authentication, the Agent registry, and the environment.
  * @param config - the currently authoritative section.
  * @returns options for one search.
  */
 function resolveOptions(
   ctx: Context, config: { [K in keyof Config]: ReturnType<Config[K]['get']> },
 ): SearchOptions {
-  const apiKeyEnv = credentialRef(config.apiKeyEnv)
+  const reference = credentialRef(config.apiKeyEnv)
   const literalApiKey = config.apiKey !== undefined && config.apiKey.length > 0
     ? config.apiKey
     : undefined
+  const baseURL = config.baseURL
+    ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
+    ?? DEEPSEEK_DEFAULT_BASE_URL
+  const authRequest = (route: string | undefined, endpoint: string): DeepSeekAuthRequest | undefined => {
+    // The account sign-in pays only for a conversation on the account route, and only through that route.
+    const accountConversation = ctx.deepseekAuth.routeKind(route) === 'account'
+    if (literalApiKey !== undefined && !accountConversation) return undefined
+    return {
+      consumer: name,
+      // A literal key is this provider's own credential, so beside it only the account sign-in is asked for.
+      accepts: literalApiKey === undefined ? ['account', 'api-key'] : ['account'],
+      billing: accountConversation ? 'auto' : 'api-key',
+      route,
+      destination: { url: endpoint },
+      // The referenced key is this provider's own too: it goes to the search endpoint, whatever the API-key route uses.
+      connections: { 'api-key': { baseURL, reference } },
+      // Official DeepSeek expects `x-api-key`; an Anthropic-compatible proxy may expect `Authorization: Bearer`.
+      apiKeyHeaders: ['x-api-key', 'authorization'],
+    }
+  }
   return {
     ...literalApiKey === undefined ? {} : { apiKey: literalApiKey },
-    resolveAccountCredential: async (endpoint) => {
+    authRequest,
+    authorize: async (endpoint, signal) => {
       // The latest request context names the route that served the model
       // request which called this search, as account sign-out reads it.
       const route = ctx.get('agents')?.currentInitiator()?.session.requestContext()?.provider
-      const credential = accountCredentialOf(ctx, route, endpoint)
-      return credential === undefined ? undefined : await credential.resolve(endpoint)
+      const request = authRequest(route, endpoint)
+      return request === undefined ? undefined : await ctx.deepseekAuth.authorize(request, signal)
     },
-    resolveApiKey: async () => {
-      const value = await resolveCredentialRef(ctx, apiKeyEnv)
-      return value === undefined ? undefined : assertUsableApiKey(value, name, apiKeyEnv)
-    },
-    apiKeyEnv,
-    baseURL: config.baseURL
-      ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
-      ?? DEEPSEEK_DEFAULT_BASE_URL,
+    apiKeyEnv: reference,
+    baseURL,
     model: config.model,
     apiVersion: config.apiVersion,
     maxTokens: config.maxTokens,
@@ -155,31 +158,27 @@ function resolveOptions(
 
 /**
  * Whether the search a model request on `route` would make has a credential, checked in the order
- * the search resolves them: the account credential the route publishes for the origin of the search
- * endpoint first, then the API key. A route whose settings do not resolve or whose published base URL
- * does not parse, or a failed read, answers false, because the search fails there
- * instead of trying the next credential. Only presence is checked: the API key's value is not read
- * and the endpoint is not contacted, so a wrong key or an endpoint without native search still
- * counts as configured.
- * @param ctx - plugin context supplying the model, credential, and environment planes.
+ * the search resolves them: on the account route the account sign-in, when the search endpoint has the
+ * origin of that route's base URL, then the API key. A route whose settings do not resolve, or a failed
+ * read, answers false, because the search fails there instead of trying the next credential. Only
+ * presence is checked: the API key's value is not read and the endpoint is not contacted, so a wrong
+ * key or an endpoint without native search still counts as configured.
+ * @param ctx - plugin context supplying the DeepSeek authentication.
  * @param options - options the next search would use.
  * @param route - provider route of the model request being assembled.
- * @returns whether the account credential or an API key is available to that search.
+ * @returns whether the account sign-in or an API key is available to that search.
  */
 async function searchConfigured(
   ctx: Context, options: SearchOptions, route: string | undefined,
 ): Promise<boolean> {
-  const endpoint = `${options.baseURL}/messages`
-  let account: ProviderCredential | undefined
-  try { account = accountCredentialOf(ctx, route, endpoint) }
-  catch (_unresolvedRoute) { return false /* The search fails on this route before it reads any credential. */ }
-  if (account !== undefined) {
-    try { if (await account.configured(endpoint)) return true }
-    catch (_unreadableGrant) { return false /* The search fails on this read before it tries the API key. */ }
+  const request = options.authRequest(route, `${options.baseURL}/messages`)
+  for (const candidate of request === undefined ? [] : ctx.deepseekAuth.candidates(request)) {
+    // The search stops at a route whose settings do not resolve before it reads any credential.
+    if ('unresolved' in candidate) return false
+    try { if (await candidate.configured()) return true }
+    catch (_unreadableCredential) { return false /* The search fails on this read before it tries the next credential. */ }
   }
-  if (options.apiKey !== undefined) return true
-  try { return await credentialRefConfigured(ctx, options.apiKeyEnv) }
-  catch (_unreadableStore) { return false /* A store that cannot be read supplies no key to the search either. */ }
+  return options.apiKey !== undefined
 }
 
 /**

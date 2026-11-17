@@ -21,8 +21,8 @@ it('places the inherited-history divider between the parent turn and the child p
   const paths = await Promise.all(['session.v4.jsonl', 'session.1.v4.jsonl']
     .map(file => selectedSessionFixture(join(DIR, file))))
   const childPrompt = parseSessionLog(await readFile(paths[1]!, 'utf8')).findLast(event =>
-    event.type === 'user/message' && event.data.source.kind === 'user')
-  if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no user prompt')
+    event.type === 'user/message' && event.data.source.kind === 'agent-message')
+  if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no delegated task')
   const scaffold = await launchWebScaffold({
     replayFixture: paths[0]!, replayChildFixtures: [paths[1]!], compareReplaySession: false,
   })
@@ -43,7 +43,7 @@ it('places the inherited-history divider between the parent turn and the child p
 
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: LABEL, delivery: 'caller',
-      signal: new AbortController().signal, parent, prompt: [...childPrompt.data.content],
+      signal: new AbortController().signal, parent, prompt: childPrompt.data.content.slice(1),
     })
     try {
       await activation.result

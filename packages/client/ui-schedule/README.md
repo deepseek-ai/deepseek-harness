@@ -25,6 +25,8 @@ The Automation tasks page and right Sidebar task tab use the same editor for tas
 <a id="use-this-package"></a>
 ## Use this package
 
+Without recommendations, catalog empty states center within the space below the page controls and remain scrollable on short viewports. With recommendations, the empty state and recommendation tiles stay in normal flow. Filters, input fields, multi-line task rows, and nested rule groups use the shared radius appropriate to their role.
+
 Below 768px, the task list uses 20px horizontal insets, matching the Plugins page.
 
 The shipped Web composition mounts `ui-schedule` with Host Schedule. The Automation tasks sidebar entry opens the task list without selecting or activating a Session. New and the adjacent menu's Create in a session action both open a new conversation with a short task-creation prompt in the current UI language, ready for the user to complete and send. When a blank conversation is reused, the prompt is appended on a new line, preserving its text, inline references, and attachments. The same menu offers Create manually. Manual creation opens the same editor as an existing task, validates required fields, and saves a task without starting an Agent or sending the instruction. A failed request leaves the form and its values visible. The empty state shows a decorative document-and-clock illustration whose colors follow the theme. Below the empty Enabled and All views, eight built-in recommended tasks appear in two columns, each with a glyph, title, description, and default run time. Choosing one opens a new conversation with that task's request prefilled in the same way. Each glyph tile takes the empty-state artwork's background color, and its glyph is drawn in blue with a light blue fill.
@@ -54,6 +56,8 @@ Task menus use the [standard menu geometry](../../../docs/ui-radius.md#nested-ho
 
 <details>
 <summary>Implementation details — click to expand</summary>
+
+Schedule group headings, field labels and hints share an inset text column inside the detail view.
 
 While the Peer may read `schedule/catalog`, the plugin registers the existing `schedules` main panel, Session header utility, Turn tail card, Session row mark and hover entries, and `scheduleTask` right Sidebar tab. Slot injection supplies framework readers and action callbacks; components own selection, search, and paging state. Entry-declared stores retain each task draft and its CAS baseline across navigation within their root or Session scope; the main panel and Session tabs have independent drafts. Pristine forms follow the catalog. A dirty form retains all fields and its original revision. A newer catalog revision prevents saving until the user discards the draft or explicitly reapplies changed title, prompt, timing, and target groups to that revision. Reapplying does not write; the user reviews the resulting form and saves with the new CAS baseline. Untouched groups follow the newer record. Missing tasks retain editable local drafts while Host mutations stay disabled. Drafts are not persisted; a Client reload or disposal of the owning entry or Session scope drops them. The Host owns task storage and execution. Browsing catalogs does not activate a Session. Conflict feedback reuses the catalog notice style; its outlined review action wraps below the message in narrow panes.
 

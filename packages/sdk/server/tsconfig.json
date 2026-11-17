@@ -58,6 +58,9 @@
     },
     {
       "path": "../../interaction/permission-presets"
+    },
+    {
+      "path": "../../account/deepseek-auth"
     }
   ]
 }

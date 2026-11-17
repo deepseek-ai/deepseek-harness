@@ -27,6 +27,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+fork 保留包含截点的 `atSeq` 请求字段，并默认选择已完成轮次的截点。命令把观察到的历史作为 fork 来源传递：截至 `persistedEventCount` 的已存储父前缀，其后是子会话的标记和冷读取修复事件。工厂用实时父会话的 log 替换该前缀，共享前缀的后端在引用前先排空父写者；父会话已存储历史短于截点时不会创建子会话。创建参数见 [fork 升级指南](../../../docs/upgrade-guide/v0.2.2-rc.3/session-fork-source/guide.zh.md)。
+
 提示重试按首次已提交入队记录中的请求标识去重，消息被领取或删除后仍然有效。异步附件准备结束后再次检查，因此并发重试只接受一条输入。接受确认入队，不代表执行或完成。
 
 控制器通过可选服务方法 `agentPresets.presetForSession(session)` 读取 Session 已记录的预设。null 结果表示未记录预设；服务缺席表示控制器无法获知预设身份。

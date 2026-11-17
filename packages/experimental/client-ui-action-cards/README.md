@@ -1,5 +1,5 @@
 ---
-description: "Browser half of optional action cards: the card frame below completed answers, the body registry that experiment packages fill, and the one-line process row of propose_action calls."
+description: "Browser half of optional action cards: the card frame below completed answers, the body registry that experiment packages fill, and the layer that hides the action-card blocks offering them."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. In the process area, the proposal shows as one row with the card title and whether the call was accepted; a refused call expands to its reason. A card whose experiment provides no controls in this browser offers only Not now. Showing, expanding and folding cards make no model request.
+Users see an optional action card below a completed answer: its title, a brief that folds when long, and the controls of the experiment that proposed it. The answer's `action-card` block that offers the card is never shown. A card whose experiment provides no controls in this browser, or whose fields those controls cannot read, offers only Not now. Showing, expanding and folding cards make no model request.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Enable the [Personalized recommendations](../personalized-recommendations/README
 
 ### Register a card body
 
-A kind's browser plugin injects `actionCards` and registers its body inside its own `ctx.effect`: `ctx.actionCards.register({ action, locale, Body })` returns the disposer. The frame renders `Body` for cards of that action with the card, its recorded or derived decision, the Session id, the frame's title and folded brief as `summary`, the frame's fold component as `Folded`, an `act(verb, payload?)` bound to the card, and a translator `t` for the body's own locale namespace. The body places `summary` in its own layout and owns its header, controls, status and footer. A second body for the same action is a registration error.
+A kind's browser plugin injects `actionCards` and registers its body inside its own `ctx.effect`: `ctx.actionCards.register({ action, locale, Body })` returns the disposer. The frame renders `Body` for cards of that action with the card, its recorded or derived decision, the Session id, the frame's title and folded brief as `summary`, the frame's dismiss-only content as `fallback`, the frame's fold component as `Folded`, an `act(verb, payload?)` bound to the card, and a translator `t` for the body's own locale namespace. The body places `summary` in its own layout, renders `fallback` instead when its schema rejects the card's `details`, and owns its header, controls, status and footer. A second body for the same action is a registration error.
 
 -----
 
@@ -39,17 +39,16 @@ A kind's browser plugin injects `actionCards` and registers its body inside its 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One `conversation.chat.turnTail` entry reads the `actionCards` Session projection and shows the card admitted in its Turn after that Turn has ended with a final answer; a Turn that ends without answer text shows no card, and should several cards share a Turn, the lowest call id is shown. The frame sets `data-action-card` to the call id and names its region by the card title. Folding counts a wide grapheme, such as a Chinese character, as two Latin-letter widths and folds after about 260; it never measures layout or alters the full text.
+One `conversation.chat.turnTail` entry reads the `actionCards` Session projection and shows the card admitted in its Turn after that Turn has ended with a final answer; a Turn that ends without answer text shows no card, and should several cards share a Turn, the lowest card id is shown. The frame sets `data-action-card` to the card id and names its region by the card title. Folding counts a wide grapheme, such as a Chinese character, as two Latin-letter widths and folds after about 260; it never measures layout or alters the full text.
 
-A `tool.call.toolview` entry keyed `propose_action` renders the process row from the recorded call arguments and result. The plugin provides the body registry at its top level, then mounts the generated `actionCards` Remote and registers its dictionaries and slot entries for the same lifetime.
+A `conversation.chat.markdown.fence` layer keyed `action-card` renders nothing, so these blocks stay hidden wherever the Chat flow renders Markdown: in answers, reasoning and compaction summaries, including blocks the Host does not admit. The plugin provides the body registry at its top level, then mounts the generated `actionCards` Remote and registers its dictionaries and slot entries for the same lifetime.
 
 | Source | Contents |
 |---|---|
 | [`src/client/mount.ts`](src/client/mount.ts) | Registry, Remote, dictionaries and slot entries |
-| [`src/client/Card.tsx`](src/client/Card.tsx) | Turn tail, frame, fold and fallback body |
-| [`src/client/ProposeRow.tsx`](src/client/ProposeRow.tsx) | Process row |
+| [`src/client/Card.tsx`](src/client/Card.tsx) | Turn tail, frame, fold, fallback body and block layer |
 | [`src/client/registry.ts`](src/client/registry.ts) | Body registry and body props |
-| [`tests/`](tests/) | Placement, frame, fallback, row and registration tests |
+| [`tests/`](tests/) | Placement, frame, fallback, block and registration tests |
 
 </details>
 
@@ -58,18 +57,18 @@ A `tool.call.toolview` entry keyed `propose_action` renders the process row from
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Action cards](../action-cards/README.md) — the tool, card state and user actions behind the frame.
+- [Action cards](../action-cards/README.md) — the card blocks, card state and user actions behind the frame.
 - [Personalized page cards](../client-ui-creation-recommendations/README.md) and [recommendation cards](../client-ui-plugin-recommendations/README.md) — the shipped card bodies.
-- [Slots](../../client/ui-slots/README.md) — Turn tail and tool row registration.
+- [Slots](../../client/ui-slots/README.md) — Turn tail and Markdown fence layer registration.
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the Host card service: card actions reach it as Remote calls, and it owns the logged tool, decisions and status notice.
+Indirectly, through the Host card service: card actions reach it as Remote calls, and it owns the card proposals read from answers, decisions and status notice.
 
 #### KV Cache effect
 
-Rendering cards and process rows does not change any model request.
+Rendering cards and hiding their blocks does not change any model request.
 
 ## Known Limitations and Deferred Work
 

@@ -1,9 +1,9 @@
 /** Sidebar account launcher and locally authoritative sign-out action. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium,
+  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineRegular, IconSettingsOutlineRegular, IconUserOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import { SignOutDialog } from './SignOutDialog.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
@@ -13,7 +13,7 @@ import type {} from './account-ui.ts'
 import css from './AccountMenu.module.css'
 
 /** Account launcher composed by the settings shell. */
-export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsRenderSlots<'settings.launcher.notifications'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
+export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
 
 /** The signed-in label stays empty while the profile loads.
  * @param props - sidebar geometry, settings navigation and account operations.
@@ -21,7 +21,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsRenderSl
  */
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
-  useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount, renderSlot,
+  useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount,
   contactUs, showLogin, start, cancel, avatarFailed, t,
 }: AccountMenuProps) {
   // The launcher outlives the panel, so a false-to-true edge is one Settings entry:
@@ -53,13 +53,9 @@ export function AccountMenu({
   }
   // The plugin's start publishes `loginFailed` before it rejects, so the dialog owns the report.
   const beginSignIn = (): void => { setOpen(false); void start().catch(() => undefined) }
-  const openAccount = useCallback(() => { openSettings('account') }, [openSettings])
   return <div className={css.root} data-inset={signedIn && wide}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
-    <div className={css.notifications} hidden={!wide}>{renderSlot('settings.launcher.notifications', {
-      active: signedIn && !account.desktopOnboardingVisible && !account.onboarding, openAccount,
-    })}</div>
     <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={signedIn ? undefined : css.signedOutMenu}
       anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
@@ -71,11 +67,11 @@ export function AccountMenu({
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}
       items={[
-        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} />,
+        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineRegular size={14} />,
           ...(settingsShortcut === undefined ? {} : { shortcut: settingsShortcut }) },
-        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineMedium size={16} /> },
+        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineRegular size={14} /> },
         ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
-          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineMedium size={16} /> }]),
+          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineRegular size={14} /> }]),
       ]}
       onClose={() => { setOpen(false) }}
       onSelect={(id) => {

@@ -26,7 +26,7 @@ const SECTION_ORDER_NAMES = [
 const CONTEXT_ORDER_NAMES = [
   'WORKING_DIRECTORY',
   'SANDBOX_POLICY', 'APPROVAL_POLICY', 'SUBAGENT_DELEGATION',
-  'HARNESS_SOURCE', 'WEB_SURFACE',
+  'HARNESS_SOURCE', 'WEB_SURFACE', 'PLUGIN_CLIS',
 ] as const satisfies readonly PromptContextOrderName[]
 function contributed(assembly: PromptAssembly): PromptAssembly['sections'] {
   return assembly.sections.filter(section => !BUILT_IN.includes(section.name))

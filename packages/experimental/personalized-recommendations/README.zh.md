@@ -29,14 +29,14 @@ kind: "package-bundle"
 
 | 行 | 包 | 提供 |
 |---|---|---|
-| 操作卡片 | [`action-cards`](../action-cards/README.zh.md) | 卡片工具、卡片状态、用户操作和状态通知 |
+| 操作卡片 | [`action-cards`](../action-cards/README.zh.md) | 卡片代码块、卡片状态、用户操作和状态通知 |
 | 操作卡片显示 | [`client-ui-action-cards`](../client-ui-action-cards/README.zh.md) | 回答下方的卡片框架 |
 | 个性化页面 | [`creation-recommendations`](../creation-recommendations/README.zh.md) | 页面提议及其后台创建 |
 | 个性化页面卡片 | [`client-ui-creation-recommendations`](../client-ui-creation-recommendations/README.zh.md) | 页面卡片正文 |
 | 插件推荐 | [`plugin-recommendations`](../plugin-recommendations/README.zh.md) | 内置插件推荐和启用 |
 | 插件推荐卡片 | [`client-ui-plugin-recommendations`](../client-ui-plugin-recommendations/README.zh.md) | 插件卡片正文 |
 
-关闭个性化页面或插件推荐即可只保留另一项功能：被关闭的功能撤下它的 Skill 和卡片种类，它之前的卡片只接受“暂不需要”。两项功能都需要操作卡片行；关闭它后两项功能都停止，直到重新开启。缺少卡片正文行时，卡片只显示提案标题、说明和“暂不需要”。操作卡片行的 `queuedMessageLimit` 字段规定排队等待下一轮的消息达到多少条时，卡片工具拒绝本轮的卡片。插件页面没有为该行提供设置页，请在 profile 的 `cordis.patch.yml` 中用 `id: action-cards` 覆盖项修改该字段。
+关闭个性化页面或插件推荐即可只保留另一项功能：被关闭的功能撤下它的 Skill 和卡片种类，它之前的卡片只接受“暂不需要”。两项功能都需要操作卡片行；关闭它后两项功能都停止，直到重新开启。缺少卡片正文行时，卡片只显示提案标题、说明和“暂不需要”。
 
 -----
 
@@ -62,11 +62,11 @@ kind: "package-bundle"
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响来自两项功能的 Skill、共享的 `propose_action` 工具和卡片状态通知，由各行所在的包说明。
+间接影响来自两项功能的 Skill、它们要求的卡片代码块和卡片状态通知，由各行所在的包说明。
 
 #### KV Cache 效果
 
-启用本 Bundle 会在请求中加入两个 Skill 的目录条目；卡片工具只在加载卡片 Skill 后才加入声明，见[操作卡片](../action-cards/README.zh.md#model-experience)页面。
+启用本 Bundle 会在请求中加入两个 Skill 的目录条目，不增加工具声明，见[操作卡片](../action-cards/README.zh.md#model-experience)页面。
 
 ## 已知限制与后续工作
 

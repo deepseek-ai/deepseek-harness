@@ -43,6 +43,9 @@ try {
   }
   await assert.rejects(definition.execute({ code: 'probe', description: 'Check shared error identity' }, execution),
     error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_RUN_FAILED')
+  runtime.run = async () => ({ output: [], outputTruncated: true })
+  assert.deepEqual(await definition.execute({ code: 'probe', description: 'Check successful truncated output' }, execution),
+    { logs: [], outputTruncated: true })
   runtime.run = async (spec) => {
     assert.deepEqual(Object.keys(spec.bindings[0].functions), ['private_probe'])
     assert.equal(spec.discardCompletion, true)

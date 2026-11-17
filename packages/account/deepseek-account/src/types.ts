@@ -118,8 +118,6 @@ declare module '@deepseek-ai/cordis' {
 export interface AccountRequestCredential {
   /** Request headers carrying the account token. */
   readonly headers: Readonly<Record<string, string>>
-  /** The bare token. */
-  readonly value: string
   /**
    * Remove the stored token after the destination rejected it, unless a newer
    * sign-in replaced it. The removal runs on the account service mounted when

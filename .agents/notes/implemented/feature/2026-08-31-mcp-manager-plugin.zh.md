@@ -20,19 +20,21 @@ Status: implemented
 
 **扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，写入期校验在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
 
-**子实例是插件实例，不是库调用。** 每个启用条目经 `ctx.plugin()` 在管理器 fiber 下挂载 `dsh-mcp-client`。这复用了经过测试的激活/销毁语义，让 `serverName` 预留与静态组合实例正确冲突（以带可操作消息的 `failed`/`load` 状态浮出），并让管理器销毁经普通 fiber 收卷解除每个实例及其工具。
+**子实例是插件实例，不是库调用。** 每个启用条目都是 MCP 客户端宿主经 `ctx.plugin()` 挂在管理器 fiber 下的 `dsh-mcp-client` 实例。这复用了经过测试的激活/销毁语义，让 `serverName` 预留与静态组合实例正确冲突（以带可操作消息的 `failed`/`load` 状态浮出），并让管理器销毁时经普通 fiber 收卷撤下每个实例及其工具。
+
+**MCP 客户端宿主是管理器接触 mcp-client 的唯一途径。** 管理器在构造时创建 `McpClientHost`，并且只从 mcp-client 导入这个类和类型。宿主用各传输自己的 schema 校验条目的客户端字段，因此拒绝时仍点名字段；它把实例挂在管理器的 fiber 下、执行探测，并用管理器的 context 创建授权所有者。插件入口只导出 Loader 加载的内容及其 Service 与错误类，因此宿主是一个 Service 类，而不是一组函数。
 
 **整条目决定实例；`enabled` 控制挂载。** 条目变化会重建子实例，停用或删除条目会销毁子实例。对账与 `restart` 在同一操作队列中串行执行。探测独立运行，配置变更先取消受影响的探测，再由队列中的清理操作等待它们结束。管理器保留清理失败记录，并在 Host 重启前拒绝替换，防止服务器生命周期重叠。
 
-**状态属于子 Fiber。** 监督器发布经 `connectionStatusOf(fiber)` 读取的状态单元。同一 Fiber 重载时保留该单元，最终销毁时移除观察者，但单元仍可读取。Fiber 身份直接区分不同注册作用域中的实例，无需在状态载荷中加入身份令牌。管理器聚合为 `list()` 和 `mcp-manager/status` 事件，吸收相等状态并在销毁后停止发出事件。配置已删除但清理未完成的条目仍以 `configured: false` 列出。首次对账等待管理器自身 Fiber 激活，因为严格服务读取要求 Fiber 已激活。
+**状态属于子 Fiber。** 监督器发布状态单元，实例激活后由宿主的 `mount` 交给管理器。同一 Fiber 重载时保留该单元，最终销毁时移除观察者，但单元仍可读取。Fiber 身份直接区分不同注册作用域中的实例，无需在状态载荷中加入身份令牌。管理器聚合为 `list()` 和 `mcp-manager/status` 事件，吸收相等状态并在销毁后停止发出事件。配置已删除但清理未完成的条目仍以 `configured: false` 列出。首次对账等待管理器自身 Fiber 激活，因为严格服务读取要求 Fiber 已激活。
 
 **模板让密钥不进入配置。** 存储的 env 和 header 值仍可读，必须隐藏的值应使用模板。管理器把原始模板传入子 Fiber。mcp-client 显式启用模板展开后，从当前 provider 解析 `${credential:REF}`；其本地实现也读取继承的环境变量，因此没有单独的环境变量模板。缺失值使非严格客户端等待凭据，相关凭据通知可恢复连接。值变化时，连接只有在清理成功后才会替换；同值通知保留当前连接和重试预算。诊断、工具调用失败与 `isError` 结果保留上游文本，其中每个已解析的值都替换为 `[redacted]`，模型因此能依据服务器的错误行动，又看不到实例发送过的密钥。
 
-**mcp-client 预算与探测。** 独立客户端的 `startupTimeoutMs` 可省略，管理器明确提供 30 秒默认值。`probeServer(ctx, config, options)` 连接、读取服务器身份、列出工具名并关闭，不预留名称，也不注册工具。探测有独立于运行期启动的预算和可配置的列表上限。探测成功与传输关闭分别报告，因此发现成功不会掩盖清理未完成。
+**mcp-client 预算与探测。** 独立客户端的 `startupTimeoutMs` 可省略，管理器明确提供 30 秒默认值。宿主的 `probe(config, options)` 连接、读取服务器身份、列出工具名并关闭，不预留名称，也不注册工具。探测有独立于运行期启动的预算和可配置的列表上限。探测成功与传输关闭分别报告，因此发现成功不会掩盖清理未完成。
 
 **管理器自身即 Remote 面。** `McpServerManager` 是 Typert Remote 服务：`watch` 在订阅时以及每次状态或条目变化后推送完整服务器列表，`restart` 与 `probe` 调用宿主操作。配置写入仍走 Settings Remote，管理器不提供写入方法，因此浏览器无法定义服务器命令。
 
-OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP SDK 的 `OAuthClientProvider` 是预期归宿，`needs-auth` 状态位为那次变更保留。
+**OAuth 留在凭据与 authorization seam 上。** MCP SDK 的 `OAuthClientProvider` 在 mcp-client 内运行：被动连接只使用已提交的授权，没有可用授权时进入 `waiting-authorization`；显式登录经管理器的 `startAuthorization` 与 authorization seam 完成。每个条目拥有一个稳定的 `mcp-client/<id>` 凭据 key。
 
 ## 曾考虑的替代方案
 
@@ -48,6 +50,12 @@ OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP S
 
 **让管理界面轮询状态。** 否决：Remote 面已转发宿主事件；发货了轮询的同类产品（Reasonix）或缺状态事件的（OpenCode v1）都把它当作待修缺陷。
 
+**从 mcp-client 入口导出校验、探测、状态与授权的值。** 否决：插件入口只导出 Loader 加载的内容及其 Service 与错误类，不导出辅助值。
+
+**把宿主作为以 `host: true` 加载、由管理器注入的独立 mcp-client 条目。** 否决：每个加载管理器的组合都得多一行，客户端配置也要多出一种不连接任何服务器的形态。它唯一的好处是开发期 mcp-client 重载时管理器随之重启，不足以抵消这两点。
+
+**把连接机制移到单独的服务包。** 否决：每台服务器的 mcp-client 实例使用同一套机制，因此所有加载 mcp-client 的组合都得额外加载这个新服务。
+
 **为「MCP 管理」开 capability seam（Definition/Provider/Consumer）。** 否决：只有一个实现、没有独立演化的角色；没有第二个 provider 的 seam 是无主的结构。
 
 ## 测试
@@ -60,4 +68,5 @@ mcp-client 单测覆盖状态迁移、独立的启动与探测预算、模板绑
 - 存活判断依赖传输关闭与请求失败；停滞但不关闭的 Streamable HTTP 服务器要等到请求失败时才会被发现。
 - 被重建服务器的工具在替换连接完成首次同步前不可用。替换会等待传输确认关闭且本地清理成功。
 - 管理器只治理全局面；preset 作用域与静态实例不在其列表内。
+- 管理器沿用它加载的 mcp-client 代码，直到管理器自身重载；开发期只重载 mcp-client 不会重启管理器。
 - `startupTimeoutMs` 只为启动尝试设界，通知驱动的重同步请求仍走 SDK 请求默认值——已记录为 mcp-client 的限制。

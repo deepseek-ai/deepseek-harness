@@ -18,8 +18,8 @@
   en: e7cae8876e688f92
   zh: 1d326330c34d128d
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/wire:
-  en: f15c4106f228f5f6
-  zh: ab80cf4ce62ae84c
+  en: 387deee727dfc538
+  zh: 1cae30f007f842d0
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/page-side:
   en: c0610c8f5a0882f3
   zh: d309cbc53183ec6e
@@ -30,5 +30,5 @@
   en: abb9d7ab9ef1df15
   zh: 1704732daf5f2886
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/consequences:
-  en: 815b41dc4f9ffcee
-  zh: b57388264cc459c7
+  en: a21bf34ac3983fbb
+  zh: c6278ef441587a48

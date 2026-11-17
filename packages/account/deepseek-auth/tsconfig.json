@@ -1,0 +1,30 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../deepseek-account"
+    },
+    {
+      "path": "../../util/error"
+    },
+    {
+      "path": "../../util/launch-environment"
+    }
+  ]
+}

@@ -273,6 +273,17 @@ describe('scrollbar.css base-surface binding', () => {
     expect(indirection).toBe(`${INDIRECTION_PREFIX}thumb`)
     expect(varReferences(declaration(scrollbarRules, 'background', '::-webkit-scrollbar-thumb')!)).toEqual([indirection])
   })
+
+  it('registers the thumb pair as inherited colours so a rebinding can transition', () => {
+    const comments = /\/\*[\s\S]*?\*\//g
+    const registered = [...scrollbarCss.replace(comments, ' ').matchAll(/@property\s+(--[\w-]+)\s*\{([^{}]*)\}/g)]
+      .map(([, name, body]) => [name, body!.split(';').map(part => part.trim()).filter(Boolean).sort()])
+    const descriptors = ['inherits: true', 'initial-value: transparent', "syntax: '<color>'"]
+    expect(registered).toEqual([
+      [`${INDIRECTION_PREFIX}thumb`, descriptors],
+      [`${INDIRECTION_PREFIX}thumb-hover`, descriptors],
+    ])
+  })
 })
 
 describe('scrollbar.css geometry variables', () => {

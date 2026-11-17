@@ -370,12 +370,6 @@
     "12a2d457945d43a02ab415318a8f6744ef620abd1fe272e12a164fa4ff476289": 1,
     "37d0e226122b7a3a4253e22583da5c77cc3690554dc959c74bf570589f3224fd": 1
   },
-  "packages/client/hmr/tests/node-half.client.spec.ts": {
-    "46197efe57255c9d92d64476470c89d0602c7333bf98ad75509bf43c1b357a3b": 1
-  },
-  "packages/client/hmr/tests/transport.client.spec.ts": {
-    "3f1a5cec801bec1f78158f48fca9f53657f85a8bb1f6ff4690fce56ab5ff8e98": 1
-  },
   "packages/client/locale/tests/apply.client.spec.ts": {
     "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 1
   },
@@ -388,7 +382,6 @@
   "packages/client/modules/tests/node-half.client.spec.ts": {
     "621628e4e895b24171e82d1b3fa3ecb12970e8eb0dfccab8bacc8c5784188a28": 2,
     "6c4ace8d135ab45685d0152eefb0f8156bbf95f66cefedd9a1a8da081d3cb180": 1,
-    "8eb8ea3592cbd4e828a33b2cbe2876089d3923738996fb2259ded563811a1a85": 1,
     "c4f0b7f87a16d26a1e4e7ef7a07991e789f0bbcfdbe2240a97fcd879668b5b3f": 1,
     "f549d88ac2b1db67fb33f18a024c116051ff83d3f8ad0433ba4ceedc679e9044": 2
   },
