@@ -1,7 +1,7 @@
 - main:
   - region "Connect to this Host":
     - heading "Connect to this Host" [level=1]
-    - paragraph: Sign in to continue.
+    - paragraph: Use one of the methods below to sign in.
     - text: Login token or link
     - textbox "Login token or link"
     - paragraph: Find the token in the URL printed when this Host started.
