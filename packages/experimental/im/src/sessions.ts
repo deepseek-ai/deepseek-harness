@@ -430,13 +430,22 @@ export class ImSessionHost implements ImSessions {
   private async recover(): Promise<void> {
     // Finish any committed reset receipt whose generation advance never persisted before admitting pending deliveries,
     // so deliveries queued for the replaced generation are discarded instead of executing in the old session.
+    const blocked = new Set<SessionId>()
     for (const [receiptKey, stored] of [...this.resets]) {
       const current = this.hosted(stored.replaced)
       if (current === undefined) continue
-      await this.reset(current.key, 'recover', { operationId: receiptKey.slice(current.key.length + 1) })
+      try {
+        await this.reset(current.key, 'recover', { operationId: receiptKey.slice(current.key.length + 1) })
+      } catch (error: unknown) {
+        // One failing reset must not starve other sessions' deliveries or retention pruning,
+        // and its own queued deliveries must stay un-admitted until the reset finishes.
+        blocked.add(stored.replaced)
+        this.ctx.logger.warn('IM reset %s remains pending: %s', receiptKey, error)
+      }
+      if (this.held) return
     }
     for (const [id, stored] of [...this.deliveries]) {
-      if (stored.admitted) continue
+      if (stored.admitted || blocked.has(stored.session)) continue
       try {
         await this.admit(stored.session, id)
       } catch (error: unknown) {

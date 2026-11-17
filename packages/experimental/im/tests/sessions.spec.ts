@@ -583,6 +583,43 @@ describe('reset', () => {
     expect(harness.resets).toHaveLength(1)
     expect(harness.created).toHaveLength(2)
   })
+
+  it('isolates a failing reset replay in recover() so other sessions still receive their pending deliveries', async () => {
+    const first = await booted()
+    const a = await first.host.ensure(spec({ key: 'conv:a' }))
+    const b = await first.host.ensure(spec({ key: 'conv:b' }))
+
+    first.failFormat()
+    await expect(first.host.deliver(b.key, messagesDelivery('followup', [message('d-b', 1)]))).rejects.toThrow(/format offline/)
+
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(a.key, 'cmd', { operationId: 'op-stuck', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    await expect(first.host.deliver(a.key, messagesDelivery('followup', [message('d-a', 1)]))).rejects.toThrow(/format offline/)
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool, withoutStart: true })
+    const warn = vi.spyOn(second.host.ctx.logger, 'warn')
+    const origReset = second.host.reset.bind(second.host)
+    vi.spyOn(second.host, 'reset').mockImplementation(async (key, reason, opts) => {
+      if (key === a.key) throw new Error('agent dispose stuck')
+      return origReset(key, reason, opts)
+    })
+    await second.host.start()
+    await second.host.whenRecovered()
+
+    expect(warn.mock.calls.some(([fmt]) => String(fmt).includes('IM reset %s remains pending'))).toBe(true)
+    expect(second.host.get(a.key)?.generation).toBe(0)
+    expect(second.ctx.agents.get(a.sessionId)).toBeUndefined()
+    expect(second.host.pendingDeliveries()).toBe(1)
+    expect(second.ctx.agents.get(b.sessionId)).toBeDefined()
+  })
 })
 
 describe('ephemeral sessions', () => {
