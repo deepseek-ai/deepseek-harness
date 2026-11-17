@@ -832,13 +832,14 @@ describe('ImService facade', () => {
       return await originalPut(...args)
     })
 
-    const sending = service.send(CHAT, h.text('unreceipted-own'))
+    // Trigger an announcement via `bot.send()` directly so `sender.dispose()` has no pending dispatch/settlement
+    // waiting on it — only `intake.drainAnnouncements()` keeps `store.dispose()` from closing the domain early.
+    const directSend = bot.send({ chat: { id: 'chat', type: 'group' } }, h('message', h.text('direct-bot-send')))
     await putEntered
     const disposing = base.ctx.fiber.dispose()
     releasePut()
-    const [result] = await Promise.all([sending, disposing])
+    await Promise.all([directSend, disposing])
 
-    expect(result.status).toBe('confirmed')
     expect(base.pool.media.get('im_messages')?.tables.get('messages')?.size).toBe(2)
   })
 })
