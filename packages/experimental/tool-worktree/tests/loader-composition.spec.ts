@@ -115,6 +115,16 @@ describe('worktree tool through real Loader composition', () => {
     // Inside the new worktree the name selects its own empty pool, and the branch of a nested worktree already exists.
     const nested = await enter({ name: 'new-checkout' }, agent)
     expect(nested.isError && nested.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    // A forwarded `fetch` would make the runtime refuse `main`, which is not a remote-tracking branch.
+    const undeclared = await executeToolFixture(context, {
+      name: 'enter_worktree', callId: brandString<ToolCallId>('undeclared'), arguments: { from: 'main', fetch: true }, agent,
+      signal: new AbortController().signal,
+    })
+    expect(undeclared.isError).not.toBe(true)
+    expect(undeclared.value).toMatchObject({ baseCommit, repositoryRoot: path, created: true })
+    // Leaving the generated worktree returns the Session to `new-checkout`.
+    expect((await exit(agent)).value).toMatchObject({ baseCommit, repositoryRoot: path })
+    expect(context.workingDirectory.get(agent.session)).toBe(path)
     expect(context.tools.get('enter_worktree')!.presentCall!({ name: 'named' })).toEqual({
       card: 'generic', title: 'enter_worktree', rawInput: { name: 'named' },
     })

@@ -20299,9 +20299,9 @@ importers:
       '@deepseek-ai/cosmokit':
         specifier: link:../cosmokit
         version: link:../cosmokit
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.3.2
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
   vendor/loader:
     dependencies:

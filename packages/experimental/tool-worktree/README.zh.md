@@ -34,7 +34,7 @@ kind: "package-bundle"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-调用 `enter_worktree({ name?: string, from?: string })`。Session 所在检出的工作树池中已有同名的已登记工作树时，调用把 Session 移入其中，分支与文件保持原样，返回它的 `path`、检出了分支时的 `branch`、Session 进入前所在的 `repositoryRoot`，以及 `created: false`。否则从 `from`（默认 HEAD）创建新的分支与检出目录并进入，返回 `path`、`branch`、固定提交 `baseCommit`、`repositoryRoot`，以及 `created: true`。省略 `name` 时总是用生成的名称新建。`from` 表示要新建工作树，所以名称已被占用时以 `WORKTREE_ALREADY_EXISTS` 失败。离开时调用 `exit_worktree()`：它把 Session 送回创建或进入该工作树时所在的检出，并返回该工作树的记录；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
+调用 `enter_worktree({ name?: string, from?: string })`。工具只把这两个字段转给运行时，因此从不执行 fetch。Session 所在检出的工作树池中已有同名的已登记工作树时，调用把 Session 移入其中，分支与文件保持原样，返回它的 `path`、检出了分支时的 `branch`、Session 进入前所在的 `repositoryRoot`，以及 `created: false`。否则从 `from`（默认 HEAD）创建新的分支与检出目录并进入，返回 `path`、`branch`、固定提交 `baseCommit`、`repositoryRoot`，以及 `created: true`。省略 `name` 时总是用生成的名称新建。`from` 表示要新建工作树，所以名称已被占用时以 `WORKTREE_ALREADY_EXISTS` 失败。离开时调用 `exit_worktree()`：它把 Session 送回创建或进入该工作树时所在的检出，并返回该工作树的记录；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
 
 -----
 
