@@ -11,7 +11,7 @@ kind: "package-reference"
 
 提供共享的 DeepSeek Messages 传输、请求配置和模型能力。组合 [API key](../llm-deepseek-api-key/README.zh.md) 或[账号](../llm-deepseek-account/README.zh.md)插件以提供鉴权、模型发现与 provider 注册。有效的设置更改在后续请求生效，进行中的请求保留原配置。本包可与 [pi-ai 适配器](../llm-pi-ai/README.zh.md)并用。
 
-`resolveAuth(connection)` 返回提供方持有的鉴权请求头，以及绑定本次请求凭据的可选失败回调。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
+`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、裸凭据值以及可选的失败回调；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
 
 ## 目录
 
@@ -90,11 +90,11 @@ Messages 以内容块发送文本、思考、工具调用和工具结果，以 `
 <a id="account-credentials"></a>
 ### 账号凭据
 
-`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号服务](../../credentials/deepseek-account/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
+`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号服务](../../account/deepseek-account/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
 
-Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号服务负责 HTTP 401 分类和凭据失效处理；传输层将错误交给其回调。
+Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号路由负责 HTTP 401 分类，账号服务负责凭据失效处理；传输层将错误交给凭据的回调。
 
-[共享凭据函数](src/credential.ts)为模型路由和 Web 提供方获取凭据，不决定请求头。`resolveDeepSeekApiKey(ctx, ref)` 返回规范化并校验后的密钥或 `undefined`；已安装的凭据服务具有权威性，仅在该服务缺席时读取启动环境。存储与密钥格式错误向上传播。`deepSeekApiKeyConfigured(ctx, ref)` 检查是否存在，不读取已存密钥值。账号函数将目标地址许可检查和精确 token 作废交给账号服务；作废时隔离存储失败，保留原请求错误。
+提供方插件通过三个适配器钩子拥有凭据。`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：Messages、Files 和列表请求发送的请求头、裸凭据值、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。凭据的所有者撤回凭据时，该信号结束模型请求及其文件操作，失败回调为这次结束命名。`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`。`credential` 通过 `ctx.llm.providerCredential(provider)` 发布路由的凭据种类、可选引用和存在性检查，并附带路由的基础地址，使 Web 提供方无需读取提供方配置即可用同一凭据调用同一部署。插件通过 `dsh-credentials` 的[凭据引用函数](../../credentials/credentials/README.zh.md)读取 API Key，通过[账号服务](../../account/deepseek-account/README.zh.md)读取账号凭据；本传输层两者都不读取。
 
 ### 带 thinking 与图片的流式调用
 
@@ -124,7 +124,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 成功的 Files 响应必须包含有效 JSON。上传、列举、获取和删除操作的 JSON 解码失败抛出 `INVALID_RESPONSE`，消息包含操作名称与 HTTP 状态，`LlmError.failure` 保留该状态，`cause` 保留原始解析错误。读取响应体时的传输和取消错误保留其原有身份。
 
-非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
+非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。被凭据的 `revoked` 信号结束的请求按提供方失败回调命名的失败上报，没有回调时为 `TRANSPORT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
 
 提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，在官方端点上且 `models` 为内置目录时改为提供官方模型列表；账号路由在登录时提供账号的模型列表（见 [API key](../llm-deepseek-api-key/README.zh.md) 与[账号](../llm-deepseek-account/README.zh.md)提供方）。传输层提供内置目录、目录条目字段的 schema 和能力解析，以及两条路由共用的列表机制：`requestModelListing`、按凭据区分的 `ModelListingCache`（由 `createModelListingCache` 持有，负责自动刷新、通知与插件清理），以及带客户端版本门控和列表角标的 `resolveListedCatalog` 与 `refuseListedModel`；`catalogModelInfo` 把列表角标附到公布的条目上。角标文字拒绝控制字符、Unicode 行分隔符、双向控制符及仅由空白或默认可忽略字符组成的字符串，组合 emoji 仍有效。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
 
@@ -223,4 +223,4 @@ loop 保留的响应块会追加到下一个请求，并保留其更早的可复
 
 无。
 
-`deepseek-official` 仅使用配置的 API Key 引用；`deepseek-account` 仅在账号提供方允许的推理来源使用已保存的 DSH 授权。两条路由共享 Messages 传输，模型与文件设置独立配置。账号凭证缺失或不适用于目标时拒绝请求并提示登录；两条路由均不回退到另一凭证。Chat 和 Files 请求拒绝重定向。账号提供方根据运行中 Agent 已记录的请求上下文负责退登取消，包括工具执行阶段；传输层接收现有请求的中止信号。
+`deepseek-official` 仅使用配置的 API Key 引用；`deepseek-account` 仅在账号提供方允许的推理来源使用已保存的 DSH 授权。两条路由共享 Messages 传输，模型与文件设置独立配置。账号凭证缺失或不适用于目标时拒绝请求并提示登录；两条路由均不回退到另一凭证。Chat 和 Files 请求拒绝重定向。账号路由插件根据运行中 Agent 已记录的请求上下文负责退登取消，包括工具执行阶段；传输层接收现有请求的中止信号，并结束凭据已被撤回的请求。

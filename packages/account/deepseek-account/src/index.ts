@@ -8,22 +8,21 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import Schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
-import { installAccountTaskCancellation, isRunningAccountTask } from './account-tasks.ts'
 import { mergePlatformCookies, platformClientHeaders, platformWireLocale } from './client-metadata.ts'
-import { type AccountNotification, type AccountNotificationBatch, type AccountNotificationEvent, type AccountNotificationId, type AccountClientMetadata, type AccountDetails, type AccountUserId, type AccountView, type AccountUpdate, type PlatformSession, type SignInAttemptId, type SignInAttemptView } from './types.ts'
+import { type AccountNotification, type AccountNotificationBatch, type AccountNotificationEvent, type AccountNotificationId, type AccountClientMetadata, type AccountDetails, type AccountRequestCredential, type AccountUserId, type AccountView, type AccountUpdate, type PlatformSession, type SignInAttemptId, type SignInAttemptView } from './types.ts'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { AuthorizationSession } from '@deepseek-ai/dsh-authorization'
 import { profile, readAccountDetail } from './details.ts'
 import { readNotificationContent, readNotifications, sendNotificationEvent } from './notifications.ts'
 import { revokeAccount, type LogoutRetryPolicy } from './logout.ts'
-import { AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
+import { ACCOUNT_TOKEN_HEADER, AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
 
 export type * from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context { deepseekAccount: DeepSeekAccount }
   interface Events {
-    /** Local grant removal has completed.
+    /** Local grant removal has completed. After the listeners return, the `revoked` signal of that grant's request credentials aborts.
      * @mode emit
      */
     'deepseek-account/signed-out'(): void
@@ -122,19 +121,21 @@ export class DeepSeekAccount extends TypertRemoteService {
   private readonly revocations = new Set<Promise<void>>()
   private attempt: Attempt | undefined
   private readonly listeners = new Set<(kind: 'snapshot' | 'credentials-changed' | 'identity') => void>()
+  private readonly runningTaskReports = new Set<() => boolean>()
   /**
    * Latest ready profile read and the grant token it was read with. Binding the token keeps a
    * cached identity from answering for a credential that has since changed.
    */
   private lastProfile: { readonly token: string; readonly profile: Extract<AccountDetails['profile'], { status: 'ready' }> } | undefined
   private detailsLifetime = new AbortController()
+  /** Aborted at the next sign-out; request credentials of the current sign-in carry its signal. */
+  private signedOut = new AbortController()
   private closed = false
   private removing: Promise<AccountView> | undefined
 
   /** @param ctx - Host with authorization and credentials services. @param config - deployment options. */
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'deepseekAccount', { namespace: 'account' })
-    installAccountTaskCancellation(ctx)
     const resolved = Config(config)
     this.embeddedPageDist = resolved.embeddedPageDist
     this.origin = platformOrigin(resolved.platformOrigin, resolved.allowLoopbackHttp, 'platformOrigin')
@@ -374,7 +375,7 @@ export class DeepSeekAccount extends TypertRemoteService {
    * @param token - token captured by the rejected inference request.
    * @returns after matching credentials are removed and the expiry notification is emitted.
    */
-  async rejectToken(token: string): Promise<void> {
+  private async rejectToken(token: string): Promise<void> {
     const lifetime = this.detailsLifetime
     const stored = await this.readCurrentGrant(lifetime)
     if (stored?.token !== token || this.detailsLifetime !== lifetime) return
@@ -391,7 +392,7 @@ export class DeepSeekAccount extends TypertRemoteService {
       await this.ctx.credentials.deleteRecord(KEY)
       this.ctx.emit('deepseek-account/session-expired')
       this.attempt = undefined
-      this.ctx.emit('deepseek-account/signed-out')
+      this.publishSignedOut()
       this.changed('snapshot')
       return this.getState()
     })().finally(() => { this.removing = undefined })
@@ -451,7 +452,7 @@ export class DeepSeekAccount extends TypertRemoteService {
    * @param url - actual request destination or API base URL.
    * @returns stored token, or undefined for other origins or a signed-out account.
    */
-  async resolveToken(url: string): Promise<string | undefined> {
+  private async resolveToken(url: string): Promise<string | undefined> {
     if (this.closed || this.removing !== undefined) return undefined
     const destination = new URL(url)
     if (destination.origin !== this.inferenceOrigin || destination.username || destination.password) return undefined
@@ -467,6 +468,33 @@ export class DeepSeekAccount extends TypertRemoteService {
       if (['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname)) return undefined
     } else if (issuer.origin !== this.origin) return undefined
     return result.data.token
+  }
+
+  /**
+   * Release the account credential for one request to `url` as the request
+   * carries it, together with its invalidation, which runs on the account
+   * service mounted when it is called, and the signal this service aborts
+   * when it signs out of that credential. Host-only.
+   * @param url - actual request destination or API base URL.
+   * @returns the request credential, or undefined for other origins or a signed-out account.
+   */
+  async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined> {
+    // Captured before the token is read, so a sign-out that completes during the read aborts this credential's signal.
+    const revoked = this.signedOut.signal
+    const token = await this.resolveToken(url)
+    if (token === undefined) return undefined
+    // The destination answers after a reload may have replaced this instance, so the rejection runs on the account
+    // service mounted at that time; without one, the grant stays for the next mounted service to reject.
+    const { ctx } = this
+    return {
+      headers: { [ACCOUNT_TOKEN_HEADER]: token },
+      value: token,
+      revoked,
+      reject: async () => {
+        try { await ctx.get('deepseekAccount')?.rejectToken(token) }
+        catch (_credentialRemovalFailed) { /* The destination's rejection is the failure to report; the next rejection retries. */ }
+      },
+    }
   }
 
   /**
@@ -563,7 +591,7 @@ export class DeepSeekAccount extends TypertRemoteService {
         this.revoke(parsed.data.token, platformClientHeaders(this.platform, client))
       }
       this.attempt = undefined
-      this.ctx.emit('deepseek-account/signed-out')
+      this.publishSignedOut()
       this.changed('snapshot')
       return this.getState()
     })().finally(() => { this.removing = undefined })
@@ -571,12 +599,25 @@ export class DeepSeekAccount extends TypertRemoteService {
   }
 
   /**
+   * Register a report of running work that signing out would interrupt. The
+   * plugin billing the account to a model route registers one from within
+   * `ctx.effect()`; without any report nothing is known to be running.
+   * @param report - answers whether such work is running now.
+   * @returns the disposer removing the report.
+   */
+  registerRunningTaskReport(report: () => boolean): () => void {
+    this.runningTaskReports.add(report)
+    return () => { this.runningTaskReports.delete(report) }
+  }
+
+  /**
    * Inspect running work before sign-out.
-   * @returns whether a running task's latest request uses the account route; false when the optional agents service is absent.
+   * @returns whether a registered report says a running task uses the account; false without reports.
    */
   @Remote
   hasRunningAccountTasks(): boolean {
-    return this.ctx.get('agents')?.list().some(isRunningAccountTask) ?? false
+    for (const report of this.runningTaskReports) if (report()) return true
+    return false
   }
 
   /**
@@ -662,6 +703,17 @@ export class DeepSeekAccount extends TypertRemoteService {
     const revocation = revokeAccount(this.origin, token, this.logoutPolicy,
       this.logoutLifetime.signal, { ...this.requestHeaders, ...headers }).finally(() => { this.revocations.delete(revocation) })
     this.revocations.add(revocation)
+  }
+
+  /**
+   * Announce a completed sign-out. Listeners run first, so a turn they cancel records that cause before the requests
+   * still carrying the signed-out token end. A listener that throws does not keep those requests open.
+   */
+  private publishSignedOut(): void {
+    const signedOut = this.signedOut
+    this.signedOut = new AbortController()
+    try { this.ctx.emit('deepseek-account/signed-out') }
+    finally { signedOut.abort() }
   }
 
   private invalidateDetails(): void {

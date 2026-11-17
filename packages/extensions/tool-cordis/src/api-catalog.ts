@@ -1072,12 +1072,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'async rejectToken(token: string): Promise<void>',
-        description: 'Remove an inference-rejected token only while it still matches the stored login.',
-        parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
-        returns: 'after matching credentials are removed and the expiry notification is emitted.',
-      },
-      {
         signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
         description: 'Read existing login identity without creating a device or returning credentials.',
         parameters: [],
@@ -1090,10 +1084,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'async resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
+        signature: 'async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined>',
+        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called, and the signal this service aborts when it signs out of that credential. Host-only.',
         parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
+        returns: 'the request credential, or undefined for other origins or a signed-out account.',
       },
       {
         signature: '@Remote async startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
@@ -1114,10 +1108,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
+        signature: 'registerRunningTaskReport(report: () => boolean): () => void',
+        description: 'Register a report of running work that signing out would interrupt. The plugin billing the account to a model route registers one from within `ctx.effect()`; without any report nothing is known to be running.',
+        parameters: [{ name: 'report', description: 'answers whether such work is running now.' }],
+        returns: 'the disposer removing the report.',
+      },
+      {
         signature: '@Remote hasRunningAccountTasks(): boolean',
         description: 'Inspect running work before sign-out.',
         parameters: [],
-        returns: 'whether a running task\'s latest request uses the account route; false when the optional agents service is absent.',
+        returns: 'whether a registered report says a running task uses the account; false without reports.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) async *watchExpiry(signal: AbortSignal): AsyncIterable<\'session-expired\'>',
@@ -2261,6 +2261,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve the image projection for an exact registered model route.',
         parameters: [{ name: 'provider', description: 'registered provider route.' }, { name: 'model', description: 'exact model id.' }, { name: 'image', description: 'normalized image reference.' }],
         returns: 'dimensions and byte target used by the adapter\'s request serializer.',
+      },
+      {
+        signature: 'providerCredential(provider: string): ProviderCredential | undefined',
+        description: 'Resolve the credential one registered route currently sends, through its owning adapter. An unregistered route answers `undefined` rather than throwing because callers ask about routes a conversation named earlier, which may no longer be mounted; a registered route whose configuration does not resolve propagates the adapter\'s failure.',
+        parameters: [{ name: 'provider', description: 'provider route whose credential is wanted.' }],
+        returns: 'the route\'s credential, or `undefined` when the route is unregistered or publishes none.',
       },
       {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
@@ -5391,7 +5397,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'emit',
     signature: '\'deepseek-account/signed-out\'(): void',
     summary: 'Local grant removal has completed.',
-    description: 'Local grant removal has completed.',
+    description: 'Local grant removal has completed. After the listeners return, the `revoked` signal of that grant\'s request credentials aborts.',
     parameters: [],
   },
   {
@@ -5953,6 +5959,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AccountProfile',
     declaration: 'export interface AccountProfile {\n    readonly id: AccountUserId | null;\n    readonly name: string | null;\n    readonly contact: string | null;\n    readonly avatarUrl?: string | null;\n}',
+  },
+  {
+    name: 'AccountRequestCredential',
+    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
   },
   {
     name: 'AccountUpdate',
@@ -7720,7 +7730,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(_provider: string): ProviderCredential | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -7741,6 +7751,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmConfigurableProvider',
     declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    baseURLEnv?: readonly string[];\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
+  },
+  {
+    name: 'LlmCredentialKind',
+    declaration: 'export type LlmCredentialKind = LlmCredentialKindMap[keyof LlmCredentialKindMap];',
+  },
+  {
+    name: 'LlmCredentialKindMap',
+    declaration: 'export interface LlmCredentialKindMap {\n    \'api-key\': \'api-key\';\n    account: \'account\';\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -7808,7 +7826,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(provider: string): ProviderCredential | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -8621,6 +8639,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PromptSubmitResult',
     declaration: 'export type PromptSubmitResult = {\n    text: string;\n    context?: readonly string[];\n    drop?: undefined;\n} | {\n    drop: string;\n    text?: undefined;\n    context?: undefined;\n};',
+  },
+  {
+    name: 'ProviderCredential',
+    declaration: 'export interface ProviderCredential {\n    readonly kind: LlmCredentialKind;\n    readonly baseURL: string;\n    readonly reference?: string;\n    configured(endpoint: string): Promise<boolean>;\n    resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>;\n}',
+  },
+  {
+    name: 'ProviderCredentialGrant',
+    declaration: 'export interface ProviderCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
   },
   {
     name: 'ProviderRequestId',
