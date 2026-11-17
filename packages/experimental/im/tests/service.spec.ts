@@ -5,7 +5,7 @@
  */
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Satori, h } from '@deepseek-ai/cordis-plugin-im-core'
+import { PlatformError, Satori, h } from '@deepseek-ai/cordis-plugin-im-core'
 import type { InboundMessage } from '@deepseek-ai/cordis-plugin-im-core'
 import { createTextMode, FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -267,6 +267,23 @@ describe('ImService facade', () => {
     preAborted.abort(new Error('already cancelled'))
     bot.getMessage = () => Promise.reject(new Error('late platform failure'))
     await expect(service.readMessage(CHAT, 'm-pre-aborted', preAborted.signal)).rejects.toMatchObject({ code: 'unavailable' })
+  })
+
+  it('converts classified platform readMessage and members failures into ImError with cause', async () => {
+    const { service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    const denied = new PlatformError('permission', 'missing roster scope', { code: 99991672 })
+    bot.members = () => Promise.reject(denied)
+    await expect(service.members(CHAT)).rejects.toMatchObject({ code: 'access', message: 'missing roster scope', cause: denied })
+
+    const rawRateLimit = Object.assign(new Error('too many requests'), { status: 429 })
+    bot.classify = () => new PlatformError('rate-limit', 'rate limited by platform', { cause: rawRateLimit })
+    bot.getMessage = () => Promise.reject(rawRateLimit)
+    await expect(service.readMessage(CHAT, 'm-rate')).rejects.toMatchObject({
+      code: 'unavailable', message: 'rate limited by platform', cause: rawRateLimit,
+    })
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {

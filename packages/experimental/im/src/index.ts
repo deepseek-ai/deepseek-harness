@@ -6,7 +6,7 @@
  * routing listener passed on.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
-import { toText } from '@deepseek-ai/cordis-plugin-im-core'
+import { PlatformError, toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, Fragment, MembersPage, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -346,7 +346,7 @@ export class ImService extends Service implements ImApi {
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
     if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
-    const message = await readWithin(bot.getMessage(record.ref, id), this.config.platformTimeoutMs, signal)
+    const message = await readPlatform(bot, bot.getMessage(record.ref, id), this.config.platformTimeoutMs, signal)
     // The stored branch checks the chat because a message key is per bot; a platform read needs the same check, since
     // `getMessage` is handed the chat as a routing hint and one bot serves every chat it was added to.
     if (message.chat.id !== record.ref.id) {
@@ -374,7 +374,7 @@ export class ImService extends Service implements ImApi {
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so its members cannot be listed.`)
     if (bot.members === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot list the members of a chat.`)
-    return await readWithin(bot.members(record.ref, cursor, limit), this.config.platformTimeoutMs, signal)
+    return await readPlatform(bot, bot.members(record.ref, cursor, limit), this.config.platformTimeoutMs, signal)
   }
 
   /**
@@ -435,6 +435,21 @@ export class ImService extends Service implements ImApi {
         content: options.content ?? [message],
       }),
     }
+  }
+}
+
+/**
+ * Run one bounded platform read and translate adapter/platform errors into structured {@link ImError}s with `cause`
+ * preserved, so tool callers receive a declared error code instead of an unclassified adapter exception.
+ */
+async function readPlatform<T>(bot: Bot, read: Promise<T>, timeout: number, signal?: AbortSignal): Promise<T> {
+  try {
+    return await readWithin(read, timeout, signal)
+  } catch (error: unknown) {
+    if (error instanceof ImError) throw error
+    const classified = error instanceof PlatformError ? error : bot.classify(error)
+    const code: ImError['code'] = classified.kind === 'permission' ? 'access' : 'unavailable'
+    throw new ImError(code, classified.message, { cause: error })
   }
 }
 
