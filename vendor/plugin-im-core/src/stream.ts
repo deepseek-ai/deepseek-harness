@@ -137,6 +137,8 @@ export interface StreamHost<T extends ModeTypes = ModeTypes> {
   /** Register the `onClick` actions of a published state. */
   register(actions: TransformResult<unknown>['actions']): void
   classify(error: unknown): PlatformError
+  /** Whether a single-part `open` send with `ctx` carries platform deduplication (safe to retry on `published: 'unknown'`). */
+  idempotentSend?(ctx: SendContext): boolean
   now(): number
 }
 
@@ -504,7 +506,19 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     if (!this._handle) {
       let handle: MessageHandle
       try {
-        handle = await this.retry(attempt => driver.open(draft, payload, this.context(frame.content, frame.result.quote, frame.result.report, attempt)), false)
+        handle = await this.retry(
+          attempt => driver.open(draft, payload, this.context(frame.content, frame.result.quote, frame.result.report, attempt)),
+          false,
+          (attempt) => {
+            const tickCtx = this.context(frame.content, frame.result.quote, frame.result.report, attempt)
+            return this.host.idempotentSend?.({
+              index: 0,
+              ...tickCtx.quote === undefined ? {} : { quote: tickCtx.quote },
+              options: tickCtx.options,
+              previous: [],
+            }) ?? false
+          },
+        )
       } catch (error) {
         if (this.isLimit(error)) {
           this.paused = 'open: ' + this.limitOf(error).message
@@ -798,10 +812,17 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
 
   /**
    * Run `op` with up to `attempts` tries for `retryable` / `rate-limit` errors (exponential backoff, honouring
-   * `retryAfterMs`). Throws the classified error otherwise; `StreamLimitError` passes through untouched. An
-   * interruptible retry (intermediate ticks) is cut short by close/abort with `Interrupted`.
+   * `retryAfterMs`). An operation whose publication outcome is unknown (`published !== 'no'`) is retried only when
+   * `idempotent` allows it (subsequent edits on an existing handle, or an initial open with platform deduplication).
+   * Throws the classified error otherwise; `StreamLimitError` passes through untouched. An interruptible retry
+   * (intermediate ticks) is cut short by close/abort with `Interrupted`.
    */
-  private async retry<R>(op: (attempt: number) => Promise<R>, interruptible: boolean): Promise<R> {
+  private async retry<R>(
+    op: (attempt: number) => Promise<R>,
+    interruptible: boolean,
+    idempotent: boolean | ((attempt: number) => boolean) = true,
+  ): Promise<R> {
+    let sawUnknown = false
     for (let attempt = 1; ; attempt++) {
       try {
         return await op(attempt)
@@ -809,8 +830,18 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
         if (error instanceof StreamLimitError) throw error
         if (this.aborted) throw error
         const classified = this.classify(error)
-        const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit') && attempt < this.attempts
-        if (!again) throw classified
+        if (classified.published === 'unknown') sawUnknown = true
+        const safe = classified.published === 'no' || (typeof idempotent === 'function' ? idempotent(attempt) : idempotent)
+        const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit') && safe && attempt < this.attempts
+        if (!again) {
+          throw sawUnknown && classified.published !== 'unknown'
+            ? new PlatformError(classified.kind, classified.message, {
+                cause: classified,
+                published: 'unknown',
+                ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
+              })
+            : classified
+        }
         if (!await this.sleep(streamBackoff(attempt, classified.retryAfterMs), interruptible)) throw new Interrupted(classified.message)
       }
     }

@@ -406,6 +406,7 @@ export abstract class Bot<C = unknown> {
       recall: handle => this.recall(handle),
       register: actions => this.registerActions(actions),
       classify: error => this.classifyError(error),
+      idempotentSend: ctx => this.adapterHooks.idempotentSend?.(target, ctx) ?? false,
       now: () => this.now(),
     }
     const stream = createMessageStream<any>(host, options)

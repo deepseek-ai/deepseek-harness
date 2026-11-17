@@ -503,9 +503,9 @@ describe('retry', () => {
     await expect(stream.close('x')).rejects.toMatchObject({ kind: 'permission' })
   })
 
-  it('open is retried for retryable errors; exhausting attempts fails the stream', async () => {
+  it('open is retried for retryable unpublished errors; exhausting attempts fails the stream', async () => {
     const driver = fakeDriver('patch')
-    const err = () => new PlatformError('retryable', 'timeout')
+    const err = () => new PlatformError('retryable', 'timeout', { published: 'no' })
     driver.failures.open.push(err())
     const stream = createMessageStream(fakeHost(driver), { attempts: 2 })
     stream.update('a')
@@ -518,7 +518,27 @@ describe('retry', () => {
     const s2 = createMessageStream(fakeHost(d2), { attempts: 2 })
     s2.update('a')
     await advance(500)
-    await expect(s2.done).rejects.toMatchObject({ kind: 'retryable' })
+    await expect(s2.done).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+  })
+
+  it('open does not retry published:unknown without idempotentSend, and retries it when idempotentSend is true', async () => {
+    const d1 = fakeDriver('patch')
+    d1.failures.open.push(new PlatformError('retryable', 'lost response', { published: 'unknown' }))
+    const s1 = createMessageStream(fakeHost(d1), { attempts: 2, firstDelayMs: 0 })
+    s1.update('a')
+    await advance(500)
+    expect(d1.calls).toEqual([])
+    expect(d1.failures.open).toEqual([])
+    await expect(s1.done).rejects.toMatchObject({ kind: 'retryable', published: 'unknown' })
+
+    const d2 = fakeDriver('patch')
+    d2.failures.open.push(new PlatformError('retryable', 'lost response', { published: 'unknown' }))
+    const h2 = { ...fakeHost(d2), idempotentSend: () => true }
+    const s2 = createMessageStream(h2, { attempts: 2, firstDelayMs: 0, idempotencyKey: 'k-1' })
+    s2.update('a')
+    await advance(500)
+    expect(d2.calls).toMatchObject([{ op: 'open', attempt: 2 }])
+    await closeAll(s2)
   })
 
   it('close failure fails done', async () => {
