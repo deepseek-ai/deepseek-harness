@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Habilidades upstream de aplicaciones CLI",
+    "description": "Descarga del repositorio de GitHub del proveedor los archivos de habilidades upstream que fija cada complemento de aplicación CLI y muestra la habilidad de entrada del complemento cuando están disponibles."
+  }
+}

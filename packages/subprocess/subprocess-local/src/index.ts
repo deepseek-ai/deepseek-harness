@@ -182,15 +182,15 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     const candidates = absolute ? [command] : this.executableCandidates(command, environment)
     for (const candidate of candidates) {
       signal?.throwIfAborted()
+      let executable = false
       try {
-        const info = await stat(candidate)
-        if (!info.isFile()) continue
-        await access(candidate, constants.X_OK)
-        signal?.throwIfAborted()
-        return candidate
-      } catch {
-        // Try the next PATH candidate; the final miss receives one stable error.
+        executable = await isExecutableFile(candidate)
+      } catch (_unusableCandidate) {
+        // A missing or inaccessible candidate leaves the next PATH candidate to try;
+        // the final miss receives one stable error.
       }
+      signal?.throwIfAborted()
+      if (executable) return candidate
     }
     signal?.throwIfAborted()
     throw new SubprocessExecutableNotFoundError(absolute
@@ -374,6 +374,13 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     void handle.done.then(release, release).catch(() => {})
     return handle
   }
+}
+
+/** Whether `path` is a regular file the current user may execute; rejects when `path` cannot be inspected. */
+async function isExecutableFile(path: string): Promise<boolean> {
+  if (!(await stat(path)).isFile()) return false
+  await access(path, constants.X_OK)
+  return true
 }
 
 /** Read a Windows environment key using the platform's case-insensitive semantics. */

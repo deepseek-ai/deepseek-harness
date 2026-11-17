@@ -10,7 +10,6 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
 } from './components.tsx'
@@ -25,13 +24,6 @@ export type {
 
 /** The `connectorAccounts` Remote that `dsh-api-remotes` mounts, and the services the slot registrations need. */
 export const inject = ['remote', 'remote.connectorAccounts', 'slots', 'locale']
-
-/** The value of a Remote call, or a rejection with the Host's message when the Host refused it. */
-async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
-  const result = await call
-  if (!result.ok) throw new Error(result.error.message)
-  return result.value
-}
 
 function registerBundle(ctx: Context, face: ConnectorAccountFace, packageName: string, account: string): () => void {
   const bundle = { ...face, account }
@@ -58,8 +50,8 @@ export function apply(ctx: Context): void {
   ctx.effect(() => async () => { await browser.dispose() }, 'connector-account: stream')
   const face: ConnectorAccountFace = {
     hooks: { connectorAccounts: browser.state },
-    start: (key, operation) => settle(remote.start(key, operation)),
-    cancel: (key, id) => settle(remote.cancel(key, id)),
+    start: (key, operation) => remote.start(key, operation),
+    cancel: (key, id) => remote.cancel(key, id),
     resolveText: text => ctx.locale.resolveText(text),
     follow: (key, id) => { browser.follow(key, id) },
     failed: () => { browser.failed() },

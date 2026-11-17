@@ -30,6 +30,9 @@ import { afterAll, vi } from 'vitest'
 import type { ViewerPageRosterRow } from './viewer-page-roster.client.ts'
 import { allocateViewerStaging, disposeViewerStaging } from './viewer-staging.client.ts'
 
+// This source-only page shares real module namespaces; production seed.ts consumes built manifests.
+vi.mock('@deepseek-ai/dsh-client-web/src/seed.ts', () => import('../../../client/web/tests/source-static-modules.client.ts'))
+
 const testsDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(testsDir, '../../../..')
 /** Staging parent for generated faces; inside the workspace so their `zod` import resolves. */

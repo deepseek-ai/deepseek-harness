@@ -528,7 +528,7 @@ export class TunnelServer {
       // Forbidden header names throw on a guarded Headers instance.
       try {
         headers.set(key, value)
-      } catch {
+      } catch (_forbiddenHeader) {
         // The fetch handler reads no forbidden header; the route lane owns those.
       }
     }

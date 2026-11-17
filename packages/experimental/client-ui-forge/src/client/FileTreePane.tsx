@@ -15,12 +15,15 @@ export type FileTreePosition = 'right' | 'left' | 'hidden'
 
 /**
  * Render a keyboard- and pointer-resizable tree beside the diff.
- * @param props - tree rows, pane position, the toggle's controlled element id, and the receiver of the shown width.
+ * @param props - tree rows, pane position, the toggle's controlled element id, the width the cell above the tree needs,
+ * and the receiver of the shown width.
  * @returns the bounded pane and its resize separator.
  */
-export function FileTreePane({ position, id, onWidth, ...props }: ChangedFilesProps & {
+export function FileTreePane({ position, id, least = 0, onWidth, ...props }: ChangedFilesProps & {
   readonly position: FileTreePosition
   readonly id: string
+  /** Width in pixels the toolbar cell above the tree needs, which raises the pane's least width above its own. */
+  readonly least?: number
   /** Receives the pane's width in pixels whenever it changes, so the toolbar can align a cell with it. */
   readonly onWidth: (width: number) => void
 }): ReactNode {
@@ -42,13 +45,15 @@ export function FileTreePane({ position, id, onWidth, ...props }: ChangedFilesPr
     observer.observe(parent)
     return () => { observer.disconnect() }
   }, [])
-  const shown = Math.min(width, maximum)
+  const floor = Math.max(MIN_WIDTH, least)
+  const top = Math.max(floor, maximum)
+  const shown = Math.max(floor, Math.min(width, top))
   useLayoutEffect(() => { onWidth(shown) }, [shown, onWidth])
   const direction = position === 'left' ? 1 : -1
-  const resize = (next: number): void => { setWidth(Math.round(Math.max(MIN_WIDTH, Math.min(maximum, next)))) }
+  const resize = (next: number): void => { setWidth(Math.round(Math.max(floor, Math.min(top, next)))) }
   return <div ref={pane} className={clsx(css.pane, changesCss.treePane)} data-position={position} hidden={position === 'hidden'} style={{ width: shown }}>
     <div className={css.resize} role="separator" tabIndex={0} aria-label={props.t('diff.resizeFileTree')}
-      aria-orientation="vertical" aria-controls={id} aria-valuemin={MIN_WIDTH} aria-valuemax={maximum} aria-valuenow={shown}
+      aria-orientation="vertical" aria-controls={id} aria-valuemin={floor} aria-valuemax={top} aria-valuenow={shown}
       onPointerDown={(event) => {
         if (event.button !== 0) return
         event.preventDefault()
@@ -70,7 +75,7 @@ export function FileTreePane({ position, id, onWidth, ...props }: ChangedFilesPr
       onKeyDown={(event) => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
         event.preventDefault()
-        resize(event.key === 'Home' ? MIN_WIDTH : event.key === 'End' ? maximum : shown + direction * (event.key === 'ArrowRight' ? 20 : -20))
+        resize(event.key === 'Home' ? floor : event.key === 'End' ? top : shown + direction * (event.key === 'ArrowRight' ? 20 : -20))
       }} />
     <nav id={id} className={css.navigation} aria-label={props.t('diff.allFiles', { count: props.files.length })}>
       <ChangedFiles {...props} />

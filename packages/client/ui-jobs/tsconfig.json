@@ -9,19 +9,19 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/cordis"
+    },
+    {
       "path": "../../api/job-controller/tsconfig.client.json"
     },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
-      "path": "../../../vendor/cordis"
-    },
-    {
       "path": "../locale/tsconfig.client.json"
     },
     {
-      "path": "../ui-conversation/tsconfig.client.json"
+      "path": "../store"
     },
     {
       "path": "../ui-primitives"
@@ -31,6 +31,9 @@
     },
     {
       "path": "../ui-session"
+    },
+    {
+      "path": "../ui-session-panel"
     },
     {
       "path": "../ui-slots"

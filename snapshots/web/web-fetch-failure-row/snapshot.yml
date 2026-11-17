@@ -1,0 +1,9 @@
+version: 1
+scenario: web-fetch-failure-row
+profile: web
+composition: web-fetch-transport-failure
+recording: authored
+header:
+  class: web-fetch-transport-failure
+session:
+  source: ../../session/web-fetch-transport-failure/session.v4.jsonl

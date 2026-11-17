@@ -7,9 +7,11 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MarketCompatibility, MarketListingEntry, MarketListingVersion, MarketSearchResult, MarketSort } from '@deepseek-ai/dsh-api-remotes/client'
+import { isGitMarketIndexSourceAddress } from '@deepseek-ai/dsh-plugin-market-index/source'
 import type { DiscoverFace, DiscoverState, ListingFailure, ListingState, SourceFailure } from './market-store.ts'
 import {
-  displayDeclarations, indexLabel, presentedVersion, sourceFacts, withText, type DiscoverQuery, type DisplayDeclaration, type SourceFact,
+  displayDeclarations, indexLabel, indexMenuItems, presentedVersion, sourceFacts, withText,
+  type DiscoverQuery, type DisplayDeclaration, type SourceFact,
 } from './presentation.ts'
 import { PluginDetailSection } from './PluginDetailSection.tsx'
 import css from './DiscoverSection.module.css'
@@ -54,6 +56,7 @@ function MarketIcon({ src, size }: { readonly src: string | undefined; readonly 
 function sourceFailureText(failure: SourceFailure, t: Translate): string {
   switch (failure.kind) {
     case 'invalid': return t('sourceInvalid')
+    case 'invalid-git': return t('sourceInvalidGit')
     case 'duplicate': return t('sourceDuplicate')
     case 'unavailable': return t('sourceUnavailable')
     case 'other': return t('sourceFailed')
@@ -314,6 +317,7 @@ function SourcesDialog({ state, t, face }: {
   readonly t: Translate
   readonly face: DiscoverActions
 }): ReactNode {
+  const git = isGitMarketIndexSourceAddress(state.draft)
   return (
     <Modal open={state.editing} onClose={face.toggleSources} title={t('sourcesTitle')} closeLabel={t('close')}
       description={t('sourcesDescription')} className={css.dialog as string}>
@@ -337,12 +341,32 @@ function SourcesDialog({ state, t, face }: {
           </ul>
         )}
         <form className={css.sourceForm} onSubmit={(event) => { event.preventDefault(); face.addSource() }}>
-          <Input className={css.grow as string} value={state.draft} placeholder={t('sourcePlaceholder')} aria-label={t('sourceUrl')}
-            aria-invalid={state.sourceFailure !== null} data-modal-autofocus onChange={(event) => { face.editDraft(event.target.value) }} />
-          <Button type="submit" variant="primary" size="sm" icon={<IconPlusOutlineRegular size={13} />}
-            disabled={state.saving || state.draft.trim() === ''}>
-            {t('addSource')}
-          </Button>
+          <label className={css.sourceField}>
+            {t('sourceUrl')}
+            <Input value={state.draft} placeholder={t(git ? 'sourceRepositoryPlaceholder' : 'sourcePlaceholder')}
+              aria-invalid={state.sourceFailure !== null} disabled={state.saving} autoComplete="off" spellCheck={false} data-modal-autofocus
+              onChange={(event) => { face.editDraft(event.target.value) }} />
+          </label>
+          {git ? (
+            <>
+              <label className={css.sourceField}>
+                {t('sourcePath')}
+                <Input value={state.sourceOptions.path} placeholder={t('sourcePathPlaceholder')} disabled={state.saving} spellCheck={false}
+                  onChange={(event) => { face.editSourceOptions({ path: event.target.value }) }} />
+              </label>
+              <label className={css.sourceField}>
+                {t('sourceRef')}
+                <Input value={state.sourceOptions.ref} placeholder={t('sourceDefaultRef')} disabled={state.saving} spellCheck={false}
+                  onChange={(event) => { face.editSourceOptions({ ref: event.target.value }) }} />
+              </label>
+            </>
+          ) : null}
+          <div className={css.sourceActions}>
+            <Button type="submit" variant="primary" size="sm" icon={<IconPlusOutlineRegular size={13} />}
+              disabled={state.saving || state.draft.trim() === ''}>
+              {t('addSource')}
+            </Button>
+          </div>
         </form>
         {state.sourceFailure === null ? null : <p className={css.error} role="alert">{sourceFailureText(state.sourceFailure, t)}</p>}
         <p className={css.notice} role="note">
@@ -459,8 +483,8 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, onUpdate
         onOpenInstalled={() => { openPackage(openEntry.name) }} />
     )
   }
-  const selected = state.indexes.find(index => index.url === listing.url) ?? { url: listing.url }
-  const market = indexLabel(selected, face.resolveText)
+  const indexItems = indexMenuItems(state.indexes, face.resolveText)
+  const market = indexItems.find(item => item.id === listing.url)?.label ?? indexLabel({ url: listing.url }, face.resolveText)
   const { sort } = query
   const sortOptions = [
     ...query.text.trim() === '' ? [] : [{ id: 'relevance', label: t('sortRelevance') }],
@@ -495,7 +519,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, onUpdate
     <>
       <div className={css.toolbar} data-discover-toolbar>
         <Menu open={menu === 'market'} onClose={() => { setMenu(null) }} portal autoFocus selectedId={listing.url}
-          items={state.indexes.map(index => ({ id: index.url, label: indexLabel(index, face.resolveText) }))}
+          items={indexItems.map(({ id, label }) => ({ id, label: <span className={css.indexMenuName}>{label}</span> }))}
           footer={[{ id: 'manage', label: t('manageSources'), icon: <IconSlidersTwoOutlineRegular size={14} /> }]}
           onSelect={(id) => {
             setMenu(null)
@@ -504,7 +528,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, onUpdate
           }}
           anchor={(
             <Button variant="ghost" size="sm" className={css.marketButton} aria-haspopup="menu" aria-expanded={menu === 'market'}
-              aria-label={t('marketMenu', { market })} onClick={() => { toggleMenu('market') }}>
+              aria-label={t('marketMenu', { market })} title={market} onClick={() => { toggleMenu('market') }}>
               <span className={css.marketName}>{market}</span>
               <IconChevronDownOutlineRegular size={12} aria-hidden="true" />
             </Button>

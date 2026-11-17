@@ -1,0 +1,11 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M10 8H26C27.66 8 29 9.34 29 11V21C29 22.66 27.66 24 26 24H15.5L11 28V24H10C8.34 24 7 22.66 7 21V11C7 9.34 8.34 8 10 8Z" fill="url(#deepseek-chat-import-bubble)" fill-opacity="0.85" />
+  <path d="M18 11V18.2M14.8 15L18 18.2L21.2 15" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M13.5 21H22.5" stroke="#45D9E7" stroke-width="2.2" stroke-linecap="round" />
+  <defs>
+    <linearGradient id="deepseek-chat-import-bubble" x1="18" y1="8" x2="18" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AC2FF" />
+      <stop offset="1" stop-color="#4A65E8" />
+    </linearGradient>
+  </defs>
+</svg>

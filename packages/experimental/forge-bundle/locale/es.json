@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Solicitudes de cambio y árboles de trabajo",
-    "description": "Sigue los pull requests de GitHub vinculados a la conversación: consulta comprobaciones y revisiones, compara código y envía comentarios al agente. Revisa cambios locales y aísla cada tarea en un árbol de trabajo separado. Las funciones de GitHub requieren instalar la CLI gh e iniciar sesión en el equipo anfitrión.",
+    "description": "Sigue las solicitudes de cambio vinculadas a la conversación, tanto pull requests de GitHub como merge requests de GitLab: consulta comprobaciones y revisiones, compara código y envía comentarios al agente. Revisa cambios locales y aísla cada tarea en un árbol de trabajo separado. Las funciones de GitHub requieren instalar la CLI gh e iniciar sesión en el equipo anfitrión. Las merge requests de GitLab requieren la CLI glab instalada y con sesión iniciada en el host.",
     "detail": "docs/DETAIL.es.md"
   }
 }

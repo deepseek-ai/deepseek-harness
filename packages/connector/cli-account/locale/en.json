@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "CLI app accounts",
+    "description": "Gives the model each CLI app plugin's CLI path, runs the plugin's account operations, and shows its account on the Plugins page."
+  }
+}

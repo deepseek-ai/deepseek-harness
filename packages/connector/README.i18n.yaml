@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/connector/README.md
 /:
-  en: d9e7379487f3c08e
-  zh: e88377874d90d9c8
+  en: 689ac98272d5e23e
+  zh: c33789dd190f3f43
 /connector-application-plugins:
   en: ef6d2dd74a9b63e0
   zh: 2d1b1b1d6de9d5af
 /connector-application-plugins/summary:
-  en: fbbe778c8a3faa6e
-  zh: 6ba917ec07d3ece0
+  en: ef4e05f7ba8ec163
+  zh: 12251f9a81082730
 /connector-application-plugins/table-of-contents:
   en: 1eb35b015a6c423f
   zh: a8a3dceee2c9e943
 /connector-application-plugins/packages:
-  en: b27e62eb269ac64e
-  zh: 0d43d270c7b353ed
+  en: 68f80bc91f372195
+  zh: 4398ec99682b44f2
 /connector-application-plugins/related-documentation:
   en: 392c28cfa4bafb27
   zh: c49329900f6f2fd0

@@ -6,7 +6,7 @@ enum NativeProtocol {
         "activate": ["appHandle"],
         "applicationIcons": ["paths"],
         "click": ["appHandle", "clickCount", "elementId", "holdMs", "modifiers", "mouseButton", "snapshotId", "windowId", "x", "y"],
-        "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "windowId"],
+        "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "useSystemPointer", "windowId"],
         "findApps": ["maxAppMatches", "query"],
         "getApp": ["selector"],
         "getCapabilities": [],
@@ -30,15 +30,17 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
+        "toggleMouse": ["appHandle", "direction", "mouseButton", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]
     static let stringEnums: [String: [String: Set<String>]] = [
-        "click": ["modifiers": ["command", "control", "fn", "option", "shift"], "mouseButton": ["left", "middle", "right"]],
-        "drag": ["modifiers": ["command", "control", "fn", "option", "shift"], "mouseButton": ["left", "middle", "right"]],
+        "click": ["modifiers": ["alt", "command", "control", "ctrl", "fn", "option", "shift", "win"], "mouseButton": ["left", "middle", "right"]],
+        "drag": ["modifiers": ["alt", "command", "control", "ctrl", "fn", "option", "shift", "win"], "mouseButton": ["left", "middle", "right"]],
         "openPermissionSettings": ["permission": ["accessibility", "screenRecording"]],
         "paste": ["format": ["html", "text"]],
         "requestPermission": ["permission": ["accessibility", "screenRecording"]],
         "selectText": ["selectionType": ["cursor_after", "cursor_before", "text"]],
         "sendKeyEvent": ["direction": ["down", "up"]],
+        "toggleMouse": ["direction": ["down", "up"], "mouseButton": ["left", "middle", "right"]],
     ]
 }

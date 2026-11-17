@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitLab 变更请求",
+    "description": "通过宿主上的 GitLab CLI 为 forge 注册表读写 GitLab 合并请求。"
+  }
+}

@@ -83,23 +83,23 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 放量与官网发布
 
-按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。在此示例中，最后一轮启用它即可上传生产官网安装器并刷新缓存。官网发布独立于放量比例，不要求达到 100%；官网安装包面向所有下载用户。仅发布官网时，publish job 只校验 feed，不修改放量比例。每个平台使用各自的打包 run。
+按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。在此示例中，最后一轮启用它即可上传生产官网安装器并刷新缓存。官网发布独立于放量比例，不要求达到 100%；官网安装包面向所有下载用户。修改放量比例前审批一次，官网上传前另行审批一次；上传成功后自动刷新缓存，不再重复审批。上传失败或取消时不执行刷新。仅发布官网时跳过放量 job，只需官网审批；上传 job 仍校验当前 feed，不修改放量比例。每个平台使用各自的打包 run。
 
 准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段读取当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
 
-官网上传复用原机保留的安装器，只校验该安装器的哈希，沿用已有上传与刷新恢复记录。仅重试缓存刷新时沿用官网审批和上传记录，不再依赖原更新 YAML 或首次 feed 发布记录。官网上传在安装器校验、上传期间保持频道锁，防止中途被更新的 feed 替换；此时竞争该频道的发布会失败。因此纯放量不需要安装器文件，发布官网则需要。比例变更前后的 YAML 写入独立放量审计记录。此流程必须在首次 COS 发布之后执行，不构建安装包、不上传版本化安装包，也不创建 release tag。
+官网上传复用原机保留的安装器，只校验该安装器的哈希，沿用已有上传与刷新恢复记录。Rollout 仅重试缓存刷新时校验准备阶段生成的官网审批摘要和上传记录，不再要求 Environment 审批，不再依赖原更新 YAML 或首次 feed 发布记录。官网上传在安装器校验、上传期间保持频道锁，防止中途被更新的 feed 替换；此时竞争该频道的发布会失败。因此纯放量不需要安装器文件，发布官网则需要。比例变更前后的 YAML 写入独立放量审计记录。此流程必须在首次 COS 发布之后执行，不构建安装包、不上传版本化安装包，也不创建 release tag。
 
 <a id="recovery-and-records"></a>
 
 ## 恢复与记录
 
-归档 job 使用系统 bsdtar 创建 store 模式 ZIP：Windows 为 `%SystemRoot%\System32\tar.exe`，macOS 为 `/usr/bin/tar`。`invalid ZIP output settings` 表示归档名称缺失或格式非法，或保留目录、临时目录、`GITHUB_OUTPUT` 缺失，会在校验文件前拒绝。`desktop archival: SystemRoot is required to locate Windows bsdtar` 表示缺失 Windows 系统目录设置。`ZIP creation failed with <tar>` 指明失败的归档工具；检查其 stderr、工具是否可用，以及 `RUNNER_TEMP` 剩余空间。
+归档 job 使用系统 bsdtar 创建 store 模式的 Windows 安装包 ZIP 或 macOS 元数据 ZIP：Windows 为 `%SystemRoot%\System32\tar.exe`，macOS 为 `/usr/bin/tar`。`invalid ZIP output settings` 表示归档名称缺失或格式非法，或保留目录、临时目录、`GITHUB_OUTPUT` 缺失，会在校验文件前拒绝。`desktop archival: SystemRoot is required to locate Windows bsdtar` 表示缺失 Windows 系统目录设置。`ZIP creation failed with <tar>` 指明失败的归档工具；检查其 stderr、工具是否可用，以及 `RUNNER_TEMP` 剩余空间。`split macOS artifacts require one DMG and one update ZIP` 拒绝 Windows 输入或不完整的 macOS 清单；选择原始完整 macOS 构建，Windows 不传 `--split-macos`。`desktop archival: usage` 拒绝不支持的参数；Windows 不传参数，macOS 仅传 `--split-macos`。
 
 打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。归档重跑若一直排队且未分配 runner，应先检查解析出的 runner 标签和上游 package 输出，不能直接认定机器离线。输出缺失时需由操作者从原留存目录和 manifest 恢复文件；重跑整个 workflow 会重新构建，不属于仅归档恢复。Actions 验收须验证输出复用。
 
 生产 COS 发布默认启用官网安装包上传和缓存刷新（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 stable 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
 
-将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。版本发布、官网上传和缓存刷新分别使用生产审批 Environment，后续 job 和重跑可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
+在每台发布 runner 的 `publishing/production.json` 中将 `edgeOneZoneId` 配置为生产 EdgeOne 站点（例如 `"edgeOneZoneId": "zone-example"`）。官网发布在审批前要求该字段；仅 COS 发布和放量不需要。Actions 不读取仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID`。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。COS 工作流的版本发布、官网上传和缓存刷新分别使用生产审批 Environment。Rollout 工作流仅在放量修改和官网上传时使用它；缓存刷新跟随已批准的上传执行，不再要求 Environment 审批。重跑带 Environment 的 job 可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
 官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。官网 URL 和保存文件名遵循[固定下载规则](../README.zh.md#fixed-downloads)。上传重跑同时核对字节和 `Content-Disposition`；字节相同但响应头缺失或错误时，上传一次并读回验证。记录已完成但远端字节改变时停止恢复，需要重新审批发布。完成标记在元数据修复失败后仍保留。每次新的上传意图清除旧刷新记录，因此修复元数据后需重新刷新缓存；上一次任务 ID 和诊断需查 EdgeOne 历史。未知写入先读取再决定重试；CDN 响应头透传仍需实测。原机器路由和准备阶段输出完整时，仅重跑刷新 job 即可查询已保存任务。启用官网上传时，官网 job 仅跳过明确选择的 test 环境。各 job 的本地预检要求其注入的 `route` 或 `selection` 输出存在。官网审批缺失或变化时，在上传或提交刷新任务前失败。`website-destination` 缺失会扩大两个官网并发组的互斥范围。`runner` 输出缺失可能导致无法调度，尚未进入预检。输出缺失时停止局部重试，workflow 不重建这些输出。重新启动发布 workflow 前，先检查当前远端状态并确认上传范围的审批；这不属于仅缓存恢复。不要为恢复发布输出重跑打包。人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，重新发起发布运行是恢复方式之一。操作者也可使用已有的[固定下载刷新命令](../README.zh.md#fixed-downloads)；Windows 操作者使用该处说明的 DPAPI 凭据启动器。该命令只提交固定 URL 刷新，不观察完成状态，也不更新本次 Actions 运行的 journal。确认恢复完成前应在 EdgeOne 检查返回的任务。
 

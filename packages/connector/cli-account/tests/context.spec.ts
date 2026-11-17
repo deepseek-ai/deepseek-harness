@@ -3,7 +3,7 @@ import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-pro
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { cliPathContextText, registerCliPathContext, type CliPathContext } from '../src/context.ts'
 
-const CLI = { name: 'fixture:cli', product: 'Fixture', program: 'fixture-cli', executable: '/opt/fixture/bin/fixture-cli' }
+const CLI = { product: 'Fixture', program: 'fixture-cli', executable: '/opt/fixture/bin/fixture-cli' }
 const RUN = 'Fixture CLI: run `fixture-cli` by its absolute path "/opt/fixture/bin/fixture-cli"; the bare name may resolve to another installation or to none.'
 const WINDOWS_CLI = { ...CLI, executable: 'C:\\Users\\O\'Brien\\.dsh\\fixture\\fixture-cli.exe' }
 const WINDOWS_RUN = 'Fixture CLI: run `fixture-cli` by its absolute path with the call operator, & \'C:\\Users\\O\'\'Brien\\.dsh\\fixture\\fixture-cli.exe\'; the bare name may resolve to another installation or to none.'
@@ -16,9 +16,9 @@ async function requiredContextOnly(): Promise<Context> {
   return ctx
 }
 
-/** Register the context from its own plugin, as an app plugin does. */
+/** Register the context from its own plugin, so disposing that plugin removes it. */
 async function register(ctx: Context, cli: CliPathContext) {
-  return await ctx.plugin(Object.assign((inner: Context) => { registerCliPathContext(inner, cli) }, { inject: ['systemPrompt'] }))
+  return await ctx.plugin(Object.assign((inner: Context) => { registerCliPathContext(inner, 'fixture:cli', cli) }, { inject: ['systemPrompt'] }))
 }
 
 async function rendered(ctx: Context) {

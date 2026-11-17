@@ -21,14 +21,14 @@ Shared UI libraries still expose synchronous TypeScript and React values to many
 | Layer | Members | Responsibility | Build and load form |
 | --- | --- | --- | --- |
 | Web compilation shell | `apps/web` | Owns `index.html`, Vite configuration, dist chunks, and static assets | Assembles final browser output from built package exports |
-| Startup kernel | `packages/client/web` | Owns the plain-DOM boot page, module-system wiring, Cordis settlement, and renderer handoff | `staticLinked` `lib/index.js`; no `dsh.client` row |
-| Static assembly libraries | Cordis, `ui-primitives`, `ui-slots` | Supply shared module identities and direct value APIs | ESM `lib/index.js`, merged and chunked by Vite; not Loader entries |
+| Startup kernel | `packages/client/web` | Owns the plain-DOM boot page, module-system wiring, Cordis settlement, and renderer handoff | `clientShell` ESM entries; no `dsh.client` row |
+| Static assembly libraries | Cordis, `ui-primitives`, `ui-slots` | Supply shared module identities and direct value APIs | Manifest `lib/index.js`, shared imports assembled by Vite; not Loader entries |
 | Module bootstrap | `packages/client/modules` | Supplies the client module table and its Cordis wrapper | Dynamic package with one ordinary `lib/client.js`; the host delivers its factory early |
 | Dynamic client packages | connection, `ui-renderer`, theme, and feature plugins | Participate through Cordis services, slots, and effects | Declare `dsh.client`, emit self-registering `lib/client.js`, and remain host-graph entries |
 
 `packages/client/web` keeps Cordis as matching peer and development dependencies and uses modules and static UI packages as development compilation inputs. `apps/web` consumes built package exports rather than aliases into workspace source.
 
-The `staticLinked` preset leaves every bare specifier as an external import in `lib/index.js` and emits relative CSS assets beside it. The Vite host resolves and deduplicates those imports and decides final chunk boundaries. A static library therefore does not copy the host's bundling policy into its own artifact.
+The `staticLinked` preset emits `lib/index.js` as ordinary ESM that keeps every bare import and dynamic import for Vite to resolve, deduplicate, and split, and adds one export, `__$dsh_client_module_manifest`, whose factory returns the library's own exports. A factory that runs the library body later would defer nothing useful: the third-party imports already evaluate when the module loads, and the shell registers these libraries at startup. CSS imports become deferred metadata resources. The [module metadata decision](2026-11-05-client-module-metadata.md) defines resource ownership; static libraries do not adopt dynamic plugins' private-dependency bundling policy.
 
 ### Shared module requests
 

@@ -309,6 +309,7 @@ it('opens usage inside Desktop and returns to the same Account settings', async 
   expect(platform.open).toHaveBeenCalledWith('usage', { x: 0, y: 0, width: 0, height: 0 })
   const back = screen.getByRole('button', { name: en.backToHarness })
   await expect(`${back.parentElement!.parentElement!.textContent}\n`).toMatchFileSnapshot('./expected/platform-header-en.txt')
+  expect(screen.getByRole('dialog', { name: en.backToHarness }).dataset.shortcutModal).toBe('platform')
   await act(async () => { fireEvent.click(back) })
   expect(platform.close).toHaveBeenCalledOnce()
   expect(screen.queryByRole('button', { name: en.backToHarness })).toBeNull()

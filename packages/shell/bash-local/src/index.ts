@@ -332,8 +332,8 @@ export class LocalBashExecutor extends ShellExecutor {
         let detail = 'unprintable provider failure'
         try {
           detail = String(error)
-        } catch {
-          // Provider-owned rejection values cannot make ShellProcess.done reject.
+        } catch (_unprintableRejection) {
+          // A rejection value whose coercion throws keeps the fallback detail, so ShellProcess.done still settles.
         }
         providerFailure = { error, note: `subprocess failed before reporting an outcome: ${detail}` }
         this.onProcessDone(proc, providerFailure.note, true, error)

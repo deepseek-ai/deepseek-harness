@@ -1,4 +1,4 @@
-/** The pinned upstream files of an entry skill and the handle its plugin observes. */
+/** The pinned upstream files of an entry skill, its registration, and the handle its plugin observes. */
 
 /** Which files of a GitHub repository an upstream skill set keeps. */
 export interface UpstreamSkillSelection {
@@ -25,8 +25,20 @@ export interface UpstreamSkillSet extends UpstreamSkillSelection {
 /** Where an entry skill's upstream files stand: in place, being downloaded, or neither. */
 export type UpstreamSkillsState = 'installed' | 'downloading' | 'failed'
 
+/** One plugin's packaged entry skill and the upstream files it indexes. */
+export interface UpstreamSkillsRegistration {
+  /** The skill provider's name, also the directory under `$DSH_HOME/cache` that receives the download. */
+  readonly name: string
+  /** Absolute path of the packaged entry `SKILL.md`, whose frontmatter gives the skill's name and description. */
+  readonly entry: string
+  /** The pinned upstream files. */
+  readonly set: UpstreamSkillSet
+  /** The plugin's configured directory holding the kept files at their repository paths; when set, nothing is downloaded. */
+  readonly skillsDir?: string | undefined
+}
+
 /** The upstream files of one registered entry skill, which the provider lists only while they are in `directory`. */
-export interface UpstreamSkills {
+export interface UpstreamSkillsHandle {
   /** The directory the entry skill resolves relative paths against: `skillsDir`, or the published cache directory. */
   readonly directory: string
   /** `downloading` while a download runs, otherwise `installed` when `directory` exists and `failed` when it does not. */
@@ -37,6 +49,8 @@ export interface UpstreamSkills {
    * @returns the disposer that removes the listener.
    */
   watch(listener: (state: UpstreamSkillsState) => void): () => void
-  /** Start a download when the state is `failed`, unless `skillsDir` is configured or the plugin is disposed; return at once. */
+  /** Start a download when the state is `failed`, unless `skillsDir` is set or the registration is withdrawn; return at once. */
   retry(): void
+  /** Withdraw the registration before the plugin unloads: abort a running download and remove the entry skill. */
+  dispose(): void
 }

@@ -6,7 +6,6 @@ import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream } from 'node:stream/web'
-import { t as list } from 'tar'
 import type { UpstreamSkillSelection, UpstreamSkillSet } from './types.ts'
 
 /** Entry types read as regular files. */
@@ -38,6 +37,8 @@ export async function readArchive(archive: Readable, selection: UpstreamSkillSel
     failure ??= error
     archive.destroy(failure)
   }
+  // Loaded at the first download: the experimental Web preview's browser worker cannot evaluate node-tar, and the Service loads there.
+  const { t: list } = await import('tar')
   const parser = list({
     strict: true,
     onReadEntry: (entry) => {

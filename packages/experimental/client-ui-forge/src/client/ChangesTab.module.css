@@ -734,8 +734,9 @@
 
 /* Collapsed unchanged lines; the row expands them. */
 /* Collapsed unchanged lines, a collapsed large file, and a file whose lines cannot be drawn share one strip;
-   only the first two open on a click. */
+   only the first two open on a click. Unchanged lines over one expansion step name their count beside step buttons. */
 .gap,
+.gapSteps,
 .fileNote {
   display: flex;
   align-items: center;
@@ -769,140 +770,45 @@
   cursor: progress;
 }
 
-/* The local changes card of the panel: its toggle and refs, the view link and create action, then its files. */
-.local {
-  min-width: 0;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
+.gapSteps {
+  gap: 2px;
+  padding-inline-start: 7px;
 }
 
-.localHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 12px 2px 6px;
+.gapSteps > span {
+  margin-inline-start: 4px;
 }
 
-.localToggle {
+.gapStep {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  min-height: 26px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 500;
-}
-
-@media (hover: hover) {
-  .localToggle:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.localToggle svg {
-  color: var(--dsw-alias-label-tertiary);
-  transition: transform 120ms ease;
-}
-
-.localToggle[aria-expanded='true'] svg {
-  transform: rotate(180deg);
-}
-
-.localRefs {
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.localRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px 10px 12px;
-  font-size: 12px;
-}
-
-.localView {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 28px;
-  margin-left: -6px;
-  padding: 0 6px;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  font: inherit;
 }
 
 @media (hover: hover) {
-  .localView:hover {
+  .gapStep:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
   }
 }
 
-.localCreate {
-  flex: none;
-  margin-left: auto;
+.gapStep:disabled {
+  cursor: progress;
 }
 
-.localFiles {
-  margin: 0;
-  padding: 4px 6px 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-  list-style: none;
-}
-
-.localFile {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 28px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-}
-
-@media (hover: hover) {
-  .localFile:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.localFile .menuPath {
-  flex: 1;
-}
-
-.localView:focus-visible,
-.localToggle:focus-visible,
 .fileToggle:focus-visible,
-.localFile:focus-visible,
 .select:focus-visible,
-.gap:focus-visible {
+.gap:focus-visible,
+.gapStep:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }

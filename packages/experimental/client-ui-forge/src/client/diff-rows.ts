@@ -25,14 +25,38 @@ export interface SplitRow {
   readonly right: SplitCell | null
 }
 
+/** Unchanged lines one step of a gap shows, and the most a gap shows on one click: the step of GitHub's and GitLab's diffs. */
+export const EXPAND_STEP = 20
+
+/** The lines a gap shows: `top` continue the hunk above it, `bottom` lead into the hunk below it. */
+export interface GapReveal {
+  readonly top: number
+  readonly bottom: number
+}
+
+/** How a click expands a gap: one step down from the hunk above it, one step up from the hunk below it, or wholly. */
+export type GapExpansion = 'down' | 'up' | 'all'
+
+/** Where a gap sits: before the first hunk, between two hunks, or after the last hunk. */
+export type GapEdge = 'leading' | 'middle' | 'trailing'
+
 /** A run of drawn rows, or unchanged lines drawn as one row that expands them. */
 export type DiffSegment =
   | { readonly kind: 'rows'; readonly rows: readonly DiffRow[] }
   /**
-   * `index` is the hunk the lines precede, or the hunk count for the lines after the last hunk;
-   * `count` is null while the length of the file is unknown.
+   * `index` is the hunk the lines precede, or the hunk count for the lines after the last hunk; `count` is null while
+   * the length of the file is unknown. The hidden lines are new-side lines `from` to `to`, null while unknown, whose old
+   * numbers are `offset` higher.
    */
-  | { readonly kind: 'gap'; readonly index: number; readonly count: number | null }
+  | {
+    readonly kind: 'gap'
+    readonly index: number
+    readonly count: number | null
+    readonly edge: GapEdge
+    readonly from: number
+    readonly to: number | null
+    readonly offset: number
+  }
   /** Consecutive hunks a filter lens folds, drawn as one row that shows them, with the unchanged lines between them. */
   | { readonly kind: 'folded'; readonly hunks: readonly number[] }
 
@@ -144,18 +168,19 @@ function endsNewSide(hunk: ForgeDiffHunk): boolean {
 /**
  * Lay out one file as runs of rows separated by collapsed unchanged lines.
  * Unchanged lines before a hunk, between hunks, and after the last hunk
- * collapse into one gap each; an open gap draws its lines from `lines` once
- * they are known. The lines after the last hunk are unknown until `lines`
+ * collapse into one gap each; once `lines` is known, a gap draws the lines its
+ * reveal shows at its top and bottom, and a gap whose reveal covers it joins
+ * the rows around it. The lines after the last hunk are unknown until `lines`
  * arrives, unless the file is new, deleted, or its last hunk reaches its end. Consecutive folded hunks draw as one
  * folded segment that takes the unchanged lines between them too.
  * @param file - one file of a diff.
  * @param lines - the file's new side, which {@link matchesHunks} accepted, or undefined while it has not been read.
- * @param open - indexes of the gaps the user expanded.
+ * @param open - the lines each expanded gap shows, by gap index.
  * @param folded - indexes of the hunks a filter lens folds.
  * @returns the segments in file order.
  */
 export function segmentsOf(
-  file: ForgeDiffFile, lines: readonly string[] | undefined, open: ReadonlySet<number>, folded: ReadonlySet<number> = NO_FOLDS,
+  file: ForgeDiffFile, lines: readonly string[] | undefined, open: ReadonlyMap<number, GapReveal>, folded: ReadonlySet<number> = NO_FOLDS,
 ): DiffSegment[] {
   const segments: DiffSegment[] = []
   let rows: DiffRow[] = []
@@ -163,16 +188,30 @@ export function segmentsOf(
     if (rows.length > 0) segments.push({ kind: 'rows', rows })
     rows = []
   }
+  /** Draw unchanged new-side lines `first` to `last` of the known file, whose old numbers are `offset` higher. */
+  const context = (known: readonly string[], first: number, last: number, offset: number): void => {
+    for (const [at, text] of known.slice(first - 1, last).entries()) {
+      rows.push({ kind: 'context', old: first + at + offset, new: first + at, text: drawn(text) })
+    }
+  }
   /** Unchanged new-side lines `from` to `to`, null while unknown, whose old numbers are `offset` higher. */
   const gap = (index: number, from: number, to: number | null, offset: number): void => {
-    if (lines !== undefined && to !== null && open.has(index)) {
-      for (const [at, text] of lines.slice(from - 1, to).entries()) {
-        rows.push({ kind: 'context', old: from + at + offset, new: from + at, text: drawn(text) })
-      }
+    const edge: GapEdge = index === 0 ? 'leading' : index === file.hunks.length ? 'trailing' : 'middle'
+    const reveal = open.get(index)
+    if (lines === undefined || to === null || reveal === undefined) {
+      flush()
+      segments.push({ kind: 'gap', index, count: to === null ? null : to - from + 1, edge, from, to, offset })
       return
     }
-    flush()
-    segments.push({ kind: 'gap', index, count: to === null ? null : to - from + 1 })
+    const total = to - from + 1
+    const top = Math.min(reveal.top, total)
+    const bottom = Math.min(reveal.bottom, total - top)
+    context(lines, from, from + top - 1, offset)
+    if (top + bottom < total) {
+      flush()
+      segments.push({ kind: 'gap', index, count: total - top - bottom, edge, from: from + top, to: to - bottom, offset })
+    }
+    context(lines, to - bottom + 1, to, offset)
   }
   let newEnd = 0
   let oldEnd = 0
@@ -198,6 +237,34 @@ export function segmentsOf(
   }
   flush()
   return segments
+}
+
+/**
+ * Show more of one gap: a step down from the hunk above it, a step up from the hunk below it, or all of it.
+ * @param open - the lines each expanded gap of a file shows, by gap index.
+ * @param index - the gap.
+ * @param expansion - which way the gap expands.
+ * @returns the reveals with that gap's widened.
+ */
+export function revealGap(
+  open: ReadonlyMap<number, GapReveal> | undefined, index: number, expansion: GapExpansion,
+): ReadonlyMap<number, GapReveal> {
+  const previous = open?.get(index) ?? { top: 0, bottom: 0 }
+  const next = expansion === 'all' ? { top: Number.POSITIVE_INFINITY, bottom: 0 }
+    : expansion === 'down' ? { ...previous, top: previous.top + EXPAND_STEP } : { ...previous, bottom: previous.bottom + EXPAND_STEP }
+  return new Map([...open ?? [], [index, next]])
+}
+
+/**
+ * Whether a gap still hides a line.
+ * @param gap - the gap segment.
+ * @param side - the side that numbers the line.
+ * @param line - the line.
+ * @returns whether the line is among the gap's hidden lines.
+ */
+export function hidesLine(gap: Extract<DiffSegment, { kind: 'gap' }>, side: 'L' | 'R', line: number): boolean {
+  const at = side === 'L' ? line - gap.offset : line
+  return at >= gap.from && (gap.to === null || at <= gap.to)
 }
 
 /**
