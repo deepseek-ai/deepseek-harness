@@ -33,6 +33,8 @@ A file closes completion as an atomic inline reference displayed with a file gly
 
 A session pick inserts an atomic inline reference whose hidden `ref` and clipboard representation is the canonical `@[label](dsh-session:…)` mention returned by the Host; its visible form is a chat-bubble glyph plus the session title. Sending carries the mention through `session.prompt`, and the session-reference service validates it and captures model context at `agent/pre-step`.
 
+The shared file context menu ends with **Add to chat**. It inserts the clicked file as the same kind of reference into that Session’s draft, preserves existing text and selection, and returns focus without sending. The reference captures the resolved absolute path; line numbers are not included. The action is disabled when the Session cannot be edited at the moment the menu opens or the path cannot use the mention grammar; a draft that becomes uneditable while the menu stays open makes the action report failure instead of inserting. An open menu updates its label and failure feedback when the interface language changes.
+
 ### Sent file and folder mentions
 
 In sent messages, queued rows, and local echoes, an `@path` or `@"path"` token renders as a file or folder reference only after the Session's filesystem confirms the path exists. Until then, and for a path that does not exist, such as a hand-typed `@notes`, the original text stays verbatim; email addresses never match. A candidate picked and sent in the same Session during one page load counts as confirmed, so its echo shows the reference immediately.
