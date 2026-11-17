@@ -488,19 +488,22 @@ describe('testkit helpers', () => {
     expect(toText(normalize(minimalContent(tag, 'align')))).toContain('Header')
   })
 
-  it('shares PlatformError class identity across built runtime and testing entrypoints', async () => {
-    const runtimeUrl = new URL('../lib/index.js', import.meta.url)
-    const testingUrl = new URL('../lib/testing.js', import.meta.url)
-    if (!existsSync(runtimeUrl) || !existsSync(testingUrl)) return
-    const runtime = await import(runtimeUrl.href) as { PlatformError: typeof PlatformError; Satori: typeof Satori }
-    const testing = await import(testingUrl.href) as { FakeAdapter: typeof FakeAdapter }
-    const { Context } = await import('@deepseek-ai/cordis')
-    const ctx = new Context()
-    await ctx.plugin(runtime.Satori)
-    const err = new runtime.PlatformError('permission', 'denied', { published: 'no' })
-    const adapter = new testing.FakeAdapter(ctx, { modes: {} })
-    expect(adapter.classify(err)).toBe(err)
-    expect(adapter.classify(err)).toBeInstanceOf(runtime.PlatformError)
-    await ctx.fiber.dispose()
-  })
+  const runtimeUrl = new URL('../lib/index.js', import.meta.url)
+  const testingUrl = new URL('../lib/testing.js', import.meta.url)
+
+  it.skipIf(!existsSync(runtimeUrl) || !existsSync(testingUrl))(
+    'shares PlatformError class identity across built runtime and testing entrypoints',
+    async () => {
+      const runtime = await import(runtimeUrl.href) as { PlatformError: typeof PlatformError; Satori: typeof Satori }
+      const testing = await import(testingUrl.href) as { FakeAdapter: typeof FakeAdapter }
+      const { Context } = await import('@deepseek-ai/cordis')
+      const ctx = new Context()
+      await ctx.plugin(runtime.Satori)
+      const err = new runtime.PlatformError('permission', 'denied', { published: 'no' })
+      const adapter = new testing.FakeAdapter(ctx, { modes: {} })
+      expect(adapter.classify(err)).toBe(err)
+      expect(adapter.classify(err)).toBeInstanceOf(runtime.PlatformError)
+      await ctx.fiber.dispose()
+    },
+  )
 })
