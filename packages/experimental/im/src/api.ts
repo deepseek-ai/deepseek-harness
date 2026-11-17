@@ -515,8 +515,9 @@ export interface ImSessions {
   bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>
   /**
    * Live agent (created/resumed with the stored composition). Serializes on the session's stable `key` behind any
-   * in-flight `reset()` / `admit()`, then re-resolves: rejects with `ImError('unavailable')` (retryable) if
-   * `target` is a `SessionId` retired by `reset()` or the current generation has an uncommitted reset receipt;
+   * in-flight `reset()` / `admit()`, then re-resolves: rejects with `ImError('unavailable')` if `target` is a
+   * `SessionId` retired by `reset()` (re-resolve by `key` or `forChat()` — retrying the retired id keeps failing)
+   * or if the current generation has an uncommitted reset receipt (retryable with the same `target` after recovery);
    * opens the new generation when called by stable `key`; rejects with `ImError('access')` if `target` is unhosted.
    */
   agent(target: SessionId | string): Promise<Agent>
