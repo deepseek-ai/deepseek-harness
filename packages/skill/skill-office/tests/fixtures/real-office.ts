@@ -67,13 +67,61 @@ export function officeImages(events: readonly SessionEvent[]): ImageBlock[] {
   })
 }
 
+/** One PDF conversion the Office tool reported inside a recorded task. */
+export interface ConvertedPdfFile {
+  /** Absolute path of the temporary file the conversion reported. */
+  readonly file: string
+  /** Byte count the conversion reported for {@link ConvertedPdfFile.file}. */
+  readonly bytes: number
+}
+
+/** One `Converted <input> to pdf (<bytes> bytes[, <pages> pages]): <temporary file>` result line. */
+const CONVERTED_PDF = /^Converted .+ to pdf \((\d+) bytes(?:, \d+ pages?)?\): (.+)$/mu
+
 /**
- * Reject recorded Office render calls and the "Render the saved deliverable" instruction.
+ * Collect the PDF conversions reported by successful native Office tool results.
+ * @param events - Recorded task events.
+ * @returns Reported temporary files in log order; failed results and other formats are excluded.
+ */
+export function convertedPdfFiles(events: readonly SessionEvent[]): ConvertedPdfFile[] {
+  return events.flatMap((event): ConvertedPdfFile[] => {
+    if (event.type !== 'tool/result' || event.data.message.isError) return []
+    return event.data.message.content.flatMap((block): ConvertedPdfFile[] => {
+      if (block.type !== 'text') return []
+      const match = CONVERTED_PDF.exec(block.text)
+      return match === null ? [] : [{ bytes: Number(match[1]), file: match[2]! }]
+    })
+  })
+}
+
+/**
+ * Select the reported conversions the shell commands copy and whose byte count matches the deliverable.
+ * @param commands - Joined `bash`/`pwsh` command text recorded for the task.
+ * @param deliveredBytes - Byte count of the delivered file.
+ * @param conversions - PDF conversions reported by the Office tool.
+ * @returns Conversions the deliverable was copied from; empty when it has another origin.
+ */
+export function deliveredConversions(
+  commands: string, deliveredBytes: number, conversions: readonly ConvertedPdfFile[],
+): ConvertedPdfFile[] {
+  return conversions.filter(conversion => commands.includes(conversion.file) && conversion.bytes === deliveredBytes)
+}
+
+/**
+ * Reject the "Render the saved deliverable" instruction injected into recorded messages.
+ * @param events - Recorded task events, including nested skill and shell results.
+ */
+export function expectNoRenderInstruction(events: readonly SessionEvent[]): void {
+  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
+  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
+}
+
+/**
+ * Reject recorded Office render calls and the instruction {@link expectNoRenderInstruction} names.
  * @param events - Recorded task events, including nested skill and shell results.
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
   expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
-  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
-  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
+  expectNoRenderInstruction(events)
 }
