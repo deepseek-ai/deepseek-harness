@@ -954,6 +954,42 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(tripwire.warnings).toEqual([])
 })
 
+it.skipIf(MODE === 'record')('creates the requested worktree for the first message, not for the notice an access mode change queues before it', async () => {
+  const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel-access-mode')
+  await page.locator('button[aria-label^="访问模式"]').first().click()
+  await page.getByRole('menuitem', { name: '完全权限', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: '确认启用完全权限？' })
+  await confirmation.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).check()
+  await confirmation.getByRole('button', { name: '启用完全权限' }).click()
+  await page.locator('button[aria-label="访问模式，当前：完全权限"]').waitFor()
+  // The switch queues its approval notice for the next step, which opens no turn. A hold would run as maintenance of
+  // the Agent until the worktree exists, and the Session would then work in it.
+  const noticed = () => scaffold.ctx.agents.list()
+    .find(candidate => candidate.inbox.nextStep.some(message => message.source.kind === 'user-approval'))
+  await expect.poll(() => noticed() !== undefined).toBe(true)
+  const agent = noticed()
+  if (agent === undefined) throw new Error('The access mode change must queue its notice')
+  await agent.runMaintenance(() => Promise.resolve())
+  expect(scaffold.ctx.workingDirectory.get(agent.session)).toBe(project)
+
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  expect(sessionId).toBe(agent.session.id)
+
+  // The prompt opens the first turn, and its hold creates the worktree.
+  const events = await readPersistedEvents(scaffold, sessionId)
+  const queued = (target: 'next-step' | 'next-turn', kind: string): number => events.findIndex(event => event.type === 'agent/inbox/spliced'
+    && event.data.target === target && event.data.inserted.some(message => message.source.kind === kind))
+  const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
+  expect(queued('next-step', 'user-approval')).toBeGreaterThan(-1)
+  expect(queued('next-turn', 'user')).toBeGreaterThan(queued('next-step', 'user-approval'))
+  expect(created).toBeGreaterThan(queued('next-turn', 'user'))
+  expect(created).toBeLessThan(events.findIndex(event => event.type === 'turn/start'))
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('keeps the first message waiting when the worktree cannot be created, tries again, and sends it without the worktree', async () => {
   const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel-failure')
   await git(project, 'branch', '--quiet', '-D', 'release')
