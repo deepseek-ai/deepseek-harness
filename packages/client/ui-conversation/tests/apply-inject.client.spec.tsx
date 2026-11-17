@@ -18,7 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import {
-  apply, inject, type ComposerBarInjected, type ConversationInjected,
+  apply, inject, type ComposerBarInjected, type ConversationInjected, type ConversationShellInjected,
   type ConversationSessionHeaderInjected, type ConversationSessionInjected, type ViewTab,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -97,7 +97,6 @@ async function bench(renderQuote = false) {
       const id = await connectWorkspace()
       replaceMain(id, beforeOpen)
     },
-    connectWorkspace: async () => await connectWorkspace(),
     openSession,
   } as never)
   const sessionFake = sessionFakeFor()
@@ -142,6 +141,11 @@ async function bench(renderQuote = false) {
       sessionId: SessionId | undefined,
     ) => ConversationInjected)(id)
   }
+  /** Pick a Workspace as the main occurrence does: the shell opens it and adopts the draft of the Session shown. */
+  const selectWorkspace = (id: SessionId | undefined, workspaceId: WorkspaceId): Promise<void> => {
+    const shell = runtime.slots.spec('main.conversation') as { inject: ConversationShellInjected }
+    return shell.inject.openWorkspace(workspaceId, residentApi(id).moveDraft)
+  }
   const headerApi = (id: SessionId) => {
     const entry = entryOf('conversation.session.header')
     const instance = runtime.storeOf('conversation.session.header', references.get(id)) as ConversationInstance
@@ -162,7 +166,7 @@ async function bench(renderQuote = false) {
   const viewSource = (id: SessionId): ObservableSnapshot<readonly ViewTab[]> =>
     conversationApi(id).injected.hooks.conversationViews
   return {
-    runtime, feature, slots: runtime.slots, entryOf, conversationApi, headerApi, residentApi, composerApi,
+    runtime, feature, slots: runtime.slots, entryOf, conversationApi, headerApi, residentApi, composerApi, selectWorkspace,
     inputApi, viewSource, sessionFake, connectWorkspace, rootUpload, uploads, rootReference, references, opened,
   }
 }
@@ -667,7 +671,6 @@ describe('Conversation inject API', () => {
 
   it('moves a draft only when Workspace navigation changes Session', async () => {
     const b = await bench()
-    const resident = b.residentApi(ROOT)
     const { state, actions } = b.inputApi(ROOT)
     actions.setDraft('carry me')
     expect(b.composerApi(ROOT).addFiles?.([
@@ -676,7 +679,7 @@ describe('Conversation inject API', () => {
     await vi.waitFor(() => { expect(b.rootUpload).toHaveBeenCalledOnce() })
 
     b.connectWorkspace.mockResolvedValueOnce(ROOT)
-    await resident.selectWorkspace('workspace-1' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-1' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(ROOT)
     expect(state.getSnapshot().draft).toBe('carry me')
 
@@ -691,104 +694,12 @@ describe('Conversation inject API', () => {
     b.uploads.set(other, targetUpload)
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await resident.selectWorkspace('workspace-2' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-2' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(other)
     expect(state.getSnapshot().draft).toBe('')
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry me')
     await vi.waitFor(() => { expect(targetUpload).toHaveBeenCalledOnce() })
     expect(b.inputApi(other).state.getSnapshot().attachmentIds).toHaveLength(1)
-    await b.runtime.dispose()
-  })
-
-  it('reports the blank of a picked Workspace to an embedding owner, which retains it, and moves the draft without opening it', async () => {
-    const b = await bench()
-    const resident = b.residentApi(ROOT)
-    b.inputApi(ROOT).actions.setDraft('review this')
-    const other = 'other-2' as SessionId
-    await b.runtime.sessions.add({ id: other, session: {} })
-    b.connectWorkspace.mockResolvedValueOnce(other)
-    const held: SessionReference[] = []
-    const report = vi.fn((id: SessionId) => {
-      held.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
-      return true
-    })
-    await resident.selectWorkspace('workspace-3' as WorkspaceId, report)
-    expect(report).toHaveBeenCalledWith(other)
-    expect(b.opened).not.toHaveBeenCalledWith(other)
-    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
-    expect(b.inputApi(other).state.getSnapshot().draft).toBe('review this')
-    for (const reference of held) reference.release()
-    await b.runtime.dispose()
-  })
-
-  it('moves the draft although the owner releases the Session it showed before while it takes the picked blank', async () => {
-    const b = await bench()
-    const source = 'handover-source' as SessionId
-    const target = 'handover-target' as SessionId
-    await b.runtime.sessions.add({ id: source, session: {} })
-    await b.runtime.sessions.add({ id: target, session: {} })
-    const shown = b.runtime.sessions.retain(source, { source: 'mainView' })
-    b.inputApi(source).actions.setDraft('carry over')
-    b.connectWorkspace.mockResolvedValueOnce(target)
-    const taken: SessionReference[] = []
-    await b.residentApi(source).selectWorkspace('workspace-5' as WorkspaceId, (id) => {
-      taken.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
-      shown.release()
-      return true
-    })
-    expect(b.inputApi(target).state.getSnapshot().draft).toBe('carry over')
-    // The handover's own hold on the source ended with it.
-    expect(b.runtime.sessions.binding(source)).toBeUndefined()
-    for (const reference of taken) reference.release()
-    await b.runtime.dispose()
-  })
-
-  it('changes nothing when the owner declines the picked blank', async () => {
-    const b = await bench()
-    b.inputApi(ROOT).actions.setDraft('stay here')
-    const other = 'declined-target' as SessionId
-    await b.runtime.sessions.add({ id: other, session: {} })
-    b.connectWorkspace.mockResolvedValueOnce(other)
-    const report = vi.fn((_id: SessionId) => false)
-    await b.residentApi(ROOT).selectWorkspace('workspace-6' as WorkspaceId, report)
-    expect(report).toHaveBeenCalledWith(other)
-    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('stay here')
-    expect(b.runtime.sessions.binding(other)).toBeUndefined()
-    expect(b.opened).not.toHaveBeenCalledWith(other)
-    await b.runtime.dispose()
-  })
-
-  it('offers the picked blank without retaining a source when no Session, or one no longer retained, started the pick', async () => {
-    const b = await bench()
-    const gone = 'released-source' as SessionId
-    const other = 'late-target' as SessionId
-    await b.runtime.sessions.add({ id: gone, session: {} })
-    await b.runtime.sessions.add({ id: other, session: {} })
-    b.connectWorkspace.mockResolvedValue(other)
-    const declined = vi.fn((_id: SessionId) => false)
-    await b.residentApi(gone).selectWorkspace('workspace-7' as WorkspaceId, declined)
-    expect(declined).toHaveBeenCalledWith(other)
-    expect(b.runtime.sessions.binding(gone)).toBeUndefined()
-
-    const taken: SessionReference[] = []
-    await b.residentApi(undefined).selectWorkspace('workspace-7' as WorkspaceId, (id) => {
-      taken.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
-      return true
-    })
-    expect(taken.map(reference => reference.sessionId)).toEqual([other])
-    expect(b.opened).not.toHaveBeenCalledWith(other)
-    for (const reference of taken) reference.release()
-    await b.runtime.dispose()
-  })
-
-  it('rejects an embedded pick whose Workspace cannot connect without offering a Session', async () => {
-    const b = await bench()
-    b.inputApi(ROOT).actions.setDraft('kept')
-    b.connectWorkspace.mockRejectedValueOnce(new Error('preset missing'))
-    const report = vi.fn((_id: SessionId) => true)
-    await expect(b.residentApi(ROOT).selectWorkspace('workspace-8' as WorkspaceId, report)).rejects.toThrow('preset missing')
-    expect(report).not.toHaveBeenCalled()
-    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('kept')
     await b.runtime.dispose()
   })
 
@@ -804,7 +715,7 @@ describe('Conversation inject API', () => {
     const other = 'sending-target' as SessionId
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await b.residentApi(ROOT).selectWorkspace('workspace-sending' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-sending' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(other)
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('')
     expect(state.getSnapshot().draft).toBe('in flight')
@@ -825,7 +736,7 @@ describe('Conversation inject API', () => {
     const other = 'structured-target' as SessionId
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await b.residentApi(ROOT).selectWorkspace('workspace-structured' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-structured' as WorkspaceId)
     expect(b.inputApi(other).state.getSnapshot().draft).toBe(draft.text)
     expect(b.inputApi(other).state.getSnapshot().occurrences).toMatchObject(draft.references)
     expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
@@ -836,12 +747,12 @@ describe('Conversation inject API', () => {
   it('supports no-Session navigation and propagates Workspace connection failure', async () => {
     const b = await bench()
     b.connectWorkspace.mockResolvedValueOnce(ROOT)
-    await b.residentApi(undefined).selectWorkspace('workspace-0' as WorkspaceId)
+    await b.selectWorkspace(undefined, 'workspace-0' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(ROOT)
 
     const opens = b.opened.mock.calls.length
     b.connectWorkspace.mockRejectedValueOnce(new Error('offline'))
-    await expect(b.residentApi(ROOT).selectWorkspace('workspace-4' as WorkspaceId))
+    await expect(b.selectWorkspace(ROOT, 'workspace-4' as WorkspaceId))
       .rejects.toThrow('offline')
     expect(b.opened).toHaveBeenCalledTimes(opens)
     await b.runtime.dispose()

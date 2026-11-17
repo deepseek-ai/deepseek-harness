@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { ConversationContentProps, ConversationViewsProps, InputZone } from '../contract/slots.ts'
@@ -24,7 +23,7 @@ export function ConversationContent(props: ConversationContentProps) {
   const {
     sessionId, phase, hero, useSession, useSessions, useSessionStatus,
     useWorkspaces, useInput, useComposerBlock, renderSlot, renderSlotChain,
-    selectWorkspace, t, useFactorySlot,
+    moveDraft, t, useFactorySlot,
   } = props
   const session = useSession(snapshot => snapshot)
   const Views = useFactorySlot('views', ConversationSessionView)
@@ -41,15 +40,6 @@ export function ConversationContent(props: ConversationContentProps) {
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
-  // An embedded pick is handed to its owner only while it is the latest pick of a mounted occurrence. The content
-  // remounts for another Session, so a mounted occurrence still shows the Session the pick started from.
-  const mounted = useRef(false)
-  const pickSeq = useRef(0)
-  useEffect(() => {
-    mounted.current = true
-    return () => { mounted.current = false }
-  }, [])
-  const [pickFailure, setPickFailure] = useState<{ readonly seq: number; readonly text: string } | null>(null)
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 
   // Publishes the two live measurements floating View chrome reads off the
@@ -133,19 +123,8 @@ export function ConversationContent(props: ConversationContentProps) {
         onPick: (workspaceId) => {
           setPickerOpen(false)
           setPendingWorkspaceId(workspaceId)
-          const handOver = props.onWorkspaceSession
-          pickSeq.current += 1
-          const seq = pickSeq.current
-          const latest = (): boolean => mounted.current && seq === pickSeq.current
-          void selectWorkspace(workspaceId, handOver === undefined ? undefined : (nextId) => {
-            if (!latest()) return false
-            handOver(nextId)
-            return true
-          }).catch((error: unknown) => {
+          void props.onWorkspaceSelected(workspaceId, moveDraft).catch(() => {
             setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
-            // Workspace navigation reports a failed pick of the main occurrence; an embedded one reports its own.
-            if (handOver === undefined || !latest()) return
-            setPickFailure({ seq, text: t('error.workspaceConnectFailed', { message: error instanceof Error ? error.message : String(error) }) })
           })
         },
         onClose: () => { setPickerOpen(false) },
@@ -185,10 +164,6 @@ export function ConversationContent(props: ConversationContentProps) {
 
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {pickFailure !== null && (
-        <Toast key={pickFailure.seq} text={pickFailure.text} icon={<IconWarningOutlineRegular />} anchor={body}
-          onDone={() => { setPickFailure(null) }} />
-      )}
       {hero && <HeroShell t={t} renderSlot={renderSlot} headline={props.headline} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}

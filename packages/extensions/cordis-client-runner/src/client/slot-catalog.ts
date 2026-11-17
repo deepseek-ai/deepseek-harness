@@ -3322,7 +3322,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     keyDomain: '',
     hookContext: '',
-    slotInject: '',
+    slotInject: 'ConversationShellInjected',
     declaredBy: 'an entry in \'main\' (client-ui-conversation), so it exists while that entry is mounted',
     occupants: [
       'client-ui-conversation ConversationRoot',
@@ -4829,7 +4829,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     keyDomain: '',
     hookContext: '',
-    slotInject: '',
+    slotInject: 'SidebarChatInjected',
     declaredBy: 'an entry in \'sidebar.right.pane.tab\' (client-ui-subagent), so it exists while that entry is mounted',
     occupants: [
       'client-ui-subagent ConversationSlotPanel',
