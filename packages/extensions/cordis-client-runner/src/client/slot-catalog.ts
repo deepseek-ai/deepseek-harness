@@ -2604,7 +2604,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'keyed',
     scope: 'session',
     summary: 'Trailing content of one section title, such as a count, keyed by the section\'s `id`.',
-    doc: 'Trailing content of one section title, such as a count, keyed by the\nsection\'s `id`. The section\'s drag handle covers its last 20px while the\ntitle row is hovered, and the content fades out under it.',
+    doc: 'Trailing content of one section title, such as a count, keyed by the\nsection\'s `id`. The section\'s drag handle shows in its place while the\ntitle row is hovered, so it holds content to read, not a control to press.',
     registerOptions: [
       {
         name: 'key',

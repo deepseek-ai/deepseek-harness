@@ -115,15 +115,15 @@ describe('SessionPanel.module.css section reordering', () => {
     })
   })
 
-  it('shows the handle on title-row hover, keyboard focus, and during a drag, and fades the trailing content under it', () => {
-    const fade = 'linear-gradient(to left, transparent 20px, #000 36px)'
+  it('shows the handle in place of the trailing content on title-row hover, keyboard focus, and during a drag', () => {
     expect(declarationsOf('.grip:focus-visible, .section[data-dragging] .grip')).toEqual({ opacity: '1' })
+    // Hidden, not removed: the trailing content keeps its box, so the title beside it does not move.
     expect(declarationsOf('.head:has(> .grip:focus-visible) > .actions, .section[data-dragging] > .head > .actions'))
-      .toEqual({ 'mask-image': fade })
+      .toEqual({ visibility: 'hidden' })
     // The pointer rules stay inside the hover media query, so a touch that latches hover shows no handle.
     const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
     expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: 1;/)
-    expect(hover).toContain(`.head:hover > .actions {\n    mask-image: ${fade};`)
+    expect(hover).toMatch(/\.head:hover > \.actions \{\s*visibility: hidden;/)
   })
 
   it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {

@@ -28,8 +28,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     }
     /**
      * Trailing content of one section title, such as a count, keyed by the
-     * section's `id`. The section's drag handle covers its last 20px while the
-     * title row is hovered, and the content fades out under it.
+     * section's `id`. The section's drag handle shows in its place while the
+     * title row is hovered, so it holds content to read, not a control to press.
      */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**

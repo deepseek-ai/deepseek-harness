@@ -237,9 +237,11 @@
 /* The drag handle lies over the end of the title row, in the column of the
    rows' More buttons: a 24px target whose center is 14px from the row's
    end. It takes no room in the row, so the title's trailing content runs to
-   the row's end as it does without the handle. The handle shows while the
-   pointer is over the title row, while it has keyboard focus, and during a
-   drag; the trailing content then fades out under it. */
+   the row's end as it does without the handle. The row's end shows one of
+   the two: the trailing content at rest, and the handle in its place while
+   the pointer is over the title row, while the handle has keyboard focus,
+   and during a drag. The hidden content keeps its box, so the title does not
+   move. */
 .grip {
   position: absolute;
   top: 0;
@@ -268,11 +270,9 @@
   opacity: 1;
 }
 
-/* The trailing content ends 6px from the row's end and the handle reaches
-   26px from it: transparent across the handle, opaque 16px further in. */
 .head:has(> .grip:focus-visible) > .actions,
 .section[data-dragging] > .head > .actions {
-  mask-image: linear-gradient(to left, transparent 20px, #000 36px);
+  visibility: hidden;
 }
 
 @media (hover: hover) {
@@ -281,7 +281,7 @@
   }
 
   .head:hover > .actions {
-    mask-image: linear-gradient(to left, transparent 20px, #000 36px);
+    visibility: hidden;
   }
 
   .grip:hover {

@@ -393,7 +393,7 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     await expect.poll(order, { timeout: 20_000 }).toEqual(registered)
 
     // At rest the handle does not show and takes no room: the title's trailing count runs to the row's 6px padding.
-    // Over the title row the handle shows on the rows' More column, and the count stays where it was and fades under it.
+    // Over the title row the handle shows on the rows' More column in place of the count, which keeps its box.
     await page.mouse.move(5, 5)
     const handle = (id: string) => head(id).evaluate((element) => {
       const button = element.querySelector<HTMLElement>('[data-session-panel-grip]')!
@@ -407,14 +407,14 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
         center: box.right - (target.left + target.width / 2),
         trailing: trailing.textContent,
         trailingEnd: box.right - trailing.getBoundingClientRect().right,
-        faded: getComputedStyle(trailing).maskImage !== 'none',
+        shown: getComputedStyle(trailing).visibility === 'visible',
       }
     })
     const resting = { cursor: 'grab', target: [24, 24], center: 14, trailing: '1 external', trailingEnd: 6 }
-    expect(await handle('subagents')).toEqual({ ...resting, opacity: '0', faded: false })
+    expect(await handle('subagents')).toEqual({ ...resting, opacity: '0', shown: true })
     await head('subagents').hover()
     await expect.poll(async () => (await handle('subagents')).opacity).toBe('1')
-    expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', faded: true })
+    expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', shown: false })
     expect(await grip('background-jobs').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
 
     // Drag Background jobs by its title row onto the upper half of Environment.
