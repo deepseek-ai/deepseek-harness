@@ -179,7 +179,7 @@ export class ImFormatter {
       for (const item of await this.media.admit(refs, options.signal)) {
         if (item.image !== undefined) content.push(item.image)
         else if (item.file !== undefined) content.push(item.file)
-        else if (item.skipped !== undefined) skipped.push(`${mediaLabel(item.ref)}: skipped (${item.skipped})`)
+        else if (item.skipped !== undefined) skipped.push(`${escapeText(mediaLabel(item.ref))}: skipped (${escapeText(item.skipped)})`)
       }
       if (skipped.length > 0) content[0] = { type: 'text', text: `${text}\n${skipped.join('\n')}` }
     }
