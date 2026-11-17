@@ -268,6 +268,25 @@ describe('QQ inbound messages', () => {
     expect(toText(message.content)).toBe('这个建议很有帮助，谢谢你！')
   })
 
+  it('records message_scene.ext.msg_idx as an alias alongside message.id', async () => {
+    const { bot } = await mount()
+    const [session] = await bot.decodeDispatch({
+      op: 0,
+      t: 'C2C_MESSAGE_CREATE',
+      id: 'evt-alias',
+      d: {
+        id: 'ROBOT1.0_msg_1',
+        author: { user_openid: 'user-1' },
+        content: 'original text',
+        timestamp: '2026-07-21T10:00:00+08:00',
+        message_scene: { ext: ['msg_idx=REFIDX_alias_1=='] },
+      },
+    })
+    const message = messageOf([session!])
+    expect(message.id).toBe('ROBOT1.0_msg_1')
+    expect(message.aliases).toEqual(['REFIDX_alias_1=='])
+  })
+
   it('decodes a quoted 聊天记录 that carries no message_type marker', async () => {
     const { bot } = await mount()
     const [session] = await bot.decodeDispatch(load('group-at-message-quote'))

@@ -92,6 +92,8 @@ export interface MessageRef {
 export interface InboundMessage {
   /** Platform message id. */
   id: string
+  /** Platform-local alternative ids for the same message (e.g. QQ `msg_idx` alongside `msg_id`). */
+  aliases?: string[]
   chat: ChatRef
   thread?: { id: string; root?: string }
   sender: UserRef

@@ -186,8 +186,11 @@ function messageSession(
   const eventId = nonEmpty(frame.id)
   if (eventId) referrer.event_id = eventId
 
+  const scene = isDict(payload.message_scene) ? parseSceneExt(payload.message_scene.ext) : {}
+  const msgIdx = nonEmpty(scene.msg_idx)
   const message: InboundMessage = {
     id,
+    ...msgIdx && msgIdx !== id ? { aliases: [msgIdx] } : {},
     chat,
     sender: decodeUser(payload.author),
     content: decoded.content,

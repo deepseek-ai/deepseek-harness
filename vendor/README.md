@@ -34,7 +34,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V111.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V112.
 
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
@@ -147,6 +147,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V108 · `plugin-im-core` detaches the caller `AbortSignal` listener when a stream settles**: `Scheduler` keeps a reference to its `abort` listener and removes it in `close()`, `fail()`, and `abort()`, preventing settled streams from accumulating on a long-lived `AbortSignal`. Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
 - **V109 · `plugin-im-adapter-qq` sends heartbeat sequence numbers in `d` per the QQ gateway protocol**: `QQWsClient.heartbeat()` sends `{ op: Opcode.HEARTBEAT, d: this.seq ?? null }` instead of `{ op: Opcode.HEARTBEAT, s: this.seq }` (upstream `adapters/qq/src/ws.ts` sends `s`, contradicting its own `HEARTBEAT` payload type `d: number` and causing strict gateways to omit `HEARTBEAT_ACK`). Covered by `vendor/plugin-im-adapter-qq/tests/ws.spec.ts`.
 - **V110 · `http` combines caller `config.signal` via `AbortSignal.any` instead of an unbounded listener**: `Http[Service.invoke]` fuses `config.signal` with the per-request timeout `controller.signal` using `AbortSignal.any([config.signal, controller.signal])` so repeated requests sharing a long-lived `AbortSignal` do not accumulate strong closure listeners while still supporting response-body cancellation.
+- **V111 · `plugin-im-core` and `plugin-im-adapter-qq` preserve `message_scene.ext.msg_idx` as `InboundMessage.aliases`**: `InboundMessage` gains optional `aliases?: string[]`, and QQ's `messageSession()` records `message_scene.ext.msg_idx` there while keeping `payload.id` as `message.id` (for event dedupe and passive reply `msg_id`), allowing `dsh-im` to resolve `ref_msg_idx` quotes back to the stored original message. Covered by `vendor/plugin-im-adapter-qq/tests/decode.spec.ts` and `packages/experimental/im/tests/intake.spec.ts`.
 
 ### Resolver adaptations
 
