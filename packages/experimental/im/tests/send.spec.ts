@@ -525,6 +525,32 @@ describe('ImSender grants', () => {
     })
     await okRootStream.close(h.text('stream-reply'))
     expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
+
+    // An explicit thread must not be overwritten by a quoted unthreaded root message from the same chat.
+    const otherRoot = await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'm-other-root') }, 'none')
+    const keepExplicit = await sender.send(CHAT, h.text('keep-t1'), {
+      session: confined.sessionId,
+      thread: 't1',
+      quote: otherRoot.key,
+    })
+    expect(keepExplicit.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('t1')
+
+    // Bare sends for a root-confined session follow `messageInThreads` on its trigger (both nested thread and root).
+    const nestedTrigger = await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-nested'), undefined),
+      thread: { id: 'omt_x', root: 'r1' },
+    }, 'none')
+    sessions.answered(rootConfined, nestedTrigger)
+    const okNested = await sender.send(CHAT, h.text('bare-nested'), { session: rootConfined.sessionId })
+    expect(okNested.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('omt_x')
+
+    const rootTrigger = store.get(ImMessageKey('fake:bot', 'r1'))!
+    sessions.answered(rootConfined, rootTrigger)
+    const okRootBare = await sender.send(CHAT, h.text('bare-root'), { session: rootConfined.sessionId })
+    expect(okRootBare.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
   })
 
   it('accepts the thread a confined session answered in, and refuses any other', async () => {

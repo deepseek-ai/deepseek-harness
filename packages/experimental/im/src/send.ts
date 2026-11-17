@@ -504,34 +504,34 @@ export class ImSender {
     const fromQuote = quoted?.chat.key === chat ? quoted : undefined
     // A publication that names neither a thread nor a message stays in the thread this session is talking in: its
     // output renderers quote the trigger and inherit that thread, so the chat's own timeline is not where its work is.
-    const answered = explicit === undefined && fromQuote === undefined ? this.answeredThread(chat, session) : undefined
+    const answered = explicit === undefined && fromQuote === undefined ? this.answeredMessage(chat, session) : undefined
     // An open chat binds the session to the whole conversation, so any of its threads is allowed.
-    if (confined.length < writable.length) return answered
+    if (confined.length < writable.length) return answered?.thread?.id
     const allowed = explicit !== undefined
       ? allowedThreads.has(explicit)
       : fromQuote !== undefined
         ? messageInThreads(fromQuote, allowedThreads)
-        : answered !== undefined && allowedThreads.has(answered)
+        : answered !== undefined && messageInThreads(answered, allowedThreads)
     if (!allowed) {
       throw new ImError(
         'access',
         `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
       )
     }
-    if (explicit === undefined && fromQuote === undefined) return answered
-    if (fromQuote !== undefined && fromQuote.thread === undefined) return splitKey(fromQuote.key).id
-    return undefined
+    if (explicit !== undefined) return undefined
+    if (fromQuote !== undefined) return fromQuote.thread === undefined ? splitKey(fromQuote.key).id : undefined
+    return answered.thread?.id ?? splitKey(answered.key).id
   }
 
   /**
-   * The thread of the message a session answered last (`ImSessions.trigger`), when that message belongs to `chat`.
+   * The message a session answered last (`ImSessions.trigger`), when that message belongs to `chat`.
    * @param chat - chat the publication goes to.
    * @param session - publishing session.
-   * @returns the thread id, or `undefined` for a message outside any thread or of another chat.
+   * @returns the trigger message, or `undefined` when none exists or it belongs to another chat.
    */
-  private answeredThread(chat: ImChatKey, session: SessionId): string | undefined {
+  private answeredMessage(chat: ImChatKey, session: SessionId): ImMessage | undefined {
     const trigger = this.deps.sessions.trigger(session)
-    return trigger?.chat.key === chat ? trigger.thread?.id : undefined
+    return trigger?.chat.key === chat ? trigger : undefined
   }
 
   /** The bot of a chat (`ImError('unavailable')` when it is not mounted). */
