@@ -163,6 +163,14 @@ describe('ReviewDetail header', () => {
     expect(b.view.container.querySelector(`.${css.detailMeta}`)?.textContent).toBe('·Created 8 d ago·feat → main')
   })
 
+  it('offers no ready-for-review action on a surface that cannot mark a draft ready', () => {
+    const { markReady: _markReady, ...actions } = renderDetail().actions
+    cleanup()
+    const b = renderDetail({ read: stream(changed({ draft: true })), actions })
+    expect(b.view.queryByRole('button', { name: 'Ready for review' })).toBeNull()
+    expect(b.view.getByRole('button', { name: 'More actions' })).toBeTruthy()
+  })
+
   it('offers the primary action, and opens, copies, or reads the status from the More menu', () => {
     const b = renderDetail({ read: stream(changed({ draft: true })) })
     const primary = b.view.getByRole('button', { name: 'Ready for review' })

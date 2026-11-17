@@ -20,15 +20,6 @@ export function taskSessionId(task: Pick<ScheduleCatalogEntry, 'target' | 'lastD
   return task.target.kind === 'new' ? task.lastDelivery?.targetSessionId : task.target.sessionId
 }
 
-/** Whether one Session should expose this task in its existing clock entry.
- * @param task - Catalog entry being inspected.
- * @param sessionId - Session owning the entry.
- * @returns Whether the task targets or involves this Session.
- */
-export function taskInvolvesSession(task: ScheduleCatalogEntry, sessionId: SessionId): boolean {
-  return task.involvedSessionIds.includes(sessionId) || taskSessionId(task) === sessionId
-}
-
 /** RRULE fields read for presentation; dispatch remains owned by the Host.
  * @param rrule - Host-validated recurrence text.
  * @returns Fields from its RRULE content line.

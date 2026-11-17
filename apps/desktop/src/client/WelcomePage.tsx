@@ -142,14 +142,15 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     if (cancelling || attemptRef.current === null) return
     setCancelling(true)
     const current = ++revision.current
+    let state: AccountView | undefined
     try {
-      const state = await api.cancelSignIn(attemptRef.current.id)
-      if (mounted.current && revision.current === current) showAccount(state)
-    } catch {
+      state = await api.cancelSignIn(attemptRef.current.id)
+    } catch (_cancelFailed) {
       // The current attempt remains visible so cancellation can be retried.
     } finally {
       if (mounted.current) setCancelling(false)
     }
+    if (state !== undefined && mounted.current && revision.current === current) showAccount(state)
   }
   async function copyLink() {
     const current = attemptRef.current

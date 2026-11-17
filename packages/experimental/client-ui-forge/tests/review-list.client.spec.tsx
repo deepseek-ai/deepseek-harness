@@ -7,7 +7,6 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { titleMarqueeClass } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestIssue, ChangeRequestLabel, ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
 import { en } from '../src/client/locales.ts'
@@ -225,7 +224,8 @@ describe('ReviewList compact view', () => {
     expect(first.querySelector(`.${css.compactTime}`)?.textContent).toBe('5min')
     expect(first.getAttribute('aria-current')).toBe('true')
     expect(first.querySelector('[data-checks]')?.getAttribute('data-checks')).toBe('success')
-    expect(first.querySelector(`.${css.compactTitle}`)?.classList.contains(titleMarqueeClass)).toBe(true)
+    // The title is the shared marquee text: its inner span travels while the row is hovered.
+    expect(first.querySelector(`.${css.compactTitle} > span`)?.textContent).toBe('Change 1')
     expect(first.querySelector(`.${css.itemMeta}`)).toBeNull()
 
     const second = b.item(prUrl(2))
@@ -268,7 +268,6 @@ describe('ReviewList compact view', () => {
   })
 
   it('marquees a clipped title while the item is hovered and returns it on leave', () => {
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' })))
     const b = renderList({ view: 'compact', frame: frame(host({ authored: list([summary(1)]) })) })
     const item = b.item(prUrl(1))
     const title = item.querySelector<HTMLElement>(`.${css.compactTitle}`)
@@ -277,9 +276,10 @@ describe('ReviewList compact view', () => {
     Object.defineProperty(title, 'scrollWidth', { value: 300, configurable: true })
     Object.defineProperty(title, 'clientWidth', { value: 100, configurable: true })
     fireEvent.pointerEnter(item)
-    expect(title.scrollLeft).toBe(200)
+    expect(title.dataset.marquee).toBe('')
+    expect(title.style.getPropertyValue('--dsh-marquee-range')).toBe('200px')
     fireEvent.pointerLeave(item)
-    expect(title.scrollLeft).toBe(0)
+    expect(title.dataset.marquee).toBeUndefined()
   })
 })
 

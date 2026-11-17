@@ -1,4 +1,4 @@
-/** Notices that report the outcome of an action on a change request, shared by the forge tab and the review page. */
+/** Notices that report the outcome of an action on a change request, shared by the Session panel and the review page. */
 
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgePanelKey } from './locales.ts'

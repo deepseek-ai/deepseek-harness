@@ -58,6 +58,18 @@ import {
   type PreparedJsonlMigration,
 } from './generation.ts'
 
+/** Logical JSONL history retained until its destination commits under write ownership. */
+interface LegacySessionSnapshot {
+  readonly header: SessionHeader
+  readonly inheritedEventCount: SessionLogOffsetType
+  readonly events: readonly SessionEvent[]
+}
+
+/** Prepared legacy history whose related sources are checked before destination publication. */
+interface PreparedLegacySession {
+  commit(publish: (snapshot: LegacySessionSnapshot) => Promise<void>): Promise<void>
+}
+
 export type { JsonlCompression } from './format.ts'
 
 /**
@@ -305,15 +317,12 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 }
 
 /**
- * The JSONL backend registered as `ctx.sessionPersistence` by the plugin.
+ * JSONL Session persistence with historical-format migration.
  * Sessions materialize lazily: a created session is
  * visible to this process immediately, reaches disk on its first append or
  * flush, and never existed if the process crashes before that.
  */
-class JsonlSessionPersistence extends SessionPersistence {
-  /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
-  override readonly name = 'session-persistence-jsonl'
-
+export class JsonlSessionPersistence extends SessionPersistence {
   private root: string
   private compression: JsonlCompression
   /**
@@ -348,7 +357,13 @@ class JsonlSessionPersistence extends SessionPersistence {
   /** One joinable decode/migration operation per selected historical Session file revision. */
   private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
-  constructor(ctx: Context, public config: Config, private readonly tracker: JsonlBackendTracker) {
+  /**
+   * @param ctx - context used for scoped diagnostics and filesystem reads.
+   * @param config - JSONL root, physical encoding, and listing concurrency.
+   * @param tracker - handle bookkeeping; omitted creates bookkeeping for legacy reads.
+   */
+  constructor(ctx: Context, public config: Config,
+    private readonly tracker = new JsonlBackendTracker('session-persistence-jsonl')) {
     super(ctx)
     /* v8 ignore next 5 -- generated catalog and Session source share one build-time version owner. */
     if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
@@ -381,20 +396,51 @@ class JsonlSessionPersistence extends SessionPersistence {
     return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
   }
 
+  /**
+   * Prepare logical history while the caller retains Session write ownership.
+   * @param id - stored Session identity.
+   * @param signal - optional cancellation for decoding and destination publication.
+   * @returns a commit operation that validates related sources before publishing the history.
+   */
+  async prepare(id: SessionId, signal?: AbortSignal): Promise<PreparedLegacySession> {
+    await this.ensureRootEncoding()
+    signal?.throwIfAborted()
+    const stored = await this.requireStoredLog(id, signal)
+    const snapshot = { header: stored.meta, inheritedEventCount: stored.inheritedEventCount, events: stored.events }
+    return { commit: async (publish) => {
+      signal?.throwIfAborted()
+      if (stored.status === 'prepared') await stored.validateRelatedSources()
+      signal?.throwIfAborted()
+      await publish(snapshot)
+    } }
+  }
+
+  /**
+   * Check whether a JSONL artifact occupies the Session identity.
+   * @param id - stored Session identity.
+   * @returns whether the artifact exists.
+   */
+  async hasStoredJsonl(id: SessionId): Promise<boolean> {
+    await this.ensureRootEncoding()
+    return await this.findLog(id) !== undefined
+  }
+
   // --- SessionPersistence service API ---
 
   /**
    * Create a new stored session and take its write ownership. The session is
    * visible to this process immediately; the physical artifact appears on the
-   * first append or flush.
+   * first append or flush. A fork source copies its complete history into
+   * the child artifact before creation resolves.
    * @param header - the immutable header to store; must be losslessly
    *   JSON-serializable with a non-negative safe-integer `createdAt`.
-   * @param options - optional cancellation.
+   * @param options - optional cancellation, inherited prefix length, and fork source.
    * @returns the owned write handle.
    */
   async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle> {
     options?.signal?.throwIfAborted()
     const snapshot = materializeCreateHeader(header)
+    const seed = options?.parentSource?.events
     // Fail fast on a seeded/cut mismatch with the exact refusal the header
     // line encoder enforces at materialization.
     toHeaderLine(snapshot, options?.inheritedEventCount)
@@ -410,7 +456,17 @@ class JsonlSessionPersistence extends SessionPersistence {
     // before its first log bytes publish (ensureLease); an unmaterialized
     // session leaves no filesystem footprint at all.
     this.tracker.registerCreated(snapshot, inheritedEventCount)
-    return this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
+    const handle = this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
+    if (seed === undefined) return handle
+    try {
+      if (seed.length === 0) await handle.flush(options)
+      else await handle.append(seed, options)
+      return handle
+    } catch (error: unknown) {
+      try { await handle.close() }
+      catch (closeError: unknown) { throw new AggregateError([error, closeError], 'Fork creation and handle cleanup failed') }
+      throw error
+    }
   }
 
   /**
@@ -423,6 +479,8 @@ class JsonlSessionPersistence extends SessionPersistence {
   async open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle> {
     options?.signal?.throwIfAborted()
     await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    if (access === 'read') await this.tracker.closeCompletion(id)
     options?.signal?.throwIfAborted()
     const pending = this.tracker.pendingOf(id)
     if (access === 'read') {
@@ -590,6 +648,8 @@ class JsonlSessionPersistence extends SessionPersistence {
 
   /** Resolve and read one stored log, refusing loudly when the artifact is absent. */
   private async requireStoredLog(id: SessionId, signal?: AbortSignal): Promise<StoredLog> {
+    await this.tracker.closeCompletion(id)
+    signal?.throwIfAborted()
     const selected = await this.findLog(id, signal)
     if (selected === undefined) throw new SessionPersistenceNotFoundError(id)
     if (selected.sourceVersion < SESSION_FORMAT_VERSION) {
@@ -712,7 +772,7 @@ class JsonlSessionPersistence extends SessionPersistence {
       const sources = await children()
       const related = await prepareCatalogFacts(id, sources, this.compression, signal)
       for (const failure of related.failures) {
-        this.ctx.logger.warn(`${this.name}: session "${id}" catalog retained a child with unknown descriptor (raw log: ${failure.path}): ${String(failure.error)}`)
+        this.ctx.logger.warn(`${name}: session "${id}" catalog retained a child with unknown descriptor (raw log: ${failure.path}): ${String(failure.error)}`)
       }
       const membership = sources.map(source => source.path).sort()
       validateRelatedSources = async () => {
@@ -967,7 +1027,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   async truncateTornTail(header: SessionHeader, truncateTo: number): Promise<void> {
     this.coldLogMemo.delete(header.id)
     await this.repair(header, truncateTo)
-    this.ctx.logger.warn(`${this.name}: session "${header.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
+    this.ctx.logger.warn(`${name}: session "${header.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
   }
 
   /**
@@ -1374,7 +1434,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     // append. Swallow only the rm failure; nothing else of consequence runs here.
     try {
       await rm(tmp, { force: true })
-    } catch {
+    } catch (_redundantTempRemoveFailed) {
       /* v8 ignore next -- redundant temp link; publish already durable, rm failure is an unreachable IO edge */
     }
   }

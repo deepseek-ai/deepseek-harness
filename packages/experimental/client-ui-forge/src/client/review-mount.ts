@@ -158,6 +158,10 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       const chosen = workspaces.find(item => folderName(item.path) === name) ?? workspaces[0]
       return chosen === undefined ? undefined : await ctx.uiWorkspace.connectWorkspace(chosen.workspaceId)
     },
+    connectWorkspace: workspaceId => ctx.uiWorkspace.connectWorkspace(workspaceId),
+    workspaceFailed: (error) => {
+      notices.report('reviewPage.chat.workspaceFailed', { params: { message: error instanceof Error ? error.message : String(error) } })
+    },
     retain: sessionId => ctx.sessions.retain(sessionId, { source: 'forgeReview' }),
     stage: (sessionId, url) => { void remote.reviewStage(sessionId, url).then(result => settled(result, 'reviewPage.chat.stageFailed')) },
     fill: async (reference, draft) => {
@@ -177,7 +181,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
     },
     openInMain: (sessionId) => { ctx.uiWorkspace.openSession(sessionId) },
     requestWorktree: (sessionId) => {
-      void remote.requestWorktree(sessionId, null).then(result => settled(result, 'toast.worktreeFailed'))
+      void remote.requestWorktree(sessionId, null, null).then(result => settled(result, 'toast.worktreeFailed'))
     },
   }
   const count = createStreamSource<ForgeReviewCountFrame, number | null>({

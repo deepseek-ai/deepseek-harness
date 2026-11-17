@@ -10,11 +10,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, type ToolCallId  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import { PtcRuntime, PtcRuntimeError } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcRuntime, PtcRuntimeError, PtcInspectableValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunFailure, PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -174,6 +175,66 @@ async function runCode(
     ...extras.signal ? { signal: extras.signal } : {},
   })
 }
+
+it('carries final tool rendering with structured binding values independently of the durable log copy', async () => {
+  const { ctx, runtime } = await setup({ mode: 'ptc' })
+  try {
+    const render = vi.fn((_args: unknown, value: { count: number }) => [{ type: 'text' as const, text: `Count: ${value.count}` }])
+    ctx.tools.register(defineTool({
+      name: 'count', description: 'Count a fixture.', parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { count: { type: 'number', required: true } } },
+        render,
+      },
+      execute: async () => ({ count: 2 }),
+      finalizeContent: () => [{ type: 'text', text: 'Final count: 2' }],
+    }))
+    ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'Durable preview' }])
+    const session = Session.create(brandString<SessionId>('ptc-inspection'))
+    const agent = { ctx, session } as Agent
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.count!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.value).toEqual({ count: 2 })
+      expect(result.text).toBe('Final count: 2')
+      return printed(result.text)
+    }
+    const result = await runCode(ctx, 'inspect(await tools.count({}))', { agent })
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: 'Final count: 2' }])
+    expect(render).toHaveBeenCalledOnce()
+    expect(session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')?.data.content)
+      .toEqual([{ type: 'text', text: 'Durable preview' }])
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
+
+it.each([{ value: [] }, { value: [1, 2] }])('carries rendered text for array binding value $value', async ({ value }) => {
+  const { ctx, runtime } = await setup({ mode: 'ptc' })
+  try {
+    ctx.tools.register(defineTool({
+      name: 'list', description: 'List a fixture.', parameters: {},
+      output: {
+        schema: { type: 'array', items: { type: 'number' } },
+        render: () => [{ type: 'text', text: 'List:' }, { type: 'text', text: `${value.length} items` }],
+      },
+      execute: async () => value,
+    }))
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.list!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.value).toEqual(value)
+      expect(result.text).toBe(`List:\n${value.length} items`)
+      return printed(result.text)
+    }
+    expect((await runCode(ctx, 'inspect(await tools.list({}))')).isError).toBe(false)
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
 
 it('logs detached frozen nested metadata without changing the binding value or log-content policy', async () => {
   const { ctx, runtime } = await setup({ mode: 'ptc' })
@@ -1646,25 +1707,30 @@ describe('the run_code dispatch bridge', () => {
     ])
   })
 
-  it('records image-bearing sub-call results for the TypeScript runtime', async () => {
+  it('delivers result images the program value does not reference as deferred context', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
-    ctx.tools.register(defineContentToolFixture({
+    ctx.tools.register(defineTool({
       name: 'image_result',
       description: 'Return one durable image.',
       parameters: {},
-      execute: () => Promise.resolve([
-        { type: 'text', text: 'image result' },
-        {
-          type: 'image',
-          attachment: {
-            attachmentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as never,
-            mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      output: {
+        schema: { type: 'json' },
+        render: () => [
+          { type: 'text', text: 'image result' },
+          {
+            type: 'image',
+            attachment: {
+              attachmentId: brandString<AttachmentId>('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+              mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+            },
           },
-        },
-      ]),
+        ],
+      },
+      execute: () => Promise.resolve({ content: [{ type: 'text', text: 'image result' }, { type: 'image', data: 'AQ==' }] }),
     }))
+    let value: unknown
     runtime.behavior = async (request) => {
-      await request.bindings[0]!.functions.image_result!({})
+      value = await request.bindings[0]!.functions.image_result!({})
       return printed('done')
     }
 
@@ -1678,6 +1744,85 @@ describe('the run_code dispatch bridge', () => {
       ],
     }])
     expect(result.content).toEqual([{ type: 'text', text: 'done' }])
+    expect(value).toEqual({ content: [{ type: 'text', text: 'image result' }, { type: 'image', data: 'AQ==' }] })
+  })
+
+  it('substitutes program images for value entries that reference finalized result images', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    const ref = (letter: string) => ({
+      attachmentId: brandString<AttachmentId>(`sha256:${letter.repeat(64)}`), mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1,
+    })
+    ctx.provide('attachments', { imageHostPath: (image: { attachmentId: string }) => `/host/${image.attachmentId}.png` } as never)
+    ctx.provide('fs', { processPathFromHostPath: (path: string) => `/program${path}` } as never)
+    const shown = ref('a')
+    const removed = ref('b')
+    ctx.tools.register(defineTool({
+      name: 'screenshot',
+      description: 'Return text, one shown image, and one image a policy removed.',
+      parameters: {},
+      output: {
+        schema: { type: 'json' },
+        render: () => [{ type: 'text', text: 'Window state' }, { type: 'image', attachment: shown }],
+      },
+      execute: () => Promise.resolve({ content: [
+        { type: 'text', text: 'Window state' },
+        { type: 'image', data: 'AQ==', attachment: shown },
+        { type: 'image', data: 'Ag==', attachment: removed },
+      ] }),
+    }))
+    let value: unknown
+    runtime.behavior = async (request) => {
+      value = await request.bindings[0]!.functions.screenshot!({})
+      return printed('done')
+    }
+
+    const result = await runCode(ctx, 'program')
+
+    expect(result.isError).toBe(false)
+    expect(result.additionalContexts).toBeUndefined()
+    const content = (value as { content: unknown[] }).content
+    expect(content[0]).toEqual({ type: 'text', text: 'Window state' })
+    expect(content[1]).toBeInstanceOf(PtcImage)
+    expect(content[1]).toMatchObject({ path: `/program/host/${shown.attachmentId}.png`, attachment: shown })
+    expect(content[2]).toEqual({ type: 'image', data: 'Ag==', attachment: removed })
+  })
+
+  it.each(['missing', 'throwing', 'deep'] as const)('delivers referenced result images as deferred context with %s substitution input', async (storage) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    if (storage !== 'missing') {
+      ctx.provide('attachments', { imageHostPath: () => {
+        if (storage === 'throwing') throw new Error('invalid reference')
+        return '/host/image.png'
+      } } as never)
+      ctx.provide('fs', { processPathFromHostPath: (path: string) => path } as never)
+    }
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const shown = { attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1 }
+    let deep: JsonValue = []
+    for (let depth = 0; depth < (storage === 'deep' ? 5_000 : 0); depth++) deep = [deep]
+    const raw = { content: [{ type: 'image', data: 'AQ==', attachment: shown }], deep }
+    ctx.tools.register(defineTool({
+      name: 'screenshot', description: 'Return an image without a program path.', parameters: {},
+      output: { schema: { type: 'json' }, render: () => [{ type: 'image', attachment: shown }] },
+      execute: () => Promise.resolve(raw),
+    }))
+    let value: unknown
+    runtime.behavior = async (request) => {
+      value = await request.bindings[0]!.functions.screenshot!({})
+      return printed('done')
+    }
+
+    const result = await runCode(ctx, 'program')
+
+    // Recursive equality would exceed the stack on the deep fixture; the deep member is checked by depth.
+    expect((value as typeof raw).content).toEqual(raw.content)
+    let depth = 0
+    for (let level: JsonValue = (value as typeof raw).deep; Array.isArray(level) && level.length > 0; level = level[0]!) depth++
+    expect(depth).toBe(storage === 'deep' ? 5_000 : 0)
+    expect(result.additionalContexts).toMatchObject([{ source: { kind: 'ptc-mode' }, content: [{ type: 'image', attachment: shown }] }])
+    expect(warn).toHaveBeenCalledTimes(storage === 'missing' ? 0 : 1)
   })
 
   it.each([
@@ -1715,7 +1860,13 @@ describe('the run_code dispatch bridge', () => {
       name: 'cua', description: 'Return a text observation.', parameters: {},
       execute: () => Promise.resolve([{ type: 'text', text: 'Window selected' }]),
     }))
-    runtime.behavior = async request => printed(await request.bindings[0]!.functions.cua!({}))
+    runtime.behavior = async (request) => {
+      const result = await request.bindings[0]!.functions.cua!({})
+      expect(result).toBeInstanceOf(PtcInspectableValue)
+      if (!(result instanceof PtcInspectableValue)) throw new Error('Expected rendered binding value')
+      expect(result.text).toBe('Window selected')
+      return printed(result.value)
+    }
 
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(false)
@@ -1838,6 +1989,40 @@ describe('the run_code dispatch bridge', () => {
     expect(result.error).toMatchObject({ info: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' } })
     const text = (result.content[0] as { text: string }).text
     expect(text).toBe(`Error: code run failed (timeout): execution timed out ${phase} (300ms); retained variables were cleared${logs.length > 0 ? '\nCaptured output:\ngot this far' : ''}`)
+  })
+
+  it.each([
+    ['output-limit', 'CODE_RUN_FAILED'],
+    ['invalid-output', 'CODE_RUN_FAILED'],
+    ['exception', 'CODE_RUN_FAILED'],
+    ['timeout', 'CODE_RUN_FAILED'],
+    ['worker-exit', 'CODE_RUN_FAILED'],
+    ['protocol', 'CODE_RUN_FAILED'],
+    ['sandbox-unavailable', 'CODE_RUN_FAILED'],
+    ['abort', 'CODE_RUN_FAILED'],
+  ] as const)('preserves completed subcalls when the runtime reports %s', async (kind, code) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const { agent, events } = fakeAgent()
+    const calls = registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions.echo!({ value: 'action dispatched' })
+      return { output: [{ type: 'text', text: 'before failure' }], outputTruncated: true, error: { kind, message: 'fixture failure' } }
+    }
+
+    const result = await runCode(ctx, 'program', { agent })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'CodeRunFailedError', code } })
+    const first = result.content[0]
+    if (first?.type !== 'text') throw new Error('Missing failure diagnostic')
+    expect(first.text).toContain('Captured output:\nbefore failure')
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(1)
+    expect(events.find(event => event.type === 'tool/ptc-dispatch')?.data).toMatchObject({
+      isError: false, content: [{ type: 'text', text: 'echo:action dispatched' }],
+    })
+    expect(calls).toEqual([{ value: 'action dispatched' }])
+    expect(first.text).toBe(`Error: code run failed (${kind}): fixture failure\nCaptured output:\nbefore failure\nOutput was truncated.`)
   })
 
   it('CodeRunFailedError is a HarnessError with the CODE_RUN_FAILED code', () => {
@@ -2282,18 +2467,18 @@ describe('the run_code dispatch bridge', () => {
     expect(calls).toEqual([])
   })
 
-  it.each(['preserved', 'cleared'])('reports retained variables were %s after caller cancellation', async (state) => {
+  it.each(['preserved', 'cleared'])('reports retained variables were %s after caller cancellation with truncated output', async (state) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(true)
     const controller = new AbortController()
     const message = `execution canceled; retained variables were ${state}`
     runtime.behavior = async () => {
       controller.abort({ kind: 'user' })
-      return { output: [], error: { kind: 'abort', message } }
+      return { output: [], outputTruncated: true, error: { kind: 'abort', message } }
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.error).toEqual({
-      message: `tool call aborted: ${message}`,
+      message: `tool call aborted: ${message}\nOutput was truncated.`,
       info: { name: 'AbortError', code: TOOL_ABORTED },
     })
   })

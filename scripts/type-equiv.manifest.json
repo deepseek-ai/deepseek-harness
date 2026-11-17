@@ -1284,6 +1284,12 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcInspectableValue",
+      "source": "packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts",
+      "projection": "public-api"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcOutput",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },
@@ -2765,7 +2771,17 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
-      "symbol": "ForgeBranches",
+      "symbol": "ForgeWorktreeBases",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRemoteDefault",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRemoteBranches",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {

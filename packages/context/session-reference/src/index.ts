@@ -105,7 +105,7 @@ function candidateKeys({ record, label, displayTitle }: LabelledCandidate): Sear
 
 /** Exact-read consumer that prepares immutable cross-session message context. */
 export class SessionReferenceResolver extends TypertRemoteService {
-  static inject = ['sessionQuery']
+  static inject = ['sessionQuery', 'sessions', 'sessionProjections']
   static Config: z<Config> = z.object({
     maxReferences: z.number().step(1).min(1).max(MAX_REFERENCES).default(MAX_REFERENCES),
     candidateLimit: z.number().step(1).min(1).default(DEFAULT_CANDIDATE_LIMIT),
@@ -197,6 +197,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
    *
    * Discovery runs at keystroke rate, so titles and subagent labels only ever
    * come from projection reads; sessions without either fall back to their id.
+   *
+   * The list names every Session the session index holds, whatever identity the
+   * caller acts for; it is not narrowed to Sessions that caller else can read.
+   * A share viewer therefore learns the id, title, and working-directory path of
+   * each Session on the owner Host, and {@link prepare} reads the snapshot of a
+   * cited Session without asking who cited it. That exposure is a recorded
+   * LiveShare limitation, not a grant: narrowing the list is deferred.
    * @param agent - target agent; self is excluded and its cwd drives ranking.
    * @param query - optional search text: label and display title match
    * fuzzily, session id and working directory as substrings. Matches keep the
@@ -265,17 +272,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
   private projectedLabels<T extends { readonly record: SessionRecord }>(
     items: readonly T[],
   ): Array<T & { label: string; displayTitle: string }> {
-    const projections = this.ctx.get('sessionProjections')
-    const sessions = this.ctx.get('sessions')
-    // An attached session answers from its live cut only while the registry is mounted.
-    const attached = new Map(sessions === undefined || projections === undefined
-      ? undefined
-      : sessions.list().map(session => [session.id, session]))
+    const projections = this.ctx.sessionProjections
+    const attached = new Map(this.ctx.sessions.list().map(session => [session.id, session]))
     const cache = this.ctx.get('sessionProjectionCache')
     const cachedSnapshot = cache?.cachedSnapshot.bind(cache)
     return items.map((item) => {
       const session = attached.get(item.record.header.id)
-      const snapshot = session !== undefined && projections !== undefined
+      const snapshot = session !== undefined
         ? projections.snapshot(session, LABEL_KEYS)
         : cachedSnapshot?.(item.record.header, LABEL_KEYS)
       const label = titleOf(snapshot) ?? item.record.header.id

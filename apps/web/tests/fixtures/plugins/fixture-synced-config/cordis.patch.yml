@@ -1,0 +1,9 @@
+- insert:
+    - id: fixture-synced-config
+      name: '@fixture/synced-config'
+      config:
+        cacheDir: host-only-cache-r0
+        greeting: hello-r0
+        account:
+          label: primary
+          token: secret-token-r0

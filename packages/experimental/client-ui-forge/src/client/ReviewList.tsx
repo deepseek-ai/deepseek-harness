@@ -8,7 +8,7 @@ import clsx from 'clsx'
 import {
   Button, HoverCard, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconFlatListOutlineRegular, IconFolderCloseRegular,
   IconLayersOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, IconUserOutlineRegular, IconUsersOutlineRegular,
-  Input, Menu, titleMarqueeClass, Tooltip, useTitleMarquee, type MenuEntry,
+  Input, MarqueeText, Menu, Tooltip, useHoverMarquee, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
@@ -237,7 +237,7 @@ function CompactDetails({ item, filter, qualified, now, t }: {
 function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: ItemProps): ReactNode {
   const { summary } = item
   const title = useRef<HTMLSpanElement>(null)
-  const marquee = useTitleMarquee(title)
+  const marquee = useHoverMarquee(title)
   const checks: Exclude<ChecksRollup, 'none'> | undefined = summary.checksRollup === 'none' ? undefined : summary.checksRollup
   const time = formatShortAgo(summary.updatedAt, now, t)
   return (
@@ -251,9 +251,9 @@ function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: It
         content={<CompactDetails item={item} filter={filter} qualified={qualified} now={now} t={t} />}
         anchor={(
           <button type="button" className={css.compactItem} aria-current={selected ? 'true' : undefined} data-forge-review-item={summary.url}
-            onPointerEnter={marquee.enter} onPointerLeave={marquee.leave} onClick={() => { onSelect(summary.url) }}>
+            onPointerEnter={marquee.onPointerEnter} onPointerLeave={marquee.onPointerLeave} onClick={() => { onSelect(summary.url) }}>
             <span className={css.compactGlyph}><ChangeRequestGlyph tone={summaryTone(summary)} checks={checks} size={16} /></span>
-            <span ref={title} className={clsx(css.compactTitle, titleMarqueeClass)}>{summary.title}</span>
+            <MarqueeText ref={title} className={css.compactTitle}>{summary.title}</MarqueeText>
             {time !== undefined && <span className={css.compactTime}>{time}</span>}
           </button>
         )}
@@ -385,8 +385,8 @@ export function ReviewList(props: ReviewListProps): ReactNode {
     <div className={css.list} data-forge-review-list="">
       <div className={css.listHeader}>
         <h2 className={css.listTitle}>{t('reviewPage.title')}</h2>
-        <Tooltip label={t('refresh')} side="bottom">
-          <button type="button" className={css.iconButton} aria-label={t('refresh')} aria-disabled={refreshing} onClick={onRefresh}>
+        <Tooltip label={t('reviewPage.refresh')} side="bottom">
+          <button type="button" className={css.iconButton} aria-label={t('reviewPage.refresh')} aria-disabled={refreshing} onClick={onRefresh}>
             <RefreshGlyph busy={refreshing || frame?.reading === true} size={16} />
           </button>
         </Tooltip>

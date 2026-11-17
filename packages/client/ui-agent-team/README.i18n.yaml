@@ -3,29 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-agent-team/README.md
 /:
-  en: cecfe90c9079279f
-  zh: 58062db454093088
+  en: 7dc6eba0f4471f92
+  zh: 9fdf11a94995a75d
 /deepseek-ai-dsh-client-ui-agent-team:
   en: 39c47e6e926425bf
   zh: 0fd155c454355e3a
 /deepseek-ai-dsh-client-ui-agent-team/summary:
-  en: 88103cec4c91d755
-  zh: 6536e4307a5ce122
+  en: f856eb1b0b6645d1
+  zh: 91fa3b344ec21e66
 /deepseek-ai-dsh-client-ui-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-agent-team/use-this-package:
-  en: ffbcd39a17cd2fb1
-  zh: db21ca6ca1cdf853
+  en: 8a132e3052543d8e
+  zh: b51b602604796800
 /deepseek-ai-dsh-client-ui-agent-team/use-this-package/inspect-the-task-board:
-  en: 2f606827b3ab14bc
-  zh: 7f713d10268e7498
+  en: 49312c9357e23060
+  zh: ce1a9b52667977e8
 /deepseek-ai-dsh-client-ui-agent-team/understand-the-implementation:
-  en: 24377b9e51d557de
-  zh: 9205961784386745
+  en: 34ad591d4c206d69
+  zh: 0f6796c19f4ebfb8
 /deepseek-ai-dsh-client-ui-agent-team/further-exploration:
-  en: 4d9214370681b02e
-  zh: 4acb21b9ecf25e85
+  en: 5bc48efe19557367
+  zh: c00e5e1a75d0afa8
 /deepseek-ai-dsh-client-ui-agent-team/model-experience:
   en: 47ebeba07d72759d
   zh: 8fe8133f6dd845a9

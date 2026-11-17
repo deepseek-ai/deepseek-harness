@@ -48,7 +48,7 @@ import {
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
 import { captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, REPO_ROOT, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, hideSessionPanel, newEnglishPage, REPO_ROOT, saveFailureShot, showSessionPanel } from './support.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
 /** Optional bundles that compose a profile of their own; the Web plugin page hides them, the Host inventory still reports them. */
@@ -547,13 +547,10 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     await preview.getByRole('heading', { name: 'Preview Workspace', exact: true }).waitFor({ state: 'visible' })
     expect(await preview.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['PREVIEW.md'])
 
-    const subagents = page.getByRole('button', { name: '2 subagents', exact: true })
-    await subagents.waitFor({ timeout: 15_000 })
-    await subagents.hover()
-    const catalog = page.getByRole('tree', { name: 'Subagent sessions' })
+    const catalog = (await showSessionPanel(page)).getByRole('tree', { name: 'Subagent sessions' })
     await catalog.getByRole('treeitem', { name: /Review preview architecture/ }).waitFor()
     await catalog.getByRole('treeitem', { name: /Continue preview verification/ }).waitFor()
-    await catalog.press('Escape')
+    await hideSessionPanel(page)
 
     // Auto-prefetch may already have published the page, and a pointer click can
     // land on whatever moved under it; activate the control only while it still

@@ -60,7 +60,9 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 import type { Context } from '@deepseek-ai/cordis'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
+import { normalizeApiKey } from '@deepseek-ai/dsh-credentials'
+import type { ApiKeyRejection } from '@deepseek-ai/dsh-credentials'
+import { INVALID_CREDENTIAL_CODE, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
@@ -221,7 +223,20 @@ export function apply(ctx: Context, config: Config): void {
       ? (await credentials.resolve(ref))?.value
       // Without the seam the environment is the whole credential plane.
       : launchEnvironmentOf(ctx).get(ref)?.value
-    if (hit !== undefined && hit.length > 0) return assertUsableApiKey(hit, 'llm-pi-ai', ref)
+    if (hit !== undefined && hit.length > 0) {
+      // A stored key picks up surrounding whitespace, which is trimmed. Any other defect fails here, where the
+      // reference to fix can be named, instead of inside `fetch`.
+      const checked = normalizeApiKey(hit)
+      if (checked.ok) return checked.value
+      // The key never enters the text. The Models page is named as its usual writer; a hand-edited `.env` or a shell
+      // export can supply the same value.
+      const defect: Record<ApiKeyRejection, string> = {
+        empty: `is blank; set ${ref} to the raw key (the web Models page writes it) or export it in the launching environment`,
+        illegalCharacters: 'contains characters no HTTP header can carry;'
+          + ` set ${ref} to the raw key alone (the web Models page writes it)`,
+      }
+      throw new LlmError(`llm-pi-ai: the API key resolved from ${ref} ${defect[checked.reason]}`, INVALID_CREDENTIAL_CODE)
+    }
     throw new LlmError(
       `llm-pi-ai: no credential for provider route "${provider}"; its profile resolves ${ref}, which is not`
       + ` set — store ${ref} through the credentials service (the web Models page writes it) or export it,`

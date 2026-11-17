@@ -62,6 +62,7 @@ export type {
   FixtureSnapshot, SessionBehaviorOverrides, SessionFixture, SessionFixtureSnapshot, Stabilizer,
 } from './fixtures.ts'
 export { contextMenuHook } from './context-menu.ts'
+export { syncedConfig } from './synced-config.ts'
 export { makeTranslate } from './translate.ts'
 export { allowAllAccess, allowAllAccessPlugin, StaticRemoteAccess, staticAccessPlugin } from './access.ts'
 export type { AccessStandardProps, StaticAccessPlugin } from './access.ts'
@@ -310,15 +311,16 @@ export class SlotTestRuntime {
    * so a missing provider fails loud instead of suspending the fiber forever
    * (deliberate load-order suspension tests use `ctx.plugin` directly).
    * @param plugin - plugin value (function, class, or `{ inject, apply }` object).
+   * @param config - the plugin's `apply` config, such as a {@link syncedConfig} object for a Client face with synced fields.
    * @returns handle owning the fiber's explicit disposal.
    */
-  async mount(plugin: Plugin): Promise<FeatureHandle> {
+  async mount(plugin: Plugin, config?: unknown): Promise<FeatureHandle> {
     const required = Object.keys(Inject.resolve((plugin as { inject?: Inject }).inject))
     const missing = required.filter(name => this.ctx.get(name) === undefined)
     if (missing.length > 0) {
       throw new Error(`mount would suspend: missing service(s) ${missing.join(', ')} — provide() them first`)
     }
-    const fiber = this.ctx.plugin(plugin)
+    const fiber = this.ctx.plugin(plugin, config)
     await this.stabilizer(async () => {
       await fiber.await()
     })

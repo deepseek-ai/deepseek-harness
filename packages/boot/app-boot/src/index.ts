@@ -13,7 +13,9 @@ import { captureStartupComposition, type StartupCompositionDiagnostic } from './
 export type { StartupCompositionDiagnostic, StartupPluginState, StartupServiceState } from './startup-diagnostics.ts'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { Context, type Fiber, type FiberState } from '@deepseek-ai/cordis'
-import Loader, { type Entry, type EntryGroup, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import Loader, {
+  EntryTree, EntryValidationError, formatIssues, relocate, validateOptions, type Entry, type EntryGroup, type EntryOptions,
+} from '@deepseek-ai/cordis-plugin-loader'
 import Include, { applyEntryPatches, parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, dshPath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
@@ -349,9 +351,10 @@ async function recompose(
     if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
     // Reading the prior state imports nothing, so plugin code does not run before the next resolution publishes.
     const previousFailures = (await inactiveEntries(ctx, false)).map((failure): RecordedFailure => ({
-      entry: failure.entry, fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
+      entry: failure.entry, fiber: failure.entry?.fiber, options: JSON.stringify(failure.options),
       // An entry without a running fiber has no import error yet; the judgment after the update reads it.
-      diagnostic: failure.entry.fiber?.uid ? reloadDiagnostic(failure) : undefined,
+      // Rejected options have no entry, and their diagnostic depends only on the options.
+      diagnostic: failure.entry === undefined || failure.entry.fiber?.uid ? reloadDiagnostic(failure) : undefined,
     }))
     // Removed entries leave the Loader store before their async disposers finish.
     const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [row.fiber])
@@ -410,11 +413,11 @@ async function recompose(
     await ctx.loader.await()
     const failures = await inactiveEntries(ctx)
     const introduced = failures.filter((failure) => {
-      if (requiredIds.includes(failure.entry.options.id)) return true
+      if (requiredIds.includes(failure.id)) return true
       // An entry waiting for a service starts once a provider appears.
       if (failure.outcome.kind === 'pending') return false
       // An entry that ran before the caller stopped it is a new failure even when it failed the same way before.
-      if (running.includes(failure.entry)) return true
+      if (failure.entry !== undefined && running.includes(failure.entry)) return true
       return !previousFailures.some(previous => sameFailure(previous, failure))
     })
     if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced, false).trimEnd())
@@ -435,7 +438,7 @@ async function recompose(
         // A restored row is a new Loader entry with the id of the one that ran.
         const ran = new Set(running.map(row => row.options.id))
         for (const failure of await inactiveEntries(ctx)) {
-          if (ran.has(failure.entry.options.id)) ctx.logger.warn(`${binName}: ${reloadDiagnostic(failure)}`)
+          if (ran.has(failure.id)) ctx.logger.warn(`${binName}: ${reloadDiagnostic(failure)}`)
         }
       } catch (error) {
         // The recomposition's own failure is the outcome.
@@ -447,7 +450,7 @@ async function recompose(
 
 /** An inactive entry as a recomposition found it before changing anything. */
 interface RecordedFailure {
-  entry: Entry
+  entry: Entry | undefined
   fiber: Fiber | undefined
   /** The entry's options as JSON. */
   options: string
@@ -457,8 +460,8 @@ interface RecordedFailure {
 
 /** Whether an inactive entry is the failure recorded before: the same entry, fiber and options, and a matching diagnostic. */
 function sameFailure(previous: RecordedFailure, failure: InactiveEntry): boolean {
-  return previous.entry === failure.entry && previous.fiber === failure.entry.fiber
-    && previous.options === JSON.stringify(failure.entry.options)
+  return previous.entry === failure.entry && previous.fiber === failure.entry?.fiber
+    && previous.options === JSON.stringify(failure.options)
     && (previous.diagnostic === undefined || previous.diagnostic === reloadDiagnostic(failure))
 }
 
@@ -480,7 +483,7 @@ function rowIds(patches: readonly PatchOptions[]): Set<string> {
     }
   }
   // Patch warnings are logged when the generation itself is prepared.
-  visit(applyEntryPatches([], patches as PatchOptions[], () => {}))
+  visit(applyEntryPatches([], patches as PatchOptions[], () => {}).data)
   return ids
 }
 
@@ -614,9 +617,9 @@ export interface ConfigDumpLayer {
  * Compose the configured entry list: parse the base config file with the
  * include's entry-list dialect, apply every layer's patches as ONE flattened
  * list through the include's own patch algorithm (`applyEntryPatches`) — the
- * same call `boot()` makes, so even patch-visibility corner cases (a later
- * layer targeting a group child a plain config replacement introduced, which
- * the single-pass id index never sees) compose identically — then render the
+ * same call `boot()` makes, so patch-visibility cases (a later layer
+ * targeting a group child that a group config replacement introduced or
+ * removed) compose identically — then render the
  * result as YAML in the same dialect (`!!js` expressions print verbatim,
  * unevaluated). Row admission is a later stage: a plugin row the compatibility
  * policy denies still appears here, while a denied bundle contributes no layer.
@@ -670,17 +673,22 @@ export function renderConfigDump(
   const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The patches are cloned per call: applyEntryPatches clones entries and
-  // inserted rows but assigns override values such as `config` by reference,
-  // so each snapshot keeps its own copies of those values.
-  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
-    const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
-    return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
+  // applyEntryPatches writes the ids it generates for anonymous children of a
+  // replaced group config onto those patch entries, so one full composition
+  // assigns them first and every prefix reuses them. Composition holds a
+  // supplied `config` array by reference and appends later inserts to it, so
+  // that run reads copies of the arrays, and each snapshot composes its own clone.
+  const patches = structuredClone(layers.flatMap(layer => layer.patches))
+  applyEntryPatches(base, patches.map(patch => Array.isArray(patch.config) ? { ...patch, config: patch.config.slice() } : patch))
+  const ends: number[] = []
+  for (const layer of layers) ends.push((ends.at(-1) ?? 0) + layer.patches.length)
+  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches>['data'] => {
+    return applyEntryPatches(base, structuredClone(patches.slice(0, ends[count - 1])), (message: string, ...args: unknown[]) => {
       // The include logs through cordis's printf-style logger (`%C` = code); a
       // dump has no logger, so substitute inline for a plain line.
       let index = 0
       warnings.push(message.replace(/%C/g, () => JSON.stringify(args[index++])))
-    })
+    }).data
   }
   let previous = base
   let previousWarnings: string[] = []
@@ -918,7 +926,7 @@ export function installFailLoud(
             timer = setTimeout(resolve, FAIL_LOUD_RELEASE_TIMEOUT_MS)
           }),
         ])
-      } catch {
+      } catch (_releaseFailed) {
         // The terminal release failed; the fatal exit below is the outcome that
         // matters, and no reporter runs after it.
       }
@@ -990,8 +998,14 @@ function formatActivationError(error: unknown, stacks = true): string {
 }
 
 interface InactiveEntry {
-  /** Loader entry used to identify the bootstrap Include and required ids. */
-  entry: Entry
+  /** Loader entry used to identify the bootstrap Include; absent for options their group rejected before creating one. */
+  entry: Entry | undefined
+  /** Entry id used for required ids, or `(no id)` for rejected options without a string id. */
+  id: string
+  /** Module specifier; for rejected options, a non-string `name` rendered as JSON. */
+  name: string
+  /** The options the group lists for this entry. */
+  options: unknown
   /** Activation errors and missing services remain distinct for presentation. */
   outcome: { kind: 'failed'; error: unknown; phase?: string }
     | { kind: 'pending'; missing: string[] }
@@ -1046,8 +1060,45 @@ async function importFailure(entry: Entry): Promise<unknown> {
   }
 }
 
+/** Identity fields of an inactive Loader entry. */
+function identify(entry: Entry): Pick<InactiveEntry, 'entry' | 'id' | 'name' | 'options'> {
+  return { entry, id: entry.options.id, name: entry.options.name, options: entry.options }
+}
+
+/** Groups whose option lists the Loader reconciled: the root group and those of active group and Include entries. */
+function activeGroups(ctx: Context): EntryGroup[] {
+  const groups = [ctx.loader.root]
+  for (const entry of ctx.loader.entries()) {
+    if (entry.subgroup !== undefined && entry.fiber?.state === FIBER_ACTIVE) groups.push(entry.subgroup)
+  }
+  return groups
+}
+
 /**
- * Collect Loader activation failures and disabled-expression errors. Failed
+ * Options that a group lists but rejected before creating an entry, checked with the Loader's own rule.
+ * The group only logs such a rejection, so each one is reported here with its source position when its tree has one.
+ */
+function rejectedOptions(ctx: Context): InactiveEntry[] {
+  return activeGroups(ctx).flatMap(group => group.data.flatMap((options: unknown): InactiveEntry[] => {
+    const issues = validateOptions(options, EntryTree.sep)
+    if (issues.length === 0) return []
+    const row: { id?: unknown; name?: unknown } = typeof options === 'object' && options !== null ? options : {}
+    const id = typeof row.id === 'string' ? row.id : undefined
+    const error = new EntryValidationError(issues)
+    // Source positions are found by id, so options without one keep the plain message.
+    if (id !== undefined) {
+      const frames = group.getOuterStack(id)
+      if (frames.length > 0) relocate(error, formatIssues('invalid entry options', issues, path => group.tree.getLocation(id, path)), frames)
+    }
+    return [{
+      entry: undefined, id: id ?? '(no id)', name: typeof row.name === 'string' ? row.name : row.name === undefined ? 'undefined' : JSON.stringify(row.name),
+      options, outcome: { kind: 'failed', error, phase: 'invalid entry options' },
+    }]
+  }))
+}
+
+/**
+ * Collect Loader activation failures, disabled-expression errors and options their group rejected. Failed
  * fibers are awaited to recover their recorded rejection reason and coalesce
  * duplicate Loader notifications through the next process rejection checkpoint.
  * An entry whose import failed reports the error importing it raises now; without
@@ -1060,14 +1111,14 @@ async function inactiveEntries(ctx: Context, importNow = true): Promise<Inactive
     try {
       if (entry.disabled) continue
     } catch (error) {
-      failures.push({ entry, outcome: { kind: 'failed', error, phase: 'disabled expression failed' } })
+      failures.push({ ...identify(entry), outcome: { kind: 'failed', error, phase: 'disabled expression failed' } })
       continue
     }
     const fiber = entry.fiber
     // An entry whose import failed has no fiber, or keeps the disposed fiber of its previous activation.
     if (fiber === undefined || fiber.state === FIBER_DISPOSED) {
       const error = importNow ? await importFailure(entry) : undefined
-      failures.push({ entry, outcome: error === undefined
+      failures.push({ ...identify(entry), outcome: error === undefined
         ? { kind: 'failed', error: fiber === undefined ? 'failed to import' : `fiber state ${String(fiber.state)}` }
         : { kind: 'failed', error, phase: 'failed to import' } })
       continue
@@ -1079,20 +1130,21 @@ async function inactiveEntries(ctx: Context, importNow = true): Promise<Inactive
         await fiber.await()
       } catch (error) {
         rejectionReasons.push(error)
-        failures.push({ entry, outcome: { kind: 'failed', error } })
+        failures.push({ ...identify(entry), outcome: { kind: 'failed', error } })
       }
       continue
     }
     if (state === FIBER_PENDING) {
       const missing = Object.keys(fiber.inject).filter(service => fiber.ctx.get(service) === undefined)
       failures.push({
-        entry,
+        ...identify(entry),
         outcome: { kind: 'pending', missing },
       })
     } else {
-      failures.push({ entry, outcome: { kind: 'failed', error: `fiber state ${String(state)}` } })
+      failures.push({ ...identify(entry), outcome: { kind: 'failed', error: `fiber state ${String(state)}` } })
     }
   }
+  failures.push(...rejectedOptions(ctx))
   if (rejectionReasons.length > 0) await observeLoaderRejectionCheckpoint(rejectionReasons)
   return failures
 }
@@ -1118,31 +1170,31 @@ function reloadDiagnostic(failure: InactiveEntry): string {
 }
 
 /** Stable per-entry text for reload comparisons and optional warnings. */
-function inactiveDiagnostic({ entry, outcome }: InactiveEntry, stacks = true): string {
+function inactiveDiagnostic({ id, name, outcome }: InactiveEntry, stacks = true): string {
   const detail = outcome.kind === 'failed' ? failureDetail(outcome, stacks)
     : `pending (waiting for ${outcome.missing.length === 1 ? 'service' : 'services'}: ${outcome.missing.join(', ') || 'unknown'})`
-  return `${entry.options.id} (${entry.options.name}): ${detail}`
+  return `${id} (${name}): ${detail}`
 }
 
 /** Group startup failures and pending services, marking every required entry. */
-function startupDiagnostic(binName: string, failures: readonly InactiveEntry[], required: ReadonlySet<Entry>): string {
+function startupDiagnostic(binName: string, failures: readonly InactiveEntry[], required: ReadonlySet<InactiveEntry>): string {
   const lines = [`${binName}: startup failed: ${String(required.size)} required ${required.size === 1 ? 'plugin' : 'plugins'} did not activate`]
-  const failed = failures.flatMap(({ entry, outcome }) => outcome.kind === 'failed' ? [{ entry, outcome }] : [])
-  const pending = failures.flatMap(({ entry, outcome }) => outcome.kind === 'pending' ? [{ entry, outcome }] : [])
-  pending.sort((left, right) => Number(required.has(right.entry)) - Number(required.has(left.entry)))
-  const label = (entry: Entry): string => `${entry.options.id}${required.has(entry) ? ' (required)' : ''}`
+  const failed = failures.flatMap(failure => failure.outcome.kind === 'failed' ? [{ failure, outcome: failure.outcome }] : [])
+  const pending = failures.flatMap(failure => failure.outcome.kind === 'pending' ? [{ failure, outcome: failure.outcome }] : [])
+  pending.sort((left, right) => Number(required.has(right.failure)) - Number(required.has(left.failure)))
+  const label = (failure: InactiveEntry): string => `${failure.id}${required.has(failure) ? ' (required)' : ''}`
   if (failed.length > 0) {
     lines.push('', `Failed plugins (${String(failed.length)}):`)
-    for (const { entry, outcome } of failed) {
-      lines.push(`  ${label(entry)}`, `    Package: ${entry.options.name}`)
+    for (const { failure, outcome } of failed) {
+      lines.push(`  ${label(failure)}`, `    Package: ${failure.name}`)
       lines.push(...failureDetail(outcome).split('\n').map(line => `    ${line}`))
     }
   }
   if (pending.length > 0) {
-    const width = Math.max('Plugin'.length, ...pending.map(({ entry }) => label(entry).length)) + 2
+    const width = Math.max('Plugin'.length, ...pending.map(({ failure }) => label(failure).length)) + 2
     lines.push('', `Plugins waiting for services (${String(pending.length)}):`, `  ${'Plugin'.padEnd(width)}Missing services`)
-    for (const { entry, outcome } of pending) {
-      lines.push(`  ${label(entry).padEnd(width)}${outcome.missing.join(', ') || 'unknown'}`)
+    for (const { failure, outcome } of pending) {
+      lines.push(`  ${label(failure).padEnd(width)}${outcome.missing.join(', ') || 'unknown'}`)
     }
   }
   return lines.join('\n')
@@ -1151,7 +1203,8 @@ function startupDiagnostic(binName: string, failures: readonly InactiveEntry[], 
 /**
  * Apply DSH startup policy to a settled Loader tree.
  *
- * Inactive entries from the global required list reject startup. Other
+ * Inactive entries from the global required list reject startup, including
+ * options that their group rejected before creating an entry. Other
  * inactive entries join that failure diagnostic, or produce one warning when
  * no required entry failed and leave successful siblings running.
  * Required ids absent from the tree, and disabled required entries, are ignored.
@@ -1170,11 +1223,12 @@ export async function auditStartupEntries(
   warn: (line: string) => void = line => void process.stderr.write(line),
 ): Promise<void> {
   const failures = await inactiveEntries(ctx)
-  const required = new Set(failures.filter(({ entry }) => entry === bootstrapIncludes.get(ctx)
-    || requiredStartupEntryIds.has(entry.options.id)).map(({ entry }) => entry))
+  const required = new Set(failures.filter(failure => (failure.entry !== undefined && failure.entry === bootstrapIncludes.get(ctx))
+    || requiredStartupEntryIds.has(failure.id)))
   if (required.size > 0) {
-    throw new StartupError(startupDiagnostic(binName, failures, required), failures.map(({ entry, outcome }) => ({
-      id: entry.options.id, module: entry.options.name, required: required.has(entry), fiberState: entry.fiber?.state, outcome,
+    throw new StartupError(startupDiagnostic(binName, failures, required), failures.map(failure => ({
+      id: failure.id, module: failure.name, required: required.has(failure),
+      fiberState: failure.entry?.fiber?.state, outcome: failure.outcome,
     })))
   }
   if (failures.length > 0) warn(activationDiagnostic(binName, failures))

@@ -39,13 +39,14 @@ async function extractBundleIconPng(
   const plistJson = await output(
     'plutil', ['-convert', 'json', '-o', '-', join(bundlePath, 'Contents', 'Info.plist')], timeoutMs, internals)
   if (plistJson !== null) {
+    let declared: unknown
     try {
-      const declared: unknown = (JSON.parse(plistJson) as { CFBundleIconFile?: unknown }).CFBundleIconFile
-      if (typeof declared === 'string' && declared !== '') {
-        iconFile = declared.endsWith('.icns') ? declared : `${declared}.icns`
-      }
-    } catch {
+      declared = (JSON.parse(plistJson) as { CFBundleIconFile?: unknown }).CFBundleIconFile
+    } catch (_malformedPlist) {
       // Swallows malformed plutil JSON: the Resources scan below still applies.
+    }
+    if (typeof declared === 'string' && declared !== '') {
+      iconFile = declared.endsWith('.icns') ? declared : `${declared}.icns`
     }
   }
   if (iconFile === null) {

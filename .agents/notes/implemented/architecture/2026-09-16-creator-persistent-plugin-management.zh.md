@@ -14,7 +14,7 @@ agent 需要安装能力并在同一段对话中使用。生成代码工具在�
 
 默认的标准模式以相同的 profile 条件和审批门槛启用同一工具。缺少该工具时，标准模式会话不会直接安装插件，而要额外花费轮次和 token 绕过；此改动也让标准模式和创造模式朝同一能力集收敛。因此，完整权限的标准模式会话无需单独审批即可安装 Host 代码，与其 shell 已有的能力一致。PTC 和 Minimal 仍禁用该工具。
 
-模型可见两个只读 Cordis 检查工具，不再提供生成代码的 define/run/stop/undefine 和动态自省工具 API。现有运行时和 Client 消费者保留其服务；历史会话卡片仍然可读。这仅取代[自引用工具集参考](../../../../packages/extensions/cordis-host-runner/README.zh.md)中的模型侧变更流程；其运行时所有权和沙箱依据仍有独立价值。[profile 事务决策](2026-09-14-current-profile-plugin-management.zh.md)继续规定锁、包安装和部分失败行为。
+标准模式和创造模式提供一个只读 Cordis 检查工具 `cordis_inspect`。省略 `query` 以发现 provider；提供 `query` 以读取一个已声明的方法。共用此入口使默认模式能够进行运行时发现，同时避免重复的工具描述。不再提供生成代码的 define/run/stop/undefine 和动态自省工具 API。现有运行时和 Client 消费者保留其服务；历史会话卡片仍然可读。这仅取代[自引用工具集参考](../../../../packages/extensions/cordis-host-runner/README.zh.md)中的模型侧变更流程；其运行时所有权和沙箱依据仍有独立价值。[profile 事务决策](2026-09-14-current-profile-plugin-management.zh.md)继续规定锁、包安装和部分失败行为。
 
 除非用户指定其他目标，视觉创建请求默认通过已安装的 Client 插件显示在当前 Web 页面。开发 skill 提供最小包和由 effect 管理的 Client 注册示例。已知所需 API 后结束探查，在可选视觉优化之前先安装能工作的初版。有条件时使用已连接页面验证。浏览器认证或操作系统设置不是安装插件的前提，mock 预览不能证明应用内结果。
 

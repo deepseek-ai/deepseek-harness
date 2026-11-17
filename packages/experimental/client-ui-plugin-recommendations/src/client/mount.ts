@@ -34,8 +34,8 @@ function registerBody(ctx: Context): void {
   const services: PluginCardServices = {
     // Catalog text by plugin name for this plugin lifetime: a revisited card renders it before its own lookup returns.
     catalog: createSnapshotStore<Readonly<Record<string, CatalogDetails>>>({}),
-    describe: async (sessionId, callId) => {
-      const result = await ctx.remote.pluginRecommendations.describe(sessionId, callId)
+    describe: async (sessionId, cardId) => {
+      const result = await ctx.remote.pluginRecommendations.describe(sessionId, cardId)
       return result.ok ? result.value : undefined
     },
     openDetails: (packageName) => { ctx.pluginNavigation.openBundle(packageName) },

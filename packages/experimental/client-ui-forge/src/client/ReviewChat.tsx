@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConversationViewsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationViewsProps, WorkspaceSelectedHandler, WorkspaceSessionAdopter } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -34,6 +34,10 @@ export interface ReviewChatFace {
    * @returns the Session, or undefined without any Workspace.
    */
   readonly connect: (frame: ForgeReviewChangeRequest) => Promise<SessionId | undefined>
+  /** Resolve the blank Session of a Workspace the reader picked in the conversation; rejects when it cannot connect. */
+  readonly connectWorkspace: (workspaceId: Parameters<WorkspaceSelectedHandler>[0]) => Promise<SessionId>
+  /** Tell the reader that a picked Workspace could not be opened. */
+  readonly workspaceFailed: (error: unknown) => void
   /** Retain a Session; the caller releases the returned reference. */
   readonly retain: (sessionId: SessionId) => SessionReference
   /** Bind the change request to the Session at its next message, or forget the choice for null. */
@@ -66,7 +70,7 @@ export type ReviewConversationProps = PropsRuntime<'forge.review.conversation'> 
  * @returns the embedded conversation.
  */
 export function ReviewConversation({
-  sessionId, useSession, useConversation, useSessions, renderFactorySlot, headline, onWorkspaceSession,
+  sessionId, useSession, useConversation, useSessions, renderFactorySlot, headline, onWorkspaceSelected,
 }: ReviewConversationProps): ReactNode {
   const session = useSession(value => value)
   const conversation = useConversation(value => value)
@@ -77,7 +81,7 @@ export function ReviewConversation({
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
   return (
     <div className={css.conversation} data-forge-review-conversation={sessionId}>
-      {renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero, headline, onWorkspaceSession }, {
+      {renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero, headline, onWorkspaceSelected }, {
         slots: { views: ReviewChatView },
       })}
     </div>
@@ -90,8 +94,11 @@ export interface ReviewConversation {
   readonly failed: boolean
   /** The retained conversation, or null before one. */
   readonly reference: SessionReference | null
-  /** Retain a conversation at once, releasing the one held before. */
-  readonly hold: (sessionId: SessionId) => void
+  /**
+   * Keep another Session as the conversation: retain it, move the draft of the one held before to it while both are
+   * retained, then release the one held before.
+   */
+  readonly moveTo: (sessionId: SessionId, adopt: WorkspaceSessionAdopter) => void
   /** Record that a conversation's draft already names the change request. */
   readonly markFilled: (sessionId: SessionId) => void
   /**
@@ -128,13 +135,25 @@ export function useReviewConversation(
   const connecting = useRef<Promise<SessionId | undefined> | null>(null)
   const latest = useRef({ frame, onConversation })
   latest.current = { frame, onConversation }
-  // Retains synchronously: a Workspace the reader picks moves the draft to its blank as soon as the handler returns.
   const hold = useCallback((id: SessionId): void => {
     if (held.current?.sessionId === id) return
     held.current?.reference.release()
     const retained = chat.retain(id)
     held.current = { sessionId: id, reference: retained }
     setReference({ sessionId: id, reference: retained })
+  }, [chat])
+  const moveTo = useCallback((id: SessionId, adopt: WorkspaceSessionAdopter): void => {
+    const previous = held.current
+    const retained = chat.retain(id)
+    try {
+      adopt(id)
+    } catch (error: unknown) {
+      retained.release()
+      throw error
+    }
+    held.current = { sessionId: id, reference: retained }
+    setReference({ sessionId: id, reference: retained })
+    previous?.reference.release()
   }, [chat])
   // A conversation that connects after the page stopped showing the change request is recorded but not retained.
   const alive = useRef(true)
@@ -195,7 +214,7 @@ export function useReviewConversation(
   return {
     failed,
     reference: reference !== null && reference.sessionId === sessionId ? reference.reference : null,
-    hold,
+    moveTo,
     markFilled,
     start,
   }
@@ -229,6 +248,33 @@ export function ReviewChat({
   useEffect(() => {
     if (sessionId === undefined && !failed) void start()
   }, [sessionId, failed, start])
+  // A picked Workspace becomes the conversation only as the latest pick, while the tab still shows the conversation
+  // the pick started from.
+  const picks = useRef(0)
+  const shown = useRef<SessionId | undefined>(sessionId)
+  shown.current = sessionId
+  useEffect(() => () => { shown.current = undefined }, [])
+  const selectWorkspace = useCallback<WorkspaceSelectedHandler>(async (workspaceId, adopt) => {
+    const started = shown.current
+    if (started === undefined) return
+    picks.current += 1
+    const pick = picks.current
+    const wanted = (): boolean => shown.current === started && picks.current === pick
+    let next: SessionId
+    try {
+      next = await chat.connectWorkspace(workspaceId)
+    } catch (error: unknown) {
+      if (wanted()) chat.workspaceFailed(error)
+      throw error
+    }
+    // No await from here on, so nothing interleaves with the switch.
+    if (!wanted() || next === started) return
+    conversation.moveTo(next, adopt)
+    // The moved draft already names the change request.
+    conversation.markFilled(next)
+    chat.stage(started, null)
+    onConversation(next)
+  }, [chat, conversation, onConversation])
   if (failed) {
     return <div className={css.centered} role="status"><p className={css.emptyTitle}>{t('reviewPage.chat.unavailable')}</p></div>
   }
@@ -257,14 +303,7 @@ export function ReviewChat({
       <SessionProvider session={reference}>
         {renderSlot('forge.review.conversation', {
           headline: t('reviewPage.chat.headline', { name: `${repository.name} ${name}` }),
-          onWorkspaceSession: (next) => {
-            if (next === sessionId) return
-            conversation.hold(next)
-            // The moved draft already names the change request.
-            conversation.markFilled(next)
-            chat.stage(sessionId, null)
-            onConversation(next)
-          },
+          onWorkspaceSelected: selectWorkspace,
         })}
       </SessionProvider>
     </div>

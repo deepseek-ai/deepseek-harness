@@ -8,7 +8,9 @@ import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionListState, SessionReference, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { ConversationSnapshot, ConversationViewsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {
+  ConversationSnapshot, ConversationViewsProps, WorkspaceSelectedHandler, WorkspaceSessionAdopter,
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, conversationSnapshot, makeTranslate, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RenderFactorySlot, SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
@@ -29,6 +31,10 @@ afterEach(cleanup)
 const t = makeTranslate(en)
 const S1 = brandString<SessionId>('s1')
 const S2 = brandString<SessionId>('s2')
+const S3 = brandString<SessionId>('s3')
+type WorkspaceId = Parameters<WorkspaceSelectedHandler>[0]
+const W1 = brandString<WorkspaceId>('w1')
+const W2 = brandString<WorkspaceId>('w2')
 const URL7 = prUrl(7)
 
 /** A promise the test settles by hand. */
@@ -55,6 +61,8 @@ function chatFace() {
   const retained: Retained[] = []
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
+    connectWorkspace: vi.fn<ReviewChatFace['connectWorkspace']>(async () => S2),
+    workspaceFailed: vi.fn<ReviewChatFace['workspaceFailed']>(),
     retain: vi.fn<ReviewChatFace['retain']>((sessionId) => {
       // Only the identity the chat tab hands back to the face and the release it calls are supplied.
       const release = vi.fn<() => void>()
@@ -83,6 +91,7 @@ function ChatTab(props: ChatTabProps): ReactNode {
 function renderChat(overrides: Partial<ChatTabProps> = {}, connect?: ReviewChatFace['connect']) {
   const { chat, retained } = chatFace()
   if (connect !== undefined) chat.connect.mockImplementation(connect)
+  const onConversation = vi.fn<ChatTabProps['onConversation']>()
   const slots: ForgeReviewConversationProps[] = []
   const renderSlot = ((_key: string, owner: ForgeReviewConversationProps) => {
     slots.push(owner)
@@ -94,7 +103,7 @@ function renderChat(overrides: Partial<ChatTabProps> = {}, connect?: ReviewChatF
     return <>{children}</>
   }
   const props: ChatTabProps = {
-    frame: reviewed(7), sessionId: undefined, onConversation: vi.fn(), chat, renderSlot, SessionProvider, t, ...overrides,
+    frame: reviewed(7), sessionId: undefined, onConversation, chat, renderSlot, SessionProvider, t, ...overrides,
   }
   const view = render(<ChatTab {...props} />)
   const rerender = (next: Partial<ChatTabProps>): void => { view.rerender(<ChatTab {...props} {...next} />) }
@@ -103,7 +112,7 @@ function renderChat(overrides: Partial<ChatTabProps> = {}, connect?: ReviewChatF
     if (owner === undefined) throw new Error('no conversation drawn')
     return owner
   }
-  return { view, props, chat, retained, slots, slot, provided, rerender }
+  return { view, props, chat, retained, slots, slot, provided, rerender, onConversation }
 }
 
 describe('ReviewChat start', () => {
@@ -188,14 +197,17 @@ describe('ReviewChat conversation', () => {
     expect(b.chat.openInMain).toHaveBeenCalledWith(S1)
   })
 
-  it('moves to the blank Session of a Workspace the reader picks, retaining it before the handler returns', () => {
+  it('shows the blank Session of a picked Workspace, moving the draft while both Sessions are retained', async () => {
     const b = renderChat({ sessionId: S1 })
-    act(() => { b.slot().onWorkspaceSession(S1) })
-    expect(b.chat.retain).toHaveBeenCalledOnce()
-    expect(b.props.onConversation).not.toHaveBeenCalled()
-
-    act(() => { b.slot().onWorkspaceSession(S2) })
+    const held: boolean[] = []
+    const adopt = vi.fn<WorkspaceSessionAdopter>(() => {
+      held.push(b.retained[0]?.release.mock.calls.length === 0, b.retained[1]?.release.mock.calls.length === 0)
+    })
+    await act(async () => { await b.slot().onWorkspaceSelected(W1, adopt) })
+    expect(b.chat.connectWorkspace).toHaveBeenCalledWith(W1)
     expect(b.chat.retain).toHaveBeenLastCalledWith(S2)
+    expect(adopt).toHaveBeenCalledWith(S2)
+    expect(held).toEqual([true, true])
     expect(b.retained[0]?.release).toHaveBeenCalledOnce()
     expect(b.retained[1]?.release).not.toHaveBeenCalled()
     expect(b.chat.stage).toHaveBeenLastCalledWith(S1, null)
@@ -208,6 +220,83 @@ describe('ReviewChat conversation', () => {
     expect(b.chat.fill).toHaveBeenCalledOnce()
     b.view.unmount()
     expect(b.retained[1]?.release).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the conversation when the picked Workspace resolves to it', async () => {
+    const b = renderChat({ sessionId: S1 })
+    b.chat.connectWorkspace.mockResolvedValueOnce(S1)
+    const adopt = vi.fn<WorkspaceSessionAdopter>()
+    await act(async () => { await b.slot().onWorkspaceSelected(W1, adopt) })
+    expect(adopt).not.toHaveBeenCalled()
+    expect(b.chat.retain).toHaveBeenCalledOnce()
+    expect(b.props.onConversation).not.toHaveBeenCalled()
+  })
+
+  it('shows only the latest of two picks, whichever connects first', async () => {
+    const b = renderChat({ sessionId: S1 })
+    const first = Promise.withResolvers<SessionId>()
+    const second = Promise.withResolvers<SessionId>()
+    b.chat.connectWorkspace.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const adopt = vi.fn<WorkspaceSessionAdopter>()
+    const select = b.slot().onWorkspaceSelected
+    const picks = [select(W1, adopt), select(W2, adopt)]
+    await act(async () => {
+      second.resolve(S3)
+      first.resolve(S2)
+      await Promise.all(picks)
+    })
+    expect(adopt.mock.calls).toEqual([[S3]])
+    expect(b.onConversation.mock.calls).toEqual([[S3]])
+  })
+
+  it('drops a pick that connects after the tab started another conversation or left', async () => {
+    const b = renderChat({ sessionId: S1 })
+    const pending = Promise.withResolvers<SessionId>()
+    b.chat.connectWorkspace.mockReturnValueOnce(pending.promise)
+    const adopt = vi.fn<WorkspaceSessionAdopter>()
+    const select = b.slot().onWorkspaceSelected
+    const pick = select(W1, adopt)
+    b.rerender({ sessionId: S3 })
+    await act(async () => {
+      pending.resolve(S2)
+      await pick
+    })
+    expect(adopt).not.toHaveBeenCalled()
+    expect(b.props.onConversation).not.toHaveBeenCalled()
+
+    b.view.unmount()
+    await select(W2, adopt)
+    expect(b.chat.connectWorkspace).toHaveBeenCalledOnce()
+    expect(adopt).not.toHaveBeenCalled()
+  })
+
+  it('reports a Workspace that cannot connect once, for the latest pick only, and rejects both', async () => {
+    const b = renderChat({ sessionId: S1 })
+    const first = Promise.withResolvers<SessionId>()
+    const second = Promise.withResolvers<SessionId>()
+    b.chat.connectWorkspace.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const adopt = vi.fn<WorkspaceSessionAdopter>()
+    const select = b.slot().onWorkspaceSelected
+    const picks = [select(W1, adopt), select(W2, adopt)]
+    const offline = new Error('offline')
+    first.reject(new Error('gone'))
+    second.reject(offline)
+    await act(async () => {
+      await expect(picks[0]).rejects.toThrow('gone')
+      await expect(picks[1]).rejects.toThrow('offline')
+    })
+    expect(b.chat.workspaceFailed.mock.calls).toEqual([[offline]])
+    expect(adopt).not.toHaveBeenCalled()
+    expect(b.props.onConversation).not.toHaveBeenCalled()
+  })
+
+  it('keeps the conversation and releases the picked Session when the draft cannot move', async () => {
+    const b = renderChat({ sessionId: S1 })
+    const select: WorkspaceSelectedHandler = b.slot().onWorkspaceSelected
+    await expect(select(W1, () => { throw new Error('no binding') })).rejects.toThrow('no binding')
+    expect(b.retained[1]?.release).toHaveBeenCalledOnce()
+    expect(b.retained[0]?.release).not.toHaveBeenCalled()
+    expect(b.props.onConversation).not.toHaveBeenCalled()
   })
 })
 
@@ -319,13 +408,13 @@ describe('ReviewConversation', () => {
       factory.push(args)
       return null
     }
-    const onWorkspaceSession: (sessionId: SessionId) => void = vi.fn()
+    const onWorkspaceSelected = vi.fn<WorkspaceSelectedHandler>()
     const props = {
       sessionId: S1, useSession: bindSnapshotSelector(session), useConversation: bindSnapshotSelector(conversation),
-      useSessions: bindSnapshotSelector(sessions), renderFactorySlot, headline: 'Review demo #7', onWorkspaceSession,
+      useSessions: bindSnapshotSelector(sessions), renderFactorySlot, headline: 'Review demo #7', onWorkspaceSelected,
     }
     const view = render(<ReviewConversation {...props as ReviewConversationProps} />)
-    return { view, factory, onWorkspaceSession }
+    return { view, factory, onWorkspaceSelected }
   }
 
   it.each([
@@ -341,7 +430,7 @@ describe('ReviewConversation', () => {
     const b = renderConversation(facts, options)
     expect(b.view.container.querySelector(`[data-forge-review-conversation="${S1}"]`)).not.toBeNull()
     expect(b.factory).toEqual([['conversation.content', {
-      variant: 'embedded', phase, hero, headline: 'Review demo #7', onWorkspaceSession: b.onWorkspaceSession,
+      variant: 'embedded', phase, hero, headline: 'Review demo #7', onWorkspaceSelected: b.onWorkspaceSelected,
     }, { slots: { views: ReviewChatView } }]])
   })
 

@@ -2,7 +2,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Registers the target-neutral Conversation assembly, shell, input, and docks. */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { ConversationConfig } from '../types.ts'
 import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import { IconPaperclipOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
@@ -21,7 +22,7 @@ import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
+  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected, ConversationShellInjected,
   ConversationSessionInjected, DraftFileUploads, UserTextInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
@@ -67,16 +68,6 @@ export const inject = [
   'slots', 'sessions', 'fileUpload', 'uiSession', 'uiSession.sessionStatus', 'uiWorkspace', 'locale', 'configForms',
 ]
 
-/** Conversation runtime configuration. */
-export interface Config {
-  /** Maximum generic-file uploads allowed to run concurrently in browser Workers. */
-  maxConcurrentFileUploads?: number
-}
-
-/** Validated Conversation runtime configuration. */
-export const Config: z<Config> = z.object({
-  maxConcurrentFileUploads: z.natural().min(1).default(2),
-})
 
 // Stable no-session sources keep the renderer's observable-hook cache and
 // hook order unchanged across current-Session transitions.
@@ -121,10 +112,9 @@ function hostPathBridge(): HostPathBridge | undefined {
 interface WorkspaceNavigation {
   openSession(sessionId: SessionId): void
   openWorkspace(
-    workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
+    workspaceId: Parameters<ConversationShellInjected['openWorkspace']>[0],
     beforeOpen: (sessionId: SessionId) => void,
   ): Promise<void>
-  connectWorkspace(workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0]): Promise<SessionId>
 }
 
 /** Action registration used by the composer without importing its command-UI consumer. */
@@ -159,12 +149,12 @@ function concreteConversation(ctx: Context): ConversationController {
 /**
  * Mount the Conversation core and target-neutral presentation.
  * @param ctx - Client root context.
+ * @param config - Host-synced live configuration.
  */
-export function apply(ctx: Context, config: Config = Config({})): void {
+export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): void {
   const sessions = ctx.sessions
   const slots = ctx.slots
-  // Schemastery's field default is materialized before Cordis calls apply.
-  const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
+  const fileUploadLimit = config.maxConcurrentFileUploads
   const workspaceNavigation = ctx.get('uiWorkspace') as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
   uiConversation.userText.register(sessionReferenceRule)
@@ -339,6 +329,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     },
   })
 
+  const shellInjected: ConversationShellInjected = {
+    openWorkspace: (workspaceId, adopt) => workspaceNavigation.openWorkspace(workspaceId, adopt),
+  }
+
   const registerConversationRoot = () => slots.register({
     name: 'main.conversation',
     children: {
@@ -369,46 +363,31 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
       },
-      selectWorkspace: (workspaceId, report) => {
-        const moveDraft = (nextId: SessionId): void => {
-          if (sessionId !== undefined && nextId !== sessionId) {
-            const from = inputHub.shell(sessionId)
-            // A draft with a submission in flight stays with the Session that is admitting it.
-            if (from.snapshot.phase !== 'plain' && from.snapshot.phase !== 'claimed') return
-            const draft = from.draftSnapshot
-            const attachmentIds = from.snapshot.attachmentIds
-            const next = inputHub.shell(nextId)
-            if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
-              const binding = sessions.binding(nextId)
-              if (binding === undefined) {
-                throw new Error(`ui-conversation: session "${nextId}" resolved no binding`)
-              }
-              // The same rule as intake: only an ordinary Session stages image uploads.
-              const ordinary = binding.session.getSnapshot().subagent === null
-              concreteConversation(ctx).rebindDraftFiles(nextId, attachmentIds, ordinary)
-              if (draft.text !== '') {
-                next.setDraft(draft)
-                from.setDraft('')
-              }
-              if (attachmentIds.length > 0) {
-                for (const id of attachmentIds) from.removeAttachment(id)
-              }
+      moveDraft: (nextId) => {
+        if (sessionId !== undefined && nextId !== sessionId) {
+          const from = inputHub.shell(sessionId)
+          // A draft with a submission in flight stays with the Session that is admitting it.
+          if (from.snapshot.phase !== 'plain' && from.snapshot.phase !== 'claimed') return
+          const draft = from.draftSnapshot
+          const attachmentIds = from.snapshot.attachmentIds
+          const next = inputHub.shell(nextId)
+          if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
+            const binding = sessions.binding(nextId)
+            if (binding === undefined) {
+              throw new Error(`ui-conversation: session "${nextId}" resolved no binding`)
+            }
+            // The same rule as intake: only an ordinary Session stages image uploads.
+            const ordinary = binding.session.getSnapshot().subagent === null
+            concreteConversation(ctx).rebindDraftFiles(nextId, attachmentIds, ordinary)
+            if (draft.text !== '') {
+              next.setDraft(draft)
+              from.setDraft('')
+            }
+            if (attachmentIds.length > 0) {
+              for (const id of attachmentIds) from.removeAttachment(id)
             }
           }
         }
-        if (report === undefined) return workspaceNavigation.openWorkspace(workspaceId, moveDraft)
-        return workspaceNavigation.connectWorkspace(workspaceId).then((nextId) => {
-          // No await from here on, so nothing interleaves with the handover. The Session the draft leaves stays
-          // retained through it: `report` may release its own reference when it switches to `nextId`.
-          const source = sessionId === undefined || sessions.binding(sessionId) === undefined
-            ? undefined
-            : sessions.retain(sessionId, { source: 'controllerOperation' })
-          try {
-            if (report(nextId)) moveDraft(nextId)
-          } finally {
-            source?.release()
-          }
-        })
       },
     }),
   }, ConversationContent)
@@ -605,7 +584,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     yield slots.register({
       name: 'main',
       key: 'conversation',
-      children: { 'main.conversation': { kind: 'single', scope: 'session-maybe' } },
+      children: { 'main.conversation': { kind: 'single', scope: 'session-maybe', inject: shellInjected } },
     }, ConversationPanel)
     yield registerConversationRoot()
     yield registerConversationContent()
@@ -618,7 +597,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.plugin(ConversationController, {
     input: inputHub,
     blocks: composerBlocks,
-    maxConcurrentFileUploads,
+    maxConcurrentFileUploads: fileUploadLimit,
   })
   ctx.plugin(todoDockEntry)
   ctx.plugin(queueDockEntry)

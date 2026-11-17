@@ -20,7 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-file-upload/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FileAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
   ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment, DraftFileUpload,
 } from './contract/slots.ts'
@@ -149,6 +149,9 @@ export class UnsupportedImageMediaTypeError extends Error {
   }
 }
 
+/** Upload concurrency while the Host sends no limit; the value the Client used before the field moved to the Host. */
+const ABSENT_UPLOAD_LIMIT = 2
+
 /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
@@ -158,6 +161,10 @@ export class ConversationController extends Service implements IConversation {
   /** Live upload state per draft that uploads when added: every file draft and every uploaded image draft. */
   readonly fileUploads: SnapshotStore<Record<string, DraftFileUpload>> = createSnapshotStore<Record<string, DraftFileUpload>>({})
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
+  /** Draft attachment ids per owning Session; they outlive that Session's composer so a return re-adopts them. */
+  private readonly sessionDraftIds = new Map<SessionId, Set<DraftAttachmentId>>()
+  /** Reverse ownership lookup for release and Workspace rebinding. */
+  private readonly draftAttachmentSession = new Map<DraftAttachmentId, SessionId>()
   private readonly fileUploadOperations = new Map<DraftAttachmentId, {
     readonly controller: AbortController
     readonly done: Promise<void>
@@ -168,7 +175,7 @@ export class ConversationController extends Service implements IConversation {
     readonly settle: () => void
   }> = []
   private activeFileUploads = 0
-  private readonly maxConcurrentFileUploads: number
+  private readonly maxConcurrentFileUploads: ObservableSnapshot<number | undefined>
 
   /**
    * @param ctx - owning root context (the plugin apply context; the service
@@ -180,12 +187,14 @@ export class ConversationController extends Service implements IConversation {
   constructor(ctx: Context, config: {
     input: SessionInputResolver
     blocks: ComposerBlocks
-    maxConcurrentFileUploads: number
+    /** Live upload concurrency limit, absent until the Host sends one; a raised limit starts queued uploads at once. */
+    maxConcurrentFileUploads: ObservableSnapshot<number | undefined>
   }) {
     super(ctx, 'conversation')
     this.input = config.input
     this.blocks = config.blocks
     this.maxConcurrentFileUploads = config.maxConcurrentFileUploads
+    ctx.effect(() => config.maxConcurrentFileUploads.subscribe(() => { this.pumpFileUploads() }), 'conversation: upload concurrency')
     ctx.effect(() => async () => {
       const operations = [...this.fileUploadOperations.values()]
       for (const operation of operations) operation.controller.abort()
@@ -196,6 +205,8 @@ export class ConversationController extends Service implements IConversation {
         if (attachment.kind === 'image') revokePreview(attachment.previewUrl)
       }
       this.draftAttachments.clear()
+      this.sessionDraftIds.clear()
+      this.draftAttachmentSession.clear()
       this.fileUploads.set({})
     }, 'conversation draft attachments')
   }
@@ -279,6 +290,11 @@ export class ConversationController extends Service implements IConversation {
     )
     // The composer owns the attachments until the Host accepts the prompt.
     const ownership = { accepted: false, retiredUnobserved: false }
+    // An accepted message's attachments leave the draft: a later composer must not re-adopt them, while
+    // the registry keeps them until the echo settles their previews or an unobserved retirement releases them.
+    const disownAccepted = (): void => {
+      for (const attachment of attachments) this.forgetDraftAttachment(attachment.id)
+    }
     const acceptance = Promise.withResolvers<undefined>()
     const submission = session.beginSubmission({
       mode,
@@ -286,6 +302,7 @@ export class ConversationController extends Service implements IConversation {
       attachments: pendingAttachments,
       onAccept: () => {
         ownership.accepted = true
+        disownAccepted()
         accept?.()
         acceptance.resolve(undefined)
       },
@@ -309,6 +326,7 @@ export class ConversationController extends Service implements IConversation {
     const result = await Promise.race([session.prompt(content, mode, signal, submission.requestId), acceptance.promise])
     if (result !== undefined && !result.ok) return { kind: 'error' }
     ownership.accepted = true
+    disownAccepted()
     // An accepted prompt whose echo already retired unobserved, as when its queue entry was removed.
     if (ownership.retiredUnobserved) this.releaseDraftAttachments(attachments)
     return { kind: 'success' }
@@ -332,6 +350,7 @@ export class ConversationController extends Service implements IConversation {
       if (isImageMediaType(file.type)) {
         const attachment = browserDraftAttachment(file)
         this.draftAttachments.set(attachment.id, attachment)
+        this.ownDraftAttachment(sessionId, attachment.id)
         probeDimensions(attachment)
         if (uploadImages) this.beginFileUpload(sessionId, attachment)
         return attachment
@@ -342,6 +361,7 @@ export class ConversationController extends Service implements IConversation {
         file,
       }
       this.draftAttachments.set(attachment.id, attachment)
+      this.ownDraftAttachment(sessionId, attachment.id)
       this.beginFileUpload(sessionId, attachment)
       return attachment
     })
@@ -369,6 +389,7 @@ export class ConversationController extends Service implements IConversation {
     for (const id of ids) {
       const attachment = this.draftAttachments.get(id)
       if (attachment === undefined) continue
+      this.ownDraftAttachment(sessionId, id)
       if (attachment.kind === 'image' && !uploadImages) this.dropUpload(id)
       else this.beginFileUpload(sessionId, attachment)
     }
@@ -442,7 +463,7 @@ export class ConversationController extends Service implements IConversation {
 
   /** Start queued upload Workers until the configured concurrency is occupied. */
   private pumpFileUploads(): void {
-    while (this.activeFileUploads < this.maxConcurrentFileUploads) {
+    while (this.activeFileUploads < (this.maxConcurrentFileUploads.getSnapshot() ?? ABSENT_UPLOAD_LIMIT)) {
       const task = this.fileUploadQueue.shift()
       if (task === undefined) return
       this.activeFileUploads += 1
@@ -504,9 +525,57 @@ export class ConversationController extends Service implements IConversation {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
     this.draftAttachments.delete(id)
+    this.forgetDraftAttachment(id)
     if (attachment.kind === 'image') revokePreview(attachment.previewUrl)
     // The stored Host object stays durable; only the draft's upload state ends.
     this.dropUpload(id)
+  }
+
+  /**
+   * Draft attachment ids a Session still owns after its composer retired.
+   * @param sessionId - owning Session identity.
+   * @returns registered ids in registration order.
+   */
+  draftAttachmentIds(sessionId: SessionId): readonly DraftAttachmentId[] {
+    return [...this.sessionDraftIds.get(sessionId) ?? []]
+  }
+
+  /**
+   * Sessions that still own registered draft attachments.
+   * @returns Session identities with at least one registered attachment.
+   */
+  draftAttachmentSessions(): readonly SessionId[] {
+    return [...this.sessionDraftIds.keys()]
+  }
+
+  /**
+   * Release every draft attachment one removed Session owns.
+   * @param sessionId - removed Session identity.
+   */
+  releaseDraftSession(sessionId: SessionId): void {
+    for (const id of this.draftAttachmentIds(sessionId)) this.releaseDraftAttachment(id)
+  }
+
+  /** Record, or move after a Workspace rebind, one draft attachment's owning Session. */
+  private ownDraftAttachment(sessionId: SessionId, id: DraftAttachmentId): void {
+    this.forgetDraftAttachment(id)
+    this.draftAttachmentSession.set(id, sessionId)
+    let ids = this.sessionDraftIds.get(sessionId)
+    if (ids === undefined) {
+      ids = new Set()
+      this.sessionDraftIds.set(sessionId, ids)
+    }
+    ids.add(id)
+  }
+
+  /** Forget one draft attachment's owning Session. */
+  private forgetDraftAttachment(id: DraftAttachmentId): void {
+    const sessionId = this.draftAttachmentSession.get(id)
+    if (sessionId === undefined) return
+    this.draftAttachmentSession.delete(id)
+    const ids = this.sessionDraftIds.get(sessionId)
+    ids?.delete(id)
+    if (ids?.size === 0) this.sessionDraftIds.delete(sessionId)
   }
 
   /** Abort one draft's active upload and drop its upload state. */
@@ -605,6 +674,7 @@ export class ConversationController extends Service implements IConversation {
         continue
       }
       this.draftAttachments.delete(attachment.id)
+      this.forgetDraftAttachment(attachment.id)
       this.forgetUpload(attachment.id)
       if (ref !== undefined && 'mediaType' in ref
         && uiConversation?.seedImageUrl(sessionId, ref, attachment.previewUrl) === true) continue

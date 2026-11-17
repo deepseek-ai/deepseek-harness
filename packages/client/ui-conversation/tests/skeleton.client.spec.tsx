@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
@@ -32,6 +32,7 @@ import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import type {
   ComposerBarOwnerProps, ConversationContentInputProps, ConversationContentProps,
+  WorkspaceSelectedHandler, WorkspaceSessionAdopter,
   ConversationHeaderLineageOwnerProps, ConversationSessionHeaderSlotProps, ConversationSessionSlotProps, ConversationSlotProps,
   ConversationViewActionsOwnerProps, ConversationViewsProps, HeroFrameOwnerProps,
 } from '../src/client/contract/slots.ts'
@@ -124,7 +125,7 @@ function sessionSnapshotOf(overrides: Partial<SessionSnapshot> = {}): SessionSna
 function mount(
   snapshot: SessionSnapshot,
   workspaceRows: WorkspaceView[] = [{ ...workspace('one'), sessionIds: [SID] }],
-  retargetWorkspace = vi.fn(async (_workspaceId: WorkspaceId) => {}),
+  retargetWorkspace = vi.fn<WorkspaceSelectedHandler>(async () => {}),
   options: {
     /** Explicit undefined exercises the shell before a Session is selected. */
     sessionId?: SessionId | undefined
@@ -148,8 +149,6 @@ function mount(
     entryActions?: boolean
     /** Isolate header capability checks from the composer's required layout observers. */
     headerOnly?: boolean
-    /** Inputs an embedding owner adds to the content occurrence. */
-    contentInput?: Pick<ConversationContentInputProps, 'onWorkspaceSession' | 'headline'>
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -353,6 +352,7 @@ function mount(
       : (opts?.fallback ?? null)
   )) as ConversationContentProps['renderSlotChain']
   const SessionProvider: ConversationContentProps['SessionProvider'] = ({ children }) => children
+  const moveDraft = vi.fn<WorkspaceSessionAdopter>()
   const renderFactorySlot = ((_name: string, input: ConversationContentInputProps, factoryOptions?: {
     slots?: Record<string, (props: never) => ReactNode>
   }) => {
@@ -379,7 +379,7 @@ function mount(
       renderSlot,
       renderSlotChain,
       renderFactorySlot,
-      selectWorkspace: retargetWorkspace,
+      moveDraft,
       t,
     }
     const useFactorySlot = ((name: string, fallback: (props: never) => ReactNode) => (
@@ -387,7 +387,7 @@ function mount(
     )) as ConversationContentProps['useFactorySlot']
     return (
       <FactoryViewsTestContext.Provider value={common}>
-        <ConversationContent {...({ ...common, ...runtimeProps, ...input, ...options.contentInput, useFactorySlot })} />
+        <ConversationContent {...({ ...common, ...runtimeProps, ...input, useFactorySlot })} />
       </FactoryViewsTestContext.Provider>
     )
   }) as ConversationSlotProps['renderFactorySlot']
@@ -395,6 +395,7 @@ function mount(
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId,
     SessionProvider,
+    openWorkspace: retargetWorkspace,
     useSession: sessionId === undefined ? () => undefined : useSession,
     useConversation: sessionId === undefined ? () => undefined : useConversation,
     useSessions: bindSnapshotSelector(sessions),
@@ -411,7 +412,8 @@ function mount(
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
-    view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners, open,
+    view, store, wiring, sink, retargetWorkspace, moveDraft, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners,
+    open,
     pickerOwner: () => pickerOwner,
     frameOwner: () => frameOwners.at(-1),
     setPinned,
@@ -620,7 +622,7 @@ describe('ConversationRoot resident composer', () => {
     const owner = b.pickerOwner() as { open: boolean; onPick(id: WorkspaceId): void }
     expect(owner.open).toBe(true)
     act(() => { owner.onPick(wid('second')) })
-    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'), undefined)
+    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'), b.moveDraft)
     expect(b.view.getByText('Selected Folder')).toBeTruthy()
   })
 
@@ -901,7 +903,7 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('rolls the pending workspace label back when switching fails', async () => {
-    const selectWorkspace = vi.fn(async () => { throw new Error('connect failed') })
+    const selectWorkspace = vi.fn<WorkspaceSelectedHandler>(async () => { throw new Error('connect failed') })
     const b = mount(
       sessionSnapshotOf({ blank: true }),
       [
@@ -913,87 +915,9 @@ describe('ConversationRoot resident composer', () => {
     fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
     const owner = b.pickerOwner() as { onPick(id: WorkspaceId): void }
     await act(async () => { owner.onPick(wid('second')); await Promise.resolve() })
-    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'), undefined)
+    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'), b.moveDraft)
     expect(b.view.queryByText('Selected Folder')).toBeNull()
     expect(b.view.getByText('one')).toBeTruthy()
-    // Workspace navigation reports this failure; the content adds no notice of its own.
-    expect(screen.queryByText(/没能打开这个工作区/)).toBeNull()
-  })
-
-  describe('embedded Workspace pick', () => {
-    /** One pick in flight: the handover the content gave `selectWorkspace`, and how the connection settles. */
-    interface Pick {
-      readonly handOver: ((sessionId: SessionId) => boolean) | undefined
-      readonly fail: (error: unknown) => void
-    }
-
-    /** Mount a blank embedded occurrence whose picks settle when the test says. */
-    function embedded() {
-      const picks: Pick[] = []
-      const selectWorkspace = vi.fn((_workspaceId: WorkspaceId, handOver?: (sessionId: SessionId) => boolean) =>
-        new Promise<void>((_resolve, reject) => { picks.push({ handOver, fail: reject }) }))
-      const owner = vi.fn<(sessionId: SessionId) => void>()
-      const b = mount(
-        sessionSnapshotOf({ blank: true }),
-        [
-          { ...workspace('one'), sessionIds: [SID] },
-          { ...workspace('second'), title: 'Second Folder' },
-          { ...workspace('third'), title: 'Third Folder' },
-        ],
-        selectWorkspace,
-        { contentInput: { onWorkspaceSession: owner } },
-      )
-      const pick = (id: string): void => {
-        act(() => { (b.pickerOwner() as { onPick(id: WorkspaceId): void }).onPick(wid(id)) })
-      }
-      return { b, picks, owner, pick }
-    }
-
-    it('hands only the latest pick to the owner', () => {
-      const { picks, owner, pick } = embedded()
-      pick('second')
-      pick('third')
-      expect(picks[0]?.handOver?.(sid('second-blank'))).toBe(false)
-      expect(owner).not.toHaveBeenCalled()
-      expect(picks[1]?.handOver?.(sid('third-blank'))).toBe(true)
-      expect(owner.mock.calls).toEqual([[sid('third-blank')]])
-    })
-
-    it('declines a pick that connects after the occurrence unmounted', () => {
-      const { b, picks, owner, pick } = embedded()
-      pick('second')
-      b.view.unmount()
-      expect(picks[0]?.handOver?.(sid('second-blank'))).toBe(false)
-      expect(owner).not.toHaveBeenCalled()
-    })
-
-    it('shows why the latest pick failed for a while and returns to the Workspace it showed', async () => {
-      vi.useFakeTimers()
-      onTestFinished(() => { vi.useRealTimers() })
-      const { b, picks, pick } = embedded()
-      pick('second')
-      expect(b.view.getByText('Second Folder')).toBeTruthy()
-      await act(async () => { picks[0]?.fail(new Error('preset missing')); await Promise.resolve() })
-      expect(screen.getByText('没能打开这个工作区：preset missing')).toBeTruthy()
-      expect(b.view.queryByText('Second Folder')).toBeNull()
-      expect(b.view.getByText('one')).toBeTruthy()
-
-      pick('third')
-      await act(async () => { picks[1]?.fail('offline'); await Promise.resolve() })
-      expect(screen.queryByText('没能打开这个工作区：preset missing')).toBeNull()
-      expect(screen.getByText('没能打开这个工作区：offline')).toBeTruthy()
-      act(() => { vi.advanceTimersByTime(5_000) })
-      expect(screen.queryByText('没能打开这个工作区：offline')).toBeNull()
-    })
-
-    it('reports no failure for a pick that another pick replaced', async () => {
-      const { b, picks, pick } = embedded()
-      pick('second')
-      pick('third')
-      await act(async () => { picks[0]?.fail(new Error('too late')); await Promise.resolve() })
-      expect(screen.queryByText(/没能打开这个工作区/)).toBeNull()
-      expect(b.view.getByText('Third Folder')).toBeTruthy()
-    })
   })
 
   it('blank session keeps the interactive picker chip (workspace switchable until the first message)', () => {
@@ -1059,32 +983,32 @@ describe('ConversationRoot resident composer', () => {
     Element.prototype.releasePointerCapture = function () { captured.delete(this) }
     Element.prototype.hasPointerCapture = function () { return captured.has(this) }
     try {
-      // Base resolves from the adaptive clamp: min(1600*0.64, 920) = 920.
-      // Dragging the right handle outward by 25px widens by 2×25 = 50 → 970,
+      // Base resolves from the adaptive clamp: min(1600*0.64, 880) = 880.
+      // Dragging the right handle outward by 25px widens by 2×25 = 50 → 930,
       // inside both bounds (max = 1600 − 176 = 1424 keeps the handles on-column).
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 800, clientY: 300 })
       fireEvent.pointerMove(handle, { pointerId: 1, clientX: 825, clientY: 300 })
       expect(handle.style.getPropertyValue('--dsh-width-handle-pointer-y')).toBe('300px')
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 825, clientY: 300 })
       expect(handle.hasAttribute('data-dragging')).toBe(false)
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('970px')
-      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('930px')
+      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       // Window shrinks: the displayed width re-clamps (900 − 176 = 724) but the
       // preference stays.
       Object.defineProperty(content, 'offsetWidth', { value: 900, configurable: true })
       act(() => { fireResize(content) })
       expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
-      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       // A press without travel (a real double-click delivers two such
       // press/release rounds) must not commit the clamped display value over
       // the stored preference.
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 800, clientY: 300 })
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 800, clientY: 300 })
-      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
       // No reset affordance on the handle: double-click leaves the preference alone.
       fireEvent.doubleClick(handle)
-      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+      expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
     } finally {
       for (const [name, descriptor] of originals) {
         if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)

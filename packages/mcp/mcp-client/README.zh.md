@@ -73,6 +73,12 @@ kind: "package-reference"
 
 启动后，服务器的工具会以 `mcp__<serverName>__<tool>` 形式出现——试着用一条提示词调用其中一个。如果初始连接失败，harness 仍会启动，但该服务器的工具不会出现，并会记录一条错误。设置 `failOnStartupError: true` 会拒绝插件激活；[app-boot 的启动策略](../../boot/app-boot/README.zh.md)仍允许可选 MCP 配置项失败，而不中止 harness。
 
+### 为服务器管理器提供宿主
+
+在运行时管理服务器的插件（例如 [MCP 管理器](../mcp-manager/README.zh.md)）用 `new McpClientHost(ctx)` 创建自己的 `McpClientHost`。宿主提供 `ctx.mcpClientHost`，这是此类插件使用本包的唯一途径：它校验服务器配置、挂载服务器实例、探测服务器，并创建显式 OAuth 授权所有者。宿主挂载的实例运行在该插件的 Fiber 下，随它结束。
+
+`validate` 用各传输自己的 schema 解析服务器配置，并拒绝无效的模板 token、重连策略，以及与 `Authorization` 请求头同时配置的 OAuth，因此每条拒绝都会在调用方传入的配置路径后点名字段。
+
 ### 工具命名与共存
 
 模型看到每个工具都带有稳定的服务器限定名称：`mcp__<serverName>__<rawName>`，例如 `mcp__github__create_issue`——与 Claude Code 和 Codex 使用的命名形态相同。只要服务器保持相同的工具名称，名称就保持不变，因此会话历史与权限规则在重启和重载后仍然有效。两个服务器可以同时提供名为 `search` 的工具，分别以 `mcp__github__search` 和 `mcp__web__search` 共存。
@@ -104,6 +110,13 @@ kind: "package-reference"
 
 启用模板展开时，失败诊断、工具调用失败与 MCP `isError` 工具结果文本保留上游消息，但会把本实例解析过的每个值（包括此前轮换的值及其 URL 编码形式）替换为 `[redacted]`，失败的 `name` 与 `code` 保持不变。成功工具结果保留原始内容。
 
+<a id="oauth"></a>
+### OAuth
+
+为 Streamable HTTP 条目设置稳定的 `mcp-client/<id>` 凭据记录地址 `oauth.credentialKey`，并加载凭据提供方。在所属插件条目上声明 `inject: [credentials]`，使启动等待该提供方就绪。OAuth 不能与 `Authorization` 请求头同时配置。连接和探测只使用已提交的授权，不会打开浏览器或注册客户端。缺失凭据、令牌被拒绝或明确的权限不足响应会使连接进入 `waiting-authorization`；探测返回失败结果。其原因为：没有已保存授权时为 `missing`，access token 过期且没有 refresh token 时为 `expired`，授权与解析后的 `url` 或 OAuth 选项不再匹配时为 `binding`，服务器拒绝令牌时为 `rejected`，服务器要求更多权限范围时为 `scope`。授权失效时正在进行的工具调用会以该原因失败，例如 `MCP OAuth requires authorization: scope`。探测可能刷新并持久化过期授权。普通 HTTP 403 错误不改变授权状态。诊断、工具调用失败与 `isError` 结果会把连接发送过的每个 access token 替换为 `[redacted]`。
+
+显式授权通过[管理器](../mcp-manager/README.zh.md#oauth-authorization)使用 Authorization 与 WebServer 服务。`oauth.clientId` 指定预注册的公开客户端；省略时允许在显式授权中动态注册。`oauth.scope` 覆盖挑战中的权限范围；仅在配置的权限范围一致时复用动态注册。修改解析后的 `url`、`oauth.clientId` 或 `oauth.scope` 会使已保存授权以 `binding` 原因失效，条目需要重新显式授权。`oauth.requestTimeoutMs` 默认为 10,000 毫秒，`oauth.authorizationTimeoutMs` 默认为 600,000 毫秒。取消和重试等待未完成授权清理的时间由 `closeTimeoutMs` 限制。授权服务器请求和 OAuth 条目的 MCP 请求都要求 HTTPS（回环 HTTP 除外）并拒绝重定向，因此 `url` 必须是最终端点。浏览器回调是一个只在授权尝试期间存在的 `webserver/request` 监听器，在路由准入之前应答：授权服务器的跳转是跨站导航，[Connection](../../client/connection/README.zh.md) 对所有路由都拒绝这类请求。监听器只处理 authority 和路径都与重定向 URI 相同的请求，其余请求交给后续处理。回调返回一个中英双语的静态页面，说明 DSH 是否已收到授权，或提示回到 DSH 重试；页面不回显任何回调参数。授权服务器请求不携带资源请求头。失败尝试的 `lastError` 是固定或本地消息，例如 `MCP OAuth request failed`；该消息未包含上游原因时，宿主会以警告日志记录该原因，并把解析后的模板值、授权码、PKCE verifier、客户端密钥和签发的令牌替换为 `[redacted]`。刷新通过凭据提供方串行执行，保留授权身份及注册时的令牌端点认证方式；重新授权成功后会替换授权身份和连接，替换期间不会进入 `waiting-authorization`。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -126,7 +139,9 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待 |
+| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待、宿主启动 |
+| [`src/config.ts`](src/config.ts) | stdio、Streamable HTTP 与宿主三种配置形态的 schema，以及 OAuth 请求头规则 |
+| [`src/host.ts`](src/host.ts) | MCP 客户端宿主：配置校验、挂在宿主之下的实例、探测与授权所有者 |
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose（资源释放） |
 | [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
 | [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定，并替换每个已解析的值 |
@@ -136,9 +151,12 @@ kind: "package-reference"
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
-| [`src/deadline.ts`](src/deadline.ts) | 启动与探测预算共用的结算截止器 |
-| [`src/diagnostic.ts`](src/diagnostic.ts) | 原因链诊断与密钥值替换 |
-| [`src/types.ts`](src/types.ts) | 客户端可用的连接状态与探测结果类型（`./types`） |
+| [`src/deadline.ts`](src/deadline.ts) | 启动、探测、操作与清理预算共用的结算截止器 |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | 原因链诊断、OAuth 失败分类与密钥值替换 |
+| [`src/oauth-options.ts`](src/oauth-options.ts) | OAuth 配置 schema |
+| [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | 持久化的授权与客户端记录，刷新经凭据提供方串行执行 |
+| [`src/oauth.ts`](src/oauth.ts) | 显式浏览器授权：回调、流程与进行中的工作共用一个所有者 |
+| [`src/types.ts`](src/types.ts) | 客户端可用的连接状态、探测结果与 OAuth 尝试类型（`./types`） |
 
 导出的 `createMcpToolDefinition(ctx, options)` 将上游工具 schema 和原始结果回调适配到相同的规范值、错误和持久化图像投影。每次回调都收到原样的 `ToolExecution`，包括其 Agent 和取消信号；SDK 的规范类型校验会在投影前检查返回结果。调用方负责注册、取消截止时间和提供方卸载。原生 Cua Driver 提供方使用此适配函数，无需打开 MCP 传输。
 
@@ -146,15 +164,15 @@ kind: "package-reference"
 
 `apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 agent（智能体）作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭协商中的传输或已绑定的客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。
 
-组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(fiber)` 观察单个实例。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。`probeServer(ctx, config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
+宿主的 `mount` 在实例激活完成后给出其状态句柄。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。宿主的 `probe(config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
 
 SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试并关闭连接，再按重连策略处理。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
 
-启用 `expandTemplates` 时，失败诊断标明操作名称并保留原因链，其中每个已解析的值都替换为 `[redacted]`。未启用模板展开的配置保留完整错误诊断。
+启用 `expandTemplates` 或 OAuth 时，失败诊断标明操作名称并保留原因链，其中每个已解析的值和 OAuth access token 都替换为 `[redacted]`。两者均未启用的配置保留完整错误诊断。
 
 ### 工具执行内部细节
 
-工具调用向 SDK 提供原始名称、完整工具定义、JSON 参数、取消信号及配置的超时。SDK 负责协议校验和现代协议请求 header。结构化内容是否符合已声明的输出 schema 由桥接器自己用 SDK 在 Node 上的 Ajv 校验器检查，因为 SDK 把自己的检查结果报告为 `ProtocolError`，与服务端的 JSON-RPC 错误无法区分。成功结果规范值为 `{ content: JsonValue[], structuredContent? }`，为编程调用方及 PTC 模式保留有效的 MCP JSON 块。MCP `isError` 结果会在图片持久化前抛出带 `MCP_TOOL_ERROR` 的 `McpToolError`。其他工具与资源请求失败抛出 `McpToolError`：`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT` 之后请求结果未知，`MCP_SERVER_UNAVAILABLE` 表示请求未发送，`MCP_INVALID_RESULT` 拒绝违反 MCP 结果 schema 或已声明输出 schema 的结果，以及无法编译的输出 schema，`MCP_UNSUPPORTED_TASK_EXECUTION` 拒绝该工具，`MCP_REQUEST_FAILED` 在 message 中携带 JSON-RPC 或 SDK code。连接代关闭表现为带 `MCP_CONNECTION_CLOSED` 的 `McpLocalError`，调用方取消表现为工具注册表的 `ABORTED`。`McpLocalError` 的 code 也报告本地连接失败：`MCP_TIMEOUT`、`MCP_CREDENTIALS_UNAVAILABLE`、`MCP_CREDENTIAL_NOT_FOUND`、`MCP_INSTRUCTIONS_TOO_LARGE` 与 `MCP_TOOL_REGISTRATION_FAILED`。桥接器在保存前校验整批图片；拒绝时将每张图片投影为诊断文本。对未声明 `resources` 能力的服务器，资源列表与模板列表直接返回空页而不调用 SDK，因为 SDK 的兜底逻辑会把诊断写到 stdout，而 ACP 配置档在 stdout 上传输 JSON-RPC。
+工具调用向 SDK 提供原始名称、完整工具定义、JSON 参数、取消信号及配置的超时。SDK 负责协议校验和现代协议请求 header。结构化内容是否符合已声明的输出 schema 由桥接器自己用 SDK 在 Node 上的 Ajv 校验器检查，因为 SDK 把自己的检查结果报告为 `ProtocolError`，与服务端的 JSON-RPC 错误无法区分。成功结果规范值为 `{ content: JsonValue[], structuredContent? }`，为编程调用方及 PTC 模式保留有效的 MCP JSON 块；每个进入持久模型上下文的图片块还携带其 `attachment` 引用，PTC 模式会将其转为 `Image`。MCP `isError` 结果会在图片持久化前抛出带 `MCP_TOOL_ERROR` 的 `McpToolError`。其他工具与资源请求失败抛出 `McpToolError`：`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT` 之后请求结果未知，`MCP_SERVER_UNAVAILABLE` 表示请求未发送，`MCP_INVALID_RESULT` 拒绝违反 MCP 结果 schema 或已声明输出 schema 的结果，以及无法编译的输出 schema，`MCP_UNSUPPORTED_TASK_EXECUTION` 拒绝该工具，`MCP_REQUEST_FAILED` 在 message 中携带 JSON-RPC 或 SDK code。连接代关闭表现为带 `MCP_CONNECTION_CLOSED` 的 `McpLocalError`，调用方取消表现为工具注册表的 `ABORTED`。`McpLocalError` 的 code 也报告本地连接失败：`MCP_TIMEOUT`、`MCP_CREDENTIALS_UNAVAILABLE`、`MCP_CREDENTIAL_NOT_FOUND`、`MCP_INSTRUCTIONS_TOO_LARGE` 与 `MCP_TOOL_REGISTRATION_FAILED`。桥接器在保存前校验整批图片；拒绝时将每张图片投影为诊断文本。对未声明 `resources` 能力的服务器，资源列表与模板列表直接返回空页而不调用 SDK，因为 SDK 的兜底逻辑会把诊断写到 stdout，而 ACP 配置档在 stdout 上传输 JSON-RPC。
 
 ### 环境清洗（stdio）
 
@@ -184,11 +202,11 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 #### 模型看到什么
 
-发现成功后，SDK 接受的 MCP 工具以原生工具名称 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）出现，携带服务器描述和输入 schema。重新同步会替换注册代；释放或重连预算耗尽会移除工具。未声明 tools 能力的服务器以空工具集连接。
+发现成功后，SDK 接受的 MCP 工具以原生工具名称 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）出现，携带服务器描述和输入 schema。重新同步会替换注册代；释放或重连预算耗尽会移除工具。未声明 tools 能力的服务器以空工具集连接。在 PTC 模式下，每个工具的 SDK 输出声明会为其 `content` 数组附上说明：`MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.`
 
 #### Token 影响
 
-工具注册期间，工具描述与输入 schema 会进入每次请求；重新同步会替换而非累积 schema，服务器限定名称也会为每个工具定义和调用增加 token。已配置客户端还会启用[共享资源工具与服务器名称提示词](../mcp-resources/README.zh.md#model-experience)。
+工具注册期间，工具描述与输入 schema 会进入每次请求，PTC 模式还会在每个输出声明中加入一行 `content` 注释；重新同步会替换而非累积 schema，服务器限定名称也会为每个工具定义和调用增加 token。已配置客户端还会启用[共享资源工具与服务器名称提示词](../mcp-resources/README.zh.md#model-experience)。
 
 #### KV Cache 影响
 
@@ -198,7 +216,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 #### 模型看到什么
 
-公开工具名称和 JSON 参数保留在 assistant 历史中。规范值始终为程序化调用方与 PTC 模式调用方保留完整的 MCP JSON 块与可选结构化内容；受支持的图片块在确切路由能力得到证明后，按原始顺序与文本一起投影。被拒绝的图片、音频、嵌入资源、资源链接与未知块继续以有界文本诊断可见；MCP `isError` 会在图片持久化之前拒绝调用。
+公开工具名称和 JSON 参数保留在 assistant 历史中。规范值始终为程序化调用方与 PTC 模式调用方保留完整的 MCP JSON 块与可选结构化内容；受支持的图片块在确切路由能力得到证明后，按原始顺序与文本一起投影。程序能读取最终结果保留的每张图片时，PTC 程序将这些图片块作为 `Image` 接收，`inspect` 将其显示为图片而非 base64，且结果的文本与图片仅在被 inspect 时进入对话；否则程序接收原始块，完整的结果内容作为额外上下文附加。被拒绝的图片、音频、嵌入资源、资源链接与未知块继续以有界文本诊断可见；MCP `isError` 会在图片持久化之前拒绝调用。
 
 #### Token 影响
 
@@ -234,6 +252,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 - **重连处理协商失败与传输关闭**——初始连接失败或 stdio 子进程崩溃都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
+- **OAuth 授权需要浏览器能直接访问 Host Web 服务器**——回调地址是该服务器自身的源地址：监听地址加端口，启用 TLS 时使用 HTTPS。只能通过代理或 Web 应用的 `publicUrl` 访问 DSH 的浏览器无法完成授权。动态客户端注册以该回调地址区分，监听地址或端口改变、或端口随机分配时，下一次显式授权会注册新的客户端；退出登录会保留之前的注册记录。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
 
 <a id="dev-note"></a>

@@ -24,7 +24,7 @@ beforeAll(async () => {
   await symlink(join(root, 'gone'), join(root, 'broken'), 'junction')
   try {
     await symlink(join(root, 'notes.txt'), join(root, 'file-link'))
-  } catch {
+  } catch (_fileSymlinkDenied) {
     // Windows denies unprivileged file symlinks; the file-link row only
     // feeds the POSIX lanes' coverage of the symlink-to-file arm, and every
     // assertion below expects it to be filtered out anyway.

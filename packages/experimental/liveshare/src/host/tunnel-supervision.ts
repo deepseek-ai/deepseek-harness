@@ -540,7 +540,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
       pendingRemovalWait = PENDING_REMOVAL_RETRY_MS
       try {
         await deps.persistOwnerState()
-      } catch {
+      } catch (_persistFailed) {
         // The rows are gone from this host; the file still names them until its next write succeeds.
       }
     }

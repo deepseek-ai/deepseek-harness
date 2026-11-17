@@ -1010,6 +1010,24 @@ describe('Liveshare dialog stored-record branches', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDefined()
   })
 
+  it('keeps its create form when the list read fails', async () => {
+    await showControlled({ overrides: { list: async () => { throw new Error('host unreachable') } } })
+
+    expect(screen.queryByRole('textbox', { name: 'Share link' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create share' })).toBeDefined()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('hides the endpoint control when the offer read fails', async () => {
+    await showControlled({
+      rows: [existing],
+      overrides: { capabilities: async () => { throw new Error('host unreachable') } },
+    })
+
+    expect(screen.queryByRole('tablist', { name: 'Plugin endpoints' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDefined()
+  })
+
   it('states an identity it could not read and retries it on request', async () => {
     const identity = vi.fn(async () => { throw new Error('identity lost') })
     await showControlled({ overrides: { identity } })

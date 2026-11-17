@@ -1,7 +1,7 @@
 /**
  * The review page's detail of one change request: its header with state, repository, labels, title, author, times, and
- * branches; the Ask Agent, ready-or-merge, and more actions; and the summary, changes, and chat tabs. The summary shows
- * the description beside the card rows the forge tab shows.
+ * branches; the ready-or-merge and more actions; and the summary, changes, and chat tabs. The summary shows the
+ * description beside the rows a change request card shows.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -114,13 +114,35 @@ function useDescription(url: string, updatedAt: string | null, read: ReviewDetai
   return { description: current?.description ?? null, failure: current?.failure ?? null, retry: () => { setAttempt(value => value + 1) } }
 }
 
+/** The ready-for-review action of an open draft, when the surface offers it. */
+function MarkReady({ frame, actions, t }: {
+  readonly frame: ForgeReviewChangeRequest
+  readonly actions: ChangeRequestActions
+  readonly t: Translate
+}): ReactNode {
+  // One request at a time: the action stays disabled until the previous one settles.
+  const [busy, setBusy] = useState(false)
+  const { markReady } = actions
+  if (markReady === undefined) return null
+  return (
+    <div className={css.primary}>
+      <Button size="sm" variant="outline" className={css.readyAction} disabled={busy} onClick={() => {
+        setBusy(true)
+        void markReady(frame).finally(() => { setBusy(false) })
+      }}>
+        {t('change.markReady')}
+      </Button>
+    </div>
+  )
+}
+
 /** The more-actions menu: open in the browser, copy the link, and read the status again. */
 function MoreMenu({ url, actions, t }: { readonly url: string; readonly actions: ChangeRequestActions; readonly t: Translate }): ReactNode {
   const [open, setOpen] = useState(false)
   const items: MenuEntry[] = [
     { id: 'open', label: t('change.view') },
     { id: 'copy', label: t('change.copy') },
-    { id: 'refresh', label: t('refresh') },
+    { id: 'refresh', label: t('reviewPage.refresh') },
   ]
   return (
     <Menu
@@ -272,7 +294,9 @@ export function ReviewDetail({
             )}
           </span>
           <span className={css.headerActions}>
-            <ChangeRequestPrimary entry={frame} snapshot={snapshot} name={name} actions={actions} className={css.primary} t={t} />
+            {snapshot.state === 'open' && snapshot.draft
+              ? <MarkReady frame={frame} actions={actions} t={t} />
+              : <ChangeRequestPrimary entry={frame} snapshot={snapshot} name={name} actions={actions} className={css.primary} t={t} />}
             <MoreMenu url={snapshot.url} actions={actions} t={t} />
           </span>
         </div>

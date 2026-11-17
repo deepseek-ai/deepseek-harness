@@ -60,6 +60,8 @@ await ctx.credentials.unset(ref)                       // no-op when absent; an 
 
 用 `set` 存储密钥、用 `unset` 移除、用 `describe` 检查状态、在操作需要时用 `resolve` 读取当前值。`describe` 报告密钥是否已设置、来自哪里、能否写入——它绝不返回值。提供方可通过可选的 `masked` 字段报告已保存值的脱敏预览；完整值留在 Host。
 
+必须在没有凭据服务的组合中也能工作的消费方（如 DeepSeek 请求鉴权）通过 `resolveCredentialRef(ctx, ref)` 和 `credentialRefConfigured(ctx, ref)` 读取引用：已挂载的服务具有权威性，包括它不持有值的情况；只有服务缺席时才读取启动环境，其中空值视为不存在。存储失败向上传播。值的格式由调用方用 `normalizeApiKey(raw)` 校验：它去掉首尾空白，并拒绝空值和含有 HTTP 请求头无法携带的字符的值；调用方再依据它返回的 `reason` 写出自己的错误；本包不生成诊断文案。
+
 ### 存储、更新与移除记录
 
 插件按 `<scope>/<id>` 寻址每条记录——自身注册名加一个自选 id，例如提供方路由键——并读取、修改或移除它所持有的内容：
@@ -131,6 +133,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition：`credentialRef`/`credentialKey` 品牌、`ResolvedCredential`/`CredentialRecordInfo`、覆盖两个键空间的抽象提供方、带失败隔离的扇出 |
+| [`src/api-key.ts`](src/api-key.ts) | 已解析 API 密钥的格式判断，以及指出修正位置的诊断文案 |
 | [`src/types.ts`](src/types.ts) | 客户端安全类型面：`CredentialRef` 与 `CredentialKey` 品牌、存储记录联合类型、`CredentialInfo` 引用视图、`credentials/reference-updated` 与 `credentials/record-updated` 事件声明 |
 
 ### 客户端安全类型

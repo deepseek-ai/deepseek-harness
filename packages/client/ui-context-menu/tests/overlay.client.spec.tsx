@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { bindSnapshotSelector, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -97,7 +98,7 @@ it('dispatches captured icon keys in rows, submenus and footers and retires rend
   runtime.slots.installLocale(locale)
   await runtime.root.declare({ 'shell.overlay': { kind: 'list', scope: 'root' } }, ({ renderSlot }) =>
     <>{renderSlot('shell.overlay', {})}</>)
-  const menuPlugin = await runtime.mount({ inject, apply })
+  const menuPlugin = await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   const run = vi.fn()
   const contribution = await runtime.mount({ inject: ['contextMenus'], apply(ctx) {
     ctx.effect(() => ctx.contextMenus.register({ id: 'icons', target: 'session', order: 0, resolve: () => [

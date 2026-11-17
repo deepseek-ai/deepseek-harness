@@ -402,7 +402,7 @@ export async function startClaudeCodeRun(
   const reportFailure = (error: Error): void => {
     try {
       spec.onError?.(error, 'error')
-    } catch {
+    } catch (_diagnosticSinkFailed) {
       // Host diagnostic logging cannot replace the product failure.
     }
   }

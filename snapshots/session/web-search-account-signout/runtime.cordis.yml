@@ -1,0 +1,4 @@
+# The stand-in account signs out while the account-billed Search request is in flight.
+- id: web-search-billing-fixture
+  config:
+    signOutDuringSearch: true

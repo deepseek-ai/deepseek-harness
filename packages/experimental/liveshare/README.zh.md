@@ -84,9 +84,10 @@ Liveshare 服务端地址在首次使用时设置：在分享弹窗的地址输�
 | 档位 | 查看者操作 | 执行限制 |
 |---|---|---|
 | `view` | 向源会话发送提示词，并停止其正在运行的轮次 | 挂在会话上的只读沙箱，只约束分享查看者发起的轮次：该轮次只能使用读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`），以及 PTC 传输工具 `run_code`；每次调用声明的每个路径都按获授工作区检查 |
+| 两档均可 | 管理源会话的目标：创建、编辑、暂停、恢复、完成或清除 | 档位之外没有额外限制：目标是会话数据，不是工作区内容 |
 | `write` | 还可修改该工作区内的文件 | 有上限的可写沙箱：读取与检索面加上有界 `edit` 与 `write`，同样作用于查看者发起的轮次 |
 
-两档都会驱动共享会话，区别在于能否写入。沙箱挂在会话上，只要该会话还有分享活跃就会安装，但它只约束分享查看者发起的轮次：所有者自己发起的轮次保留会话原生工具，包括 `bash` 与不受限的文件工具；所有者在查看者轮次中追加的输入仍留在该受限轮次内。该判定只存在于 Host 内存、按轮次重算，不写入会话日志；所有分享停止或全部过期后执行层被释放，会话恢复自己的工具。分叉会话不是一个档位：分享自带独立开关，与档位无关；被允许的查看者可从已完成的源前缀分叉出会话，分叉会话运行在只读上限下；分享处于 `write` 档时改为受约束的写上限。
+两档都会驱动共享会话，区别在于能否写入。沙箱挂在会话上，只要该会话还有分享活跃就会安装，但它只约束分享查看者发起的轮次：所有者自己发起的轮次保留会话原生工具，包括 `bash` 与不受限的文件工具；所有者在查看者轮次中追加的输入仍留在该受限轮次内。该判定只存在于 Host 内存、按轮次重算，不写入会话日志；所有分享停止或全部过期后执行层被释放，会话恢复自己的工具。分叉会话不是一个档位：分享自带独立开关，与档位无关；被允许的查看者可从已完成的源前缀分叉出会话，分叉会话运行在只读上限下；分享处于 `write` 档时改为受约束的写上限。与档位无关，读者还可以列出并跟随该会话的后台任务、管理其目标、列出 `@` 会话候选、用自己的录音调用宿主的语音识别、回答会话中待处理的问题，并上报自己的产品分析事件。设置、凭据、提供方配置与后台任务的停止控件仍仅限所有者：`job/kill` 不会授予读者。
 
 携带多个源会话的分享仍以第一个源会话作为 Relay 注册与页面目标。新增的源会话由 `share-viewer` 策略绑定，读者的会话列表因此会提供它们；页面刷新后仍打开第一个源会话。停止该分享会结束全部源会话，并撤销它们授权过的 fork。
 
@@ -107,7 +108,7 @@ Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒
 <details>
 <summary>实现内部机制 — 点击展开</summary>
 
-查看页就是 Owner 自己的 Web shell。Liveshare 服务端通过 `asset` 读取取得 Owner 渲染好的 index 文档，并把 [viewer-carrier.ts](../liveshare-protocol/src/viewer-carrier.ts) 生成的载体脚本放在文档最前面。Shell 资源、客户端插件 bundle，以及 index 相对文档基准引用的三个确切顶层文件（`manifest.webmanifest`、`favicon.svg`、`favicon-dark.svg`）都经同一读取取得，来自 Owner 的前端读取服务和客户端模块注册表，因此页面以 Owner 的版本运行 Owner 的全部插件。任何 asset 路径上的 source map 都被拒绝，且该判定是权威的：经 Liveshare 服务端转发的 `asset` 读取会原样到达这里，因此 Liveshare 服务端侧的同名规则只覆盖它自己的页面资源路由；被服务的文档还会去掉自己的 manifest 链接，否则浏览器会不带凭据地抓取它。载体把 Connection 调用和 Gateway 流转换为 `POST {base}/__share/rpc` 请求，并把 Liveshare 服务端无法作答的只读页面源 Owner 路由（`/open-in-app/apps` 与 `/api/present.host`）也经该通道转发，而不是留给 Liveshare 服务端尾部。Liveshare 服务端在不透明请求体之外提供已认证主体。Owner 读取处理器把每位读者的调用和流以「每个分享、每位读者一个 Peer」分派进自己的 Connection 与 Gateway，该 Peer 的 `share-viewer` principal 携带分享与服务端断言的身份。Gateway 依据本包注册的 `share-viewer` 策略，经 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md) 判定该 Peer 的调用以及转发给它的会话通知：受服务的读者持有共享会话、其自己的 fork 及包含它们的工作区上的读取角色，持有条件按分享档位与其自身 fork 开关判定的 fork 与写入角色，此外别无授权；附件上传随读取角色生效。读取处理器保留分享生命周期拒绝、Liveshare 服务端授权刷新、冷会话准备和 fork 编排，在准备或分派提示词与停止之前读取策略的写入规则，并在授权结束、分享停止或过期、或复检拒绝时释放读者的 Peer。读者索取页面或打开流时也会开始准备该分享的源会话，因此宿主重启时该会话的 agent 尚未存活也能补上驱动所需的层；无法被 confine 的分享会如实说明该状态，而不再声明只读。存在载体写入的 `__DSH_LIVESHARE_VIEWER__` 全局变量时，本包的浏览器端挂载查看页界面，否则挂载分享操作。读者收到的 index 把读者自己的访问快照赋给每个 index 设为所有者基线的同一全局变量，页面随后跟随读者的 `remoteAccess/follow` 快照；CSS 隐藏不构成授权。
+查看页就是 Owner 自己的 Web shell。Liveshare 服务端通过 `asset` 读取取得 Owner 渲染好的 index 文档，并把 [viewer-carrier.ts](../liveshare-protocol/src/viewer-carrier.ts) 生成的载体脚本放在文档最前面。Shell 资源、客户端插件 bundle，以及 index 相对文档基准引用的三个确切顶层文件（`manifest.webmanifest`、`favicon.svg`、`favicon-dark.svg`）都经同一读取取得，来自 Owner 的前端读取服务和客户端模块注册表，因此页面以 Owner 的版本运行 Owner 的全部插件。任何 asset 路径上的 source map 都被拒绝，且该判定是权威的：经 Liveshare 服务端转发的 `asset` 读取会原样到达这里，因此 Liveshare 服务端侧的同名规则只覆盖它自己的页面资源路由；被服务的文档还会去掉自己的 manifest 链接，否则浏览器会不带凭据地抓取它。载体把 Connection 调用和 Gateway 流转换为 `POST {base}/__share/rpc` 请求，并把 Liveshare 服务端无法作答的只读页面源 Owner 路由（`/open-in-app/apps` 与 `/api/present.host`）也经该通道转发，而不是留给 Liveshare 服务端尾部。Liveshare 服务端在不透明请求体之外提供已认证主体。Owner 读取处理器把每位读者的调用和流以「每个分享、每位读者一个 Peer」分派进自己的 Connection 与 Gateway，该 Peer 的 `share-viewer` principal 携带分享与服务端断言的身份。Gateway 依据本包注册的 `share-viewer` 策略，经 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md) 判定该 Peer 的调用以及转发给它的会话通知：受服务的读者持有共享会话、其自己的 fork 及包含它们的工作区上的读取角色，持有条件按分享档位与其自身 fork 开关判定的 fork 与写入角色，此外别无授权；附件上传与 `@` 会话候选随读取角色生效。读取处理器保留分享生命周期拒绝、Liveshare 服务端授权刷新、冷会话准备和 fork 编排，在准备或分派提示词与停止之前读取策略的写入规则，并在授权结束、分享停止或过期、或复检拒绝时释放读者的 Peer。读者索取页面或打开流时也会开始准备该分享的源会话，因此宿主重启时该会话的 agent 尚未存活也能补上驱动所需的层；无法被 confine 的分享会如实说明该状态，而不再声明只读。存在载体写入的 `__DSH_LIVESHARE_VIEWER__` 全局变量时，本包的浏览器端挂载查看页界面，否则挂载分享操作。读者收到的 index 把读者自己的访问快照赋给每个 index 设为所有者基线的同一全局变量，页面随后跟随读者的 `remoteAccess/follow` 快照；CSS 隐藏不构成授权。
 
 Fork 请求绑定主体、分享、源会话、操作身份和已完成前缀。持久化预留记录与已记录的分叉会话使重试已记录的操作时重放同一分叉会话；owner 的 `SessionForkRequest` 自己生成分叉会话 id，因此在分叉会话已创建、但尚未记录时中断的请求会再次 fork。注册表变更为异步操作，仅在加锁的读取、修改与原子发布后完成；调用方必须等待预留、记录与撤销。冷态激活使用 Host 常规 Agent lookup，由串行 `agent/created` 在排队输入运行前安装限制，不使用 Remote `session/prepare` 端点。分叉会话作用域保留单个默认拒绝的 guard；重连替换其限制安装，释放旧安装不会移除继任。无论由 guard 还是受限替换工具判定，同一种拒绝只有一个标识：授权工作区外的路径为 `FsError` `FS_SANDBOX_DENIED`；fork 的限制或分享当前授权不允许的工具或写入为 `LiveshareForkDeniedError` `FORK_TOOL_NOT_PERMITTED`；guard 的其他拒绝使用 [fork-errors.ts](src/host/fork-errors.ts) 中其余的 `FORK_*` code；替换工具无法限制的参数以 `ToolArgsError` 失败。
 
@@ -160,11 +161,13 @@ viewer 的 prompt 以普通用户输入进入共享会话，因此扩展的是�
 - Owner、查看页和 Liveshare 服务端需要匹配版本；尚未建立跨版本兼容保证。
 - 所有者无法拒绝已准入查看者的附件上传：能读取某条会话的查看者也可以向它附加文件，与档位和分叉开关无关。这是已接受的风险。
 - 查看者的文件操作按获授根目录做路径检查，若本地进程在检查与打开之间把获授范围内的目录换成符号链接，读写可能被改指别处；目录句柄锚定留待单独变更引入。查看者工具仅限受限的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`）、PTC 传输工具 `run_code`，以及 write 档下的有界 `edit` 与 `write`；不授予 `bash`、`pwsh`、`cua`、`plugin_manager`、`schedule_*` 及其他任何未列出的工具。`run_code` 程序不受分享范围约束，[会话档位](#session-tiers) 一节说明其程序可以触及什么。
-- 查看页没有独立工作区文件编辑界面，也没有 DSH 核心管理权限；所有者开放的已安装插件方法仍可改变该插件自己拥有的状态。
+- 查看页无法触及所有者的工作区文件与终端：`workspaceFiles/*` 与全部 `terminal/*` 方法在任何档位下都仅限所有者，因此读者既没有文件预览也没有 shell。它也没有 DSH 核心管理权限；所有者开放的已安装插件方法仍可改变该插件自己拥有的状态。
 - `liveshareShares.addSessions` 没有分享对话框入口，查看页刷新后会回到分享的第一个源会话；新增源会话需从读者的会话列表进入。
 - 一条分享的所有源会话必须属于同一个工作区；来自其他工作区、或不属于任何工作区的源会被拒绝。
 - 端点能力从 Typert registry 枚举已安装插件的 Remote 方法（见 [`shareable-catalog.ts`](src/host/shareable-catalog.ts)），DSH 核心服务命名空间被排除。方法调用不经过沙箱，也没有读写分类：开放一个方法即信任该已安装插件的代码，它在 Host 进程中执行。被选中的方法会在 policy 绑定的资源上被任意已认证分享读者调用，覆盖 `global`、`session`、`workspace` 三种资源种类。
 - owner 在分享面板里通过全局开关和按插件行选择已安装插件的方法。全局开关为“不可用”（全部关闭）、“自定义”（按插件列表）或“全部允许”（开放当前目录全部方法）。每个插件再设为不可用、全部方法或部分方法；部分选择保存显式方法列表，因此目录之后新增的方法不会自动开放，直到 owner 再次保存。插件行优先显示包内本地化名称，取不到时回退到包名末段或 namespace；搜索与限高滚动让大目录仍可操作。选择是分享级的：每位已准入查看者都可以在 policy 绑定的资源上调用被选中的方法，尚未建立逐查看者方法级别。方法授权独立于会话档位，Session 与 Workspace 调用仍由核心分享角色决定。目录不再提供的方法即使留在记录里也不暴露。
+- 查看者输入框里的 `@` 引用选择器列出的是所有者 Host 上的全部会话，而不只是被共享的会话和读者自己的分叉：`sessionReferenceResolver/candidates` 从整个会话索引作答，因此已准入的查看者可以读到其中每条会话的 id、标题和工作目录路径；这些目录路径可能暴露所有者的文件夹名，尽管该读者一条也打不开。这个选择器只是读取面；查看者引用自己打不开的会话时，该会话的快照仍会为它的提示词准备好。标题或路径本身敏感的分享不应准入查看者，或等候选列表限定到可见会话后再开放。
+- `fileReferences/list` 虽然分类为 `reader-session-read` 并列入读取角色，分享查看者实际无法到达：该方法接受 `Agent` 而不是点名 Session 的请求对象，因此 Session 资源解析器找不到可绑定的 Session，Gateway 在无资源可检查的情况下判定该调用。分类保留给该方法改用请求对象之时；因此查看页的 `@` 文件选择器不会给出任何文件。
 - 工作区不再包含读者可见的会话后，要到该工作区或工作区顺序下次变化时才离开读者的工作区订阅（[remote access 限制](../../api/remote-access/README.zh.md#known-limitations-and-deferred-work)）。
 - 注册表文件锁防止并发文件写入丢失持久条目，但每个注册表读取自身内存快照。一个正在运行的 Host 通过 `owner-host.json` 认领 owner 状态目录，因此同一 home 上的第二个 Host 只读取分享、不再注册或修改它们，任何会改动记录或为该记录联系 Liveshare 服务端的 `liveshareShares` 操作都以 `liveshareShares/owner-state-held` 拒绝，包括在分享对话框里添加源 Session、分享列表和审计读取。它仍可导入凭据，因为那是它自己的登录，但该导入不再认领分享、也不再重新注册任何分享。被后继者取代的 Host 会在下一次分享操作时发现这一点，并以同样的方式拒绝。该认领是建议性的，持有进程消失后会被回收，也仍不是多宿主授权服务。
 - 不发布运行时 invariant 配套模块：授权在操作本身检查，本包没有单独的 invariant 观察器。

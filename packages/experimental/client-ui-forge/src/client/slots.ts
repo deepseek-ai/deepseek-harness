@@ -1,7 +1,7 @@
 /** The forge panel's extension slots and the props their owners pass. */
 
+import type { WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChangeRequestRef, ChangeRequestState } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ForgeLensFile } from '../types.ts'
 import type { ChangesTarget } from './changes-address.ts'
 import type { ForgeLineAnnotation } from './changes-service.ts'
@@ -70,8 +70,8 @@ export interface ForgeChangeRequestCardActionsProps {
 export interface ForgeReviewConversationProps {
   /** Headline of the blank conversation, naming the change request. */
   readonly headline: string
-  /** Receives the blank Session of a Workspace the reader picked in the conversation, which the page shows next. */
-  readonly onWorkspaceSession: (sessionId: SessionId) => void
+  /** Shows the blank Session of a Workspace the reader picked in the conversation as the page's conversation. */
+  readonly onWorkspaceSelected: WorkspaceSelectedHandler
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -86,7 +86,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'forge.diff.line.annotation': { kind: 'keyed'; scope: 'session'; owner: ForgeLineAnnotationProps }
     /** Buttons a plugin adds to the line comment form, between Add to input and the code host actions. */
     'forge.diff.comment.actions': { kind: 'list'; scope: 'session'; owner: ForgeCommentActionsProps }
-    /** Icon buttons a plugin adds to a change request card's head, before Open in browser. */
+    /** Icon buttons a plugin adds to a change request card's head, before the card's actions menu. */
     'forge.change-request.card.actions': { kind: 'list'; scope: 'session'; owner: ForgeChangeRequestCardActionsProps }
   }
 }

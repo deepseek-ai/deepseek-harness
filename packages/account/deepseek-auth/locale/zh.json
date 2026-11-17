@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek 请求鉴权",
+    "description": "为发往 DeepSeek 的每个请求选择 API 密钥或账号登录，并提供请求头。"
+  }
+}

@@ -304,10 +304,6 @@
 
 .compactTitle {
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .compactTime {
@@ -559,6 +555,13 @@
 
 .primary {
   display: contents;
+}
+
+.readyAction {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .detailTitle {

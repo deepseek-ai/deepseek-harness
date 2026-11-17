@@ -126,6 +126,8 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
   const changes = changesFaces(threads)
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
+    connectWorkspace: vi.fn<ReviewChatFace['connectWorkspace']>(async () => S1),
+    workspaceFailed: vi.fn<ReviewChatFace['workspaceFailed']>(),
     // Only the identity the chat tab hands back to the face is supplied.
     retain: vi.fn<ReviewChatFace['retain']>(sessionId =>
       ({ sessionId, release: () => {} }) as Pick<SessionReference, 'sessionId' | 'release'> as SessionReference),

@@ -113,6 +113,7 @@
     "verify-concrete-terms": "tsx scripts/verify-concrete-terms.ts",
     "verify-no-unknown-casts": "tsx scripts/verify-no-unknown-casts.ts",
     "verify-empty-catch": "tsx scripts/verify-empty-catch.ts",
+    "verify-cordis-root": "tsx scripts/verify-cordis-root.ts",
     "verify-doc-refs": "tsx scripts/verify-doc-refs.ts",
     "verify-subsystem-pages": "tsx scripts/verify-subsystem-pages.ts",
     "verify-package-paths": "tsx scripts/verify-package-paths.ts",
@@ -278,7 +279,7 @@
     "jsdom": "29.1.1",
     "lefthook": "^2.1.12",
     "lightningcss": "^1.33.0",
-    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
     "mermaid": "11.17.2",
     "micromark-extension-gfm": "^3.0.0",
@@ -313,6 +314,7 @@
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
-    "@deepseek-ai/dsh-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-tool-session-list": "workspace:*"
   }
 }

@@ -52,7 +52,7 @@ HTTP 提供方继续负责自身的 URL 校验和资源限制。选择 DeepSeek 
 
 **把两个 API 放在 Messages 提供方内部，由提供方自己的开关切换。** Messages 提供方内的开关无法改变抓取路由，因此除非用户另外修改 `web.fetchProvider`，`web_fetch` 仍会走 HTTP；它还会把两个 API 的生命周期绑在 Messages 搜索上。独立注册让 Web 服务通过现有的提供方选择机制选择各个提供方，不会把任一 API 与 Messages 提供方绑定。
 
-**让 Messages 搜索与新 API 共用一套传输层。** 共享 Web 传输层会耦合不同的请求格式和失败映射。凭据值改为通过共享的 [`llm-deepseek` 凭据函数](../../../../packages/llm/llm-deepseek/src/credential.ts)获取；Messages 搜索与 Search/Fetch API 传输层保持独立。
+**让 Messages 搜索与新 API 共用一套传输层。** 共享 Web 传输层会耦合不同的请求格式和失败映射。凭据改为来自同一个服务 `ctx.deepseekAuth`，它释放 API 密钥或账号登录凭据的请求头；Messages 搜索与 Search/Fetch API 传输层保持独立。
 
 **把 Search 和 Fetch 拆成两个包。** 指南从同一基础地址、以同一份凭据提供两个 API；拆成两个包会让指向同一部署的设置重复出现。分别选择不需要拆包，因为每个 API 注册自己的提供方 id。每种操作位于独立模块，任一 API 都可以单独修改。
 

@@ -138,12 +138,12 @@ export function created(overrides: Partial<ForgeSessionWorktree> = {}): ForgeSes
 
 /** Running creation of the branch `dsh/0a1b2c3d` from `main`, in its preparation step, that a message waits for. */
 export function creation(overrides: Partial<ForgeWorktreeCreation> = {}): ForgeWorktreeCreation {
-  return { phase: 'prepare', branch: 'dsh/0a1b2c3d', from: 'main', held: true, ...overrides }
+  return { phase: 'prepare', branch: 'dsh/0a1b2c3d', from: 'main', fetch: false, held: true, ...overrides }
 }
 
 /** Failed attempt to create the branch `dsh/0a1b2c3d` from `main`, in its preparation step. */
 export function failure(overrides: Partial<ForgeWorktreeFailure> = {}): ForgeWorktreeFailure {
-  return { branch: 'dsh/0a1b2c3d', from: 'main', phase: 'prepare', message: 'fatal: invalid reference: main', ...overrides }
+  return { branch: 'dsh/0a1b2c3d', from: 'main', fetch: false, phase: 'prepare', message: 'fatal: invalid reference: main', exists: false, ...overrides }
 }
 
 /**
@@ -152,8 +152,8 @@ export function failure(overrides: Partial<ForgeWorktreeFailure> = {}): ForgeWor
  */
 export function worktree(overrides: Partial<ForgePanelWorktree> = {}): ForgePanelWorktree {
   return {
-    editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null, restoration: null,
-    waiting: null, ...overrides,
+    editable: false, blocker: null, namePrefix: 'dsh-', request: null, created: null, creation: null, failure: null, missing: null,
+    restoration: null, waiting: null, ...overrides,
   }
 }
 
@@ -171,9 +171,12 @@ export function ready(overrides: Partial<ForgePanelState> = {}, checkoutOverride
   }
 }
 
-/** Ready panel state of a Session that waits to start in a worktree requested from `from`, with further worktree facts. */
-export function requested(from: string | null = 'main', overrides: Partial<ForgePanelWorktree> = {}): ForgePanelState {
-  return ready({ worktree: worktree({ editable: true, request: { from }, ...overrides }) })
+/**
+ * Ready panel state of a Session that waits to start in a worktree requested from `from` on the branch `name`, or on a
+ * generated branch for null, with further worktree facts.
+ */
+export function requested(from: string | null = 'main', overrides: Partial<ForgePanelWorktree> = {}, name: string | null = null): ForgePanelState {
+  return ready({ worktree: worktree({ editable: true, request: { from, name }, ...overrides }) })
 }
 
 /**
