@@ -8,10 +8,11 @@
  *   publication is host- or plugin-originated (the session command plugin's replies and notices, an event's own
  *   `reply`), so only the chat's admission gates it: `sources[].writable` is a property of a session's binding, not a
  *   chat-wide permission.
- * - **Target.** `target()` resolves the chat ref of an admitted chat and the caller's thread wish; `quote` becomes the
- *   content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path, and the
- *   quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for a
- *   stream on every state, because the target is resolved once.
+ * - **Target.** `target()` resolves the chat ref of an admitted chat, re-verifies that the chat's stored `source` rule in
+ *   `config.sources` still exists and admits it (else `ImError('access')`), and applies the caller's thread wish; `quote`
+ *   becomes the content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path,
+ *   and the quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for
+ *   a stream on every state, because the target is resolved once.
  * - **Receipts.** A publication with `options.operationId` records `pending` *before* it reaches the platform and the
  *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing —
  *   `PlatformError.published === 'no'`, `StrictRenderError`, or a stream whose message was never opened or was
@@ -259,12 +260,14 @@ export class ImSender {
   }
 
   /**
-   * Core target of one publication: the chat ref of an admitted chat, the caller's thread wish and — when the
-   * publication answers a stored message or stored thread of this chat — that message's adapter referrer
-   * (see {@link referrerOf}).
+   * Core target of one publication: the chat ref of an admitted chat (re-verifying the chat's stored `source` rule in
+   * current `config.sources`), the caller's thread wish and — when the publication answers a stored message or stored
+   * thread of this chat — that message's adapter referrer (see {@link referrerOf}).
    * @param chat - chat key.
    * @param options - `thread` and `quote`; a `quote` is applied to the content (see {@link send}).
    * @returns the target handed to `bot.send` / `bot.stream`.
+   * @throws ImError `access` when `chat` was never admitted or its stored `source` rule was removed or narrowed so it
+   *   no longer admits `chat`.
    */
   target(chat: ImChatKey, options: Pick<ImSendOptions, 'thread' | 'quote'> = {}): Target {
     const known = this.deps.store.chat(chat)
