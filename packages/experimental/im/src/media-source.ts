@@ -144,9 +144,10 @@ function ipv6Groups(address: string): number[] {
  * Refuse a media source a received message may not make this host fetch.
  * @param src - the source of one inbound media element.
  * @param policy - the deployment's switches, from `config.media.source`.
- * @param options - the lookup deadline, the resolver and the receiving bot.
+ * @param options - the lookup deadline, the resolver, the receiving bot, and optional caller cancellation (`signal`).
  * @returns a promise that resolves when the source may be fetched.
- * @throws RefusedSourceError naming the source and the switch that would accept it.
+ * @throws RefusedSourceError naming the source and the switch that would accept it; rejects with `signal.reason` when
+ *   caller cancellation fires (which does not mean the source was refused).
  */
 export async function admitMediaSource(
   src: string,
