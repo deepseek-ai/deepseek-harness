@@ -1081,5 +1081,7 @@ describe('stored delivery validation', () => {
     expect(opened.session.id).toBe(harness.host.get(initial.key)?.sessionId)
     expect(opened.session.id).not.toBe(initial.sessionId)
     expect(harness.ctx.agents.get(initial.sessionId)).toBeUndefined()
+    // Calling `agent()` with an already-retired `SessionId` after `reset()` commits also rejects with `unavailable`.
+    await expect(harness.host.agent(initial.sessionId)).rejects.toMatchObject({ code: 'unavailable' })
   })
 })

@@ -393,6 +393,9 @@ export class ImSessionHost implements ImSessions {
   }
 
   async agent(target: SessionId | string): Promise<Agent> {
+    if (this.retired.has(target as SessionId)) {
+      throw new ImError('unavailable', `IM session ${target} was replaced by a reset.`)
+    }
     const initial = this.resolve(target)
     return this.serial(initial.key, async () => {
       // Re-resolve inside `serial(key)` after any in-flight `reset()` finishes so a retired `SessionId` or a
