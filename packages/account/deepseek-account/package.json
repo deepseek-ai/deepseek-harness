@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/credentials/deepseek-account"
+    "directory": "packages/account/deepseek-account"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -56,8 +56,6 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-authorization": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
@@ -68,18 +66,11 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-authorization": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-agent": {
-      "optional": true
-    }
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",

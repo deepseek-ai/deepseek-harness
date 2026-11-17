@@ -111,6 +111,33 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * The account credential released for one request destination, as the request
+ * carries it. Host-only: it holds the token and never crosses the Remote.
+ */
+export interface AccountRequestCredential {
+  /** Request headers carrying the account token. */
+  readonly headers: Readonly<Record<string, string>>
+  /** The bare token. */
+  readonly value: string
+  /**
+   * Remove the stored token after the destination rejected it, unless a newer
+   * sign-in replaced it. The removal runs on the account service mounted when
+   * this is called, so a reload between the request and the rejection does
+   * not keep the token; without a mounted service the token stays for the
+   * next one to reject. Storage failures are contained: the caller reports
+   * the destination's rejection, and the next rejection retries the removal.
+   * @returns settlement after the removal attempt.
+   */
+  reject(): Promise<void>
+  /**
+   * Aborts when the account signs out of the sign-in this token belongs to, by the user or after a rejection, once
+   * `deepseek-account/signed-out` listeners have run. A consumer ends the request that carries the token. It stays
+   * unaborted when the account service that released it has been unloaded, because no sign-out reaches it then.
+   */
+  readonly revoked: AbortSignal
+}
+
 /** Host-only credentials for an embedded Platform document; never expose through account RPC. */
 export interface PlatformSession {
   readonly origin: string

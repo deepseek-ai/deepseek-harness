@@ -1,4 +1,4 @@
-/** Account cancellation follows logged routes and the owning plugin lifetime. */
+/** Account cancellation and running-task reports follow logged routes and the owning plugin lifetime. */
 import { Context } from '@deepseek-ai/cordis'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import { expect, it, vi } from 'vitest'
@@ -16,9 +16,17 @@ it('cancels running account tasks with their inboxes retained and detaches with 
     { status: 'running', session: { requestContext: () => undefined }, cancel: cancelOther },
   ]
   ctx.provide('agents', { list: () => tasks } as never)
-  const owner = ctx.plugin((scope) => { installAccountTaskCancellation(scope) })
+  const reports = new Set<() => boolean>()
+  ctx.provide('deepseekAccount', {
+    registerRunningTaskReport: (report: () => boolean) => { reports.add(report); return () => { reports.delete(report) } },
+  } as never)
+  const owner = ctx.plugin((scope) => { installAccountTaskCancellation(scope, 'deepseek-account') })
   try {
     await owner.await()
+    expect([...reports].map(report => report())).toEqual([true])
+    tasks[0]!.status = 'idle'
+    expect([...reports].map(report => report())).toEqual([false])
+    tasks[0]!.status = 'running'
     ctx.emit('deepseek-account/signed-out')
     expect(cancelAccount).toHaveBeenCalledExactlyOnceWith(
       { kind: 'hook', reason: 'deepseek-account/signed-out' }, { keepInbox: true },
@@ -34,6 +42,7 @@ it('cancels running account tasks with their inboxes retained and detaches with 
     report(new LlmError('Sign in required', 'ACCOUNT_SIGN_IN_REQUIRED'))
     expect(notice).toHaveBeenCalledTimes(1)
     await owner.dispose()
+    expect(reports.size).toBe(0)
     report(new LlmError('Sign in required', 'ACCOUNT_SIGN_IN_REQUIRED'))
     expect(notice).toHaveBeenCalledTimes(1)
     ctx.emit('deepseek-account/signed-out')

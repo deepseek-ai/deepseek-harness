@@ -9,11 +9,11 @@ kind: "package-reference"
 
 每个到达 Platform 的操作都接收调用方的 `AccountClientMetadata`：客户端版本、当前界面语言和以秒为单位的 UTC 偏移。服务据此与组合出的平台推导五个 Platform 客户端请求头，因此每个请求报告的是发起它的界面，而不是 Host 上一次见到的调用方。新的登录申请会为该申请的初始化、兑换和取消捕获这份元数据，中途加入的调用方不会替换它；退登则为在请求之后继续进行的撤销重试捕获这份元数据。
 
-getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导出该授权。这个仅限 Host 的操作支持原生 Platform 内嵌，不扩大 resolveToken 配置的模型及文件请求来源。其 userId 复制最近一次成功 getProfile 得到的稳定账号 ID；尚无一次成功读取或资料不含 ID 时为 null。快照不自行发起资料请求，因此资料请求缓慢或失败都不会延迟它；ID 未知时 userId 为 null，使用方将其视为临时存储模式。读取授权期间凭证变化时丢弃快照。
+getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导出该授权。这个仅限 Host 的操作支持原生 Platform 内嵌，不扩大 `resolveRequestCredential` 限定的推理来源。其 userId 复制最近一次成功 getProfile 得到的稳定账号 ID；尚无一次成功读取或资料不含 ID 时为 null。快照不自行发起资料请求，因此资料请求缓慢或失败都不会延迟它；ID 未知时 userId 为 null，使用方将其视为临时存储模式。读取授权期间凭证变化时丢弃快照。
 
 `desktopPlatform` 默认为 `null`，此时携带 `x-client-platform: web`；Desktop profile 提供 `darwin` 或 `win32`，改为 `desktop-mac` 或 `desktop-win`。五个请求头均由 provider 拥有，部署配置无法覆盖；`x-client-bundle-id` 有意保持为空，`x-client-locale` 将调用方语言归约为 `zh_CN` 或 `en_US`。PlatformSession 只携带部署请求头，内嵌客户端为自行打开的 Platform 文档和 API 请求组装同样的五个请求头，且仅在配置来源发送。
 
-资料和余额接口返回 HTTP 401 或顶层响应码 `40003`（鉴权失效）时清除被拒绝的本地凭据，并发送实时 `deepseek-account/session-expired` 通知。并发响应共用一次清除操作；已失效凭据代次的响应不能清除替换后的凭据。其他 HTTP 错误保留凭据。Host 推理调用方可以通过 `rejectToken` 报告被拒绝的请求 token；仅当它仍匹配当前登录凭据时才执行清除。
+资料和余额接口返回 HTTP 401 或顶层响应码 `40003`（鉴权失效）时清除被拒绝的本地凭据，并发送实时 `deepseek-account/session-expired` 通知。并发响应共用一次清除操作；已失效凭据代次的响应不能清除替换后的凭据。其他 HTTP 错误保留凭据。`resolveRequestCredential(url)` 把一个允许目标的凭据以请求头、裸 token、`reject()` 和 `revoked` 信号的形式释放；`reject()` 在 HTTP 401 后、且存储的授权仍匹配该 token 时清除它并隔离存储失败；清除在 `reject()` 被调用时挂载的账号服务上执行，因此请求与目的地应答之间发生的重载仍会清除授权。账号模型路由和 DeepSeek Web 提供方使用它，而不自行组装请求头，并在 `revoked` 中止时结束携带该 token 的请求。
 
 ## 概述
 
@@ -32,17 +32,17 @@ getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导�
 <a id="use-this-package"></a>
 ## 使用此包
 
-服务通过 `account` Remote 命名空间暴露可供客户端使用的操作。应用加载其生成的 `./remote` 贡献，无需单独的 controller。登录、资料、余额、通知、退出影响检查和凭据过期操作均通过 `ctx.remote.account` 调用。Remote `watch` 不接受仅供 Host 使用的身份订阅选项。`resolveToken`、`rejectToken`、`getPlatformSession` 和 `getDeviceIdentity` 仍仅供 Host 使用。
+服务通过 `account` Remote 命名空间暴露可供客户端使用的操作。应用加载其生成的 `./remote` 贡献，无需单独的 controller。登录、资料、余额、通知、退出影响检查和凭据过期操作均通过 `ctx.remote.account` 调用。Remote `watch` 不接受仅供 Host 使用的身份订阅选项。`resolveRequestCredential`、`getPlatformSession` 和 `getDeviceIdentity` 仍仅供 Host 使用。
 
 `DeepSeekAccount` 是具体服务，拥有登录、凭证和 Remote 操作。`/types` 提供不加载服务实现的类型出口。`watch` 返回完整状态与 `snapshot` 或 `credentials-changed` 类型；仅 Host 的 `watch(signal, true)` 还接收资料身份变化，Remote 订阅不启用该选项。
 
-`/client-metadata` 为 Host 使用方提供纯函数形式的 Platform 请求头和 Cookie 辅助函数。配置 schema 为 `DeepSeekAccount.Config`；插件入口不导出辅助函数。挂载服务时会安装账号任务取消逻辑。
+`/client-metadata` 为 Host 使用方提供纯函数形式的 Platform 请求头和 Cookie 辅助函数。配置 schema 为 `DeepSeekAccount.Config`；插件入口不导出辅助函数。
 
-`agents` 服务为可选依赖。未提供时，`hasRunningAccountTasks()` 返回 false；提供时，检查使用账号服务的运行中任务。
+`hasRunningAccountTasks()` 通过模型路由在 `ctx.effect()` 内用 `registerRunningTaskReport()` 注册的报告作答；没有报告时视为没有运行中的工作。`llm-deepseek-account` 路由注册一份报告，并负责在退登后取消其运行中的 Agent。
 
 账号资料投影将 `id_profile.picture` 映射为 `avatarUrl`，没有配置头像时返回 null。
 
-本地退出登录期间拒绝解析 token。本地授权成功删除后，先发布 `deepseek-account/signed-out`，再返回已退出的状态快照；远程撤销独立执行。
+本地退出登录期间拒绝解析 token。本地授权成功删除后，先发布 `deepseek-account/signed-out`，接着中止为该次登录释放的请求凭据的 `revoked` 信号，再返回已退出的状态快照；token 被拒绝时的退登同样如此。远程撤销独立执行。
 
 getProfile / getBalance 将保存的授权 token 通过 x-dsh-auth-token 请求头，向 platformOrigin 上的 GET /auth-api/v0/users/current 和 GET /api/v0/users/get_user_summary 发起请求。授权签发来源必须与该来源一致。Host 只投影账号 UID、资料名称、头像 URL、由 Platform 脱敏的手机号或邮箱（原样保留），以及 normal_wallets / bonus_wallets 的币种和余额字符串，丢弃响应 token 与其他字段。余额和赠金金额字符串只要符合 Platform Web 客户端交给 big.js 的数字文法即可通过，该文法和 big.js 一致，允许省略整数或小数部分以及十进制指数，因此 0E-16、5.0000000000000000 这类值仍然有效；原始字符串会保留，NaN、Infinity 和非法文本仍被拒绝。赠送钱包不计入充值余额。凭证变化和销毁会使进行中的查询失效。
 

@@ -2,6 +2,9 @@
 import { z } from 'zod'
 import type { AccountNotificationEvent, AccountNotificationId, SignInErrorCode } from './types.ts'
 
+/** Request header carrying the account token on every request the token authenticates. */
+export const ACCOUNT_TOKEN_HEADER = 'x-dsh-auth-token'
+
 /** Protocol errors expose a stable code, never a response body or authorization URL. */
 export class PlatformAuthError extends Error {
   /** @param code - safe error classification. */
@@ -66,7 +69,7 @@ export function platformHeaders(values: Record<string, string>): Record<string, 
   const names = new Set<string>()
   for (const [name, value] of Object.entries(values)) {
     const key = name.toLowerCase()
-    if (['authorization', 'x-dsh-auth-token', 'host', 'content-length', 'transfer-encoding', 'connection', 'content-type'].includes(key)
+    if (['authorization', ACCOUNT_TOKEN_HEADER, 'host', 'content-length', 'transfer-encoding', 'connection', 'content-type'].includes(key)
       || names.has(key)) throw new Error('account: requestHeaders contains a reserved or duplicate header')
     names.add(key)
     try { headers.set(name, value) }
@@ -163,7 +166,7 @@ export function requestNotificationEvent(origin: string, token: string, id: Acco
 
 // The grant is provider-owned; deployment requestHeaders cannot override it or the client identity.
 function accountHeaders(headers: Record<string, string>, token: string): Record<string, string> {
-  return { ...headers, 'x-dsh-auth-token': token }
+  return { ...headers, [ACCOUNT_TOKEN_HEADER]: token }
 }
 
 /**
@@ -177,7 +180,7 @@ function accountHeaders(headers: Record<string, string>, token: string): Record<
 export async function logoutAccount(origin: string, token: string,
   signal: AbortSignal, headers: Record<string, string>): Promise<void> {
   await platformRequest(`${origin}/auth-api/v0/users/logout`, {
-    method: 'POST', headers: { ...headers, 'x-dsh-auth-token': token },
+    method: 'POST', headers: { ...headers, [ACCOUNT_TOKEN_HEADER]: token },
   }, signal)
 }
 
@@ -196,7 +199,7 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
     if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, errorCode: 'no-response', aborted: signal.aborted })
     throw new PlatformAuthError('no-response')
   }
-  if (response.status === 401 && new Headers(init.headers).has('x-dsh-auth-token')) {
+  if (response.status === 401 && new Headers(init.headers).has(ACCOUNT_TOKEN_HEADER)) {
     if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'expired' })
     await response.body?.cancel()
     throw new AccountUnauthorizedError()
@@ -228,7 +231,7 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
     const responseCodes = z.object({ code: z.number().int(), data: z.object({ biz_code: z.number().int() }).optional() }).safeParse(payload)
     if (responseCodes.success) codes = responseCodes.data
     const authorization = z.object({ code: z.literal(40003) }).safeParse(payload)
-    if (authorization.success && new Headers(init.headers).has('x-dsh-auth-token')) {
+    if (authorization.success && new Headers(init.headers).has(ACCOUNT_TOKEN_HEADER)) {
       throw new AccountUnauthorizedError()
     }
     stage = 'envelope'
