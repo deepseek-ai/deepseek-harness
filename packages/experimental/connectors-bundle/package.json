@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-connectors-bundle",
   "description": "Experimental Connectors tab that lists and installs the official connectors",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.4",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
