@@ -7,6 +7,14 @@
     "type": "separator"
   },
   {
+    "id": "dsh-settings-open",
+    "label": "设置…",
+    "enabled": false
+  },
+  {
+    "type": "separator"
+  },
+  {
     "label": "检查更新…"
   },
   {
