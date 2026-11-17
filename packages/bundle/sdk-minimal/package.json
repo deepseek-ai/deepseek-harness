@@ -71,7 +71,6 @@
     "@deepseek-ai/dsh-tool-pwsh-persistent": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },

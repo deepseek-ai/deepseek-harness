@@ -2656,6 +2656,16 @@
     },
     {
       "doc": "docs/subsystems/worktrees.md",
+      "symbol": "EnterWorktreeRequest",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
+      "symbol": "EnteredWorktree",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
       "symbol": "RestoreWorktreeRequest",
       "source": "packages/experimental/worktree/src/types.ts"
     },
