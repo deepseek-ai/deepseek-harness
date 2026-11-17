@@ -66,7 +66,11 @@ function frames(api: Api, tools = false): (string | ReturnType<typeof anthropicF
       role: 'assistant', content: tools ? 'source text' : 'reply',
       ...tools ? {
         reasoning_content: 'source reasoning',
-        tool_calls: [0, 1].map(index => ({ index, id: `call_${index}`, type: 'function', function: { name: 'lookup', arguments: JSON.stringify({ key: index }) } })),
+        tool_calls: [0, 1].map(index => ({
+          index, id: `call_${index}`, type: 'function', function: { name: 'lookup', arguments: JSON.stringify({ key: index }) },
+          // Gemini's OpenAI-compatible endpoints sign only the first call of each step.
+          ...index === 0 ? { extra_content: { google: { thought_signature: 'gemini-signature' } } } : {},
+        })),
       } : {},
     }, finish_reason: null }] }),
     JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: tools ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
@@ -107,7 +111,7 @@ function expectToolPairs(request: unknown, api: Api): void {
 
 const tool = { name: 'lookup', description: 'Look up a value.', parameters: { type: 'object', properties: { key: { type: 'number' } }, required: ['key'] } }
 const pairs: { a: Api; b: Api | 'deepseek-messages' }[] = [
-  ...apis.flatMap(a => apis.filter(b => b !== a).map(b => ({ a, b }))),
+  ...apis.flatMap(a => apis.map(b => ({ a, b }))),
   ...apis.map(a => ({ a, b: 'deepseek-messages' as const })),
 ]
 
@@ -150,6 +154,9 @@ describe('protocol history round trips', () => {
         { type: 'text', textSignature: JSON.stringify({ v: 1, id: 'msg_empty' }) },
       ])
       expect(original.message.source).toMatchObject({ replayState: { response: { responseId: 'resp_original' }, blocks } })
+    } else {
+      const blocks = (original.message.source as { replayState: { blocks: unknown[] } }).replayState.blocks.filter(block => (block as { type: string }).type === 'tool-call')
+      expect(blocks).toEqual([{ type: 'tool-call', thoughtSignature: 'gemini-signature' }, { type: 'tool-call' }])
     }
     history.push(original.message, ...calls.map(call => createToolResultMessage({
       callId: call.id, content: [{ type: 'text', text: 'value' }], isError: false,
@@ -167,6 +174,10 @@ describe('protocol history round trips', () => {
     } else if (a === 'openai-responses') {
       expect(JSON.stringify(baseline)).toContain('encrypted-reasoning')
       expect(JSON.stringify(baseline)).toContain('fc_0')
+    } else {
+      const calls = baseline.flatMap(message => (message as { tool_calls?: unknown[] }).tool_calls ?? [])
+      expect(calls).toMatchObject([{ extra_content: { google: { thought_signature: 'gemini-signature' } } }, {}])
+      expect(calls[1]).not.toHaveProperty('extra_content')
     }
     const foreign = await assemble(ctx, { provider: targetProvider, model: 'model', messages: history, tools: [tool] })
     expect(foreign.finish).toEqual({ kind: 'stop' })
@@ -175,6 +186,7 @@ describe('protocol history round trips', () => {
     expect(JSON.stringify(target.requests[0])).not.toContain('encrypted-reasoning')
     expect(JSON.stringify(target.requests[0])).not.toContain('encrypted-redacted-reasoning')
     expect(JSON.stringify(target.requests[0])).not.toContain('signed-reasoning')
+    expect(JSON.stringify(target.requests[0])).not.toContain('gemini-signature')
     history.push(foreign.message, createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Continue with the original model.' }] }))
     history = JSON.parse(JSON.stringify(history)) as Message[]
     expect(history.slice(0, -2)).toEqual(JSON.parse(saved))

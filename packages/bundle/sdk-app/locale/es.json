@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Perfil SDK",
+    "description": "Proporcione JSON-RPC a través de entrada y salida estándar y administre el ciclo de vida del proceso a través de la base dsh."
+  }
+}

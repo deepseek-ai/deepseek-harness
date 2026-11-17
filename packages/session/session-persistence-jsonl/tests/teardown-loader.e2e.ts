@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import * as SessionPlugin from '@deepseek-ai/dsh-session'
-import { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import type { SessionId, Session } from '@deepseek-ai/dsh-session'
 import * as JsonlPlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { SessionHandleClosedError } from '@deepseek-ai/dsh-session-persistence'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -13,6 +13,7 @@ import { scheduler } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 import { logPath } from '../src/format.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it('waits for injected consumer teardown, persists its final event, and releases listeners and leases', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-teardown-'))
@@ -28,7 +29,7 @@ it('waits for injected consumer teardown, persists its final event, and releases
     inject: ['sessionPersistence', 'sessions'],
     async apply(consumerCtx: Context) {
       // Keep the Session alive while its persistence consumer unloads.
-      session = ctx.sessions.create(SessionId('async-teardown'))
+      session = ctx.sessions.create(brandString<SessionId>('async-teardown'))
       await consumerCtx.sessionPersistence.create(session.header)
       const live = session
       live.append('turn/start', { turn: 1 })
@@ -114,8 +115,11 @@ it('waits for injected consumer teardown, persists its final event, and releases
     expect(persisted.at(-1)).toMatchObject({ type: 'turn/end', seq: 1, data: { turn: 1, reason: { kind: 'completed' } } })
 
     await consumingEntry.fiber!.dispose()
-    await provider.init()
+    // Self-disposal records disabled: true; re-enable through Loader so the journal agrees with the runtime.
+    await ctx.loader.update(provider.id, { disabled: false })
+    await (provider.parent.tree as Include).flush()
     await provider.fiber!.await()
+    expect(provider.disabled).toBe(false)
     const reopened = await ctx.sessionPersistence.open(live.id, 'write')
     try {
       expect((await reopened.read()).events).toEqual(live.snapshotEvents())

@@ -243,3 +243,59 @@ it.each(['en', 'zh-CN'])('records mandatory update guidance and actions across i
   })
   await expect(JSON.stringify(snapshots, null, 2) + '\n').toMatchFileSnapshot(`./expected/update-guidance-${language}.json`)
 })
+
+it.each(['en', 'zh-CN'])('shows fullscreen recovery guidance directly in the mandatory update page: %s', async (language) => {
+  const p = page('mandatory-update')
+  const locale = resolveDesktopLocale(language)
+  const state: MandatoryUpdateView = { locale, deferred: false, policy: { blocking: true, checking: false },
+    update: { phase: 'error', failedOperation: 'install', preparationFailure: 'fullscreen-timeout',
+      version: '0.1.6-nightly.1', message: 'different shell locale' } }
+  const action = vi.fn(async () => {})
+  Object.defineProperty(p.dom.window, 'dshMandatoryUpdate', { value: {
+    status: async () => state, action, subscribe: () => () => {},
+  } satisfies MandatoryUpdateApi })
+  p.run()
+  await expect.poll(() => p.element('error').textContent).toBe(locale.messages.updateFullscreenTimeout)
+  expect((p.element('technical-details') as HTMLDetailsElement).open).toBe(false)
+  expect(action).not.toHaveBeenCalled()
+})
+
+it('offers configuration recovery from a mandatory update error', async () => {
+  const p = page('mandatory-update')
+  const locale = resolveDesktopLocale('zh-CN')
+  const state: MandatoryUpdateView = { locale, deferred: false, policy: { blocking: true, checking: false },
+    update: { phase: 'error', failedOperation: 'configuration', message: 'settings parse failure', technicalDetails: 'diagnostic' } }
+  const action = vi.fn(async () => {})
+  const api: MandatoryUpdateApi = { status: async () => state, action, subscribe: () => () => {} }
+  Object.defineProperty(p.dom.window, 'dshMandatoryUpdate', { value: api })
+  p.run()
+  await expect.poll(() => p.element('refresh').textContent).toBe(locale.messages.updateConfigurationDetails)
+  expect(p.element('refresh').hidden).toBe(false)
+  expect(p.element('error').textContent).toBe(locale.messages.updateConfigurationRead)
+  expect(p.element('technical-details').hidden).toBe(true)
+  expect(p.element('technical-details-content').textContent).toBe('')
+  expect(p.element('update').hidden).toBe(true)
+  p.element('refresh').click()
+  expect(action).toHaveBeenCalledWith('refresh', undefined, undefined)
+})
+
+it('accepts another response after a keep-open action publishes its next revision', async () => {
+  const p = page('update-dialog')
+  const locale = resolveDesktopLocale('zh-CN')
+  let state: UpdateDialogView = { revision: 1, locale: locale.id, title: 'Settings', message: 'Settings error', detail: '',
+    buttons: ['Reload', 'Show file', 'Close'], cancelId: 2, closeLabel: 'Close', technicalDetails: '', technicalDetailsLabel: '' }
+  let publish!: (view: UpdateDialogView | null) => void
+  const respond = vi.fn(async (_revision: number, index: number) => {
+    if (index === 1) { state = { ...state, revision: state.revision + 1 }; publish(state) }
+    else publish(null)
+  })
+  const api: UpdateDialogApi = { status: async () => state, respond, subscribe: (listener) => { publish = listener; return () => {} } }
+  Object.defineProperty(p.dom.window, 'dshUpdateDialog', { value: api })
+  p.run()
+  await expect.poll(() => p.element('actions').children.length).toBe(3)
+  p.element('actions').querySelectorAll('button')[1]!.click()
+  p.element('actions').querySelectorAll('button')[1]!.click()
+  p.element('actions').querySelectorAll('button')[2]!.click()
+  expect(respond.mock.calls).toEqual([[1, 1], [2, 1], [3, 2]])
+  expect(p.document.body.classList.contains('visible')).toBe(false)
+})

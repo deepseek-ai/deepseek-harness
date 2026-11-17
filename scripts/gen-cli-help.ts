@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import {
   computeTranslationPairingRecord,
   renderTranslationPairingRecord,
@@ -64,6 +64,22 @@ function addAlias(page: HelpPage, invocation: string, path: ReadonlySet<HelpPage
  */
 export function topLevelHelpArgs(profiles: readonly string[]): string[][] {
   return [[], ['plugin'], ...[...profiles].sort().flatMap(profile => [[profile], ['--profile', profile]])]
+}
+
+/**
+ * Resolve the child-process allowance before any help invocation starts.
+ * @param raw - optional DSH_CLI_HELP_CONCURRENCY override.
+ * @param fallback - worker budget for an invocation without an explicit allowance.
+ * @returns the maximum number of help children in flight.
+ * @throws when a supplied override is not a positive decimal integer.
+ */
+export function cliHelpConcurrency(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === '') return fallback
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw) {
+    throw new Error(`gen-cli-help: DSH_CLI_HELP_CONCURRENCY must be a positive integer, got ${JSON.stringify(raw)}.`)
+  }
+  return parsed
 }
 
 /** Help reads started ahead of an in-order consumer. */
@@ -177,9 +193,10 @@ export async function collectCliHelp(
 }
 
 async function collectHelp(): Promise<HelpPage[]> {
+  const concurrency = cliHelpConcurrency(process.env.DSH_CLI_HELP_CONCURRENCY, defaultParallelism())
   const directory = mkdtempSync(join(tmpdir(), 'dsh-cli-help-'))
   const profiles = Object.keys(PROFILE_TEMPLATES)
-  // Concurrent profile boots share the repository worker budget.
+  // Aggregate callers allocate this leaf's children separately from the other running gates.
   const reader = prefetchHelp(async (args, signal) => {
     // Each invocation boots against its own empty Harness and agents homes.
     const home = mkdtempSync(join(directory, 'invocation-'))
@@ -207,7 +224,7 @@ async function collectHelp(): Promise<HelpPage[]> {
     } finally {
       signal.removeEventListener('abort', abort)
     }
-  }, topLevelHelpArgs(profiles), defaultParallelism())
+  }, topLevelHelpArgs(profiles), concurrency)
   try {
     return await collectCliHelp(reader.readHelp, profiles)
   } finally {

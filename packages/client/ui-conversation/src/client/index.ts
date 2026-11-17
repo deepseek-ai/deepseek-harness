@@ -1,3 +1,4 @@
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Browser Conversation assemble core, React adapter, shell, input, and text projection plugin. */
 export type {} from './user-text/session-reference-rule.ts'
 
@@ -87,10 +88,11 @@ export type {
   ConversationHeaderActionOwnerProps, ConversationHeaderCornerOwnerProps, ConversationHeaderLineageOwnerProps,
   ConversationContentInputProps, ConversationContentProps,
   ConversationInjected, ConversationSessionHeaderInjected, ConversationSessionHeaderSlotProps,
-  ConversationSessionInjected, ConversationSessionSlotProps, ConversationSlotProps, ConversationViewsProps,
+  ConversationSessionInjected, ConversationSessionSlotProps, ConversationSlotProps,
+  ConversationViewActionEntry, ConversationViewActionsOwnerProps, ConversationViewsProps,
   ConversationWidthControlsInputProps, ConversationWidthControlsProps,
   ConversationStore, ConvViewOwnerProps, ConvViewProps, EmptyWorkspaceOwnerProps,
-  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, InputControlOwnerProps, InputZone,
+  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, HeroFrameOwnerProps, InputControlOwnerProps, InputZone,
   MessageImageLabels, MessageImageLoader, MessageImageSource, MessageImagesContentInput, MessageImagesOwnerProps, UseConversation,
   UserTextInput, UserTextInjected, UserTextNodeOwnerProps, UserTextNodeProps,
   UseConversationViews,
@@ -101,7 +103,7 @@ export type {
   InputState, InsertReferenceRequest, InsertTextRequest, PickOutcome, SessionInput,
   SessionInputResolver, SubmitAttachment, SubmitOutcome,
 } from './contract/input.ts'
-export type { ArbitrateKey, ArbitrateOutcome, DraftInput, DraftReference, DraftSnapshot, ReferenceInsert, TokenSpan } from './contract/draft-editor.ts'
+export type { ArbitrateKey, ArbitrateOutcome, DraftInput, DraftQuote, DraftReference, DraftSnapshot, ReferenceInsert, TokenSpan } from './contract/draft-editor.ts'
 export type { ComposerBlock, ComposerBlocks } from './contract/composer-blocks.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -112,3 +114,6 @@ declare module '@deepseek-ai/cordis' {
     uiConversation: import('./conversation/assembly.ts').UiConversation
   }
 }
+
+export type { TextInteractionDefinition, TextInteractionGesture, TextInteractionRequest, TextInteractionSurface, TextInteractionTrigger } from './contract/text-interaction.ts'
+export type { ConversationInteractionRegistry } from './conversation/interaction-registry.ts'

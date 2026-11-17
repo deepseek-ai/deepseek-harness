@@ -1,18 +1,18 @@
 /** Session Controller fork boundaries, lineage, and inherited model routing. */
-
-import { describe, expect, it, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import { type ToolCallId, createMessage, createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionPersistenceRevision, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -35,7 +35,7 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   ctx.provide('workspaceRegistry', { list: () => workspaces, archivedSessionIds: [] } as never)
   ctx.agents.setFactory({
     createAgent: async (ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> => {
@@ -108,11 +108,14 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     try {
       const source = ctx.sessions.prepare(sid('current-cold'), { meta: { cwd: '/proj' } })
+      const detach = ctx.effect(() => ctx.sessions.enter(source))
+      ctx.sessions.announce(source)
       source.append('turn/start', { turn: 1 })
       source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      await detach()
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:cold-source'),
+        revision: brandString<SessionPersistenceRevision>('test:cold-source'),
         ...status === undefined ? {} : { formatStatus: status },
       }
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
@@ -143,7 +146,7 @@ describe('sessions.fork', () => {
       const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:requires-migration'),
+        revision: brandString<SessionPersistenceRevision>('test:requires-migration'),
         formatStatus: 'migration-required',
       }
       const stat = vi.fn(async () => snapshot)
@@ -191,7 +194,7 @@ describe('sessions.fork', () => {
       const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:attaching-source'),
+        revision: brandString<SessionPersistenceRevision>('test:attaching-source'),
         formatStatus: 'migration-required',
       }
       const entered = Promise.withResolvers<undefined>()
@@ -326,7 +329,7 @@ describe('sessions.fork', () => {
     },
   )
 
-  it('cuts exactly at a completed turn and records lineage and cwd', async () => {
+  it('cuts exactly at a completed turn and retains cwd without source lineage', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-source', 2)
     const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: 2 }))
@@ -336,7 +339,7 @@ describe('sessions.fork', () => {
     expect(child?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end', 'session/end-seed',
     ])
-    expect(child?.header.parentSession).toBe(source.id)
+    expect(child?.header.parentSession).toBeUndefined()
     expect(child?.header.cwd).toBe('/proj')
     await ctx.fiber.dispose()
   })
@@ -377,10 +380,10 @@ describe('sessions.fork', () => {
     if (!response.ok) return
     expect(attachSession).toHaveBeenCalledWith(response.value.sessionId)
     expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
-      parentSession: grandchild.id,
       cwd: '/proj',
     })
     expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -433,10 +436,10 @@ describe('sessions.fork', () => {
     expect(resume).not.toHaveBeenCalled()
     expect(ctx.agents.get(sourceId)).toBeUndefined()
     expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
-      parentSession: sourceId,
       cwd: '/proj',
     })
     expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -563,7 +566,7 @@ describe('sessions.fork', () => {
   it('repairs a cold open-step cut without resuming its Agent', async () => {
     const ctx = await composed()
     const sourceId = sid('session-cold-mid-turn')
-    const callId = ToolCallId('cold-dangling')
+    const callId = brandString<ToolCallId>('cold-dangling')
     const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: sourceId, createdAt: 1, cwd: '/proj', isSeeded: false }
     const events = [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
@@ -634,15 +637,19 @@ describe('sessions.fork', () => {
   })
 
   it('inherits model selection through the completed turn and excludes later changes', async () => {
-    const ctx = await composed()
-    const source = await liveAgent(ctx, 'session-routed', 0)
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    const harness = await mountAgentLoopTestHarness(ctx)
+    ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
+    const { session: source } = await harness.create(sid('session-routed'))
     source.append('turn/start', { turn: 1 })
     source.append('request/header', {
       header: {
         config: {
           provider: 'inherited-provider',
           model: 'inherited-model',
-          reasoningEffort: ReasoningEffortId('high'),
+          reasoningEffort: brandString<ReasoningEffortId>('high'),
         },
       },
       reason: 'initial',
@@ -664,19 +671,8 @@ describe('sessions.fork', () => {
     const child = ctx.agents.get(response.value.sessionId)
     if (child === undefined) throw new Error('fork did not publish the child agent')
     expect(child.session.snapshotEvents().slice(0, child.session.inheritedEventCount)).toEqual(inherited)
-    const assembly = await child.ctx.systemPrompt.assemble()
-    expect(assembly.variables).toMatchObject({
-      provider: 'inherited-provider',
-      model: 'inherited-model',
+    expect(child.model.current()).toEqual({
+      provider: 'inherited-provider', model: 'inherited-model', reasoningEffort: 'high',
     })
-    const fallback: LlmCallConfig = { provider: 'default-provider', model: 'default-model' }
-    await expect(agentEvents(child.ctx, child).waterfall(
-      'agent/request', { turn: 1, step: 0, signal: new AbortController().signal }, () => Promise.resolve(fallback),
-    )).resolves.toMatchObject({
-      provider: 'inherited-provider',
-      model: 'inherited-model',
-      reasoningEffort: 'high',
-    })
-    await ctx.fiber.dispose()
   })
 })

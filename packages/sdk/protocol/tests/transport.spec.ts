@@ -235,6 +235,7 @@ describe('JsonRpcLineTransport', () => {
     aToB.end()
 
     await expect(pending).rejects.toThrow('JSON-RPC input closed')
+    await expect(b.request('after-eof', {})).rejects.toThrow('JSON-RPC input closed')
     b.close()
   })
 
@@ -246,6 +247,7 @@ describe('JsonRpcLineTransport', () => {
     aToB.emit('error', new Error('input broke'))
 
     await expect(pending).rejects.toThrow('input broke')
+    await expect(b.request('after-error', {})).rejects.toThrow('input broke')
     b.close()
   })
 
@@ -256,6 +258,7 @@ describe('JsonRpcLineTransport', () => {
     b.close()
 
     await expect(pending).rejects.toThrow('JSON-RPC transport closed')
+    await expect(b.request('after-close', {})).rejects.toThrow('JSON-RPC transport closed')
   })
 
   it('rejects a request when writing the frame throws', async () => {

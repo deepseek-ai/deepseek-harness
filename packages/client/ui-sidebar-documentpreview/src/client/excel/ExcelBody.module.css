@@ -102,9 +102,16 @@
   border-radius: var(--dsw-radius-sm);
 }
 
-.formulaWarning:hover, .formulaWarning:focus-visible {
+.formulaWarning:focus-visible {
   background: var(--dsw-alias-state-warn-tertiary);
   outline: none;
+}
+
+@media (hover: hover) {
+  .formulaWarning:hover {
+    background: var(--dsw-alias-state-warn-tertiary);
+    outline: none;
+  }
 }
 
 .withFormulaWarning :global(.fortune-fx-input) {

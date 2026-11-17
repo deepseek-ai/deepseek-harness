@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import {
   launchWebScaffold,
@@ -19,7 +19,8 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { conversationContextKey, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { conversationContextKey, expandOwningTurnProcess, loadEarlierChatPage, newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const MODE = webSnapshotMode()
 const SESSION_ID = 'chat-long-interactions-e2e'
@@ -174,10 +175,10 @@ describe('web e2e: long Chat interaction contract', () => {
   it.skipIf(MODE === 'record')('keeps heterogeneous rows and their actions bound to exact semantic identities', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-chat-long-interactions'))
     await expect.poll(
-      () => scaffold.ctx.agents.get(SessionId(SESSION_ID)) !== undefined,
+      () => scaffold.ctx.agents.get(brandString<SessionId>(SESSION_ID)) !== undefined,
       { timeout: 10_000 },
     ).toBe(true)
-    const source = scaffold.ctx.agents.get(SessionId(SESSION_ID))
+    const source = scaffold.ctx.agents.get(brandString<SessionId>(SESSION_ID))
     if (source === undefined) throw new Error('seeded long-history agent is not attached')
 
     const toolUserMarker = FIXTURE.markers.user(TOOL_TURN)
@@ -219,10 +220,9 @@ describe('web e2e: long Chat interaction contract', () => {
     ))
     expect(await markPitch()).toBe(10)
 
-    const loadEarlier = page.getByRole('button', { name: 'Load earlier', exact: true })
     const loadedRows = page.locator('[data-chat-flow-key]')
     const loadedBefore = await loadedRows.count()
-    await loadEarlier.click()
+    await loadEarlierChatPage(page)
     await expect.poll(() => loadedRows.count(), { timeout: 15_000 }).toBeGreaterThan(loadedBefore)
     await railScroller.hover()
     await page.mouse.wheel(0, -FIXTURE_TURNS * 10)
@@ -307,15 +307,17 @@ describe('web e2e: long Chat interaction contract', () => {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
       .toBe(expectedUserText)
 
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await turnTailRow.hover()
     await turnTailRow.getByRole('button', { name: 'Branch into a new conversation', exact: true }).click()
     await expect.poll(
-      () => scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === SessionId(SESSION_ID)),
+      () => scaffold.ctx.agents.list().find(agent => !existing.has(agent.id)),
       { timeout: 15_000 },
     ).toBeDefined()
     const child = scaffold.ctx.agents.list()
-      .find(agent => agent.session.header.parentSession === SessionId(SESSION_ID))
+      .find(agent => !existing.has(agent.id))
     if (child === undefined) throw new Error('message branch did not create a child session')
+    expect(child.session.header.parentSession).toBeUndefined()
     expect(child.session.inheritedEventCount).toBe(boundary.seq + 1)
     expect(child.session.snapshotEvents().some(event => carries(event, branchAssistantMarker))).toBe(true)
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(BRANCH_TURN + 1)))).toBe(false)

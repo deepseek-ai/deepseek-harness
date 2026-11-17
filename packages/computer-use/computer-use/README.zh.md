@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-部署每次可启用一个计算机操作提供方。加载另一个提供方时会失败，并报告已注册的提供方名称。各提供方提供自己的工具和桌面操作。本包不添加模型可见工具，也不协调并发 Session。
+部署每次可启用一个计算机操作提供方。加载另一个提供方时会失败，并报告已注册的提供方名称。DSH 原生 CUA 和 Cua Driver 适配包都使用此注册器。各提供方提供自己的工具和桌面操作。本包不添加模型可见工具，也不协调并发 Session。
 
 ## 目录
 
@@ -31,7 +31,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-computer-use'
 ```
 
-服务没有配置项。提供方插件注入 `computerUse` 并调用 `ctx.computerUse.register(ComputerUseProviderName(name))`；该品牌类型从 `@deepseek-ai/dsh-computer-use/brand` 导出。返回的 effect 清理函数释放此次注册。
+服务没有配置项。提供方插件注入 `computerUse` 并调用 `ctx.computerUse.register(brandString<ComputerUseProviderName>(name))`，其中 `brandString` 来自 `@deepseek-ai/dsh-brand`，类型来自 `@deepseek-ai/dsh-computer-use/types`。返回的 effect 清理函数释放此次注册。
 
 提供方先停止接收工具调用、关闭资源并等待自有工作结束，再释放注册。释放前，`ctx.computerUse.providerName` 始终报告已注册的名称。
 
@@ -53,6 +53,10 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [计算机操作](../../../docs/subsystems/computer-use.zh.md) — 提供方选择和共享桌面限制。
+- [Computer Use 组合包](../../experimental/cua-bundle/README.zh.md)：启用 DSH 原生 CUA 和权限管理功能。
+- [共享 CUA 库](../../experimental/cua/README.zh.md)：应用与窗口对象、工具执行和应用授权。
+- [macOS CUA 提供方](../../experimental/cua-macos/README.zh.md)：DSH 的 Swift 实现和原生辅助进程生命周期。
+- [Windows CUA 提供方](../../experimental/cua-windows/README.zh.md)：通过 Windows UI Automation 查看应用和窗口。
 - [Cua Driver MCP 提供方](../../experimental/computer-use-cua-driver-mcp/README.zh.md) — 使用已安装的驱动。
 - [Cua Driver 原生提供方](../../experimental/computer-use-cua-driver-native/README.zh.md) — 使用 npm 运行时。
 

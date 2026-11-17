@@ -27,9 +27,11 @@
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-.chip:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .chip:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .chip:disabled {
@@ -42,11 +44,18 @@
   outline-offset: 2px;
 }
 
-.chipActive,
-.chipActive:hover:not(:disabled) {
+.chipActive {
   border-color: var(--dsw-alias-button-primary-fill);
   background: var(--dsw-alias-button-primary-fill);
   color: var(--dsw-alias-label-primary-foreground);
+}
+
+@media (hover: hover) {
+  .chipActive:hover:not(:disabled) {
+    border-color: var(--dsw-alias-button-primary-fill);
+    background: var(--dsw-alias-button-primary-fill);
+    color: var(--dsw-alias-label-primary-foreground);
+  }
 }
 
 /* The field starts at three short lines, grows with its text where supported,

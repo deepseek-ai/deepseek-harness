@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`declares propose_action from the step after a card skill loads, and logs the addition > tool declaration 1`] = `
+{
+  "description": "Show the user one optional action card under this answer. Call only as the skill that names the action instructs.",
+  "name": "propose_action",
+  "parameters": {
+    "properties": {
+      "action": {
+        "description": "Action name from the skill.",
+        "type": "string",
+      },
+      "brief": {
+        "description": "What the action does, in the user's language.",
+        "type": "string",
+      },
+      "details": {
+        "additionalProperties": true,
+        "description": "Fields the skill lists for this action.",
+        "type": "object",
+      },
+      "title": {
+        "description": "Card title.",
+        "type": "string",
+      },
+    },
+    "required": [
+      "action",
+      "title",
+      "brief",
+      "details",
+    ],
+    "type": "object",
+  },
+}
+`;

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paramètres d'exécution de l'agent",
+    "description": "Configurez le nombre maximum d'appels d'outils pouvant être exécutés simultanément."
+  }
+}

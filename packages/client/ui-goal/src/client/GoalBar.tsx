@@ -1,10 +1,11 @@
 /**
  * GoalBar: the goal indicator docked above the message composer (input dock
  * strip). A present goal shows a goal glyph, a phase label, the truncated
- * objective, and icon actions — resume when active-disarmed or paused, edit
- * (inline form in the same strip), and clear. Goal creation lives on the
- * `/goal` command, not here: loading (undefined), no goal (null), and complete
- * goals render nothing. Durable state arrives as the projected whole snapshot;
+ * objective, and icon actions — edit (inline form in the same strip), clear,
+ * then pause when armed (disabled until activation is known) or resume when
+ * active-disarmed, paused, or blocked.
+ * Goal creation lives on the `/goal` command, not here: loading (undefined), no goal
+ * (null), and complete goals render nothing. Durable state arrives as the projected whole snapshot;
  * process-local activation arrives through the injected activation hook.
  */
 
@@ -128,8 +129,8 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
 
   const title = goal.phase === 'blocked' ? goal.blockedReason?.message : undefined
   const label = goal.phase === 'active' ? activeLabel(activation, t) : t(PHASE_LABELS[goal.phase])
-  const showResume = goal.phase === 'paused'
-    || (goal.phase === 'active' && activation === 'disarmed')
+  const resume = goal.phase !== 'active' || activation === 'disarmed'
+  const toggleLabel = t(resume ? 'action.resume' : 'action.pause')
   return (
     <div className={css.dock} data-goal-bar>
       <div className={css.bar} title={title}>
@@ -138,20 +139,6 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
         <span className={css.objective}>{goal.objective}</span>
         {actionError !== null && <span className={css.error} role="alert">{actionError}</span>}
         <div className={css.actions}>
-          {goal.phase === 'active' && activation === 'armed' && (
-            <Tooltip portal label={t('action.pause')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onPause) }} aria-label={t('action.pause')}>
-                <IconPauseOutlineRegular size={14} />
-              </button>
-            </Tooltip>
-          )}
-          {showResume && (
-            <Tooltip portal label={t('action.resume')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onResume) }} aria-label={t('action.resume')}>
-                <IconPlayOutlineRegular size={14} />
-              </button>
-            </Tooltip>
-          )}
           <Tooltip portal label={t('action.edit')} side="bottom" delayMs={500}>
             <button
               type="button"
@@ -166,6 +153,18 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
           <Tooltip portal label={t('action.clear')} side="bottom" delayMs={500}>
             <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void handleClear(goal.id) }} aria-label={t('action.clear')}>
               <IconTrashOutlineRegular size={14} />
+            </button>
+          </Tooltip>
+          {/* Until activation arrives, an active goal keeps a disabled pause so edit and clear stay in place. */}
+          <Tooltip portal label={toggleLabel} side="bottom" delayMs={500}>
+            <button
+              type="button"
+              className={css.iconBtn}
+              disabled={pending || (!resume && activation === undefined)}
+              onClick={() => { void runAction(resume ? onResume : onPause) }}
+              aria-label={toggleLabel}
+            >
+              {resume ? <IconPlayOutlineRegular size={14} /> : <IconPauseOutlineRegular size={14} />}
             </button>
           </Tooltip>
         </div>

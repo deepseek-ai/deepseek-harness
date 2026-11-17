@@ -1,0 +1,85 @@
+/* One icon in the Session row's resting seat, sized to the row's 20px line. */
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Hover card section: the card keeps one dark surface in both themes, so it
+ * uses the hover card label and state tokens. */
+.hover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hoverItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hoverIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 16px;
+  color: var(--dsw-alias-hovercard-label-tertiary);
+}
+
+.hoverIcon[data-tone='merged'] {
+  color: var(--dsw-alias-hovercard-state-done);
+}
+
+.hoverIcon[data-tone='closed'] {
+  color: var(--dsw-alias-hovercard-state-error);
+}
+
+.hoverBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hoverBranch,
+.hoverTitle {
+  overflow: hidden;
+  color: var(--dsw-alias-hovercard-label-primary);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hoverBranch {
+  font-family: var(--ds-font-family-code);
+}
+
+.hoverNote,
+.hoverMore {
+  color: var(--dsw-alias-hovercard-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hoverSeparator {
+  margin: 0 4px;
+}
+
+.hoverNote [data-checks='failure'] {
+  color: var(--dsw-alias-hovercard-state-error);
+}
+
+/* The state and checks as one phrase for assistive technology, which skips the separator glyph. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

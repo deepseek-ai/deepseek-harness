@@ -3,6 +3,7 @@
  * that outlives the Chat panel, and history scrollback never does.
  */
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, screen } from '@testing-library/react'
@@ -46,12 +47,14 @@ const quotaEntry = (seq: number, code: string): SessionLiveEventEntry => ({
  */
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   disposers.push(() => runtime.dispose())
   const chatSettings = stubConfigForm<ChatSettings>()
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },
     get: (namespace: string) => namespace === CHAT_SETTINGS_NAMESPACE ? chatSettings.scope : stubConfigForm().scope,
   } as never)
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openRightbar: () => {}, closeRightbar: () => {} } as never)
   runtime.ctx.provide('sidebarRight', { openResource: () => {}, openTab: () => {} } as never)
   runtime.ctx.provide('sidebarRightTabs', {
@@ -66,6 +69,8 @@ async function bench() {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.declare({
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.approval.detail': { kind: 'single', scope: 'session' },

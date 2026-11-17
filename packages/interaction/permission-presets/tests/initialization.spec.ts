@@ -1,11 +1,12 @@
-/** Permission admission must finish before a Session or Agent is published. */
+/** Permission admission must finish before Agent creation completes. */
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import PermissionPresetService, { AUTO_PRESET } from '@deepseek-ai/dsh-permission-presets'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup() {
   const ctx = new Context()
@@ -40,7 +41,7 @@ async function setup() {
 }
 
 function autoSeed() {
-  const source = Session.create(SessionId('auto-source'))
+  const source = Session.create(brandString<SessionId>('auto-source'))
   source.append('permission/preset', { preset: AUTO_PRESET })
   source.append('sandbox/mode', { mode: 'danger-full-access' })
   source.append('approval/policy', { policy: 'never' })
@@ -48,25 +49,23 @@ function autoSeed() {
 }
 
 describe('permission admission during activation', () => {
-  it('rejects synchronous Session creation until the permission reader is ready', async () => {
+  it('keeps Session creation read-only while permission registration is pending', async () => {
     const { ctx, fiber, release } = await setup()
-    const id = SessionId('pending-session')
-    expect(() => ctx.sessions.create(id)).toThrow(/permission:.*not ready/)
-    expect(ctx.sessions.get(id)).toBeUndefined()
+    const id = brandString<SessionId>('pending-session')
+    const session = ctx.sessions.create(id)
+    expect(ctx.sessions.get(id)).toBe(session)
+    expect(session.snapshotEvents()).toEqual([])
 
     release.resolve(undefined)
     await fiber
-    const session = ctx.sessions.create(id)
     expect(ctx.permissionPresets.current(session)).toBe('workspace-write')
-    expect(ctx.approval.overrideOf(session)).toBe('ask')
-    expect(session.snapshotEvents().map(event => event.type)).toEqual([
-      'permission/preset', 'sandbox/mode', 'approval/policy',
-    ])
+    expect(ctx.approval.overrideOf(session)).toBeUndefined()
+    expect(session.snapshotEvents()).toEqual([])
   })
 
   it.each(['fresh', 'auto'] as const)('rolls back %s Agent creation before publication while registration is pending', async (kind) => {
     const { ctx, fiber, release } = await setup()
-    const id = SessionId('pending-agent')
+    const id = brandString<SessionId>('pending-agent')
     const options = { sessionId: id, ...kind === 'auto' ? { seed: autoSeed() } : {} }
     const published = vi.fn()
     ctx.on('agent/created', published)

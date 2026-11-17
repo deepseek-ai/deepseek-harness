@@ -30,7 +30,7 @@ function validSearchCall(block: ToolCallBlock): 'grep' | 'glob' | null {
   if (path !== undefined && (typeof path !== 'string' || path.trim() === '')) return null
   if (call.name === 'grep') {
     const { include } = call.args
-    if (include !== undefined && (typeof include !== 'string' || !validInclude(include))) return null
+    if (include !== undefined && include !== '' && (typeof include !== 'string' || !validInclude(include))) return null
   }
   return call.name
 }

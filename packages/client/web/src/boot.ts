@@ -2,7 +2,7 @@
  * Web boot kernel. It owns only the module system, Cordis loader, and a
  * framework-free boot page; plugin composition and the renderer handoff are
  * `bootClient` and `mountClient`. The dynamic UI renderer receives the mount
- * point after every client entry activates.
+ * point after the activation audit accepts the client tree.
  * @module @deepseek-ai/dsh-client-web/src/boot
  */
 import { Context } from '@deepseek-ai/cordis'
@@ -17,7 +17,7 @@ import { installWindowDragRecall } from './window-drag/recall.ts'
 import './base.css'
 
 /** Module transport hook replaced by jsdom tests. */
-export type BootSeams = Pick<ClientModuleCreateOptions, 'loadBundle'>
+export type BootSeams = Pick<ClientModuleCreateOptions, 'loadBundle' | 'resolveAsset'>
 
 /** Browser boot entry consumed by `apps/web`. */
 export class AppWebEntry {
@@ -26,7 +26,7 @@ export class AppWebEntry {
   private readonly page: BootPage
   private ctx: Context | undefined
   private stopDragRecall: (() => void) | undefined
-  private modules!: ClientModuleSystem
+  private modules: ClientModuleSystem | undefined
   private manifest!: BootManifest
 
   /**
@@ -41,8 +41,10 @@ export class AppWebEntry {
   }
 
   /**
-   * Load and activate every client entry, then hand the mount point to the
-   * UI renderer. Plugin failures remain visible on the boot page.
+   * Load and activate every client entry, audit activation, then hand the
+   * mount point to the UI renderer. A required-entry failure remains visible
+   * on the boot page; optional-entry failures are reported to the console and
+   * the application mounts without them.
    * @param onFailure - Optional carrier-owned fatal presentation; keeps the boot page visible.
    * @returns Resolves after application mount or failure reporting.
    */
@@ -60,33 +62,36 @@ export class AppWebEntry {
       if (moduleLoader === undefined) {
         throw new Error('web boot: window.__ModuleLoader__ bootstrap facade is missing')
       }
-      // A pre-injected transport (the worker preview page) owns bundle bytes;
-      // its loadBundle is the default and explicit seams still win. The global
+      // A pre-injected transport (the worker preview page) owns bundle and asset
+      // bytes; its loadBundle and resolveAsset are the defaults and explicit seams still win. The global
       // is `ClientTransportHooks`, owned by @deepseek-ai/dsh-client-connection;
-      // this structural slice reads one optional member without adding a
+      // this structural slice reads two optional members without adding a
       // package edge.
       const transport = (globalThis as {
-        __DSH_TRANSPORT__?: { loadBundle?: ClientModuleCreateOptions['loadBundle'] }
+        __DSH_TRANSPORT__?: Pick<ClientModuleCreateOptions, 'loadBundle' | 'resolveAsset'>
       }).__DSH_TRANSPORT__
-      this.modules = moduleLoader.create({
+      const modules = moduleLoader.create({
         boot: win.__DSH_BOOT__,
         staticModules: getStaticModules(),
         ...transport?.loadBundle === undefined ? {} : { loadBundle: transport.loadBundle },
+        ...transport?.resolveAsset === undefined ? {} : { resolveAsset: transport.resolveAsset },
         ...this.seams,
       })
-      this.manifest = this.modules.manifest
+      this.modules = modules
+      this.manifest = modules.manifest
 
-      const prefetching = this.prefetchImmediateTier()
+      const prefetching = this.prefetchImmediateTier(modules)
       const ctx = new Context()
       this.ctx = ctx
       this.page.setTotal(this.manifest.plugins.length)
       await prefetching
       await bootClient({
         ctx,
-        modules: this.modules,
+        modules,
         manifest: this.manifest,
+        // A failed entry may be optional; only the audit decides whether the boot page reports a failure.
         onEntryState: (name, state) => {
-          if (onFailure === undefined || state !== 'failed') this.page.setState(name, state)
+          if (state !== 'failed') this.page.setState(name, state)
         },
       })
       // The shell owns the one watcher that keeps Electron's window drag rects in
@@ -108,15 +113,22 @@ export class AppWebEntry {
     this.stopDragRecall = undefined
     const ctx = this.ctx
     this.ctx = undefined
-    if (ctx !== undefined) await ctx.fiber.dispose()
-    this.page.dispose()
+    try {
+      if (ctx !== undefined) await ctx.fiber.dispose()
+    } finally {
+      try {
+        await this.modules?.dispose()
+      } finally {
+        this.page.dispose()
+      }
+    }
   }
 
   /** Prefetch stage-one bundles and their dynamic requests before concurrent plugin imports. */
-  private async prefetchImmediateTier(): Promise<void> {
+  private async prefetchImmediateTier(modules: ClientModuleSystem): Promise<void> {
     await Promise.all(this.manifest.plugins
       .filter(row => row.immediately)
-      .map(row => this.modules.prefetch(row.id).catch((_prefetchError: unknown) => {
+      .map(row => modules.prefetch(row.id).catch((_prefetchError: unknown) => {
         // Prefetch only starts transport early; the Loader import retries and reports this bundle failure.
       })))
   }

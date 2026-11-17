@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "caja de arena de proceso local",
+    "description": "Proporciona aislamiento de procesos por sistema operativo y limita el alcance de acceso de los comandos."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP クライアント",
+    "description": "MCP サーバーに接続し、そのツールを Harness に登録します。"
+  }
+}

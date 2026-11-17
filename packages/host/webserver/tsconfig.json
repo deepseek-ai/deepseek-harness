@@ -13,6 +13,9 @@
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../typert/protocol"
     }
   ]
 }

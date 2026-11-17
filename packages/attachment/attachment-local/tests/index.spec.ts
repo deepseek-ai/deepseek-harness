@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,11 +22,11 @@ import LocalAttachmentStore, {
 describe('local attachment service', () => {
   it('resolves every omitted admission limit explicitly', () => {
     const service = new LocalAttachmentStore(new Context(), {})
-    expect(DEFAULT_MAX_IMAGE_BYTES).toBe(20 * 1024 * 1024)
+    expect(DEFAULT_MAX_IMAGE_BYTES).toBe(50 * 1024 * 1024)
     expect(DEFAULT_MAX_IMAGES_PER_MESSAGE).toBe(20)
     expect(DEFAULT_MAX_MESSAGE_IMAGE_BYTES).toBe(200 * 1024 * 1024)
     expect(DEFAULT_MAX_IMAGE_PIXELS).toBe(64_000_000)
-    expect(DEFAULT_MAX_IMAGE_DIMENSION).toBe(8192)
+    expect(DEFAULT_MAX_IMAGE_DIMENSION).toBe(65_535)
     expect(service.imageLimits).toEqual({
       maxImageBytes: DEFAULT_MAX_IMAGE_BYTES,
       maxImagesPerMessage: DEFAULT_MAX_IMAGES_PER_MESSAGE,
@@ -41,7 +42,7 @@ describe('local attachment service', () => {
     })
     expect(service.imageCompressionConcurrency).toBe(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY)
     const ref = {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
       mediaType: 'image/png' as const,
       bytes: 1,
       width: 1,
@@ -53,7 +54,7 @@ describe('local attachment service', () => {
       'aa',
       'a'.repeat(64),
     ))
-    expect(() => service.imageHostPath({ ...ref, attachmentId: AttachmentId('invalid') }))
+    expect(() => service.imageHostPath({ ...ref, attachmentId: brandString<AttachmentId>('invalid') }))
       .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }))
   })
 

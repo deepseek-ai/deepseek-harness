@@ -9,3 +9,5 @@
   - text: ·
   - link "Website":
     - /url: https://example.com/
+  - text: ·
+  - button "D:\\repo\\.github\\a.md"

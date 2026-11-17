@@ -147,6 +147,14 @@ const homeAndGuide = pairedPages([
     order: 4,
   },
   {
+    source: 'docs/user/guide/desktop-uninstall-cleanup.md',
+    route: 'guide/desktop-uninstall-cleanup.md',
+    label: { root: '卸载 DSH 桌面端', en: 'Uninstall DSH Desktop' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '入门', en: 'Guide' },
+    order: 5,
+  },
+  {
     source: 'docs/user/guide/python-sdk.md',
     route: 'guide/python-sdk.md',
     label: { root: 'Python', en: 'Python' },
@@ -173,7 +181,7 @@ const homeAndGuide = pairedPages([
   {
     source: 'docs/user/guide/plugin-market.md',
     route: 'guide/plugin-market.md',
-    label: { root: '插件市场', en: 'Plugin markets' },
+    label: { root: '插件索引', en: 'Plugin indexes' },
     sidebar: { root: 'zh-guide', en: 'en-guide' },
     section: { root: '集成', en: 'Integrations' },
     order: 2,

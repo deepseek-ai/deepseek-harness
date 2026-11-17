@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serveur SDK",
+    "description": "Servez les clients SDK dans des processus distincts via JSON-RPC via une entrée et une sortie standard."
+  }
+}

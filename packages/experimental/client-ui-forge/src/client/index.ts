@@ -1,0 +1,46 @@
+/**
+ * Browser entry of the forge panel: the Session panel's change requests
+ * section, Environment rows, and attention indicator, the changes view, the
+ * worktree option and creation card, and their Remote.
+ */
+
+import type { Context } from '@deepseek-ai/cordis'
+import remote from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
+import { mountForgePanel } from './mount.ts'
+
+export { inject } from './mount.ts'
+export type { ForgePanelKey } from './locales.ts'
+export type { ChangeRequestActions, ChangeRequestCardProps } from './ChangeRequestCard.tsx'
+export type { ChangesParams, ChangesSource, ChangesTarget } from './changes-address.ts'
+export type {
+  ForgeAnnotationSource, ForgeChangesService, ForgeChangesSidebar, ForgeLensDescription, ForgeLineAnnotation,
+} from './changes-service.ts'
+export type {
+  ForgeChangeRequestCardActionsProps, ForgeChangesFileMenuProps, ForgeChangesToolbarProps, ForgeCommentActionsProps,
+  ForgeLineAnnotationProps,
+} from './slots.ts'
+// The Host face's lens and extension types that the slot owner props and the changes view surface name.
+export type {
+  ForgeExtensionState, ForgeLensFile, ForgeLensFrame, ForgeLensId, ForgeLensKeep, ForgeLensRequest, ForgeLineRange,
+  ForgeRegisteredLens,
+} from '../types.ts'
+export type { ChangesTabInjected, ChangesTabProps } from './ChangesTab.tsx'
+export type { ChangesTabTitleProps } from './ChangesTabTitle.tsx'
+export type { DiffFileAction, DiffFileProps, DiffFileText } from './DiffFile.tsx'
+export type { AttentionIndicatorInjected, AttentionIndicatorProps } from './AttentionIndicator.tsx'
+export type {
+  ChangeRequestsActionsInjected, ChangeRequestsActionsProps, ChangeRequestsSectionInjected, ChangeRequestsSectionProps,
+} from './ChangeRequestsSection.tsx'
+export type { CheckoutRowInjected, CheckoutRowProps, LocalChangesRowInjected, LocalChangesRowProps } from './EnvironmentRows.tsx'
+export type { WorktreeProgressInjected, WorktreeProgressProps } from './WorktreeProgress.tsx'
+export type { WorktreeToggleInjected, WorktreeToggleProps } from './WorktreeToggle.tsx'
+export type { ActionNotice, NoticeOptions, PanelSnapshot } from './source.ts'
+
+/**
+ * Mount the forge panel Remote and its UI.
+ * @param ctx - browser plugin context.
+ * @returns the disposer that withdraws the UI, then the Remote.
+ */
+export async function apply(ctx: Context): Promise<() => Promise<void>> {
+  return await mountForgePanel(ctx, remote)
+}

@@ -1,13 +1,18 @@
 /** Test package using the published registration protocol, locale and slots. */
 window.__ModuleLoader__.load({
   id: '@fixture/live-client',
+  meta() {
+    return {
+      stylesheets: {
+        'style.css': {
+          text: () => '[data-live-client] { color: rgb(12, 34, 56); position: absolute; bottom: 20px; right: 20px; }',
+        },
+      },
+    }
+  },
   factory(require) {
     const React = require('react')
-    const { MenuItemButton } = require('@deepseek-ai/dsh-client-ui-primitives')
-    const style = document.createElement('style')
-    style.dataset.plugin = '@fixture/live-client'
-    style.textContent = '[data-live-client] { color: rgb(12, 34, 56); position: absolute; bottom: 20px; right: 20px; }'
-    document.head.append(style)
+    const { IconFolderCloseRegular, IconNewChatOutlineRegular, MenuItemButton } = require('@deepseek-ai/dsh-client-ui-primitives')
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {
@@ -88,9 +93,20 @@ window.__ModuleLoader__.load({
             t(label),
           )
         })
+        ctx.slots.inject('sidebar.session.row.trailing', function* () {
+          for (const [id, order, Icon, label] of [
+            ['fixture.trailing-new-chat', 200, IconNewChatOutlineRegular, 'section'],
+            ['fixture.trailing-folder', 100, IconFolderCloseRegular, 'badge'],
+          ]) {
+            yield ctx.slots.register({
+              name: 'sidebar.session.row.trailing', id, order, locale: 'fixtureLive',
+            }, ({ sessionId, t }) => React.createElement('span', {
+              role: 'img', 'aria-label': t(label), 'data-session-trailing': sessionId,
+            }, React.createElement(Icon)))
+          }
+        })
         ctx.slots.inject('sidebar.workspaces.session.menu.item', function* () {
-          // The shipped rows end at Session ID (450); these follow as one group,
-          // opened by the export row's hairline.
+          // Legacy rows form their own ordered group before the built-in Archive action.
           yield registerSessionAction('fixture.export-session', 500, 'exportSession', true)
           yield registerSessionAction('fixture.copy-session-id', 600, 'copySessionId', false)
         })

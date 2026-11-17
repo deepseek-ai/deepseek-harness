@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
@@ -10,7 +11,11 @@ import {
   apply as applyChat, inject as injectChat, type ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import { SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, contextMenuHook, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { toolFileInject } from '../src/client/tool/file-menu.ts'
+import { ReadRow } from '../src/client/tool/toolviews/read-row.tsx'
+import { WebRow } from '../src/client/tool/toolviews/web-row.tsx'
+import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply as applyConversation, inject as injectConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyTool, inject as injectTool } from '@deepseek-ai/dsh-client-ui-tool/client'
@@ -76,10 +81,12 @@ const LAYOUT_CHILDREN = {
  */
 async function bench(nodes: ToolResultNode[]) {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   const openWorkspacePath = vi.fn(async () => ({ ok: true, value: { opened: true } }))
   runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
   runtime.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', layout)
   const sidebarRight = { openResource: vi.fn<(address: string) => void>() }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
@@ -92,6 +99,8 @@ async function bench(nodes: ToolResultNode[]) {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.sessions.add({
     id: SID,
     summary: { title: 'S', displayTitle: 'S', cwd: '/w' },
@@ -110,6 +119,42 @@ async function bench(nodes: ToolResultNode[]) {
 }
 
 describe('keyed toolview hole through the real machinery', () => {
+  it('uses toolview Slot capabilities without a Markdown provider and resolves paths at the gesture', async () => {
+    const b = await bench([])
+    try {
+      const opened = vi.spyOn(b.runtime.ctx.contextMenus, 'open')
+      const block = toolResult(3, 'read-file', 'read', '{"file_path":"src/a.ts","offset":42}')
+      const fileEntry = b.runtime.slots.entries('tool.call.toolview').find(entry => entry.options.key === 'read')!
+      const resolveFilePath = fileEntry.inject!(SID as never).resolveFilePath as (path: string) => string
+      const props = {
+        sessionId: SID, toolName: 'read', callId: block.callId, phase: 'result', block, useDisclosure,
+        useContextMenu: contextMenuHook((target, point) => { b.runtime.ctx.contextMenus.open(target, point) }),
+        resolveFilePath, openFile: vi.fn(), t: b.runtime.ctx.locale.bind('conversation'),
+      } as Parameters<typeof ReadRow>[0]
+      const view = render(<ReadRow {...props} />)
+      await b.runtime.sessions.setProjection(SID, 'workingDirectory', '/w/moved')
+      const file = view.getByRole('button', { name: 'src/a.ts' })
+      fireEvent.contextMenu(file, { clientX: 12, clientY: 34 })
+      expect(opened).toHaveBeenLastCalledWith({ kind: 'file', value: { sessionId: SID, path: '/w/moved/src/a.ts', line: 42 } }, { x: 12, y: 34 })
+      await b.runtime.sessions.setProjection(SID, 'workingDirectory', null)
+      fireEvent.keyDown(file, { key: 'F10', shiftKey: true })
+      expect(opened).toHaveBeenLastCalledWith({ kind: 'file', value: { sessionId: SID, path: '/w/src/a.ts', line: 42 } }, { x: 0, y: 0 })
+      expect(props.openFile).not.toHaveBeenCalled()
+      expect(view.container.querySelector('[aria-expanded="true"]')).toBeNull()
+      view.rerender(<WebRow {...props} phase="result" toolName="web_fetch" block={toolResult(4, 'url', 'web_fetch', '{"url":"https://example.com/file"}')} />)
+      const url = view.getByRole('link')
+      fireEvent.contextMenu(url, { clientX: 56, clientY: 78 })
+      fireEvent.keyDown(url, { key: 'F10', shiftKey: true })
+      expect(opened).toHaveBeenLastCalledWith({ kind: 'url', value: { sessionId: SID, url: 'https://example.com/file' } }, { x: 0, y: 0 })
+      expect(opened).toHaveBeenCalledTimes(4)
+      expect(view.container.querySelector('[aria-expanded="true"]')).toBeNull()
+      const absent = toolFileInject(b.runtime.ctx)('missing' as SessionId)
+      expect(absent.resolveFilePath('file.ts')).toBe('file.ts')
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
   it('dispatches registered rows by entryKey and unregistered tools to the GenericToolCard fallback', async () => {
     const b = await bench([
       toolResult(3, 'c1', 'bash'),
@@ -124,6 +169,28 @@ describe('keyed toolview hole through the real machinery', () => {
     // mystery: no registration under that key → render-site fallback.
     expect(view.getByText('Tool call')).toBeTruthy()
     await b.runtime.dispose()
+  })
+
+  it.each([
+    ['office_render', 'Render document'],
+    ['office_convert', 'Convert document'],
+    ['office_recalculate', 'Recalculate workbook'],
+  ])('dispatches %s to its Office row through the real call tree', async (name, title) => {
+    const output = `${name} result`
+    const args = { input: 'input.xlsx', ...name === 'office_render' ? {} : { format: 'xlsx' } }
+    const b = await bench([
+      toolResult(3, 'office-call', name, JSON.stringify(args), {
+        meta: { path: '/w/input.xlsx' }, content: [{ type: 'text', text: output }],
+      }),
+    ])
+    try {
+      const view = b.runtime.renderRoot()
+      expect(view.getByText(title)).toBeTruthy()
+      expect(view.queryByText('Tool call')).toBeNull()
+      expect(view.getByRole('button', { name: name === 'office_render' ? 'input.xlsx' : 'input.xlsx → xlsx' })).toBeTruthy()
+      fireEvent.click(view.container.querySelector('[data-expandable]')!)
+      expect(view.getByText(output)).toBeTruthy()
+    } finally { await b.runtime.dispose() }
   })
 
   it('renders Auto denial copy through the real machinery', async () => {
@@ -294,12 +361,14 @@ describe('keyed toolview hole through the real machinery', () => {
 describe('registrant declaration injection', () => {
   it('runs a registrant before ui-tool and waits on the actual toolview declaration', async () => {
     const runtime = await SlotTestRuntime.create()
+    runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
     runtime.remote.provideNamespaces({
       session: {
         openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })),
       },
     })
     runtime.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
+    runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
     runtime.ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     runtime.ctx.provide('sidebarRight', { openResource: vi.fn() } as never)
     runtime.ctx.provide('uiWorkspace', {
@@ -311,6 +380,8 @@ describe('registrant declaration injection', () => {
     const locale = new LocaleRuntime(runtime.ctx)
     runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
+    runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+    await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
     await runtime.root.declare(LAYOUT_CHILDREN, AppRoot)
 
     // Third-party posture, mounted BEFORE ui-conversation. Plugin apply runs,

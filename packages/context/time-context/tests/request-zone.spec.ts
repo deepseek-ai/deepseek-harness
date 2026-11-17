@@ -53,6 +53,13 @@ describe('browser request-zone context', () => {
     ])).toThrow(/browser time zone must be canonical/)
   })
 
+  it('combines committed reported zones with proposed messages before validation', () => {
+    expect(deriveBrowserTimeZoneContext([browserMessage('America/New_York')], ['Asia/Shanghai']))
+      .toEqual({ kind: 'mixed', timeZones: ['America/New_York', 'Asia/Shanghai'] })
+    expect(() => deriveBrowserTimeZoneContext([browserMessage('Not/A_Real_Zone')], ['+08:00']))
+      .toThrow('browser time zone must be canonical UTC or IANA Area/Location: "+08:00"')
+  })
+
   it('keeps the exact refusal and the platform cause for every unusable zone', () => {
     const refusal = (timeZone: string): Error => {
       try {

@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canonicalizeTimeZone, createAtScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord,
-  decodeScheduleChange, decodeScheduleRecord, foldScheduleEvents, isRecurringScheduleRecord,
-  renderRecurringReminderBatchFraming, resolveDailyOccurrence, resolveRecurringOccurrence,
-  ScheduleId, ScheduleInputError, ScheduleLogError, scheduleView,
+  canonicalizeTimeZone,
+  createAtScheduleRecord,
+  createDailyScheduleRecord,
+  createEveryScheduleRecord,
+  decodeScheduleRecord,
+  isRecurringScheduleRecord,
+  renderRecurringReminderBatchFraming,
+  resolveDailyOccurrence,
+  resolveRecurringOccurrence,
+  ScheduleInputError,
 } from '../src/domain.ts'
-import type { DailyInput, DailyScheduleRecord } from '../src/types.ts'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { DailyInput, DailyScheduleRecord, ScheduleId } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function daily(now: string, time = '23:00:00', timeZone = 'Asia/Shanghai'): DailyScheduleRecord {
   return createDailyScheduleRecord(
-    ScheduleId('daily'), '  Daily reminder  ', { time, time_zone: timeZone }, Date.parse(now), 'Daily reminder',
+    brandString<ScheduleId>('daily'), '  Daily reminder  ', { time, time_zone: timeZone }, Date.parse(now), 'Daily reminder',
   )
 }
 
@@ -29,8 +34,6 @@ describe('daily wall-clock creation', () => {
     expect(record).toEqual({ id: 'daily', kind: 'daily', title: 'Daily reminder', prompt: 'Daily reminder',
       time: '23:00:00.000', timeZone: 'Asia/Shanghai', scheduledAt })
     expect(Object.isFrozen(record)).toBe(true)
-    expect(scheduleView(record, Date.parse(now))).toEqual({ ...record, state: 'scheduled', deliveryMode: 'host' })
-    expect(scheduleView(record, Date.parse(scheduledAt)).state).toBe('overdue')
   })
 
   it.each([
@@ -75,15 +78,15 @@ describe('daily wall-clock creation', () => {
     { time: '23:00:00', time_zone: 'Unknown/Zone' },
     { time: '23:00:00', time_zone: 'CST' }, { time: '23:00:00', time_zone: '+08:00' },
   ])('rejects malformed daily JSON input %#', (input) => {
-    expect(() => createDailyScheduleRecord(ScheduleId('bad'), 'Reminder', input as DailyInput,
+    expect(() => createDailyScheduleRecord(brandString<ScheduleId>('bad'), 'Reminder', input as DailyInput,
       Date.parse('2026-09-16T00:00:00Z'), 'Reminder')).toThrow(ScheduleInputError)
   })
 
   it('rejects empty prompts and unsupported creation instants', () => {
     const input = { time: '23:00:00', time_zone: 'UTC' }
-    expect(() => createDailyScheduleRecord(ScheduleId('bad'), ' ', input, 0, 'Title')).toThrow(/prompt/)
+    expect(() => createDailyScheduleRecord(brandString<ScheduleId>('bad'), ' ', input, 0, 'Title')).toThrow(/prompt/)
     for (const now of [Number.NaN, 0.5, Date.parse('0000-12-31T23:59:59.999Z'), Date.parse('+010000-01-01T00:00:00Z')]) {
-      expect(() => createDailyScheduleRecord(ScheduleId('bad'), 'Reminder', input, now, 'Reminder'))
+      expect(() => createDailyScheduleRecord(brandString<ScheduleId>('bad'), 'Reminder', input, now, 'Reminder'))
         .toThrow(expect.objectContaining({ code: 'time_out_of_range' }))
     }
   })
@@ -146,7 +149,7 @@ describe('daily transition rules', () => {
       occurrenceAt: record.scheduledAt, nextScheduledAt: '2011-12-30T22:00:00.000Z',
     })
     expect(daily(record.scheduledAt, '12:00:00', 'Pacific/Apia').scheduledAt).toBe('2011-12-30T22:00:00.000Z')
-    expect(() => createAtScheduleRecord(ScheduleId('at'), 'Gap', {
+    expect(() => createAtScheduleRecord(brandString<ScheduleId>('at'), 'Gap', {
       date: '2011-12-30', time: '12:00:00', time_zone: 'Pacific/Apia',
     }, Date.parse('2011-12-29T00:00:00Z'), 'Gap')).toThrow(/does not exist/)
   })
@@ -199,24 +202,20 @@ describe('daily latest-only decisions and durable targets', () => {
     }
   })
 
-  it('keeps Daily out of historical events and folds while current Host decoding accepts it', () => {
+  it('decodes a daily record from Host storage', () => {
     const record = daily('2026-09-16T00:00:00Z')
     expect(decodeScheduleRecord(record)).toEqual(record)
-    const data: unknown = { version: 1, operation: 'create', schedule: record }
-    expect(() => decodeScheduleChange(data)).toThrow(ScheduleLogError)
-    expect(() => foldScheduleEvents([{ type: 'schedule/change', seq: SessionSeq(0), time: 0, data } as SessionEvent]))
-      .toThrow(ScheduleLogError)
   })
 
   it('shares recurring selection and escaped batch framing without accepting one-shots', () => {
     const record = daily('2026-09-16T00:00:00Z')
     const every = createEveryScheduleRecord(
-      ScheduleId('every'), 'line\n"quoted"', 300, Date.parse(record.scheduledAt) - 300_000, 'line',
+      brandString<ScheduleId>('every'), 'line\n"quoted"', 300, Date.parse(record.scheduledAt) - 300_000, 'line',
     )
     expect(isRecurringScheduleRecord(record)).toBe(true)
     expect(isRecurringScheduleRecord(every)).toBe(true)
     const once = createAtScheduleRecord(
-      ScheduleId('at'), 'Once', record.scheduledAt, Date.parse(record.scheduledAt) - 1, 'Once',
+      brandString<ScheduleId>('at'), 'Once', record.scheduledAt, Date.parse(record.scheduledAt) - 1, 'Once',
     )
     expect(isRecurringScheduleRecord(once)).toBe(false)
     expect(resolveRecurringOccurrence(record, Date.parse(record.scheduledAt))).toEqual(decision(record, record.scheduledAt))

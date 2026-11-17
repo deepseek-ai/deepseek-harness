@@ -23,6 +23,31 @@ function Card({ name, grouped = true, disabled = false }: { name: string; groupe
 }
 
 describe('HoverCardGroup', () => {
+  it('keeps an inline bridge in its hover region and replaces the active card without overlap', () => {
+    const view = render(<HoverCardGroup as="span">
+      <HoverCard inline grouped openDelayMs={0} anchor={<span>A</span>} content={<span>details A</span>} />
+      <HoverCard inline grouped openDelayMs={0} anchor={<span>B</span>} content={<span>details B</span>} />
+    </HoverCardGroup>)
+    expect(view.container.firstElementChild?.tagName).toBe('SPAN')
+    const a = screen.getByText('A')
+    const b = screen.getByText('B')
+    move(document.body, a)
+    tick(0)
+    const card = screen.getByText('details A').parentElement!
+    const bridge = card.previousElementSibling!
+    move(a, bridge)
+    tick(300)
+    expect(screen.getByText('details A')).toBeTruthy()
+    move(bridge, b)
+    expect(screen.queryByText('details A')).toBeNull()
+    expect(screen.getByText('details B')).toBeTruthy()
+    move(b, document.body)
+    tick(300)
+    expect(screen.queryByText('details B')).toBeNull()
+    view.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('does not warm the next pointer visit when keyboard focus displays an inline card outside a pointer visit', () => {
     const view = render(<>
       <button type="button">outside</button>

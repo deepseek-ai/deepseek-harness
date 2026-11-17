@@ -6,6 +6,12 @@
  * @module @deepseek-ai/dsh-session-title-llm
  */
 
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'session-title': true
+  }
+}
+
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { createUserMessage, BlockAssembler } from '@deepseek-ai/dsh-llm'
@@ -27,7 +33,7 @@ import type {
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { assertNever, deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
-import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import type {
   SessionTitleModelIdentity,
   SessionTitleProviderRequest,

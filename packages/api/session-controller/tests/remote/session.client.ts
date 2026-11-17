@@ -6,13 +6,14 @@
  * derives them from its log, and builders for the attachment references
  * the Host's log carries.
  */
-import { AttachmentId, type FileAttachmentRef, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { ok, type RemoteMock, type RemoteTable, type StreamScript, type UnaryRuleFn } from '@deepseek-ai/dsh-remote-mock'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   SessionAssistantStreamBaseline, SessionFollowFrame, SessionFollowRequest,
-  SessionPage, SessionPageRequest,
+  SessionEventsPage, SessionPageRequest,
 } from '../../src/types.ts'
 import { entries, historyValue } from '../event-script.client.ts'
 import { followSnapshot, pageThrough } from './history.client.ts'
@@ -24,7 +25,7 @@ export const FOLLOW = 'session/follow'
 export const PAGE = 'session/page'
 
 /** A history answer as the Host returns it, possibly still pending. */
-export type HistoryAnswer = RemoteResult<SessionPage> | Promise<RemoteResult<SessionPage>>
+export type HistoryAnswer = RemoteResult<SessionEventsPage> | Promise<RemoteResult<SessionEventsPage>>
 /** A history answer, or a function of the request that produces one. */
 export type HistorySource<Request> = HistoryAnswer | ((request: Request) => HistoryAnswer)
 
@@ -43,7 +44,7 @@ export function err<T>(error: RemoteFailure): RemoteResult<T> {
  * @param hasMore - whether older history exists.
  * @returns the success result.
  */
-export function history(events: readonly SessionEvent[], hasMore = false): RemoteResult<SessionPage> {
+export function history(events: readonly SessionEvent[], hasMore = false): RemoteResult<SessionEventsPage> {
   return ok(historyValue(events, hasMore))
 }
 
@@ -102,11 +103,11 @@ export function followScript(
  */
 export function pageRule(
   history: HistorySource<SessionPageRequest>,
-): UnaryRuleFn<readonly [SessionPageRequest], Promise<RemoteResult<SessionPage>>> {
+): UnaryRuleFn<readonly [SessionPageRequest], Promise<RemoteResult<SessionEventsPage>>> {
   return async (page) => {
     const result = await answer(history, page)
     if (!result.ok) return result
-    return ok(pageThrough(result.value, page.throughSeq))
+    return ok(pageThrough(result.value, page.throughSeq ?? result.value.cursor))
   }
 }
 
@@ -120,7 +121,7 @@ function answer<Request>(history: HistorySource<Request>, request: Request): His
  * @returns the reference.
  */
 export function imageRef(id: string): ImageAttachmentRef {
-  return { attachmentId: AttachmentId(id), mediaType: 'image/png', bytes: 1, width: 2, height: 2 }
+  return { attachmentId: brandString<AttachmentId>(id), mediaType: 'image/png', bytes: 1, width: 2, height: 2 }
 }
 
 /**
@@ -130,7 +131,7 @@ export function imageRef(id: string): ImageAttachmentRef {
  * @returns the reference.
  */
 export function fileRef(id: string, name = 'notes.txt'): FileAttachmentRef {
-  return { attachmentId: AttachmentId(id), name, bytes: 3 }
+  return { attachmentId: brandString<AttachmentId>(id), name, bytes: 3 }
 }
 
 /** Default answers: every command accepted, empty history and subagent catalog, one attachment of one zero byte. */
@@ -144,12 +145,12 @@ export const sessionWorld: RemoteTable = {
       attachment: { attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
       data: 'AA==',
     }),
-    'session/page': pageRule(ok({ records: [], hasMore: false })),
+    'session/page': pageRule(ok({ cursor: -1, records: [], hasMore: false })),
     'session/projections': ok({ kind: 'sequenced', asOfSeq: -1, values: { subagentCatalog: [] } }),
     'subagents/prompt': ok({ messageId: 'fake-message' }),
-    'subagents/interruptByParent': ok({ accepted: true }),
+    'subagents/interruptByUser': ok({ accepted: true }),
   },
   stream: {
-    'session/follow': followScript(ok({ records: [], hasMore: false })),
+    'session/follow': followScript(ok({ cursor: -1, records: [], hasMore: false })),
   },
 }

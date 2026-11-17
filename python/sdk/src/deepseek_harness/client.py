@@ -12,13 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, TypeAlias, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
-from .models import IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification
+from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, ResumeSessionOptions, UserQuestionAnswer, UserQuestionRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 NotificationFilter: TypeAlias = Callable[[Notification], bool]
+UserQuestionHandler: TypeAlias = Callable[[UserQuestionRequest, threading.Event], UserQuestionAnswer | JsonObject]
 
 
 @dataclass(slots=True)
@@ -34,6 +35,8 @@ class HarnessConfig:
     initialize_timeout_seconds: float = 30.0
     request_timeout_seconds: float | None = None
     shutdown_timeout_seconds: float | None = 1.0
+    # Callbacks run outside the reader; observe the Event to release work on cancellation.
+    on_user_question: UserQuestionHandler | None = None
 
 
 class HarnessClient:
@@ -60,6 +63,9 @@ class HarnessClient:
         self._stderr_lines: deque[str] = deque(maxlen=400)
         self._reader_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
+        self._question_tasks: dict[str, tuple[threading.Event, threading.Thread]] = {}
+        self._closing = False
+        self._user_question_handler: UserQuestionHandler | None = None
 
     def __enter__(self) -> "HarnessClient":
         self.start()
@@ -73,6 +79,9 @@ class HarnessClient:
             return
         with self._lock:
             self._session_parents.clear()
+            self._question_tasks.clear()
+            self._closing = False
+            self._user_question_handler = self.config.on_user_question
         env = os.environ.copy()
         if self.config.env:
             env.update(self.config.env)
@@ -93,6 +102,11 @@ class HarnessClient:
 
     def close(self) -> None:
         """Close the runtime after a bounded opportunity to flush durable state."""
+        with self._lock:
+            self._closing = True
+            question_tasks = list(self._question_tasks.values())
+            for cancelled, _thread in question_tasks:
+                cancelled.set()
         proc = self._proc
         if proc is None:
             return
@@ -129,6 +143,10 @@ class HarnessClient:
             self._reader_thread.join(timeout=0.5)
         if self._stderr_thread and self._stderr_thread.is_alive():
             self._stderr_thread.join(timeout=0.5)
+        deadline = time.monotonic() + 0.5
+        for _cancelled, thread in question_tasks:
+            if thread is not threading.current_thread():
+                thread.join(timeout=max(0, deadline - time.monotonic()))
 
     def initialize(
         self,
@@ -138,16 +156,27 @@ class HarnessClient:
         model: str,
         reasoning_effort: str | None = None,
         max_tokens: int | None = None,
+        approval_requests: bool = False,
     ) -> InitializeResponse:
+        """Initialize the runtime; approval_requests enables approval/request reception.
+
+        When enabled, drain next_request() concurrently with blocking waits and
+        return one-operation decisions through respond(). Omission preserves the
+        runtime's composed approval answerers.
+        """
         payload: JsonObject = {
             "cwd": str(Path(cwd).resolve()),
             "provider": provider,
             "model": model,
         }
+        if approval_requests:
+            payload["approvalRequests"] = True
         if reasoning_effort is not None:
             payload["reasoningEffort"] = reasoning_effort
         if max_tokens is not None:
             payload["maxTokens"] = max_tokens
+        if self._user_question_handler is not None:
+            payload["capabilities"] = {"userQuestions": True}
         try:
             return self.request(
                 "initialize",
@@ -188,13 +217,37 @@ class HarnessClient:
         )
         return response.messageId
 
-    def resume_session(self, session_id: str) -> None:
-        """Restore a persisted session without sending a prompt; propagate restoration failures."""
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> None:
+        """Restore history; an explicit permission preset replaces saved permissions before execution."""
+        params: JsonObject = {"sessionId": session_id}
+        if options is not None:
+            if not isinstance(options, dict):
+                raise TypeError("resume_session options must be a dict or None")
+            for key in options:
+                if key != "permission_mode":
+                    raise TypeError(f"unknown resume_session option {key!r}; expected 'permission_mode'")
+            if "permission_mode" in options:
+                params["permissionMode"] = options["permission_mode"]
         self.request(
             "session/resume",
-            {"sessionId": session_id},
+            params,
             response_model=_EmptyResponse,
         )
+
+    def _query(
+        self, session_id: str, input: str | list[JsonObject],
+    ) -> str | CommandExecution:
+        """Return a validated prompt receipt or command result for high-level run callers."""
+        blocks = [{"type": "text", "text": input}] if isinstance(input, str) else input
+        result = self._request_raw("session/query", {
+            "sessionId": session_id, "contentBlocks": blocks,
+        })
+        if isinstance(result, dict):
+            if result.get("kind") == "prompt" and isinstance(result.get("messageId"), str) and result["messageId"]:
+                return result["messageId"]
+            if result.get("kind") == "command":
+                return _command_execution(result.get("execution"))
+        raise SdkProtocolError("session/query requires a prompt messageId or command execution result")
 
     def get_working_directory(self, session_id: str) -> str:
         """Read the effective directory, recovering a missing directory to the Session origin."""
@@ -407,7 +460,11 @@ class HarnessClient:
         method = message.get("method")
         if isinstance(msg_id, (str, int)) and isinstance(method, str):
             params = message.get("params")
-            self._requests.put(IncomingRequest(id=msg_id, method=method, payload=params if isinstance(params, dict) else {}))
+            request = IncomingRequest(id=msg_id, method=method, payload=params if isinstance(params, dict) else {})
+            if method == "user-question/ask" and self._user_question_handler is not None:
+                self._start_user_question(request)
+            else:
+                self._requests.put(request)
             return
         if isinstance(msg_id, (str, int)):
             with self._lock:
@@ -424,6 +481,10 @@ class HarnessClient:
             params = message.get("params")
             notification = Notification(method=method, payload=params if isinstance(params, dict) else {})
             with self._lock:
+                if method == "user-question.cancelled":
+                    task = self._question_tasks.get(str(notification.payload.get("requestId")))
+                    if task is not None:
+                        task[0].set()
                 self._record_session_relationship_locked(notification)
                 subscribers = list(self._notification_subscribers.items())
             delivered = False
@@ -445,6 +506,8 @@ class HarnessClient:
 
     def _fail_waiters(self, exc: BaseException) -> None:
         with self._lock:
+            for cancelled, _thread in self._question_tasks.values():
+                cancelled.set()
             waiters = list(self._responses.values())
             self._responses.clear()
             subscribers = list(self._notification_subscribers.values())
@@ -455,6 +518,56 @@ class HarnessClient:
             subscriber.put(exc)
         self._notifications.put(exc)
         self._requests.put(exc)
+
+    def _start_user_question(self, incoming: IncomingRequest) -> None:
+        """Keep the reader free to receive cancellation, other responses, and shutdown."""
+        handler = self._user_question_handler
+        proc = self._proc
+        try:
+            request = UserQuestionRequest.model_validate(incoming.payload)
+            if any(not isinstance(item.get("id"), str) or not isinstance(item.get("question"), str) for item in request.questions):
+                raise ValueError("questions require id and question strings")
+        except ValueError:
+            self.respond_error(incoming.id, code=-32602, message="invalid user-question/ask parameters")
+            return
+        cancelled = threading.Event()
+
+        def answer() -> None:
+            try:
+                if cancelled.is_set() or handler is None:
+                    return
+                result = handler(request, cancelled)
+                wire_result = result.model_dump(exclude_none=True) if isinstance(result, UserQuestionAnswer) else result
+                with self._lock:
+                    if not cancelled.is_set() and self._proc is proc:
+                        self.respond(incoming.id, wire_result)
+            except Exception as exc:
+                with self._lock:
+                    if not cancelled.is_set() and self._proc is proc:
+                        try:
+                            self.respond_error(incoming.id, code=-32603, message=str(exc))
+                        except TransportClosedError:
+                            cancelled.set()
+            finally:
+                with self._lock:
+                    current = self._question_tasks.get(request.request_id)
+                    if current is not None and current[0] is cancelled:
+                        self._question_tasks.pop(request.request_id, None)
+
+        thread = threading.Thread(target=answer, name="dsh-user-question", daemon=True)
+        with self._lock:
+            if self._closing:
+                return
+            if request.request_id in self._question_tasks:
+                self.respond_error(incoming.id, code=-32602, message="duplicate user-question requestId")
+                return
+            self._question_tasks[request.request_id] = (cancelled, thread)
+            try:
+                thread.start()
+            except BaseException:
+                self._question_tasks.pop(request.request_id, None)
+                cancelled.set()
+                raise
 
     def _runtime_closed_error(self, reason: str) -> TransportClosedError:
         diagnostics = self._runtime_diagnostics()
@@ -586,8 +699,12 @@ class NotificationSubscription:
         self._closed = True
         self._client._unsubscribe_notifications(self._subscription_id)
 
-    def next(self) -> Notification:
-        item = self._notifications.get()
+    def next(self, timeout_seconds: float | None = None) -> Notification:
+        """Read one notification; an optional timeout stops only this local wait."""
+        try:
+            item = self._notifications.get(timeout=timeout_seconds)
+        except queue.Empty as exc:
+            raise TimeoutError("timed out waiting for an SDK notification") from exc
         if isinstance(item, BaseException):
             raise item
         return item
@@ -617,3 +734,11 @@ class _EmptyResponse(BaseModel):
 
 def _int_or_none(value: object) -> int | None:
     return value if isinstance(value, int) else None
+
+
+def _command_execution(value: JsonValue) -> CommandExecution:
+    """Decode native command results and report malformed data as a protocol error."""
+    try:
+        return CommandExecution.model_validate(value)
+    except ValidationError as error:
+        raise SdkProtocolError("session/query returned an invalid command result") from error

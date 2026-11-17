@@ -1,6 +1,34 @@
 {
   "initial": [
     {
+      "name": "apply_patch",
+      "description": "Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "description": "Patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval.",
+            "enum": [
+              "workspace-write",
+              "danger-full-access"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request."
+          }
+        },
+        "required": [
+          "input"
+        ]
+      }
+    },
+    {
       "name": "bash",
       "description": "Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way.",
       "parameters": {
@@ -108,22 +136,6 @@
       }
     },
     {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
-        ]
-      }
-    },
-    {
       "name": "get_goal",
       "description": "Read the current session goal, including the id and revision that update_goal requires.",
       "parameters": {
@@ -177,17 +189,17 @@
     },
     {
       "name": "interrupt_agent",
-      "description": "Interrupt one teammate's current turn while preserving its pending inbox. Team Lead only.",
+      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
       "parameters": {
         "type": "object",
         "properties": {
-          "target": {
+          "agent": {
             "type": "string",
-            "description": "Teammate target returned by spawn_teammate or list_agents."
+            "description": "The name of an agent created under you: your direct child or a deeper descendant."
           }
         },
         "required": [
-          "target"
+          "agent"
         ]
       }
     },
@@ -245,7 +257,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List the Lead and every durable teammate with an addressable target and current availability. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -293,21 +305,21 @@
     },
     {
       "name": "send_message",
-      "description": "Send one message to another Team member. A running target receives it at the nearest step boundary; an inactive target starts or resumes a turn.",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
       "parameters": {
         "type": "object",
         "properties": {
-          "target": {
+          "agent": {
             "type": "string",
-            "description": "Member target returned by spawn_teammate or list_agents, including lead."
+            "description": "The name of another agent in your subagent tree, as shown by list_agents."
           },
           "message": {
             "type": "string",
-            "description": "Self-contained message for the target."
+            "description": "The message to deliver to the agent."
           }
         },
         "required": [
-          "target",
+          "agent",
           "message"
         ]
       }
@@ -329,34 +341,58 @@
       }
     },
     {
-      "name": "spawn_teammate",
-      "description": "Create one named, durable teammate. Only the Team Lead may call this tool.",
+      "name": "subagent",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
+          "cwd": {
             "type": "string",
-            "description": "Unique lower-kebab-case teammate name."
+            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
           },
           "description": {
             "type": "string",
-            "description": "Short description of the delegated responsibility."
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
           },
           "prompt": {
             "type": "string",
-            "description": "Complete initial task for the teammate."
-          },
-          "context": {
-            "type": "string",
-            "description": "fresh starts without Lead history; fork inherits completed Lead turns. Defaults to fresh.",
-            "enum": [
-              "fresh",
-              "fork"
-            ]
+            "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
           }
         },
         "required": [
-          "name",
+          "description",
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "subagent_fork",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cwd": {
+            "type": "string",
+            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
+          },
+          "description": {
+            "type": "string",
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new."
+          }
+        },
+        "required": [
           "description",
           "prompt"
         ]
@@ -430,7 +466,11 @@
           },
           "owner": {
             "type": "string",
-            "description": "Optional member target from spawn_teammate or list_agents, matching ownerName; use unowned for tasks without an owner."
+            "description": "Optional owner agent name filter; cannot be combined with unowned."
+          },
+          "unowned": {
+            "type": "boolean",
+            "description": "Filter tasks by whether they have no owner; cannot be combined with owner."
           },
           "ready": {
             "type": "boolean",
@@ -499,7 +539,7 @@
           },
           "owner": {
             "type": "string",
-            "description": "Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign."
+            "description": "Agent name of the root or any continuable descendant for root-only reassign; omit to unassign."
           }
         },
         "required": [
@@ -595,7 +635,7 @@
     },
     {
       "name": "wait_agent",
-      "description": "Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running or provisioning. Re-list after wakeup or timeout instead of polling.",
+      "description": "Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -630,7 +670,7 @@
         "properties": {
           "queries": {
             "type": "array",
-            "description": "1–4 search queries; their results are merged.",
+            "description": "1–10 search queries; their results are merged.",
             "items": {
               "type": "string"
             }

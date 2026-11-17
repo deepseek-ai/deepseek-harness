@@ -55,13 +55,23 @@ describe.skipIf(MODE === 'record')('web e2e: compact Tool details', () => {
     // turn-tail create card carries the same `data-tool` marker without being
     // one of the keyed call views this case walks.
     const rows = page.locator('[data-chat-call-id] [data-tool]')
-    expect(await rows.count()).toBe(45)
+    expect(await rows.count()).toBe(50)
     for (const row of await rows.all()) {
       await row.getByRole('button', { expanded: false }).first().click()
       expect(await row.getByRole('listitem').count()).toBeGreaterThan(0)
       expect(await row.locator('[class*="ioCard"]').count()).toBe(0)
       expect(await row.getByRole('button', { name: 'Inspect', exact: true }).count()).toBe(1)
     }
+    const agentRow = page.locator('[data-tool="list_agents"]').getByRole('listitem').first()
+    expect(await agentRow.getByRole('button').count()).toBe(0)
+    expect(await agentRow.locator('svg').count()).toBe(0)
+    // Read both positions in one browser task so scrolling cannot move the viewport between measurements.
+    const agentLayout = await agentRow.evaluate((element) => {
+      const description = element.querySelector('[class*="heading"] > span')!.getBoundingClientRect()
+      const name = element.querySelector('[class*="subtitle"]')!.getBoundingClientRect()
+      return { descriptionBottom: description.bottom, nameTop: name.top }
+    })
+    expect(agentLayout.descriptionBottom).toBeLessThanOrEqual(agentLayout.nameTop)
     const changedTodos = page.locator('[data-tool="todo_write"]').nth(1)
     await changedTodos.getByText('1 added · 1 updated · 1 removed', { exact: true }).waitFor()
     for (const summary of await page.locator('[data-tool] details > summary').all()) await summary.click()
@@ -70,8 +80,10 @@ describe.skipIf(MODE === 'record')('web e2e: compact Tool details', () => {
     await expect.poll(() => schema.textContent()).toContain('"properties"')
     const callIds = [
       ...Array.from({ length: 3 }, (_, index) => `details-call-${index + 1}`),
-      // The authored schedule_update round sits beside its schedule_create sibling.
+      // The authored schedule_update round sits beside its schedule_create sibling, and the rounds of the current
+      // Schedule tools follow them.
       'details-call-3b',
+      ...['c', 'd', 'e', 'f', 'g'].map(suffix => `details-call-3${suffix}`),
       ...Array.from({ length: 41 }, (_, index) => `details-call-${index + 4}`),
     ]
     const snapshots = await Promise.all(callIds.map(id =>
@@ -79,9 +91,12 @@ describe.skipIf(MODE === 'record')('web e2e: compact Tool details', () => {
     const snapshot = snapshots.join('\n')
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
     await page.setViewportSize({ width: 360, height: 800 })
-    const card = page.locator('[data-chat-call-id] [data-tool="schedule_create"]')
-    expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-    const reminders = page.locator('[data-tool="schedule_list"]')
+    const cards = page.locator('[data-chat-call-id] [data-tool="schedule_create"]')
+    expect(await cards.count()).toBe(2)
+    for (const card of await cards.all()) {
+      expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    }
+    const reminders = page.locator('[data-chat-call-id="details-call-6"] [data-tool="schedule_list"]')
     await scrollIntoView(reminders)
     const list = reminders.getByRole('list').first()
     await list.evaluate((element) => {

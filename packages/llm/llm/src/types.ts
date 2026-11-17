@@ -6,6 +6,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { MessageId, ToolCallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message, UserMessage } from './message.ts'
 
@@ -21,6 +22,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'llm/adapters-updated'(): void
+    /**
+     * A provider's advertised models or display metadata changed; consumers reload `listModels()`.
+     * @mode emit
+     * @param provider - route whose model catalog changed.
+     */
+    'llm/models-updated'(provider: string): void
   }
 }
 
@@ -286,6 +293,94 @@ export interface LlmNativeAuth {
 }
 
 /**
+ * Merge-extensible vocabulary of the credential kinds a provider route sends.
+ * `api-key` is a provider key read from a credential reference or the launch
+ * environment; `account` is a grant obtained by signing in. An adapter that
+ * sends another kind declares it here.
+ */
+export interface LlmCredentialKindMap {
+  'api-key': 'api-key'
+  account: 'account'
+}
+
+/** Any declared credential kind. */
+export type LlmCredentialKind = LlmCredentialKindMap[keyof LlmCredentialKindMap]
+
+/**
+ * One credential released for one destination. Host-only: it carries the
+ * secret, so it never crosses a Remote boundary and never enters a log.
+ */
+export interface ProviderCredentialGrant {
+  /**
+   * Request headers carrying the credential as the route's own protocol
+   * expects it, such as `x-api-key` for an API key. Consumers speaking that
+   * protocol send them unchanged.
+   */
+  readonly headers: Readonly<Record<string, string>>
+  /**
+   * The bare credential value, for destinations whose protocol renders it
+   * differently from {@link headers}, such as `Authorization: Bearer`.
+   */
+  readonly value: string
+  /**
+   * Invalidate this exact credential after the destination rejected it with
+   * HTTP 401 so no later request resends it. Absent for kinds without
+   * invalidation. The owner contains storage failures: the caller reports the
+   * destination's rejection, never a failure of this call.
+   * @returns settlement after the invalidation attempt.
+   */
+  reject?(): Promise<void>
+  /**
+   * Aborts when the owner withdraws this credential while requests carrying it
+   * may be in flight, as an account sign-out does. A consumer ends each request
+   * it authenticated with this grant and reports that end as its own failure,
+   * not as the caller's cancellation. Absent for kinds that are never withdrawn.
+   */
+  readonly revoked?: AbortSignal
+}
+
+/**
+ * The credential one registered provider route currently sends, answered by
+ * the route's owning adapter so that consumers read no provider configuration
+ * and choose no header names. `ctx.llm.providerCredential()` resolves a new value
+ * per call from one configuration generation; a caller keeps it for one
+ * operation only.
+ */
+export interface ProviderCredential {
+  /** Kind of credential the route sends. */
+  readonly kind: LlmCredentialKind
+  /**
+   * The route's current request base URL as its configuration resolves it,
+   * environment fallbacks included: the destination this credential is meant
+   * for. Consumers derive sibling endpoints of the same deployment from it.
+   */
+  readonly baseURL: string
+  /**
+   * Credential reference the route resolves, for diagnostics that tell the user
+   * where to configure the credential; absent for kinds without a stored
+   * reference, such as sign-in grants.
+   */
+  readonly reference?: string
+  /**
+   * Whether {@link resolve} would release a credential for `endpoint`, checked
+   * without validating the credential or contacting the destination; the owner
+   * may read its store to answer. Store failures reject.
+   * @param endpoint - absolute URL the credential would be sent to.
+   * @returns whether a credential is configured for that destination.
+   */
+  configured(endpoint: string): Promise<boolean>
+  /**
+   * Release the credential for `endpoint`, or `undefined` when none is
+   * configured or the destination may not receive it. The caller chooses the
+   * failure it reports for `undefined`. Store and format failures reject.
+   * @param endpoint - absolute URL the credential will be sent to.
+   * @param signal - cancellation for the lookup.
+   * @returns the released credential, or `undefined`.
+   */
+  resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>
+}
+
+/**
  * One interrogation of a provider endpoint that configuration has not stored
  * yet. Configuration surfaces send the draft a user is still editing, so the
  * request carries the endpoint and credential directly instead of naming a
@@ -344,6 +439,20 @@ export interface LlmDiscoveredModel {
   inputModalities?: readonly ModelModality[]
 }
 
+/**
+ * Emphasis of a model badge: `neutral` states a plain fact, `info` highlights
+ * the model, `success` marks a benefit, and `warning` asks for attention.
+ */
+export type LlmModelBadgeTone = 'neutral' | 'info' | 'success' | 'warning'
+
+/** Short provider-authored label a selector shows beside one advertised model name. */
+export interface LlmModelBadge {
+  /** One literal, or translations keyed by lowercase language id with a required English entry. */
+  text: LocalizedText
+  /** Emphasis of the label. */
+  tone: LlmModelBadgeTone
+}
+
 /** One adapter-discovered model; catalog membership is advisory, not request validation. */
 export interface LlmModelInfo {
   /** Provider route that owns this model entry. */
@@ -356,6 +465,11 @@ export interface LlmModelInfo {
   description?: string
   /** Accepted request modalities; absent means unknown, while an explicit omission is negative capability. */
   inputModalities?: readonly ModelModality[]
+  /**
+   * Selector label advertised by catalog discovery; exact-route resolution
+   * omits it, and no model request or Session event carries it.
+   */
+  badge?: LlmModelBadge
 }
 
 /** Provider-owned context capacity for one exact provider/model route. */
@@ -525,8 +639,17 @@ export interface ToolHistory {
   }[]
 }
 
-/** A single model request, fully assembled. */
-export interface GenerateOptions {
+/** Auxiliary request purposes declared by their producer packages. */
+export interface LlmRequestPurposeMap {}
+
+/** Declared auxiliary request purpose; ordinary conversation requests leave it absent. */
+export type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>
+
+/**
+ * A single model request, fully assembled.
+ * @typeParam Purpose - declared purpose keys for callers; forwarding adapters may accept `string`.
+ */
+export interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {
   /** Registered provider route selecting the adapter instance. */
   provider: string
   model: string
@@ -567,5 +690,7 @@ export interface GenerateOptions {
    * map the purpose to model-hidden transport metadata. Ordinary conversation
    * requests leave it unset.
    */
-  purpose?: 'compaction' | 'session-title'
+  purpose?: Purpose
 }
+
+export type { MessageId, ToolCallId, ProviderRequestId, LlmAttemptId, ReasoningEffortId } from './brand.ts'

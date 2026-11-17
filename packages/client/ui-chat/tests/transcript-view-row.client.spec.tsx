@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -50,6 +51,7 @@ function mount(mode: TranscriptViewMode = 'standard', dictionary: typeof en | ty
     useSessionRetainInfo: () => undefined,
     useResource,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useTranscriptView: bindSnapshotSelector(source),
     useCollapseTiming: bindSnapshotSelector(collapseTiming),
     useFoldedReplies: bindSnapshotSelector(foldedReplies),

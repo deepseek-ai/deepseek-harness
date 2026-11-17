@@ -1,0 +1,27 @@
+- region "Authorize computer use":
+  - paragraph: Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.
+  - heading "Authorize computer use" [level=3]
+  - group "Default mode for new sessions":
+    - strong: Default mode for new sessions
+    - paragraph: Computer use is available in Standard, Creator, and PTC modes. Choose PTC here to make it the default for new sessions.
+    - button "Set to PTC"
+  - group "PTC execution mode":
+    - strong: PTC execution mode
+    - paragraph: Keep variables and application objects across PTC tool calls. Switching restarts the PTC runtime. Other modes always keep their computer use state separately.
+    - button "Use persistent mode"
+  - group "Accessibility":
+    - strong: Accessibility
+    - paragraph: In System Settings, allow DSH Computer Use.app to read interface controls, click, and type.
+    - button "Request permission"
+  - group "Screen Recording":
+    - strong: Screen Recording
+    - paragraph: In System Settings, allow DSH Computer Use.app to capture application windows.
+    - button "Request permission"
+  - paragraph: Manage Accessibility and Screen Recording permissions in System Settings.
+- region "Manage applications computer use can access":
+  - heading "Manage applications computer use can access" [level=3]
+  - heading "Always-allowed applications" [level=4]
+  - list:
+    - listitem:
+      - strong: Fixture
+      - button "Revoke"

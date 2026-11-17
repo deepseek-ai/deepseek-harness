@@ -2,16 +2,17 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsObservation, FsTarget, FsWriteIntent } from '@deepseek-ai/dsh-fs'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import type { FsObservationActor } from '@deepseek-ai/dsh-fs-observation-policy'
 
 function target(path: string): FsTarget {
-  return { targetKey: FsTargetKey(path), displayPath: path }
+  return { targetKey: brandString<FsTargetKey>(path), displayPath: path }
 }
 const ownerExec = (session: object): FsObservationActor => ({ agent: { session } })
-const present = (version: string): FsObservation => ({ kind: 'present', version: FsVersion(version) })
+const present = (version: string): FsObservation => ({ kind: 'present', version: brandString<FsVersion>(version) })
 const absent: FsObservation = { kind: 'absent' }
 
 /** Dispatch the write-intent waterfall with the bare default thunk. */
@@ -235,5 +236,22 @@ describe('disposal releases recorded state (HMR safety)', () => {
     await fiber.dispose()
     // With no listener, the waterfall falls through to the bare default.
     expect(await writeIntent(ctx, target('a.txt'), ownerExec({}))).toBeUndefined()
+  })
+})
+
+describe('delete-intent decision', () => {
+  it('rejects unseen and absent sources, returns a present version, and releases its listener on disposal', async () => {
+    const { ctx, fiber } = await setup()
+    const actor = ownerExec({})
+    const t = target('a')
+    const intent = () => ctx.waterfall('fs/delete-intent', t, actor, () => undefined)
+    try {
+      await expect(intent()).rejects.toMatchObject({ code: 'FS_NOT_OBSERVED', message: 'delete requires reading "a" first' })
+      ctx.emit('fs/observed', t, absent, actor)
+      await expect(intent()).rejects.toMatchObject({ code: 'FS_NOT_FOUND', message: 'cannot delete "a": not found' })
+      ctx.emit('fs/observed', t, present('v7'), actor)
+      expect(await intent()).toEqual({ version: 'v7' })
+    } finally { await fiber.dispose() }
+    expect(await intent()).toBeUndefined()
   })
 })

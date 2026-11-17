@@ -93,6 +93,49 @@ export function apply(ctx: Context) {
 }
 ```
 
+## Forge 评审扩展
+
+变更请求评审经由 [forge 扩展 API](../subsystems/forge.zh.md#extension-api) 向插件开放。Host 插件注册一个筛选透镜，它保留变更视图所显示文件中的一部分，并给出它关心的行：
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ForgeLensId } from '@deepseek-ai/dsh-experimental-client-ui-forge'
+
+export const name = 'exports-lens'
+export const inject = ['forgePanel']
+
+export function apply(ctx: Context) {
+  // An effect of this plugin's fiber: unloading the plugin withdraws the lens and aborts its runs.
+  ctx.forgePanel.registerLens({
+    id: brandString<ForgeLensId>('example/exports'),
+    version: '1',
+    async classify(input, signal) {
+      const files: Record<string, { ranges: { old: []; new: { start: number; end: number }[] } }> = {}
+      for (const file of input.files) {
+        const lines = (await input.text('new', file.path, signal))?.split('\n') ?? []
+        const ranges = lines.flatMap((line, at) => line.startsWith('export') ? [{ start: at + 1, end: at + 1 }] : [])
+        if (ranges.length > 0) files[file.path] = { ranges: { old: [], new: ranges } }
+      }
+      return { files }
+    },
+  })
+}
+```
+
+Client 插件给这个透镜起名并添加行注解；`notesOf` 为每个视图返回一个稳定的可观察对象，`NoteBody` 是模块级组件，在视图所画的外框中绘制一条注解。forge 测试的[夹具插件](../../apps/web/tests/fixtures/plugins/fixture-forge-extension/client.js)还用到了工具栏、文件菜单、评论框和卡片的 slot。
+
+```ts ignore-check
+export const inject = ['forgeChanges', 'slots']
+
+export function apply(ctx: Context) {
+  ctx.effect(() => ctx.forgeChanges.describeLens({ id: brandString<ForgeLensId>('example/exports'), title: () => 'Exports' }))
+  ctx.effect(() => ctx.forgeChanges.registerAnnotations({ id: 'example-notes', observe: target => notesOf(target) }))
+  ctx.slots.inject('forge.diff.line.annotation', () => ctx.slots.register(
+    { name: 'forge.diff.line.annotation', key: 'example-notes' }, NoteBody))
+}
+```
+
 ## 可运行的组装示例
 
 交付应用通过 `packages/bundle/*/cordis.patch.yml` 提供 profile 层，产品 `dsh` 启动器通过具名 profile 负责 Web、ACP、SDK 与一次性 headless 执行。可选的用户 overlay 位于 `apps/cli/config/examples/`；profile 集成测试位于 `apps/cli/tests/profiles/`，包专属 Loader 组合则留在对应包的测试目录中。
@@ -107,7 +150,7 @@ export function apply(ctx: Context) {
 
 | 产品功能 | 插件机制 |
 |---|---|
-| 钩子系统（用户级 + 项目级） | `agent/created`、`agent/pre-step`、`agent/request`、`tools/pre-execute`、`tools/post-execute` 和 `agent/turn-stopping` 上的监听器；waterfall 返回类型化决策，`agent/turn-stopping` 则可通过 steering（中途引导）触发下一步；`dsh-hooks-claude-code` / `dsh-hooks-codex` 桥接器将钩子配置文件映射到这些扩展点上 |
+| 钩子系统（用户级 + 项目级） | `agent/created`、`agent/pre-step`、`tools/pre-execute`、`tools/post-execute` 和 `agent/turn-stopping` 上的监听器；waterfall 返回类型化决策，`agent/turn-stopping` 则可通过 steering（中途引导）触发下一步；`dsh-hooks-claude-code` / `dsh-hooks-codex` 桥接器将钩子配置文件映射到这些扩展点上 |
 | `/goal` | `ctx.goals` 管理持久状态，`dsh-goal-round-driver` 通过公共 `Agent` 调度同会话 Round，独立的命令/工具生产方分别提供人类/模型控制 |
 | `/loop` | 在 `turn/end` 会话事件上 `followup()` 下一次迭代；或强制继续 |
 | 动态工作流 | `ctx.workflowEngine` + PTC 工作流引擎 + `workflow` 工具；结构化的进程内子任务通过作用域化的提示词/工具注册、单调工具守卫、最终 `tools/result` 提交（包括外层 `run_code`）和结构化输出执行的单调 `concludeTurn()` 标记来强制输出 |

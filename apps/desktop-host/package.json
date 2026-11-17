@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop-host",
   "description": "Private Node-mode host process for the Electron desktop application",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -12,24 +12,31 @@
   ],
   "dependencies": {
     "koffi": "3.1.1",
-    "@deepseek-ai/libreoffice-kit": "^0.1.5",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*",
+    "@deepseek-ai/dsh-host-authentication-desktop": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-schedule": "workspace:*",
-    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
-    "@deepseek-ai/dsh-skill-office": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
-    "@deepseek-ai/dsh-workspace": "workspace:*"
+    "@deepseek-ai/dsh-workspace": "workspace:*",
+    "@deepseek-ai/dsh-plugin-manager": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
-    "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "@deepseek-ai/dsh-skill": "workspace:*"
+    "ws": "^8.21.3",
+    "@types/ws": "^8.18.1",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
+    "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*"
   }
 }

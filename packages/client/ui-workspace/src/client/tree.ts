@@ -9,8 +9,9 @@ import {
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionStatusSnapshot,
-} from '@deepseek-ai/dsh-client-ui-session/client'
+} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { TextSearchIndex, type SearchKeys } from '@deepseek-ai/dsh-util-text-search'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 
@@ -52,13 +53,17 @@ export interface SessionNode {
   running: boolean
   /** Running direct children in the loaded subagent catalog. */
   runningSubagentCount: number
-  /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
+  /** Host-confirmed unread completion or explicit unread mark. */
   completed: boolean
+  /** Latest unread completion ended with an execution error. */
+  failed: boolean
   /** In the registry-global pin set: leads its section, reorderable only among pinned rows. */
   pinned: boolean
   /** In the registry-global archive set: shown grayed in place and not openable. */
   archived: boolean
   updatedAt: number
+  /** Session working directory; absent when the Host reports none or an empty path. */
+  cwd?: string
 }
 
 /** Session order selected by the Workspace browser. */
@@ -93,8 +98,10 @@ export interface SearchResultNode {
   running: boolean
   /** Running direct children in the loaded subagent catalog. */
   runningSubagentCount: number
-  /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
+  /** Host-confirmed unread completion or explicit unread mark. */
   completed: boolean
+  /** Latest unread completion ended with an execution error. */
+  failed: boolean
   /** In the registry-global archive set: shown grayed and not openable. */
   archived: boolean
   snippet?: string
@@ -158,12 +165,12 @@ export function orderByRecency(
 
 /**
  * Reconcile a browser-local manual order with current account membership.
- * New ordinary forks precede their sources without changing saved entries' relative order.
+ * Saved entries retain their relative order; new ordinary members follow them by recency.
  * @param memberIds - authoritative account membership.
  * @param savedOrder - previously saved browser-local order.
  * @param summaries - current Session metadata; unknown new members wait for their summaries.
  * @param rowState - global pin and archive membership; only account members can supplement the order.
- * @returns saved relative positions plus missing members ordered by pin, fork source, recency, and archive status.
+ * @returns saved relative positions plus missing members ordered by pin, recency, and archive status.
  */
 export function reconcileManualOrder(
   memberIds: readonly SessionId[],
@@ -194,18 +201,7 @@ export function reconcileManualOrder(
     if (archived.has(id)) archives.push(id)
     else ordinary.push(id)
   }
-  const result = [...pins, ...ordered, ...ordinary, ...archives]
-  const pending = new Set(ordinary)
-  const placeFork = (id: SessionId): void => {
-    if (!pending.delete(id)) return
-    const parentId = summaries[id]?.parentId
-    if (parentId === undefined || parentId === id || !result.includes(parentId)) return
-    placeFork(parentId)
-    result.splice(result.indexOf(id), 1)
-    result.splice(result.indexOf(parentId), 0, id)
-  }
-  for (const id of [...ordinary].reverse()) placeFork(id)
-  return result
+  return [...pins, ...ordered, ...ordinary, ...archives]
 }
 
 /**
@@ -410,9 +406,11 @@ function sessionNode(
     running: status?.running ?? s.running,
     runningSubagentCount: runningChildCount(list, s.id, statuses),
     completed: status?.completionUnread === true,
+    failed: status?.completionFailed === true,
     pinned: !archived.has(s.id) && pinned.has(s.id),
     archived: archived.has(s.id),
     updatedAt: s.updatedAt,
+    ...(s.cwd === undefined || s.cwd === '' ? {} : { cwd: s.cwd }),
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
 }
@@ -525,10 +523,52 @@ export function deriveFlat(
     .map(session => sessionNode(session, list, statuses, pinned, archived))
 }
 
+/** Display label of each Session's Workspace: its first Workspace's title, else its cwd label. */
+function workspaceLabels(workspaces: readonly WorkspaceView[]): (summary: SessionSummary) => string {
+  const workspaceBySession = new Map<SessionId, string>()
+  for (const workspace of workspaces) {
+    for (const sessionId of workspace.sessionIds) {
+      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
+    }
+  }
+  return summary => workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd)
+}
+
 /**
- * Merge immediate title/Workspace substring matches with ranked Host content
- * matches. Local rows lead newest-first, content-only rows retain backend
- * order, and duplicate sessions receive the backend snippet in place.
+ * Search index over the Sessions sidebar search can show, newest first: title
+ * and Workspace match fuzzily, the Session id as a substring. Blank placeholders
+ * are left out because their canonical title displays localized.
+ * @param list - session metadata authority.
+ * @param workspaces - Workspace membership and display labels.
+ * @param archivedSessionIds - registry-global archive set (members match per the archived filter).
+ * @param archivedFilter - archived-row visibility choice; search follows it.
+ * @param previous - the index of an earlier list; its prepared titles, labels, and ids are reused.
+ * @returns the index {@link deriveSearchResults} searches.
+ */
+export function sessionSearchIndex(
+  list: SessionListState,
+  workspaces: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[],
+  archivedFilter: ArchivedFilter,
+  previous?: TextSearchIndex<SessionSummary>,
+): TextSearchIndex<SessionSummary> {
+  const archived = new Set(archivedSessionIds)
+  const current = mainSessionId(list)
+  const labelOf = workspaceLabels(workspaces)
+  const visible = list.ids.filter((id) => {
+    const summary = list.byId[id]
+    return summary !== undefined && !summary.blank && sessionVisible(summary, current, archived, archivedFilter)
+  })
+  const sessions = orderByRecency(visible, list.byId).map(id => list.byId[id] as SessionSummary)
+  const keys = (summary: SessionSummary): SearchKeys => ({ fuzzy: [sessionTitle(summary), labelOf(summary)], substring: [summary.id] })
+  return previous === undefined ? new TextSearchIndex(sessions, keys) : previous.update(sessions, keys)
+}
+
+/**
+ * Merge immediate title/Workspace/Session id fuzzy matches with ranked Host content
+ * matches. Local rows lead best match first, newest first among equal matches;
+ * content-only rows retain backend order, and duplicate sessions receive the
+ * backend snippet in place.
  * @param list - session metadata authority.
  * @param workspaces - Workspace membership and display labels.
  * @param query - caller text; surrounding whitespace is ignored.
@@ -537,6 +577,7 @@ export function deriveFlat(
  * @param statuses - unified UI status by Session.
  * @param content - ranked Host content-search page.
  * @param limit - protocol-owned maximum merged row count.
+ * @param index - {@link sessionSearchIndex} of the same list, Workspaces, and archive choice.
  * @returns bounded deduplicated flat rows and a refine-query hint bit.
  */
 export function deriveSearchResults(
@@ -548,41 +589,18 @@ export function deriveSearchResults(
   statuses: SessionStatuses,
   content: { items: readonly SessionSearchResultItem[]; hasMore: boolean },
   limit: number,
+  index: TextSearchIndex<SessionSummary>,
 ): SearchResultSet {
-  const q = query.trim().toLowerCase()
-  if (q === '') return { items: [], hasMore: false }
+  if (query.trim() === '') return { items: [], hasMore: false }
   const archived = new Set(archivedSessionIds)
   const current = mainSessionId(list)
-
-  const workspaceBySession = new Map<SessionId, string>()
-  for (const workspace of workspaces) {
-    for (const sessionId of workspace.sessionIds) {
-      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
-    }
-  }
-  const labelOf = (summary: SessionSummary): string =>
-    workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd)
+  const labelOf = workspaceLabels(workspaces)
   const contentBySession = new Map<SessionId, SessionSearchResultItem>()
   for (const item of content.items) {
     if (!contentBySession.has(item.sessionId)) contentBySession.set(item.sessionId, item)
   }
 
-  const local: SessionSummary[] = []
-  for (const id of list.ids) {
-    const summary = list.byId[id]
-    // Blank placeholders never match a query (their canonical title displays
-    // localized, so matching it would tie search to one language).
-    if (summary === undefined || summary.blank || !sessionVisible(summary, current, archived, archivedFilter)) continue
-    if (
-      sessionTitle(summary).toLowerCase().includes(q)
-      || labelOf(summary).toLowerCase().includes(q)
-    ) {
-      local.push(summary)
-    }
-  }
-  const localById = new Map(local.map(summary => [summary.id, summary]))
-  const orderedLocal = orderByRecency(local.map(summary => summary.id), list.byId)
-    .map(id => localById.get(id) as SessionSummary)
+  const orderedLocal = index.search(query)
 
   const ordered: SessionSummary[] = []
   const included = new Set<SessionId>()
@@ -612,6 +630,7 @@ export function deriveSearchResults(
           ? {}
           : { pendingInteraction }),
         completed: status?.completionUnread === true,
+        failed: status?.completionFailed === true,
         archived: archived.has(summary.id),
         ...match === undefined ? {} : { snippet: match.snippet },
       }

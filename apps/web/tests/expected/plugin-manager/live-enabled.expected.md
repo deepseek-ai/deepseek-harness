@@ -11,8 +11,8 @@
     - button "查看 子智能体": 子智能体
     - text: 设置子智能体的递归层级、数量和模型。
   - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
+    - button "查看 网页搜索与获取": 网页搜索与获取
+    - text: 选择网页搜索与网页获取使用的提供方。
   - listitem:
     - button "查看 Agent 循环": Agent 循环
     - text: 控制 Agent 派发工具调用的方式。
@@ -23,27 +23,33 @@
 - button "更多"
 - list:
   - listitem:
-    - button "查看 智能体团队": 智能体团队
-    - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。
-    - switch "启用 智能体团队"
-  - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - status
     - switch "启用 语音输入"
   - listitem:
+    - button "查看 自定义插件索引": 自定义插件索引
+    - text: 实验性 在插件页添加“发现”标签页，从你添加的插件索引中浏览和安装插件。
+    - status
+    - switch "启用 自定义插件索引"
+  - listitem:
     - button "查看 自动授权审查": 自动授权审查
-    - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
+    - text: 实验性 提供“自动审查”访问模式：每次工具调用前，由模型对照你的要求检查，获准的调用立即运行，被拒绝的调用等你审批。
+    - status
     - switch "启用 自动授权审查"
   - listitem:
-    - button "查看 开发者工具": 开发者工具
-    - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
-    - switch "启用 开发者工具"
+    - button "查看 变更请求与工作树": 变更请求与工作树
+    - text: 实验性 在会话侧栏集中跟踪关联的代码变更请求，支持 GitHub PR 以及 GitLab MR：查看检查状态、评审意见与代码差异，并把修改建议交给智能体继续处理。也可查看本地改动，用独立工作树隔离任务。GitHub 功能需要本机安装 gh 并登录。GitLab 合并请求需要本机安装 glab 并登录。
+    - status
+    - switch "启用 变更请求与工作树"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:
     - button "查看 @fixture/bundle": "@fixture/bundle"
     - text: Registry description for the fixture bundle.
+    - status
     - switch "启用 @fixture/bundle" [checked]
   - listitem:
     - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
+    - status
     - switch "启用 dsh-web-scaffold-defaults" [checked]

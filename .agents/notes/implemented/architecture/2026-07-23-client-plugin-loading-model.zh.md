@@ -34,7 +34,7 @@ Web 内核保持不依赖框架，也不 import 任何动态包实体。Modules 
 
 浏览器复刻 host 侧的分工。`dsh-client-modules`（`ClientModuleSystem`）坐上 host 侧由 Node 内部 ESM loader 占据的模块系统席位；同一份 vendored `@cordisjs/plugin-loader` 在两侧都坐治理席。二者的分界线一句话说尽：**模块系统拥有模块身份与字节——代码怎么到达、怎么登记、怎么变成导出内容；Loader 拥有插件生命周期——插件何时挂载、等待什么、如何拆除。**
 
-`ClientModuleSystem` 是一张 lazy CJS 表。执行 bundle 只**登记**其 factory——入口调用 `window.__ModuleLoader__.load({ id, factory })`，chunk 还会提供其生成文件名——此外什么都不发生。模块体的一切副作用（包括 CSS 注入）都住在 factory 闭包里，在物化时运行：物化即该 id 的首次 `require`/import，此后记忆化。Import 和 prefetch 会先递归登记已声明的动态请求，再登记消费者；随后 factory 会同步物化任何已登记但尚未物化的请求。可调用的 `require` 解析同步模块表请求；其 `require.async` 操作返回 Promise，负责加载、登记并物化一个包内 chunk。共享 tsdown 预设把源码中针对包内 chunk 的 `import()` 表达式编译到这个独立操作。受支持的产物必须自包含：入口或 chunk 不能同步 require 另一个相对 `client*.js` 产物。模块表按固定分支顺序解析：seed word → 记忆化记录 → graph row classic-script 登记 → 已登记 factory 物化 → 大声抛错。Modules factory 是自举例外：HTML facade 先物化它，构造过程再把同一 exports 直接写入记忆化表。最后这一抛是构建期纯度门禁在运行时的镜像。系统还保管逐模块簿记——名下 `<style data-plugin>` 标签 id、观测到的 require 边——并暴露 HMR（热模块替换）需要的两个动词：`prefetch(id)`（登记所请求的动态 factory 和本 row 自身的 factory；并发到达共享一个任务）与 `invalidate(id)`（推进 owner 代次并丢弃非 bootstrap 包的入口和 chunk factory 及记录，让下次到达重新加载它们）。在旧代次捕获的 chunk 请求不能填充新代次。
+`ClientModuleSystem` 是一张 lazy CJS 表。执行 bundle 只**登记**其 factory——入口调用 `window.__ModuleLoader__.load({ id, factory })`，chunk 还会提供其生成文件名——此外什么都不发生。JavaScript 模块体副作用位于 factory 闭包里，在物化时运行：物化即该 id 的首次 `require`/import，此后记忆化。Import 和 prefetch 会先递归登记已声明的动态请求，再登记消费者；随后 factory 会同步物化任何已登记但尚未物化的请求。可调用的 `require` 解析同步模块表请求；其 `require.async` 操作返回 Promise，负责加载、登记并物化一个包内 chunk。共享 tsdown 预设把源码中针对包内 chunk 的 `import()` 表达式编译到这个独立操作。受支持的产物必须自包含：入口或 chunk 不能同步 require 另一个相对 `client*.js` 产物。模块表按固定分支顺序解析：seed word → 记忆化记录 → graph row classic-script 登记 → 已登记 factory 物化 → 大声抛错。Modules factory 是自举例外：HTML facade 先物化它，构造过程再把同一 exports 直接写入记忆化表。最后这一抛是构建期纯度门禁在运行时的镜像。系统还保管逐模块簿记——owner 身份、可选且不求值的元信息函数、观测到的 require 边——并暴露 HMR（热模块替换）需要的两个动词：`prefetch(id)`（登记所请求的动态 factory 和本 row 自身的 factory；并发到达共享一个任务）与 `invalidate(id)`（推进 owner 代次并丢弃非 bootstrap 包的入口和 chunk factory 及记录，让下次到达重新加载它们）。在旧代次捕获的 chunk 请求不能填充新代次。
 
 vendored Loader 经其 `internal` 约定消费模块系统——唯一调用点是 `tree.import`——并拥有一切 entry 形状的事务：entry 创建、fiber 经 cordis 服务等待的激活（注入的服务未就位即保持 PENDING，服务 provide 时级联激活）、update/refresh、拆除。治理代码按 vendor 政策与 host 侧逐字节相同。浏览器化是壳 vite 配置里的编译期映射：一个 `node:module` stub 别名加若干 `process.*` define，使 `ModuleLoader.fromInternal()` 返回 undefined——这正是留给壳来填的空槽。模块系统挂载为 `ctx.modules`。
 
@@ -56,7 +56,7 @@ Host 会快照每个已构建插件入口 bundle，并把每个调度阶段的�
 
 1. 负责组合的 app（`apps/cli`）把名册作为普通行放进它的 `cordis.yml` 配置树——client 插件包与每个 host 插件一样是 entry 行，包括无条件挂载的 `client-hmr` 行。`auditStartupEntries` 报告 import 失败、带原始 stack 的激活错误，以及待满足的依赖；optional entry 输出 warning，required entry 则使启动失败（[启动策略](2026-09-09-consumer-owned-startup-strictness.zh.md)）。
 2. `dsh-client-modules` 的 node 半（该包是双面的：浏览器半就是模块表）使用 Host face import 时相同的 `name` 与所属 tree `baseUrl` 解析每个 live Loader entry，再读取最近归属 package.json 的 `dsh.client` 声明并组合出 `window.__DSH_BOOT__`：`{ rev, entries: [{ id, url, rev, inject?, immediately?, external? }], batches: [{ phase, url, rev, entries }] }`。即使 overlay 指向相对的 source 或 built entry 文件，manifest 包名仍是浏览器模块身份。若不同的 active Loader source 解析到同一包名，组合会失败；一个来源卸载后，仍存活的来源无需重启 fiber 即可提供该 row。Row 的三个可选字段都来自 manifest，永不人肉抄写。组合会把被请求的动态图 row 排到消费者之前、拒绝同步请求环，并把每个 row 恰好分配给一个初始批次。它会拒绝没有已构建 `./client` bundle 的已声明插件，并把它们的 package/path 行归到一条源码构建要求下；畸形声明字段同样会让激活失败，Host 检查会从 FAILED fiber 报告这两类错误。
-3. 扫描是单包增量——不存在全量重扫代码路径。每次 cordis `internal/plugin` 发射把该 fiber 的 entry 名标脏（无 entry 的 fiber O(1) 丢弃）；微任务 flush 把每个脏名对账 live loader entries，包元数据（含「非 client 包」的否定结论）按 entry 名与所属 tree base URL 缓存至进程结束，变化后 bundle 的发布只经 `rebuilt(id)` 可达。激活趟从当前 entries 灌同一脏集合并同步 flush，初扫与稳态共享一条实现。初始 row 对读取前的文件系统元数据求哈希；启动 combo revision 对有序 row 的身份与 revision 求哈希，row 与批次描述再共同哈希进 `graph.rev`。图类型单源在 modules 包的 `./client` 出口——webserver 对图一无所知；modules 会注册 combo 路由并贡献结构化 index 注入行。
+3. 扫描是单包增量——不存在全量重扫代码路径。每次 cordis `internal/plugin` 发射把该 fiber 的 entry 名标脏（无 entry 的 fiber O(1) 丢弃）；微任务 flush 把每个脏名对账 live loader entries，每次对账都重新读取包 manifest 与 bundle 元数据，因此条目重启会发布变化后的声明或 bundle，未变化时不发布；没有伴随条目重启的 bundle 重建经 `rebuilt(id)` 发布（[包资源决策](2026-10-19-client-plugin-package-assets.zh.md)）。激活趟从当前 entries 灌同一脏集合并同步 flush，初扫与稳态共享一条实现。初始 row 对读取前的文件系统元数据求哈希；启动 combo revision 对有序 row 的身份与 revision 求哈希，row 与批次描述再共同哈希进 `graph.rev`。图类型单源在 modules 包的 `./client` 出口——webserver 对图一无所知；modules 会注册 combo 路由并贡献结构化 index 注入行。
 
 为什么名册是 yml 行而不是扫描？因为哪些插件组合进一次部署是组合决策，不是包属性——一个在仓库中声明了 dsh.client 的包，不代表这次部署要挂载它，扫描发现无从替人做这个决定；node 半只扫描配置树实际挂载了的东西。
 
@@ -67,12 +67,14 @@ Host 会快照每个已构建插件入口 bundle，并把每个调度阶段的�
 1. 内核挂载 vendored Loader，在任何 entry 存在之前就把模块系统注入为 `internal`。顺序有讲究：`tree.import` 的裸 import 兜底分支在浏览器里绝不能跑到。
 2. 它统一创建每个 graph row。Import modules row 会返回记忆化的 bootstrap exports，其 `apply()` 读取该树的 `Loader.internal`，把同一个实例提供为 `ctx.modules`；需要该 service 的 row 会保持 PENDING 直至此时，因此 modules row 无需特殊创建位置。渲染组装是由 `dsh-client-ui-renderer` 提供的普通 host graph row；内核不追加组装伪 entry。
 3. Graph 顺序治理同步 factory 可用性；Cordis 激活与之独立，仍经服务等待推进。
-4. `settled` = 每个 entry 已创建 + `loader.await()` 完全停稳 + 一次全 ACTIVE 扫描。扫描列出每个 import 失败、FAILED 或 PENDING 的 fiber 及其缺失的服务。它存在的理由：cordis 的 inject 等待没有超时——这次扫描就是大声失败的兜底线。
-5. 不依赖框架的 loading 页经 `internal/status` 投影真实 fiber 状态。检查完成后，内核调用 `ctx.uiRenderer.mount(container)`，一次切换到真实 UI。
+4. `settled` = 每个 entry 已创建 + `loader.await()` 完全停稳 + 启动审计。审计列出每个 import 失败、FAILED 或 PENDING 的 fiber 及其激活错误或缺失的服务。它存在的理由：cordis 的 inject 等待没有超时。浏览器必需名单中的 entry 未激活会拒绝启动；其他未激活 entry 输出一条控制台警告（[启动策略](2026-09-09-consumer-owned-startup-strictness.zh.md)）。
+5. 不依赖框架的 loading 页经 `internal/status` 投影真实 fiber 状态。审计接受插件树后，内核调用 `ctx.uiRenderer.mount(container)`，一次切换到真实 UI。
+
+样式元信息及 renderer 所有权遵循[模块元信息决定](2026-11-05-client-module-metadata.zh.md)；模块加载保存生产函数而不求值。
 
 ### 动态图对账
 
-modules 控制器只持有从启动清单创建的 Loader 条目。Host 的完整快照更新模块描述并对账这些条目；其他 Loader 贡献方保留自身所有权。新增模块通过单资源 URL 到达，因为重放启动 batch 可能重复注册现有 factory。移除使用 Loader 删除语义，随后等待已捕获 fiber 清理完毕，再移除未使用的模块与样式。已声明及已观察到的传递依赖使共享模块保持存活。Factory revision 的跟踪独立于条目激活，因为下载或物化完成后仍可能没有创建条目。图更新会在任何消费者导入依赖前，使未归属受管条目的陈旧 factory 和失败的到达目标失效，并清除其样式；重建帧也会对账因导入失败而缺失的条目。
+modules 控制器只持有从启动清单创建的 Loader 条目。Host 的完整快照更新模块描述并对账这些条目；其他 Loader 贡献方保留自身所有权。新增模块通过单资源 URL 到达，因为重放启动 batch 可能重复注册现有 factory。移除使用 Loader 删除语义，随后等待已捕获 fiber 清理完毕，再移除未使用的模块记录。已声明及已观察到的传递依赖使共享模块保持存活。Factory revision 的跟踪独立于条目激活，因为下载或物化完成后仍可能没有创建条目。图更新会在任何消费者导入依赖前，使未归属受管条目的陈旧 factory 和失败的到达目标失效，并通知资源消费者；重建帧也会对账因导入失败而缺失的条目。
 
 Host SSE 适配器转发现有图变化通知，并在连接时发送当前完整图。图描述浏览器的目标条目，不代表 Host 清理完成：Host 生命周期顺序属于其 Loader，每个浏览器则等待自身被移除 fiber 的清理。图对账与代码重建共用一个页面队列。本地代际阻止过期下载挂载；不透明 revision 只比较相等。失败页面报告本地错误，并可重试同一张图而不改变 Host 启用状态。这保留了无关页面状态，也无需重启应用或引入第二套插件执行器。Electron 的独立安装流程不属于此机制。
 
@@ -88,8 +90,8 @@ Host SSE 适配器转发现有图变化通知，并在连接时发送当前完�
 2. `prefetch`——加载该单资源外部脚本并登记新 factory，旧 fiber 此刻仍在服役。初始多资源脚本不会再次执行。
 3. `registry.delete`——先于任何 fiber 操作。裸做 fiber dispose 会触发 vendored Loader 的自 dispose 分支，把 entry 永久停用。
 4. 排空旧 fiber 的各 disposer。
-5. 移除名下的 `<style data-plugin>` 标签。
-6. 通过模块系统物化新导出，再调用 `entry.refresh()` 由 Loader 挂载。CSS 在旧 disposer 清理完成后重新注入；显式物化使导入错误能够被捕获，而不只留下 Loader 的控制台日志。
+5. Renderer 观察模块失效并移除过期样式资源。
+6. 通过模块系统物化新导出，再调用 `entry.refresh()` 由 Loader 挂载。成功物化后 Renderer 安装元信息提供的样式；显式物化使导入错误能够被捕获，而不只留下 Loader 的控制台日志。
 7. `fiber.await()`——让失败大声重抛。
 
 Bootstrap 替换会在失效或卸载前被拒绝：模块系统保留其初始导出，重新挂载旧代码会重置消费者，却无法应用请求的 revision。页面会报告需要刷新，并保留 bootstrap fiber。所有非 bootstrap 插件都共享同一套替换语义；`immediately` 行的重载与 lazy 行分毫不差。依赖级联不花一行 client 代码：fiber 的激活纪元串接着它各服务提供方的 uid，因此替换 connection 等基础 provider 的 fiber 时，每个依赖方都会经 cordis 本身重新装载——行为正确，但代价较高。
@@ -102,9 +104,9 @@ Bootstrap 替换会在失效或卸载前被拒绝：模块系统保留其初始�
 
 ## Consequences
 
-Wire 两侧运行同一份治理实现；浏览器特有层只包含一套模块系统和一个重载插件。动态包只有一种产物形态，因此纯度检查覆盖全部动态包。Cordis 依赖、模块请求与启动档位都与其所有者——manifest——同住，负责组合的 app 只握名册。Host graph 校验与递归请求到达使同步 factory 依赖保持显式。浏览器原生 script 装载保留插件网络资源、生成 bundle 与 TypeScript/TSX 源码之间的标准映射，模块系统也只保留一个可替换的 `loadBundle` 钩子。
+Wire 两侧运行同一份治理实现；浏览器特有层只包含一套模块系统和一个重载插件。动态包只有一种产物形态，因此纯度检查覆盖全部动态包。Cordis 依赖、模块请求与启动档位都与其所有者——manifest——同住，负责组合的 app 只握名册。Host graph 校验与递归请求到达使同步 factory 依赖保持显式。浏览器原生 script 装载保留插件网络资源、生成 bundle 与 TypeScript/TSX 源码之间的标准映射，模块系统只保留两个可替换的载体钩子：负责 bundle 字节的 `loadBundle` 和负责包资源引用的 `resolveAsset`。
 
-接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在 settled 扫描时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 为当前图及上一代启动图保留 bundle 快照与惰性响应计划。脚本和 map body 在首次 `GET` 后缓存，因此内存随 bundle 快照和已请求的响应 body 增长。每份已物化响应在其 URL 下保持固定；若上一代 map 在重建后才首次被请求，则会读取当前 map 文件。
+接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在启动审计时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 为当前图及上一代启动图保留 bundle 快照与惰性响应计划。脚本和 map body 在首次 `GET` 后缓存，因此内存随 bundle 快照和已请求的响应 body 增长。每份已物化响应在其 URL 下保持固定；若上一代 map 在重建后才首次被请求，则会读取当前 map 文件。
 
 名册位于 web 组合包的配置树（`packages/bundle/web-app/cordis.patch.yml`）；`mountWebPlugins` 与 `CLIENT_PACKAGES` 常量已消失，重组一次部署等于替换 yml/overlay。Graph 组合器位于 `dsh-client-modules` node 半，由 parser 预载的 Client face 则自举浏览器模块表。Webserver 继续作为朴素路由注册插件；`/api/*` 绑定、浏览器认证、RPC envelope 与精确 Fetch 路由属于 Connection node 半，Remote 分发属于 API Gateway，开发期 bundle 监视与 SSE 通道属于 HMR node 半。
 

@@ -1,15 +1,16 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
-import SessionStore, { foldSurface, Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { foldSurface, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import * as commandFeedback from '@deepseek-ai/dsh-command-feedback'
 import type { FeedbackRecord } from '@deepseek-ai/dsh-command-feedback/types'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const { USER_ID, getOrCreateAnonymousUserId } = vi.hoisted(() => {
   const USER_ID = '01234567-89ab-4cde-8f01-23456789abcd'
@@ -31,12 +32,13 @@ interface Harness {
 
 /** Build a live idle agent over a store-owned session, as an app's spine does. */
 function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session } {
-  const session = ctx.sessions.create(SessionId(id))
+  const session = ctx.sessions.create(brandString<SessionId>(id))
   let status: AgentStatus = 'idle'
   const agent: Agent = {
     id: session.id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     ctx: new Context(),
     get status() { return status },
@@ -137,7 +139,7 @@ describe('sessionFeedback Host Remote', () => {
 
   it('reports session-not-found for a Session no live owner carries', async () => {
     const test = await harness()
-    const missing = SessionId('no-such-session')
+    const missing = brandString<SessionId>('no-such-session')
     await expect(test.ctx.sessionFeedback.record({ sessionId: missing, text: 'lost' }))
       .resolves.toEqual({ ok: false, error: { code: 'session-not-found', sessionId: missing } })
     expect(test.session.snapshotEvents()).toEqual([])

@@ -31,6 +31,8 @@ kind: "package-reference"
 
 评分或列表加载失败在行内展示；提交失败通过警告 toast 展示，弹窗保持打开以便修正草稿。只有已定稿的消息能到达消息条目——被中断冻结的部分输出不带 `messageId`，因此没有反馈控件。
 
+访问控制：评分按钮只在当前 Peer 可以在该会话上调用 `messageFeedback/put` 时渲染；`/feedback` 装饰不做前端判断，没有权限时提交由 Host 拒绝。
+
 -----
 
 <a id="understand-the-implementation"></a>

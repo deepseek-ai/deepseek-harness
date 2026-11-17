@@ -27,6 +27,8 @@ kind: "package-library"
 
 用此包启动应用是一个小而显式的入口：你给它一个配置文件，它运行整个启动过程。本节说明你能做什么、能得到什么；每个结果背后的 helper 调用记录在下方可折叠的实现章节中。
 
+profile 加载时会从 `dsh.profile.bundles` 移除已停用的安装方 bundle 选项，仅在需要时重写 manifest，保留其他字段。[Team 迁移](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)说明默认组合与保留的行覆盖。
+
 ### 何时使用
 
 在实现共享 `dsh` launcher 或嵌入其低层启动 helper 时使用它。产品功能应放入 profile 组合包，而不是新增应用 bin；只向已运行应用添加插件的代码直接挂载插件即可。
@@ -40,7 +42,7 @@ installFailLoud('dsh')
 const ctx = await boot('dsh', resolveConfigPath(argv[2], process.env.DSH_SNAPSHOT))
 ```
 
-`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`webserver`、`web-runtime`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
+`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`tool-executor-native`、`tool-executor-ptc`、`webserver`、`web-runtime`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
 
 <a id="profiles"></a>
 ### Profile
@@ -53,18 +55,20 @@ profile 导入插件前，DSH 会将其声明的 DSH 版本要求与 `getDshRunt
 
 检查只发生在 DSH 自己持有的组合入口，改写的是启动器自己的那份组合：profile 的 patch 层、依赖清单与组合包列表都不会改变。`prepareProfilePatches` 在启动器的空 profile 根之上组合，并在挂载根 Include 时以及每次 profile 重新组合时执行，因此被拒绝的插件永远不会导入其模块；`prepareProfileEntries` 对 preset 行做同样的事。被拒绝的普通行会变成游离的 `disabled: true` 行；原生 group 保持挂载，其被拒绝的子行不会加载；若某个原生 Include 会到达被拒绝的插件，则整体省略该 Include，因为它的文件不会被改写。被策略拒绝的行在 profile 中保留其配置的 `disabled` 值，每次拒绝都会报告包名、版本与风险。组合包本身不是行，因此 `loadProfileDirectory` 在启动和每次重新组合加载 profile 的组合包层时，检查每个组合包自己声明的 DSH 版本要求；没有豁免的不兼容组合包会像无法读取的组合包一样被跳过，并列入 `skippedBundles`。这些入口不覆盖其他嵌入方通过自己的 `ctx.plugin` 调用挂载的插件。会话中直接改文件的两类编辑只在下一次重新组合或启动时才被判定：正在运行的插件自己的 `package.json` DSH 版本要求，以及 Loader 自己读取的入口清单文件（如启动器的根配置或嵌套的 `cordis:include` 文件）。`--dump-config` 报告的是配置出的组合，因此被拒绝的插件行仍会出现在其中，而被拒绝的组合包不提供任何行；`--dump-config-schema` 会导入每个组合模块以读取其 schema，请只对已经信任其插件的 profile 运行。
 
-精确版本豁免保存在 profile 自己的 `compatibility.json` 中，而不是 `package.json`，因此写豁免不会触及依赖清单、组合包列表或 Cordis patch 文件。它把精确的 `package-name@version` 键映射到精确 DSH 运行时版本列表；插件升级和 DSH 升级都不继承授权。文件缺失表示没有豁免。文件损坏绝不会阻止 profile 启动：读取器接受的记录仍然生效，每条被拒绝的记录会与插件拒绝信息一起输出到 stderr，此后该文件被视为只读，因此授予或撤销会拒绝执行并要求用户手工修复，而不是覆盖用户的内容。[插件管理器](../plugin-manager/README.zh.md#version-compatibility-and-exemptions)负责每次变更所需的授权、撤销与风险确认。
+精确版本豁免保存在 profile 自己的 `compatibility.json` 中，而不是 `package.json`，因此写豁免不会触及依赖清单、组合包列表或 Cordis patch 文件。它把精确的 `package-name@version` 键映射到精确 DSH 运行时版本列表；插件升级和 DSH 升级都不继承授权。文件缺失表示没有豁免。文件损坏绝不会阻止 profile 启动：读取器接受的记录仍然生效，每条被拒绝的记录会与插件拒绝信息一起输出到 stderr，此后该文件被视为只读，因此授予或撤销会拒绝执行并要求用户手工修复，而不是覆盖用户的内容。[插件管理器](../plugin-manager/README.zh.md#version-compatibility-and-exemptions)负责每次变更所需的授权、撤销与风险确认。`validatePluginVersionExemption(packageVersion, runtimeVersion)` 校验规范的精确身份而不授予权限；身份非法时抛出错误。
+
+组合包可以用 `dsh.bundle.platforms` 声明非空的 Node Host 平台名称列表，例如 `["darwin"]`。 额外的 `wsl` 值允许带有 WSL 进程或内核标记的 Linux Host；`linux` 仍允许所有 Linux Host。平台准入不代表 Windows 互操作或桌面已可用。启动器在读取组合包 patch 前验证此声明。Host 不受支持时会跳过整个配置层，保留已保存的选择，并通过 `skippedBundles` 报告原因；其他配置层继续生效。省略此字段时允许所有平台。值必须是 Node 平台名或 `wsl`，`macos` 等别名无效。浏览器所在机器的平台不决定 Host 是否受支持。
 
 你的机器本地偏好同样位于 harness home 中：
 
-- **`.env`**——你的普通环境层：调用目录的文件优先于 harness home 的文件，两者都低于继承环境。在文件中设置的进程启动变量（如 `PATH`、`DSH_*`、`XDG_*`）会被拒绝：请改为导出这些变量。四个代理名（`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`）只从 harness home 的文件接受，绝不从调用目录的文件接受——后者随 clone 一起到来。对于只想加载某个目录 `.env` 的非产品 bin，文件缺失不影响启动，文件无法加载时输出一行带标签的警告。
+- **`.env`**——你的普通环境层：调用目录的文件优先于 harness home 的文件，两者都低于继承环境。在文件中设置的进程启动变量（如 `PATH`、`DSH_*`、`XDG_*`）会被拒绝：请改为导出这些变量。四个代理名（`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`，大小写不限）和 DeepSeek 端点变量名（`DEEPSEEK_BASE_URL`、`DEEPSEEK_SEARCH_BASE_URL`，须按此拼写）只从 harness home 的文件接受，绝不从调用目录的文件接受——后者随 clone 一起到来。对于只想加载某个目录 `.env` 的非产品 bin，文件缺失不影响启动，文件无法加载时输出一行带标签的警告。
 - **`cordis.patch.yml`**——你的 tweak 层，应用在所有组合包层之后（先应用逐 profile 的文件，再应用 home 级文件，因此后者优先级更高）：替换某个条目的整个配置（重述你要保留的字段）、插入新条目，或在启动时插值 `!!js` 表达式。patch 指定的条目不存在时输出 stderr 警告；空文件或仅含注释的文件会导致启动失败——如需禁用该层，请改用 `[]`。
 
-启用的 `dsh-hmr` 插件会监视 profile manifest 与两份用户 patch 文件，重新读取按顺序排列的组合包层，并应用[重载失败策略](#startup-and-reload-failures)。[DSH HMR](../hmr/README.zh.md) 将这些重载与[插件管理器](../plugin-manager/README.zh.md)的配置写入串行化；包操作在其队列之外执行。启动器不安装 HMR 或监视器；HMR 被禁用或不存在时，更改需要重启。
+启用的 `dsh-hmr` 插件会监视 profile manifest、两份用户 patch 文件与每个 `--patch` overlay 文件，重新读取按顺序排列的组合包层，并应用[重载失败策略](#startup-and-reload-failures)。[DSH HMR](../hmr/README.zh.md) 将这些重载与[插件管理器](../plugin-manager/README.zh.md)的配置写入串行化；包操作在其队列之外执行。启动器不安装 HMR 或监视器；HMR 被禁用或不存在时，更改需要重启；例外是 Config Editor 保存时会应用所有 patch 与 overlay 文件的当前内容。
 
 插入条目的插件名可以是绝对文件系统路径、文件 URL 或包标识符。patch 加载会把 `insert` 条目及其嵌套分组中的绝对路径以及相对于 patch 文件的 `./` 或 `../` 路径转换为文件 URL；对已有条目名称的断言及替换用的 `config` 值保持原样。
 
-挂载 profile 条目前，`dsh` launcher 会从安装依赖图与有序 bundle 依赖图计算一份不可变的 runtime resolution。普通 Node、打包可执行文件与 Electron Host 等所有 profile 启动器都使用 runtime 解析，将 runtime resolution 安装到 Node 的 ESM 与 CommonJS 解析器中，不创建 fallback 链接。
+挂载 profile 条目前，`dsh` launcher 会从安装依赖图与有序 bundle 依赖图计算一份不可变的 runtime resolution。普通 Node、打包可执行文件与 Electron Host 等所有 profile 启动器都使用 runtime 解析，将 runtime resolution 安装到 Node 的 ESM 与 CommonJS 解析器中，不创建 fallback 链接。依赖遍历包含已安装的可选依赖，跳过目标安装中缺席的包。
 
 `sanitizeProfile(binName, profileDir, bundles)` 提供文件恢复，无需加载插件或解析 patch。Desktop 在原生致命错误恢复中调用它。调用前必须停止 profile 并排除并发 profile 写入。它将 profile 的 `cordis.patch.yml` 重命名为带唯一 `.bak-<timestamp>` 后缀的同目录备份，并恢复调用方指定的 bundle 列表，保留已安装包和其他 manifest 字段。时间戳为 Unix 毫秒数；同名备份已存在时追加序号（`-1`、`-2`、……），时间戳保持不变。返回值为备份路径；patch 不存在时返回 `undefined`，缺失的 profile 不会被创建。下次启动的 profile 初始化会重新创建空 patch。home 级 patch 不变。无效 profile JSON 在修改前报错；后续错误向调用方抛出，保留已完成的修改供重试。
 
@@ -86,18 +90,18 @@ profile 导入插件前，DSH 会将其声明的 DSH 版本要求与 `getDshRunt
 
 使用 `readPluginMeta(specifier, parentURL)` 或 `ctx.pluginPackages.metaOf(specifier, parentURL)` 读取已安装包的展示文本，无需导入或激活插件。查询使用完整包标识与调用方的解析基准，并遵循 Node exports。文件路径与文件 URL 不解析资源，直接返回无元信息。包根标识缺失的 locale 字段回退到可访问的 `package.json`；子路径标识从不读取 `package.json`。格式错误的元信息返回 `error` 诊断。结果保留翻译，由 Client 选择语言。即使 locale 文本完整，读取器也会加载图片 data URL：包根使用清单 `icon`，省略该字段时使用 `<包名>/icon`；子路径使用 `<标识>/icon`。图标出错时，保留有效文本并附上诊断。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。
 
-`ON_DEMAND_BUNDLES` 列出仅按需安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包拥有的本地化元信息和图标，支持离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与新鲜度；构建只读取已提交的目录，不导入提供者代码。目录不保存安装目标；[插件管理器](../plugin-manager/README.zh.md#use-this-package)根据当前版本和安装位置确定目标，并使用普通组合包安装器。[产品用途检查](../../../scripts/verify-product-use.ts)将随附和按需选择与 Web 组合，但不执行提供者。
+app-boot 应用的 profile 模板、安装方拥有的 profile 组合包元组和已退役组合包列表位于 [`@deepseek-ai/dsh-official-bundles`](../../util/official-bundles/README.zh.md)，安装方的默认、可选和按需组合包列表也在该包中。
 
 <a id="startup-and-reload-failures"></a>
 ### 启动与重载失败
 
 profile 重载返回未变化的已有故障诊断，不让无关修改因此失败。新增未激活条目、配置或 fiber 变化、诊断变化都会使重载失败；被移除的 fiber 仍须完成释放。显式启用的目标必须成功激活，即使它的故障早于本次操作。`recomposeProfile(ctx, patches, binName, { requiredIds, running })` 与 runtime resolution 一起执行一次重新组合：它移除新一代组合不再列出的行，并在其包仍有映射时等待这些行释放完成，发布可重新计算的 resolution 的最新一代，使兼容性预检读取已发布的包，应用新一代组合，启动更新后没有运行中 fiber 的 `running` 条目和导入失败的条目，然后判定激活结果。`running` 列出调用方停止其中部分条目之前正在运行的条目；之后每个失败的条目都计为新的故障。新一代组合应用之前的失败会把移除的行放回原位置，从而重新启动它们，并重新启动 `running` 条目。等待服务的条目报告为警告（required 条目除外），因此出现提供方后它即启动；`reconcileProfilePatches()` 以同样方式判定它。resolution 拒绝的发布属于这种失败，并报告 `package-moved`。Config Editor 使用的 `reconcileProfilePatches()` 应用并判定 patch，不发布 resolution，也不重试失败的导入。导入失败的条目以 Loader 再次导入时返回的错误报告，因此若导入现在成功，判定该条目时会对模块求值；变更前记录的激活状态不执行任何导入，因此之前导入失败的条目无论现在的错误是什么，都计为同一个故障。成功重载在生命周期结束及诊断检查通过后发出 `app-boot/config-reload`，包括未启用 HMR 时的程序化更新。事件不携带 diff 或解析后的配置。成功重载在生命周期结束及诊断检查通过后返回；仅 volatile 的条目变化由 Loader 在更新过程中提交。
 
-Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如果已启用的 required 条目无法激活，`boot()` 会在释放资源后以 `StartupError` 拒绝。独立管理生命周期的 logger exporter 会保留异步资源释放期间的警告和错误记录，并在 `boot()` 结算前释放。其消息分组列出所有失败插件和等待的服务，标记 required 条目，并保留原始堆栈、嵌套原因和聚合错误成员。CLI 仅输出该消息一次，并在保存[完整启动诊断](../../../apps/cli/reference/README.zh.md#startup-diagnostics)后以退出码 1 结束；其他异常保留正常堆栈输出。表中的“终止启动”指释放已挂载插件并以非零码退出，不报告就绪；“继续”指保留成功运行的插件。后续配置 HMR 不会再次执行 required 启动审计，也不会回滚整个更新。
+Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如果已启用的 required 条目无法激活，`boot()` 会在释放资源后以 `StartupError` 拒绝。被所在 group 拒绝的条目选项也视为无法激活的条目，其错误是 Loader 的校验问题及源码位置。独立管理生命周期的 logger exporter 会保留异步资源释放期间的警告和错误记录，并在 `boot()` 结算前释放。其消息分组列出所有失败插件和等待的服务，标记 required 条目，并保留原始堆栈、嵌套原因和聚合错误成员。CLI 仅输出该消息一次，并在保存[完整启动诊断](../../../apps/cli/reference/README.zh.md#startup-diagnostics)后以退出码 1 结束；其他异常保留正常堆栈输出。表中的“终止启动”指释放已挂载插件并以非零码退出，不报告就绪；“继续”指保留成功运行的插件。后续配置 HMR 不会再次执行 required 启动审计，也不会回滚整个更新。
 
 | 失败模式 | Optional 条目启动时 | Required 条目启动时 | 后续配置 HMR |
 |---|---|---|---|
-| 根配置或必需 overlay 缺失、不可读、格式错误，或包含无效条目 | 终止启动 | 终止启动 | 拒绝格式错误或无效的实时 patch，不改变运行中的配置；有效修改可以应用 |
+| 根配置或必需 overlay 缺失、不可读、格式错误，或包含无效条目 | 终止启动 | 终止启动 | 拒绝缺失、格式错误或无效的实时 patch 与 overlay，不改变运行中的配置；有效修改可以应用 |
 | 模块 import 失败或模块求值抛出异常 | 警告；继续 | 终止启动 | 报告错误；保留成功的兄弟插件；修正 import 后可以激活 |
 | 插件配置 schema 校验失败 | 警告；继续 | 终止启动 | 新条目保持未激活；现有条目保留原实例与配置；有效修正可以应用 |
 | 配置 `!!js` 求值抛出异常 | 警告；继续 | 终止启动 | 报告错误；保留成功的兄弟插件；有效修正后可以激活 |
@@ -129,7 +133,7 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 ### 设计说明
 
 - **运行时版本。** `getDshRuntimeVersion()` 通过文件系统路径读取本包清单，也支持可执行文件内的虚拟文件系统；版本缺失或无效时会失败，而不会绕过兼容性检查。
-- **Profile 启动数据。** `ctx.profileContext` 只包含 profile 位置、启动时组合包名称、已解析的调用级 overlay 与遥测退出值。`readProfilePatches()` 组合传入的启动 profile，或读取这些位置上的当前文件；调用方负责调度和应用结果。
+- **Profile 启动数据。** `ctx.profileContext` 只包含 profile 位置、启动时组合包名称、调用级 overlay 的绝对路径与遥测退出值。`readProfilePatches()` 组合传入的启动 profile，或读取这些位置上的当前文件，并且总是重新读取 overlay 文件；调用方负责调度和应用结果。插件管理器的列表与 Config Editor 的写入无论是否启用 HMR 都调用它，因此会读到当前 overlay 内容，并在 overlay 文件缺失或无效时失败。
 - **进程内模块解析。** launcher 在挂载 profile 条目前，将 runtime resolution 安装到 Node 的 ESM 与 CommonJS 内部 resolver。exports、conditions、子路径、模块缓存和错误码仍由 Node 负责；路由后的 ESM 失败报告原始 importer。显式 CommonJS `paths` 始终保留原生查询，包括指向 profile 内的路径。
 - **链接目录。** profile 链接到树外目录时，其下的 importer 参与逐层 peer 查询，即使目标没有自身的 `package.json`。在每个 `D/node_modules` 位置，当前 `D/package.json` 的 peer 包名若存在于运行时表，就使用运行时包；其他包名查询物理候选。更近的物理包先于后续 peer 声明，peer 位置无需物理 `node_modules`。installation 作用域包目录不参与 linked 拦截，重叠 root 不改变 importer 的查询顺序（[规则](../../../.agents/notes/implemented/architecture/2026-09-19-profile-resolution-lookup-order.zh.md)）。
 - **包元数据。** `ctx.pluginPackages.packageOf` 定位所属包，不加载代码，也不要求导出 `package.json`；子路径选择其所属包，不校验该文件。安装 runtime resolution 后，即使查询未命中也以其选包规则为准。仅安装服务而不提供 runtime resolution 的底层嵌入方保留原生查询。展示元数据使用上文另述的入口感知读取器。
@@ -143,7 +147,9 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 - **单一 rejection 检查点。** `inactiveEntries` 把折入启动诊断的确切原因保持到下一个进程级 rejection 检查点可见，使 `installFailLoud` 能合并 Loader 的重复通知，而所有无关的未处理 rejection 仍然致命。
 - **两阶段失败标签。** 除启动审计失败外，`boot()` 区分 `host preparation failed`（`prepare` 在任何配置树条目挂载前抛出）与 `plugin tree failed to load`，并追加最深层插件错误的堆栈。插件诊断保留嵌套原因和聚合错误中的各项失败；原因链出现循环时会停止遍历，但不会替换原始错误。
 
-启动错误还保留未激活条目的元数据和原始启动警告、错误记录，不保留 Loader tree。其 `entries` 和 `startup` 字段不可枚举：直接访问和完整诊断报告保留这些字段，常规错误检查输出则省略它们。只有等待条目时没有 `cause`；存在已记录错误时，`AggregateError` 保留其原始值。收集器在 Loader 挂载前通过 logger 收集导入错误，因为这些导入尚无 failed Fiber。启动结算后会移除临时 exporter。
+启动错误还保留未激活条目的元数据和原始启动警告、错误记录，不保留 Loader tree。其 `entries`、`startup` 和 `composition` 字段不可枚举：直接访问和完整诊断报告保留这些字段，常规错误检查输出则省略它们。只有等待条目时没有 `cause`；存在已记录错误时，`AggregateError` 保留其原始值。收集器在 Loader 挂载前通过 logger 收集导入错误，因为这些导入尚无 failed Fiber。启动结算后会移除临时 exporter。
+
+包导出 `StartupCompositionDiagnostic`、`StartupPluginState` 和 `StartupServiceState`，供消费者按名引用。释放前，`composition` 捕获最多 256 个配置插件条目和 256 个缺失服务观测，并记录省略数量。条目包含模块、可取得的包版本、状态和 Loader 来源 URL，不含配置值。已注册提供者包含其状态及作用域是否与消费者一致。提供者列表为空表示归属未知：被禁用或失败的插件可能从未注册服务。Loader 来源不代表最后修改该条目的 overlay。元数据查询失败时版本标为未知；快照失败保留原始启动错误。
 
 ### Helper 行为
 

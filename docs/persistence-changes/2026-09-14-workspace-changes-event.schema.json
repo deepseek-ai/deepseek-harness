@@ -1,72 +1,14 @@
 {
   "formatVersion": 1,
   "roots": [
-    {
-      "key": "event:workspace/changes",
-      "kind": "event",
-      "event": "workspace/changes",
-      "surface": false,
-      "digest": "e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72",
-      "schema": {
-        "root": 0,
-        "nodes": [
-          {
-            "kind": "object",
-            "properties": [
-              {
-                "name": "data",
-                "type": 1,
-                "optional": false
-              },
-              {
-                "name": "ignorable",
-                "type": 3,
-                "optional": true
-              },
-              {
-                "name": "seq",
-                "type": 2,
-                "optional": false
-              },
-              {
-                "name": "time",
-                "type": 2,
-                "optional": false
-              },
-              {
-                "name": "type",
-                "type": 4,
-                "optional": false
-              }
-            ],
-            "indices": []
-          },
-          {
-            "kind": "object",
-            "properties": [
-              {
-                "name": "turn",
-                "type": 2,
-                "optional": false
-              }
-            ],
-            "indices": []
-          },
-          {
-            "kind": "primitive",
-            "type": "number"
-          },
-          {
-            "kind": "literal",
-            "value": true
-          },
-          {
-            "kind": "literal",
-            "value": "workspace/changes"
-          }
-        ]
-      }
-    }
+    {"key":"event:workspace/changes","kind":"event","event":"workspace/changes","surface":false,"digest":"e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72"}
   ],
-  "types": []
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "8e8155594e078123": {"kind":"literal","value":"workspace/changes"},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true},
+    "e308ccf867a5398e": {"kind":"object","properties":[{"name":"data","type":"f90eb4ab2d3897bc","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"8e8155594e078123","optional":false}],"indices":[]},
+    "f90eb4ab2d3897bc": {"kind":"object","properties":[{"name":"turn","type":"0657d3ca5ac4e7bf","optional":false}],"indices":[]}
+  }
 }

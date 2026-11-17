@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Hochladen des Feedback-Sitzungsprotokolls",
+    "description": "Gemäß der Feedback-Autorisierungsrichtlinie werden relevante Sitzungsprotokolle über OpenTelemetry hochgeladen."
+  }
+}

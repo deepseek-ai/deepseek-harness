@@ -1,10 +1,12 @@
 /** Discover state: configured index sources, the selected index's query and loaded results, and source editing. */
+import { NPMMIRROR_REGISTRY } from '@deepseek-ai/dsh-plugin-manager/registry'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MarketIndexSummary, MarketSearchResult, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
+import type { MarketIndexSummary, MarketSearchResult, PluginDetail, PluginDetailDocumentId, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
+import { gitMarketIndexSource, isGitMarketIndexSourceAddress } from '@deepseek-ai/dsh-plugin-market-index/source'
 import { declaredQuery, INITIAL_QUERY, type DiscoverQuery } from './presentation.ts'
 
 /** Why the last listing read failed: the index could not be fetched, is not a valid index, or changed while its pages loaded. */
@@ -12,8 +14,16 @@ export type ListingFailure = 'fetch' | 'invalid' | 'changed'
 
 /** Why the last source change was refused. */
 export type SourceFailure =
-  | { readonly kind: 'invalid' | 'duplicate' | 'unavailable' }
+  | { readonly kind: 'invalid' | 'invalid-git' | 'duplicate' | 'unavailable' }
   | { readonly kind: 'other'; readonly reason: string }
+
+type SourceKind = 'http' | 'git'
+
+/** The optional location of an index in Git. */
+interface SourceOptions {
+  readonly path: string
+  readonly ref: string
+}
 
 /** Plugins loaded before "Show more", and loaded again by each press. */
 export const PAGE_SIZE = 50
@@ -44,17 +54,66 @@ export interface DiscoverState {
   /** Whether the source editor is open; it is always shown when no source exists. */
   readonly editing: boolean
   readonly draft: string
+  readonly sourceOptions: SourceOptions
   readonly saving: boolean
   readonly sourceFailure: SourceFailure | null
 }
 
-/** What the Discover tab receives through injection. */
-export interface DiscoverFace {
+/** The market entry version a detail read is about. */
+export interface DetailRequest {
+  readonly url: string
+  readonly name: string
+  readonly version: string
+  /** Whether the version is an npm package; the Host reads those of the public registries from the npm file CDNs. */
+  readonly npm: boolean
+}
+
+/** Why a detail read failed: the Host's `plugin-market/detail-unavailable` reason, or `other` for any other failure. */
+export type DetailFailureKind = 'too-large' | 'network' | 'denied' | 'git-unavailable' | 'invalid' | 'other'
+
+/** One detail read. */
+export type DetailState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready'; readonly detail: PluginDetail }
+  | { readonly status: 'error'; readonly failure: DetailFailureKind }
+
+/** Detail reads by {@link detailKey}. */
+export type DetailsState = Readonly<Record<string, DetailState>>
+
+/**
+ * The identity of a detail read.
+ * @param request - the plugin.
+ * @param language - the display language.
+ * @returns the key of the read in {@link DetailsState}.
+ */
+export function detailKey(request: DetailRequest, language: string): string {
+  return JSON.stringify([language, request])
+}
+
+/** What the entry detail section receives through injection. */
+export interface DetailFace {
   readonly hooks: {
+    /** Detail reads, bound as `useDetails`. */
+    readonly details: SnapshotStore<DetailsState>
+    /** The active locale, bound as `useLocale`. */
+    readonly locale: HostObservable<LocaleSnapshot>
+  }
+  /** Read a plugin's detail document unless the read already ran or runs. */
+  readonly loadDetail: (request: DetailRequest, language: string) => void
+  /** Read a failed detail document again, bypassing the Host's cached result. */
+  readonly retryDetail: (request: DetailRequest, language: string) => void
+  /**
+   * The URL of an image beside a detail document.
+   * @returns the authenticated Host URL, or undefined for an absolute, protocol-relative, or fragment destination.
+   */
+  readonly detailImage: (document: PluginDetailDocumentId, destination: string) => string | undefined
+}
+
+/** What the Discover tab receives through injection. */
+export interface DiscoverFace extends DetailFace {
+  readonly hooks: DetailFace['hooks'] & {
     /** Discover state, bound as `useDiscover`. */
     readonly discover: SnapshotStore<DiscoverState>
-    /** The active locale, bound as `useLocale`, for collation. */
-    readonly locale: HostObservable<LocaleSnapshot>
   }
   /** Resolve market text in the current language. */
   readonly resolveText: (text: LocalizedText) => string
@@ -73,6 +132,7 @@ export interface DiscoverFace {
   readonly retry: () => void
   readonly toggleSources: () => void
   readonly editDraft: (text: string) => void
+  readonly editSourceOptions: (options: Partial<SourceOptions>) => void
   readonly addSource: () => void
   readonly removeSource: (url: string) => void
 }
@@ -80,15 +140,28 @@ export interface DiscoverFace {
 /** Largest page the Host returns, the `limit` bound of `pluginMarket.search`. */
 const MAX_PAGE = 100
 
+const INITIAL_SOURCE_OPTIONS: SourceOptions = { path: '', ref: '' }
+
 const INITIAL: DiscoverState = {
-  status: 'idle', indexes: [], selected: null, listing: null, editing: false, draft: '', saving: false, sourceFailure: null,
+  status: 'idle', indexes: [], selected: null, listing: null, editing: false, draft: '', sourceOptions: INITIAL_SOURCE_OPTIONS,
+  saving: false, sourceFailure: null,
 }
 
-function sourceFailure(failure: RemoteFailure): SourceFailure {
-  if (failure.code === 'plugin-market/invalid-index-url') return { kind: failure.details.reason === 'duplicate' ? 'duplicate' : 'invalid' }
+function sourceFailure(failure: RemoteFailure, kind?: SourceKind): SourceFailure {
+  if (failure.code === 'plugin-market/invalid-index-url') {
+    if (failure.details.reason === 'duplicate') return { kind: 'duplicate' }
+    return { kind: kind === 'git' ? 'invalid-git' : 'invalid' }
+  }
   if (failure.code === 'plugin-market/settings-unavailable') return { kind: 'unavailable' }
   return { kind: 'other', reason: failure.message }
 }
+
+function detailFailure(failure: RemoteFailure): DetailFailureKind {
+  return failure.code === 'plugin-market/detail-unavailable' ? failure.details.reason : 'other'
+}
+
+/** The Host route of images beside detail documents, relative to the application base. */
+const DETAIL_FILE_ROUTE = 'api/plugin-market/detail-file'
 
 function listingFailure(failure: RemoteFailure): ListingFailure {
   return failure.code === 'plugin-market/invalid-index' ? 'invalid' : 'fetch'
@@ -98,7 +171,13 @@ function listingFailure(failure: RemoteFailure): ListingFailure {
 export class DiscoverController {
   /** Shared Discover state published to the tab. */
   readonly store: SnapshotStore<DiscoverState> = createSnapshotStore<DiscoverState>(INITIAL)
+  /** Detail reads published to detail sections. */
+  readonly details: SnapshotStore<DetailsState> = createSnapshotStore<DetailsState>({})
   private disposed = false
+  /** The latest detail read of each key; an older read's answer is dropped. */
+  private readonly detailReads = new Map<string, number>()
+  /** Numbers detail reads across the controller's lifetime, so a read started before a reset never matches one after it. */
+  private detailSequence = 0
   private indexRead = 0
   private listingRead = 0
   /** Select the last source once the list it was added to arrives. */
@@ -106,8 +185,11 @@ export class DiscoverController {
   /** Runs the listing read that failed last. */
   private failed: () => void = () => {}
 
-  /** @param ctx - the plugin context whose `remote.pluginMarket` namespace answers. */
-  constructor(private readonly ctx: ClientContext) {}
+  /**
+   * @param ctx - the plugin context whose `remote.pluginMarket` namespace answers.
+   * @param base - the application base URL that Host routes resolve against.
+   */
+  constructor(private readonly ctx: ClientContext, private readonly base: () => string) {}
 
   /** Stop publishing late settlements. */
   dispose(): void {
@@ -120,8 +202,10 @@ export class DiscoverController {
    * @returns the tab's injected state sources and actions.
    */
   face(resolveText: DiscoverFace['resolveText']): DiscoverFace {
+    const detail = this.detailFace()
     return {
-      hooks: { discover: this.store, locale: this.ctx.locale },
+      ...detail,
+      hooks: { ...detail.hooks, discover: this.store },
       resolveText,
       ensure: () => { if (this.state().status === 'idle') void this.loadIndexes() },
       reload: () => { void this.loadIndexes() },
@@ -142,14 +226,34 @@ export class DiscoverController {
       },
       toggleSources: () => { this.patch({ editing: !this.state().editing, sourceFailure: null }) },
       editDraft: (text) => { this.patch({ draft: text, sourceFailure: null }) },
-      addSource: () => {
-        const draft = this.state().draft.trim()
-        if (draft === '') return
-        this.selectAdded = true
-        void this.saveSources([...this.state().indexes.map(index => index.url), draft], true)
-      },
-      removeSource: (url) => { void this.saveSources(this.state().indexes.map(index => index.url).filter(item => item !== url), false) },
+      editSourceOptions: (options) => { this.patch({ sourceOptions: { ...this.state().sourceOptions, ...options }, sourceFailure: null }) },
+      addSource: () => { this.addSource() },
+      removeSource: (url) => { void this.saveSources(this.state().indexes.map(index => index.url).filter(item => item !== url)) },
     }
+  }
+
+  /** Detail reads and image addressing of the entry detail section. */
+  private detailFace(): DetailFace {
+    return {
+      hooks: { details: this.details, locale: this.ctx.locale },
+      loadDetail: (request, language) => {
+        if (this.details.getSnapshot()[detailKey(request, language)] === undefined) void this.readDetail(request, language)
+      },
+      retryDetail: (request, language) => { void this.readDetail(request, language, true) },
+      detailImage: (document, destination) => {
+        if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/iu.test(destination)) return undefined
+        return new URL(`${DETAIL_FILE_ROUTE}?document=${encodeURIComponent(document)}&path=${encodeURIComponent(destination)}`, this.base()).href
+      },
+    }
+  }
+
+  /**
+   * Forget every detail read after the connection reset: a restarted Host no longer knows the document ids that address
+   * their images, and each shown section reads its document again.
+   */
+  detailsReset(): void {
+    this.detailReads.clear()
+    this.details.set({})
   }
 
   /** Re-read the sources after the Host announced a change or the connection reset; an unrendered tab stays idle. */
@@ -162,6 +266,32 @@ export class DiscoverController {
     const { listing } = this.state()
     // A ready listing holds the results it settled with.
     if (listing?.status === 'ready') void this.load(listing.url, listing.query, Math.max((listing.value as MarketSearchResult).entries.length, PAGE_SIZE), false)
+  }
+
+  private async readDetail(request: DetailRequest, language: string, refresh = false): Promise<void> {
+    const key = detailKey(request, language)
+    const read = ++this.detailSequence
+    this.detailReads.set(key, read)
+    this.publishDetail(key, { status: 'loading' })
+    // The remote is captured before any wait: the plugin's context may be disposed while the comparison runs.
+    const { remote } = this.ctx
+    const current = (): boolean => !this.disposed && this.detailReads.get(key) === read
+    // Only an npm version waits for the registry comparison; a Git version is read at once.
+    // npmmirror is asked first where its registry answered the Host's comparison fastest.
+    let npmFileSources: 'npmmirror'[] = []
+    if (request.npm) {
+      const fastest = await remote.pluginRegistryProbe.fastest()
+      // A retry or reset started while the comparison ran settles the key instead.
+      if (!current()) return
+      if (fastest.ok && fastest.value === NPMMIRROR_REGISTRY) npmFileSources = ['npmmirror']
+    }
+    const { url, name, version } = request
+    const answer = await remote.pluginMarket.readEntryDetail(url, name, version, language, { refresh, npmFileSources })
+    if (current()) this.publishDetail(key, answer.ok ? { status: 'ready', detail: answer.value } : { status: 'error', failure: detailFailure(answer.error) })
+  }
+
+  private publishDetail(key: string, state: DetailState): void {
+    this.details.set({ ...this.details.getSnapshot(), [key]: state })
   }
 
   private state(): DiscoverState {
@@ -283,16 +413,37 @@ export class DiscoverController {
     this.patch({ listing, indexes })
   }
 
-  private async saveSources(urls: string[], adding: boolean): Promise<void> {
+  private addSource(): void {
+    const { draft, sourceOptions, indexes, saving } = this.state()
+    const address = draft.trim()
+    if (saving || address === '') return
+    const kind = isGitMarketIndexSourceAddress(address) ? 'git' : 'http'
+    let url = address
+    if (kind === 'git') {
+      try {
+        url = gitMarketIndexSource(address, sourceOptions.path.trim() || undefined, sourceOptions.ref.trim() || undefined)
+      } catch {
+        this.patch({ sourceFailure: { kind: 'invalid-git' } })
+        return
+      }
+    }
+    this.selectAdded = true
+    void this.saveSources([...indexes.map(index => index.url), url], kind)
+  }
+
+  private async saveSources(urls: string[], adding?: SourceKind): Promise<void> {
+    if (this.state().saving) return
+    const isDisposed = (): boolean => this.disposed
     this.patch({ saving: true, sourceFailure: null })
     const answer = await this.ctx.remote.pluginMarket.setIndexes(urls)
-    if (this.disposed) return
+    if (isDisposed()) return
     if (!answer.ok) {
       this.selectAdded = false
-      this.patch({ saving: false, sourceFailure: sourceFailure(answer.error) })
+      this.patch({ saving: false, sourceFailure: sourceFailure(answer.error, adding) })
       return
     }
-    this.patch({ saving: false, ...adding ? { draft: '' } : {} })
     await this.loadIndexes()
+    if (isDisposed()) return
+    this.patch({ saving: false, ...adding === undefined ? {} : { draft: '', sourceOptions: INITIAL_SOURCE_OPTIONS } })
   }
 }

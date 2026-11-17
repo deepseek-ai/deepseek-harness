@@ -191,6 +191,8 @@ describe('TabDomain — a tab\'s own actions', () => {
     const { tabActions } = domain.occurrence(SESSION, recordOf(current(), tabId))
     tabActions.openTab('files', { replaceTab: true })
     expect(navigator.openTabIn).toHaveBeenLastCalledWith(SESSION, 'files', { replaceTab: tabId })
+    tabActions.openResource('dsh-resource://file/session/s-one/b.txt', { replaceTab: true })
+    expect(navigator.openResourceIn).toHaveBeenLastCalledWith(SESSION, 'dsh-resource://file/session/s-one/b.txt', { replaceTab: tabId })
     tabActions.close()
     expect(navigator.closeIn).toHaveBeenCalledWith(SESSION, tabId)
   })
@@ -209,5 +211,20 @@ describe('TabDomain — a tab\'s own actions', () => {
       'dsh-resource://file/session/s-one/a.txt',
       { paneId: current().rootId, preferNewPane: true, revealIfOpened: false },
     )
+  })
+
+  it('passes only an explicit host and params, never this tab\'s pane or itself for replacement', () => {
+    const { domain, navigator, controller, current } = harness()
+    const tabId = controller.openContent({ kind: 'text', contentId: 'dsh-resource://file/session/s-one/a.txt', title: 'a' })
+    domain.sync(SESSION, current())
+    const { tabActions } = domain.occurrence(SESSION, recordOf(current(), tabId))
+    tabActions.openResource('dsh-resource://file/session/s-one/b.txt', {
+      destination: 'float', replaceTab: true, paneId: getPane(current(), current().rootId).id, preferNewPane: true, revealIfOpened: false, params: { line: 8 },
+    })
+    expect(navigator.openResourceIn).toHaveBeenLastCalledWith(SESSION, 'dsh-resource://file/session/s-one/b.txt',
+      { destination: 'float', params: { line: 8 } })
+    tabActions.openResource('dsh-resource://file/session/s-one/b.txt', { destination: 'sidebar' })
+    expect(navigator.openResourceIn).toHaveBeenLastCalledWith(SESSION, 'dsh-resource://file/session/s-one/b.txt',
+      { destination: 'sidebar', params: undefined })
   })
 })

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web サービス",
+    "description": "Web ページと API ルートを登録し、HTTP サービスを提供します。"
+  }
+}

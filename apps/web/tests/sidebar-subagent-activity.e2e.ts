@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionId as SessionIdValue } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionId as SessionIdValue } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-workspace'
 import {
@@ -19,7 +19,8 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/sidebar-subagent-activity', import.meta.url))
 const RUNNING_OWNER_EXPECTED = join(SNAPSHOT_DIR, 'owner-running.expected.md')
@@ -87,7 +88,7 @@ describe('web e2e: sidebar subagent activity', () => {
     const cwd = join(scaffold.workspaceCwd, 'workspace')
     await mkdir(cwd)
     parentHandle = await scaffold.ctx.agents.create({
-      sessionId: SessionId('sidebar-activity-owner'),
+      sessionId: brandString<SessionId>('sidebar-activity-owner'),
       meta: { cwd },
       agentOptions: { provider: HOLD_PROVIDER, model: HOLD_MODEL },
     })
@@ -101,10 +102,8 @@ describe('web e2e: sidebar subagent activity', () => {
       provider: 'spawn',
       label: 'sidebar activity child',
       signal: new AbortController().signal,
-      request: {
-        prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
-        parent: parentHandle.agent,
-      },
+      prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
+      parent: parentHandle.agent,
     })
     childId = started.childId
     await waitForRunningChild(scaffold, adapter, childId)
@@ -137,7 +136,7 @@ describe('web e2e: sidebar subagent activity', () => {
   it('pins a running descendant on its visible idle owner row', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-subagent-activity'))
     const sidebar = page.getByRole('tree', { name: 'Sessions' })
-    const ownerRow = sidebar.getByRole('treeitem', { name: /1 subagent running Delegate a background job/ })
+    const ownerRow = sidebar.getByRole('treeitem', { name: /1 subagent running.*Delegate a background job/ })
     await ownerRow.waitFor({ timeout: 10_000 })
     expect(parentHandle.agent.status).toBe('idle')
     await compareOrRefreshGolden(
@@ -147,10 +146,53 @@ describe('web e2e: sidebar subagent activity', () => {
     )
     expect(await ownerRow.locator('[data-state="ongoing"]').count()).toBe(1)
     await ownerRow.click()
-    const runningTrigger = page.getByRole('button', { name: '1 subagent running' })
-    await runningTrigger.waitFor({ timeout: 10_000 })
-    expect(await runningTrigger.locator('[data-state="ongoing"]').count()).toBe(1)
-    await assertFixtureInventory(SNAPSHOT_DIR, ['owner-running.expected.md'])
+    const toggle = sessionPanelToggle(page)
+    const subagents = (await showSessionPanel(page)).locator('[data-session-panel-section="subagents"]')
+    await subagents.getByRole('treeitem').locator('[data-state="ongoing"]').waitFor({ timeout: 10_000 })
+    expect(await subagents.getByText('1 in progress', { exact: true }).isVisible()).toBe(true)
+    // This directly created owner has no tool preset; the fixture collects its own job.
+    scaffold.ctx.effect(() => scaffold.ctx.jobs.attachController('compact header fixture'), 'compact header job controller')
+    const completion = Promise.withResolvers<{ status: 'completed' }>()
+    const ownerId = parentHandle.agent.id
+    const jobId = scaffold.ctx.jobs.start({
+      kind: 'bash', label: 'Concurrent background work', owner: ownerId,
+      run(handle) {
+        handle.append('Background work is running.\n')
+        return { done: completion.promise, cancel: () => { completion.resolve({ status: 'completed' }) } }
+      },
+    })
+    const viewport = page.viewportSize()!
+    const panel = page.locator('[data-session-panel]')
+    const assertRunningSections = async (): Promise<void> => {
+      await showSessionPanel(page)
+      for (const section of ['subagents', 'background-jobs']) {
+        await panel.locator(`[data-session-panel-section="${section}"]`).locator('[data-state="ongoing"]').first()
+          .waitFor({ timeout: 10_000 })
+      }
+      expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
+      await page.keyboard.press('Escape')
+      await panel.waitFor({ state: 'detached' })
+    }
+    try {
+      await assertRunningSections()
+      await toggle.focus()
+      await page.setViewportSize({ width: 390, height: 700 })
+      expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
+      await compareOrRefreshGolden(
+        join(SNAPSHOT_DIR, 'compact-running.expected.md'),
+        await captureStableAria(page, 'header:has([data-session-panel-toggle])', scaffold.workspaceCwd),
+        MODE,
+      )
+      await saveFailureShot(page, 'web-e2e-compact-running-header')
+      await assertRunningSections()
+      await page.setViewportSize(viewport)
+      await assertRunningSections()
+    } finally {
+      completion.resolve({ status: 'completed' })
+      await scaffold.ctx.jobs.wait(jobId, 5_000, ownerId)
+      await page.setViewportSize(viewport)
+    }
+    await assertFixtureInventory(SNAPSHOT_DIR, ['owner-running.expected.md', 'compact-running.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

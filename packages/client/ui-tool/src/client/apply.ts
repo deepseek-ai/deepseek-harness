@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import { toolFileInject } from './tool/file-menu.ts'
 import { ToolCallTree } from './tool/ToolCallTree.tsx'
 import { CONVERSATION_NS as NS } from './locale.ts'
 import { askQuestionToolview } from './tool/toolviews/ask-question-row.tsx'
@@ -13,13 +14,14 @@ import { bashToolviewSample } from './tool/toolviews/bash-sample.tsx'
 import { fileMutationToolview } from './tool/toolviews/file-mutation-row.tsx'
 import { readToolview } from './tool/toolviews/read-row.tsx'
 import { readImageToolview } from './tool/toolviews/read-image-row.tsx'
+import { officeToolview } from './tool/toolviews/office-row.tsx'
 import { searchToolview } from './tool/toolviews/search-row.tsx'
 import { detailsToolview } from './tool/toolviews/details-row.tsx'
 import { todoToolview } from './tool/toolviews/todo-row.tsx'
 import { webToolview } from './tool/toolviews/web-row.tsx'
 
-/** Required services: the slot registry and the Remote face carrying the Host home used for POSIX `~`. */
-export const inject = ['slots', 'remote']
+/** Required services: Slots, live Session paths, and the Remote face carrying the Host home used for POSIX `~`. */
+export const inject = ['slots', 'remote', 'sessions']
 
 /**
  * Mount the whole-Tool renderers and built-in atomic Tool registrations.
@@ -30,7 +32,8 @@ export function apply(ctx: ClientContext): void {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
   }
-  const toolInject = () => ({ hooks: { hostInfo } })
+  const fileInject = toolFileInject(ctx)
+  const toolInject = (sessionId: Parameters<typeof fileInject>[0]) => ({ ...fileInject(sessionId), hooks: { hostInfo } })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'tool-call',
@@ -44,6 +47,7 @@ export function apply(ctx: ClientContext): void {
   ctx.plugin(bashToolviewSample)
   ctx.plugin(readToolview)
   ctx.plugin(readImageToolview)
+  ctx.plugin(officeToolview)
   ctx.plugin(fileMutationToolview)
   ctx.plugin(searchToolview)
   ctx.plugin(webToolview)

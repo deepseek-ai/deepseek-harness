@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Scenario-chain integration (scenarios A/C/D/H/I): the real per-session
  * InputTriggerController pipeline over a real session scope (Client Sessions over
@@ -28,7 +29,7 @@ import type {
 import {
   allowAllAccess, bindSnapshotSelector, conversationSnapshot, makeTranslate, sessionSnapshot, SlotTestRuntime,
 } from '@deepseek-ai/dsh-client-test-runtime'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
@@ -37,6 +38,7 @@ import { $replaceDetectSpanWithText } from '../src/client/input/editor/span-map.
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -169,6 +171,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection: (() => undefined),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),
@@ -177,6 +180,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     addFiles: () => null,
     useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
     retryFileUpload: undefined,
+    registerFileIntake: createComposerFileIntake(),
     removeAttachment: () => {},
     // Every id resolves so the bar's registry prune never drops a test image.
     resolveDraftAttachments: ids => ids.map(id => ({
@@ -200,9 +204,11 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     useMenuLauncher: bindSnapshotSelector(controller.launcher),
     renderSlot: (() => null) as InputBarProps['renderSlot'],
     stop: vi.fn(),
+    retry: undefined,
     useStopShortcut: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
     t: makeTranslate(zh, commonZh),
     variant: 'composer',
+    occurrence: 'main',
   }
   const view = render(<InputBar {...barProps} />)
   const textarea = view.container.querySelector<HTMLDivElement>('[data-composer-input]')!
@@ -312,7 +318,7 @@ describe('scenario D: execute-kind /compact', () => {
     act(() => { b2.shell.setDraft('/compact 现在') })
     fireEvent.keyDown(b2.textarea, { key: 'Enter' })
     // execute with trailing → matchEnter answers undefined → default sink.
-    await vi.waitFor(() => { expect(b2.sink).toHaveBeenCalledWith('/compact 现在', [], 'queue', expect.any(AbortSignal)) })
+    await vi.waitFor(() => { expect(b2.sink).toHaveBeenCalledWith('/compact 现在', [], 'queue', expect.any(AbortSignal), expect.any(Function)) })
     expect(b2.executed).toHaveLength(0)
   })
 })
@@ -522,7 +528,7 @@ describe('scenario H: the command chip deletes whole', () => {
     expect(b.shell.snapshot.draft).toBe(' 发布')
     expect(b.view.container.querySelector('[data-composer-command]')).toBeNull()
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
-    expect(b.sink).toHaveBeenCalledWith('发布', [], 'queue', expect.any(AbortSignal))
+    expect(b.sink).toHaveBeenCalledWith('发布', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     expect(b.execute).not.toHaveBeenCalled()
   })
 
@@ -615,7 +621,7 @@ describe('scenario I: unknown /xyz + enter', () => {
     const b = await bench()
     act(() => { b.shell.setDraft('/xyz 干点啥') })
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
-    await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledWith('/xyz 干点啥', [], 'queue', expect.any(AbortSignal)) })
+    await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledWith('/xyz 干点啥', [], 'queue', expect.any(AbortSignal), expect.any(Function)) })
     await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
     expect(b.execute).not.toHaveBeenCalled()
   })

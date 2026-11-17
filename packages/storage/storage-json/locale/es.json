@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "JSON almacenamiento de archivos",
+    "description": "Guarde los datos clave-valor en un archivo JSON local."
+  }
+}

@@ -1,7 +1,8 @@
 /** Empty POSIX filesystem fixture whose execution coordinates differ from the Harness host. */
 import { posix } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { FileSystem, FsError, FsTargetKey, FsVersion, type FsTarget, type FsInfo } from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, type FsTargetKey, type FsVersion, type FsTarget, type FsInfo } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import schema from '@deepseek-ai/schemastery'
 
 /** Deployment coordinates for the deterministic provider. */
@@ -9,6 +10,10 @@ interface Config { root: string }
 
 /** Empty provider-owned workspace; no operation accesses the host filesystem. */
 export default class ProviderCwdFileSystem extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   static inject = ['sandboxPolicy']
   static Config: schema<Config> = schema.object({ root: schema.string().required() })
@@ -19,7 +24,7 @@ export default class ProviderCwdFileSystem extends FileSystem {
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     opts?.signal?.throwIfAborted()
     const absolute = posix.resolve(opts?.cwd ?? this.config.root, path)
-    return { targetKey: FsTargetKey(absolute), displayPath: path }
+    return { targetKey: brandString<FsTargetKey>(absolute), displayPath: path }
   }
   override processPath(target: FsTarget): string { return String(target.targetKey) }
   override fileUrl(target: FsTarget): string {
@@ -32,7 +37,7 @@ export default class ProviderCwdFileSystem extends FileSystem {
     return relative === '' || (relative !== '..' && !relative.startsWith('../'))
   }
   override async stat(target: FsTarget): Promise<FsInfo | undefined> {
-    return this.processPath(target) === this.config.root ? { type: 'directory', version: FsVersion('empty-workspace') } : undefined
+    return this.processPath(target) === this.config.root ? { type: 'directory', version: brandString<FsVersion>('empty-workspace') } : undefined
   }
   override async lstat(path: string, opts?: { cwd?: string }): Promise<FsInfo | undefined> {
     return this.stat(await this.resolve(path, opts))

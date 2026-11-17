@@ -17,13 +17,14 @@ import { join, sep } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { logPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/workspace-management', import.meta.url))
 // The seed is another scenario's committed fixture, reused read-only: this
@@ -249,7 +250,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     const workspace = await scaffold.ctx.workspaceRegistry.resolveByPath(scaffold.workspaceCwd)
     if (workspace === undefined) throw new Error('GUI did not register the existing project directory')
     holdAttachment = true
-    await workspace.attachSession(SessionId(SEED_ID))
+    await workspace.attachSession(brandString<SessionId>(SEED_ID))
     const header = (await scaffold.ctx.sessionPersistence.list())
       .map(snapshot => snapshot.header)
       .find(candidate => candidate.id === SEED_ID)
@@ -303,7 +304,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     ).toBe(1)
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
     await stat(seededLogPath)
-    expect((await readPersistedEvents(scaffold, SessionId(SEED_ID))).length).toBeGreaterThan(0)
+    expect((await readPersistedEvents(scaffold, brandString<SessionId>(SEED_ID))).length).toBeGreaterThan(0)
 
     // Re-registering the exact deleted path immediately, without a reload, is
     // a supported reversible flow. It creates a fresh Workspace id and does
@@ -350,7 +351,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     expect(scaffold.ctx.workspaceRegistry.get(workspace.id)).toBeUndefined()
     expect(await readFile(join(scaffold.workspaceCwd, 'workspace', 'a.txt'), 'utf8')).toBe('alpha\n')
     await stat(seededLogPath)
-    expect((await readPersistedEvents(scaffold, SessionId(SEED_ID))).length).toBeGreaterThan(0)
+    expect((await readPersistedEvents(scaffold, brandString<SessionId>(SEED_ID))).length).toBeGreaterThan(0)
 
     expect(transientSlotErrors).toEqual([])
     expect(slotConsoleErrors).toEqual([])
@@ -540,6 +541,15 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     // crossing ground that belongs to neither. Hovering it must not dismiss
     // it — the hazard this scenario pins.
     const card = page.getByRole('button', { name: `Copy: ${rowTitle}` })
+    // The stylesheet anchors the card: beside the row's end edge, its top on the row's top.
+    const beside = async (): Promise<{ gap: number; top: number; bottomMargin: number }> => {
+      const row = await sessionRow.boundingBox()
+      const box = await card.boundingBox()
+      if (row === null || box === null) throw new Error('the row or its hover card has no box')
+      const height = await page.evaluate(() => window.innerHeight)
+      return { gap: box.x - (row.x + row.width), top: box.y - row.y, bottomMargin: height - (box.y + box.height) }
+    }
+    expect(await beside()).toMatchObject({ gap: 8, top: 0 })
     await card.hover()
     await page.waitForTimeout(POINTER_HOLD_MS)
     expect(await page.getByText('Idle', { exact: true }).count()).toBeGreaterThanOrEqual(1)
@@ -558,6 +568,23 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     // Leaving anchor and card together closes it after the grace.
     await page.getByRole('button', { name: 'Account menu', exact: true }).hover()
     await expect.poll(() => card.count(), { timeout: 5_000 }).toBe(0)
+    // In a window too short for the card below the row's top, the card keeps
+    // its side and holds its bottom at the viewport's 8px margin.
+    const viewport = page.viewportSize()
+    const row = await sessionRow.boundingBox()
+    if (viewport === null || row === null) throw new Error('no viewport or row box')
+    await page.setViewportSize({ width: viewport.width, height: Math.ceil(row.y + row.height + 24) })
+    try {
+      await sessionRow.hover()
+      await card.waitFor({ timeout: 5_000 })
+      const held = await beside()
+      expect(held).toMatchObject({ gap: 8, bottomMargin: 8 })
+      expect(held.top).toBeLessThan(0)
+      await page.mouse.move(viewport.width - 20, 4)
+      await expect.poll(() => card.count(), { timeout: 5_000 }).toBe(0)
+    } finally {
+      await page.setViewportSize(viewport)
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -567,7 +594,10 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       const consoleWatch = watchConsole(hoverPage)
       await hoverPage.goto(scaffold.authenticatedUrl)
       const row = await seededSessionRow(hoverPage)
+      await row.click()
+      await hoverPage.getByText('DONE', { exact: true }).waitFor()
       const title = row.locator('[class*="title"]')
+      await expect.poll(() => title.innerText()).not.toBe('Untitled')
       const card = hoverPage.getByRole('button', { name: `Copy: ${await title.innerText()}` })
       const tooltip = hoverPage.getByRole('tooltip')
       const observations: { stage: string; details: boolean; tooltips: string[] }[] = []
@@ -575,6 +605,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
         observations.push({ stage, details: await card.count() > 0, tooltips: await tooltip.allTextContents() })
       }
       const clockStart = Date.now()
+      await hoverPage.getByRole('button', { name: 'Account menu', exact: true }).hover()
       await hoverPage.clock.install({ time: clockStart })
       await hoverPage.clock.pauseAt(clockStart + 1000)
       await title.hover()
@@ -583,6 +614,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       await observe('details')
       await row.getByRole('button', { name: /^Session actions for / }).hover()
       await hoverPage.clock.runFor(1000)
+      expect(await tooltip.count()).toBe(0)
       expect(await card.count()).toBe(1)
       await observe('more-hover')
 
@@ -612,9 +644,11 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
 
       const menu = row.getByRole('button', { name: /^Session actions for / })
       await menu.click()
+      await hoverPage.clock.runFor(1000)
       await hoverPage.getByRole('menu').waitFor()
       expect(await card.count()).toBe(0)
       await hoverPage.keyboard.press('Escape')
+      await hoverPage.clock.runFor(1000)
       await hoverPage.getByRole('menu').waitFor({ state: 'detached' })
       await title.hover()
       await hoverPage.clock.runFor(1600)
@@ -647,7 +681,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
         await mkdir(cwd, { recursive: true })
         await hoverScaffold.ctx.workspaceRegistry.create(cwd, title)
       }
-      const sessionId = SessionId('mixed-hover-session')
+      const sessionId = brandString<SessionId>('mixed-hover-session')
       await seedSession(hoverScaffold, await readFile(SEED, 'utf8'), sessionId)
       await hoverScaffold.ctx.sessionController.rename({ sessionId, title: 'Mixed hover session' })
       const hoverPage = await newEnglishPage(browser)
@@ -709,8 +743,8 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       const seed = await readFile(SEED, 'utf8')
       await seedSession(hoverScaffold, seed, 'hover-first')
       await seedSession(hoverScaffold, seed, 'hover-second')
-      await hoverScaffold.ctx.sessionController.rename({ sessionId: SessionId('hover-first'), title: 'Hover first' })
-      await hoverScaffold.ctx.sessionController.rename({ sessionId: SessionId('hover-second'), title: 'Hover second' })
+      await hoverScaffold.ctx.sessionController.rename({ sessionId: brandString<SessionId>('hover-first'), title: 'Hover first' })
+      await hoverScaffold.ctx.sessionController.rename({ sessionId: brandString<SessionId>('hover-second'), title: 'Hover second' })
       for (const layout of ['In one list', 'Workspace Tree']) {
         // Each page owns a browser context, so layout preferences and paused clocks cannot leak between layouts.
         const ui = await newEnglishPage(browser)
@@ -821,8 +855,10 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await item.hover()
     await page.waitForTimeout(POINTER_HOLD_MS)
     expect(await page.getByRole('menuitem', { name: 'Rename' }).count()).toBe(1)
-    // Pointer-leave dismissal still applies once the pointer genuinely leaves.
+    // Context menus stay open across pointer departure and dismiss on an outside press.
     await page.getByRole('button', { name: 'Account menu', exact: true }).hover()
+    expect(await item.isVisible()).toBe(true)
+    await page.locator('[data-row-key]').first().click()
     await expect.poll(() => page.getByRole('menuitem', { name: 'Rename' }).count(), { timeout: 5_000 }).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
@@ -834,7 +870,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     // so archiving this last visible Ungrouped Session must remove the bucket.
     await initialRow.click()
     const { title } = await scaffold.ctx.sessionController.rename({
-      sessionId: SessionId(SEED_ID), title: `Archive target ${SEED_ID}`,
+      sessionId: brandString<SessionId>(SEED_ID), title: `Archive target ${SEED_ID}`,
     })
     // A user-owned title binds the locator to this seed across restoration.
     const sessionRow = page.getByRole('treeitem').filter({
@@ -854,17 +890,16 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await expect.poll(() => page.getByText('Ungrouped', { exact: true }).count(), { timeout: 10_000 }).toBe(0)
     // Durable on the host: the registry-global set carries the id while the
     // session log itself stays in persistence untouched.
-    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([SessionId(SEED_ID)])
-    expect((await scaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id)).toContain(SessionId(SEED_ID))
+    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([brandString<SessionId>(SEED_ID)])
+    expect((await scaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id)).toContain(brandString<SessionId>(SEED_ID))
     // Reload: the hidden state is rebuilt from the workspace.list baseline.
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await expect.poll(() => page.getByText('Workspaces', { exact: true }).count(), { timeout: 15_000 }).toBe(1)
-    // Initial Workspace reconnection can focus the composer after the tree renders.
-    // Finish that navigation before the next test opens a path editor.
-    await page.locator('[role="treeitem"][aria-selected="true"]').waitFor({ timeout: 15_000 })
+    // The last Session can leave the new-session page with no selected row.
+    // Wait for composer focus so reconnection cannot steal the next editor's focus.
     await expect.poll(
       () => page.locator('[data-composer-input][contenteditable="true"]')
         .evaluate(element => element === document.activeElement),
@@ -986,13 +1021,14 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     const createdBody = await createdResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
     expect(createdBody.result.ok).toBe(true)
     const createdSessionId = createdBody.result.value.sessionId
-    expect(previousParentSessionIds).not.toContain(createdSessionId)
+    // The parent Workspace's only member is the blank adopting it created, so New Session returns to it.
+    expect(previousParentSessionIds).toEqual([createdSessionId])
+    expect(createdResponse.request().postDataJSON()).toHaveProperty('payload.args.request.sessionId', createdSessionId)
     await page.locator(`[data-conversation-session="${createdSessionId}"]`).waitFor()
     await expect.poll(() => section.locator('[aria-selected="true"]').evaluate(row =>
       row.closest('[class*="groupSection"]')?.querySelector('[role="treeitem"]')?.textContent,
     ), { timeout: 10_000 }).toBe('folder-group')
-    await expect.poll(() => parentWorkspace.sessionIds).toHaveLength(previousParentSessionIds.length + 1)
-    expect(parentWorkspace.sessionIds).toEqual(expect.arrayContaining([...previousParentSessionIds, createdSessionId]))
+    expect([...parentWorkspace.sessionIds]).toEqual(previousParentSessionIds)
     expect([...childWorkspace.sessionIds]).toEqual(childSessionIds)
     expect(tripwire.pageErrors).toEqual([])
   })
@@ -1006,7 +1042,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
 })
 
 describe('web e2e: New Session after an outdated blank cache', () => {
-  it('opens a fresh conversation instead of reusing the recorded conversation', async () => {
+  it('returns to the startup blank instead of reusing the recorded conversation', async () => {
     const scaffold = await launchWebScaffold({})
     let browser: Browser | undefined
     try {
@@ -1034,6 +1070,8 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       // candidate; the Host declines the started Session and creates a blank one.
       await expect.poll(() => selected.innerText()).toBe('New Session')
       await expect.poll(() => workspace.sessionIds.length).toBe(2)
+      const startupBlank = workspace.sessionIds.find(member => member !== id)
+      expect(startupBlank).toBeDefined()
       // The declined Session's projections are reloaded, so its stale blank row reappears.
       await page.getByRole('treeitem', { name: /^Use the read tool twice/ }).click()
       await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor()
@@ -1041,11 +1079,15 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       const previous = (await selected.innerText()).split('\n')[0]!
       const before = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)
 
+      const creation = page.waitForResponse('**/api/session/create')
       await page.getByRole('button', { name: 'New session', exact: true }).last().click()
+      const created = await creation
+      // New Session names the blank startup created, not the recorded conversation, and the Host reuses it.
+      expect(created.request().postDataJSON()).toHaveProperty('payload.args.request.sessionId', startupBlank)
+      expect(await created.json()).toMatchObject({ result: { ok: true, value: { sessionId: startupBlank } } })
       await expect.poll(() => selected.innerText()).toBe('New Session')
       await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ state: 'hidden' })
-      // New Session creates a fresh Session; the blank startup created stays a member.
-      await expect.poll(() => workspace.sessionIds.length).toBe(3)
+      expect(workspace.sessionIds).toHaveLength(2)
       expect(workspace.sessionIds).toContain(id)
       await page.getByRole('treeitem').filter({ hasText: previous }).waitFor()
       const after = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)

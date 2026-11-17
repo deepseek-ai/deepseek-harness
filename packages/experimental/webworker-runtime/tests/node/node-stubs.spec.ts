@@ -20,6 +20,7 @@ import * as net from '../../src/node/builtin_modules/mock/net.ts'
 import * as sqlite from '../../src/node/builtin_modules/mock/sqlite.ts'
 import * as stream from '../../src/node/builtin_modules/implemented/stream.ts'
 import * as vm from '../../src/node/builtin_modules/mock/vm.ts'
+import * as repl from '../../src/node/builtin_modules/mock/repl.ts'
 import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threads.ts'
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
 import * as libreofficeKit from '../../src/node/external_packages/libreoffice-kit.ts'
@@ -47,6 +48,7 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node:net', net, ['createServer', 'connect']],
   ['node:sqlite', sqlite, ['backup']],
   ['node:vm', vm, ['createContext', 'runInContext', 'runInNewContext', 'runInThisContext', 'isContext']],
+  ['node:repl', repl, ['start']],
   ['node:worker_threads', workerThreads, ['MessageChannel', 'MessagePort', 'markAsUntransferable', 'receiveMessageOnPort']],
   // The rest of `node:child_process` runs commands (see child-process.spec.ts);
   // these three need a real process, so they stay refusals.
@@ -124,7 +126,7 @@ describe('not-implemented stubs', () => {
 
   it('keeps the CommonJS interop marker and a default export on every replaced module', () => {
     for (const namespace of [
-      dnsPromises, net, sqlite, vm, workerThreads, childProcess, stream, ws, nodePty, piAi, piCodingAgent, os, perfHooks, got,
+      dnsPromises, net, sqlite, vm, repl, workerThreads, childProcess, stream, ws, nodePty, piAi, piCodingAgent, os, perfHooks, got,
     ]) {
       const holder = namespace as { __esModule?: unknown; default?: unknown }
       expect(holder.__esModule).toBe(true)

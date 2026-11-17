@@ -18,6 +18,7 @@ import {
   loadOverlayPatches,
   PROFILE_PATCH_FILENAME,
   reconcileProfilePatches,
+  StartupError,
 } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
@@ -132,12 +133,12 @@ describe('loadOptionalPatches', () => {
       .toThrow(new RegExp(`^${NAME}: failed to read patches `))
   })
 
-  it('fails loud on unparsable YAML and on a !!js tag with no expression body', () => {
+  it('fails loud on unparsable YAML and on an unknown tag', () => {
     const dir = tmp()
     writeFileSync(join(dir, PROFILE_PATCH_FILENAME), 'invalid: [unclosed\n')
     expect(() => loadOptionalPatches(NAME, join(dir, PROFILE_PATCH_FILENAME)))
       .toThrow(new RegExp(`^${NAME}: failed to parse patches `))
-    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config:\n    a: !!js\n')
+    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config:\n    a: !js process.env.A\n')
     expect(() => loadOptionalPatches(NAME, join(dir, PROFILE_PATCH_FILENAME)))
       .toThrow(new RegExp(`^${NAME}: failed to parse patches `))
   })
@@ -254,6 +255,11 @@ describe('Loader config interpolation', () => {
       await provider?.update({ config: { value: 'recovered' } })
       await provider?.update({ disabled: false })
       await ctx.loader.await()
+      // rc.11 keeps a failed fiber failed after its dependency recovers; recovery requires an explicit update.
+      const failed = reader?.fiber
+      if (failed === undefined) throw new Error('reader entry has no fiber')
+      await expect(failed.await()).rejects.toThrow('rejected provider')
+      await failed.update(failed.rawConfig, true)
       expect(ctx.get('readerResult')).toEqual({ value: 'recovered' })
     } finally {
       await ctx.fiber.dispose()
@@ -338,9 +344,28 @@ describe('profile reconciliation settlement', () => {
     const ctx = await boot(NAME, join(dir, 'cordis.yml'), patches)
     onTestFinished(() => ctx.fiber.dispose())
     // Reload diagnostics carry the import error's message without stack frames.
-    const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: Error \\[ERR_MODULE_NOT_FOUND\\]'
-    const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs' imported from [^\\n]*$`, 'u')
+    const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: ModuleNotFoundError'
+    const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs'$`, 'u')
     expect(await reconcileProfilePatches(ctx, patches, NAME)).toEqual([expect.stringMatching(diagnostic)])
+  })
+
+  it('fails startup for a required row whose options the Loader rejects, at its source position', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'cordis.yml'), '- id: webserver\n  name: ./webserver.mjs\n  disabled: maybe\n')
+    const error = await boot(NAME, join(dir, 'cordis.yml')).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(StartupError)
+    expect((error as Error).message).toContain('  webserver (required)\n    Package: ./webserver.mjs')
+    expect((error as Error).message).toContain(`disabled must be a boolean (at disabled, ${join(dir, 'cordis.yml')}:3:13)`)
+  })
+
+  it('rejects a recomposition that introduces rows the Loader rejects', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'cordis.yml'), '[]\n')
+    const ctx = await boot(NAME, join(dir, 'cordis.yml'))
+    onTestFinished(() => ctx.fiber.dispose())
+    const patches = [{ insert: [{ id: 'bad-group', name: 'cordis:group', group: true }] }]
+    await expect(reconcileProfilePatches(ctx, patches, NAME)).rejects
+      .toThrow('bad-group (cordis:group): invalid entry options: EntryValidationError: invalid entry options:\n  - config is required (at config)')
   })
 
   it('rejects a context without the launcher root Include', async () => {
@@ -360,7 +385,7 @@ describe('profile reconciliation settlement', () => {
     onTestFinished(() => ctx.fiber.dispose())
     const entry = [...ctx.loader.entries()].find(row => row.options.id === 'candidate')
     if (entry === undefined) throw new Error('candidate entry missing')
-    await entry.update({ config: { fail: true } })
+    await expect(entry.update({ config: { fail: true } })).rejects.toThrow('candidate activation failed')
     await ctx.loader.await()
     await reconcileProfilePatches(ctx, [], NAME)
     expect([...ctx.loader.entries()].some(row => row.options.id === 'candidate')).toBe(false)
@@ -379,7 +404,7 @@ describe('profile reconciliation settlement', () => {
       .rejects.toThrow('candidate activation failed')
   })
 
-  it('reports an activation failure that settles while its entry is being removed', async () => {
+  it('logs a superseded activation failure without failing removal', async () => {
     const dir = tmp()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -390,11 +415,19 @@ describe('profile reconciliation settlement', () => {
     })
     onTestFinished(async () => { release.resolve(undefined); await ctx.fiber.dispose() })
     const entry = [...ctx.loader.entries()].find(row => row.options.id === 'candidate')!
-    await entry.update({ config: { fail: true } })
+    const updating = entry.update({ config: { fail: true } })
     await entered.promise
-    const result = expect(reconcileProfilePatches(ctx, [], NAME)).rejects.toThrow('in-flight failure')
+    const stopped = Promise.withResolvers<undefined>()
+    ctx.on('internal/plugin', (fiber) => {
+      if (fiber.uid === null && fiber.entry === entry) stopped.resolve(undefined)
+    })
+    const removing = reconcileProfilePatches(ctx, [], NAME)
+    await stopped.promise
     release.resolve(undefined)
-    await result
+    await Promise.all([updating, removing])
+    expect([...ctx.loader.entries()].some(row => row.options.id === 'candidate')).toBe(false)
+    expect(ctx.logger.buffer.some(message => message.type === 'error'
+      && message.args.some(value => String(value).includes('in-flight failure')))).toBe(true)
   })
 
   it('waits for a removed plugin to release its resources', async () => {
@@ -451,7 +484,7 @@ describe('boot with user patches', () => {
     try {
       const noop = [...ctx.loader.entries()].find(entry => entry.options.id === 'noop')
       // The mounted plugin received the interpolated environment value.
-      expect(noop?.fiber?.config).toEqual({ value: 'user-value' })
+      expect(noop?.fiber?.effectiveConfig).toEqual({ value: 'user-value' })
       expect([...ctx.loader.entries()].some(entry => entry.options.id === 'user-extra')).toBe(true)
     } finally {
       await ctx.fiber.dispose()

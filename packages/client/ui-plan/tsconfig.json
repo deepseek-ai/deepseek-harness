@@ -60,10 +60,10 @@
       "path": "../../llm/llm"
     },
     {
-      "path": "../../core/tools"
+      "path": "../../util/crypto"
     },
     {
-      "path": "../../util/crypto"
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

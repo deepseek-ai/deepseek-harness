@@ -14,13 +14,13 @@ Status: implemented
 
 **失败或被取消的安装恢复 profile 文件。** `installBundle` 在 pnpm 运行前快照 `package.json` 与 `pnpm-lock.yaml`，在 pnpm 失败、运行被取消、或 pnpm 装入的包没有声明组合包 patch 时把它们放回去。这只针对安装反转了[管理器的决定](2026-09-14-current-profile-plugin-management.zh.md)中"保留部分改动"的部分：没有产出可用组合包的安装，不能留下一个页面无法显示的依赖。删除仍沿用那个决定。已下载文件可能留在 `node_modules` 与 pnpm 缓存中。
 
-**失败在事实所在处分类。** `classifyInstallFailure` 依据运行的结束方式和 pnpm 的输出——它的 `ERR_PNPM_*` 码和 Node 的 errno 名——给出 `packageResult.kind`。被管理器终止的运行，不论信号留下什么退出状态都归类为 `timeout`，因此安装会还原文件，删除则报告失败而不会读成成功（[运行上界](../../../../packages/boot/plugin-manager/README.zh.md)）。客户端把 kind 显示成一句话，把 pnpm 输出折叠进详情。对日志的解析只存在于这一个函数，用夹具驱动的测试钉住。
+**失败在事实所在处分类。** `classifyInstallFailure` 依据运行的结束方式和 pnpm 的输出——它的 `ERR_PNPM_*` 码和 Node 的 errno 名——给出 `packageResult.kind`。被管理器终止的运行，不论信号留下什么退出状态都归类为 `timeout`，因此安装会还原文件，删除则报告失败而不会读成成功（[运行上界](../../../../packages/boot/plugin-manager/README.zh.md)）。客户端把 kind 显示成一句话，把 pnpm 输出折叠进详情；详情还会指出完整日志，以及尚未运行 pnpm 就停下的一次失败（[详情](../bug-fix/2026-10-28-plugin-install-failure-diagnostics.zh.md)）。对日志的解析只存在于这一个函数，用夹具驱动的测试钉住。
 
 **GitHub 连接失败在安装前有单独的短时限。** 宿主通过只读的 `git ls-remote` 检查连接，沿用 profile 的 Git 与代理配置，`githubConnectionTimeoutMs` 默认为 5000 毫秒。这次检查禁用凭据助手和认证提示，避免认证过程占用连接预算。只有网络失败与超时会阻止 pnpm 启动；认证、HTTPS 到 SSH 的回退、ref 解析及完整安装仍由 pnpm 负责。时限不约束下载或构建。已有的失败类型与 `failedAt: 'spec-host'` 让客户端显示连接失败或超时，并提供国内镜像供用户输入另一个包名。取消安装或销毁管理器会先终止检查及其子进程，再结束操作。
 
 **取消属于管理器，不属于信号。** 对话框为每次运行生成一个 request id；宿主在它之下流式转发运行的输出与阶段，`cancelInstall` 只在 pnpm 退出且文件恢复后才答复。对话框等到这个答复才把 spec 重新交回；中止的 RPC 或断开的连接都不算确认。只有检查末尾接受 `AbortSignal`：返回编辑或关闭会丢掉一次注册表查询，没有人等它的结果。
 
-**启用在事后。** 运行以 `enabled: false` 安装；完成画面为它新增的组合包提供**立即启用**，对话框关闭，列表滚动到它。在人看到装了什么之前，不会启用任何东西。
+**启用在事后。** 运行以 `enabled: false` 安装；完成画面为它新增的组合包提供**立即启用**，对话框关闭；其卡片在当前页面时，列表滚动到它。在人看到装了什么之前，不会启用任何东西。
 
 **当下的结果是 toast。** 要等下次启动的变更、被更高层覆盖的变更、被取消的运行、被拒绝的操作，各弹一条 toast 后自行消失；页面上不留任何东西。
 

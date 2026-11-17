@@ -7,13 +7,25 @@
  * `sidebar.settings` registrant's (ui-settings), followed by optional footer
  * actions in `sidebar.footer.action`.
  */
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RefCallback } from 'react'
+import type {
+  InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, SlotHookFactory,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { ProductEventMap } from '@deepseek-ai/dsh-client-product-analytics/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotFactoryMap {
+    /** Reuse a registered panel icon in navigation rows and menus. */
+    'sidebar.panel.icon': {
+      scope: 'root'
+      props: SidebarPanelIconOwnerProps & { readonly id: string }
+      children: { 'sidebar.panellist': { kind: 'list'; scope: 'root' } }
+    }
+  }
   interface SlotMap {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
     'sidebar.toggle.badge': { kind: 'single'; scope: 'root'; owner: Record<never, never> }
@@ -33,13 +45,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the sidebar owns the button and resolves its label from list metadata.
      */
     'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
+    /** Rows of the panel list's More menu; the sidebar shows More only while this list has registrations. */
+    'sidebar.panellist.actions': { kind: 'list'; scope: 'root'; owner: SidebarPanelActionsOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
      * package's 'sidebar' entry (declaring is claiming); ui-workspace
-     * registers the browser.
+     * registers the browser. The section renders inside the sidebar viewport,
+     * which is a size container one viewport tall and a scroll-state container,
+     * and binds its own vertical scroller through `useSectionScroller`.
      */
-    'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    'sidebar.workspaces': {
+      kind: 'single'
+      scope: 'root'
+      owner: SidebarSectionOwnerProps
+      hookContext: SidebarSectionHookContext
+      inject: SidebarSectionInjected
+    }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -51,6 +73,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's 'sidebar' entry; each action receives only the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
+    /**
+     * HOC layer around the inner content of the New-session row — the Tooltip
+     * and button the shell passes as `children`, rendered only while the Peer
+     * may create Sessions. An occupant receives that content and returns it,
+     * possibly wrapped, together with its own controls, so it decorates the
+     * row without adding a wrapper element. Occupants nest around the content
+     * instead of rendering beside it: one that adds nothing must return
+     * `children`, and with no occupant the content renders unchanged.
+     * Declared by this package's 'sidebar' entry.
+     */
+    'sidebar.session.action': { kind: 'hoc'; scope: 'root'; owner: SidebarSessionActionOwnerProps }
   }
 }
 
@@ -84,6 +117,37 @@ export interface SidebarPanelMetadata {
   label: string
 }
 
+/** One customizable panel launcher listed in the More menu. */
+export interface SidebarPanelActionEntry {
+  /** Panel id. */
+  readonly id: string
+  /** Resolved panel label. */
+  readonly label: string
+  /** False while the launcher is unpinned from the sidebar. */
+  readonly pinned: boolean
+  /** Whether this panel is selected, independently of its pin state. */
+  readonly active?: boolean
+}
+
+/** Owner share of the panel list's More menu rows. */
+export interface SidebarPanelActionsOwnerProps {
+  /** Customizable panels in registration order; Plugins is never listed. */
+  readonly entries: readonly SidebarPanelActionEntry[]
+  /**
+   * Open a panel without changing its pin state.
+   * @param id - Listed panel id.
+   */
+  readonly onOpen: (id: string) => void
+  /**
+   * Show (true) or unpin (false) a panel launcher.
+   * @param id - Listed panel id.
+   * @param pinned - Whether the launcher shows in the sidebar.
+   */
+  readonly onPinnedChange: (id: string, pinned: boolean) => void
+  /** Close the More menu. */
+  readonly onDismiss: () => void
+}
+
 /**
  * Owner share of the browser hole — the only facts crossing the shell/region
  * boundary. Business data and actions arrive through the region's own inject.
@@ -91,8 +155,34 @@ export interface SidebarPanelMetadata {
 export interface SidebarSectionOwnerProps {
   /** Shell fold-state output: wide renders the full browser, rail the icon column. */
   wide: boolean
-  /** Rail icons request expansion; the browser rides the wide flip for focus. */
+  /** Ensure the sidebar is visible; safe to call while already expanded. */
   expandSidebar: () => void
+}
+
+/** Sidebar viewport capability handed to the `sidebar.workspaces` occupant. */
+export interface SectionScroller {
+  /**
+   * Ref callback for the occupant's own vertical scroller. While bound, wheel scrolling over
+   * the sidebar viewport moves the navigation away first and then continues into this element;
+   * scrolling up returns this element to its top before the navigation reappears.
+   */
+  readonly bindScrollerRef: RefCallback<HTMLElement>
+}
+
+/**
+ * Bind the occupant to the sidebar viewport it renders in.
+ * @returns The same object on every call for one sidebar.
+ */
+export type UseSectionScroller = () => SectionScroller
+
+/** Viewport capability supplied with each `sidebar.workspaces` render. */
+export interface SidebarSectionHookContext {
+  readonly useSectionScroller: UseSectionScroller
+}
+
+/** Slot-level Hook factory for the `sidebar.workspaces` occupant. */
+export interface SidebarSectionInjected {
+  hooks: { sectionScroller: SlotHookFactory<'sidebar.workspaces', UseSectionScroller> }
 }
 
 /**
@@ -106,6 +196,12 @@ export interface SidebarSettingsOwnerProps {
 
 /** Owner share of an action rendered beside Settings at the sidebar foot. */
 export interface SidebarFooterActionOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
+/** Owner share of the New-session row's HOC layer. */
+export interface SidebarSessionActionOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
 }
@@ -125,8 +221,23 @@ export type SidebarRootInjected = {
   toggleSidebar: () => void
   /** Select the global panel addressed by a sidebar row. */
   selectPanel: (id: MainPanelId) => void
+  /**
+   * Show or unpin one panel launcher; Plugins is ignored.
+   * @param id - Panel id.
+   * @param pinned - Whether the launcher shows in the sidebar.
+   */
+  setPinned: (id: string, pinned: boolean) => void
+  /** Record activation of an official navigation control without changing navigation. */
+  trackEntryClick: (attributes: ProductEventMap['sidebar_menu_click']) => void
   /** Private reactive sources bound to framework selector hooks. */
-  hooks: { panels: ObservableSnapshot<readonly SidebarPanelMetadata[]>; shortcuts: ObservableSnapshot<readonly ShortcutCatalogEntry[]> }
+  hooks: {
+    panels: ObservableSnapshot<readonly SidebarPanelMetadata[]>
+    shortcuts: ObservableSnapshot<readonly ShortcutCatalogEntry[]>
+    /** Ids of unpinned panel launchers held in memory until plugin reload. */
+    entryPins: ObservableSnapshot<readonly string[]>
+    /** Whether `sidebar.panellist.actions` has registrations. */
+    entryActions: ObservableSnapshot<boolean>
+  }
 }
 
 /**
@@ -140,9 +251,10 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.toggle.badge'
-    | 'sidebar.panellist'
+    | 'sidebar.panellist.actions'
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
+    | 'sidebar.session.action'
   >
-  & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>
+  & PropsRenderFactories & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>

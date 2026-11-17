@@ -334,3 +334,28 @@ describe('profile package metadata service', () => {
     expect(getEnvironmentData(key)).toBe(previous)
   })
 })
+
+
+it.each(['installation', 'bundle'] as const)('exposes installed optional dependencies from %s and skips absent ones', async (scope) => {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-optional-resolution-')))
+  roots.push(root)
+  const installAnchor = join(root, 'install', 'package.json')
+  file(installAnchor, JSON.stringify({ name: 'installation', version: '1.0.0' }))
+  const profileDir = join(root, 'profiles', 'test')
+  initProfile(profileDir, ['optional-bundle'])
+  const bundleDir = join(profileDir, 'node_modules', 'optional-bundle')
+  const bundleManifest = { name: 'optional-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } }
+  file(join(bundleDir, 'package.json'), JSON.stringify(bundleManifest))
+  file(join(bundleDir, 'cordis.patch.yml'), '[]\n')
+  const anchor = scope === 'installation' ? installAnchor : join(bundleDir, 'package.json')
+  file(anchor, JSON.stringify({ ...JSON.parse(readFileSync(anchor, 'utf8')) as object,
+    optionalDependencies: { 'metadata-lib': '*', 'absent-platform': '*' },
+  }))
+  const optionalDir = join(dirname(anchor), 'node_modules', 'metadata-lib')
+  pkg(optionalDir, '1.0.0')
+  const active = await createRuntimeResolution({
+    installAnchor, home: root, profile: loadProfileDirectory('dsh', profileDir, installAnchor),
+  })
+  expect(active.entries).toContainEqual(expect.objectContaining({ name: 'metadata-lib', packageDir: optionalDir }))
+  expect(active.entries.some(entry => entry.name === 'absent-platform')).toBe(false)
+})

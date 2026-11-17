@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-20-ptc-script-evaluation-and-retention.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-20-ptc-script-evaluation-and-retention.md
+/agent-note-ptc-script-evaluation-and-state-retention:
+  en: e222c8cda4cee561
+  zh: 9e624e5643ad2984
+/agent-note-ptc-script-evaluation-and-state-retention/problem:
+  en: 2da844a2a4e1903b
+  zh: 3b74ba7c1bcdae89
+/agent-note-ptc-script-evaluation-and-state-retention/decision:
+  en: 4beff8714f1d1555
+  zh: a22019a90989eb66
+/agent-note-ptc-script-evaluation-and-state-retention/alternatives-considered:
+  en: 8ee3f3c7e04b4f25
+  zh: ac604fa8debcfebf
+/agent-note-ptc-script-evaluation-and-state-retention/consequences:
+  en: 64b7d3a5d247d82b
+  zh: 6f94d6b37f1ea4c1

@@ -38,20 +38,20 @@ export interface DomainSpec {
   /** Current domain format version; reads enforce it according to the selected layout. */
   readonly version: number
   /**
-   * Medium layout for the backend unit: `single` (the default) stores the
+   * Document layout for the backend unit: `single` (the default) stores the
    * whole unit as one document; `per-record` stores each record as its own
    * document, for units whose records are large, sparse, or individually
-   * disposable — the projection cache — and scopes version checks per record
-   * (an unaccepted record document is discarded, never migrated).
+   * disposable — the projection cache — with per-record version checks.
+   * Row stores retain unit-wide versioning for either layout request.
    */
   readonly layout?: 'single' | 'per-record'
   /**
    * Older domain versions whose stored records the current record schemas
    * also accept (the declaring owner vouches for that, typically by
-   * declaring the fields older records lack as optional). `per-record` backends
-   * read documents stamped with a listed version instead of discarding them,
-   * and accept a legacy whole-unit file so stamped for the one-time
-   * bootstrap; writes always stamp {@link version}.
+   * declaring the fields older records lack as optional). Ordinary reads admit
+   * listed versions without restamping saved data; writes stamp {@link version}
+   * while leaving untouched records as saved. Current schemas must therefore
+   * accept mixed generations even under the current unit stamp.
    */
   readonly compatibleVersions?: readonly number[]
   /**

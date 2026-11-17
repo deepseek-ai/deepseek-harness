@@ -21,6 +21,9 @@
       "path": "../session-format"
     },
     {
+      "path": "../../util/time"
+    },
+    {
       "path": "../../util/values"
     }
   ]

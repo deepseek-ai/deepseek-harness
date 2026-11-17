@@ -31,6 +31,18 @@ function installed(location: ProfilePluginLocation, name: string, bundle = true)
   })
 }
 
+it('refuses automatic activation on an unsupported Host without changing the bundle selection', () => {
+  const location = fixture()
+  const before = readProfilePlugins(location)
+  writeManifest(location.profileDir, { dependencies: { restricted: '1.0.0' }, dsh: { profile: { bundles: [] } } })
+  writeManifest(join(location.profileDir, 'node_modules/restricted'), { name: 'restricted', dsh: { bundle: {
+    patch: 'unused.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'],
+  } } })
+  const saved = readFileSync(join(location.profileDir, 'package.json'), 'utf8')
+  expect(() => reconcileProfilePlugins({ ...location, before, preserveDisabled: true })).toThrow('Host is running')
+  expect(readFileSync(join(location.profileDir, 'package.json'), 'utf8')).toBe(saved)
+})
+
 describe('profile plugin inventory', () => {
   it('uses dependency alias keys, installed versions, and the loader installation precedence', () => {
     const location = fixture()

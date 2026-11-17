@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { ChatReading } from '../src/client/chat/use-chat-reading.ts'
 import { ChatViewport } from '../src/client/chat/use-chat-viewport.ts'
 import { ScrollFollow, scrollMetrics } from '../src/client/chat/use-scroll-follow.ts'
 
@@ -48,6 +47,100 @@ function fixture() {
   }
   return { column, viewport, group, row, prepend: (height: number) => { prependedHeight += height } }
 }
+
+it('updates history distance only from scrollport size observations before layout writes', () => {
+  let resize: ResizeObserverCallback | undefined
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { resize = callback }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  onTestFinished(() => { vi.unstubAllGlobals() })
+  const h = fixture()
+  const edge = document.createElement('div')
+  h.column.prepend(edge)
+  const height = vi.fn(() => 300)
+  Object.defineProperty(h.column, 'clientHeight', { configurable: true, get: height })
+  h.viewport.setHistoryEdge(edge)
+  expect(height).not.toHaveBeenCalled()
+  let afterWrite = false
+  vi.spyOn(h.viewport, 'reclaimBelow').mockImplementation(() => { afterWrite = true })
+  height.mockImplementation(() => {
+    if (afterWrite) throw new Error('height read after a layout writer')
+    return 300
+  })
+  const entry: ResizeObserverEntry = { target: h.column, contentRect: new DOMRect(),
+    borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }
+  const notify = resize
+  const observer = new Observer(() => {})
+  notify?.([entry], observer)
+  height.mockClear()
+  notify?.([], observer)
+  vi.spyOn(edge, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -600, 20, 10))
+  expect(h.viewport.confirmHistoryStart()).toBe(true)
+  vi.spyOn(edge, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -700, 20, 10))
+  expect(h.viewport.confirmHistoryStart()).toBe(false)
+  expect(height).not.toHaveBeenCalled()
+})
+
+it('uses the first paging anchor for one-shot history prepending without reading-position lookup', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  const scrollerRect = vi.spyOn(h.column, 'getBoundingClientRect')
+  const capture = vi.spyOn(h.viewport, 'capturePosition')
+  const query = vi.spyOn(h.column, 'querySelector')
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(capture).not.toHaveBeenCalled()
+  expect(query).toHaveBeenCalledTimes(1)
+  expect(scrollerRect).toHaveBeenCalledTimes(1)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(row.getBoundingClientRect().top).toBe(0)
+  h.prepend(30)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+})
+
+it('uses a collapsed group paging anchor when no ordinary content row is visible', () => {
+  const h = fixture()
+  const group = h.row(h.column, 'group', 0)
+  group.dataset.chatGroupKey = 'group'
+  const body = document.createElement('div')
+  body.hidden = true
+  group.append(body)
+  h.row(body, 'hidden-member', 20)
+  expect(h.viewport.capturePosition()).toBeNull()
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(group.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('restores the captured screen position once without retaining paging ownership', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(h.viewport.preserving).toBe(false)
+  h.column.scrollTop = 25
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(row.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('does not prepare a correction when no paging anchor exists', () => {
+  const h = fixture()
+  expect(h.viewport.beginHistoryPrepend()).toBe(false)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(0)
+})
 
 it.each([
   { count: 64, slot: false }, { count: 4096, slot: false },
@@ -441,6 +534,71 @@ it.each([
   expect(h.row.getBoundingClientRect().top).toBe(top)
 })
 
+it('restores the captured inner and outer screen position once without subscribing', () => {
+  const h = nestedFixture(600, 400)
+  h.scroller.scrollTop = 80
+  h.body.scrollTop = 40
+  const screenTop = h.row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(h.viewport.preserving).toBe(false)
+  expect(h.observed.has(h.content)).toBe(false)
+  h.body.scrollTop = 60
+  h.scroller.scrollTop = 90
+  h.prepend(200)
+  h.viewport.finishHistoryPrepend()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
+  expect(h.row.getBoundingClientRect().top).toBe(screenTop)
+  expect(h.observed.has(h.content)).toBe(false)
+  h.prepend(20)
+  h.resize()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
+})
+
+it('resolves a remounted one-shot anchor without entering retained paging', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  row.remove()
+  const replacement = h.row(h.column, 'old', 0)
+  h.column.scrollTop = 25
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(replacement.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('does not repeat native outer anchoring during a near-zero one-shot prepend', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  h.column.scrollTop = 0.5
+  const top = row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(120)
+  // Model the browser's adjustment before the layout effect reads the new geometry.
+  h.column.scrollTop = 120.5
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120.5)
+  expect(row.getBoundingClientRect().top).toBe(top)
+})
+
+it('does not repeat native inner anchoring when the outer scroller is at zero', () => {
+  const h = nestedFixture(600, 400)
+  h.body.scrollTop = 40
+  const top = h.row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(200)
+  // Same ordering as the Chromium regression: native inner adjustment precedes our correction.
+  h.body.scrollTop = 240
+  h.viewport.finishHistoryPrepend()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(0)
+  expect(h.row.getBoundingClientRect().top).toBe(top)
+  expect(h.viewport.preserving).toBe(false)
+})
+
 it('gives paging compensation priority over an active inner follow animation', () => {
   const h = nestedFixture(600, 400)
   const follow = new ScrollFollow(true, 1)
@@ -560,98 +718,4 @@ it('releases a removed paging row without navigating to unrelated content', () =
   expect(h.viewport.preserve()).toBeNull()
   expect(h.viewport.preserving).toBe(false)
   expect(h.scroller.scrollTop).toBe(80)
-})
-
-it('pins the tail only while sampled follow intent holds over overflowing content, writing the mark on change', async () => {
-  vi.useFakeTimers()
-  let notifyResize = () => {}
-  class Observer implements ResizeObserver {
-    constructor(callback: ResizeObserverCallback) { notifyResize = () => { callback([], this) } }
-    observe(): void {}
-    unobserve(): void {}
-    disconnect(): void {}
-  }
-  vi.stubGlobal('ResizeObserver', Observer)
-  const scroller = document.createElement('div')
-  const column = document.createElement('div')
-  scroller.append(column)
-  document.body.append(scroller)
-  let content = 200
-  let top = 0
-  const floor = () => Math.max(0, content - 300)
-  Object.defineProperties(scroller, {
-    clientHeight: { configurable: true, get: () => 300 },
-    scrollHeight: { configurable: true, get: () => Math.max(300, content) },
-    scrollTop: {
-      configurable: true,
-      get: () => Math.min(top, floor()),
-      set: (value: number) => { top = Math.max(0, Math.min(value, floor())) },
-    },
-  })
-  const viewport = new ChatViewport()
-  viewport.attach(scroller, column)
-  const follow = new ScrollFollow(true, 4)
-  const reading = new ChatReading(viewport, { read: () => null, save: vi.fn() }, {
-    initialized: true, followingTail: true, activeTurn: 1,
-  }, vi.fn(), follow)
-  const unbind = reading.bindFolds()
-  viewport.connect({
-    scroll: reading.onScroll, scrollEnd: reading.onScrollEnd, interact: () => {},
-    resize: () => { reading.onResize() },
-  })
-  const writes: (string | null)[] = []
-  const mutations = new MutationObserver((records) => {
-    for (const record of records) writes.push(record.oldValue)
-  })
-  mutations.observe(column, { attributes: true, attributeFilter: ['data-chat-tail-pinned'], attributeOldValue: true })
-  onTestFinished(() => {
-    mutations.disconnect()
-    unbind()
-    reading.dispose()
-    viewport.detach()
-    scroller.remove()
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-  })
-  const pinned = () => column.hasAttribute('data-chat-tail-pinned')
-  const scrollTo = (value: number) => {
-    scroller.scrollTop = value
-    scroller.dispatchEvent(new Event('scroll'))
-  }
-
-  // Content that fits moves the tail on screen, so status moves keep their duration.
-  notifyResize()
-  expect(pinned()).toBe(false)
-  // Growth that overflows is followed to the floor within the same resize, then pinned.
-  content = 900
-  notifyResize()
-  expect(scroller.scrollTop).toBe(600)
-  expect(pinned()).toBe(true)
-  // Further growth and scroll deliveries at the floor keep the pin without rewriting it.
-  content = 950
-  notifyResize()
-  scroller.dispatchEvent(new Event('scroll'))
-  expect(pinned()).toBe(true)
-  // A reader scroll away leaves follow intent set until its sample settles; growth in that window is not
-  // followed, so the pin drops at once.
-  scrollTo(300)
-  expect(reading.pending).toBe(true)
-  expect(follow.active).toBe(true)
-  expect(pinned()).toBe(false)
-  content = 1_000
-  notifyResize()
-  expect(scroller.scrollTop).toBe(300)
-  expect(pinned()).toBe(false)
-  // The settled sample releases follow intent; returning to the floor restores both.
-  await vi.advanceTimersByTimeAsync(500)
-  expect(follow.active).toBe(false)
-  expect(pinned()).toBe(false)
-  scrollTo(700)
-  expect(follow.active).toBe(true)
-  expect(pinned()).toBe(true)
-  await Promise.resolve()
-  // Set, removed, set: one write per pin change.
-  expect(writes).toEqual([null, '', null])
-  viewport.detach()
-  expect(pinned()).toBe(false)
 })

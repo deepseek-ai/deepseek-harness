@@ -5,7 +5,7 @@ import { scheduler } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
-import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
@@ -24,11 +24,6 @@ const SEARCH_PROVIDER_CALL_LIMIT = 100
 const SESSION_SEARCH_QUERY_MAX_CHARS = 500
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
 
-const sessionListMetadataSchema: z.ZodType<SessionListMetadata> = z.object({
-  blank: z.boolean(),
-  lastPromptAt: z.number().nullable(),
-})
-
 const imageLimitsSchema = z.object({
   maxImageBytes: z.number().int().positive(),
   maxImagesPerMessage: z.number().int().positive(),
@@ -37,25 +32,6 @@ const imageLimitsSchema = z.object({
   maxImageDimension: z.number().int().positive(),
   mediaTypes: z.array(z.string()),
 }) as unknown as z.ZodType<ImageAttachmentLimits>
-
-/**
- * Advance the Session-list metadata projection by one committed event.
- * @param state - metadata before the event.
- * @param event - next committed Session event.
- * @returns the original or advanced metadata value.
- */
-export function applySessionListMetadata(
-  state: SessionListMetadata,
-  event: SessionEvent,
-): SessionListMetadata {
-  const blank = state.blank && event.type !== 'turn/start'
-  const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
-    ? event.time
-    : state.lastPromptAt
-  return blank === state.blank && lastPromptAt === state.lastPromptAt
-    ? state
-    : { blank, lastPromptAt }
-}
 
 /**
  * Return the longest prefix containing at most `maximum` Unicode code points.
@@ -87,14 +63,6 @@ export class ApiSessionList {
    * @returns when all required registrations are ready.
    */
   async initialize(): Promise<void> {
-    await this.ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
-      key: 'sessionListMetadata',
-      stateSchema: sessionListMetadataSchema,
-      init: () => ({ blank: true, lastPromptAt: null }),
-      apply: applySessionListMetadata,
-      wire: { viewSchema: sessionListMetadataSchema, view: state => state },
-      stateVersion: 1,
-    })
     await this.ctx.sessionProjections.register<'imageLimits', null>({
       key: 'imageLimits',
       stateSchema: z.null(),
@@ -111,19 +79,25 @@ export class ApiSessionList {
 
   /**
    * Build one current attached-Session summary.
+   * Blankness and recency come from `sessionQuery.getListMetadata`; projection
+   * hints carry every summary key computed through `snapshot`. The first call
+   * for a Session computes these projections over its whole in-memory log, and
+   * later calls advance them incrementally. The metadata read and the hint with
+   * the same key come from one cell; the metadata read does not depend on any
+   * other unit's view.
    * @param session - attached Session to summarize.
    * @returns current list metadata and available projections.
    */
   summaryFor(session: Session): SessionSummary {
+    const metadata = this.ctx.sessionQuery.getListMetadata(session)
     const projections = this.projectionsFor(session.header, session)
-    const metadata = projections?.values.sessionListMetadata
     return {
       sessionId: session.id,
       updatedAt: updatedAt(session.header, metadata),
       agentAvailable: this.ctx.agents.get(session.id)?.session === session,
       formatStatus: 'current',
       running: this.ctx.agents.get(session.id)?.status === 'running',
-      blank: metadata?.blank ?? session.seq === 0,
+      blank: metadata.blank,
       ...listFields(session.header),
       ...(projections === undefined ? {} : { projections }),
     }
@@ -304,9 +278,9 @@ export class ApiSessionList {
       // itself summary-excluded.
       const keys = this.ctx.sessionProjections.summaryKeys()
       if (session !== undefined) {
-        // The live registry computed the block for this Session: its watermark
+        // The live registry computes the block for this Session: its watermark
         // shares the sequence space of the Session's baselines and frames.
-        return hintsOf('sequenced', this.ctx.sessionProjections.cachedSnapshot(session, keys))
+        return hintsOf('sequenced', this.ctx.sessionProjections.snapshot(session, keys))
       }
       // A cold row reads the persisted cache by header alone; the cache serves
       // seeded and unseeded lifecycles alike because a listing never seeds a
@@ -334,8 +308,8 @@ function hintsOf(
   block: ProjectionSnapshot | undefined,
 ): SessionProjectionHints | undefined {
   if (block === undefined || Object.keys(block.values).length === 0) return undefined
-  // Listing hints contain every summary wire value the source currently holds
-  // but remain partial: missing cells and cache rows are never materialized here.
+  // Listing hints contain every summary wire value the source holds; cached
+  // hints remain partial because missing cache rows are never folded here.
   return { kind, asOfSeq: block.asOfSeq, values: block.values }
 }
 

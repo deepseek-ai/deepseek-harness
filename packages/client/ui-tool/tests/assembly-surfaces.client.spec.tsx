@@ -1,4 +1,5 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { toolSessionEvents } from './tool-fixtures.client.ts'
 // @vitest-environment jsdom
 /** Tool assembly acceptance through the real ui-conversation host. */
@@ -83,12 +84,14 @@ const LAYOUT_CHILDREN = {
 
 async function bench(nodes: ToolResultNode[]) {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   runtime.remote.provideNamespaces({
     session: {
       openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })),
     },
   })
   runtime.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
   runtime.ctx.provide('sidebarRight', { openResource: vi.fn() } as never)
   runtime.ctx.provide('uiWorkspace', {
@@ -100,6 +103,8 @@ async function bench(nodes: ToolResultNode[]) {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.sessions.add({
     id: SID,
     summary: { title: 'S', displayTitle: 'S', cwd: '/proj' },

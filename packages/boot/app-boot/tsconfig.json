@@ -27,10 +27,16 @@
       "path": "../../util/home-paths"
     },
     {
+      "path": "../../util/official-bundles"
+    },
+    {
       "path": "../../util/package-manifest"
     },
     {
       "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../util/native-command"
     }
   ]
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code ganchos",
+    "description": "Execute ganchos de Claude Code hooks.json ou configurações nos pontos de interceptação do Harness."
+  }
+}

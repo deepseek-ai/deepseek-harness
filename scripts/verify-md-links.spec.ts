@@ -45,11 +45,12 @@ describe('Markdown source discovery', () => {
       ])
   })
 
-  it('checks package instructions and nested docs while excluding frozen notes', () => {
+  it('checks package instructions, nested docs, and detail documents while excluding frozen notes', () => {
     const root = layout({
       'packages/AGENTS.md': '[missing](missing.md)\n',
       'packages/core/README.md': '[missing](missing.md)\n',
       'packages/core/probe/README.md': '[missing](missing.md)\n',
+      'packages/core/probe/docs/DETAIL.md': '![missing](missing.png)\n',
       '.agents/notes/archived/process/frozen.md': '[historical](missing.md)\n',
     })
     const sources = markdownLinkSourcePaths(root)
@@ -58,6 +59,7 @@ describe('Markdown source discovery', () => {
       join('packages', 'AGENTS.md'),
       join('packages', 'core', 'README.md'),
       join('packages', 'core', 'probe', 'README.md'),
+      join('packages', 'core', 'probe', 'docs', 'DETAIL.md'),
     ])
   })
 })

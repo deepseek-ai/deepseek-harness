@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AskUserQuestionAnswerItem } from '@deepseek-ai/dsh-user-questions/types'
 import { createWaterfallRequest, PendingQuestion, type QuestionCardSnapshot, type QuestionComposerProps } from '../src/client/contract/slots.ts'
@@ -24,7 +26,13 @@ afterEach(cleanup)
 const SID = 's1' as SessionId
 
 const seatOver = (dict: Record<string, string>, common: Record<string, string>): QuestionComposerProps['t'] =>
-  (key => dict[key] ?? common[key] ?? key)
+  (key, params) => {
+    const template = dict[key] ?? common[key] ?? key
+    return params === undefined
+      ? template
+      : template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in params ? String(params[name]) : match)
+  }
 
 type SessionState = Parameters<Parameters<QuestionComposerProps['useSession']>[0]>[0]
 type ConversationState = Parameters<Parameters<QuestionComposerProps['useConversation']>[0]>[0]
@@ -42,7 +50,7 @@ const sessionState: SessionState = {
   openState: 'open',
   openError: null,
   hasMore: false,
-  loadingOlder: false,
+  loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false,
   promptError: null,
   blank: false,
   lastAgentError: null,
@@ -119,7 +127,9 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestion
   pendingInteraction: undefined,
   useSession: selector => selector(sessionState),
   useSessions: selector => selector(sessionList),
-  usePanelInfo, useResource,
+  usePanelInfo,
+  useContextMenu: contextMenuHook(),
+  useResource,
   useSessionStatus: selector => selector(attentionState),
   useSessionRetainInfo: () => undefined,
   useWorkspaces: selector => selector(workspaceState),
@@ -130,6 +140,7 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestion
   useProjection: (() => undefined),
   useInput: selector => selector(inputState),
   inputActions: {
+    insertQuote: () => false,
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
     setDraft: () => { throw new Error('unused') },
@@ -233,6 +244,58 @@ describe('QuestionComposer', () => {
     }
   })
 
+  it('starts every recommended choice of a multi-select question selected', () => {
+    const { carrier, answer } = wait([{
+      id: 'checks', question: 'Which checks?', multiSelect: true,
+      options: [{ label: 'Unit (Recommended)' }, { label: 'Lint' }, { label: 'Types（推荐）' }],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    expect(screen.getByRole('checkbox', { name: 'Unit' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: 'Lint' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('checkbox', { name: 'Types' }).getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: 'Lint' }), { key: 'Enter' })
+    expect(answer).toHaveBeenCalledWith(answerBatch([
+      { id: 'checks', selected: ['Unit (Recommended)', 'Types（推荐）'] },
+    ]))
+  })
+
+  it('keeps several recommended multi-select defaults without pausing a timed wait', () => {
+    const { carrier } = wait([
+      {
+        id: 'checks', question: 'Which checks?', multiSelect: true,
+        options: [{ label: 'Unit (Recommended)' }, { label: 'Lint' }, { label: 'Types (Recommended)' }],
+      },
+      { id: 'note', question: 'Anything else?' },
+    ], Date.now() + 30_000)
+    try {
+      const view = render(<QuestionComposer matched={carrier} {...kit} />)
+      fireEvent.click(screen.getByLabelText('下一题'))
+      view.unmount()
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      expect(carrier.snapshot().countdown?.running).toBe(true)
+      fireEvent.click(screen.getByLabelText('上一题'))
+      expect(screen.getByRole('checkbox', { name: 'Unit' }).getAttribute('aria-checked')).toBe('true')
+      expect(screen.getByRole('checkbox', { name: 'Types' }).getAttribute('aria-checked')).toBe('true')
+    } finally {
+      carrier.timeout()
+    }
+  })
+
+  it('starts only a recommended first choice of a single-select question selected', () => {
+    const { carrier } = wait([
+      { id: 'first', question: 'First?', options: [{ label: 'A (Recommended)' }, { label: 'B (Recommended)' }] },
+      { id: 'later', question: 'Later?', options: [{ label: 'C' }, { label: 'D (Recommended)' }] },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    expect(screen.getByRole('radio', { name: 'A' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'B' }).getAttribute('aria-checked')).toBe('false')
+
+    fireEvent.click(screen.getByLabelText('下一题'))
+    expect(screen.getByRole('radio', { name: 'C' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('radio', { name: 'D' }).getAttribute('aria-checked')).toBe('false')
+  })
+
   it('treats Enter on an unselected option as submit, without selecting it', () => {
     const { carrier, answer } = wait([{
       id: 'mode', question: 'Which mode?', options: [{ label: 'Alpha' }, { label: 'Beta' }],
@@ -257,6 +320,7 @@ describe('QuestionComposer', () => {
     const detail = screen.getByText('按当前空缺岗位的优先级选择。')
     const scrollRegion = detail.closest('[data-question-scroll]')
     expect(scrollRegion).toBeTruthy()
+    expect(scrollRegion?.contains(screen.getByRole('heading', { name: '选择候选人类型' }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByRole('radio', { name: /工程落地型/ }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByText('下一题').closest('button'))).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
@@ -291,6 +355,104 @@ describe('QuestionComposer', () => {
       { id: 'signals', selected: ['系统设计', '代码质量', '产品判断'], custom: '沟通能力' },
     ]))
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
+  })
+
+  it('expands long copy in place without choosing an option', () => {
+    const description = 'Remove the experimental client from every shipped template and require an explicit profile install.'
+    const { carrier } = wait([{
+      id: 'release', question: 'How should the release graph change?',
+      options: [
+        { label: 'Explicit install', description },
+        { label: 'Optional bundle' },
+        { label: 'Empty description', description: '' },
+        { label: 'Whitespace description', description: '   ' },
+      ],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    // CSS shows each toggle only while its copy overflows; every candidate is rendered.
+    const heading = screen.getByRole('heading', { name: 'How should the release graph change?' })
+    const [questionToggle, descriptionToggle, ...rest] = screen.getAllByRole('button', { name: '展开' })
+    expect(rest).toHaveLength(0)
+    if (questionToggle === undefined || descriptionToggle === undefined) throw new Error('Both copy toggles must render')
+    expect(questionToggle.getAttribute('aria-describedby')).toBe(heading.id)
+    expect(questionToggle.getAttribute('aria-controls')).toBe(heading.id)
+    const option = screen.getByRole('radio', { name: 'Explicit install' })
+    const text = screen.getByText(description)
+    expect(option.getAttribute('aria-describedby')).toBe(text.id)
+    expect(descriptionToggle.getAttribute('aria-controls')).toBe(text.id)
+    expect(descriptionToggle.getAttribute('aria-describedby')).toBe(text.id)
+    expect(descriptionToggle.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(descriptionToggle)
+    expect(descriptionToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(descriptionToggle.getAttribute('aria-label')).toBe('收起')
+    expect(text.closest('[data-option-row]')?.hasAttribute('data-expanded')).toBe(true)
+    expect(screen.getByText(description)).toBe(text)
+    expect(option.getAttribute('aria-checked')).toBe('false')
+    expect(questionToggle.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(questionToggle)
+    expect(questionToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(questionToggle.getAttribute('aria-label')).toBe('收起')
+    expect(heading.parentElement?.hasAttribute('data-expanded')).toBe(true)
+    fireEvent.click(questionToggle)
+    fireEvent.click(descriptionToggle)
+    expect(heading.parentElement?.hasAttribute('data-expanded')).toBe(false)
+    expect(text.closest('[data-option-row]')?.hasAttribute('data-expanded')).toBe(false)
+    expect(screen.getAllByRole('button', { name: '展开' })).toEqual([questionToggle, descriptionToggle])
+  })
+
+  it('resets scrolling and expanded copy when the question changes', () => {
+    const firstDescription = 'First question detail that was expanded.'
+    const secondDescription = 'Second question detail starts collapsed.'
+    const { carrier } = wait([
+      {
+        id: 'first', question: 'First question?',
+        options: [{ label: 'Continue', description: firstDescription }],
+      },
+      {
+        id: 'second', question: 'Second question?',
+        options: [{ label: 'Continue', description: secondDescription }],
+      },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByRole('region', { name: 'First question?' })).toBeTruthy()
+    const firstScroll = screen.getByText('First question?').closest('[data-question-scroll]') as HTMLElement
+    firstScroll.scrollTop = 80
+    for (const toggle of screen.getAllByRole('button', { name: '展开' })) fireEvent.click(toggle)
+    expect(screen.getAllByRole('button', { name: '收起' }).map(toggle => toggle.getAttribute('aria-expanded'))).toEqual(['true', 'true'])
+    fireEvent.click(screen.getByRole('radio', { name: 'Continue' }))
+
+    const secondScroll = screen.getByText('Second question?').closest('[data-question-scroll]') as HTMLElement
+    expect(screen.queryByRole('region', { name: 'First question?' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
+    expect(secondScroll).toBe(firstScroll)
+    expect(secondScroll.scrollTop).toBe(0)
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(secondScroll.querySelector('[data-expanded]')).toBeNull()
+    expect(screen.queryByText(firstDescription)).toBeNull()
+    const descriptionToggle = screen.getAllByRole('button', { name: '展开' })[1]
+    expect(document.getElementById(descriptionToggle?.getAttribute('aria-controls') ?? '')?.textContent).toBe(secondDescription)
+  })
+
+  it('keeps expansions with their question when the shared position moves elsewhere', () => {
+    const { carrier } = wait([
+      { id: 'first', question: 'First question?', options: [{ label: 'Continue', description: 'First detail.' }] },
+      { id: 'second', question: 'Second question?', options: [{ label: 'Continue', description: 'Second detail.' }] },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.click(screen.getAllByRole('button', { name: '展开' })[1] as HTMLElement)
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+
+    // Another surface of the same Session moves the shared question position.
+    const blank = { selected: [], custom: '', skipped: false }
+    act(() => { kit.actions.replace(carrier.key, { index: 1, drafts: [blank, blank] }) })
+
+    expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(document.querySelector('[data-expanded]')).toBeNull()
   })
 
   it('renders plan detail through the shared assistant Markdown primitive', () => {
@@ -501,7 +663,7 @@ describe('PendingQuestion domain face', () => {
   })
 
   it('ignores persisted progress that no longer matches the question batch', () => {
-    const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId('stale-progress'))
+    const carrier = new PendingQuestion(SID, QUESTIONS, brandString<ToolCallId>('stale-progress'))
     draftInstance.actions.replace(carrier.key, { index: 7, drafts: [] })
 
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -564,7 +726,7 @@ const TIMED: PendingQuestion['questions'] = [{
 }]
 
 /** A timed card as the Remote Event listener builds it: waterfall channel with a Client-decided deadline. */
-function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
+function timedCard(deadline: number, callId = brandString<ToolCallId>('ask-timed')) {
   const carrier = new PendingQuestion(SID, TIMED, callId)
   const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
   carrier.attachWaterfall(request.channel)
@@ -575,7 +737,7 @@ function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
 describe('timed card', () => {
   it.each([true, false])('does not autofocus before claiming and respects manual focus until readiness: %s', async (stillFocused) => {
     vi.useFakeTimers()
-    const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], ToolCallId('claiming'))
+    const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], brandString<ToolCallId>('claiming'))
     const request = createWaterfallRequest(Date.now() + 2_000, undefined,
       (channel) => { carrier.detachWaterfall(channel) })
     try {
@@ -730,7 +892,7 @@ describe('timed card', () => {
   })
 
   it('steers an RPC reply, hides the panel, and rejects a duplicate before discard', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-retry'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-retry'))
     const answer = vi.fn(async () => true)
     const hide = vi.fn()
     answer.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('a reply is already queued for this question'))
@@ -756,7 +918,7 @@ describe('timed card', () => {
   })
 
   it('unlocks an older reply when the rendered channel lags its continued state', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-stale-channel'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-stale-channel'))
     const hide = vi.fn()
     carrier.attachRpc({ answer: vi.fn(async () => true) })
     carrier.attachSeat({ hide })
@@ -774,7 +936,7 @@ describe('timed card', () => {
   })
 
   it('closing a continued panel only withdraws it from the seat and sends nothing', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-continued'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-continued'))
     const answer = vi.fn(async () => true)
     const hide = vi.fn()
     carrier.attachRpc({ answer })
@@ -794,7 +956,7 @@ describe('timed card', () => {
   })
 
   it('closing a card-keyed panel with no channel left still just withdraws it', () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-gap'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-gap'))
     const hide = vi.fn()
     carrier.attachSeat({ hide })
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -847,7 +1009,7 @@ const RECORDED_CUSTOM: readonly AskUserQuestionAnswerItem[] = [
 
 /** A read-only card as the panel provider builds it from a settled call's transcript record. */
 function reviewCard(review: readonly AskUserQuestionAnswerItem[] = RECORDED) {
-  const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId(REVIEWED_CALL), undefined, review)
+  const carrier = new PendingQuestion(SID, QUESTIONS, brandString<ToolCallId>(REVIEWED_CALL), undefined, review)
   const hide = vi.fn()
   carrier.attachSeat({ hide })
   return { carrier, hide }
@@ -863,6 +1025,8 @@ describe('review card', () => {
     const chosen = screen.getByRole<HTMLButtonElement>('radio', { name: '工程落地型' })
     expect(chosen.getAttribute('aria-checked')).toBe('true')
     expect(chosen.disabled).toBe(true)
+    // Long copy stays readable on a frozen card.
+    expect(screen.getAllByRole<HTMLButtonElement>('button', { name: '展开' }).map(toggle => toggle.disabled)).toEqual([false, false, false])
     // Nothing is left to send, and the unused free-text field would read as
     // somewhere to type.
     expect(screen.queryByRole('button', { name: '跳过' })).toBeNull()
@@ -883,6 +1047,28 @@ describe('review card', () => {
     expect(screen.getByText(zh['review.skipped'])).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: '系统设计' }).getAttribute('aria-checked')).toBe('false')
     expect(screen.queryByPlaceholderText('输入你的答案')).toBeNull()
+  })
+
+  it('shows recorded multi-select answers without restoring recommended defaults', () => {
+    const questions: PendingQuestion['questions'] = [
+      {
+        id: 'checks', question: 'Which checks?', multiSelect: true,
+        options: [{ label: 'Unit (Recommended)' }, { label: 'Lint' }, { label: 'Types (Recommended)' }],
+      },
+      {
+        id: 'unrecorded', question: 'Which targets?', multiSelect: true,
+        options: [{ label: 'Web (Recommended)' }, { label: 'Desktop' }],
+      },
+    ]
+    const carrier = new PendingQuestion(SID, questions, brandString<ToolCallId>(REVIEWED_CALL), undefined, [{ id: 'checks', selected: ['Lint'] }])
+    carrier.attachSeat({ hide: vi.fn() })
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByRole('checkbox', { name: 'Unit' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('checkbox', { name: 'Lint' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: 'Types' }).getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(screen.getByLabelText('下一题'))
+    expect(screen.getByRole('checkbox', { name: 'Web' }).getAttribute('aria-checked')).toBe('false')
   })
 
   it('reads the record back instead of a draft the live card left under the same key', () => {
@@ -936,4 +1122,26 @@ describe('review card', () => {
     fireEvent.click(screen.getByLabelText(en['nav.next']))
     expect(screen.getByText(en['review.skipped'])).toBeTruthy()
   })
+})
+
+it('retains custom-answer focus across Enter navigation between option questions', () => {
+  const { carrier } = wait([
+    { id: 'one', question: 'First?', options: [{ label: 'One', description: 'First description' }] },
+    { id: 'two', question: 'Second?', options: [{ label: 'Two' }] },
+  ])
+  render(<QuestionComposer matched={carrier} {...kit} />)
+  const choice = screen.getByRole('radio', { name: 'One' })
+  expect(choice.getAttribute('aria-describedby')).toBeTruthy()
+  expect(document.getElementById(choice.getAttribute('aria-describedby') as string)?.textContent).toBe('First description')
+  const first = screen.getByRole('textbox')
+  act(() => { first.focus() })
+  fireEvent.change(first, { target: { value: 'first answer' } })
+  fireEvent.keyDown(first, { key: 'Enter' })
+  expect(screen.getByRole('heading', { name: 'Second?' })).toBeTruthy()
+  const second = screen.getByRole('textbox')
+  expect(second).toBe(first)
+  expect(document.activeElement).toBe(second)
+  fireEvent.change(second, { target: { value: 'second answer' } })
+  expect((second as HTMLTextAreaElement).value).toBe('second answer')
+  expect(screen.getByRole('radio', { name: 'Two' }).getAttribute('aria-describedby')).toBeNull()
 })

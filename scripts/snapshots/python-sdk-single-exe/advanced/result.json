@@ -98,7 +98,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Serial agent creation completed."
+            "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
           }
         ],
         "source": {
@@ -134,7 +134,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n</system-reminder>"
           }
         ],
         "source": {
@@ -202,8 +202,7 @@
             "maxTokens": true
           },
           "tools": [
-            "cordis_inspect_list",
-            "cordis_inspect_query",
+            "cordis_inspect",
             "job_kill",
             "job_list",
             "job_output",
@@ -298,8 +297,7 @@
             "maxTokens": true
           },
           "tools": [
-            "cordis_inspect_list",
-            "cordis_inspect_query",
+            "cordis_inspect",
             "job_kill",
             "job_list",
             "job_output",
@@ -890,11 +888,12 @@
       "seq": 37,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "Check direct child"
+        "label": "Check direct child",
+        "name": "agent-1"
       }
     },
     {
@@ -914,11 +913,15 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent {{child-1}}"
+              "text": "started subagent agent-1"
             }
           ],
           "isError": false,
           "id": "{{messageId}}"
+        },
+        "meta": {
+          "kind": "activation",
+          "name": "agent-1"
         }
       },
       "sourceEventSeqs": [
@@ -966,7 +969,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -980,7 +983,8 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -1139,11 +1143,12 @@
       "seq": 46,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "advanced-exe-snapshot child 1"
+        "label": "advanced-exe-snapshot child 1",
+        "name": "agent-2"
       }
     },
     {
@@ -1243,7 +1248,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+            "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
           },
           {
             "type": "text",
@@ -1257,7 +1262,8 @@
         "source": {
           "kind": "subagent-settled",
           "form": "notice",
-          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+          "stopReason": "completed",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -1628,7 +1634,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed."
+                "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
               }
             ],
             "source": {
@@ -1676,7 +1682,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n</system-reminder>"
               }
             ],
             "source": {
@@ -1756,8 +1762,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -1882,8 +1887,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -2585,6 +2589,70 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "Check direct child",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
           "type": "agent/inbox/spliced",
           "seq": 4,
           "time": 0,
@@ -2627,6 +2695,10 @@
                   {
                     "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
                 "source": {
@@ -2704,11 +2776,12 @@
           "seq": 37,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "Check direct child"
+            "label": "Check direct child",
+            "name": "agent-1"
           }
         }
       }
@@ -2734,11 +2807,15 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent {{child-1}}"
+                  "text": "started subagent agent-1"
                 }
               ],
               "isError": false,
               "id": "{{messageId}}"
+            },
+            "meta": {
+              "kind": "activation",
+              "name": "agent-1"
             }
           },
           "sourceEventSeqs": [
@@ -2799,11 +2876,205 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
-          "type": "step/start",
+          "type": "agent/inbox/spliced",
           "seq": 9,
           "time": 0,
           "data": {
+            "target": "next-step",
+            "start": 0,
+            "inserted": [
+              {
+                "id": "{{messageId}}",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Cancellation checkpoint probe."
+                  }
+                ],
+                "source": {
+                  "kind": "plugin:serial-created-fixture"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 10,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": [],
+            "outcome": "canceled"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 11,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "inserted": [
+              {
+                "id": "{{messageId}}",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Serial agent creation completed."
+                  }
+                ],
+                "source": {
+                  "kind": "plugin:serial-created-fixture"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 12,
+          "time": 0,
+          "data": {
+            "target": "next-turn",
+            "start": 0,
+            "inserted": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
+                  }
+                ],
+                "source": {
+                  "kind": "user"
+                },
+                "role": "user",
+                "id": "{{messageId}}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "turn/end",
+          "seq": 13,
+          "time": 0,
+          "data": {
             "turn": 1,
+            "reason": {
+              "kind": "aborted",
+              "reason": {
+                "kind": "user"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.status",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "status": "idle"
+      }
+    },
+    {
+      "method": "session.status",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "status": "running"
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "turn/start",
+          "seq": 14,
+          "time": 0,
+          "data": {
+            "turn": 2
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 15,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": []
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 16,
+          "time": 0,
+          "data": {
+            "target": "next-turn",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": []
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "step/start",
+          "seq": 17,
+          "time": 0,
+          "data": {
+            "turn": 2,
             "step": 1
           }
         }
@@ -2815,10 +3086,10 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "system/message",
-          "seq": 10,
+          "seq": 18,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1,
             "message": {
               "role": "system",
@@ -2844,7 +3115,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 11,
+          "seq": 19,
           "time": 0,
           "data": {
             "id": "{{messageId}}",
@@ -2869,13 +3140,17 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 12,
+          "seq": 20,
           "time": 0,
           "data": {
             "content": [
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+              },
+              {
+                "type": "text",
+                "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
               }
             ],
             "source": {
@@ -2894,13 +3169,13 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 13,
+          "seq": 21,
           "time": 0,
           "data": {
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.\n</system-reminder>"
               }
             ],
             "source": {
@@ -2942,7 +3217,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "request/header",
-          "seq": 14,
+          "seq": 22,
           "time": 0,
           "data": {
             "header": {
@@ -2956,8 +3231,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -2978,7 +3252,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "request/context",
-          "seq": 15,
+          "seq": 23,
           "time": 0,
           "data": {
             "provider": "deepseek-official",
@@ -2994,12 +3268,12 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "session/title",
-          "seq": 16,
+          "seq": 24,
           "time": 0,
           "data": {
             "title": "Reply with exactly DIRECT_CHILD_OK and",
             "messageSeqs": [
-              12
+              20
             ],
             "source": {
               "kind": "fallback"
@@ -3014,12 +3288,12 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 17,
+          "seq": 25,
           "time": 0,
           "data": {
             "sessionId": "{{child-1}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 16
+            "throughSeq": 24
           }
         }
       }
@@ -3030,10 +3304,10 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "assistant/message",
-          "seq": 18,
+          "seq": 26,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1,
             "message": {
               "role": "assistant",
@@ -3144,10 +3418,10 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/end",
-          "seq": 19,
+          "seq": 27,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1
           }
         }
@@ -3159,10 +3433,10 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 20,
+          "seq": 28,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "reason": {
               "kind": "completed"
             }
@@ -3193,7 +3467,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                    "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
                   },
                   {
                     "type": "text",
@@ -3207,7 +3481,8 @@
                 "source": {
                   "kind": "subagent-settled",
                   "form": "notice",
-                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+                  "stopReason": "completed",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -3410,6 +3685,70 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "advanced-exe-snapshot child 1",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
           "type": "agent/inbox/spliced",
           "seq": 4,
           "time": 0,
@@ -3529,11 +3868,12 @@
           "seq": 46,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "advanced-exe-snapshot child 1"
+            "label": "advanced-exe-snapshot child 1",
+            "name": "agent-2"
           }
         }
       }
@@ -3561,11 +3901,201 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
-          "type": "step/start",
+          "type": "agent/inbox/spliced",
           "seq": 9,
           "time": 0,
           "data": {
+            "target": "next-step",
+            "start": 0,
+            "inserted": [
+              {
+                "id": "{{messageId}}",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Cancellation checkpoint probe."
+                  }
+                ],
+                "source": {
+                  "kind": "plugin:serial-created-fixture"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 10,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": [],
+            "outcome": "canceled"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 11,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "inserted": [
+              {
+                "id": "{{messageId}}",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Serial agent creation completed."
+                  }
+                ],
+                "source": {
+                  "kind": "plugin:serial-created-fixture"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 12,
+          "time": 0,
+          "data": {
+            "target": "next-turn",
+            "start": 0,
+            "inserted": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
+                  }
+                ],
+                "source": {
+                  "kind": "user"
+                },
+                "role": "user",
+                "id": "{{messageId}}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "turn/end",
+          "seq": 13,
+          "time": 0,
+          "data": {
             "turn": 1,
+            "reason": {
+              "kind": "aborted",
+              "reason": {
+                "kind": "user"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.status",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "status": "idle"
+      }
+    },
+    {
+      "method": "session.status",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "status": "running"
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "turn/start",
+          "seq": 14,
+          "time": 0,
+          "data": {
+            "turn": 2
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 15,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": []
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 16,
+          "time": 0,
+          "data": {
+            "target": "next-turn",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": []
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "step/start",
+          "seq": 17,
+          "time": 0,
+          "data": {
+            "turn": 2,
             "step": 1
           }
         }
@@ -3577,10 +4107,10 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "system/message",
-          "seq": 10,
+          "seq": 18,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1,
             "message": {
               "role": "system",
@@ -3606,7 +4136,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 11,
+          "seq": 19,
           "time": 0,
           "data": {
             "id": "{{messageId}}",
@@ -3631,7 +4161,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 12,
+          "seq": 20,
           "time": 0,
           "data": {
             "content": [
@@ -3656,13 +4186,13 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 13,
+          "seq": 21,
           "time": 0,
           "data": {
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.\n</system-reminder>"
               }
             ],
             "source": {
@@ -3704,7 +4234,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "request/header",
-          "seq": 14,
+          "seq": 22,
           "time": 0,
           "data": {
             "header": {
@@ -3718,8 +4248,7 @@
                 "maxTokens": true
               },
               "tools": [
-                "cordis_inspect_list",
-                "cordis_inspect_query",
+                "cordis_inspect",
                 "job_kill",
                 "job_list",
                 "job_output",
@@ -3740,7 +4269,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "request/context",
-          "seq": 15,
+          "seq": 23,
           "time": 0,
           "data": {
             "provider": "deepseek-official",
@@ -3756,12 +4285,12 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "session/title",
-          "seq": 16,
+          "seq": 24,
           "time": 0,
           "data": {
             "title": "Reply with exactly WORKFLOW_CHILD_OK and",
             "messageSeqs": [
-              12
+              20
             ],
             "source": {
               "kind": "fallback"
@@ -3776,12 +4305,12 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 17,
+          "seq": 25,
           "time": 0,
           "data": {
             "sessionId": "{{child-2}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 16
+            "throughSeq": 24
           }
         }
       }
@@ -3792,10 +4321,10 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "assistant/message",
-          "seq": 18,
+          "seq": 26,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1,
             "message": {
               "role": "assistant",
@@ -3906,10 +4435,10 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/end",
-          "seq": 19,
+          "seq": 27,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "step": 1
           }
         }
@@ -3921,10 +4450,10 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 20,
+          "seq": 28,
           "time": 0,
           "data": {
-            "turn": 1,
+            "turn": 2,
             "reason": {
               "kind": "completed"
             }
@@ -4081,7 +4610,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -4095,7 +4624,8 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",

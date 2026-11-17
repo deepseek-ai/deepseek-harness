@@ -29,6 +29,8 @@ export interface CrashReportApp {
 
 /** Inputs of {@link renderCrashReport} and {@link writeCrashReport}. */
 export interface CrashReportInput {
+  /** The shell will attempt an independently bounded operation-history append after saving this report. */
+  readonly operationHistoryPlanned?: boolean
   readonly source: CrashReportSource
   readonly phase: CrashReportPhase
   readonly error: unknown
@@ -125,6 +127,9 @@ export function renderCrashReport(input: CrashReportInput): string {
     ...(input.hostDiagnostic === undefined ? [] : ['--- host diagnostic (as reported by the Host process) ---', input.hostDiagnostic, '']),
     '--- renderer console (error level, oldest first) ---',
     consoleSection,
+    ...(input.operationHistoryPlanned === true ? ['', '--- auxiliary diagnostics ---',
+      'Operation history is best effort. Without its completion marker below, it is unavailable or incomplete.',
+      'Recent operations are context only. Missing records do not establish that no changes occurred.'] : []),
     '',
   ].join('\n')
 }

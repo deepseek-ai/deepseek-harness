@@ -143,7 +143,7 @@ it('expands Node Data inline but keeps its title navigable and cyclic references
     target: { nodeKey: 'node-1' }, read: () => data }
   props.index.set(data, reference)
   const ui = render(<InspectorObjectTree {...props} value={{ data }} />)
-  const link = ui.getByRole('button', { name: '↗ Node Data · 1' })
+  const link = ui.getByRole('button', { name: '↗ Node data · 1' })
   const branch = link.closest('details')!
   expect(branch.open).toBe(false)
   expect(ui.queryByText('"inline node data"')).toBeNull()
@@ -151,7 +151,7 @@ it('expands Node Data inline but keeps its title navigable and cyclic references
   fireEvent(branch, new Event('toggle'))
   expect(ui.getByText('"inline node data"')).toBeTruthy()
   expect(props.navigate).not.toHaveBeenCalled()
-  expect(ui.getAllByRole('button', { name: '↗ Node Data · 1' })).toHaveLength(2)
+  expect(ui.getAllByRole('button', { name: '↗ Node data · 1' })).toHaveLength(2)
   expect(ui.container.querySelectorAll('details')).toHaveLength(2)
   fireEvent.click(link)
   expect(props.navigate).toHaveBeenCalledExactlyOnceWith(reference)

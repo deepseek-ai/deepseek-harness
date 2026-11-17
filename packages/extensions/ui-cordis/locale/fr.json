@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Carte de fonctionnement enfichable dynamique",
+    "description": "Affiche les définitions de plug-in dynamiques et fournit des contrôles d'exécution et d'arrêt."
+  }
+}

@@ -41,6 +41,12 @@ describe('sandbox context façade — escape surface is closed', () => {
     expect(message).toContain('withheld by design')
   })
 
+  it('withholds executor control through ctx.tools.setExecutor', async () => {
+    const harness = await setup()
+    const message = await runTouching(harness, 'ctx.tools.setExecutor()')
+    expect(message).toContain('is not a function')
+  })
+
   it('the classic ctx.root.tools.register bypass registers nothing and fails loud', async () => {
     const harness = await setup()
     const message = await runTouching(harness, `
@@ -57,6 +63,21 @@ describe('sandbox context façade — escape surface is closed', () => {
     expect(harness.ctx.tools.get('smuggled')).toBeUndefined()
   })
 
+  it('withholds the ctx[Context.root] symbol key, so the root bypass registers nothing', async () => {
+    const harness = await setup()
+    const message = await runTouching(harness, `
+      ctx[Symbol.for('cordis.root')].tools.register({
+        name: 'smuggled_via_root_key',
+        description: 'raw, unguarded',
+        parameters: { type: 'object', properties: {} },
+        ${CONTENT_OUTPUT_CODE}
+        async execute() { return [] },
+      })
+    `)
+    expect(message).toContain("reading 'tools'")
+    expect(harness.ctx.tools.get('smuggled_via_root_key')).toBeUndefined()
+  })
+
   it('rejects assignment to the façade rather than silently dropping it', async () => {
     const harness = await setup()
     await expect(mount(harness, 'return { name: \'writer\', apply(ctx) { ctx.stash = 1 } }'))
@@ -65,7 +86,7 @@ describe('sandbox context façade — escape surface is closed', () => {
 
   it('denies a service whose method returns a Context (the .ctx escape), registering nothing', async () => {
     // A cordis Service instance carries `.ctx` (a real Context), so
-    // `ctx.systemPrompt.ctx.root.tools.register(…)` would escape the façade; service-return
+    // `ctx.systemPrompt.ctx[Context.root].tools.register(…)` would escape the façade; service-return
     // guards reject that Context before the registration lands.
     const harness = await setup()
     const message = await (async (): Promise<string> => {
@@ -75,7 +96,7 @@ describe('sandbox context façade — escape surface is closed', () => {
             name: 'svc-ctx-escape',
             inject: ['systemPrompt', 'tools'],
             apply(ctx) {
-              ctx.systemPrompt.ctx.root.tools.register({
+              ctx.systemPrompt.ctx[Symbol.for('cordis.root')].tools.register({
                 name: 'smuggled_via_service',
                 description: 'raw, unguarded',
                 parameters: { type: 'object', properties: {} },
@@ -207,7 +228,7 @@ describe('sandbox context façade — inject gate on services', () => {
 describe('sandbox tools façade — get is a read-only schema view', () => {
   it('ctx.tools.get returns a schema, not the live ToolDefinition with execute', async () => {
     // The finding: returning the raw ToolDefinition hands package code the tool's execute
-    // function, letting it bypass ToolRegistry.execute (and its pre/post hooks). get now
+    // function, letting it bypass ToolsService.execute (and its pre/post hooks). get now
     // returns the same name/description/parameters view as schemas(), with no execute.
     const harness = await setup()
     harness.ctx.tools.register(dummyTool('host_tool'))

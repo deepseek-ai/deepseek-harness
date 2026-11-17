@@ -34,6 +34,12 @@ const clientVersionDefine = { 'process.env.DSH_CLIENT_VERSION': JSON.stringify(c
 
 export default defineConfig([
   {
+    entry: ['lib/types/operation-report-worker.js'],
+    plugins: [packagedImportsPlugin({ packages: new Set(), nodeBuiltins: true })],
+    outDir: 'lib', format: ['esm'], platform: 'node', target: 'es2024',
+    fixedExtension: false, dts: false, clean: false, codeSplitting: false,
+  },
+  {
     entry: ['lib/types/command-manager-entry.js'],
     plugins: [packagedImportsPlugin({ packages: new Set(), nodeBuiltins: true })],
     outDir: 'lib',
@@ -44,7 +50,8 @@ export default defineConfig([
     dts: false,
     clean: false,
     codeSplitting: false,
-    deps: { alwaysBundle: ['@deepseek-ai/dsh-atomic-write'] },
+    // The standalone worker has no node_modules; inline even production dependencies.
+    deps: { alwaysBundle: ['@deepseek-ai/dsh-atomic-write', '@deepseek-ai/dsh-error'] },
   },
   {
     entry: ['lib/types/main.js'],
@@ -54,9 +61,9 @@ export default defineConfig([
       await build({
         configFile: false,
         plugins: [{
-          name: 'desktop-brand-font',
+          name: 'desktop-shell-assets',
           async generateBundle() {
-            for (const name of ['brand-font.css', 'montserrat-regular.woff2', 'montserrat-light.woff2', 'montserrat-medium.woff2', 'Montserrat-OFL.txt']) {
+            for (const name of ['design-platform.css', 'brand-font.css', 'montserrat-regular.woff2', 'montserrat-light.woff2', 'montserrat-medium.woff2', 'Montserrat-OFL.txt']) {
               this.emitFile({
                 type: 'asset',
                 fileName: name,

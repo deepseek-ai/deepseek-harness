@@ -168,8 +168,8 @@ def exercise(args, artifacts, transcript, summary):
                                                   "maxElements": 2000, "maxDepth": 25})
                     window_elements = [element for element in observed["elements"] if element["role"] == "AXWindow"]
                     assert len(window_elements) == 1, observed
-                    call("performSecondaryAction", {**owner, "snapshotId": observed["snapshotId"],
-                        "elementIndex": window_elements[0]["index"], "action": "raise"})
+                    call("performAction", {**owner, "snapshotId": observed["snapshotId"],
+                        "elementId": window_elements[0]["elementId"], "action": "AXRaise"})
                     observed = call("getState", {**owner, "windowId": window["windowId"],
                                                   "maxElements": 2000, "maxDepth": 25})
                     window = next(value for value in observed["windows"] if value["windowId"] == window["windowId"])
@@ -275,7 +275,7 @@ def main():
     args = parser.parse_args()
     if os.uname().sysname != "Darwin":
         raise RuntimeError("This opt-in check requires macOS")
-    args.helper = (args.helper or support.BINARY).resolve()
+    args.helper = (args.helper or support.default_binary()).resolve()
     args.blender = args.blender.resolve()
     for label, path in [("Blender", args.blender), ("native helper", args.helper)]:
         if not path.is_file() or not os.access(path, os.X_OK):

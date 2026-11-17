@@ -25,6 +25,13 @@ const tmp = (): string => {
   return dir
 }
 
+
+/** Give a fake Loader the root group that the startup audit reads for rejected options. */
+function withRoot(ctx: Context, rows: unknown[] = []): Context {
+  const root = { data: rows, getOuterStack: () => [] }
+  Object.assign(ctx.loader, { root })
+  return ctx
+}
 describe('resolveConfigPath', () => {
   it('resolves relative to the given cwd outside replay mode', () => {
     expect(resolveConfigPath('./cordis.yml', undefined, `${sep}base`)).toBe(resolve(`${sep}base`, 'cordis.yml'))
@@ -144,6 +151,9 @@ describe('loadLayeredEnv', () => {
     ['a network proxy', 'HTTPS_PROXY=http://attacker.example\n'],
     ['a lowercase network proxy', 'https_proxy=http://attacker.example\n'],
     ['a browser command', 'BROWSER=./script\n'],
+    ['a DeepSeek model endpoint', 'DEEPSEEK_BASE_URL=http://attacker.example\n'],
+    ['a DeepSeek search endpoint', 'DEEPSEEK_SEARCH_BASE_URL=http://attacker.example\n'],
+    ['a lowercase DeepSeek endpoint', 'deepseek_base_url=http://attacker.example\n'],
   ])('refuses to launch when a .env sets %s, before applying anything', (_case, content) => {
     const home = tmp()
     const project = tmp()
@@ -189,12 +199,59 @@ describe('loadLayeredEnv', () => {
     }
   })
 
-  it('still refuses every other bootstrap name in the Harness-home .env', () => {
+  it('accepts the DeepSeek endpoints from the Harness-home .env, below an exported one', () => {
     const home = tmp()
     const project = tmp()
-    // A CA path sits in the same network group as the proxy names and changes what is trusted,
-    // not where traffic goes; the exemption must not widen to it.
-    writeFileSync(join(home, '.env'), 'SSL_CERT_FILE=/tmp/ca.pem\n')
+    writeFileSync(join(home, '.env'), [
+      'DEEPSEEK_BASE_URL=https://from-home.example/anthropic',
+      'DEEPSEEK_SEARCH_BASE_URL=https://from-home.example/v1',
+      '',
+    ].join('\n'))
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'https://exported.example/anthropic')
+    vi.stubEnv('DEEPSEEK_SEARCH_BASE_URL', undefined)
+    try {
+      const snapshot = loadLayeredEnv(NAME, project, vi.fn())
+      expect(snapshot.get('DEEPSEEK_SEARCH_BASE_URL'))
+        .toEqual({ value: 'https://from-home.example/v1', source: 'user-env', path: join(home, '.env') })
+      expect(snapshot.get('DEEPSEEK_BASE_URL')).toEqual({ value: 'https://exported.example/anthropic', source: 'process' })
+      expect(process.env.DEEPSEEK_SEARCH_BASE_URL).toBe('https://from-home.example/v1')
+      expect(process.env.DEEPSEEK_BASE_URL).toBe('https://exported.example/anthropic')
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each(['deepseek_base_url', 'DeepSeek_Search_Base_URL'])('refuses %s from the Harness-home .env and names the exact spelling', (name) => {
+    const home = tmp()
+    const project = tmp()
+    // Consumers look the endpoint up by its exact name on POSIX, so another spelling would load without effect.
+    writeFileSync(join(home, '.env'), `${name}=https://from-home.example/v1\n`)
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv(name, undefined)
+    try {
+      expect(() => loadLayeredEnv(NAME, project, vi.fn()))
+        .toThrow(`spell it ${name.toUpperCase()}, then export it or put it in ${join(home, '.env')}`)
+      expect(process.env[name]).toBeUndefined()
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each([
+    'SSL_CERT_FILE=/tmp/ca.pem\n',
+    'NODE_TLS_REJECT_UNAUTHORIZED=0\n',
+    'DSH_HOME=/tmp/elsewhere\n',
+  ])('still refuses every other bootstrap name in the Harness-home .env: %s', (content) => {
+    const home = tmp()
+    const project = tmp()
+    // The CA and TLS names sit in the same network group as the proxy and DeepSeek endpoint names but change what
+    // is trusted, not where traffic goes, and DSH_HOME would move the exemption itself; none may join it.
+    writeFileSync(join(home, '.env'), content)
     clear()
     vi.stubEnv('DSH_HOME', home)
     try {
@@ -205,16 +262,17 @@ describe('loadLayeredEnv', () => {
     }
   })
 
-  it('names the Harness-home file as the way out when a project .env sets a proxy', () => {
+  it.each(['HTTP_PROXY', 'DEEPSEEK_BASE_URL'])('names the Harness-home file as the way out when a project .env sets %s', (name) => {
     const home = tmp()
     const project = tmp()
-    writeFileSync(join(project, '.env'), 'HTTP_PROXY=http://attacker.example\n')
+    writeFileSync(join(project, '.env'), `${name}=http://attacker.example\n`)
     clear(); clearProxy()
     vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv(name, undefined)
     try {
       expect(() => loadLayeredEnv(NAME, project, vi.fn()))
-        .toThrow(`export HTTP_PROXY, or put it in ${join(home, '.env')}, which does not travel with a repository`)
-      expect(process.env.HTTP_PROXY).toBeUndefined()
+        .toThrow(`export ${name}, or put it in ${join(home, '.env')}, which does not travel with a repository`)
+      expect(process.env[name]).toBeUndefined()
     } finally {
       clear(); clearProxy()
       vi.unstubAllEnvs()
@@ -433,7 +491,7 @@ describe('installFailLoud', () => {
     installFailLoud(NAME, proc)
     const error = new Error('assembled activation failure')
     const warn = vi.fn()
-    const audit = auditStartupEntries({
+    const audit = auditStartupEntries(withRoot({
       loader: {
         entries: () => ['broken-a', 'broken-b'].map(name => ({
           options: { id: name, name },
@@ -445,7 +503,7 @@ describe('installFailLoud', () => {
           },
         })),
       },
-    } as unknown as Context, NAME, warn)
+    } as unknown as Context), NAME, warn)
     await Promise.resolve()
     await Promise.resolve()
     proc.rejection(error)
@@ -557,6 +615,8 @@ describe('installFailLoud', () => {
 describe('auditStartupEntries', () => {
   const requiredIds = [
     'agent-loop',
+    'tool-executor-native',
+    'tool-executor-ptc',
     'webserver',
     'web-runtime',
     'modules',
@@ -578,9 +638,9 @@ describe('auditStartupEntries', () => {
     parent?: { tree: { import(name: string): Promise<unknown> } }
   }
 
-  const ctxWith = (entries: FakeEntry[]): Context => ({
+  const ctxWith = (entries: FakeEntry[], rows: unknown[] = []): Context => withRoot(({
     loader: { entries: () => entries.values() },
-  }) as unknown as Context
+  }) as unknown as Context, rows)
 
   const fiber = (
     state: number,
@@ -739,6 +799,29 @@ describe('auditStartupEntries', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
+  it('fails startup for required options their group rejected and lists optional ones', async () => {
+    const error = await auditStartupEntries(ctxWith([], [
+      { id: 'webserver', name: './webserver.mjs', disabled: 'yes' },
+      { id: 'tool-todo', name: 7 },
+      { id: 'valid', name: './valid.mjs' },
+    ]), NAME, vi.fn()).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(StartupError)
+    const message = (error as Error).message
+    expect(message).toContain(`${NAME}: startup failed: 1 required plugin did not activate`)
+    expect(message).toContain('  webserver (required)\n    Package: ./webserver.mjs\n    invalid entry options: EntryValidationError: invalid entry options:\n      - disabled must be a boolean (at disabled)')
+    expect(message).toContain('  tool-todo\n    Package: 7\n')
+    expect(message).not.toContain('valid.mjs')
+    expect((error as StartupError).entries.map(entry => [entry.id, entry.required, entry.fiberState])).toEqual([
+      ['webserver', true, undefined], ['tool-todo', false, undefined],
+    ])
+  })
+
+  it('warns about rejected options without an id', async () => {
+    const warn = vi.fn()
+    await auditStartupEntries(ctxWith([], [null]), NAME, warn)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('(no id) (undefined): invalid entry options:'))
+  })
+
   it('omits an error cause when required plugins are only waiting for services', async () => {
     const error = await auditStartupEntries(ctxWith([
       { fiber: fiber(0, undefined, { webStartup: {} }), options: { id: 'connection', name: './connection.mjs' } },
@@ -834,7 +917,7 @@ describe('loadOverlayPatches', () => {
     expect(loadOverlayPatches(NAME, valid)).toEqual([{ id: 'target', config: { value: { __jsExpr: 'process.env.VALUE' } } }])
     expect(() => loadOverlayPatches(NAME, join(dir, 'missing.yml'))).toThrow(`${NAME}: failed to read overlay`)
     const malformed = join(dir, 'malformed.yml')
-    writeFileSync(malformed, ': bad')
+    writeFileSync(malformed, '- [bad\n')
     expect(() => loadOverlayPatches(NAME, malformed)).toThrow(`${NAME}: failed to parse overlay`)
     const mapping = join(dir, 'mapping.yml')
     writeFileSync(mapping, 'id: target\n')
@@ -1015,7 +1098,7 @@ describe('boot', () => {
     }
   })
 
-  it('exposes dshHomePath to Loader config expressions', async () => {
+  it('exposes dshHomePath and dshPath to Loader config expressions', async () => {
     const dir = tmp()
     const dshHome = join(dir, 'home')
     vi.stubEnv('DSH_HOME', dshHome)
@@ -1023,6 +1106,7 @@ describe('boot', () => {
       'export const name = "capture"',
       'export function apply(ctx, config) {',
       '  ctx.provide("capturedPath", config.path)',
+      '  ctx.provide("capturedStatePath", config.state)',
       '}',
       '',
     ].join('\n'))
@@ -1031,12 +1115,14 @@ describe('boot', () => {
       '  name: ./capture.mjs',
       '  config:',
       "    path: !!js dshHomePath('sessions')",
+      "    state: !!js dshPath('state', 'capture')",
       '',
     ].join('\n'))
     let ctx: Context | undefined
     try {
       ctx = await boot(NAME, join(dir, 'cordis.yml'))
       expect(ctx.get('capturedPath')).toBe(join(dshHome, 'sessions'))
+      expect(ctx.get('capturedStatePath')).toBe(join(dshHome, 'state', 'capture'))
     } finally {
       await ctx?.fiber.dispose()
       vi.unstubAllEnvs()
@@ -1052,7 +1138,7 @@ describe('boot', () => {
     writeFileSync(join(dir, 'exiting.mjs'), [
       'export const name = "exiting"',
       'export function apply(ctx) {',
-      '  void ctx.root.fiber.dispose()',
+      '  void ctx[Symbol.for("cordis.root")].fiber.dispose()',
       '}',
       '',
     ].join('\n'))
@@ -1146,7 +1232,7 @@ describe('boot', () => {
 
   it.each([
     ['missing', undefined, 'config file not found'],
-    ['malformed', 'invalid: [unclosed\n', 'unexpected end'],
+    ['malformed', 'invalid: [unclosed\n', 'must be sufficiently indented and end with a ] (at '],
     ['non-array', 'entries: []\n', 'top-level array'],
   ])('rejects a %s root configuration', async (_kind, content, message) => {
     const dir = tmp()

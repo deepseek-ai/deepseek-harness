@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Control de tiempo de espera de llamada de herramienta",
+    "description": "Envía una señal de cancelación de acuerdo con el límite de tiempo de cada herramienta y devuelve el resultado del tiempo de espera."
+  }
+}

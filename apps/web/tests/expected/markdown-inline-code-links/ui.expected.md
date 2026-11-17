@@ -1,9 +1,11 @@
 - banner:
   - navigation "Session hierarchy": Inline code links
+  - button "Session panel"
   - button "More actions"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Show the local preview URL. {{clock}}
 - button "Copy"
 - status: Completed

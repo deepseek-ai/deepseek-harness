@@ -1,6 +1,7 @@
 {
   "meta": {
-    "title": "Custom plugin markets",
-    "description": "Adds a Discover tab to Plugins for browsing and installing bundles from plugin market indexes you add"
+    "title": "Custom plugin indexes",
+    "description": "Adds a Discover tab to Plugins, where you browse and install plugins from plugin indexes you add.",
+    "detail": "docs/DETAIL.md"
   }
 }

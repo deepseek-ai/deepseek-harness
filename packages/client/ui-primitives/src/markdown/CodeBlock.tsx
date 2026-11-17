@@ -4,6 +4,10 @@ import clsx from 'clsx'
 import { writeClipboard } from '../clipboard.ts'
 import { CodeToolbar, type CodeToolbarLabels } from '../CodeToolbar.tsx'
 import {
+  diffFenceTokens, isDiffContent, isDiffFenceLanguage, parseDiffFence,
+} from './diff-fence.ts'
+import type { DiffRow } from './diff-fence.ts'
+import {
   StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,
 } from './highlight.ts'
 import type { HighlightSpan, StreamingHighlightFrame } from './highlight.ts'
@@ -15,6 +19,13 @@ export interface CodeBlockProps {
   code: string
   /** Grammar hint (markdown fence info string or a fixed caller id); unknown = plain. */
   lang?: string | undefined
+  /**
+   * Render unified-diff rows: row colors by marker column, and each file's
+   * removed and added sides tokenized with the language its header names.
+   * Omitted, a `diff` or `patch` `lang` selects them; `true` or `false` forces
+   * the choice for any `lang`.
+   */
+  diff?: boolean | undefined
   /**
    * The code is still growing (a streaming markdown fence): highlight through
    * a per-instance {@link StreamingHighlightSession}, which re-tokenizes only
@@ -57,6 +68,35 @@ const SHIKI_PRE_PROPS = {
 /** Completed-line group size; React reconciles groups while the DOM remains line-for-line identical. */
 const STREAMING_LINE_GROUP_SIZE = 32
 
+/** Line class per row kind; context rows keep the block's default ink. */
+const DIFF_ROW_CLASS: Record<DiffRow['kind'], string | undefined> = {
+  add: css.diffAdd,
+  del: css.diffDel,
+  hunk: css.diffHunk,
+  meta: css.diffMeta,
+  context: css.diffContext,
+}
+
+/** One diff row: optional marker column, then the body with its token colors. */
+function renderDiffRow(row: DiffRow, index: number, tokens: readonly HighlightSpan[] | undefined): ReactNode {
+  const kindClass = DIFF_ROW_CLASS[row.kind]
+  return (
+    <Fragment key={index}>
+      {index > 0 && '\n'}
+      <span className={clsx('line', css.diffLine, kindClass)}>
+        {isDiffContent(row)
+          ? <Fragment>
+            <span className={css.diffMarker}>{row.marker}</span>
+            {tokens === undefined
+              ? row.body
+              : tokens.map((span, spanIndex) => <span key={spanIndex} style={span.style}>{span.text}</span>)}
+          </Fragment>
+          : row.raw}
+      </span>
+    </Fragment>
+  )
+}
+
 function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
   return (
     <Fragment key={index}>
@@ -69,16 +109,27 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
 }
 
 export function CodeBlock({
-  code, lang, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
+  code, lang, diff, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
 }: CodeBlockProps) {
   const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
+  const diffRows = useMemo(() => ((diff ?? isDiffFenceLanguage(lang)) ? parseDiffFence(trimmed) : undefined),
+    [trimmed, lang, diff])
   const sourceLines = lineNumbers ? trimmed.split('\n') : undefined
   const rootRef = useRef<HTMLDivElement>(null)
-  const highlighting = useViewportHighlighting(rootRef, lang)
+  // Diff rows join the same viewport gate as grammar-highlighted fences, so an
+  // off-screen fence paints its row colors without tokenizing the body.
+  const highlighting = useViewportHighlighting(rootRef, diffRows === undefined ? lang : 'diff')
   // Re-render when a lazy grammar finishes loading, so a fence that showed plain
   // text while its language's grammar imported picks up highlighting. The
   // snapshot value is opaque; only its change across renders drives the memo.
   const loaded = useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount, grammarLoadCount)
+  // Each file's old and new sides are tokenized separately; a growing fence
+  // re-tokenizes per chunk because that grouping has no incremental path, and
+  // diffs in a fence are short enough to accept it.
+  const diffTokens = useMemo(
+    () => (diffRows === undefined || !highlighting ? undefined : diffFenceTokens(diffRows)),
+    [diffRows, highlighting, loaded],
+  )
   // Streaming state lives in refs mutated inside the memo (the MarkdownText
   // streaming-cache pattern): the session's caches carry across chunks only
   // because the owner keys this instance stably while the fence grows.
@@ -95,7 +146,8 @@ export function CodeBlock({
   } | null>(null)
   const settledRef = useRef(false)
   const streamedBody = useMemo(() => {
-    if (!highlighting) {
+    // A diff fence draws its own rows; the session's single-language stream is unused.
+    if (!highlighting || diffRows !== undefined) {
       sessionRef.current = null
       lineCacheRef.current = null
       settledRef.current = false
@@ -146,12 +198,12 @@ export function CodeBlock({
       code: trimmed, lang, generation: frame.generation, frame, groups, pending, nextLine, body,
     }
     return body
-  }, [streaming, highlighting, trimmed, lang, loaded])
+  }, [streaming, highlighting, diffRows, trimmed, lang, loaded])
   const html = useMemo(
-    () => (highlighting && streaming !== true && streamedBody === undefined
+    () => (diffRows === undefined && highlighting && streaming !== true && streamedBody === undefined
       ? highlightToHtml(trimmed, lang)
       : undefined),
-    [streaming, highlighting, streamedBody, trimmed, lang, loaded],
+    [diffRows, streaming, highlighting, streamedBody, trimmed, lang, loaded],
   )
   const [copied, setCopied] = useState(false)
   const [localWrapped, setWrapped] = useState(true)
@@ -172,20 +224,24 @@ export function CodeBlock({
   // shiki's HTML output is a static span tree it generated from `code` (no
   // user HTML passes through), the sanctioned innerHTML consumption path per
   // shiki's own docs.
-  const body = streamedBody !== undefined
-    ? streamedBody
-    : html === undefined
-      ? (
-        <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
-          <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
-        ))}</code></pre>
-      )
-      : (
-        <div dangerouslySetInnerHTML={{ __html: html }} />
-      )
+  const body = diffRows !== undefined
+    ? (
+      <pre className={css.plain}><code>{diffRows.rows.map((row, index) => renderDiffRow(row, index, diffTokens?.get(index)))}</code></pre>
+    )
+    : streamedBody !== undefined
+      ? streamedBody
+      : html === undefined
+        ? (
+          <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
+            <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
+          ))}</code></pre>
+        )
+        : (
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        )
 
   return (
-    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, toolbarLabels !== undefined && css.card, className)}
+    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, diffRows !== undefined && !lineNumbers && css.diffFence, toolbarLabels !== undefined && css.card, className)}
       data-line-numbers={lineNumbers || undefined}
       data-code-wrap={toolbarLabels === undefined ? undefined : wrapped}
       style={sourceLines === undefined ? undefined : {
@@ -198,7 +254,7 @@ export function CodeBlock({
           copied={copied} wrapped={wrapped} onCopy={onCopy}
           onWrap={wrap === undefined ? () => { setWrapped(value => !value) } : undefined}
         /> : <div className={css.banner} data-code-block-banner>
-          <div className={css.infostring}>{lang ?? ''}</div>
+          <div className={css.infostring} data-text-interaction-exclude="">{lang ?? ''}</div>
           <div className={css.action}>
             <button type="button" className={css.copyButton} onClick={onCopy}>
               {copied ? copiedLabel : copyLabel}

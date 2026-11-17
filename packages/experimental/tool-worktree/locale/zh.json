@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Git 工作树",
-    "description": "让智能体创建新的 Git 分支与工作树，并在其中继续工作。"
+    "description": "要求在新分支上工作时，智能体会创建单独的 Git 工作树并在其中继续，你当前的工作树保持原样。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

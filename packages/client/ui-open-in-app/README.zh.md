@@ -1,5 +1,5 @@
 ---
-description: "Web \"Open In...\" 控件：会话头部在记住的应用中打开 workspace 目录的分体按钮，以及文档预览里用默认应用打开、显示单个文件位置的控件。"
+description: "通过应用子菜单打开会话目录，并通过原生应用打开预览文件。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 open-in-app 功能的浏览器表面。会话头部的分体按钮在记住的应用中打开当前会话的 workspace 目录（会话摘要的 `cwd`），下拉箭头列出主机探测到已安装的全部 catalog 应用；可用性、图标与启动均来自 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 的主机路由，所以两个包要一起挂载。在右侧 Sidebar 的文档预览里，一个「打开」分体按钮和一个空态按钮经由 Session Remote 用默认应用打开当前文件或显示其位置。主机没有这项能力时，这些控件一个都不渲染。
+通过会话头部更多菜单或会话行、标题右键菜单中的**在应用中打开**打开会话目录。子菜单按 Host 顺序列出已安装且已本地化的应用，仅显示图标和名称，不标注默认应用。文件树、文档预览和交付控件也可通过原生应用打开文件或目录。可用性、图标和启动由 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 提供；两个包应一起挂载。会话目录未知或没有符合条件的应用时，不显示在应用中打开。
 
 ## 目录
 
@@ -25,17 +25,29 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂进 Web 组合；这对包用两行 cordis.yml 组成完整功能，本行不接受任何配置。只要主机探测到至少一个已安装的 catalog 应用且会话有已知的 workspace 目录，会话头部就会出现 "Open In..." 分体按钮。只要 Host 通过 Session Remote 的 `session.canOpenWorkspacePath` 报告有桌面，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览就会长出文件控件；删掉这一行会一次去掉所有控件。
+把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂载到 Web 组合；本行不接受配置。会话目录已知且至少有一个已安装、已本地化的目录应用时，显示在应用中打开子菜单。Host 通过 `session.canOpenWorkspacePath` 报告桌面可用时，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览显示文件控件；删除本行会移除其全部控件与菜单贡献。
+
+头部入口使用 [`ui-conversation`](../ui-conversation/README.zh.md) 持有的更多按钮，由 [`ui-context-menu`](../ui-context-menu/README.zh.md) 提供共享按钮行为。未挂载导出插件时，在应用中打开仍可通过该入口使用；本包提供菜单项，而不创建自己的头部按钮。
 
 ### 预期行为
 
-会话标题栏、文件树标题栏和文档标题栏共用同一个高 24px、圆角 9px 的分体按钮。这些标题栏都只显示图标，悬停提示显示默认应用名称或文件定位动作。它们都显示默认动作的图标，在菜单的默认应用后标注“（默认）”，仅在自己的操作执行期间禁用，并通过短暂提示报告失败。文件树打开按钮以 `absolutePath` 传入的显示目录为目标，并与会话头部共享应用选择和启动状态。目录适配器使用已有的跨平台应用列表，将最后一次成功选择保存在 `dsh.open-in-app.choice` 中；原选择不可用时回退到第一个可用应用。
+会话头部把**在应用中打开**放在下载之后、反馈之前的独立分隔组。会话行更多、行右键及标题右键菜单把它放在复制 Session ID 之后、归档之前。只有一个应用时仍保留子菜单。文件树与文档标题栏保留高 24px、圆角 9px 的纯图标分体按钮。这些按钮的悬停提示显示默认应用或定位动作，其菜单保留默认标记。所有应用图标加载失败时均使用原生打开图标。文件树按钮以所属组件传入的 `absolutePath` 为目标，并与会话菜单共享应用选择及启动占用状态。目录选择仅在启动成功后持久化到 `dsh.open-in-app.choice`；原选择不可用时回退到首个符合条件的应用。目录启动忙碌时，禁用子菜单父项和全部应用行。
 
-**在本地打开**快捷键捕获主会话的目录，并使用与头部按钮相同的已记住应用。按钮 tooltip 和 `aria-keyshortcuts` 显示当前有效绑定；Web 遵循[快捷键服务的平台默认值](../shortcuts/README.zh.md)。只有选中会话界面、且头部按钮有可打开的目录和已安装应用时，命令才执行。启动尚未结束时也会阻止命令。鼠标与键盘操作共享 controller 的启动状态，重复操作不会启动两次，也不会在启动期间更改已记住的选择。
+在 iOS、Android 手机和平板上（包括已安装的 PWA），原生打开获得确认后显示「已在其它设备打开」，文件定位则显示「已在其它设备显示文件位置」。电脑端成功时不提示，包括窄窗口浏览器与已安装的桌面 PWA。Host 拒绝请求或无法连通时，所有客户端都会收到失败 toast。成功表示 Host 已接受原生操作，不代表目标应用已完成文件加载。反馈复用现有移动设备判定，不依据窗口宽度或安装模式。
+
+**在本地打开**快捷键捕获主会话目录及已记住的应用。有效绑定继续显示在文件树打开按钮的 tooltip 和 `aria-keyshortcuts` 中；Web 遵循[快捷键服务的平台默认值](../shortcuts/README.zh.md)。只有选中会话界面且该会话具有可打开目录与已安装应用时才执行命令。启动进行中会阻止命令；结果遵循与点击操作相同的反馈规则。鼠标与键盘操作共享控制器的启动状态，因此重复操作不会启动两次，也不会在启动期间更改已记住的选择。
 
 文件菜单列出已发现的关联应用，不单列“用默认应用打开”。“显示文件位置”固定在菜单底部，通过分隔线与滚动的应用列表分开。查询成功且只有一个可用操作时显示单按钮，不再显示下拉箭头。文件关联首次加载时使用灰色骨架图标。Host 识别出默认应用时，菜单将该项标注为“（默认）”，主按钮打开该应用；否则第一个关联应用占据该位置，只有在一个关联应用都没有时主按钮才执行文件定位。目录菜单不包含定位项。选择文件应用不修改系统默认应用。无法预览文件时，空态使用同一菜单，按钮增大到 40px 高并显示图标和动作文字；根据默认动作显示“打开”或“显示文件位置”。
 
-使用同一查询函数和文件的已挂载控件共用查询与结果，打开任一菜单会刷新所有相关控件。最后一个控件释放后取消查询并清除状态。已取消的查询不会覆盖其他文件的结果。查询失败时菜单显示提示，并以文件定位作为默认动作。文件关联查询的平台支持范围见 [native-command](../../util/native-command/README.zh.md)；查询结果为空时，包括平台尚无查询适配器的情况，控件统一使用定位动作，不按操作系统分支处理。
+使用同一查询函数和文件的已挂载控件共用查询与结果，打开任一菜单会刷新所有相关控件。最后一个控件释放后取消查询并清除状态。已取消的查询不会覆盖其他文件的结果。查询成功后，结果还会替换本页面中该文件关联类别的记录，除非更晚发起的查询已经给出回答；类别按文件名的最后一个扩展名划分（区分大小写），没有扩展名的文件按完整路径划分。已挂载控件不读取这份记录，会保留自己的回答，直到再次打开其菜单，因此在此期间同一个文件在文件标题栏和右键菜单中可能显示不同的应用。查询失败时菜单显示提示，并以文件定位作为默认动作。文件关联查询的平台支持范围见 [native-command](../../util/native-command/README.zh.md)；查询结果为空时，包括平台尚无查询适配器的情况，控件统一使用定位动作，不按操作系统分支处理。
+
+工作区右键菜单通过共享的目录应用列表定位被点击的文件夹。文件树目录提供原生定位与复制文件夹路径，不提供文件预览或保存。
+
+右键菜单通过 [ui-context-menu](../ui-context-menu/README.zh.md) 贡献文件预览、原生应用打开、原文件定位以及链接导航与复制。会话子菜单解析被捕获会话 ID 的目录，不使用主视图，并观察应用、操作、会话列表及语言变化。原生操作在菜单关闭或目标切换后仍通过本功能的全局 toast 报告，不产生第二个注册表提示。原生文件操作先通过授权元数据解析会话路径，然后直接显示该文件类型已记录的应用，不等待 Host。某个类型在本页面第一次打开菜单时，最多等待 Host 回答 300 毫秒；到时仍未回答，这一项显示“使用默认应用打开”，通过系统的文件关联打开文件。每次打开菜单都会在后台重新查询 Host；回答有变化时，已打开的菜单原地更新，查询失败则保留已记录的回答。文件不存在时禁用路径操作；图片定位要求实际 Host 文件，并始终针对原文件。[ui-file-actions](../ui-file-actions/README.zh.md) 负责复制、下载、另存为及完成提示，包括通过提示定位保存目标。
+
+文件菜单复制不含行号的绝对路径；网址复制保留查询参数与锚点。图片文件在既有文件操作之外，还提供复制图片与下载原图。下载和保存成功后显示共享 Toast，取消选择器时不提示。
+
+文件菜单提供“在侧边栏打开”与“在浮窗中打开”，以 `destination: 'sidebar'` 或 `'float'` 和目标的行号调用 `ctx.sidebarRight.openResourceIn`，从不传菜单所在的分栏。文件已在请求的位置打开时揭示它；在另一位置打开时连同阅读位置移过去，因此菜单可以把预览在停靠列和浮窗之间移动。左键打开文件的行为不变。
 
 -----
 
@@ -45,9 +57,9 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-两个目录插槽均通过显式的 `absolutePath` 使用 `OpenInAppAction`。`conversation.session.header.utilities` 的注册函数读取会话 cwd，`sidebar.right.tab.files.actions` 则接收所属组件传入的显示目录。插件以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收共享源，因此所有会话头部共享同一份事实。文档相对的路由形式与 wire 载荷类型来自主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。controller 守卫执行中的启动，并发布所捕获的目录与状态；头部控件从该源派生延迟出现的等待态和短暂错误态。
+[`session-open-with.ts`](src/client/session-open-with.ts) 为共享右键菜单包声明的 `session` 和 `sessionHeader` 目标共用一个解析器；其他贡献不会在这两种目标间扩散。文件树插槽通过所属组件的 `absolutePath` 使用 `OpenInAppAction`；会话头部没有独立打开按钮插槽。页面生命周期的 [`controller`](src/client/controller.ts) 持有可用性、持久化偏好与启动 POST 状态。菜单观察器和组件注入 hooks 读取同一组源。文档相对路由与载荷类型来自 Host 的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。适配器将原生操作及传输失败解析为具名结果；跳过的请求不播报。
 
-目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标、尺寸和操作反馈。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
+目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标和尺寸。注入的回调将结果交给本功能在 `shell.overlay` 中持有的唯一 toast，因此切换会话或关闭发起操作的预览不会丢失结果。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。同一控制器按关联类别保存本页面的回答，同一时间只运行一次后台刷新（下一次打开菜单或插件卸载会取消尚未完成的刷新），只在回答变化时发布新快照。文件菜单观察该快照；只有本文件类型的回答变化时，才基于本次打开时验证的路径同步重新解析，因此右键菜单注册表保留其他各项，只有应用这一项原地变化。尚无记录的类型会让文件菜单项等到这次刷新结束、满 300 毫秒或菜单关闭；注册表在所有菜单项都就绪后才打开菜单，所以整个菜单都会等待。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
 
 </details>
 
@@ -57,7 +69,7 @@ kind: "package-reference"
 ## 进一步探索
 
 - [dsh-host-open-in-app](../../host/open-in-app/README.zh.md)——提供可用性、图标与启动的主机路由，及其背后的目录。
-- [dsh-session-log-export](../../session-query/session-log-export/README.zh.md)——会话头部的姊妹动作。
+- [ui-conversation](../ui-conversation/README.zh.md)——持有共享更多按钮的会话头部。
 - [ui-sidebar-documentpreview](../ui-sidebar-documentpreview/README.zh.md)——声明文件控件所占头部与空态子 slot 的文档预览。
 - [ui-deliverables](../ui-deliverables/README.zh.md)——交付卡片，仍通过自己的路由打开声明过的文件。
 - [Web client 架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册 slot。
@@ -67,7 +79,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无。分体按钮是浏览器 chrome；这里没有任何东西进入模型请求。
+无。这些打开控件与菜单是浏览器界面；不会进入模型请求。
 
 #### KV Cache 影响
 
@@ -81,6 +93,9 @@ Host 在打开或定位前通过当前文件系统验证路径。没有对应 Ho
 
 - **词典把守菜单。** 主机目录的新条目若在两份词典中没有对应的 `app.<id>` 条目，将保持不可见而不是显示裸 id；扩展目录意味着同时扩展 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 与本包的 locale。
 - **可用性每页只读一次。** 页面打开期间安装的应用要重新加载页面后才出现（主机侧还需主机重启）；文件控件背后的桌面回答同样每页只读一次。
+- **文件关联按类型在页面内缓存。** 最后一个扩展名相同的文件共用一个回答；只有大小写不同的扩展名（如 `.PNG` 和 `.png`）算作不同类型。因此单个文件的单独设置（例如 macOS 中只针对某个文件的“打开方式”）可能先显示该类型之前的回答，再由后台查询更正已打开的菜单。Linux 的内容嗅探和 `.tar.gz` 这类多段扩展名也有同样的效果；某个文件的空回答也会以同样的方式，让同类型其他文件的这一项先显示为禁用。在更正之前选择这一项，会用该回答中的应用打开。没有扩展名的文件按路径记录。记录以及每个应用的一份图标随出现过的文件类型增长，并在页面关闭时释放。
+- **某个类型的第一次文件菜单可能打开得较慢。** 整个菜单最多等待该类型在本页面的第一个回答 300 毫秒；回答更慢时，菜单打开后这一项仍会原地变化。
+- **同一时间只有一次后台刷新。** 打开另一个文件的菜单会取消前一个菜单尚未返回的查询，该类型保留之前的回答（或仍没有回答），直到下次打开。
 - **所有平台共用一个定位标签。** Session Remote 只报告有没有桌面，不报告它跑的是哪个文件管理器，所以菜单写「显示文件位置」，而不像交付卡片那样点名访达或文件资源管理器。
 - **交付卡片保留自己的打开器。** [`ui-deliverables`](../ui-deliverables/README.zh.md) 仍通过自己按 Session 与事件定位的路由打开声明过的文件；把这些卡片并到这里的文件控件上仍属延期工作。
 

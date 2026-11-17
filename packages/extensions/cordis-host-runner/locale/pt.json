@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Executor de servidor de plug-in dinâmico",
+    "description": "Gerencie definições de plug-ins dinâmicos temporários e execute suas partes do lado do servidor."
+  }
+}

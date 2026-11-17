@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Tarjetas de acción",
+    "description": "Muestra tarjetas de acción opcionales debajo de las respuestas para los experimentos habilitados e informa a la conversación de las elecciones del usuario."
+  }
+}

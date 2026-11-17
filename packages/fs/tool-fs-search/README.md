@@ -48,9 +48,11 @@ A subprocess backend, then the tools; the spill backend is optional and makes ca
 | Tool | Arguments | Behavior |
 |---|---|---|
 | `glob` | `pattern`, `path?` | Finds files whose paths match a glob pattern, including hidden and ignored files but excluding VCS metadata; a pattern with no `/` matches basenames at any depth, so `*` matches the whole tree; complete results stay modification-time ordered |
-| `grep` | `pattern`, `path?`, `include?` | Searches file contents with a ripgrep regex and returns matches grouped by file as `Line N: <preview>`; `include` is one positive glob filter, with comma-separated lists and negated values rejected up front |
+| `grep` | `pattern`, `path?`, `include?` | Searches file contents with a ripgrep regex and returns matches grouped by file as `Line N: <preview>`; omitted or exact empty `include` applies no file filter; otherwise `include` is one positive glob, with whitespace-only values, comma-separated lists, and negated values rejected up front |
 
 Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint.
+
+Both tools opt into concurrent scheduling with sibling parallel-safe calls. A search records no file observation, over-cap spilling runs in the model-ordered post-execute phase, and working-directory recovery is serialized per Session by the working-directory service.
 
 ### Configuration
 
@@ -76,7 +78,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 
 ### Failures and recovery
 
-Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
+Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes throw `ToolArgsError` with `INVALID_ARGS`.
 
 -----
 
@@ -105,7 +107,24 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
-Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+Without an explicit `path`, `glob` prunes unrelated subtrees for patterns such as `packages/core/src/*.ts` when every directory component is a plain relative name outside VCS metadata. Ordered ripgrep globs exclude the tree, admit directories with the prefix's distinct names, then apply the original file pattern. Same-named directories elsewhere may also be traversed, but only the original pattern admits files. The added arguments are capped at 8 KiB; larger sets use the original traversal. The search root, path separators, symlink handling, matching, and modification-time ordering stay unchanged; other patterns retain the original traversal.
+
+Each call resolves and starts the packaged binary through the shared [ripgrep library](../../util/ripgrep/README.md), which prepends `--no-config` to prevent configuration-driven preprocessors. Model-controlled values remain plain argv elements without shell quoting. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+
+### Native-mode benchmark
+
+After `pnpm run build`, compile the package-local diagnostic with external runtime dependencies, then run it under plain Node:
+
+```sh
+cd packages/fs/tool-fs-search
+node --input-type=module <<'JS'
+import { build } from 'tsdown';
+await build({ config: false, tsconfig: false, dts: false, entry: 'tests/glob-native.perf.ts', outDir: 'tests/.dsh-build', clean: false, deps: { neverBundle: [/^[^./]/] } });
+JS
+node tests/.dsh-build/glob-native.perf.mjs
+```
+
+The diagnostic creates 20,000 unrelated files and six matches, then measures five `ctx.tools.execute()` calls through the Native executor with a real Agent, working-directory service, and local subprocess backend. It reports raw timings, the median, and a hash of the complete value, text, and presentation metadata. `--plugin <built-module>` selects another search-package revision; `--workspace <directory>` opts into a read-only existing workspace instead of the synthetic tree. Setup, model generation, UI, and Session persistence are excluded; there is no timing threshold.
 
 ### Two budgets, two artifacts
 
@@ -209,6 +228,7 @@ These limits define when the search tools are a poor fit or need special operati
 
 - **Search and file access have no shared-workspace proof** — returned paths are follow-up-readable only when the workdir and filesystem root denote the same workspace; the package performs no runtime cross-service validation.
 - **The packaged binary is fixed at dependency version** — Node deployments use the version selected by `@vscode/ripgrep`; Python single-file runtimes copy that target-native version into the required `-rg` sidecar. An unsupported platform or a corrupted installation fails with `SEARCH_FAILED`, while the Python runtime package rejects a missing sidecar before launch. Remote or virtual filesystems need a co-located workspace or another search consumer.
+- **Directory wildcards retain workspace traversal** — patterns such as `src/**/*.ts` do not narrow the traversal root automatically; supply an explicit `path` to constrain them.
 - **The schemas expose one bounded page** — offset pagination, case-mode switches, alternate output modes, and provider-backed discovery remain outside this package; capped complete output requires a spill backend.
 - **Sampling, when enabled, groups by first path segment beneath the search root only** — an over-cap `glob` page balances across those top-level entries, so a result concentrated deeper is still shown unevenly below that level; recursive balancing is deferred.
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-fetch-http",
-  "description": "Anonymous public HTTP(S) fetch provider for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.2.1-rc.2",
+  "description": "Anonymous HTTP(S) fetch provider for the DeepSeek Harness web capability seam (ctx.web)",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -25,18 +25,19 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-timeout": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*",
-    "@deepseek-ai/dsh-http-proxy": "workspace:*"
+    "@deepseek-ai/dsh-web": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "ipaddr.js": "^2.5.0",
     "undici": "8.11.2"
   },
   "devDependencies": {

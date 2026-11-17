@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP 运行配置",
+    "description": "在 dsh-base 上提供自动化专用的 ACP 通信与进程生命周期。"
+  }
+}

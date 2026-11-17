@@ -33,7 +33,7 @@ Run `pnpm run dev:web`, which starts the host and the rebuild watchers together 
 
 ### What a reload does
 
-Each successful reload re-executes the plugin bundle and remounts the plugin with fresh state. Plugins that depend on the reloaded one reload with it automatically. Failures appear in the plugin list, where they can be retried without waiting for another rebuild.
+Each successful reload re-executes the plugin bundle and remounts the plugin with fresh state. Plugins that depend on the reloaded one reload with it automatically. Failures appear in the Plugins page's synchronization notice, where they can be retried without waiting for another rebuild.
 
 ### Configuration
 
@@ -71,7 +71,7 @@ A fiber's activation epoch strings its service providers' uids, so replacing a p
 
 ### Failure policy
 
-Download failures leave the running plugin active. After the old fiber is torn down, import or activation failure does not restore the previous bundle. Failures appear as page-local synchronization errors. Settings → Plugins → Plugin list retries the latest graph, even when its revision is unchanged; a later rebuild also retries the affected plugin. Successful unrelated plugins remain active.
+Download failures leave the running plugin active. After the old fiber is torn down, import or activation failure does not restore the previous bundle. Failures appear as page-local synchronization errors. **Retry this page** on the Plugins page retries the latest graph, even when its revision is unchanged; a later rebuild also retries the affected plugin. Successful unrelated plugins remain active.
 
 ### Source map
 

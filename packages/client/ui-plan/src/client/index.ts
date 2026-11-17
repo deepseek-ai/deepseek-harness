@@ -25,7 +25,7 @@ import { planAddress, parsePlanAddress } from './plan.ts'
 import { isReviewPreviewAddress, reviewPreviewAddress } from './review-preview.ts'
 import { createPlanReviewStore } from './review-store.ts'
 import { PlanChip } from './PlanModeControl.tsx'
-import { en, zh, type PlanKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
 
@@ -56,7 +56,7 @@ export const inject = ['slots', 'remote', 'remote.commands', 'remote.session', '
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plan: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-plan: dictionaries')
 
   const previewId = '@deepseek-ai/dsh-client-ui-plan'
   const t = ctx.locale.bind(NS)

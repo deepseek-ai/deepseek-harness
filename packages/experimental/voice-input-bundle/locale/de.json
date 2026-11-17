@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Spracheingabe",
+    "description": "Transkribieren Sie Aufnahmen lokal mit SenseVoice; Für die erste Verwendung müssen Abhängigkeiten installiert werden.",
+    "detail": "docs/DETAIL.md"
+  }
+}

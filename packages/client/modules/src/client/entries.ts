@@ -6,7 +6,7 @@ import { parseBootManifest, readRelease } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { notifySubscribers } from './notify.ts'
-import { removeOwnedStyles, tearDownEntryFiber } from './entry-lifecycle.ts'
+import { tearDownEntryFiber } from './entry-lifecycle.ts'
 
 /** Page-local failures do not change the Host's bundle enablement. */
 export interface ClientEntryState {
@@ -19,7 +19,10 @@ export interface ClientEntryState {
 /** Module-table capabilities used within serialized entry operations. */
 interface ModuleIndex {
   update(manifest: BootManifest, managed: Iterable<string>): void
+  /** Reset a package's code while its previous records stay active for the runtime that is still running. */
   invalidateForReplacement(id: string, rev: string): void
+  /** Release the previous records once the replaced runtime has been torn down. */
+  releaseReplaced(id: string): void
   prune(roots: Iterable<string>): void
 }
 
@@ -77,6 +80,8 @@ export class ClientEntries {
 
   /**
    * Create the initial roster and retain its entry identities for subsequent reconciliation.
+   * As the Host Loader group does, a row whose creation rejects (for example a module that exports no
+   * plugin) is logged and stays an inactive entry, so one row cannot abort startup before the boot audit.
    * @param loader - Page Loader, already configured with the module system.
    * @param manifest - Initial roster audited by the boot caller.
    * @returns after initial entries and their activation settle; boot owns its activation audit.
@@ -92,7 +97,7 @@ export class ClientEntries {
     }, 'client-modules: entry reconciliation')
     return this.enqueue(async () => {
       await Promise.all(this.desired.plugins.map(async ({ id }) => {
-        await this.create(loader, id)
+        await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
       }))
       await loader.await()
       for (const row of this.modules.manifest.modules) this.revisions.set(row.id, row.rev)
@@ -144,7 +149,6 @@ export class ClientEntries {
       const entry = this.managed.get(id)
       if (entry === undefined) {
         this.modules.invalidate(id, desired.rev)
-        removeOwnedStyles(id)
         await this.reconcile(this.generation)
         return
       }
@@ -192,7 +196,7 @@ export class ClientEntries {
     await this.modules.prefetch(id)
     if (!this.current(generation)) return
     await tearDownEntryFiber(entry)
-    removeOwnedStyles(id)
+    this.index.releaseReplaced(id)
     if (!this.current(generation)) return
     await this.modules.import(id, '', {})
     if (!this.current(generation)) return
@@ -236,7 +240,8 @@ export class ClientEntries {
         } else if (entry.fiber === undefined) {
           await this.replace(entry, row.id, row.rev, generation)
         } else if (entry.fiber.state === FAILED) {
-          entry.fiber.update(entry.options.config)
+          // A retry with unchanged config is not a configuration change to persist.
+          await entry.fiber.update(entry.options.config, true)
         }
       } catch (error) {
         failures.push({ id: row.id, message: String(error) })

@@ -6,6 +6,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { customGuidance } from './guidance.ts'
 import { dispatchDeepSeekWeb } from '../src/transport.ts'
 
 const TEST_API_KEY = 'redirect-test-key'
@@ -46,10 +48,22 @@ afterAll(async () => {
 describe('dispatchDeepSeekWeb redirect policy', () => {
   it.each([301, 302, 303, 307, 308])('rejects HTTP %i before contacting Location', async (status) => {
     targetRequests.length = 0
-    await expect(dispatchDeepSeekWeb({ apiKey: TEST_API_KEY }, {
-      endpoint: `${redirectOrigin}/${status}`, body: { query: TEST_QUERY }, decode: value => value,
+    await expect(dispatchDeepSeekWeb({ sources: [{ kind: 'api-key', baseURL: redirectOrigin, key: { ref: credentialRef('TEST_API_KEY'), configured: async () => true, resolve: async () => TEST_API_KEY } }] }, {
+      path: `/${status}`, body: { query: TEST_QUERY }, decode: value => value,
       apiKeyHeaders: key => ({ 'x-api-key': key }),
-      guidance: { subject: 'Search', plugin: 'web-search-deepseek', field: 'baseURL', label: 'Messages API base URL', page: 'Web search' },
+      guidance: customGuidance('search'),
+    })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
+    expect(targetRequests).toHaveLength(0)
+  })
+
+  it('rejects a redirect of an account-token request before contacting Location', async () => {
+    targetRequests.length = 0
+    const grant = { headers: { 'x-dsh-auth-token': 'redirect-test-token' }, value: 'redirect-test-token' }
+    await expect(dispatchDeepSeekWeb({ sources: [{
+      kind: 'route', baseURL: redirectOrigin, credential: { kind: 'account', configured: async () => true, resolve: async () => grant },
+    }] }, {
+      path: '/307', body: { query: TEST_QUERY }, decode: value => value,
+      guidance: customGuidance('search'),
     })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
     expect(targetRequests).toHaveLength(0)
   })

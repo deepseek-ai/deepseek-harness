@@ -3,7 +3,7 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -12,14 +12,15 @@ import {
   installSessionReadTestServices,
   testSessionPersistence,
 } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const defaults = {
   defaultModelSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
   cwd: '/tmp',
 }
 
-const PARENT = SessionId('catalog-parent')
-const CHILD = SessionId('catalog-child')
+const PARENT = brandString<SessionId>('catalog-parent')
+const CHILD = brandString<SessionId>('catalog-child')
 const header: SessionHeader = {
   version: SESSION_FORMAT_VERSION,
   id: PARENT,
@@ -58,7 +59,7 @@ async function bench() {
       sessionId === PARENT ? { meta: header, events } : undefined,
     ),
   }) as never)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const controller = await createSessionTestController(ctx, defaults)
@@ -77,12 +78,15 @@ describe('SessionController subagent catalog', () => {
         version: 0, childId: CHILD, childCreatedAt: 8, mode: 'continuable', label: 'worker',
       })
       let frame = await stream.next()
-      while (!frame.done && !(frame.value.type === 'projection' && frame.value.key === 'subagentCatalog'
-        && Array.isArray(frame.value.value) && frame.value.value.length === 1)) {
+      let catalog = frame.done || frame.value.type !== 'projection'
+        ? undefined : frame.value.changes.find(change => change.key === 'subagentCatalog')?.val
+      while (!frame.done && !(Array.isArray(catalog) && catalog.length === 1)) {
         frame = await stream.next()
+        catalog = frame.done || frame.value.type !== 'projection'
+          ? undefined : frame.value.changes.find(change => change.key === 'subagentCatalog')?.val
       }
-      expect(frame.value).toMatchObject({ type: 'projection', sessionId: PARENT, key: 'subagentCatalog',
-        value: [{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }] })
+      expect(frame.value).toMatchObject({ type: 'projection', sessionId: PARENT })
+      expect(catalog).toMatchObject([{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }])
     } finally {
       signal.abort()
       await stream.return?.()
@@ -105,7 +109,7 @@ describe('SessionController subagent catalog', () => {
       kind: 'sequenced', values: { subagentCatalog: [{ id: CHILD, mode: 'continuable', label: 'worker' }] },
     })
     expect(stat).toHaveBeenCalledWith(PARENT, { signal })
-    expect(observe).toHaveBeenCalledWith(PARENT, { signal })
+    expect(observe).toHaveBeenCalledWith(PARENT, { signal, projectionMode: 'all' })
     expect(open).toHaveBeenCalledWith(PARENT, 'read', { signal })
     expect(resume).not.toHaveBeenCalled()
     expect(ctx.sessions.get(PARENT)).toBeUndefined()
@@ -180,7 +184,7 @@ describe('SessionController subagent catalog', () => {
 
   it('does not republish a Session when its Agent outlives the Session registration', async () => {
     const { ctx } = await bench()
-    const session = ctx.sessions.prepare(SessionId('detached'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.prepare(brandString<SessionId>('detached'), { meta: { cwd: '/workspace' } })
     const detach = ctx.sessions.enter(session)
     const disposeAgent = ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
     await disposeAgent
@@ -197,7 +201,7 @@ describe('SessionController subagent catalog', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    installSessionReadTestServices(ctx)
+    await installSessionReadTestServices(ctx)
     const controller = await createSessionTestController(ctx, defaults)
     const session = ctx.sessions.create(PARENT, { meta: { cwd: '/workspace' } })
     const expected = ctx.sessionProjections.snapshot(session)
@@ -210,10 +214,10 @@ describe('SessionController subagent catalog', () => {
   it('validates the parent id and keeps not-found distinct from cancellation', async () => {
     const { controller } = await bench()
     const signal = new AbortController().signal
-    await expect(controller.projections({ sessionId: SessionId('') }, signal)).rejects.toMatchObject({
+    await expect(controller.projections({ sessionId: brandString<SessionId>('') }, signal)).rejects.toMatchObject({
       code: 'gateway/bad-request',
     })
-    await expect(controller.projections({ sessionId: SessionId('missing') }, signal)).resolves.toEqual(null)
+    await expect(controller.projections({ sessionId: brandString<SessionId>('missing') }, signal)).resolves.toEqual(null)
     const aborted = new AbortController()
     aborted.abort()
     await expect(controller.projections({ sessionId: PARENT }, aborted.signal)).rejects.toMatchObject({

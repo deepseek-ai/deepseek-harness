@@ -1,0 +1,248 @@
+{
+  "initial": [
+    {
+      "name": "list_agents",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "send_message",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "The name of another agent in your subagent tree, as shown by list_agents."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message to deliver to the agent."
+          }
+        },
+        "required": [
+          "agent",
+          "message"
+        ]
+      }
+    }
+  ],
+  "changes": [
+    [
+      {
+        "name": "list_agents",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "send_message",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "agent": {
+              "type": "string",
+              "description": "The name of another agent in your subagent tree, as shown by list_agents."
+            },
+            "message": {
+              "type": "string",
+              "description": "The message to deliver to the agent."
+            }
+          },
+          "required": [
+            "agent",
+            "message"
+          ]
+        }
+      },
+      {
+        "name": "team_task_create",
+        "description": "Create one unowned pending task on the shared Team task board.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "description": "Concise task title."
+            },
+            "description": {
+              "type": "string",
+              "description": "Complete task details and acceptance criteria."
+            },
+            "blocked_by": {
+              "type": "array",
+              "description": "Task ids that must complete first.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "write_scopes": {
+              "type": "array",
+              "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "subject",
+            "description"
+          ]
+        }
+      },
+      {
+        "name": "team_task_get",
+        "description": "Read the complete latest value of one shared task before changing or executing it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "description": "Shared task id."
+            }
+          },
+          "required": [
+            "task_id"
+          ]
+        }
+      },
+      {
+        "name": "team_task_list",
+        "description": "List shared tasks, including readiness, owner, revision, blockers, and write-scope warnings.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Optional exact status filter.",
+              "enum": [
+                "pending",
+                "in_progress",
+                "completed"
+              ]
+            },
+            "owner": {
+              "type": "string",
+              "description": "Optional owner agent name filter; cannot be combined with unowned."
+            },
+            "unowned": {
+              "type": "boolean",
+              "description": "Filter tasks by whether they have no owner; cannot be combined with owner."
+            },
+            "ready": {
+              "type": "boolean",
+              "description": "Optional readiness filter."
+            },
+            "cursor": {
+              "type": "integer",
+              "description": "Zero-based result offset. Defaults to 0."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Number of rows, 1 through 100. Defaults to 50."
+            }
+          }
+        }
+      },
+      {
+        "name": "team_task_update",
+        "description": "Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "description": "Shared task id."
+            },
+            "expected_revision": {
+              "type": "integer",
+              "description": "Current task revision used as the CAS precondition."
+            },
+            "action": {
+              "type": "string",
+              "description": "Task transition to apply.",
+              "enum": [
+                "claim",
+                "release",
+                "edit",
+                "set_dependencies",
+                "complete",
+                "reopen",
+                "reassign",
+                "delete"
+              ]
+            },
+            "subject": {
+              "type": "string",
+              "description": "Replacement title for edit."
+            },
+            "description": {
+              "type": "string",
+              "description": "Replacement details for edit."
+            },
+            "blocked_by": {
+              "type": "array",
+              "description": "Complete blocker list for set_dependencies.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "write_scopes": {
+              "type": "array",
+              "description": "Replacement advisory write scopes for edit.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "owner": {
+              "type": "string",
+              "description": "Agent name of the root or any continuable descendant for root-only reassign; omit to unassign."
+            }
+          },
+          "required": [
+            "task_id",
+            "expected_revision",
+            "action"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "name": "list_agents",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "send_message",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "agent": {
+              "type": "string",
+              "description": "The name of another agent in your subagent tree, as shown by list_agents."
+            },
+            "message": {
+              "type": "string",
+              "description": "The message to deliver to the agent."
+            }
+          },
+          "required": [
+            "agent",
+            "message"
+          ]
+        }
+      }
+    ]
+  ]
+}

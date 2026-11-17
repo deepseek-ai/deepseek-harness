@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungsstatus-Cache",
+    "description": "Aus Sitzungsprotokollen generierter Cache-Status zum schnellen Lesen durch Funktionen wie Sitzungslisten."
+  }
+}

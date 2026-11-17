@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -28,9 +31,6 @@
     },
     {
       "path": "../../session/session-projection"
-    },
-    {
-      "path": "../../core/scope"
     },
     {
       "path": "../../llm/llm"

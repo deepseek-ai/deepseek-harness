@@ -43,11 +43,16 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.main:hover:not(:disabled),
 .main:focus-visible,
-.chevron:hover:not(:disabled),
 .chevron:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .main:hover:not(:disabled),
+  .chevron:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Pending disables clicks without a restyle; only hover feedback pauses. */

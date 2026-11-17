@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Outils de développement",
+    "description": "Pour le dépannage : consultez dans « Journal de session » ce que DSH a enregistré pour une session, examinez le contexte, les durées, le cache et le coût des outils par tour et étape dans l’onglet « Statistiques », et déboguez le backend de DSH dans Chrome DevTools.",
+    "detail": "docs/DETAIL.md"
+  }
+}

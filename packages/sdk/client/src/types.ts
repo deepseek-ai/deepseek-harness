@@ -6,7 +6,7 @@
  */
 
 import type { ContentBlock, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { SdkPromptContentBlock } from '@deepseek-ai/dsh-sdk-protocol'
+import type { SdkPromptContentBlock, SdkUserQuestionResult, SdkUserQuestionRequest } from '@deepseek-ai/dsh-sdk-protocol'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 
 /** One server-to-client notification as received off the wire. */
@@ -22,6 +22,8 @@ export type NotificationFilter = (notification: HarnessNotification) => boolean
 
 /** Launch and timeout options for {@link HarnessClient}. */
 export interface HarnessClientOptions {
+  /** Answer or dismiss runtime questions; observe the signal to release host work on runtime cancellation. */
+  onUserQuestion?: (request: SdkUserQuestionRequest, context: { signal: AbortSignal }) => Promise<SdkUserQuestionResult>
   /** Absolute or caller-relative dsh CLI module; omitted resolves this package's same-version dependency. */
   dshBin?: string
   /** Named profile serving the SDK protocol (default `sdk`). */
@@ -64,14 +66,18 @@ export interface DeepSeekHarnessOptions extends HarnessClientOptions {
   reasoningEffort?: ReasoningEffortId
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
+  /** Enable server approval requests; install client.onRequest() after client.start() and before harness.start(). */
+  approvalRequests?: boolean
 }
 
-/** One owned session activity interval, from enqueue receipt through idle. */
+/** Result of one SDK input, including the model activity or native operation it owns. */
 export interface RunResult {
   /** The session the activity ran on. */
   sessionId: string
-  /** Concatenated text of the interval's last assistant message (empty when none). */
+  /** Final assistant text (empty when absent), native state-only result text, or a failure diagnostic. */
   finalResponse: string
+  /** Model turn ending or native operation outcome; null when no terminal reason was recorded. */
+  finishReason: string | null
   /** Every `session.event` payload for the root session, in wire order. */
   events: SessionEvent[]
   /** Every notification for the root session and discovered descendants, in wire order. */
@@ -81,3 +87,5 @@ export interface RunResult {
 /** Re-exported content-block alias so SDK callers need no extra import. */
 export type { ContentBlock }
 export type { SdkPromptContentBlock }
+export type { SdkEncodedImageBlock } from '@deepseek-ai/dsh-sdk-protocol'
+export type { SdkUserQuestionAnswer, SdkUserQuestionResult, SdkUserQuestionRequest } from '@deepseek-ai/dsh-sdk-protocol'

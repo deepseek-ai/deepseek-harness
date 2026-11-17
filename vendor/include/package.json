@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-include",
   "description": "Include files in cordis configurations",
-  "version": "1.0.10",
+  "version": "1.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -35,6 +35,6 @@
   },
   "dependencies": {
     "@deepseek-ai/cosmokit": "workspace:~",
-    "js-yaml": "^4.1.0"
+    "yaml": "^2.9.0"
   }
 }

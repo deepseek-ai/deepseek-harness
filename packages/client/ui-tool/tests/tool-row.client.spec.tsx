@@ -1,4 +1,7 @@
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
@@ -12,8 +15,9 @@ import {
 } from '../src/client/tool/models/tool-call-model.ts'
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
-import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { en, zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => {
   cleanup()
@@ -51,6 +55,9 @@ describe('tool-call-model', () => {
     expect(classifyTool('grep')).toBe('search')
     expect(classifyTool('write')).toBe('write')
     expect(classifyTool('edit')).toBe('edit')
+    expect(classifyTool('run_code')).toBe('code')
+    expect(classifyTool('cua_run_code')).toBe('code')
+    expect(classifyTool('cua_run_code_extra')).toBe('others')
     expect(classifyTool('cordis_runtime_inspect')).toBe('read')
     // The v3 run-control verbs: `others` is the decided intent, not an
     // unclassified default (there is no program to show and no file to open).
@@ -173,7 +180,8 @@ describe('tool-call-model', () => {
       expect(model.filePath).toBe('/workspace/b/note.txt')
       expect(model.summary).toBe('note.txt')
       const openFile = vi.fn()
-      const view = render(<GenericToolCard useDisclosure={useDisclosure} phase="result" callId="c1" toolName={name} block={block} cwd={cwd} openFile={openFile} loadImage={vi.fn(async () => '')} t={t} />)
+      const view = render(<GenericToolCard
+        getFileTriggerProps={() => ({})} useDisclosure={useDisclosure} phase="result" callId="c1" toolName={name} block={block} cwd={cwd} openFile={openFile} loadImage={vi.fn(async () => '')} t={t} />)
       fireEvent.click(view.getByText('note.txt'))
       expect(openFile).toHaveBeenCalledWith('/workspace/b/note.txt')
       view.unmount()
@@ -232,19 +240,48 @@ describe('tool-call-model', () => {
       .toBe('{\n  "code": ""\n}')
   })
 
-  it('resultText flattens text blocks verbatim, other shapes as JSON, empty error content to name: code', () => {
+  it('resultText retains text and image JSON and uses the structured failure when content is empty', () => {
     expect(resultText(result({ content: [{ type: 'text', text: 'a\nb' }] }))).toBe('a\nb')
-    expect(resultText(result({ content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x' } as never] })))
-      .toBe(`a\n${JSON.stringify({ type: 'image', data: 'x' }, null, 2)}`)
+    const image = { type: 'image' as const, attachment: { attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png' as const, width: 8, height: 4, bytes: 64 } }
+    expect(resultText(result({ content: [image] }))).toBe(JSON.stringify(image, null, 2))
+    const reasoning = { type: 'reasoning' as const, text: 'detail' }
+    expect(resultText(result({ content: [reasoning] }))).toBe(JSON.stringify(reasoning, null, 2))
     expect(resultText(result({ content: [], isError: true, error: { name: 'ToolError', code: 'denied' } })))
       .toBe('ToolError: denied')
     expect(resultText(result({ content: [] }))).toBe('')
+  })
+
+  it('preserves image JSON when the formatter declines', () => {
+    for (const content of ['[{"type":"image"}]', '[{"type":"image","attachment":null}]',
+      '[{"type":"image","attachment":{"width":"8"}}]']) {
+      const blocks = JSON.parse(content) as ToolResultNode['content']
+      expect(resultText(result({ content: blocks }), () => undefined)).toBe(JSON.stringify(blocks[0], null, 2))
+    }
+  })
+
+  it('separates image references without duplicating an emitted newline', () => {
+    const attachment = { attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png' as const, width: 8, height: 4, bytes: 64 }
+    for (const text of ['a', 'a\n']) {
+      expect(resultText(result({ content: [{ type: 'text', text }, { type: 'image', attachment }] }), () => 'sha256:image'))
+        .toBe('a\nsha256:image')
+    }
+    expect(resultText(result({ content: [{ type: 'text', text: 'a\n\n' }, { type: 'image', attachment }] }), () => 'sha256:image'))
+      .toBe('a\n\nsha256:image')
   })
 
   it('derives output from the settled result and null while running or blank', () => {
     expect(toolRowModel('bash', result({ content: [{ type: 'text', text: 'out' }] })).output).toBe('out')
     expect(toolRowModel('bash', running()).output).toBeNull()
     expect(toolRowModel('bash', result({ content: [] })).output).toBeNull()
+  })
+
+  it.each([false, true])('shares formatted image output with its error summary, failure=%s', (isError) => {
+    const image = { type: 'image' as const, attachment: { attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png' as const, width: 8, height: 4, bytes: 64 } }
+    const formatImage = vi.fn(() => 'selected image')
+    const model = toolRowModel('run_code', result({ content: [image], isError }), undefined, undefined, formatImage)
+    expect(model.output).toBe('selected image')
+    expect(model.errorSummary).toBe(isError ? 'selected image' : null)
+    expect(formatImage).toHaveBeenCalledOnce()
   })
 
   it('derives errorSummary as the first output line on error rows only', () => {
@@ -329,6 +366,28 @@ describe('ToolRow', () => {
     variant: 'bash' as const, icon: <i data-testid="tool-icon" />, title: 'Bash',
     summary: 'List files', bodyRaw: '{"a":1}', state: 'ok' as const,
   }
+
+  it('declares file and URL menus without losing line numbers or toggling the row', () => {
+    const open = vi.fn(), openFile = vi.fn()
+    const view = render(<ToolRow fileContextMenuProps={contextMenuHook(open)().getTriggerProps({ kind: 'file', value: { sessionId: 'original' as SessionId, path: '/workspace/file.ts', line: 42 } })} {...rowProps} variant="read" summary="file.ts:42" filePath="/workspace/file.ts" filePathLine={42} onOpenFile={openFile} />)
+    const file = view.getByRole('button', { name: 'file.ts:42' })
+    file.getBoundingClientRect = () => new DOMRect(10, 20, 100, 20)
+    fireEvent.contextMenu(file, { clientX: 30, clientY: 40 })
+    fireEvent.keyDown(file, { key: 'F10', shiftKey: true })
+    expect(open.mock.calls).toEqual([
+      [{ kind: 'file', value: { sessionId: 'original', path: '/workspace/file.ts', line: 42 } }, { x: 30, y: 40 }],
+      [{ kind: 'file', value: { sessionId: 'original', path: '/workspace/file.ts', line: 42 } }, { x: 10, y: 40 }],
+    ])
+    expect(view.container.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false')
+    expect(openFile).not.toHaveBeenCalled()
+    view.rerender(<ToolRow urlContextMenuProps={contextMenuHook(open)().getTriggerProps({ kind: 'url', value: { url: 'https://example.com?q=1#part' } })} {...rowProps} summary="Website" href="https://example.com?q=1#part" />)
+    const link = view.getByRole('link')
+    fireEvent.contextMenu(link, { clientX: 40, clientY: 50 })
+    expect(open).toHaveBeenLastCalledWith({ kind: 'url', value: { url: 'https://example.com?q=1#part' } }, { x: 40, y: 50 })
+    fireEvent.keyDown(link, { key: 'F10', shiftKey: true })
+    expect(open).toHaveBeenLastCalledWith({ kind: 'url', value: { url: 'https://example.com?q=1#part' } }, { x: 0, y: 0 })
+    expect(view.container.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false')
+  })
 
   it('renders leading icon, title and summary while collapsed', () => {
     const view = render(<ToolRow {...rowProps} />)
@@ -558,12 +617,41 @@ describe('ToolRow', () => {
 
 describe('GenericToolCard', () => {
   const props = (toolName: string, block: StartedToolCall | ToolResultNode): GenericToolCardProps => ({
+    getFileTriggerProps: () => ({}),
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     useDisclosure, callId: 'c1', toolName, ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), t,
   })
 
+  it.each([
+    [t, 'sha256:image (8x4px，64 字节)'],
+    [makeTranslate(en), 'sha256:image (8x4px, 64 bytes)'],
+  ] as const)('localizes compact image references in the generic card', (translate, expected) => {
+    const attachment = { attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png' as const, width: 8, height: 4, bytes: 64 }
+    const block = result({ content: [{ type: 'text', text: 'before\n' }, { type: 'image', attachment }] })
+    const view = render(<GenericToolCard {...props('run_code', block)} t={translate} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.container.textContent).toContain(expected)
+    expect(view.container.querySelector('[class*="output"]')?.textContent ?? view.container.textContent).not.toContain('before\n\nsha256:')
+  })
+
+  it.each([
+    '{"type":"image"}',
+    '{"type":"image","attachment":null}',
+    '{"type":"image","attachment":[]}',
+    '{"type":"image","attachment":{"attachmentId":"image","width":"8","height":4,"bytes":64}}',
+    '{"type":"image","attachment":{"attachmentId":"image","width":8,"height":4,"bytes":0}}',
+    '{"type":"image","attachment":{"attachmentId":"image","name":12,"width":8,"height":4,"bytes":64}}',
+    '{"type":"image","attachment":{"width":8,"height":4,"bytes":64}}',
+  ])('renders malformed image references as JSON: %s', (json) => {
+    const content = JSON.parse(`[${json}]`) as ToolResultNode['content']
+    const view = render(<GenericToolCard {...props('run_code', result({ content }))} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.container.textContent).toContain(JSON.stringify(content[0], null, 2))
+  })
+
   it('renders the classified variant row from the frozen slice', () => {
-    const view = render(<GenericToolCard {...props('bash', result())} />)
+    const view = render(<GenericToolCard {...props('bash', result())}
+      getFileTriggerProps={() => ({})} />)
     expect(view.getByText('运行命令')).toBeTruthy()
     expect(view.getByText('List files')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
@@ -577,7 +665,8 @@ describe('GenericToolCard', () => {
       content: [{ type: 'text', text: 'failed' }],
       isError: true,
     })
-    const view = render(<GenericToolCard {...props(toolName, failed)} />)
+    const view = render(<GenericToolCard {...props(toolName, failed)}
+      getFileTriggerProps={() => ({})} />)
     const root = view.container.querySelector(`[data-tool="${toolName}"]`)!
     expect(root.querySelector('[data-disclosure-row] > :first-child svg')).not.toBeNull()
     expect(root.querySelector('[data-state]')).toBeNull()
@@ -585,7 +674,8 @@ describe('GenericToolCard', () => {
 
   it('unknown tools land on the others variant titled Tool call', () => {
     const view = render(
-      <GenericToolCard {...props('custom_tool', running({ name: 'custom_tool', argsRaw: '{"note":"x"}' }))} />,
+      <GenericToolCard {...props('custom_tool', running({ name: 'custom_tool', argsRaw: '{"note":"x"}' }))}
+        getFileTriggerProps={() => ({})} />,
     )
     expect(view.getByText('工具调用')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="others"]')).not.toBeNull()
@@ -597,7 +687,8 @@ describe('GenericToolCard', () => {
       <GenericToolCard {...props('edit', running({
         name: 'edit',
         argsRaw: '{"file_path":"src/x.ts","old_string":"before","new_string":"after"}',
-      }))} />,
+      }))}
+      getFileTriggerProps={() => ({})} />,
     )
     expect(view.getByText('编辑')).toBeTruthy()
     expect(view.getByText('src/x.ts')).toBeTruthy()
@@ -610,7 +701,8 @@ describe('GenericToolCard', () => {
       <GenericToolCard {...props('write', running({
         name: 'write',
         argsRaw: '{"file_path":"src/x.ts","content":"hello"}',
-      }))} />,
+      }))}
+      getFileTriggerProps={() => ({})} />,
     )
     expect(view.getByText('写入')).toBeTruthy()
     expect(view.getByText('src/x.ts')).toBeTruthy()
@@ -620,7 +712,8 @@ describe('GenericToolCard', () => {
 
   it('passes the owner inspect callback through to the expanded row pill', () => {
     const inspect = vi.fn()
-    const view = render(<GenericToolCard {...props('bash', result())} inspect={inspect} />)
+    const view = render(<GenericToolCard {...props('bash', result())} inspect={inspect}
+      getFileTriggerProps={() => ({})} />)
     fireEvent.click(view.getByRole('button', { name: /运行命令/ }))
     fireEvent.click(view.getByText('查看'))
     expect(inspect).toHaveBeenCalledTimes(1)
@@ -628,12 +721,14 @@ describe('GenericToolCard', () => {
 
   it('file-path summary click reaches openFile; bash summary does not', () => {
     const file = props('read', result({ call: { name: 'read', argsRaw: '{"path":"src/x.ts"}' } }))
-    const fileView = render(<GenericToolCard {...file} />)
+    const fileView = render(<GenericToolCard {...file}
+      getFileTriggerProps={() => ({})} />)
     fireEvent.click(fileView.getByText('src/x.ts'))
     expect(file.openFile).toHaveBeenCalledWith('src/x.ts')
 
     const bash = props('bash', result())
-    const bashView = render(<GenericToolCard {...bash} />)
+    const bashView = render(<GenericToolCard {...bash}
+      getFileTriggerProps={() => ({})} />)
     fireEvent.click(bashView.getByText('List files'))
     expect(bash.openFile).not.toHaveBeenCalled()
   })
@@ -647,7 +742,8 @@ describe('GenericToolCard', () => {
       isError: true,
       error: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: '  scope\r\nwas not authorized  ' },
     })
-    const view = render(<GenericToolCard {...props('mystery', denied)} />)
+    const view = render(<GenericToolCard {...props('mystery', denied)}
+      getFileTriggerProps={() => ({})} />)
     expect(view.getByText('Auto review 已拒绝')).toBeTruthy()
     fireEvent.click(view.getByRole('button'))
     expect(view.getByText('工具未执行。原因：scope was not authorized')).toBeTruthy()

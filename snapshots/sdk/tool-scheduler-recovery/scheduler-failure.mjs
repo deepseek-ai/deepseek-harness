@@ -1,15 +1,14 @@
 /** Reject one scheduler preparation to exercise the terminal internal-failure path. */
-export const inject = ['tools']
+export const inject = ['tools', 'loader']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx - Scenario-owned runtime. */
-export function apply(ctx) {
-  // Inspect the active instance's key so the fixture cannot introduce a second tools module.
-  const key = Object.getOwnPropertySymbols(ctx.tools)
-    .find(symbol => symbol.description === '@deepseek-ai/dsh-tools.scheduler')
-  if (key === undefined) throw new Error('Scheduler failure fixture requires the active tool scheduler')
-  const scheduler = ctx.tools[key]
-  const prepare = scheduler.prepare
-  ctx.effect(() => {
+export async function apply(ctx) {
+  // Resolve through the running profile so packaged runs share the bundled error classes.
+  const { NativeToolExecutor } = await ctx.loader.import('@deepseek-ai/dsh-tool-executor-native')
+  ctx.on('agent/created', ({ agent }) => {
+    const executor = new NativeToolExecutor(agent.ctx)
+    const scheduler = executor.pipeline
+    const prepare = scheduler.prepare
     scheduler.prepare = async input => {
       if (input.callId === 'scheduler-fail') {
         scheduler.prepare = prepare
@@ -17,6 +16,6 @@ export function apply(ctx) {
       }
       return prepare.call(scheduler, input)
     }
-    return () => { scheduler.prepare = prepare }
-  }, 'scheduler failure fixture')
+    agent.ctx.tools.setExecutor(executor)
+  })
 }

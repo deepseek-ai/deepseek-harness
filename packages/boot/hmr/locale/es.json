@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "hmr",
+    "description": "Vuelva a cargar el código y la configuración del complemento mientras la aplicación se está ejecutando."
+  }
+}

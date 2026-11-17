@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Benutzerdefinierte Plugin-Indizes",
+    "description": "Fügt unter „Plugins“ den Tab „Entdecken“ hinzu, in dem Sie Plugins aus von Ihnen hinzugefügten Plugin-Indizes durchsuchen und installieren.",
+    "detail": "docs/DETAIL.md"
+  }
+}

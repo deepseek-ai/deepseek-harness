@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "comando de retroalimentación de sesión",
+    "description": "Registre la evaluación del usuario de la sesión a través de entradas como /feedback."
+  }
+}

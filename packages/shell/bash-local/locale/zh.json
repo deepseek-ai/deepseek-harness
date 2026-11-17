@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "本地 Bash 执行",
+    "description": "通过本地子进程执行 Bash 命令。"
+  }
+}

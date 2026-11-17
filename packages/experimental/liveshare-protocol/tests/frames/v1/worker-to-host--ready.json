@@ -1,0 +1,6 @@
+{
+  "dir": "worker->host",
+  "note": "the gateway worker is up",
+  "frame": { "type": "ready" },
+  "optional": []
+}

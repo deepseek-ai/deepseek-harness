@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Masquage des informations d'identification",
+    "description": "Masque les clés, jetons et mots de passe reconnus dans les messages envoyés."
+  }
+}

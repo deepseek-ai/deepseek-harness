@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-format-v0-to-v1",
   "description": "Frozen released-v0 Session codec and identity migration to v1",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -23,7 +23,10 @@
   },
   "files": [
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {
@@ -40,6 +43,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-session-format": "workspace:*",
+    "@deepseek-ai/dsh-util-time": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "peerDependencies": {

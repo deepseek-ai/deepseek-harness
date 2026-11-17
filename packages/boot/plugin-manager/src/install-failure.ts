@@ -19,7 +19,7 @@ export interface InstallFailureFacts {
 
 /** Patterns in the order they decide: a specific code before the generic network family. */
 const LOG_KINDS: readonly [PluginInstallFailureKind, RegExp][] = [
-  ['build-blocked', /ERR_PNPM_IGNORED_BUILDS|Ignored build scripts/],
+  ['build-blocked', /ERR_PNPM_IGNORED_BUILDS|Ignored build scripts|ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED/],
   ['not-found', /ERR_PNPM_FETCH_404|\bE404\b|404 Not Found|Not Found - GET/],
   ['no-matching-version', /ERR_PNPM_NO_MATCHING_VERSION|\bETARGET\b|No matching version/],
   ['disk-full', /\bENOSPC\b|no space left on device/i],

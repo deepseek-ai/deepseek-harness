@@ -11,9 +11,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SessionId as sessionId, type SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId as sessionId, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
 import { launchWebScaffold, readPersistedEvents, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const MODE = webSnapshotMode()
 const INITIAL = 'Explain event sourcing in one sentence.'
@@ -70,7 +71,7 @@ function textCompletion(text: string): object {
   }
 }
 
-describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over the real composition', () => {
+describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the real composition', () => {
   let scaffold: WebScaffold
   let sidecarRoot: string
   let readyFile: string
@@ -104,7 +105,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
       cwd: scaffold.workspaceCwd,
     })
     if (!created.ok) throw new Error(`session.create failed: ${created.error.code}`)
-    parentId = sessionId(created.value.sessionId)
+    parentId = brandString<sessionId>(created.value.sessionId)
     const parent = scaffold.ctx.agents.get(parentId)
     if (parent === undefined) throw new Error('created parent session did not publish a live Agent')
 
@@ -113,7 +114,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
       provider: 'spawn',
       label: 'event-sourcing researcher',
       signal: new AbortController().signal,
-      request: { prompt: [{ type: 'text', text: INITIAL }], parent },
+      prompt: [{ type: 'text', text: INITIAL }], parent,
     })
     childId = started.childId
     // The hang entry writes readyFile after its prefix chunks, immediately
@@ -134,9 +135,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const queued = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: FOLLOWUP }],
       },
@@ -144,10 +143,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     expect(queued).toMatchObject({ ok: true })
 
     const settled = scaffold.whenTurnSettled()
-    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByParent', {
+    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByUser', {
       childSessionId: childId,
-      parentSessionId: parentId,
-      mode: 'continuable',
     })
     expect(interrupted).toMatchObject({ ok: true, value: { accepted: true } })
     // accepted acknowledges the admitted cancel, not quiescence: wait for the
@@ -169,9 +166,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const waking = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: WAKING }],
       },
@@ -189,7 +184,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
+    expect(userTexts[1]).toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
     expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')

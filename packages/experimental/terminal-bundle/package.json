@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-terminal-bundle",
-  "description": "Keep shell processes alive across tool calls.",
-  "version": "0.2.1-rc.2",
+  "description": "Let the agent run long-lived commands in terminals you can watch in the sidebar.",
+  "version": "0.2.2-rc.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -27,9 +27,13 @@
   "files": [
     "icon.svg",
     "locale/*.json",
+    "docs",
     "lib/index.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {
@@ -40,7 +44,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-tool-terminal": "workspace:*",
     "@deepseek-ai/dsh-terminal": "workspace:*",
-    "@deepseek-ai/dsh-terminal-bash": "workspace:*"
+    "@deepseek-ai/dsh-terminal-panel": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

@@ -22,6 +22,7 @@ import type {
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
+  ProviderCredential,
   StreamChunk,
   SystemPromptUpdate,
   ToolSchema,
@@ -34,6 +35,7 @@ import type { ProviderRequestId } from './brand.ts'
 import { callConfigEquals } from './call-config.ts'
 import type { ConfigureCall, LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
 import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
+import type { BuiltinLlmFailureCode } from './error.ts'
 import { normalizeLlmFailure } from './adapter-failure.ts'
 import { normalizeApiKey } from './api-key.ts'
 import {
@@ -45,10 +47,14 @@ export * from './attribution.ts'
 export * from './brand.ts'
 export * from './error.ts'
 export * from './api-key.ts'
-export * from './types.ts'
+export type * from './types.ts'
 export * from './content.ts'
 export * from './assistant-stream.ts'
-export * from './message.ts'
+export type * from './message.ts'
+export {
+  CONTEXT_SUMMARY_MAX_CHARS, boundContextSummary, createAssistantMessage, createDeveloperMessage, createMessage,
+  createSystemMessage, createToolResultMessage, createUserMessage, freezeMessage,
+} from './message.ts'
 export * from './retry-policy.ts'
 export { BlockAssembler } from './assembler.ts'
 export { callConfigEquals, isAgentLoopRequest, markAgentLoopRequest } from './call-config.ts'
@@ -92,6 +98,9 @@ export interface LlmErrorOptions extends ErrorOptions {
 /**
  * Typed error for LLM-related failures. Extends {@link HarnessError}, so the
  * `code` string (e.g. `AUTH`, `RATE_LIMIT`, `NO_ADAPTER`) is shared taxonomy.
+ * The constructor takes only a {@link BuiltinLlmFailureCode}; a failure from
+ * another provider, whose code may be any string, is re-raised through
+ * {@link LlmError.fromFailure}.
  */
 export class LlmError extends HarnessError {
   /** Serializable facts retained beside this live Error. */
@@ -99,10 +108,10 @@ export class LlmError extends HarnessError {
 
   /**
    * @param message - non-empty human-readable failure summary.
-   * @param code - non-empty stable provider-neutral machine code.
+   * @param code - built-in stable provider-neutral machine code.
    * @param options - optional cause and validated serializable provider facts.
    */
-  constructor(message: string, code: string, options?: LlmErrorOptions) {
+  constructor(message: string, code: BuiltinLlmFailureCode, options?: LlmErrorOptions) {
     if (typeof message !== 'string' || message.length === 0) throw new Error('LlmError message must be a non-empty string')
     if (typeof code !== 'string' || code.length === 0) throw new Error('LlmError code must be a non-empty string')
     if (options?.status !== undefined
@@ -128,6 +137,17 @@ export class LlmError extends HarnessError {
       ...options?.offloadImages === undefined ? {} : { offloadImages: options.offloadImages },
     })
   }
+
+  /**
+   * Raise an observed failure again with its own code, which any provider may have chosen.
+   * @param failure - the serializable failure, typically from a stream's terminal chunk.
+   * @param options - optional cause.
+   * @returns an error carrying the failure's message, code, and provider facts.
+   */
+  static fromFailure(failure: LlmFailure, options?: ErrorOptions): LlmError {
+    // The constructor validates the code at runtime; the built-in type constrains only codes raised here.
+    return new LlmError(failure.message, failure.code as BuiltinLlmFailureCode, { ...failure, ...options })
+  }
 }
 
 /**
@@ -144,7 +164,7 @@ export class LlmError extends HarnessError {
  * module stays dependency-free; both adapters share this one diagnosis instead
  * of keeping near-identical local copies.
  * @param raw - the credential exactly as supplied.
- * @param pkg - the refusing package name, prefixed to the diagnostic.
+ * @param pkg - the refusing plugin's settings namespace or package name, prefixed to the diagnostic.
  * @param ref - the credential reference the value resolved through.
  * @returns the trimmed, usable key.
  */
@@ -247,6 +267,19 @@ export abstract class LlmAdapter {
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget {
     return { width: image.width, height: image.height, maxBytes: image.bytes }
+  }
+
+  /**
+   * Describe the credential one owned route currently sends, for consumers that
+   * call the same deployment outside the model request path, such as web
+   * providers that share a route's credential and endpoint. The default
+   * publishes none. Implementations answer from one configuration generation
+   * per call and may throw when that configuration does not resolve.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @returns the route's current credential, or `undefined` when the route publishes none.
+   */
+  providerCredential(_provider: string): ProviderCredential | undefined {
+    return undefined
   }
 
   /**
@@ -694,6 +727,19 @@ export class LlmRuntime extends TypertRemoteService {
   }
 
   /**
+   * Resolve the credential one registered route currently sends, through its
+   * owning adapter. An unregistered route answers `undefined` rather than
+   * throwing because callers ask about routes a conversation named earlier,
+   * which may no longer be mounted; a registered route whose configuration
+   * does not resolve propagates the adapter's failure.
+   * @param provider - provider route whose credential is wanted.
+   * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
+   */
+  providerCredential(provider: string): ProviderCredential | undefined {
+    return this.adapters.get(provider)?.adapter.providerCredential(provider)
+  }
+
+  /**
    * Resolve the exact text one durable file occurrence contributes to every
    * provider request in the current execution environment.
    * @param ref - durable verbatim file reference from model history.
@@ -734,12 +780,16 @@ export class LlmRuntime extends TypertRemoteService {
       }
       seen.add(model.id)
       const inputModalities = this.detachedModalities(model.inputModalities)
+      const badge = model.badge
       return {
         provider: model.provider,
         id: model.id,
         name: model.name,
         ...model.description === undefined ? {} : { description: model.description },
         ...inputModalities === undefined ? {} : { inputModalities },
+        ...badge === undefined ? {} : {
+          badge: { text: typeof badge.text === 'string' ? badge.text : { ...badge.text }, tone: badge.tone },
+        },
       }
     })
   }

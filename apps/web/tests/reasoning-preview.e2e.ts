@@ -10,10 +10,13 @@ import {
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, writeComposerDraft } from './support.ts'
 
 const SUMMARY = `Next paragraph: ${'inspect the loaded context and pending tools '.repeat(8).trim()}`
-const DELTAS = ['First paragraph', `\nDetails\n\n\n${SUMMARY}`, '\nMore detail']
+const DELTAS = ['First paragraph', `\nDetails\n\n\n${SUMMARY}`, '\nMore detail', '\n\nExpanded update']
 const UI_EXPECTED = fileURLToPath(new URL('./expected/reasoning-preview/running.expected.md', import.meta.url))
+/** Computed mask of the animated whale: the ui-chat package asset URL, whose `@` is percent-encoded. */
+const WHALE_MASK = /^url\("([^"]*\/plugins\/@deepseek-ai\/dsh-client-ui-chat\/assets\/running-whale%402x-[0-9a-f]{12}\.png)"\)$/
 
 class PausedReasoningAdapter extends LlmAdapter {
+  constructor(private readonly prefix: string) { super() }
   override async listModels(provider: string) { return [{ provider, id: 'paused', name: `${provider}/paused` }] }
   readonly stages = DELTAS.map(text => ({
     text,
@@ -27,13 +30,14 @@ class PausedReasoningAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     yield { type: 'block-start', index: 0, blockType: 'reasoning' }
+    if (this.prefix !== '') yield { type: 'reasoning-delta', index: 0, text: this.prefix }
     for (const stage of this.stages) {
       yield { type: 'reasoning-delta', index: 0, text: stage.text }
       stage.arrived.resolve(undefined)
       await stage.proceed.promise
       options.signal?.throwIfAborted()
     }
-    yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: DELTAS.join('') } }
+    yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: this.prefix + DELTAS.join('') } }
     yield { type: 'block-start', index: 1, blockType: 'text' }
     yield { type: 'text-delta', index: 1, text: 'Done' }
     yield { type: 'block-end', index: 1, block: { type: 'text', text: 'Done' } }
@@ -41,9 +45,9 @@ class PausedReasoningAdapter extends LlmAdapter {
   }
 }
 
-it('shows completed paragraph first lines across blank lines with a right-edge fade', async () => {
+it.each(['plain', 'signature'])('shows completed paragraph first lines with a right-edge fade (%s)', async (format) => {
   const scaffold = await launchWebScaffold()
-  const adapter = new PausedReasoningAdapter()
+  const adapter = new PausedReasoningAdapter(format === 'signature' ? '<signature>metadata.payload</signature>\n\n' : '')
   try {
     scaffold.ctx.effect(() => scaffold.ctx.llm.registerAdapter(['reasoning-preview-test'], adapter))
     await scaffold.ctx.agentDefaultModel.saveSelection({ provider: 'reasoning-preview-test', model: 'paused' })
@@ -59,8 +63,10 @@ it('shows completed paragraph first lines across blank lines with a right-edge f
       await writeComposerDraft(page, input, 'Show a streamed reasoning preview.')
       await input.press('Enter')
 
-      const [first, second, third] = adapter.stages
-      if (first === undefined || second === undefined || third === undefined) throw new Error('preview stages are incomplete')
+      const [first, second, third, fourth] = adapter.stages
+      if (first === undefined || second === undefined || third === undefined || fourth === undefined) {
+        throw new Error('preview stages are incomplete')
+      }
       await first.arrived.promise
       const reasoning = page.locator('[data-variant="think"][data-state="running"]')
       await expandOwningTurnProcess(page, reasoning)
@@ -96,14 +102,14 @@ it('shows completed paragraph first lines across blank lines with a right-edge f
         await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' })
         await expect.poll(() => animatedWhale.isVisible()).toBe(true)
         expect(await animatedWhale.evaluate(element => getComputedStyle(element).maskMode)).toBe('alpha')
-        const imageSize = await animatedWhale.evaluate(async (element) => {
-          const source = getComputedStyle(element).maskImage.match(/^url\("?(data:image\/png;base64,[A-Za-z0-9+/=]+)"?\)$/)?.[1]
-          if (source === undefined) throw new Error('Running whale mask must use the bundled PNG data URL')
+        const imageSize = await animatedWhale.evaluate(async (element, mask) => {
+          const source = getComputedStyle(element).maskImage.match(new RegExp(mask))?.[1]
+          if (source === undefined) throw new Error('Running whale mask must use the ui-chat package asset URL')
           const image = new Image()
           image.src = source
           await image.decode()
           return [image.naturalWidth, image.naturalHeight]
-        })
+        }, WHALE_MASK.source)
         expect(imageSize).toEqual([28, 28])
         expect(await restingWhale.isVisible()).toBe(false)
         const firstWhaleFrame = await whale.screenshot({ animations: 'allow' })
@@ -118,6 +124,7 @@ it('shows completed paragraph first lines across blank lines with a right-edge f
         await page.emulateMedia({ reducedMotion: null, forcedColors: null })
       }
       expect(await reasoning.getAttribute('data-preview')).toBeNull()
+      expect(await reasoning.textContent()).not.toContain('metadata.payload')
 
       first.proceed.resolve(undefined)
       await second.arrived.promise
@@ -136,7 +143,14 @@ it('shows completed paragraph first lines across blank lines with a right-edge f
       await compareOrRefreshGolden(UI_EXPECTED,
         await captureStableAria(page, '[data-variant="think"]', scaffold.workspaceCwd), webSnapshotMode())
 
+      await reasoning.getByRole('button').click()
+      await reasoning.getByText('More detail', { exact: false }).waitFor()
+      expect(await reasoning.textContent()).not.toContain('metadata.payload')
       third.proceed.resolve(undefined)
+      await fourth.arrived.promise
+      await reasoning.getByText('Expanded update', { exact: true }).waitFor()
+      expect(await reasoning.textContent()).not.toContain('metadata.payload')
+      fourth.proceed.resolve(undefined)
       await settled
       await page.getByText('Done', { exact: true }).waitFor()
       await whale.waitFor({ state: 'detached' })

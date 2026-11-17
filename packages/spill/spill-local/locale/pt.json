@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Armazenamento local de resultados longos",
+    "description": "Salve resultados de ferramentas excessivamente longos em um arquivo local específico da sessão."
+  }
+}

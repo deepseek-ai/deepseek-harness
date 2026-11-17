@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-gateway",
   "description": "Typert Remote Host dispatcher and Client API endpoint",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -56,7 +56,10 @@
     "lib/client.browser.js",
     "lib/client.node.js",
     "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
@@ -80,6 +83,6 @@
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@types/ws": "^8.18.1",
     "@deepseek-ai/cordis": "workspace:~",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   }
 }

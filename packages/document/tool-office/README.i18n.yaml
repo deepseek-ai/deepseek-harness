@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/document/tool-office/README.md
+/:
+  en: 2ec7e66cd18356df
+  zh: 4862555b5a4c9f51
+/deepseek-ai-dsh-tool-office:
+  en: e9153903d819e2a7
+  zh: 3f50cf3c768a1af5
+/deepseek-ai-dsh-tool-office/summary:
+  en: e74f50cd7e13fad9
+  zh: f234831ae934f60a
+/deepseek-ai-dsh-tool-office/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-office/use-this-package:
+  en: 8e43235b282387a3
+  zh: 9823ab293840422a
+/deepseek-ai-dsh-tool-office/understand-the-implementation:
+  en: 05a32b4fde4d8c21
+  zh: f6ce05a11f5ccb6d
+/deepseek-ai-dsh-tool-office/further-exploration:
+  en: 5d20d2318d1957cf
+  zh: 8b8111099ab8bb46
+/deepseek-ai-dsh-tool-office/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate:
+  en: 3bc9eb9e036e6224
+  zh: 3bc9eb9e036e6224
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/what-the-model-sees:
+  en: 7c31ad3faa31547f
+  zh: 81fdae59ebc4aed0
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/token-effect:
+  en: b8d5d8c33c7563d4
+  zh: 5b6cb183b690bdba
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/kv-cache-effect:
+  en: c4e3595dab58a800
+  zh: 65f7fcf46b1e3130
+/deepseek-ai-dsh-tool-office/known-limitations-and-deferred-work:
+  en: 41e64b075cac6b5d
+  zh: 56594dc602b63ca8
+/deepseek-ai-dsh-tool-office/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

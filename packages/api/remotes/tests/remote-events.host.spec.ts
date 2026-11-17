@@ -133,6 +133,16 @@ describe('Remote event Host source', () => {
       value: { event: 'schedule/changed', args: [] },
     })
 
+    emitRaw(ctx, 'web/providers-changed', [])
+    await expect(first.next()).resolves.toEqual({
+      done: false,
+      value: { event: 'web/providers-changed', args: [] },
+    })
+    await expect(second.next()).resolves.toEqual({
+      done: false,
+      value: { event: 'web/providers-changed', args: [] },
+    })
+
     const firstDone = first.next()
     firstAbort.abort(new Error('first Client disconnected'))
     emitRaw(ctx, 'commands/change', [])

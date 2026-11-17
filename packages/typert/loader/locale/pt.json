@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Carregamento do tipo Typert",
+    "description": "Carregue as informações de tipo geradas pelo plug-in para consulta e chamada em tempo de execução."
+  }
+}

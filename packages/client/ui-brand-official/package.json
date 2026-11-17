@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-brand-official",
-  "description": "Official DeepSeek Harness brand occupants for the Web client's sidebar slots",
-  "version": "0.2.1-rc.2",
+  "description": "Official DeepSeek Harness brand artwork and click-triggered home background",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -24,13 +24,15 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./assets/*": "./lib/assets/*"
   },
   "dsh": {
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
     }
@@ -50,12 +52,18 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@testing-library/react": "^16.3.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*"
   },
   "files": [
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/assets",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

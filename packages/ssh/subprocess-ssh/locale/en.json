@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH subprocesses",
+    "description": "Provide subprocesses and terminals through the shared POSIX SSH helper."
+  }
+}

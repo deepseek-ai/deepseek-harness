@@ -99,6 +99,12 @@ export interface ClientTransportHooks {
    */
   loadBundle?(url: string): Promise<void>
   /**
+   * Package-asset resolver for the module system, present when the page cannot
+   * request `plugins/<package>/assets/<path>` itself (the worker tunnel): it
+   * maps each reference to a URL the page can load. Absent in the served web app.
+   */
+  resolveAsset?(reference: string): string
+  /**
    * The transport owner declares the page owns the Host outright: the Host
    * runs inside a worker this page spawned, so no other party can reach it and
    * the loopback stand-in for "the owner's own machine" is vacuous.

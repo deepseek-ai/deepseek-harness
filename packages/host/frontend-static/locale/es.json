@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servidor front-end estático",
+    "description": "Sirve la página de entrada de la aplicación web y los archivos estáticos, rechaza las rutas fuera de su directorio y devuelve 404 para los recursos faltantes."
+  }
+}

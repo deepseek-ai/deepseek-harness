@@ -11,7 +11,7 @@ import { withWindowsSigningStage } from './windows-signing-stage.mjs'
 import { failPackagingRun, recordPackagingEvent } from './packaging-run.mjs'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { smokePrimaryRuntime } from './prepare-primary-runtime.ts'
-import { verifyDesktopRuntime, writeDesktopRuntime, type DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
+import { verifyDesktopRuntime, writeDesktopRuntimeAsync, type DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 import { smokePreparedRuntime } from './smoke-prepared-runtime.ts'
 
 /**
@@ -39,7 +39,7 @@ export async function signWindowsDesktopRuntime(root: string, version: string,
   options: WindowsCodeSigningOptions & { smoke: (descriptor: DesktopRuntimeDescriptor) => Promise<void> }): Promise<void> {
   const descriptor = await verifyDesktopRuntime(root, version)
   await signWindowsCode(root, options)
-  writeDesktopRuntime(root, descriptor.release, descriptor.sharedPackages.map(entry => entry.name))
+  await writeDesktopRuntimeAsync(root, descriptor.release, descriptor.sharedPackages.map(entry => entry.name))
   const signed = await verifyDesktopRuntime(root, version)
   await options.smoke(signed)
   await verifyDesktopRuntime(root, version)

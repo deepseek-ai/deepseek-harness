@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** Frame interactions with a real store and explicitly driven browser measurements. */
 import type { GlobalStandardProps, RenderOpts } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { AppFrame } from '../src/client/AppFrame.tsx'
 import type { AppFrameProps } from '../src/client/AppFrame.tsx'
 import type { MainPanelId, RightbarOwnerProps, SidebarOwnerProps } from '../src/client/index.ts'
@@ -33,6 +35,7 @@ let frameWidth: number
 let animationFrames: Map<number, FrameRequestCallback>
 let nextFrame: number
 let originalTitle: string
+let foldedLandscape: SnapshotStore<boolean>
 const restoreProperties: (() => void)[] = []
 
 function replaceProperty<T extends object, K extends keyof T>(target: T, key: K, value: T[K]): void {
@@ -60,13 +63,13 @@ function resize(width: number): void {
   })
 }
 
-function mountFrame(windowWidth = frameWidth) {
+function mountFrame(windowWidth = frameWidth, content?: AppFrameProps['renderSlot']) {
   vi.stubGlobal('innerWidth', windowWidth)
   const instance = createLayoutStore().create()
   const slotCalls: { key: string; props: object; options: RenderOpts | undefined }[] = []
   const renderSlot: AppFrameProps['renderSlot'] = (key, owner, options) => {
     slotCalls.push({ key, props: owner, options })
-    return <div data-testid={`${key}-content`} data-entry-key={options?.entryKey} />
+    return content?.(key, owner, options) ?? <div data-testid={`${key}-content`} data-entry-key={options?.entryKey} />
   }
   const useSessions: AppFrameProps['useSessions'] = sel => sel({
     ids: selectedSession === undefined ? [] : [selectedSession],
@@ -95,9 +98,10 @@ function mountFrame(windowWidth = frameWidth) {
       renderSlot={renderSlot}
       useSessions={useSessions}
       usePanelInfo={usePanelInfo}
+      useFoldedLandscape={bindSnapshotSelector(foldedLandscape)}
       useSessionStatus={useSessionStatus}
       useSessionRetainInfo={() => undefined}
-      useResource={useResource}
+      useContextMenu={contextMenuHook()} useResource={useResource}
       useWorkspaces={sel => sel(workspaceState)}
       {...allowAllAccess}
       t={key => key === 'brand.localBuild' ? 'DSH Local Build' : key}
@@ -152,6 +156,8 @@ beforeEach(() => {
   nextFrame = 1
   vi.stubEnv('DSH_CLIENT_TITLE', undefined)
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  foldedLandscape = createSnapshotStore(false)
+  vi.stubGlobal('matchMedia', () => ({ matches: false }))
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     const id = nextFrame++
     animationFrames.set(id, callback)
@@ -205,7 +211,7 @@ describe('AppFrame', () => {
   it('renders owner props for the default sidebar and prospective right panel', () => {
     const { frame, rightOwner, sidebarOwner, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([280, 0])
-    expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 280, drawer: false })
     expect(rightOwner()).toEqual({ width: 864, viewportWidth: 1920, canShow: true })
     expect(slotCalls.find(c => c.key === 'main')).toEqual({ key: 'main', props: {}, options: { entryKey: 'conversation' } })
   })
@@ -227,14 +233,16 @@ describe('AppFrame', () => {
     expect(getByTestId('rightbar-content')).toBeTruthy()
   })
 
-  it('keeps Windows caption controls mounted with a zero-width collapsed column', () => {
+  it.each([1920, 390])('keeps Windows caption controls mounted at %ipx with a zero-width collapsed column', (width) => {
     document.documentElement.setAttribute('data-windows-titlebar', '')
     try {
       const { frame, instance, sidebarOwner, getByTestId, queryByTestId } = mountFrame()
-      act(() => { instance.actions.toggleSidebar() })
+      if (width < 1024) resize(width)
+      else act(() => { instance.actions.toggleSidebar() })
       expect(tracks(frame)[0]).toBe(0)
-      expect(sidebarOwner()).toMatchObject({ collapsed: true, width: 0 })
+      expect(sidebarOwner()).toMatchObject({ collapsed: true, width: 0, drawer: false })
       expect(getByTestId('sidebar-content')).toBeTruthy()
+      expect(getByTestId('sidebar-content').closest('[inert]')).toBeNull()
       // The caption row keeps the reopen controls; the darwin-only
       // shell.leading seat must not mount a duplicate set.
       expect(queryByTestId('shell.leading-content')).toBeNull()
@@ -247,7 +255,7 @@ describe('AppFrame', () => {
     const { frame, instance, sidebarOwner, getByTestId, queryByTestId } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([56, 0])
-    expect(sidebarOwner()).toEqual({ collapsed: true, width: 56 })
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 56, drawer: false })
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
     // The rail keeps the window chrome housed: no shell.leading seat.
@@ -264,7 +272,7 @@ describe('AppFrame', () => {
     expect(queryByTestId('shell.leading-content')).toBeNull()
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([0, 0])
-    expect(sidebarOwner()).toEqual({ collapsed: true, width: 0 })
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 0, drawer: false })
     expect(frame.querySelector('[data-shell-leading]')).not.toBeNull()
     expect(queryByTestId('shell.leading-content')).toBeTruthy()
     act(() => { instance.actions.toggleSidebar() })
@@ -291,6 +299,37 @@ describe('AppFrame', () => {
 })
 
 describe('AppFrame normal width concessions', () => {
+  it('centers the sidebar while folded in landscape and restores its width without remounting', () => {
+    frameWidth = 951
+    const { frame, instance, sidebarOwner, getByTestId, unmount } = mountFrame()
+    act(() => { instance.actions.setSidebar(360); instance.actions.toggleSidebar() })
+    const sidebar = getByTestId('sidebar-content')
+    expect(tracks(frame)[0]).toBe(360)
+    fireEvent.transitionEnd(frame, { propertyName: 'grid-template-columns' })
+    act(() => { foldedLandscape.set(true) })
+    expect(tracks(frame)).toEqual([475.5, 0])
+    expect(frame.dataset.animating).toBe('true')
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 475.5, drawer: false })
+    expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+    expect(getByTestId('sidebar-content')).toBe(sidebar)
+    act(() => { instance.actions.toggleSidebar() })
+    expect(tracks(frame)[0]).toBe(56)
+    resize(767)
+    expect(frame.dataset.animating).toBeUndefined()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 360, drawer: true })
+    resize(951)
+    act(() => { instance.actions.toggleSidebar() })
+    expect(tracks(frame)[0]).toBe(475.5)
+    fireEvent.transitionEnd(frame, { propertyName: 'grid-template-columns' })
+    act(() => { foldedLandscape.set(false) })
+    expect(tracks(frame)[0]).toBe(360)
+    expect(frame.dataset.animating).toBe('true')
+    expect(frame.querySelector('[data-side="sidebar"]')).not.toBeNull()
+    expect(instance.getSnapshot().layoutInfo.sidebar).toBe(360)
+    unmount()
+  })
+
   it('measures the frame, not the window, before choosing the first-open preference', () => {
     frameWidth = 1000
     const { instance, rightOwner } = mountFrame(1920)
@@ -319,7 +358,7 @@ describe('AppFrame normal width concessions', () => {
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
     resize(455)
-    expect(tracks(frame)).toEqual([56, 0])
+    expect(tracks(frame)).toEqual([0, 0])
     resize(1920)
     expect(tracks(frame)).toEqual([420, 0])
   })
@@ -336,7 +375,7 @@ describe('AppFrame normal width concessions', () => {
     expect(rightOwner().canShow).toBe(true)
   })
 
-  it.each([[756, 300, true], [755, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
+  it.each([[768, 312, true], [767, 345, true], [700, 300, true], [699, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
     frameWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
@@ -450,6 +489,30 @@ describe('AppFrame right panel presentation', () => {
     expect(frame.dataset.animating).toBe('true')
   })
 
+  it('skips drawer entry motion from a collapsed rail while retaining explicit toggle motion', () => {
+    const { frame, instance } = mountFrame()
+    resize(768)
+    expect(frame.dataset.sidebarInstant).toBeUndefined()
+    resize(767)
+    expect(frame.dataset.sidebarInstant).toBe('true')
+    resize(766)
+    expect(frame.dataset.sidebarInstant).toBe('true')
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.dataset.sidebarInstant).toBeUndefined()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.dataset.sidebarInstant).toBeUndefined()
+    resize(768)
+    resize(767)
+    expect(frame.dataset.sidebarInstant).toBe('true')
+  })
+
+  it('retains drawer entry motion when resizing an expanded sidebar', () => {
+    const { frame } = mountFrame()
+    resize(767)
+    expect(frame.dataset.sidebarCollapsed).toBe('true')
+    expect(frame.dataset.sidebarInstant).toBeUndefined()
+  })
+
   it('animates the rightbar track flip and settles by timeout without a transition end', () => {
     vi.useFakeTimers()
     try {
@@ -506,11 +569,11 @@ describe('AppFrame right panel presentation', () => {
   })
 
   it('retains fullscreen without a track when normal columns cannot fit', () => {
-    frameWidth = 700
+    frameWidth = 699
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
-    expect(tracks(frame)).toEqual([56, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 700, canShow: false })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 699, canShow: false })
     expect(instance.getSnapshot().layoutInfo.rightbarShown).toBe(true)
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
   })
@@ -677,5 +740,60 @@ describe('AppFrame frame measurement lifecycle', () => {
     act(() => { observer.fire(); flushFrames() })
     expect(instance.getSnapshot().layoutInfo.viewportWidth).toBe(1920)
     expect(animationFrames.size).toBe(0)
+  })
+})
+
+describe('sidebar drawer', () => {
+  it('cancels an unfinished drawer toggle animation at the rail breakpoint', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.hasAttribute('data-animating')).toBe(true)
+    resize(768)
+    expect(frame.hasAttribute('data-animating')).toBe(false)
+  })
+
+  it('keeps the main content at full width while opening and closing the retained drawer', () => {
+    frameWidth = 390
+    const { frame, instance, sidebarOwner, getByTestId } = mountFrame()
+    const sidebar = getByTestId('sidebar-content')
+    const main = getByTestId('main-content')
+    const leading = getByTestId('shell.leading-content')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 280, drawer: true })
+    expect(sidebar.parentElement?.hasAttribute('inert')).toBe(true)
+    const mask = frame.querySelector('[data-sidebar-mask]')
+    expect(mask).not.toBeNull()
+    fireEvent.click(mask!)
+    expect(sidebarOwner().collapsed).toBe(true)
+    act(() => { instance.actions.toggleSidebar() })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(sidebarOwner().collapsed).toBe(false)
+    expect(sidebar.parentElement?.hasAttribute('inert')).toBe(false)
+    expect(main.closest('[inert]')).not.toBeNull()
+    expect(leading.closest('[inert]')).not.toBeNull()
+    expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+    fireEvent.click(frame.querySelector('[aria-hidden="true"]')!)
+    expect(sidebarOwner().collapsed).toBe(true)
+    expect(main.closest('[inert]')).toBeNull()
+    expect(getByTestId('sidebar-content')).toBe(sidebar)
+    expect(getByTestId('main-content')).toBe(main)
+    expect(getByTestId('shell.leading-content')).toBe(leading)
+    expect(frame.querySelector('[data-sidebar-mask]')).toBe(mask)
+  })
+
+  it('closes the drawer on navigation and restores the rail at 768px', () => {
+    frameWidth = 767
+    const { frame, instance, sidebarOwner } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    act(() => { instance.actions.selectPanel('plugins' as MainPanelId) })
+    expect(sidebarOwner().collapsed).toBe(true)
+    act(() => { instance.actions.toggleSidebar() })
+    resize(768)
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 56, drawer: false })
+    expect(tracks(frame)).toEqual([56, 0])
+    resize(767)
+    expect(sidebarOwner().collapsed).toBe(true)
+    expect(tracks(frame)).toEqual([0, 0])
   })
 })

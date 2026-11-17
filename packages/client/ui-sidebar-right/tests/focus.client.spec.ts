@@ -12,6 +12,8 @@ import { createSidebarRightController } from '../src/client/service.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 import { SidebarRightTabRegistry } from '../src/client/tab-registry.ts'
 import { ShortcutRegistry } from '@deepseek-ai/dsh-client-shortcuts/src/client/registry.ts'
+import { installNativeKeyboard } from '@deepseek-ai/dsh-client-shortcuts/src/client/native.ts'
+import type { DesktopShortcutInput } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { registerSidebarShortcuts } from '../src/client/shortcuts.ts'
 import { en } from '../src/client/locales.ts'
@@ -172,6 +174,34 @@ describe('sidebar focus targets', () => {
     expect(Object.values(h.layout().tabs).filter(tab => tab.kind === 'terminal')).toHaveLength(3)
     expect(h.layout().tabs[terminals[0]!.id]).toBeDefined()
     expect(getPane(h.layout(), floating.paneId).tabs).toHaveLength(1)
+  })
+
+  it('closes a focused docked guide after the page it opens is revealed in its pane', () => {
+    const h = harness()
+    const guide = h.controller.active()!.id
+    h.controller.openTab('files')
+    const files = h.controller.active()!.id
+    const target = h.controller.focusedTarget(h.tabElement(guide))!
+    h.controller.openTabFromTarget('files', target)
+    expect(Object.keys(h.layout().tabs)).toEqual([files])
+    expect(h.controller.active()?.id).toBe(files)
+  })
+
+  it.each([false, true])('replaces a focused floating guide in its panel, even while a docked pane shows the page (page docked: %s)', (docked) => {
+    const h = harness()
+    h.controller.openTab('terminal')
+    if (docked) h.controller.openTab('files')
+    const guide = Object.values(h.layout().tabs).find(tab => tab.kind === 'guide')!.id
+    h.controller.float(guide)
+    const panel = findTabPane(h.layout(), guide)
+    const target = h.controller.focusedTarget(h.tabElement(guide))!
+    h.controller.openTabFromTarget('files', target)
+    expect(h.layout().tabs[guide]).toBeUndefined()
+    const files = Object.values(h.layout().tabs).filter(tab => tab.kind === 'files')
+    expect(files).toHaveLength(docked ? 2 : 1)
+    const floating = files.map(tab => findTabPane(h.layout(), tab.id)).find(pane => pane.host === 'float')!
+    expect(floating.id).toBe(panel.id)
+    expect(floating.rect).toEqual(panel.rect)
   })
 
   it('shares split limits and fullscreen behavior while preserving floating pages', () => {
@@ -578,6 +608,24 @@ describe('page close and refresh', () => {
     expect(closeModal).toHaveBeenCalledTimes(2)
     expect(closeWindow).not.toHaveBeenCalled()
     expect(h.layout().expanded).toBe(true)
+  })
+
+  it.each(['macos', 'windows', 'linux'] as const)('closes the window from the Platform page above Settings on %s', (platform) => {
+    const h = harness()
+    const registry = new ShortcutRegistry('desktop', platform)
+    const closeWindow = vi.fn(), closeModal = vi.fn()
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    render(createElement(Modal, { open: true, title: 'Settings', shortcutModal: 'settings', closeLabel: 'Close', onClose: closeModal }))
+    render(createElement('div', { role: 'dialog', 'aria-modal': 'true', 'data-shortcut-modal': 'platform' }))
+    let deliver: (input: DesktopShortcutInput) => void = () => {}
+    releases.push(installNativeKeyboard(window, { subscribe: (listener) => { deliver = listener; return () => {} }, closeWindow: vi.fn() },
+      registry, () => registry.config.getSnapshot()))
+    const revision = registry.config.getSnapshot().revision
+    deliver({ kind: 'keyboard', frameName: '', revision, code: 'KeyW', control: platform !== 'macos', alt: false, shift: false,
+      meta: platform === 'macos', repeat: false })
+    deliver({ kind: 'menu', commandId: 'page.close' as ShortcutCommandId, revision })
+    expect(closeWindow).toHaveBeenCalledTimes(2)
+    expect(closeModal).not.toHaveBeenCalled()
   })
 
   it('preserves a page when cleanup fails and never falls back to closing the window', () => {

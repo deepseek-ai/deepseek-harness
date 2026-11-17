@@ -15,26 +15,29 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package:
-  en: a970f0547496634f
-  zh: 36ef9a85b26e19f1
+  en: bbd3b8e6b9d87124
+  zh: 9d387d1925599c13
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package/brand-and-new-session:
-  en: 098f85b9287d3147
-  zh: b921c128ac37d2cd
+  en: 6bc49e22f0f73f07
+  zh: 10883997ccb7d145
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package/global-panel-entries:
-  en: 5d3300d3506254c5
-  zh: 541ae1ee1e10b921
+  en: 8a23eab217042cc6
+  zh: 2d760de4c83f996c
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package/collapse-behavior:
-  en: 20e744360b4be2cc
-  zh: a90be7e8526bbb21
+  en: 61d563b0f82ff658
+  zh: f27504350dd14d4c
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package/macos-desktop:
   en: 28e3639ed58492e0
   zh: 4896acd767287c8a
 /deepseek-ai-dsh-client-ui-sidebar/use-this-package/scrollbars:
-  en: d053b1ed0f4fd293
-  zh: ff25a56541f57530
+  en: 9e7b31acee759f2b
+  zh: 3a6beb63b23d26ae
+/deepseek-ai-dsh-client-ui-sidebar/use-this-package/click-analytics:
+  en: 3e84ffdf6c7c1731
+  zh: 3f7b19cac6d6674f
 /deepseek-ai-dsh-client-ui-sidebar/understand-the-implementation:
-  en: 676cd4c309b4110d
-  zh: 25d1bd0b2c7db645
+  en: 76a542d822e94fc9
+  zh: da25857ead58df5c
 /deepseek-ai-dsh-client-ui-sidebar/understand-the-implementation/slot-discipline:
   en: 6eefc5c45abe8a8f
   zh: 20b651e48a0ea903
@@ -48,8 +51,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-sidebar/known-limitations-and-deferred-work:
-  en: 262db5b10dfb7d98
-  zh: c1b5cf6aa58b054e
+  en: f31345fa08c77f91
+  zh: e2639d597353207f
 /deepseek-ai-dsh-client-ui-sidebar/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

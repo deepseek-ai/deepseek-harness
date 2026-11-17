@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conciencia del tiempo",
+    "description": "Le indica al modelo la hora actual, la zona horaria del navegador y la hora desde el mensaje anterior en cada paso."
+  }
+}

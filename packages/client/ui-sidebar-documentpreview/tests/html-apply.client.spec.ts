@@ -7,7 +7,7 @@ import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply, HTML_BODY_ID, htmlBodyDefinition } from '../src/client/html/index.ts'
 import { HtmlBody } from '../src/client/html/HtmlBody.tsx'
-import { en, zh } from '../src/client/html/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/html/locales.ts'
 import type { HtmlBodyProps } from '../src/client/html/HtmlBody.tsx'
 
 type Registration = {
@@ -54,7 +54,7 @@ describe('HTML registration', () => {
     await fiber.await()
     expect(registry.candidates('INDEX.HTM').map(entry => entry.id)).toEqual([HTML_BODY_ID])
     expect(registry.getSnapshot()[0]?.title()).toBe(en.title)
-    expect(dictionaries.get('documentHtml')).toEqual({ zh, en })
+    expect(dictionaries.get('documentHtml')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     expect(register).toHaveBeenCalledOnce()
     const registration = register.mock.calls[0]?.[0]
     expect(registration).toMatchObject({ name: 'sidebar.right.tab.document', key: HTML_BODY_ID, locale: 'documentHtml' })

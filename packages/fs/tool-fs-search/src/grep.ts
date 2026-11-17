@@ -12,7 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
@@ -65,14 +65,14 @@ export interface GrepInput {
  * group is fine — `*.{ts,tsx}` is one glob with alternation, not a list.
  */
 function validateInclude(include: string): void {
-  if (include.trim().length === 0) throw new Error('include must be a non-empty glob when given')
-  if (include.startsWith('!')) throw new Error('include must be a positive glob filter; negated patterns ("!…") are not supported')
+  if (include.trim().length === 0) throw new ToolArgsError(['include must be a non-empty glob when given'])
+  if (include.startsWith('!')) throw new ToolArgsError(['include must be a positive glob filter; negated patterns ("!…") are not supported'])
   let braceDepth = 0
   for (const char of include) {
     if (char === '{') braceDepth++
     else if (char === '}') braceDepth = Math.max(0, braceDepth - 1)
     else if (char === ',' && braceDepth === 0) {
-      throw new Error('include must be one glob, not a comma-separated list (use {a,b} alternation instead)')
+      throw new ToolArgsError(['include must be one glob, not a comma-separated list (use {a,b} alternation instead)'])
     }
   }
 }
@@ -80,20 +80,22 @@ function validateInclude(include: string): void {
 /**
  * Validate value constraints the schema DSL can't express: a non-EMPTY
  * `pattern` (whitespace is a legitimate regex), a non-blank `path` when given,
- * and a single positive `include` glob ({@link GrepInput}). Throws a plain
- * `Error` (an ordinary tool argument error) otherwise.
+ * and a single positive `include` glob ({@link GrepInput}). An exact empty
+ * `include` is treated as omitted; whitespace-only values remain invalid.
+ * Throws `ToolArgsError` (`INVALID_ARGS`) otherwise.
  *
  * @param args - the schema-validated `grep` arguments.
- * @returns the accepted input, unchanged.
+ * @returns the accepted input with an empty `include` omitted.
  */
 export function parseGrepArgs(args: { pattern: string; path?: string; include?: string }): GrepInput {
-  if (args.pattern.length === 0) throw new Error('pattern must be a non-empty string')
-  if (args.path !== undefined && args.path.trim().length === 0) throw new Error('path must be a non-empty string when given')
-  if (args.include !== undefined) validateInclude(args.include)
+  if (args.pattern.length === 0) throw new ToolArgsError(['pattern must be a non-empty string'])
+  if (args.path !== undefined && args.path.trim().length === 0) throw new ToolArgsError(['path must be a non-empty string when given'])
+  const include = args.include === '' ? undefined : args.include
+  if (include !== undefined) validateInclude(include)
   return {
     pattern: args.pattern,
     ...args.path !== undefined ? { path: args.path } : {},
-    ...args.include !== undefined ? { include: args.include } : {},
+    ...include !== undefined ? { include } : {},
   }
 }
 
@@ -232,14 +234,14 @@ function formatRetainedGrep(retained: RetainedItems<GrepMatch>, spillRef?: Spill
 
 /**
  * Pending-call presentation: a search card titled by the pattern (and target /
- * include filter).
+ * include filter). An exact empty include contributes no filter suffix.
  *
  * @param args - the raw tool arguments; `pattern`, `path`, and `include` feed the title.
  * @returns the generic card view (`kind: 'search'`) shown while the call runs.
  */
 export function presentGrepCall(args: { pattern: string; path?: string; include?: string }): GenericCallView {
   const where = args.path !== undefined ? ` in ${args.path}` : ''
-  const filter = args.include !== undefined ? ` (${args.include})` : ''
+  const filter = args.include !== undefined && args.include !== '' ? ` (${args.include})` : ''
   return { card: 'generic', title: `Grep ${args.pattern}${where}${filter}`, kind: 'search', rawInput: args.pattern }
 }
 
@@ -291,6 +293,8 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
       include: { type: 'string', description: 'One glob filter for which files to search (e.g. "*.ts", "*.{js,jsx}"). Not a list; negation is not supported.' },
     },
     timeoutMs: caps.timeoutMs,
+    // Matches record no file observation; over-cap spilling runs in model-ordered post-execute.
+    isConcurrencySafe: () => true,
     output: {
       schema: {
         type: 'object',

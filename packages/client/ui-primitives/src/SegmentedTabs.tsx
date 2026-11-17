@@ -19,14 +19,16 @@ export interface SegmentedTab<Value extends string = string> {
  * Keyboard selection also moves focus; only the selected tab is a tab stop.
  * @param props.label - localized accessible name for the tab list.
  * @param props.className - layout placement; panels remain caller-owned.
+ * @param props.size - `sm` draws 30px tabs with a 2px inset (34px tall); the default `md` draws 34px tabs with a 4px inset (42px tall).
  * @returns the tab list, without its panels.
  */
-export function SegmentedTabs<Value extends string>({ items, value, onChange, label, className }: {
+export function SegmentedTabs<Value extends string>({ items, value, onChange, label, className, size = 'md' }: {
   items: readonly [SegmentedTab<Value>, ...SegmentedTab<Value>[]]
   value: Value
   onChange: (value: Value) => void
   label: string
   className?: string | undefined
+  size?: 'sm' | 'md' | undefined
 }): ReactNode {
   const selectedIndex = items.findIndex(item => item.value === value)
 
@@ -52,6 +54,7 @@ export function SegmentedTabs<Value extends string>({ items, value, onChange, la
   return (
     <div
       role="tablist"
+      data-size={size}
       aria-label={label}
       className={clsx(css.tabs, className)}
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
@@ -59,7 +62,7 @@ export function SegmentedTabs<Value extends string>({ items, value, onChange, la
       <span
         className={css.indicator}
         aria-hidden="true"
-        style={{ width: `calc((100% - 8px) / ${items.length})`, transform: `translateX(${selectedIndex * 100}%)` }}
+        style={{ width: `calc((100% - 2 * var(--segmented-tabs-inset)) / ${items.length})`, transform: `translateX(${selectedIndex * 100}%)` }}
       />
       {items.map((item, index) => (
         <Pill

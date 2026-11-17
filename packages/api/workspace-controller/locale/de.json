@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Schnittstelle zur Arbeitsbereichssteuerung",
+    "description": "Bietet Clients Arbeitsbereichsvorgänge und einen Status, der bei erneuter Verbindung wiederhergestellt werden kann."
+  }
+}

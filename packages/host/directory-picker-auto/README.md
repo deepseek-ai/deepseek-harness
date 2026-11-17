@@ -53,7 +53,7 @@ A wrong `native` choice degrades to the backend's existing retryable failure dia
 
 ### Design concept
 
-The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples host facts once at boot and returns a backend kind, and `apply` mounts the matching backend and surface packages as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `write()` is a no-op. The effect's disposer removes both entries and joins their fibers' teardown, so unloading returns only after both faces of the mounted interaction quiesced.
+The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples host facts once at boot and returns a backend kind, and `apply` mounts the matching backend and surface packages as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `commit(change)` is a no-op. The effect's disposer removes both entries and joins their fibers' teardown, so unloading returns only after both faces of the mounted interaction quiesced.
 
 ### The resolution table
 

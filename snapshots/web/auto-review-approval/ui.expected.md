@@ -2,11 +2,13 @@
 
 - banner:
   - navigation "Session hierarchy": {{workspace}}
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Clean up the stale build log. {{clock}}
 - button "Copy"
 - status: Completed
@@ -27,11 +29,13 @@
 
 - banner:
   - navigation "Session hierarchy": {{workspace}}
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Clean up the stale build log. {{clock}}
 - button "Copy"
 - status: Completed

@@ -1,25 +1,38 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ShortcutCatalogEntry, ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createSettingsShellStore } from '../src/client/shell-store.ts'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import type { DesktopUpdateView } from '../src/types.ts'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
+const scrollIntoView = vi.fn()
+let scrollIntoViewDescriptor: PropertyDescriptor | undefined
+
+beforeEach(() => {
+  scrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
+  Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+  scrollIntoView.mockClear()
+})
+
 afterEach(() => {
   cleanup()
+  if (scrollIntoViewDescriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  else Object.defineProperty(Element.prototype, 'scrollIntoView', scrollIntoViewDescriptor)
   vi.useRealTimers()
 })
 
@@ -75,12 +88,14 @@ function mount({
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
   const renderSlot = vi.fn(
-    ((key: string, _owner: unknown, opts?: { only?: string; fallback?: import('react').ReactNode }) => {
-      if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
-      return SEAT_CONTENT[key] ?? opts?.fallback
-    }) as SettingsRootComponentProps['renderSlot'],
+    ((key: string, _owner: unknown, opts?: { only?: string; fallback?: import('react').ReactNode }) =>
+      SEAT_CONTENT[key] ?? opts?.fallback) as SettingsRootComponentProps['renderSlot'],
   )
-  const activeId = SessionId('active-session')
+  const renderFactorySlot = vi.fn(
+    ((name: string, factoryProps: { id: string }) =>
+      name === 'settings.section.view' ? <div data-testid={`section-${factoryProps.id}`} /> : null) as SettingsRootComponentProps['renderFactorySlot'],
+  )
+  const activeId = brandString<SessionId>('active-session')
   const sessions: SessionListState = {
     ids: [activeId],
     byId: {
@@ -105,6 +120,7 @@ function mount({
     usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: unusedHook,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     wide,
     reconnect,
     openDesktopUpdate: () => {},
@@ -130,6 +146,7 @@ function mount({
       return select(current)
     },
     renderSlot,
+    renderFactorySlot,
   }
   const view = render(<SettingsRoot {...props} />)
   const bump = (next: Row[]) => {
@@ -159,7 +176,10 @@ function mount({
     act(() => { sessions.byId[activeId] = { ...session, blank: next } })
     view.rerender(<SettingsRoot {...props} />)
   }
-  return { view, renderSlot, bump, listeners, reconnect, setConnectionState, setDesktopUpdate, setShortcuts, setOnboardingActive }
+  return {
+    view, renderSlot, renderFactorySlot, bump, listeners, reconnect,
+    setConnectionState, setDesktopUpdate, setShortcuts, setOnboardingActive,
+  }
 }
 
 function openPanel() {
@@ -381,9 +401,9 @@ describe('SettingsPanel navigation', () => {
       ],
     })
     openPanel()
-    // Glyphs carry no id of their own, so the drawn paths are what tells them apart.
+    // Each product glyph names its sprite symbol id in data-icon.
     const glyphs = ['General', 'Models', 'Agent presets', 'Plugins', 'Archived sessions', 'Contributed']
-      .map(name => screen.getByRole('button', { name }).querySelector('svg')?.innerHTML)
+      .map(name => screen.getByRole('button', { name }).querySelector('svg')?.getAttribute('data-icon'))
 
     expect(glyphs.every(glyph => glyph !== undefined && glyph !== '')).toBe(true)
     // The four ids the shell names get their own glyph; every other section —
@@ -421,6 +441,8 @@ describe('SettingsPanel navigation', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByTestId('section-models')).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Models' }))
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest', inline: 'nearest' })
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(document.activeElement)
 
     cleanup()
     const inactive = mount({ onboardingActive: false }).renderSlot.mock.calls
@@ -470,12 +492,11 @@ describe('SettingsPanel navigation', () => {
   })
 
   it('renders an empty content column and focuses the title when the ledger is empty', () => {
-    const { renderSlot } = mount({ rows: [] })
+    const { renderFactorySlot } = mount({ rows: [] })
     openPanel()
     expect(document.activeElement).toBe(screen.getByText('Settings Title'))
     expect(screen.getByRole('dialog')).toBeTruthy()
-    const sectionCalls = renderSlot.mock.calls.filter(c => c[0] === 'settings.section')
-    expect(sectionCalls).toHaveLength(0)
+    expect(renderFactorySlot).not.toHaveBeenCalled()
   })
 
   it('drops the ledger subscription on unmount', () => {
@@ -507,6 +528,14 @@ it('opens Account from the contributed sidebar launcher', () => {
   expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.launcher').at(-1)?.[1]).toMatchObject({ settingsOpen: true })
   fireEvent.keyDown(document, { key: 'Escape' })
   expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.launcher').at(-1)?.[1]).toMatchObject({ settingsOpen: false })
+})
+
+it('opens the section requested by the contributed sidebar launcher', () => {
+  const { renderSlot } = mount({ rows: [{ id: 'general', order: 0, label: 'General' }, { id: 'account', order: 1, label: 'Account' }] })
+  const launcher = renderSlot.mock.calls.find(call => call[0] === 'settings.launcher')!
+  act(() => { (launcher[1] as { openSettings: (sectionId?: string) => void }).openSettings('account') })
+  expect(screen.getByTestId('section-account')).toBeTruthy()
+  expect(screen.queryByTestId('section-general')).toBeNull()
 })
 
 it('shows the effective settings binding on focus and exposes it to assistive technology', () => {

@@ -1,4 +1,4 @@
-/** Native overlay visibility qualification without a Host, network, or user profile. */
+/** Native-owner visibility and focus qualification for isolated in-window update views. */
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { mkdirSync, mkdtempSync } from 'node:fs'
@@ -7,88 +7,53 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow } from 'electron'
 import { DesktopUpdateOverlays } from '../../lib/types/update-overlay.js'
-
 const directory = fileURLToPath(new URL('../../.desktop-build/qualification/', import.meta.url))
 mkdirSync(directory, { recursive: true })
 const root = mkdtempSync(join(directory, 'update-overlay-'))
 mkdirSync(join(root, 'profile'))
 app.setPath('userData', join(root, 'profile'))
 app.on('window-all-closed', () => {})
-
 async function main() {
+  await app.whenReady()
   const cases = []
   const windows = []
-  const closeWindows = () => {
-    for (const window of [...windows].reverse()) if (!window.isDestroyed()) window.destroy()
-  }
-  let phase = 'application ready'
-  const deadline = setTimeout(() => {
-    console.error(`Update overlay qualification exceeded 30 seconds: ${phase}`)
-    closeWindows()
-    app.exit(1)
-  }, 30_000)
-
-  async function qualify(initiallyVisible, closeParentFirst = false) {
-    const parent = new BrowserWindow({ show: initiallyVisible, width: 800, height: 600 })
-    windows.push(parent)
-    phase = `parent load (${initiallyVisible})`
-    await parent.loadURL('data:text/html,<h1>Update overlay visibility</h1><input aria-label="Keyboard probe">')
-    const initialShowListeners = parent.listenerCount('show')
-    const overlay = new DesktopUpdateOverlays().create(parent, undefined, 'Overlay qualification', false)
-    windows.push(overlay)
-    const ready = once(overlay, 'ready-to-show')
-    const initiallyShown = initiallyVisible ? once(overlay, 'show') : undefined
-    phase = `overlay load (${initiallyVisible})`
-    await overlay.loadURL('data:text/html,<h1>Update confirmation</h1>')
-    phase = `overlay ready (${initiallyVisible})`
-    await ready
-    await initiallyShown
-    const filter = () => parent.webContents.executeJavaScript('getComputedStyle(document.body).filter')
-    const loaded = { parent: parent.isVisible(), overlay: overlay.isVisible(), filter: await filter() }
-    if (initiallyVisible) {
-      const hidden = once(parent, 'hide')
-      parent.hide()
-      await hidden
-    }
-    const shown = once(parent, 'show')
-    phase = `overlay restored (${initiallyVisible})`
-    parent.show()
-    await shown
-    const restoredFilter = await filter()
-    const restored = { parent: parent.isVisible(), overlay: overlay.isVisible(), filter: restoredFilter }
-    phase = `overlay release (${initiallyVisible})`
-    if (closeParentFirst) {
-      parent.destroy()
-      if (!overlay.isDestroyed()) overlay.destroy()
-      cases.push({ parentDestroyed: parent.isDestroyed(), overlayDestroyed: overlay.isDestroyed() })
-      return
-    }
-    overlay.destroy()
-    const released = { filter: await filter(), showListenersRestored: parent.listenerCount('show') === initialShowListeners,
-      keyboardListeners: parent.webContents.listenerCount('before-input-event') }
-    parent.hide()
-    parent.show()
-    cases.push({ initiallyVisible, loaded, restored, released })
-    parent.destroy()
-  }
-
+  const deadline = setTimeout(() => { console.error('Overlay qualification deadline exceeded'); app.exit(1) }, 30000)
   try {
-    await app.whenReady()
-    await qualify(true)
-    await qualify(false)
-    await qualify(true, true)
-    await writeFile(join(root, 'result.json'), `${JSON.stringify(cases, null, 2)}\n`)
-    const expected = JSON.parse(await readFile(new URL('../expected/update-overlay-visibility.json', import.meta.url), 'utf8'))
-    assert.deepEqual(cases, expected)
-    console.log(`Update overlay qualification passed: ${root}`)
-  } catch (error) {
-    console.error(error)
-    process.exitCode = 1
+    for (const initiallyVisible of [true, false]) {
+      const parent = new BrowserWindow({ show: initiallyVisible, width: 800, height: 600 })
+      windows.push(parent)
+      await parent.loadURL('data:text/html,<h1>Update owner</h1>')
+      const overlays = new DesktopUpdateOverlays()
+      const overlay = overlays.create(parent, undefined)
+      await overlay.loadURL('data:text/html,<h1>Isolated update</h1>')
+      assert.equal(parent.getChildWindows().length, 0)
+      assert.equal(parent.contentView.children.length, 1)
+      const control = new BrowserWindow({ show: true, width: 300, height: 200 })
+      windows.push(control)
+      await control.loadURL('data:text/html,<h1>Focus control</h1>')
+      const focused = control.isFocused() ? undefined : once(control, 'focus')
+      control.focus(); await focused
+      parent.emit('show')
+      assert.equal(control.isFocused(), true)
+      assert.equal(parent.isFocused(), false)
+      const destroyed = once(overlay.webContents, 'destroyed')
+      overlay.destroy(); await destroyed
+      cases.push({ initiallyVisible, childWindows: parent.getChildWindows().length, controlKeepsFocus: control.isFocused(),
+        viewsReleased: parent.contentView.children.length === 0, input: overlays.input(parent) })
+      parent.destroy(); control.destroy()
+    }
+    const parent = new BrowserWindow({ show: false })
+    windows.push(parent)
+    const overlay = new DesktopUpdateOverlays().create(parent, undefined)
+    const destroyed = once(overlay.webContents, 'destroyed')
+    parent.destroy(); await destroyed
+    cases.push({ parentDestroyed: parent.isDestroyed(), overlayDestroyed: overlay.isDestroyed() })
+    assert.deepEqual(cases, JSON.parse(await readFile(new URL('../expected/update-overlay-visibility.json', import.meta.url), 'utf8')))
+    await writeFile(join(root, 'result.json'), JSON.stringify(cases, null, 2) + '\n')
+    console.log(`Update view qualification passed: ${root}`)
   } finally {
     clearTimeout(deadline)
-    closeWindows()
-    app.exit(process.exitCode ?? 0)
+    for (const window of windows) if (!window.isDestroyed()) window.destroy()
   }
 }
-
-void main().catch(error => { console.error(error); app.exit(1) })
+void main().then(() => app.exit(0), error => { console.error(error); app.exit(1) })

@@ -2,7 +2,7 @@
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
       <div class="_banner_9aea57" data-code-block-banner="true">
-        <div class="_infostring_9aea57">
+        <div class="_infostring_9aea57" data-text-interaction-exclude="">
           #text "ts"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
@@ -26,7 +26,7 @@
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
       <div class="_banner_9aea57" data-code-block-banner="true">
-        <div class="_infostring_9aea57">
+        <div class="_infostring_9aea57" data-text-interaction-exclude="">
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
@@ -37,7 +37,7 @@
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
       <div class="_banner_9aea57" data-code-block-banner="true">
-        <div class="_infostring_9aea57">
+        <div class="_infostring_9aea57" data-text-interaction-exclude="">
           #text "unknown-lang"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
@@ -49,7 +49,7 @@
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
       <div class="_banner_9aea57" data-code-block-banner="true">
-        <div class="_infostring_9aea57">
+        <div class="_infostring_9aea57" data-text-interaction-exclude="">
           #text "ts"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
@@ -71,7 +71,7 @@
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
       <div class="_banner_9aea57" data-code-block-banner="true">
-        <div class="_infostring_9aea57">
+        <div class="_infostring_9aea57" data-text-interaction-exclude="">
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"

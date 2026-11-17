@@ -1,11 +1,13 @@
 - banner:
   - navigation "Session hierarchy": Read the attached file with
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: poem.txt TXT 16B
 - button "reference-1.png, click to view original":
   - img "reference-1.png"

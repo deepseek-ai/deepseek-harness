@@ -3,13 +3,17 @@
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import type { Message } from '@deepseek-ai/cordis'
 import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
+import { setFlagsFromString } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import open from 'open'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, inject, name } from '../src/index.ts'
 import { startInspector, type InspectorHandle, type InspectorOptions } from '../src/host/bridge/controller.ts'
 import { INSPECTOR_BOOTSTRAP_PATH } from '../src/shared/web.ts'
+
+/** The Peer an index render speaks for; this listener reads no field of it. */
+const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
 
 vi.mock('open', () => ({ default: vi.fn(async () => undefined), apps: { chrome: 'chrome' } }))
 
@@ -63,7 +67,8 @@ describe('experimental Inspector Host bootstrap route', () => {
     const registerUpgrade = vi.fn<WebServer['registerUpgrade']>(() => () => {})
     context.provide('webServer', { register, registerUpgrade } as Pick<WebServer, 'register' | 'registerUpgrade'> as WebServer)
     context.provide('cmdlineArgs', { get: () => args })
-    const connection = new HostConnectionService(context, [], {} as BrowserAuth)
+    new ConnectionAuthentication(context)
+    const connection = new HostConnectionService(context, [])
     const api = connection.createSharedFetchHandler('/api')
     const messages: Message[] = []
     context.logger.exporter({ levels: { default: 3 }, export: (message) => { messages.push(message) } })
@@ -74,7 +79,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     )
     const injected = () => {
       const rows: IndexInjection[] = []
-      context!.emit('webserver/index-inject', rows)
+      context!.emit('webserver/index-inject', rows, PAGE_PEER)
       return rows.find(row => row.kind === 'global' && row.name === '__DSH_INSPECTOR__')
     }
     return { fiber, bootstrap, injected, register, registerUpgrade, messages, log }
@@ -154,7 +159,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     expect(messages.filter(message => message.type === 'error')).toEqual([])
   })
 
-  it('stops waiting when a bootstrap request is aborted before the Worker is ready', async () => {
+  it('stops waiting after garbage collection when a bootstrap request is aborted before the Worker is ready', async () => {
     const gate = gateStartup('start')
     const { fiber, bootstrap } = mount()
     await vi.waitFor(() => { expect(startInspector).toHaveBeenCalledOnce() })
@@ -162,6 +167,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     const abort = new AbortController()
     const abandoned = bootstrap(abort.signal)
     expect(await settledWithin(abandoned, 50)).toBe(false)
+    await collectGarbage()
     abort.abort()
     expect((await abandoned).status).toBe(503)
     expect((await bootstrap(AbortSignal.abort())).status).toBe(503)
@@ -171,6 +177,16 @@ describe('experimental Inspector Host bootstrap route', () => {
     expect((await bootstrap()).status).toBe(200)
   })
 })
+
+/** Collect unreachable Request controllers before the caller aborts. */
+async function collectGarbage(): Promise<void> {
+  setFlagsFromString('--expose-gc')
+  const gc = runInNewContext('gc') as () => void
+  for (let pass = 0; pass < 5; pass += 1) {
+    gc()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+  }
+}
 
 /** Report whether a promise settles before a real-time deadline. */
 async function settledWithin(promise: Promise<unknown>, ms: number): Promise<boolean> {

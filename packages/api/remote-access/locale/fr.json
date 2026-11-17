@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Contrôle d'accès à distance",
+    "description": "Contrôlez les méthodes auxquelles les connexions non propriétaires peuvent accéder et conserver les instantanés d'autorisation pour chaque connexion."
+  }
+}

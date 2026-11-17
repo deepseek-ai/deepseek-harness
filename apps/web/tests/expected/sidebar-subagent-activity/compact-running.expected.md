@@ -1,0 +1,9 @@
+- banner:
+  - navigation "Session hierarchy": Delegate a background job.
+  - 'button "Session panel Subagents running: 1 Background jobs running: 1"'
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - button "More conversation views"

@@ -37,7 +37,7 @@ kind: "package-reference"
 
 启用此组件后，按 **Ctrl/Cmd+Shift+.** 可展开或收起整宽底部面板中的 **NodeJS 诊断**，无需选中 Session。拖动上边缘可调整面板高度，占用上方内容的可用空间；收起和切换页面时保留所选高度。聚焦分隔条后也可使用上/下方向键、Home 和 End。iframe 首次展开时加载，收起、切换 Session 或主面板时保持挂载；卸载此组件会重置前端。X 按钮和快捷键会在原打开控件仍连接时恢复其焦点。iframe 自动连接当前 Host 并打开 Console；不包含手动 Connection 面板。每个内嵌前端的 Console、Sources 和 Cordis 树只显示 Host 与嵌入它的页面所对应的 Client；打印的 `devtools://` 链接仍显示全部 Client。
 
-Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路径提供镜像后的 DevTools 前端，沿用现有 Web 登录鉴权。`inspector/devtools` 前缀重定向到该入口；GET 和 HEAD 提供文件，缺失资源返回 404，其他方法返回 405。其 `cdp` WebSocket 路由鉴权同一浏览器会话，只转发到当前 Inspector 的 Worker page target。底部面板将已声明的页面 `clientSourceId` 传给入口及自动 WebSocket 端点，重连时继续选择同一逻辑 Client。没有选择参数时包含全部 Client；指定 Client 不在线时保留 Host；空值或重复参数以 400 拒绝升级。显式 `ws` 或 `wss` query 参数覆盖自动端点及其选择范围。
+Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路径提供镜像后的 DevTools 前端，要求 WebServer 准入及 owner Peer。`inspector/devtools` 前缀重定向到该入口；GET 和 HEAD 提供文件，缺失资源返回 404，其他方法返回 405。其 `cdp` WebSocket 路由在打开上游连接前要求 owner Peer，只转发到当前 Inspector 的 Worker page target。底部面板将已声明的页面 `clientSourceId` 传给入口及自动 WebSocket 端点，重连时继续选择同一逻辑 Client。没有选择参数时包含全部 Client；指定 Client 不在线时保留 Host；空值或重复参数以 400 拒绝升级。显式 `ws` 或 `wss` query 参数覆盖自动端点及其选择范围。
 
 构建使用官方 `chrome-devtools-frontend@1.0.1638082` TypeScript 源码及根 workspace 固定的 [Vite 依赖](../../../package.json)。该 npm 快照是 Chromium 150 发布分支的祖先，不是其后续稳定版的逐字节副本。[源码配置](scripts/devtools/source.ts)与包清单共同固定版本。普通 npm 安装提供源码和工具链；构建不需要 appspot、下载或启动浏览器，也不需要提取 PAK。workspace 安装和发布包安装都不运行 DevTools 下载 hook。
 
@@ -48,7 +48,7 @@ Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路�
 <a id="runtime-layout"></a>
 ## 运行时布局
 
-Worker 不访问实时 Cordis 对象；共享 Host/Client collector 会在传输前把它们投影成已验证快照。Cordis 负责插件组合、注册 `ctx.inspector`、注入 bootstrap 和 dispose（资源释放）。后加载的 Client 通过已鉴权的 Host 路由获取 bootstrap。Host 在启动 Worker 之前注册该路由，请求会等到 Worker 就绪后返回 bootstrap，启动失败时返回 `503`；请求中止时立即停止等待。当前平台无法运行 Worker 并报告 Node 的 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 时（例如浏览器预览的 Worker host），Host 记录一条警告，插件仍照常启动，只保留该路由并返回 `503`，不提供 `ctx.inspector`、DevTools 路由、bootstrap 注入或 `devtools://` URL；其他任何启动错误仍使插件启动失败。初始注入与主动获取两条路径中，bootstrap 传输或 source 建立失败均记录警告并保留连接重置后的重试；bootstrap 数据非法或服务注册失败则使启动失败。替换 source 会等待旧服务消费者清理完成，再申请新 source；卸载已激活插件会取消其未完成的 bootstrap 刷新。
+Worker 不访问实时 Cordis 对象；共享 Host/Client collector 会在传输前把它们投影成已验证快照。Cordis 负责插件组合、注册 `ctx.inspector`、注入 bootstrap 和 dispose（资源释放）。后加载的 Client 通过已鉴权的 Host 路由获取 bootstrap。Host 在启动 Worker 之前注册该路由，请求会等到 Worker 就绪后返回 bootstrap，启动失败时返回 `503`；即使启动期间发生垃圾回收，请求中止时也立即停止等待。当前平台无法运行 Worker 并报告 Node 的 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 时（例如浏览器预览的 Worker host），Host 记录一条警告，插件仍照常启动，只保留该路由并返回 `503`，不提供 `ctx.inspector`、DevTools 路由、bootstrap 注入或 `devtools://` URL；其他任何启动错误仍使插件启动失败。初始注入与主动获取两条路径中，bootstrap 传输或 source 建立失败均记录警告并保留连接重置后的重试；bootstrap 数据非法或服务注册失败则使启动失败。替换 source 会等待旧服务消费者清理完成，再申请新 source；卸载已激活插件会取消其未完成的 bootstrap 刷新。
 
 Host 插件启动 Worker 并连接专用 `MessagePort`。Client 使用注入或主动获取的浏览器 source 参数，直接向 Worker 打开带鉴权的 WebSocket，不接收 DevTools URL。Chrome DevTools 连接 Worker 的 CDP WebSocket。每条 DevTools 连接在 Worker 中独占一个连接 Host 主线程的 `node:inspector.Session`，因此 Host JavaScript 暂停时仍可调试 Host。
 
@@ -78,7 +78,7 @@ Host 插件注入 `webServer` 和 `connection`，接受以下字段：
 | `maxBodyChunkBytes` | 48 KiB | base64 编码前一条 body 记录携带的原始字节数 |
 | `maxJournalBytes` | 256 MiB | Worker 保留的请求与响应 body 总字节数 |
 | `maxRetainedRequests` | `2000` | Worker 保留的进行中与已完成请求总数 |
-| `maxSourceFrameBytes` | 128 KiB | 编码后的 source frame 上限 |
+| `maxSourceFrameBytes` | 128 KiB | 编码后的 source frame 上限；小于 5121 字节时加载失败，因为容纳不下 Cordis 树快照 |
 | `maxSourceRecordsPerFrame` | `128` | 每个 source batch 的记录数 |
 | `maxQueuedRecords` | `2048` | 每个 producer 等待发送的记录数 |
 | `maxQueuedBytes` | 16 MiB | 每个 producer 等待发送的编码字节数 |

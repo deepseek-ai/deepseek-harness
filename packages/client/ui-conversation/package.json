@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-conversation",
   "description": "Target-neutral Conversation assembly, shell, composer, queue, and view navigation",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -35,8 +35,10 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-session-status",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-workspace"
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-context-menu"
       ],
       "platform": "web"
     }
@@ -58,7 +60,6 @@
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
     "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-file-upload": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
@@ -67,6 +68,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-session-status": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
@@ -86,7 +88,6 @@
     "react": "^18.2.0",
     "@lexical/headless": "^0.49.0",
     "react-dom": "^18.2.0",
-    "zod": "4.4.3",
     "lexical": "^0.49.0",
     "clsx": "^2.0.0",
     "@lexical/utils": "^0.49.0",
@@ -96,12 +97,20 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
-    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
+    "@deepseek-ai/dsh-message-quotes": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "zod": "4.6.6",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*"
   },
   "files": [
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

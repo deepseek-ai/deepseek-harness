@@ -47,7 +47,7 @@ async function workspace(): Promise<string> {
   await writeFile(join(root, 'node_modules', 'ignored-package', 'index.js'), 'ignored')
   try {
     await symlink(join(root, 'src', 'tui.spec.ts'), join(root, 'linked-test.ts'))
-  } catch {
+  } catch (_symlinkDenied) {
     // Windows may deny symlink creation without Developer Mode; the product
     // still skips every non-file/non-directory Dirent on platforms that expose one.
   }

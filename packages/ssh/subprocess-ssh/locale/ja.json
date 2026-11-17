@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 子プロセス",
+    "description": "共通の POSIX SSH ヘルパーを通じて、子プロセスとターミナルを提供します。"
+  }
+}

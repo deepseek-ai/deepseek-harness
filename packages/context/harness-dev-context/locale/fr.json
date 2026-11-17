@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Exploiter le contexte de développement",
+    "description": "Donnez au modèle le répertoire source Harness et l'URL Web sans modifier son invite système."
+  }
+}

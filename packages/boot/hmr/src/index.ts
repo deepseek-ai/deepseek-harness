@@ -382,7 +382,14 @@ class Hmr extends Service {
       })
       yield () => { unsubscribe(); started.resolve(false); return Promise.resolve() }
       const manifestPath = join(profile.dir, 'package.json')
-      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME)]
+      // A file named by several layers or repeated `--patch` options, under any spelling, is watched and compared once.
+      const canonicalFiles = new Set<string>()
+      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME), ...profile.overlayPaths].filter((filename) => {
+        const canonical = canonicalPath(filename)
+        if (canonicalFiles.has(canonical)) return false
+        canonicalFiles.add(canonical)
+        return true
+      })
       let lastInputs: string | undefined
       let lastBundles = JSON.stringify(profile.startedBundles)
       const refresh = async (manifestOnly: boolean): Promise<void> => {
@@ -469,7 +476,10 @@ class Hmr extends Service {
           loader.exit()
           return
         }
-        for (const include of includes) await include.refresh()
+        for (const include of includes) {
+          // A rejected refresh reports unsaved runtime changes; Include keeps its running tree.
+          try { await include.refresh() } catch (error) { this.ctx.logger.warn(error) }
+        }
         if (this.stashed.size > 0) {
           try { await this.partialReload() } finally { this.stashed.clear() }
         }
@@ -646,7 +656,7 @@ class Hmr extends Service {
       ...info, previous,
       fibers: [...info.runtime?.fibers ?? []].map((fiber) => {
         const entry = fiber.entry?.fiber?.uid === fiber.uid ? fiber.entry : undefined
-        const config: unknown = entry === undefined ? fiber._config : entry.options.config
+        const config: unknown = entry === undefined ? fiber.rawConfig : entry.options.config
         return { fiber, entry, config, moduleNamespace: entry?.moduleNamespace }
       }),
     }))
@@ -678,10 +688,12 @@ class Hmr extends Service {
       activated: Fiber[] = [],
     ) => {
       for (const [previousFiber, implementation] of replacements.getActiveImplementations(this.ctx, plugin, fibers)) {
-        const fiber = previousFiber.fiber.parent.registry.plugin(implementation, previousFiber.config, this.getOuterStack).ctx.fiber
+        const wrapper = previousFiber.fiber.parent.registry.plugin(implementation, previousFiber.config, this.getOuterStack)
+        const fiber = wrapper.ctx.fiber
         if (previousFiber.entry !== undefined) {
           fiber.entry = previousFiber.entry
-          previousFiber.entry.fiber = fiber
+          // Like Loader activation, store the registry wrapper; identity checks compare `.ctx.fiber`.
+          previousFiber.entry.fiber = wrapper
         }
         activated.push(fiber)
       }
@@ -831,7 +843,7 @@ class Hmr extends Service {
       const owner = (fiber: Fiber): Entry | undefined => {
         for (let current = fiber; current.uid !== 0; current = current.parent.fiber) {
           const entry = current.entry
-          if (entry?.fiber === current && managed.has(entry) && affectedFibers.has(current)) return entry
+          if (entry?.fiber?.ctx.fiber === current && managed.has(entry) && affectedFibers.has(current)) return entry
         }
         return undefined
       }
@@ -966,7 +978,7 @@ class Hmr extends Service {
           return job !== undefined && namespaceOf(job) === undefined
         }))
       }, undefined)
-      const result = await recomposeProfile(this.ownerContext.root, patches, 'dsh', { requiredIds, running })
+      const result = await recomposeProfile(this.ownerContext[Context.root], patches, 'dsh', { requiredIds, running })
       const restartReason = compared === undefined || unavailable ? 'module-comparison' : result.restartReason
       return { warnings: result.warnings, pending, ...restartReason === undefined ? {} : { restartReason } }
     } finally {

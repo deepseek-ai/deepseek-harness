@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-25-shared-preset-delegation-tools.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-25-shared-preset-delegation-tools.md
+/agent-note-shared-preset-delegation-tools:
+  en: 2f33b8a19d8291b8
+  zh: 4f49de632ac53d01
+/agent-note-shared-preset-delegation-tools/problem:
+  en: 3150532ae6efd14c
+  zh: 3c3d662c5bcb323b
+/agent-note-shared-preset-delegation-tools/decision:
+  en: ccaa0792d54fe79d
+  zh: b2993214c35c1db0
+/agent-note-shared-preset-delegation-tools/alternatives-considered:
+  en: 2f53caf2af750178
+  zh: cd4d9b823a9348dc
+/agent-note-shared-preset-delegation-tools/consequences:
+  en: 4aaaaec2038b3f1d
+  zh: b52bdd02118ffb6f

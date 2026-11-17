@@ -8,3 +8,5 @@ header:
   pin: true
   systemPromptSource: text-turn
   toolSchemasSource: text-turn
+environment:
+  DSH_SNAPSHOT_SEARCH_KEY: snapshot-key

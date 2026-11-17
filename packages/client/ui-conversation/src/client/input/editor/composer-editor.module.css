@@ -10,8 +10,10 @@
   -webkit-box-decoration-break: clone;
 }
 
-.reference:hover {
-  background: var(--dsw-alias-state-business-tertiary);
+@media (hover: hover) {
+  .reference:hover {
+    background: var(--dsw-alias-state-business-tertiary);
+  }
 }
 
 .openable {

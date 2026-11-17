@@ -3,8 +3,9 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import * as ApiKey from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as Account from '../src/index.ts'
 
@@ -50,9 +51,7 @@ async function host(origin: string, token: () => string | undefined = () => 'fix
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
-  ctx.provide('deepseekAccount', {
-    resolveToken: (url: string) => Promise.resolve(new URL(url).origin === origin ? token() : undefined),
-  } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: url => new URL(url).origin === origin ? token() : undefined }))
   return ctx
 }
 
@@ -91,11 +90,49 @@ it('resolves listed capabilities with this build\'s model knowledge', async () =
   await expect(ctx.llm.resolveModelInfo('deepseek-account', 'deepseek-flash')).resolves.toMatchObject({
     name: 'DeepSeek-V4.1-Flash', context: { contextWindow: 1_048_576 }, defaultMaxTokens: 256_000,
     systemPromptUpdate: 'in-history', toolUpdate: 'addition-only', inputModalities: ['text', 'image'],
-    reasoning: { defaultEffort: ReasoningEffortId('high') },
+    reasoning: { defaultEffort: brandString<ReasoningEffortId>('high') },
   })
   await expect(ctx.llm.resolveModelInfo('deepseek-account', 'deepseek-v4-pro')).resolves.not.toHaveProperty('systemPromptUpdate')
   expect(server.requests).toHaveLength(1)
   expect(server.requests[0]?.headers['user-agent']).toMatch(/^deepseek-harness\//)
+})
+
+it('advertises the badges its listing declares', async () => {
+  const badge = { text: { en: 'New', zh: '新' }, tone: 'success' }
+  const server = await listing(json({ data: [{ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } }, PRO] }))
+  const ctx = await host(server.origin)
+  await ctx.plugin(Account, { baseURL: server.baseURL })
+  expect((await ctx.llm.listModels('deepseek-account')).map(row => [row.id, row.badge])).toEqual([
+    ['deepseek-flash', badge], ['deepseek-v4-pro', undefined],
+  ])
+})
+
+it('publishes an account badge removal after the default idle refresh interval', async () => {
+  let badge: { text: string } | undefined = { text: 'New' }
+  const server = await listing((request, response) => {
+    json({ data: [{ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } }] })(request, response)
+  })
+  const ctx = await host(server.origin)
+  const refreshed = Promise.withResolvers<undefined>()
+  const changes: string[] = []
+  ctx.on('llm/models-updated', (provider) => {
+    changes.push(provider)
+    if (changes.length === 2) refreshed.resolve(undefined)
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    await ctx.plugin(Account, { baseURL: server.baseURL })
+    expect((await ctx.llm.listModels('deepseek-account'))[0]?.badge?.text).toBe('New')
+    badge = undefined
+    await vi.advanceTimersByTimeAsync(600_000)
+    await refreshed.promise
+    expect(changes).toEqual(['deepseek-account', 'deepseek-account'])
+    expect((await ctx.llm.listModels('deepseek-account'))[0]).not.toHaveProperty('badge')
+    expect(server.requests).toHaveLength(2)
+  } finally {
+    try { await ctx.fiber.dispose() }
+    finally { vi.useRealTimers() }
+  }
 })
 
 it('falls back to the bundled catalog when the listing fails', async () => {
@@ -105,7 +142,7 @@ it('falls back to the bundled catalog when the listing fails', async () => {
   await ctx.plugin(Account, { baseURL: server.baseURL })
   expect((await ctx.llm.listModels('deepseek-account')).map(row => row.id)).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
   expect(warn).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-account]', expect.stringContaining('using the bundled catalog') as string)
-  await expect(ctx.llm.resolveModelInfo('deepseek-account', 'deepseek-flash')).resolves.toMatchObject({ context: { contextWindow: 1_000_000 } })
+  await expect(ctx.llm.resolveModelInfo('deepseek-account', 'deepseek-flash')).resolves.toMatchObject({ context: { contextWindow: 1_048_576 } })
 })
 
 it('hides and refuses listed models this build cannot serve before any inference request', async () => {
@@ -168,4 +205,35 @@ it('aborts an in-flight listing request when the plugin is disposed', async () =
   await account.dispose()
   await closed
   await expect(pending).resolves.toEqual(expect.any(Array))
+})
+
+it('publishes the account credential for its consumers, asking the account for each endpoint', async () => {
+  const asked: string[] = []
+  let token: string | undefined = 'fixture-account-token'
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime)
+  ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return token } }))
+  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  const credential = ctx.llm.providerCredential('deepseek-account')
+  expect(credential).toMatchObject({ kind: 'account', baseURL: 'https://account.deepseek.test/anthropic' })
+  expect(credential).not.toHaveProperty('reference')
+  const endpoint = 'https://account.deepseek.test/v1/tools/search'
+  await expect(credential!.configured(endpoint)).resolves.toBe(true)
+  await expect(credential!.resolve(endpoint)).resolves.toMatchObject({ headers: { 'x-dsh-auth-token': 'fixture-account-token' }, value: 'fixture-account-token' })
+  token = undefined
+  await expect(credential!.configured(endpoint)).resolves.toBe(false)
+  await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
+  expect(asked).toEqual([endpoint, endpoint, endpoint, endpoint])
+  expect(ctx.llm.providerCredential('deepseek-official')).toBeUndefined()
+})
+
+it('publishes a credential nobody holds without the account service', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  const credential = ctx.llm.providerCredential('deepseek-account')!
+  await expect(credential.configured('https://account.deepseek.test/v1/tools/search')).resolves.toBe(false)
+  await expect(credential.resolve('https://account.deepseek.test/v1/tools/search')).resolves.toBeUndefined()
 })

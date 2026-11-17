@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "pi-ai モデルアダプター",
+    "description": "pi-ai を通じて DeepSeek Harness に DeepSeek モデルを接続する、dsh-llm-deepseek の設計検証用実装です。"
+  }
+}

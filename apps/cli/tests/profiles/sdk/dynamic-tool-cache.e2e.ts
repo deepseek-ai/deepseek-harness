@@ -85,7 +85,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with rea
         retryPolicy: { mode: 'normal', maxRetries: 0 } satisfies RetryPolicyConfig,
         models: [{ id: 'deepseek-flash', systemPromptUpdate: 'in-history', toolUpdate: 'addition-only' }],
       } },
-      { id: 'tools', config: { mode: 'native' } },
       { id: 'session-log-deepseek', disabled: true },
       { id: 'plugin-package-inventory-deepseek', disabled: true },
       { insert: [{ id: 'sdk-dynamic-tool-cache-fixture', name: fixturePath, config: { evidencePath, callsPath, sampleLabel, updatePrompt } }] },

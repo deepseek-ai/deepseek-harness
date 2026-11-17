@@ -84,6 +84,22 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.warning .title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.warningIcon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.warning .body {
+  margin-top: 0;
+}
+
 .close {
   flex: none;
   display: inline-flex;
@@ -98,8 +114,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .close:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Description and body share the 332px content column (24px side pads). */

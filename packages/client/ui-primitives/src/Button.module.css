@@ -38,34 +38,41 @@
   color: var(--dsw-alias-label-primary-foreground);
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
-}
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-primary-hover);
+  }
 
-.ghost:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+  .ghost:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .ghost:active:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-active);
 }
 
-/* Outlined actions use the same neutral stroke as settings links. */
+/* The transparent border preserves layout; the inset stroke stays complete at fractional widths. */
 .outline {
-  border: 0.5px solid var(--dsw-alias-border-l3);
+  border: 0.5px solid transparent;
   background: transparent;
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, 0.5px) var(--dsh-button-outline-color, var(--dsw-alias-border-l3));
 }
 
-.outline:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .outline:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .toolbar {
   background: var(--dsw-alias-button-tool-bar-fill);
 }
 
-.toolbar:hover:not(:disabled) {
-  background: var(--dsw-alias-button-tool-bar-hover);
+@media (hover: hover) {
+  .toolbar:hover:not(:disabled) {
+    background: var(--dsw-alias-button-tool-bar-hover);
+  }
 }
 
 .icon {

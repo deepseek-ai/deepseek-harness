@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Git-Arbeitsbäume",
+    "description": "Bitten Sie um Arbeit auf einem neuen Branch, und der Agent erstellt einen separaten Git-Worktree und arbeitet dort weiter, während Ihr aktueller Checkout unverändert bleibt.",
+    "detail": "docs/DETAIL.md"
+  }
+}

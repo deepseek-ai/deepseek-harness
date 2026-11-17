@@ -9,7 +9,7 @@ import { flattenLineage } from '../src/client/sessions/lineage.ts'
 
 const s = (id: string, updatedAt: number, parent?: string): SessionSummary => ({ agentAvailable: true,
   sessionId: id as SessionId, updatedAt, running: false, blank: false,
-  ...(parent !== undefined ? { parentSessionId: parent as SessionId } : {}),
+  ...(parent !== undefined ? { parentSessionId: parent as SessionId, origin: 'subagent' as const } : {}),
 })
 
 describe('Session lineage flattening', () => {
@@ -23,6 +23,16 @@ describe('Session lineage flattening', () => {
     ])
     expect(out.map(e => [e.sessionId, e.depth])).toEqual([
       ['old-root', 0], ['new-root', 0], ['kid-old', 1], ['kid-new', 1], ['grandkid', 2],
+    ])
+  })
+
+  it('keeps historical ordinary forks at root level in input order', () => {
+    const out = flattenLineage([
+      s('source', 10), s('unrelated', 20),
+      { ...s('legacy-fork', 30), parentSessionId: 'source' as SessionId },
+    ])
+    expect(out.map(row => [row.sessionId, row.depth])).toEqual([
+      ['source', 0], ['unrelated', 0], ['legacy-fork', 0],
     ])
   })
 

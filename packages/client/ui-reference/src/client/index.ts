@@ -40,8 +40,8 @@ import type {
 import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
 import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
-import { abbreviateHomePath, fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { en, NS, zh, type ReferenceKey } from './locales.ts'
+import { abbreviateHomePath, fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type ReferenceKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -61,7 +61,7 @@ export const inject = [
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-reference: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
   const sessions = ctx.get('sessions') as ISessions
   const presence = createPathPresence((sessionId, path, signal) => ctx.remote.workspaceFiles.stat(sessionId, path, signal))
@@ -76,6 +76,7 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,
       inject: (sessionId: UserTextNodeProps<'file'>['sessionId']): FileReferenceInjected => ({
         ...presenceFor(sessionId),
+        resolveFilePath: path => resolveWorkspacePath(sessions.list.getSnapshot().byId[sessionId]?.cwd, path),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           ctx.sidebarRight.openResource(fileAddressFor(sessionId, cwd, path))

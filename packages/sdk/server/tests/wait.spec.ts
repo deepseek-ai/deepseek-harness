@@ -8,11 +8,12 @@ import { describe, expect, it, vi } from 'vitest'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup(beforeServer?: (ctx: Context) => void) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-wait-'))
@@ -48,7 +49,7 @@ describe('SDK session/wait with parked child input', () => {
     let completion: Promise<void> | undefined
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
-      const parent = ctx.agents.get(SessionId('main'))!
+      const parent = ctx.agents.get(brandString<SessionId>('main'))!
       await parent.whenIdle()
       ctx.subagents.registerProvider({
         name: 'local-test', capabilities: NO_START_CAPABILITIES, inheritsParentContext: false,
@@ -66,7 +67,7 @@ describe('SDK session/wait with parked child input', () => {
       for (let level = 0; level < depth; level++) {
         const started = await ctx.subagents.startActivation({
           provider: 'local-test', label: 'interruptible child', delivery: 'caller', signal: new AbortController().signal,
-          request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+          parent: owner, prompt: [{ type: 'text', text: 'work' }],
         })
         closeChildren ??= () => started.dispose()
         child = ctx.agents.get(started.childId)!
@@ -85,7 +86,7 @@ describe('SDK session/wait with parked child input', () => {
       await waiting
       expect(child.inbox.nextStep.length + child.inbox.nextTurn.length).toBeGreaterThan(0)
       expect(ctx.agents.get(child.id)).toBe(child)
-      await expect(ctx.subagents.waitForChildren(parent)).resolves.toBe(false)
+      await expect(ctx.subagents.waitForTreeWork(parent)).resolves.toBe(false)
     } finally {
       release.resolve(undefined)
       await closeChildren?.()
@@ -100,7 +101,7 @@ describe('SDK session/wait failures', () => {
     const { ctx, server, dispose } = await setup()
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
-      const parent = ctx.agents.get(SessionId('main'))!
+      const parent = ctx.agents.get(brandString<SessionId>('main'))!
       await parent.whenIdle()
       const failure = new Error('delegated work failed')
       const observed: unknown[] = []
@@ -118,7 +119,7 @@ describe('SDK session/wait failures', () => {
       const warnings = vi.spyOn(ctx.logger, 'warn')
       const child = await ctx.subagents.startActivation({
         provider: 'local-test', label: 'child failure', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'delegated task' }] },
+        parent, prompt: [{ type: 'text', text: 'delegated task' }],
       })
       await expect(child.result).resolves.toMatchObject({ stopReason: 'error' })
       expect(observed).toEqual([failure])
@@ -139,13 +140,13 @@ describe('SDK session/wait failures', () => {
     const children = Promise.withResolvers<boolean>()
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
-      const parent = ctx.agents.get(SessionId('main'))!
+      const parent = ctx.agents.get(brandString<SessionId>('main'))!
       await parent.whenIdle()
       const failure = new Error(`summary ${failedEvent} unavailable`)
       let completion: ReturnType<typeof server.wait> | undefined
       if (timing === 'during') {
         const waiting = Promise.withResolvers<undefined>()
-        vi.spyOn(ctx.subagents, 'waitForChildren').mockImplementationOnce(() => {
+        vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
           waiting.resolve(undefined)
           return children.promise
         })
@@ -185,7 +186,7 @@ describe('SDK session/wait failures', () => {
       ctx.on('agent/pre-step', () => { throw new Error('represented failure') })
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'fail normally' }] })
       await expect(server.wait({ sessionId: 'main' })).resolves.toEqual({})
-      const parent = ctx.agents.get(SessionId('main'))!
+      const parent = ctx.agents.get(brandString<SessionId>('main'))!
       expect(parent.session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data.reason)
         .toMatchObject({ kind: 'error', error: { message: 'represented failure' } })
     } finally {
@@ -205,7 +206,7 @@ describe('SDK session/wait failures', () => {
     })
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] })
-      await ctx.agents.get(SessionId('main'))!.whenIdle()
+      await ctx.agents.get(brandString<SessionId>('main'))!.whenIdle()
       await expect(server.wait({ sessionId: 'main' })).rejects.toBe(failure)
       enabled = false
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'recover' }] })

@@ -102,13 +102,27 @@ function appendRecords(records: readonly (TimingRecord | MemoryRecord)[]): void 
   appendFileSync(RESULTS_PATH, records.map(record => JSON.stringify(record) + '\n').join(''))
 }
 
-/** Vitest global setup: discard results of an earlier run. */
+/**
+ * Which invocation of a phased run this process is.
+ * @returns `first` for the invocation that clears earlier results, `last` for the one that renders the report, and `all` for a single-invocation run.
+ * @throws If the value is not a known phase.
+ */
+function reportPhase(): 'first' | 'last' | 'all' {
+  const raw = process.env.DSH_BENCH_REPORT_PHASE
+  if (raw === undefined || raw === '' || raw === 'all') return 'all'
+  if (raw === 'first' || raw === 'last') return raw
+  throw new Error(`DSH_BENCH_REPORT_PHASE must be "first", "last", or "all", got ${JSON.stringify(raw)}.`)
+}
+
+/** Vitest global setup: discard results of an earlier run unless this phase continues one. */
 export function setup(): void {
+  if (reportPhase() === 'last') return
   rmSync(REPORT_DIRECTORY, { recursive: true, force: true })
 }
 
-/** Vitest global teardown: render the report when any case recorded a timing. */
+/** Vitest global teardown: render the report when a case recorded a timing and this phase owns the report. */
 export function teardown(): void {
+  if (reportPhase() === 'first') return
   if (!existsSync(RESULTS_PATH)) return
   const records = readFileSync(RESULTS_PATH, 'utf8').split('\n').filter(line => line !== '').map(line => JSON.parse(line) as TimingRecord | MemoryRecord)
   const cpuModel = cpus()[0]?.model.trim() ?? 'unknown CPU'

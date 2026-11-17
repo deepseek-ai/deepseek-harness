@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mecanismo de execução de fluxo de trabalho",
+    "description": "Execute o código de orquestração de fluxo de trabalho usando o tempo de execução PTC compartilhado."
+  }
+}

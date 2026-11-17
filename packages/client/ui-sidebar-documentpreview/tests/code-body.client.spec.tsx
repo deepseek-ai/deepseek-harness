@@ -87,7 +87,7 @@ describe('CodeBody', () => {
     const copy = view.getByRole('button', { name: 'Copy' })
     expect(copy.textContent).toBe('')
     expect(view.getAllByRole('button')).toHaveLength(1)
-    fireEvent.mouseEnter(copy)
+    fireEvent.pointerEnter(copy)
     expect(view.getByRole('tooltip').textContent).toBe('Copy')
   })
 

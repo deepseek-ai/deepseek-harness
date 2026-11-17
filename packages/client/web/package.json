@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-web",
   "description": "Web boot kernel: static module table, Cordis loader, framework-free boot page, and UI-renderer handoff",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -29,6 +29,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
+    "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-dockkit": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
@@ -39,7 +40,7 @@
     "react-dom": "^18.2.0",
     "typescript": "^6.0.3",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@tanstack/react-virtual": "3.14.10"
   },
   "peerDependencies": {
@@ -49,6 +50,9 @@
     "lib/index.js",
     "lib/**/*.css",
     "lib/apply-injections.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

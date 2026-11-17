@@ -9,7 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 // Type-only: make `ctx.get('sandboxPolicy')`, `ctx.get('approval')`, and
@@ -28,10 +28,10 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { delegationDepthOf } from './depth.ts'
 import { SubagentError } from './error.ts'
 
-/** Thrown when starting a child would exceed the requested depth cap. */
-export class SubagentDepthError extends Error {
+/** Thrown when starting a child would exceed the requested depth cap; `code` is `DEPTH_EXCEEDED`. */
+export class SubagentDepthError extends SubagentError {
   constructor(public readonly attemptedDepth: number, public readonly maxDepth: number) {
-    super(`subagent depth ${attemptedDepth} exceeds maxDepth ${maxDepth}`)
+    super(`subagent depth ${attemptedDepth} exceeds maxDepth ${maxDepth}`, 'DEPTH_EXCEEDED')
     this.name = 'SubagentDepthError'
   }
 }
@@ -44,12 +44,12 @@ export class SubagentDepthError extends Error {
  * @param maxDepth - optional absolute cap the resolved depth must not exceed.
  * @returns the child's non-negative safe-integer depth.
  * @throws {SubagentDepthError} when the resolved depth exceeds `maxDepth`.
- * @throws {RangeError} when the resolved depth leaves the safe-integer range.
+ * @throws {SubagentError} `INVALID_DEPTH` when the resolved depth leaves the safe-integer range.
  */
 export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): number {
   const childDepth = delegationDepthOf(parent) + 1
   if (!Number.isSafeInteger(childDepth)) {
-    throw new RangeError('subagent child depth exceeds the safe-integer range')
+    throw new SubagentError('subagent child depth exceeds the safe-integer range', 'INVALID_DEPTH')
   }
   if (maxDepth !== undefined && childDepth > maxDepth) {
     throw new SubagentDepthError(childDepth, maxDepth)
@@ -155,7 +155,7 @@ export function childSessionMeta(
 
 /** The scoped composition a child agent's creation window applies. */
 export interface ChildComposition {
-  /** Independently mounted preset; omission shares the parent's standing generation. */
+  /** Preset to mount; omission shares a supplied creator or uses host composition. */
   readonly agentPreset?: string | undefined
   /** Historical descriptor persona reapplied only during cold resume. */
   readonly persona?: string | undefined
@@ -176,16 +176,20 @@ export const SUBAGENT_DELEGATION_CONTEXT
 
 /**
  * Compose a child before publication and restore historical descriptor overrides.
- * Explicit selection mounts the named preset; omission synchronously joins the
- * parent's current generation. Registrations belong to the child's scope.
+ * Explicit selection mounts the named preset. Omission joins a supplied creator's
+ * current generation; a restored child without a saved preset uses host composition.
+ * Registrations belong to the child's scope.
  * @param childCtx - the child agent's scoped creation context.
- * @param parent - the delegating parent used when no preset is selected.
+ * @param parent - creator for fresh delegation; absent during target-only restoration.
  * @param composition - independent preset and any overrides read from a historical descriptor.
  * @returns A promise when mounting an independent preset; otherwise completes synchronously.
+ * @throws {SubagentError} `PRESET_UNAVAILABLE` when a preset is selected but the preset
+ *   service is absent. An unknown or unloadable selected preset rejects with the registry's
+ *   `RemoteError` code.
  */
 export function applyChildComposition(
   childCtx: Context,
-  parent: Agent,
+  parent: Agent | undefined,
   composition: ChildComposition,
 ): void | Promise<void> {
   if (composition.agentPreset !== undefined) {
@@ -197,7 +201,7 @@ export function applyChildComposition(
       applyChildOverrides(childCtx, composition)
     })
   }
-  childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+  if (parent !== undefined) childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
   applyChildOverrides(childCtx, composition)
 }
 
@@ -256,11 +260,11 @@ export function captureDelegatedPolicyOverrides(parent: Agent): DelegatedPolicyO
 
 /**
  * Append the captured delegation policy onto the child's own log as
- * `source: 'delegation'` events inside the unpublished creation window, so the
+ * `source: 'delegation'` events after Session announcement and before Agent registration, so the
  * child's effective policy is reconstructable from its log alone. Appends land
  * after any fork seed, so fresh policy wins stale seed state; later child
  * switches still win over these events.
- * @param childSession - the unpublished child's session.
+ * @param childSession - the child's announced, writable Session.
  * @param overrides - the policy captured at delegation.
  */
 export function appendDelegatedPolicyOverrides(
@@ -276,16 +280,4 @@ export function appendDelegatedPolicyOverrides(
   if (overrides.permissionPreset !== undefined) {
     childSession.append('permission/preset', { preset: overrides.permissionPreset })
   }
-}
-
-/** Identity and lineage inputs shared by every in-process child creation. */
-export interface ChildCreateInputs {
-  /** The child's reserved session id. */
-  readonly sessionId: SessionId
-  /** The delegating parent agent. */
-  readonly parent: Agent
-  /** The resolved delegation depth. */
-  readonly childDepth: number
-  /** How many leading seed events came from the parent's log. */
-  readonly lineageSeedLength: number
 }

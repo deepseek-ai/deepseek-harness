@@ -208,5 +208,6 @@ export const contextPressureProjectionDefinition = {
         ? {}
         : { projectedTokens: Math.max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens) },
     }),
+    summary: false,
   },
 } satisfies ProjectionDefinition<'contextPressure', ContextPressureState>

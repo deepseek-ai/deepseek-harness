@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-web",
   "description": "Model-facing web tools (web_search, web_fetch) over the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -25,7 +25,10 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -36,12 +39,14 @@
     "@deepseek-ai/dsh-web": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-output-retention": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "turndown": "^7.2.4"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
@@ -50,12 +55,15 @@
     "@deepseek-ai/dsh-spill-policy": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-web-deepseek-api": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
-    "@deepseek-ai/dsh-web-search-exa": "workspace:*",
     "@types/turndown": "^5.0.6",
     "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-token-meter": "workspace:*"
+    "@deepseek-ai/dsh-token-meter": "workspace:*",
+    "@deepseek-ai/dsh-launch-environment": "workspace:*"
   }
 }

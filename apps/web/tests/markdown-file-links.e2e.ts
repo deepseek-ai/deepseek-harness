@@ -2,10 +2,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
@@ -17,16 +18,23 @@ import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './supp
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
 
+/** A restored preview resolves its Host path after the document's load event. */
+async function reloadPreview(page: Page, column: Locator, absolutePath: string): Promise<void> {
+  await page.reload({ waitUntil: 'load' })
+  await column.getByText(absolutePath, { exact: true }).waitFor()
+  expect(await column.locator('[data-textpreview-path]').textContent()).toBe(absolutePath)
+}
+
 /** Build live test input with a parent-path link and a read result naming the same Host file. */
 function parentPathFixture(path: string): string {
-  const session = Session.create(SessionId('parent-file-links-source'))
+  const session = Session.create(brandString<SessionId>('parent-file-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Read the parent-path file and link lines 24 and 30.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('session/title', { title: 'Parent file links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
   session.append('step/start', { turn: 1, step: 1 })
-  const callId = ToolCallId('parent-file-read')
+  const callId = brandString<ToolCallId>('parent-file-read')
   const args = JSON.stringify({ file_path: path, offset: 24, limit: 7 })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
@@ -50,6 +58,35 @@ function parentPathFixture(path: string): string {
     }),
   }, { surfaceOp: 'append' })
   session.append('step/end', { turn: 1, step: 2 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  return [
+    JSON.stringify({
+      type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}', createdAt: 0,
+      cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0,
+    }),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
+    '',
+  ].join('\n')
+}
+
+/** Build a settled turn whose relative link follows a directory change into a nested checkout. */
+function changedDirectoryFixture(path: string): string {
+  const session = Session.create(brandString<SessionId>('changed-directory-links-source'))
+  session.append('turn/start', { turn: 1 })
+  const user = session.append('user/message', createUserMessage({
+    content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },
+  }), { surfaceOp: 'append' })
+  session.append('session/title', { title: 'Changed directory links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
+  session.append('working-directory/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
+  session.append('step/start', { turn: 1, step: 1 })
+  session.append('assistant/message', {
+    turn: 1, step: 1, stream: [],
+    message: createAssistantMessage({
+      content: [{ type: 'text', text: `[Worktree notes](${path})` }],
+      source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    }),
+  }, { surfaceOp: 'append' })
+  session.append('step/end', { turn: 1, step: 1 })
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   return [
     JSON.stringify({
@@ -127,6 +164,54 @@ describe('web e2e: Markdown file links', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'links.expected.md', 'preview.expected.md'])
   })
 
+  it('replays colon line suffixes as locations and shares tabs with fragment links', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-colon-file-links'))
+    const fixture = new URL('./fixtures/markdown-colon-file-links/session.v3.jsonl', import.meta.url)
+    const id = await seedSession(scaffold, await readFile(fixture, 'utf8'), 'colon-file-links')
+    await page.reload({ waitUntil: 'load' })
+    const workspace = page.getByRole('treeitem').first()
+    await workspace.waitFor()
+    if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+
+    const relative = page.getByRole('button', { name: 'Relative colon:24–30', exact: true })
+    await relative.waitFor()
+    expect(await page.getByRole('button', { name: 'Development server', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'Development server', exact: true }).getAttribute('href')).toBe('localhost:3000')
+    expect(await page.getByRole('link', { name: 'Bare URL', exact: true }).getAttribute('href')).toBe('index.ts:24')
+    expect(await page.getByRole('link', { name: 'Blocked script', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Blocked script', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'Mail', exact: true }).getAttribute('href')).toBe('mailto:10086')
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/markdown-colon-file-links.md', import.meta.url)),
+      await relative.locator('..').ariaSnapshot(), MODE,
+    )
+    const column = page.locator('[data-rightbar-col]')
+    for (const label of ['Zero line', 'Reversed range']) {
+      await page.getByRole('button', { name: label, exact: true }).click()
+      await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
+        .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+      await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('source line 1\n')
+      expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    }
+    for (const [label, line] of [['Relative colon:24–30', 24], ['Absolute colon:30', 30], ['Column:24:5', 24], ['Fragment:12', 12]] as const) {
+      const link = page.getByRole('button', { name: label, exact: true })
+      await link.focus()
+      await link.press('Enter')
+      await expect.poll(() => column.locator(`[data-textpreview-target="${line}"]`).textContent())
+        .toBe(`source line ${line}\n`)
+      await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
+        .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+      expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    }
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'src/example.txt'))
+    await relative.click()
+    await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('source line 24\n')
+    expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
   it('opens parent-path prose and read-card links while retaining each address across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-parent-file-links'))
     // Return through the parent into this owned temp root; no shared parent file is created.
@@ -157,8 +242,7 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(() => column.locator('[data-textpreview-target="30"]').textContent()).toBe('parent line 30\n')
     expect(await tabs.allTextContents()).toEqual(['parent.txt'])
 
-    await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'parent.txt'))
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'parent.txt'))
     await expect.poll(stored).toContain(address)
     await source.click()
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('parent line 24\n')
@@ -174,6 +258,29 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(stored).toContain(sessionFileAddress(id, 'parent.txt'))
     await source.click()
     expect(await tabs.allTextContents()).toEqual(['parent.txt', 'parent.txt'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+  it('resolves relative links from the Session\'s current working directory', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-changed-directory-file-links'))
+    const worktree = join(scaffold.workspaceCwd, '.agents/worktrees/w')
+    await mkdir(worktree, { recursive: true })
+    await writeFile(join(scaffold.workspaceCwd, 'notes.txt'), 'original checkout\n')
+    await writeFile(join(worktree, 'notes.txt'), 'worktree checkout\n')
+    const id = await seedSession(scaffold, changedDirectoryFixture('notes.txt'), 'changed-directory-file-links')
+    await page.reload({ waitUntil: 'load' })
+    const workspace = page.getByRole('treeitem').first()
+    await workspace.waitFor()
+    if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+
+    await page.getByRole('button', { name: 'Worktree notes', exact: true }).click()
+    const column = page.locator('[data-rightbar-col]')
+    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(worktree, 'notes.txt'))
+    await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('worktree checkout\n')
+    const artifacts = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, 'changed-directory-file-links.png'), animations: 'disabled' })
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

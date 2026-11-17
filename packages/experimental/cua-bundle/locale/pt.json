@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Uso do computador",
+    "description": "Permite que o agente controle diretamente os aplicativos do seu computador.",
+    "detail": "docs/DETAIL.md"
+  }
+}

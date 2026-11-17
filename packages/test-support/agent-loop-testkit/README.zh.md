@@ -35,7 +35,8 @@ kind: "package-library"
 
 ```ts
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
@@ -46,7 +47,7 @@ const ctx = new Context()
 await mountAgentLoopTestDependencies(ctx)
 // Register the test adapter and any load-order-sensitive plugins here.
 const harness = await mountAgentLoopTestHarness(ctx)
-const agent = await harness.create(SessionId('test-agent'))
+const agent = await harness.create(brandString<SessionId>('test-agent'))
 declare const message: UserMessage
 
 agent.inbox.append('next-turn', message)
@@ -57,14 +58,15 @@ const admitted = harness.claim(agent, 'next-turn', 1)
 
 ### 构造结构化 Agent 桩
 
-当测试对象需要可变的待处理列表，但不测试持久性、投影校验、实时 Inbox 通知或驱动的认领策略时，使用 `createInboxStub()`。该桩通过两个进程内数组实现公开队列操作，且绝不会写入 Session。当测试对象不应访问待处理输入时，使用 `unsupportedInbox()`；每次变更都会在首个意外依赖处抛错。
+当测试对象需要可变的待处理列表，但不测试持久性、投影校验、实时 Inbox 通知或驱动的认领策略时，使用 `createInboxStub()`。该桩通过两个进程内数组实现公开队列操作，且绝不会写入 Session。当测试对象不应访问待处理输入时，使用 `unsupportedInbox()`；每次变更都会在首个意外依赖处抛错。当测试不读取或更改模型选择时，使用 `unsupportedModel()`；它的所有操作都会抛错。
 
 ```ts
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const agent = {
   // ...
   inbox: createInboxStub(),
+  model: unsupportedModel(),
 }
 ```
 

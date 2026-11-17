@@ -1,0 +1,6 @@
+- textbox "发消息或创建任务, / 调用指令, @ 文件或对话":
+  - paragraph:
+    - button "移除引用"
+    - text: src/extra.ts R1 请检查这项修改
+    - button "移除引用"
+    - text: src/app.ts R1 请解释这行代码

@@ -47,7 +47,7 @@ describe('Node preparation of Preview Session data', () => {
     const original = packVfsOverlay(fixture.trees)
     const projected = packPreviewFixture(fixture.trees)
     const currentFiles = Object.keys(projected.files).filter(path => path.endsWith('/' + sessionFormatLogFilename(currentVersion)))
-    expect(currentFiles).toHaveLength(3)
+    expect(currentFiles).toHaveLength(4)
     for (const [path, bytes] of Object.entries(original.files)) expect(projected.files[path], path).toEqual(bytes)
     for (const path of currentFiles) {
       const current = restore(projected.files[path])

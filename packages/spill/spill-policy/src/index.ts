@@ -5,6 +5,7 @@
  * content and reports the reason through the logger.
  * @module @deepseek-ai/dsh-spill-policy
  */
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { createUserMessage, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'

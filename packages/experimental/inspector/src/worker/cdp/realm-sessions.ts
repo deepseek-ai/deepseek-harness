@@ -126,7 +126,7 @@ export class InspectorRealmSessionSet {
     for (const listener of [...this.listeners]) {
       try {
         listener(event)
-      } catch {
+      } catch (_listenerFailed) {
         // One CDP domain cannot prevent sibling domains from observing realm lifecycle.
       }
     }

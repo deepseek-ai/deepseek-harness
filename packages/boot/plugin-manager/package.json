@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-manager",
   "description": "Current-profile plugin and bundle management shared by dsh CLI, Web and agent tools",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -45,7 +45,11 @@
       "default": "./lib/types/tools.js"
     },
     "./tools/locale/*.json": "./locale/tools/*.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./diagnostic": {
+      "types": "./lib/types/diagnostic.d.ts",
+      "default": "./lib/types/diagnostic.js"
+    }
   },
   "files": [
     "locale/*.json",
@@ -53,20 +57,29 @@
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "execa": "^10.0.1",
+    "semver": "^7.8.5",
     "yaml": "^2.9.0",
-    "zod": "4.4.3",
-    "@deepseek-ai/dsh-util-values": "workspace:*"
+    "zod": "4.6.6",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-plugin-detail": "workspace:*",
+    "@deepseek-ai/dsh-timeout": "workspace:*",
+    "hosted-git-info": "^9.0.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -75,8 +88,8 @@
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*"
@@ -91,13 +104,17 @@
   },
   "devDependencies": {
     "chokidar": "^4.0.3",
+    "@types/semver": "^7.8.0",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
     "@deepseek-ai/cordis-plugin-timer": "workspace:~",
@@ -107,6 +124,8 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-user-approval": "workspace:*"
+    "@deepseek-ai/dsh-user-approval": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@types/hosted-git-info": "^3.0.5"
   }
 }

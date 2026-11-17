@@ -1,0 +1,35 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Computer Use plugin icon.
+    Adapted from Lucide "mouse-pointer-click" (https://lucide.dev/icons/mouse-pointer-click).
+    Changes: solid-filled pointer, project palette, 36x36 canvas.
+
+    ISC License
+    Copyright (c) 2026 Lucide Icons and Contributors
+    https://github.com/lucide-icons/lucide/blob/main/LICENSE
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  -->
+  <g transform="translate(4.036 4.036) scale(1.2201)">
+    <path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z" fill="url(#g)" stroke="url(#g)" stroke-width="2" stroke-linejoin="round" />
+    <path d="M14 4.1 12 6" stroke="#51CFDB" stroke-width="2" stroke-linecap="round" />
+    <path d="m5.1 8-2.9-.8" stroke="#51CFDB" stroke-width="2" stroke-linecap="round" />
+    <path d="m6 12-1.9 2" stroke="#51CFDB" stroke-width="2" stroke-linecap="round" />
+    <path d="M7.2 2.2 8 5.1" stroke="#51CFDB" stroke-width="2" stroke-linecap="round" />
+  </g>
+  <defs>
+    <linearGradient id="g" x1="9" y1="9" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86B8F5" />
+      <stop offset="1" stop-color="#5269E1" />
+    </linearGradient>
+  </defs>
+</svg>

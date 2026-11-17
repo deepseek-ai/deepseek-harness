@@ -4,12 +4,13 @@ import { Context } from '@deepseek-ai/cordis'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 import SubagentRuntime, { type ResolvedSubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as scripted from './scripted-provider.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A minimal parent; the scripted provider only reads its id. */
 function fakeParent(id = 'parent-1'): Agent {
-  return { id: SessionId(id) } as unknown as Agent
+  return { id: brandString<SessionId>(id) } as Agent
 }
 
 function baseRequest(over: Partial<ResolvedSubagentStartRequest> = {}): ResolvedSubagentStartRequest {
@@ -34,7 +35,7 @@ async function mount(config: Partial<scripted.Config> = {}): Promise<Context> {
 describe('scripted subagent provider fixture', () => {
   it('registers through the real service and returns the scripted reply', async () => {
     const ctx = await mount({ reply: 'hello from fixture' })
-    expect(ctx.subagents.list()).toEqual(['mock'])
+    expect(ctx.subagents.getProvider('mock')).toBeDefined()
 
     const run = await ctx.subagents.getProvider('mock')!.start!(baseRequest())
     await expect(run.result).resolves.toEqual({
@@ -47,7 +48,8 @@ describe('scripted subagent provider fixture', () => {
 
   it('registers under a configurable name', async () => {
     const ctx = await mount({ name: 'spawn' })
-    expect(ctx.subagents.list()).toEqual(['spawn'])
+    expect(ctx.subagents.getProvider('spawn')).toBeDefined()
+    expect(ctx.subagents.getProvider('mock')).toBeUndefined()
   })
 
   it('returns configured and default structured results', async () => {
@@ -98,8 +100,9 @@ describe('scripted subagent provider fixture', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     const fiber = await scripted.mountScriptedProvider(ctx, { name: 'mock' })
-    expect(ctx.subagents.list()).toEqual(['mock'])
+    expect(ctx.subagents.getProvider('mock')).toBeDefined()
+    expect(ctx.subagents.getProvider('spawn')).toBeUndefined()
     await fiber.dispose()
-    expect(ctx.subagents.list()).toEqual([])
+    expect(ctx.subagents.getProvider('mock')).toBeUndefined()
   })
 })

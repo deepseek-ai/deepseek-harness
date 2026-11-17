@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm",
   "description": "Provider-neutral LLM service interface for the DeepSeek Harness",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -21,10 +21,6 @@
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
-    },
-    "./brand": {
-      "types": "./lib/types/brand.d.ts",
-      "default": "./lib/types/brand.js"
     },
     "./message": {
       "types": "./lib/types/message.d.ts",
@@ -51,19 +47,24 @@
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
@@ -71,6 +72,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
+    "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   }
 }

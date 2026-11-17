@@ -1,0 +1,19 @@
+{
+  "dir": "relay->gateway",
+  "note": "an envelope whose id cannot correlate an answer with its request",
+  "frame": {
+    "type": "share-rpc",
+    "id": 0,
+    "body": {
+      "op": "call",
+      "path": "/__share/context",
+      "body": {}
+    },
+    "actor": {
+      "providerId": "example",
+      "tenantId": "tenant-a",
+      "subjectId": "user_viewer"
+    }
+  },
+  "refusal": null
+}

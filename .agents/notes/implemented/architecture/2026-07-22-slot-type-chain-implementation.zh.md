@@ -50,12 +50,13 @@ ctx.slots.register({
 | 子 slot 渲染 | `PropsRenderSlots<S>` | register 的 `children` 键集 | `renderSlot(key, owner)`，键参静态收窄到 S；chain 键另有 `renderSlotChain` |
 | store | `PropsStore<H>` | store 工厂的返回类型 | `useStore` selector 钩子 + `actions.*`（剥去 draft 形参） |
 | 业务 | `I` | inject 的返回类型 | 普通数据+回调；保留的 `hooks` 区域内，裸 observable 经绑定后以 `use<Name>` 选择器钩子的形式到达（`InjectFace<I>`） |
+| 按 kind | `MatchedShare` / `HocShare` | SlotMap entry 的 kind | chain 的 `matched`；hoc 的 `children`，即内一层或宿主内容 |
 
 凡声明 `scope: 'session'` 之处，`sessionId` 一律由框架供给——owner 传参不携带它。register 调用点是双重类型约束的收口：组件的 renderSlot 键集超出 `children` 声明、漏接某个已声明的面、store/inject 形状漂移，任何一条都在那一行上报编译错误。转授就是普通的 props 传递（把 `renderSlot` 函数递下去，可按需包一层更窄的签名）——不存在白名单面对象，也不存在铸面 API。
 
 ### chain kind：entry 自荐，首个匹配项负责渲染
 
-第四种 `SlotKind`——`'chain'`——把路由权相对 `keyed` 反转：keyed 的分派现场以 `entryKey` 点选占用 slot 的 entry，chain 则由 entry 自荐——owner 只分派一套格式统一的 owner props，永远不知道谁来接管，新的接管包注册进来 owner 零改动。chain 注册携带一个 `select` 纯选择器（`ChainSelect<O, M>`：`(owner) => matched | null`）与可选的 `priority`（升序；同值保持注册序 = 装配序——部署可控的 inject 拓扑——复用 list `order` 的同一稳定排序）；注册缺 `select` 即上文装载即炸情形之一。渲染时 outlet 按链序依次执行各 select：首个非 null 返回值当选，该值以 `matched` 并入组件 props（组件绝不自行重新推导匹配）；返回 `null` 则轮到下一个 entry；全 null 则渲染 owner 的 fallback 体（`ChainRenderOpts`）。
+第五种 kind `'hoc'` 把 entry 层层嵌套在 owner 提供的 `children` 外面，并像 `chain` 提供 `matched` 那样提供按 kind 的 `children` prop；其决策见 [hoc 插槽类型 Note](2026-11-03-hoc-slot-kind.zh.md)。第四种 `SlotKind`——`'chain'`——把路由权相对 `keyed` 反转：keyed 的分派现场以 `entryKey` 点选占用 slot 的 entry，chain 则由 entry 自荐——owner 只分派一套格式统一的 owner props，永远不知道谁来接管，新的接管包注册进来 owner 零改动。chain 注册携带一个 `select` 纯选择器（`ChainSelect<O, M>`：`(owner) => matched | null`）与可选的 `priority`（升序；同值保持注册序 = 装配序——部署可控的 inject 拓扑——复用 list `order` 的同一稳定排序）；注册缺 `select` 即上文装载即炸情形之一。渲染时 outlet 按链序依次执行各 select：首个非 null 返回值当选，该值以 `matched` 并入组件 props（组件绝不自行重新推导匹配）；返回 `null` 则轮到下一个 entry；全 null 则渲染 owner 的 fallback 体（`ChainRenderOpts`）。
 
 「不接」的判定住在 `select` 里，绝不在挂载后的组件里自探 props：组件为了渲染 null 也得先挂载，其钩子与 effect 全部白跑，随之而来的挂载/卸载抖动还会破坏 memo 化与 React key 语义；而选择器是纯函数——可单测、零挂载副作用——与「presentation methods are pure functions of `args`」是同一条纪律。纯，就是选择器的约定：不读外部可变状态、不产副作用，路由判定因此完全是 owner props 的函数，每次分派都可安全执行。选择器只做路由，绝不创建新对象——按分派逐次构造对象会让引用每次渲染都换新；把匹配值包成更丰富的面这件事，发生在当选组件内部（以 `matched` 为依赖的 `useMemo`）。
 

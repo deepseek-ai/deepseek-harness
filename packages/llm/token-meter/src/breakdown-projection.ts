@@ -179,5 +179,6 @@ export const contextBreakdownProjectionDefinition = {
   wire: {
     viewSchema: breakdownSchema,
     view: state => state.breakdown,
+    summary: false,
   },
 } satisfies ProjectionDefinition<'contextBreakdown', ContextBreakdownState>

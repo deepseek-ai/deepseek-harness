@@ -4,10 +4,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { constants, createReadStream } from 'node:fs'
 import { chmod, link, mkdir, open, readFile, unlink } from 'node:fs/promises'
 import { dirname, join, parse, resolve } from 'node:path'
-import {
-  AttachmentError,
-  AttachmentId,
-} from '@deepseek-ai/dsh-attachment'
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
@@ -112,7 +111,7 @@ export async function prepareImageFile(
   return {
     data: normalized.data,
     ref: {
-      attachmentId: AttachmentId(`sha256:${sha256}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${sha256}`),
       mediaType: normalized.mediaType,
       width: normalized.width,
       height: normalized.height,
@@ -423,7 +422,7 @@ export async function saveImageFile(
 /**
  * Read and verify one content-addressed image.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param ref - reference recorded in the session log.
+ * @param ref - supplied image reference; display fields are returned unchanged.
  * @param signal - optional cancellation for filesystem and verification work.
  * @returns verified bytes and reference.
  * @throws the signal reason when aborted, or an AttachmentError when verification fails.

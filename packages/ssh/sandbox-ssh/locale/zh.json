@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 进程沙箱",
+    "description": "通过共享的 SSH 辅助程序，为远程 POSIX 进程构造沙箱命令。"
+  }
+}

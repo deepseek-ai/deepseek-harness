@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Nova tentativa de solicitação de modelo",
+    "description": "Tente novamente as solicitações com falha de acordo com a política do provedor do modelo."
+  }
+}

@@ -1,5 +1,5 @@
-/* Sidebar column (figma 133:7629): vertical stack, padding 12/6, sidebar
-   fill + 1px right border painted by the layout column. Collapse is a
+/* Sidebar column: vertical stack, padding 8/6, sidebar
+   fill and desktop divider painted by the layout column. Collapse is a
    slide + crossfade, not a morph: the content holds its frozen expanded
    layout (inline width set by the component) and fades in place (.fading)
    while the sliding column (AppFrame grid tracks) clips it; the rail layout
@@ -7,7 +7,10 @@
    mid-slide. */
 
 .root {
-  --dsh-sidebar-inline-padding: 12px;
+  --dsh-sidebar-inline-padding: 8px;
+  --dsh-sidebar-row-padding: 12px;
+  --dsh-sidebar-label-gap: 6px;
+  --dsh-sidebar-paint-inset: 3px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -20,6 +23,10 @@
      scrollbar uses the l2 pair. .quietBars hides it without changing layout. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+:global([data-animating]:not([data-dragging])) .root {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
@@ -55,7 +62,7 @@
 }
 
 :global([data-windows-titlebar]) .root:not(.collapsed) .brand {
-  padding-left: 4px;
+  padding-left: 8px;
 }
 
 :global([data-windows-titlebar]) .brandIdentity {
@@ -74,9 +81,8 @@
   padding: 0;
 }
 
-:global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
-  margin-top: 8px;
-  margin-left: 0;
+:global([data-windows-titlebar]) .root:not(.collapsed) .newSessionRow {
+  margin-top: 6px;
 }
 
 :global([data-windows-titlebar]) .collapsed .panelList,
@@ -150,9 +156,14 @@
    rail right edge over the remaining 150ms of the AppFrame track transition.
    The bottom-pinned settings seat shares their opacity timeline but stays
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static. */
+   render stays static.
+   The New Session row renders its content through the `sidebar.session.action`
+   HOC slot, whose `display: contents` outlet anchor sits between the row and
+   its content. The shell's New-session button and the occupant's own controls
+   are that anchor's children, so the fade targets them through the anchor; the
+   boxless anchor itself cannot carry an animation. */
 .railIn .iconButton,
-.railIn .newSession,
+.railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
 .railIn .panelList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
@@ -192,6 +203,10 @@
   padding: 0 12px 2px;
 }
 
+:global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle {
+  transform: translateX(4px);
+}
+
 /* Window fullscreen hides the traffic lights (html[data-fullscreen], desktop
    preload): the toggle takes their spot at the strip's left edge. */
 :global([data-fullscreen]) .topStrip {
@@ -205,14 +220,16 @@
   margin-top: -12px;
 }
 
-/* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
+/* Logo row: 8px vertical and leading padding, with no trailing padding or
+   bottom margin. Expanded keeps the panel toggle at the
    right edge; the rail gives every control the same base left anchor before
    the shared entry translation is applied. macOS hiddenInset titlebar: the row
    is marked `data-window-drag` in markup (SidebarRoot), so ui-web base.css's
    single darwin rule carries the drag over its own box — below the top strip
    (40–100px: the strip's 52px foot with the row's -12px tuck). The brand rides
    that box (SidebarRoot renders the wordmark as a plain span there, so the
-   global interactive no-drag rule never subtracts it); the dedicated New
+   drag-row controls rule never subtracts it; only the local-build
+   fallbacks opt out through .copyVersion); the dedicated New
    Session button below keeps the pointer and keyboard paths. Safe as a drag
    source: it precedes the sidebar's overlay slots in document order, so their
    no-drag still wins. */
@@ -223,8 +240,8 @@
   justify-content: flex-end;
   gap: 8px;
   height: 60px;
-  padding: 8px 0 8px 4px;
-  margin-bottom: 4px;
+  padding: 8px 0 8px 8px;
+  margin-bottom: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -267,7 +284,7 @@
 .brandIdentity {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   height: 24px;
   min-width: 0;
 }
@@ -308,6 +325,14 @@
   white-space: nowrap;
 }
 
+/* Local-build fallbacks copy the version, also on macOS, where the
+   surrounding brand is a window-drag surface. */
+.copyVersion {
+  display: inline-flex;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
 .localBuildTitle {
   font-size: 12px;
   line-height: 13px;
@@ -330,8 +355,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .iconButton:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The toggle is flush with .logoRow, which clips its own overflow, so an outward ring loses
@@ -355,12 +382,14 @@
   display: none;
 }
 
-.collapsed .toggle:hover .panelIcon {
-  display: inline;
-}
+@media (hover: hover) {
+  .collapsed .toggle:hover .panelIcon {
+    display: inline;
+  }
 
-.collapsed .toggle:hover .railMark {
-  display: none;
+  .collapsed .toggle:hover .railMark {
+    display: none;
+  }
 }
 
 .railMark {
@@ -391,19 +420,29 @@
   white-space: nowrap;
 }
 
+/* New session fills the row; the session-action HOC layer renders it, then the occupant's controls. */
+.newSessionRow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px);
+}
+
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
    corners); collapsed it renders as the rail's plain icon control. */
 .newSession {
   container-type: inline-size;
   position: relative;
-  flex: none;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
   height: 38px;
   padding: 8px 12px;
-  margin: 0 2px 12px;
+  margin: 0;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
@@ -416,42 +455,58 @@
   overflow: hidden;
 }
 
-.newSession:hover {
-  background: var(--dsw-alias-button-floating-hover);
+@media (hover: hover) {
+  .newSession:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }
 
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
-   controls. Dark keeps the same white ink at lower alpha. */
-:global([data-platform='darwin']) .newSession {
-  background: rgb(255 255 255 / 0.55);
+   controls; the glass tokens lower its alpha in dark mode. */
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+  background: var(--dsw-specific-sidebar-glass-fill);
 }
 
-:global([data-platform='darwin']) .newSession:hover {
-  background: rgb(255 255 255 / 0.3);
+@media (hover: hover) {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
+    background: var(--dsw-specific-sidebar-glass-hover);
+  }
 }
 
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession {
-  background: rgb(255 255 255 / 0.15);
-}
-
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
-  background: rgb(255 255 255 / 0.2);
+/* The rail stacks the occupant's controls under the New session icon. */
+.collapsed .newSessionRow {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0 0 12px;
 }
 
 .collapsed .newSession {
-  align-self: flex-start;
+  flex: none;
   width: 36px;
   height: 36px;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0;
   gap: 0;
   border-color: transparent;
   background: transparent;
 }
 
-.collapsed .newSession:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .collapsed .newSession:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+  background: var(--dsw-specific-sidebar-glass-collapsed-fill);
+}
+
+@media (hover: hover) {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+    background: var(--dsw-specific-sidebar-glass-collapsed-hover);
+  }
 }
 
 .newSessionLabel {
@@ -465,7 +520,18 @@
 }
 
 .newSessionLabelMask { flex: 1; min-width: 0; }
-.newSession:is(:hover, :focus-visible) .newSessionLabelMask:has(+ .newSessionShortcut) { overflow: hidden; mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
+
+.newSession:focus-visible .newSessionLabelMask:has(+ .newSessionShortcut) {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
+}
+
+@media (hover: hover) {
+  .newSession:hover .newSessionLabelMask:has(+ .newSessionShortcut) {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
+  }
+}
 .newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: center; gap: 6px; }
 .newSessionContent > svg { flex: none; }
 
@@ -477,29 +543,181 @@
   font-weight: 400;
 }
 
-.newSession:is(:hover, :focus-visible) .newSessionShortcut { opacity: 1; }
+.newSession:focus-visible .newSessionShortcut {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .newSession:hover .newSessionShortcut {
+    opacity: 1;
+  }
+}
+
+.scrollRegion {
+  margin-top: 4px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The workspace section is `100cqh` of this bounded region, one viewport tall without a resize observer. */
+.root:not(.collapsed) .scrollRegion {
+  container-type: size;
+}
+
+/* Both gaps scroll away; ordinary rows do not force overflow when they fit. The
+   trailing column keeps content 8px from the sidebar edge; this viewport draws no
+   scrollbar of its own. */
+.scrollArea {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) calc(var(--dsh-sidebar-inline-padding) - 2px);
+  grid-template-rows: 8px max-content 2px max-content;
+  align-content: start;
+  margin-left: -4px;
+  margin-right: calc(2px - var(--dsh-sidebar-inline-padding));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Expanded, this viewport only scrolls the navigation away; the section below
+   scrolls its own rows and draws the only visible scrollbar. Descendants query
+   the scroll state to take scrolling once this viewport ends. */
+.root:not(.collapsed) .scrollArea {
+  container-type: scroll-state;
+  scrollbar-width: none;
+}
+
+/* Safari versions without `scrollbar-width` still use the WebKit scrollbar. */
+.root:not(.collapsed) .scrollArea::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollArea::before,
+.scrollArea::after {
+  content: '';
+  grid-column: 2;
+  pointer-events: none;
+}
+
+.scrollArea::before { grid-row: 1; }
+.scrollArea::after { grid-row: 3; }
+
+.scrollFade {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill));
+  pointer-events: none;
+}
+
+:global([data-platform='darwin']) .scrollFade,
+.collapsed .scrollFade,
+.collapsed .scrollArea::before,
+.collapsed .scrollArea::after {
+  display: none;
+}
+
+.collapsed .scrollRegion {
+  margin-top: 0;
+}
+
+.collapsed .scrollArea {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+/* The entry wrapper paints the row fill, so it carries the shared paint inset
+   instead of its inner panel row. */
+.panelEntry {
+  position: relative;
+  display: flex;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background-clip: padding-box;
+}
+
+.panelEntryWide > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.panelEntryWide .panelRow {
+  width: 100%;
+  margin: 0;
+  border-inline: 0;
+  padding-right: 38px;
+  background: transparent;
+}
+
+.panelEntryActive,
+.panelEntry:has(:focus-visible) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panelUnpin {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.panelUnpin:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .panelUnpin { opacity: 0; }
+  .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
+  .panelEntry .panelRow:hover { background: transparent; }
+  .panelUnpin:hover { color: var(--dsw-alias-label-primary); }
+  .panelEntry:hover .panelUnpin,
+  .panelEntry:has(:focus-visible) .panelUnpin { opacity: 1; }
+}
 
 .panelList {
+  grid-column: 2;
+  grid-row: 2;
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   margin-bottom: 8px;
 }
 
-/* Panel entries share the New Session bar's 12px radius and 2px inset, the
-   session rows' hover/selected surface, and the primary ink. */
+/* Panel entries use a 3px paint inset, the New Session bar's 12px radius,
+   the session rows' hover/selected fill, and the primary ink. */
 .panelRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 2px;
-  min-height: 36px;
-  padding: 7px 8px;
+  gap: var(--dsh-sidebar-label-gap);
+  margin: 0;
+  min-height: 32px;
+  padding: 5px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
   box-sizing: border-box;
   border: none;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
   border-radius: var(--dsw-radius-md);
   background: transparent;
+  background-clip: padding-box;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   line-height: 22px;
@@ -507,18 +725,30 @@
   cursor: pointer;
 }
 
-.panelRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.panelRow.panelActive {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .panelRow:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .panelRow:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
+}
+
+/* The More launcher keeps the panel rows' geometry inside the menu's anchor wrapper. */
+.moreAnchor {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelRow[aria-expanded='true'] {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.moreMenu {
+  width: 288px;
+  max-width: calc(100vw - 24px);
 }
 
 .panelGlyph {
@@ -540,33 +770,33 @@
   margin-bottom: 12px;
 }
 
+.collapsed .panelEntry {
+  border-inline: 0;
+}
+
 .collapsed .panelRow {
   width: 36px;
   height: 36px;
   justify-content: center;
   margin: 0;
+  border-inline: 0;
+  background-clip: border-box;
   padding: 0;
   color: var(--dsw-alias-label-primary);
 }
 
-/* Region seat: always mounted so the foot never moves. Its trailing margin
-   cancels the wide shell inset so the nested scrollbar can sit at the sidebar
-   edge; the browser restores that inset inside its own rows. */
+/* The workspace seat stays mounted while its wide and rail bodies change. */
 .regionArea {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 4;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  margin-left: -4px;
-  margin-right: calc(-1 * var(--dsh-sidebar-inline-padding));
-  padding-left: 4px;
-  overflow: hidden;
 }
 
 .collapsed .regionArea {
-  margin-left: 0;
-  margin-right: 0;
-  padding-left: 0;
+  flex: 1;
 }
 
 /* Footer seats: additive actions stack above Settings. Each occupant owns its
@@ -600,10 +830,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :global([data-animating]:not([data-dragging])) .root,
   .wide,
   .fading > *,
   .railIn .iconButton,
-  .railIn .newSession,
+  .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
   .railIn .panelList,
   .railIn .footArea,
   .railIn .regionArea {

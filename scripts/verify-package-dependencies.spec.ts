@@ -235,6 +235,7 @@ describe('package dependency scope', () => {
       '@deepseek-ai/dsh-typert-protocol',
       '@deepseek-ai/dsh-util-code-language',
       '@deepseek-ai/dsh-util-crypto',
+      '@deepseek-ai/dsh-util-text-search',
       '@deepseek-ai/dsh-util-values',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-deque']).toEqual(['Deque'])
@@ -242,11 +243,20 @@ describe('package dependency scope', () => {
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-session/types']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-typert-protocol']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-scope']).toEqual([
-      'carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget',
+      'carrierKeyOf', 'createScope', 'scopeOf', 'scopeParentOf', 'scopeTarget',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-typert-protocol']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-translator'])
       .toEqual(['TranslationError'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-forge'])
+      .toEqual(['changeRequestKey'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-worktree'])
+      .toEqual(['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-fs']).toEqual(['FsError'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session'])
+      .toEqual(['SESSION_FORMAT_VERSION', 'Session', 'appendPluginRecord', 'pluginRecordOf'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session-title']).toEqual(['normalizeSessionTitle'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-timeout']).toEqual(['deadline', 'timeoutOf'])
   })
 
   it('discovers the Client directory, dsh.client declarations, and configured Host packages', () => {
@@ -705,6 +715,36 @@ describe('face-aware source classification', () => {
     await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
       exports: { './node': './other/node.js' },
     })).rejects.toThrow('Host export ./node cannot map ./other/node.js to a source entry')
+  })
+
+  it.each(['./lib/assets/*', { default: './lib/assets/*.js' }])(
+    'does not classify the package-asset export %j as Host code', async (target) => {
+      const root = writeWorkspace({
+        'packages/client/ui-probe/package.json': {
+          name: '@deepseek-ai/dsh-client-ui-probe',
+          dsh: { client: { platform: 'web' } },
+          exports: {
+            '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+            './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+            './assets/*': target,
+          },
+          ...CORDIS_PEER,
+        },
+        'packages/client/ui-probe/src/index.ts': 'export function apply() {}\n',
+        'packages/client/ui-probe/src/client/index.ts': "import art from './assets/art.webp'\nexport const image = art\n",
+      })
+
+      const state = await readPackageDependencyState(root, policy())
+
+      expect(state.facts.map(fact => fact.manifestPath)).toEqual(['packages/client/ui-probe/package.json'])
+      expect(collectPackageDependencyViolations(state)).toEqual([])
+    },
+  )
+
+  it('scans other subpaths below ./assets as Host exports', async () => {
+    await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      exports: { './assets/index': './lib/assets/index.js' },
+    })).rejects.toThrow('Host export ./assets/index has no source entry')
   })
 
   it('fails when a managed Host package has no Host entry', async () => {

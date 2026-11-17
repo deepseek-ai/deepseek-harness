@@ -7,8 +7,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import * as yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { evaluate } from '@deepseek-ai/cordis-plugin-loader'
 
 describe('dsh-base bundle', () => {
@@ -21,10 +20,7 @@ describe('dsh-base bundle', () => {
       dsh?: { bundle?: { patch?: string } }
     }
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
-    const parsed = yaml.load(
-      readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'),
-      { schema: entryListSchema },
-    )
+    const parsed = parseEntryYaml(readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'))
     expect(Array.isArray(parsed)).toBe(true)
     // The base layer is one insert list over the empty profile root.
     const rows = (parsed as { insert?: { id?: string; config?: Record<string, unknown>; disabled?: boolean }[] }[]).flatMap(
@@ -41,20 +37,23 @@ describe('dsh-base bundle', () => {
     })
     expect(rows.filter(row => row.id === 'subagent-codex')).toHaveLength(0)
     expect(rows.filter(row => row.id === 'subagent-claude-code')).toHaveLength(0)
-    expect(rows.find(row => row.id === 'web')?.config).toMatchObject({ fetchProvider: 'http' })
+    expect(rows.find(row => row.id === 'web')?.config).toEqual({ searchProvider: 'deepseek-search-api', fetchProvider: 'http' })
+    expect(rows.find(row => row.id === 'web-deepseek-api')).toEqual({ id: 'web-deepseek-api', name: '@deepseek-ai/dsh-web-deepseek-api' })
     expect(rows.find(row => row.id === 'web-fetch-http')).toBeDefined()
+    expect(rows.find(row => row.id === 'web-search-deepseek')).toMatchObject({
+      name: '@deepseek-ai/dsh-web-search-deepseek', config: { apiKeyEnv: 'DEEPSEEK_API_KEY' },
+    })
     expect(rows.find(row => row.id === 'tool-web')?.config).toMatchObject({ fetch: true })
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-codex')
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-claude-code')
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-web-fetch-http')
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-web-deepseek-api')
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-web-search-deepseek')
   })
 
   it('gates each shell stack by platform with a symmetric disabled expression', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
-    const parsed = yaml.load(
-      readFileSync(resolve(root, 'cordis.patch.yml'), 'utf8'),
-      { schema: entryListSchema },
-    )
+    const parsed = parseEntryYaml(readFileSync(resolve(root, 'cordis.patch.yml'), 'utf8'))
     if (!Array.isArray(parsed)) throw new TypeError('base patch must parse to a patch list')
     const rows = parsed.flatMap((patch): Record<string, unknown>[] =>
       typeof patch === 'object' && patch !== null

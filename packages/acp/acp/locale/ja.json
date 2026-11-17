@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP サーバー",
+    "description": "JSON-RPC の標準入出力でエージェントを操作する、自動化専用の ACP サーバーです。"
+  }
+}

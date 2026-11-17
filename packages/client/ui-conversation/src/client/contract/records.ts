@@ -2,8 +2,8 @@
 // substructure references. Stable node and location stores make old snapshots
 // live readers rather than time-point views.
 
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { LlmRetryEventData } from '@deepseek-ai/dsh-llm-retry/types'
@@ -41,6 +41,8 @@ export type AssistantBlock =
 /** A finalized user message. */
 export interface UserMessageNode {
   kind: 'user'
+  /** Durable identity, absent only in synthetic projections. */
+  messageId?: MessageId
   seq: number
   /** Unix epoch ms from the source session event. */
   time: number

@@ -14,10 +14,11 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { APPROVAL_POLICIES, setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
@@ -99,10 +100,7 @@ function summarize(session: Session, firstSeq: SessionLogOffset): RunOutcome {
     }
     if (!started) continue
     if (event.type === 'assistant/message') {
-      const joined = event.data.message.content
-        .filter(block => block.type === 'text')
-        .map(block => block.text)
-        .join('')
+      const joined = extractTextContent(event.data.message.content)
       if (joined !== '') text = joined
     }
     if (event.type === 'turn/end') reason = event.data.reason
@@ -180,7 +178,6 @@ function streamReasoning(
 interface AdoptableHeader {
   cwd?: string | undefined
   origin?: 'subagent' | undefined
-  parentSession?: SessionId | undefined
   agentPreset?: string | undefined
 }
 
@@ -231,8 +228,8 @@ function assertAdoptable(header: AdoptableHeader, events: Iterable<SessionEvent>
       `session "${sessionId}" runs under agent preset "${preset}", which the one-shot runner does not compose`,
     )
   }
-  if (header.origin === 'subagent' || header.parentSession !== undefined) {
-    throw new Error(`session "${sessionId}" is a subagent or forked session and cannot be driven directly`)
+  if (header.origin === 'subagent') {
+    throw new Error(`session "${sessionId}" is a subagent session and cannot be driven directly`)
   }
   if (header.cwd === undefined) {
     throw new Error(`session "${sessionId}" recorded no working directory, so it cannot be adopted`)
@@ -259,8 +256,8 @@ async function resolveAgent(
   ctx: Context,
   agents: Context['agents'],
   sessionId: SessionId,
-  agentOptions: { provider: string; model: string },
-  setup: (agentCtx: Context) => void,
+  agentOptions: AgentOptions,
+  setup: (agentCtx: Context, agent: Agent) => void | Promise<void>,
   cwd: string,
 ): Promise<Agent> {
   // Resuming promises the caller a log a later process can continue. Without a
@@ -364,14 +361,24 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   }
 
   const selection = defaultModel.currentSelection()
-  const agentOptions = { provider: selection.provider, model: selection.model }
+  const agentOptions: AgentOptions = { ...selection }
   // This bundle composes no preset roster, so the model-facing rows sit in the
   // host plane and the agent reads them from the global layer. A deployment
   // that DOES configure one has to join it here first
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
-  const setup = (agentCtx: Context): void => {
-    const selected: ModelSelectionRef = { current: selection, assembled: undefined }
-    installModelSelection(agentCtx, selected)
+  const setup = (agentCtx: Context, agent: Agent): void => {
+    // A resumed Session continues with this run's configured model.
+    if (config.sessionId !== undefined) {
+      const previous = agent.model.current()
+      const configured = { ...selection }
+      if (configured.reasoningEffort === undefined && previous !== undefined
+        && previous.provider === configured.provider && previous.model === configured.model
+        && previous.reasoningEffort !== undefined) {
+        configured.reasoningEffort = previous.reasoningEffort
+      }
+      agent.model.select(configured)
+    }
+    installModelSelection(agentCtx)
   }
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
   const fs = ctx.get('fs')
@@ -417,7 +424,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
         await agent.whenIdle()
         const idleSeq = agent.session.seq
         // Child settlement can wake the parent before the child wait observes it.
-        if (!await subagents?.waitForChildren(agent)
+        if (!await subagents?.waitForTreeWork(agent)
           && agent.status === 'idle' && agent.session.seq === idleSeq) break
       }
     } finally {

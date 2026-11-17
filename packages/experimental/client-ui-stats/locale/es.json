@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vista de estadísticas",
+    "description": "Muestra contexto, tiempos, caché y coste de herramientas por turno y paso junto al chat."
+  }
+}

@@ -1,15 +1,17 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  ToolCallId,
+  type ToolCallId,
   LlmAdapter,
-  ReasoningEffortId,
+  type ReasoningEffortId,
   type GenerateOptions,
   type LlmResolvedModelInfo,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-tools'
 
-const HIGH = ReasoningEffortId('high')
-const OFF = ReasoningEffortId('off')
+const HIGH = brandString<ReasoningEffortId>('high')
+const OFF = brandString<ReasoningEffortId>('off')
 const SHELL_TOOL = process.platform === 'win32' ? 'pwsh' : 'bash'
 const SHELL_COMMAND = process.platform === 'win32'
   ? "Write-Output 'CLI_TOOL_ROUND_TRIP'"
@@ -46,8 +48,8 @@ class CliMockAdapter extends LlmAdapter {
       yield { type: 'reasoning-delta', index: 0, text: reasoning }
       yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: reasoning } }
       yield { type: 'block-start', index: 1, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 1, id: ToolCallId('cli-smoke-call'), name: SHELL_TOOL, argumentsDelta: args }
-      yield { type: 'block-end', index: 1, block: { type: 'tool-call', id: ToolCallId('cli-smoke-call'), name: SHELL_TOOL, arguments: args } }
+      yield { type: 'tool-call-delta', index: 1, id: brandString<ToolCallId>('cli-smoke-call'), name: SHELL_TOOL, argumentsDelta: args }
+      yield { type: 'block-end', index: 1, block: { type: 'tool-call', id: brandString<ToolCallId>('cli-smoke-call'), name: SHELL_TOOL, arguments: args } }
       yield { type: 'usage', usage: { inputTokens: 11, outputTokens: 3, cacheReadTokens: 2 } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
@@ -67,13 +69,17 @@ class CliMockAdapter extends LlmAdapter {
 }
 
 export const name = 'cli-mock-llm'
-export const inject = ['llm']
+export const inject = ['llm', 'tools']
 
-/** Register the keyless `cli-mock` adapter. */
+/** Register the keyless `cli-mock` adapter and select `off` effort for the step after a tool call. */
 export function apply(ctx: Context): void {
   ctx.llm.registerAdapter(['cli-mock'], new CliMockAdapter())
-  ctx.on('agent/request', async ({ step }, next) => {
-    const config = await next()
-    return step === 2 ? { ...config, reasoningEffort: OFF } : config
+  ctx.on('tools/execute', async (exec, next) => {
+    const result = await next()
+    const current = exec.agent === undefined ? undefined : exec.agent.model.current()
+    if (exec.agent !== undefined && current !== undefined) {
+      exec.agent.model.select({ provider: current.provider, model: current.model, reasoningEffort: OFF })
+    }
+    return result
   })
 }

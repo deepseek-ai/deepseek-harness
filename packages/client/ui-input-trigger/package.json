@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-input-trigger",
   "description": "Input trigger pipeline: '/' and '@' detection, candidate menu, pick routing to registered sources",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -66,6 +66,9 @@
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

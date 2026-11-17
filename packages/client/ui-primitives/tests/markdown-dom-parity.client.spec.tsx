@@ -171,6 +171,8 @@ const CORPUS: Record<string, string> = {
     '',
     '<https://deepseek.com> and bare autolink https://autolink.example.com literal.',
     '',
+    '中文 https://autolink.example.com/a。后文 ends before CJK punctuation.',
+    '',
     '[spaces encoded](https://example.com/a b)',
     '',
     '[![linked badge](https://example.com/badge.png)](https://example.com/target) image-only anchors carry no leading glyph.',

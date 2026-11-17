@@ -1,4 +1,4 @@
-# Custom plugin markets: the Host service that reads the index sources the
+# Custom plugin indexes: the Host service that reads the index sources the
 # user configures and the Web Discover tab of the Plugins page. The
 # `plugin_market` tool row in the Creator preset registers its tool only
 # while this service is mounted.

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Impact-matrix projection tests (row by row): what each
  * phase projects onto the InputBar — enter routing, visuals (command chip /
@@ -15,7 +16,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   allowAllAccess, bindSnapshotSelector, conversationSnapshot, sessionSnapshot,
 } from '@deepseek-ai/dsh-client-test-runtime'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubmitAttachment, SubmitOutcome } from '../src/client/contract/input.ts'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -25,6 +26,7 @@ import { SessionInputShell } from '../src/client/input/facade.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -67,6 +69,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection: (() => undefined),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),
@@ -75,6 +78,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     addFiles: () => null,
     useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
     retryFileUpload: undefined,
+    registerFileIntake: createComposerFileIntake(),
     removeAttachment: () => {},
     // Every id resolves so the bar's registry prune never drops a test image.
     resolveDraftAttachments: ids => ids.map(id => ({
@@ -84,6 +88,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     })),
     toggleCommandMenu: vi.fn(),
     useBusyEnter: bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue')),
+    retry: undefined,
     useStopShortcut: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
@@ -92,6 +97,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     stop: vi.fn(),
     t: makeTranslate(zh, commonZh),
     variant: 'composer',
+    occurrence: 'main',
   }
   return render(<InputBar {...props} />)
 }
@@ -149,14 +155,15 @@ describe('matrix row: plain', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('enter falls to the default sink; no claim on the currency; edits free', async () => {
+  it('enter falls to the default sink; no claim on the currency; the draft clears once accepted', async () => {
     const { textarea, shell, sink } = bench()
     act(() => { shell.setDraft('普通消息') })
     expect(shell.snapshot.claim).toBeUndefined()
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal))
-    // The detached default send never freezes the composer.
-    expect(shell.snapshot.phase).toBe('plain')
+    expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal), expect.any(Function))
+    // The composer holds the message, read-only, until the Host accepts it.
+    expect(shell.snapshot).toMatchObject({ phase: 'sending', draft: '普通消息' })
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     expect(shell.snapshot.draft).toBe('')
     expect(shell.snapshot.claim).toBeUndefined()
   })
@@ -360,7 +367,7 @@ describe('matrix row: locked (session disabled)', () => {
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     act(() => { shell.setDraft('排队') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 })
 

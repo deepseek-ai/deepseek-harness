@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import BINARY, ROOT, NativeHelper, line, run_cleanup, stop
+from native_test_support import default_binary, ROOT, NativeHelper, line, run_cleanup, stop
 
 
 def wait_state(path, predicate):
@@ -23,9 +23,10 @@ def wait_state(path, predicate):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
+    parser.add_argument("--helper", type=Path, default=None)
     parser.add_argument("--artifacts", type=Path)
     args = parser.parse_args()
+    args.helper = args.helper or default_binary()
     transcript = []
     processes = []
     helper = None
@@ -48,22 +49,32 @@ def main():
             helper.call("activate", {"appHandle": blocker["appHandle"]})
             wait_state(root / "target.json", lambda state: not state["active"] and state["textFocused"])
             started = time.monotonic()
-            error = helper.call("paste", params, "PASTE_NOT_CONSUMED")
+            unread = helper.call("paste", params, "PASTE_NOT_CONSUMED")
             elapsed = time.monotonic() - started
-            assert "foreground" in error["message"] and "focus" in error["message"], error
+            assert "foreground" in unread["message"] and "focus" in unread["message"], unread
             background = wait_state(root / "target.json", lambda state: state["pasteCalls"] == [False])
             assert background["text"] == "" and not background["active"], background
             helper.call("activate", owner)
             wait_state(root / "target.json", lambda state: state["active"] and state["textFocused"])
             result = helper.call("paste", params)
-            assert result == {"dispatched": True, "verified": False}, result
+            assert result == {"dispatched": True}, result
             foreground = wait_state(root / "target.json", lambda state: state["text"] == "test")
             assert foreground["pasteCalls"] == [False, True] and foreground["active"], foreground
+            duplicate_path = root / "duplicate.json"
+            duplicate = subprocess.Popen([str(binary), str(duplicate_path), "Duplicate Paste commands", "--duplicate"],
+                                         stdout=subprocess.PIPE, text=True)
+            processes.append(duplicate)
+            assert line(duplicate).strip() == "READY"
+            target = helper.call("getApp", {"selector": str(duplicate.pid)})
+            error = helper.call("paste", {**params, "appHandle": target["appHandle"]}, "UNSUPPORTED")
+            assert "ambiguous" in error["message"] and "No input was dispatched. Read fresh state" in error["message"], error
+            state = json.loads(duplicate_path.read_text())
+            assert state["text"] == "" and state["pasteCalls"] == [], state
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 (args.artifacts / "results.json").write_text(json.dumps({"background": background,
-                    "foreground": foreground, "backgroundElapsedSeconds": elapsed, "error": error}, indent=2) + "\n")
-            print(f"PASS: background PASTE_NOT_CONSUMED in {elapsed:.3f}s; foreground paste inserted test")
+                    "foreground": foreground, "backgroundElapsedSeconds": elapsed, "error": unread}, indent=2) + "\n")
+            print(f"PASS: background PASTE_NOT_CONSUMED in {elapsed:.3f}s; foreground paste inserted test; ambiguous menu received zero Paste actions")
         finally:
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)

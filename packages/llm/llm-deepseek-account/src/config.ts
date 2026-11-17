@@ -2,28 +2,17 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { isVolatile } from '@deepseek-ai/cosmokit'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import { catalogModelFields, deepSeekConfigFields, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import type { Config as ProtocolConfig, DeepSeekCatalogModel, Options as ProtocolOptions, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
-
-/** Default deadline of one model-listing request and of a first-use wait. */
-export const DEFAULT_MODELS_TIMEOUT_MS = 5_000
-/** Default listing age after which the next access refreshes it in the background. */
-export const DEFAULT_MODELS_MAX_AGE_MS = 600_000
-
-/** Field overrides for one model; unset fields and empty lists inherit the underlying entry. */
-export type ModelOverride = Omit<DeepSeekCatalogModel, 'id'>
+import {
+  catalogModelFields, deepSeekConfigFields, modelListingConfigFields, modelListingURL, resolveAdapterOptions, resolveListingTiming,
+} from '@deepseek-ai/dsh-llm-deepseek'
+import type {
+  Config as ProtocolConfig, ListingSettings, ModelListingConfig, ModelListingOptions, ModelOverride, Options as ProtocolOptions,
+  ResolvedDeepSeekOptions,
+} from '@deepseek-ai/dsh-llm-deepseek'
 
 /** Account route configuration; authentication comes exclusively from the account service. */
-export interface Config extends Omit<ProtocolConfig, 'models'> {
-  /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
-  modelsTimeoutMs: Volatile<number>
-  /**
-   * Listing age after which the next access refreshes it in the background;
-   * a failed load retries after the same age (default ten minutes).
-   */
-  modelsMaxAgeMs: Volatile<number>
+export interface Config extends Omit<ProtocolConfig, 'models'>, ModelListingConfig {
   /** Field overrides by model id, layered over the account listing and the built-in catalog. */
   modelOverrides: Volatile<Record<string, ModelOverride>>
 }
@@ -38,26 +27,13 @@ const modelOverride: z<ModelOverride> = z.object({
 
 export const Config = z.object({
   ...protocolFields,
-  modelsTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_MODELS_TIMEOUT_MS).volatile(),
-  modelsMaxAgeMs: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_MAX_AGE_MS).volatile(),
+  ...modelListingConfigFields,
   modelOverrides: z.dict(modelOverride).default({}).volatile(),
 })
 
 /** Plain account options accepted by {@link resolveAccountOptions}. */
-export type AccountOptions = Omit<ProtocolOptions, 'models'> & {
-  modelsTimeoutMs?: number
-  modelsMaxAgeMs?: number
+export type AccountOptions = Omit<ProtocolOptions, 'models'> & ModelListingOptions & {
   modelOverrides?: Record<string, ModelOverride>
-}
-
-/** Model-listing endpoint and cache timing of one configuration generation. */
-export interface CatalogSettings {
-  /** Listing endpoint; it always shares the Messages origin. */
-  readonly url: string
-  /** Deadline of one listing request. */
-  readonly timeoutMs: number
-  /** Listing age after which the next access refreshes it. */
-  readonly maxAgeMs: number
 }
 
 /** One validated configuration generation of the account route. */
@@ -65,7 +41,7 @@ export interface ResolvedAccountOptions {
   /** Messages settings; request resolution replaces `models` with the resolved account catalog. */
   readonly protocol: ResolvedDeepSeekOptions
   /** Listing endpoint and cache timing. */
-  readonly catalog: CatalogSettings
+  readonly catalog: ListingSettings
   /** Overrides by model id, holding only the fields each one declares. */
   readonly modelOverrides: Readonly<Record<string, ModelOverride>>
 }
@@ -77,11 +53,6 @@ export interface ResolvedAccountOptions {
  */
 export function plainAccountOptions(config: Config): AccountOptions {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
-}
-
-/** The listing endpoint: `/models` at the Messages origin, the only origin that receives the account token. */
-function listingEndpoint(baseURL: string): string {
-  return new URL('/models', new URL(baseURL).origin).href
 }
 
 /** Keep an override's declared fields: parsed configuration carries unset fields as `undefined` and unset arrays as `[]`. */
@@ -115,20 +86,12 @@ export function resolveAccountOptions(options: AccountOptions, environment?: Lau
     throw new Error('llm-deepseek-account: models is no longer configurable; the account /models listing supplies the catalog. '
       + 'Remove models from this entry and adjust single models with modelOverrides.<model id>')
   }
-  const {
-    modelsTimeoutMs = DEFAULT_MODELS_TIMEOUT_MS, modelsMaxAgeMs = DEFAULT_MODELS_MAX_AGE_MS,
-    modelOverrides = {}, ...protocolOptions
-  } = options
-  if (!Number.isFinite(modelsTimeoutMs) || modelsTimeoutMs <= 0 || modelsTimeoutMs > MAX_TIMER_DELAY_MS) {
-    throw new Error(`llm-deepseek-account: modelsTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
-  }
-  if (!Number.isSafeInteger(modelsMaxAgeMs) || modelsMaxAgeMs < 0) {
-    throw new Error('llm-deepseek-account: modelsMaxAgeMs must be a non-negative safe integer')
-  }
+  const { modelsTimeoutMs: _timeout, modelsMaxAgeMs: _maxAge, modelOverrides = {}, ...protocolOptions } = options
+  const timing = resolveListingTiming(options, 'llm-deepseek-account')
   const protocol = resolveAdapterOptions(protocolOptions, environment)
   return {
     protocol,
-    catalog: { url: listingEndpoint(protocol.baseURL), timeoutMs: modelsTimeoutMs, maxAgeMs: modelsMaxAgeMs },
+    catalog: { url: modelListingURL(protocol.baseURL), ...timing },
     modelOverrides: Object.fromEntries(Object.entries(modelOverrides).map(([id, override]) => [id, resolveOverride(id, override)])),
   }
 }

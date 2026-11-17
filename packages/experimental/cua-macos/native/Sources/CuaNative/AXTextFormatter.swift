@@ -46,6 +46,14 @@ struct AXTextNode {
         return !hasMeaning && valueWritable != true && selectionWritable != true
             && actions.allSatisfy { ["AXShowMenu", "AXScrollToVisible", "AXCancel"].contains($0) }
     }
+
+    var addressable: Bool {
+        enabled != false && (!actions.isEmpty || valueWritable == true || selectionWritable == true)
+    }
+
+    var omitted: Bool {
+        transparent || (!addressable && !hasMeaning && role != "AXWindow" && role != "AXSheet")
+    }
 }
 
 enum AXTextFormatter {
@@ -109,6 +117,12 @@ enum AXTextFormatter {
             else { line += " bounds=unavailable" }
         }
         return line
+    }
+
+    static let incompleteDiscovery = "Window discovery incomplete. Some children could not be read."
+
+    static func unreadableChildLine(level: Int, positioned: Bool) -> String {
+        String(repeating: "  ", count: level) + (positioned ? "[One child could not be read.]" : "[Child list incomplete.]")
     }
 
     static func truncation(maxElements: Int?, maxDepth: Int?) -> String {

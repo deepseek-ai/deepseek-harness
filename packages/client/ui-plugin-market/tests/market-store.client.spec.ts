@@ -1,9 +1,12 @@
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import type { MarketIndexSummary, MarketListingEntry, MarketQuery, MarketSearchResult } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  MarketIndexSummary, MarketListingEntry, MarketQuery, MarketSearchResult, PluginDetail, PluginDetailDocumentId,
+} from '@deepseek-ai/dsh-api-remotes/client'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { DiscoverController, PAGE_SIZE } from '../src/client/market-store.ts'
+import { detailKey, DiscoverController, PAGE_SIZE } from '../src/client/market-store.ts'
 import { INITIAL_QUERY } from '../src/client/presentation.ts'
 
 const A = 'https://a.example/index.json'
@@ -45,16 +48,26 @@ function setup(indexes: MarketIndexSummary[] = [{ url: A }, { url: B }]) {
     listIndexes: vi.fn(() => ok(state.indexes)),
     search: vi.fn((url: string, _query: MarketQuery) => ok(listing(url, url === A ? 'A' : 'B', url === A ? 'Desc' : undefined))),
     setIndexes: vi.fn((urls: string[]) => { state.indexes = urls.map(url => ({ url: url.trim() })); return ok(undefined) }),
+    readEntryDetail: vi.fn(
+      (_url: string, _name: string, _version: string, _language: string, _options: object): Promise<Answer<PluginDetail>> => ok({ status: 'none' }),
+    ),
   }
-  new TestRemote(ctx, { pluginMarket: market })
-  const controller = new DiscoverController(ctx)
+  const probe = { fastest: vi.fn((): Promise<Answer<string | null>> => ok('https://registry.npmmirror.com/')) }
+  new TestRemote(ctx, { pluginMarket: market, pluginRegistryProbe: probe })
+  const controller = new DiscoverController(ctx, () => 'https://dsh.example/prefix/')
   const face = controller.face(text => typeof text === 'string' ? text : text.en)
-  return { controller, face, market, state, snapshot: () => controller.store.getSnapshot() }
+  return { controller, face, market, probe, state, snapshot: () => controller.store.getSnapshot() }
 }
 
 describe('DiscoverController', () => {
   it('reads sources on first render, selects the first, and reads its listing', async () => {
     const { face, market, snapshot } = setup()
+    const entries = [plugin('publisher-first'), plugin('more-downloads')]
+    market.search.mockImplementationOnce(() => ok(listing(A, 'A', 'Desc', {
+      metadata: { categories: {}, labels: {}, sortKeys: { downloads: { title: 'Downloads', order: 'desc' } } },
+      entries: entries.map((entry, index) => ({ ...entry, metadata: { ...entry.metadata, sortKeys: { downloads: index + 1 } } })),
+      total: 2,
+    })))
     expect(snapshot().status).toBe('idle')
     face.ensure()
     expect(snapshot().status).toBe('loading')
@@ -63,7 +76,8 @@ describe('DiscoverController', () => {
     expect(market.listIndexes).toHaveBeenCalledOnce()
     expect(snapshot()).toMatchObject({ status: 'ready', selected: A, listing: { url: A, value: { title: 'A' } } })
     expect(snapshot().indexes).toEqual([{ url: A, title: 'A', description: 'Desc' }, { url: B }])
-    expect(market.search).toHaveBeenCalledWith(A, FIRST_PAGE)
+    expect(market.search).toHaveBeenCalledExactlyOnceWith(A, FIRST_PAGE)
+    expect(snapshot().listing?.value?.entries.map(entry => entry.name)).toEqual(['publisher-first', 'more-downloads'])
     expect(face.hooks.locale.getSnapshot().active).toBeTypeOf('string')
   })
 
@@ -143,6 +157,82 @@ describe('DiscoverController', () => {
     expect(snapshot()).toMatchObject({ editing: false, selected: null, listing: null })
   })
 
+  it('saves an ambiguous HTTPS address directly and honors an explicit Git address', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    const address = 'https://git.example/acme/plugins'
+    face.editDraft(address)
+    face.addSource()
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ selected: address, saving: false }) })
+    expect(market.setIndexes).toHaveBeenCalledWith([A, address])
+    face.editDraft(`git+${address}`)
+    face.editSourceOptions({ path: 'market/index.json', ref: 'main' })
+    face.addSource()
+    const source = `git+${address}?path=market%2Findex.json&ref=main`
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ selected: source, saving: false }) })
+    expect(market.setIndexes).toHaveBeenLastCalledWith([A, address, source])
+    expect(snapshot()).toMatchObject({ draft: '', sourceOptions: { path: '', ref: '' } })
+  })
+
+  it('saves a GitHub repository address with the default index path and ref', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    face.editDraft('https://github.com/acme/plugins')
+    face.addSource()
+    expect(market.setIndexes).toHaveBeenCalledWith([A, 'git+https://github.com/acme/plugins.git'])
+    await vi.waitFor(() => { expect(snapshot().saving).toBe(false) })
+  })
+
+  it('keeps a Git source draft with an invalid file path', () => {
+    const { face, market, snapshot } = setup([])
+    const address = 'https://github.com/acme/plugins'
+    face.editDraft(address)
+    face.editSourceOptions({ path: '../index.json' })
+    face.addSource()
+    expect(snapshot()).toMatchObject({ draft: address, sourceOptions: { path: '../index.json' }, sourceFailure: { kind: 'invalid-git' } })
+    expect(market.setIndexes).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Git draft and its file options when the Host rejects the source', async () => {
+    const { face, market, snapshot } = setup([])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
+    const address = 'git@github.com:acme/plugins.git'
+    const source = 'git+ssh://git@github.com/acme/plugins.git?path=market%2Findex.json&ref=main'
+    market.setIndexes.mockImplementationOnce(() => fail('plugin-market/invalid-index-url', 'Invalid source', { url: source, reason: 'git-source' }))
+    face.editDraft(address)
+    face.editSourceOptions({ path: 'market/index.json', ref: 'main' })
+    face.addSource()
+    await vi.waitFor(() => { expect(snapshot().sourceFailure).toEqual({ kind: 'invalid-git' }) })
+    expect(market.setIndexes).toHaveBeenCalledWith([source])
+    expect(snapshot()).toMatchObject({ saving: false, draft: address, sourceOptions: { path: 'market/index.json', ref: 'main' } })
+  })
+
+  it('blocks another source edit until the saved list has been read back', async () => {
+    const { face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().listing?.status).toBe('ready') })
+    const save = Promise.withResolvers<{ ok: true; value: undefined }>()
+    const reload = Promise.withResolvers<{ ok: true; value: MarketIndexSummary[] }>()
+    market.setIndexes.mockImplementationOnce(() => save.promise)
+    market.listIndexes.mockImplementationOnce(() => reload.promise)
+    face.editDraft(B)
+    face.addSource()
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenCalledExactlyOnceWith([A, B])
+    save.resolve({ ok: true, value: undefined })
+    await vi.waitFor(() => { expect(market.listIndexes).toHaveBeenCalledTimes(2) })
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenCalledTimes(1)
+    reload.resolve({ ok: true, value: [{ url: A }, { url: B }] })
+    await vi.waitFor(() => { expect(snapshot()).toMatchObject({ saving: false, selected: B }) })
+    face.removeSource(A)
+    expect(market.setIndexes).toHaveBeenLastCalledWith([B])
+    await vi.waitFor(() => { expect(snapshot().saving).toBe(false) })
+  })
+
   it.each([
     ['plugin-market/invalid-index-url', { url: 'x', reason: 'scheme' }, { kind: 'invalid' }],
     ['plugin-market/invalid-index-url', { url: 'x', reason: 'duplicate' }, { kind: 'duplicate' }],
@@ -153,10 +243,10 @@ describe('DiscoverController', () => {
     face.ensure()
     await vi.waitFor(() => { expect(snapshot().status).toBe('ready') })
     market.setIndexes.mockImplementationOnce(() => fail(code, 'broken', details))
-    face.editDraft('x')
+    face.editDraft(B)
     face.addSource()
     await vi.waitFor(() => { expect(snapshot().sourceFailure).toEqual(expected) })
-    expect(snapshot()).toMatchObject({ saving: false, draft: 'x' })
+    expect(snapshot()).toMatchObject({ saving: false, draft: B })
     face.editDraft('y')
     expect(snapshot().sourceFailure).toBeNull()
   })
@@ -200,6 +290,23 @@ describe('DiscoverController', () => {
     save.resolve({ ok: true, value: undefined })
     await Promise.resolve()
     expect(snapshot().listing?.status).toBe('loading')
+  })
+
+  it('drops the source-list readback when Discover is disposed after saving', async () => {
+    const { controller, face, market, snapshot } = setup([{ url: A }])
+    face.ensure()
+    await vi.waitFor(() => { expect(snapshot().listing?.status).toBe('ready') })
+    const reload = Promise.withResolvers<{ ok: true; value: MarketIndexSummary[] }>()
+    market.listIndexes.mockImplementationOnce(() => reload.promise)
+    face.editDraft(B)
+    face.addSource()
+    await vi.waitFor(() => { expect(market.listIndexes).toHaveBeenCalledTimes(2) })
+    controller.dispose()
+    const before = snapshot()
+    reload.resolve({ ok: true, value: [{ url: A }, { url: B }] })
+    await reload.promise
+    await Promise.resolve()
+    expect(snapshot()).toBe(before)
   })
 
   it('sends the query text, filters, and order, and starts each index with the initial query', async () => {
@@ -341,5 +448,129 @@ describe('DiscoverController', () => {
     late.resolve({ ok: true, value: listing(A, 'late') })
     await Promise.resolve()
     expect(snapshot().listing?.status).toBe('more')
+  })
+})
+
+describe('detail reads', () => {
+  const BUNDLE = { url: A, name: 'b', version: '1.0.0', npm: true } as const
+  const ENTRY = { url: B, name: 'e', version: '2.0.0', npm: false } as const
+  const FOUND: PluginDetail = { status: 'found', origin: 'readme', markdown: '# B', document: brandString<PluginDetailDocumentId>('doc') }
+
+  it('reads each plugin once per language and publishes the result', async () => {
+    const { controller, face, market } = setup()
+    market.readEntryDetail.mockImplementationOnce(() => ok(FOUND))
+    face.loadDetail(BUNDLE, 'en')
+    face.loadDetail(BUNDLE, 'en')
+    expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'loading' })
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: FOUND }) })
+    face.loadDetail(ENTRY, 'zh')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(ENTRY, 'zh')]).toEqual({ status: 'ready', detail: { status: 'none' } }) })
+    // An npm version asks the registry comparison and reads npmmirror first where it won; a Git version does not ask.
+    expect(market.readEntryDetail.mock.calls).toEqual([
+      [A, 'b', '1.0.0', 'en', { refresh: false, npmFileSources: ['npmmirror'] }], [B, 'e', '2.0.0', 'zh', { refresh: false, npmFileSources: [] }],
+    ])
+  })
+
+  it('reports failures by reason and reads again on retry', async () => {
+    const { controller, face, market } = setup()
+    // The Git entry's read starts at once; the npm one waits for the registry comparison, so answers go by name.
+    market.readEntryDetail.mockImplementationOnce(() => fail('plugin-market/unknown-plugin', 'gone', { name: 'e', version: '2.0.0' }))
+    market.readEntryDetail.mockImplementationOnce(() => fail('plugin-market/detail-unavailable', 'big', { reason: 'too-large' }))
+    face.loadDetail(BUNDLE, 'en')
+    face.loadDetail(ENTRY, 'en')
+    await vi.waitFor(() => {
+      expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'error', failure: 'too-large' })
+      expect(controller.details.getSnapshot()[detailKey(ENTRY, 'en')]).toEqual({ status: 'error', failure: 'other' })
+    })
+    face.retryDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: { status: 'none' } }) })
+    // A retry bypasses the Host's cached result.
+    expect(market.readEntryDetail.mock.calls.at(-1)).toEqual([A, 'b', '1.0.0', 'en', { refresh: true, npmFileSources: ['npmmirror'] }])
+  })
+
+  it('settles a retried read with the retry\'s answer', async () => {
+    const { controller, face, market } = setup()
+    let first: (value: Answer<PluginDetail>) => void = () => {}
+    market.readEntryDetail.mockImplementationOnce(() => new Promise((resolve) => { first = resolve }))
+    market.readEntryDetail.mockImplementationOnce(() => ok(FOUND))
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(market.readEntryDetail).toHaveBeenCalledOnce() })
+    face.retryDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: FOUND }) })
+    first({ ok: true, value: { status: 'none' } })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: FOUND })
+  })
+
+  it('forgets every read after the connection reset and drops the answers of forgotten reads', async () => {
+    const { controller, face, market } = setup()
+    let answer: (value: Answer<PluginDetail>) => void = () => {}
+    face.loadDetail(ENTRY, 'zh')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(ENTRY, 'zh')]?.status).toBe('ready') })
+    market.readEntryDetail.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve }))
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(market.readEntryDetail).toHaveBeenCalledTimes(2) })
+    controller.detailsReset()
+    expect(controller.details.getSnapshot()).toEqual({})
+    answer({ ok: true, value: FOUND })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(controller.details.getSnapshot()).toEqual({})
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]?.status).toBe('ready') })
+    // A read from before a reset that settles after the read that replaced it does not overwrite it.
+    let stale: (value: Answer<PluginDetail>) => void = () => {}
+    market.readEntryDetail.mockImplementationOnce(() => new Promise((resolve) => { stale = resolve }))
+    controller.detailsReset()
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(market.readEntryDetail).toHaveBeenCalledTimes(3) })
+    controller.detailsReset()
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: { status: 'none' } }) })
+    stale({ ok: true, value: FOUND })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'ready', detail: { status: 'none' } })
+  })
+
+  it('keeps the configured CDN order where npmmirror did not answer fastest', async () => {
+    const { controller, face, market, probe } = setup()
+    probe.fastest.mockImplementationOnce(() => ok('https://registry.npmjs.org/'))
+    face.loadDetail(BUNDLE, 'en')
+    await vi.waitFor(() => { expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]?.status).toBe('ready') })
+    expect(market.readEntryDetail.mock.calls).toEqual([[A, 'b', '1.0.0', 'en', { refresh: false, npmFileSources: [] }]])
+  })
+
+  it('drops a read whose registry comparison settles after a reset or disposal, without asking the Host', async () => {
+    const { controller, face, market, probe } = setup()
+    let settle: (value: Answer<string | null>) => void = () => {}
+    probe.fastest.mockImplementation(() => new Promise((resolve) => { settle = resolve }))
+    face.loadDetail(BUNDLE, 'en')
+    controller.detailsReset()
+    settle({ ok: true, value: null })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    face.loadDetail(BUNDLE, 'en')
+    controller.dispose()
+    settle({ ok: true, value: null })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(market.readEntryDetail).not.toHaveBeenCalled()
+  })
+
+  it('stops publishing detail reads after disposal', async () => {
+    const { controller, face, market } = setup()
+    let answer: (value: Answer<PluginDetail>) => void = () => {}
+    market.readEntryDetail.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve }))
+    face.loadDetail(BUNDLE, 'en')
+    controller.dispose()
+    answer({ ok: true, value: FOUND })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(controller.details.getSnapshot()[detailKey(BUNDLE, 'en')]).toEqual({ status: 'loading' })
+  })
+
+  it('addresses relative images through the Host route and leaves other destinations alone', () => {
+    const { face } = setup()
+    const doc = brandString<PluginDetailDocumentId>('d 1')
+    expect(face.detailImage(doc, 'img/a.png')).toBe('https://dsh.example/prefix/api/plugin-market/detail-file?document=d%201&path=img%2Fa.png')
+    for (const destination of ['https://example.com/a.png', 'data:image/png;base64,AA', '//cdn.example/a.png', '#top', 'mailto:a@b']) {
+      expect(face.detailImage(doc, destination)).toBeUndefined()
+    }
   })
 })

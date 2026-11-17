@@ -5,18 +5,22 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/types'
 import { SessionResources } from '@deepseek-ai/dsh-experimental-browser-use-runtime'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
-import { browserInputs, stagehandModelSchema, StagehandDrainError } from './native.ts'
+import { browserInputs, stagehandModelSchema } from './native.ts'
+import { StagehandDrainError } from './error.ts'
 import type { BrowserMethod, NativeBrowserRuntime, StagehandModelConfig } from './native.ts'
 import { openBrowserWorker } from './worker-client.ts'
 import { launchChromium } from './launch.ts'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-browser-use'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+
+export { StagehandDrainError, StagehandError, type StagehandErrorCode } from './error.ts'
 
 /** Cordis identity for the native Stagehand provider. */
 export const name = 'experimental-browser-use-stagehand-native'
@@ -32,8 +36,6 @@ export interface Config {
   mode: 'launch' | 'attach'
   /** CDP HTTP or WebSocket endpoint, required only for attach mode. */
   cdpEndpoint?: string
-  /** Optional Stagehand extension id for an existing browser. */
-  extensionId?: string
   /** Installed Chrome/Chromium executable used in launch mode. */
   executablePath?: string
   /** Hide an owned browser's window. */
@@ -55,7 +57,6 @@ export const Config: Schema<Config, ResolvedConfig> = Schema.object({
   }).required(), value => stagehandModelSchema.parse(value)).required(),
   mode: Schema.union(['launch', 'attach']).default('launch'),
   cdpEndpoint: Schema.string(),
-  extensionId: Schema.string(),
   executablePath: Schema.string(),
   headless: Schema.boolean().default(true),
   // Stagehand adds ten seconds to the action RPC timeout before arming its timer.
@@ -86,8 +87,8 @@ export function apply(ctx: Context, input: Config): void {
   if (config.mode === 'attach' && !config.cdpEndpoint?.trim()) {
     throw new Error('Stagehand attach mode requires cdpEndpoint')
   }
-  if (config.mode === 'launch' && (config.cdpEndpoint !== undefined || config.extensionId !== undefined)) {
-    throw new Error('Stagehand cdpEndpoint and extensionId require attach mode')
+  if (config.mode === 'launch' && config.cdpEndpoint !== undefined) {
+    throw new Error('Stagehand cdpEndpoint requires attach mode')
   }
   if (config.mode === 'attach' && config.executablePath !== undefined) {
     throw new Error('Stagehand executablePath requires launch mode')
@@ -96,7 +97,7 @@ export function apply(ctx: Context, input: Config): void {
     z.url().refine(value => /^(?:https?|wss?):/u.test(value), 'Expected an HTTP(S) or WS(S) endpoint').parse(config.cdpEndpoint)
   }
   ctx.effect(function* () {
-    yield ctx.browserUse.register(BrowserUseProviderName('stagehand-native'))
+    yield ctx.browserUse.register(brandString<BrowserUseProviderName>('stagehand-native'))
     const resources = new SessionResources<BrowserResource>(ctx, {
       label: 'stagehand-native',
       exclusive: config.mode === 'attach',
@@ -106,7 +107,6 @@ export function apply(ctx: Context, input: Config): void {
         const connect = (connectionSignal: AbortSignal) => openBrowserWorker({
           mode: 'attach', model: config.model, headless: config.headless,
           operationTimeoutMs: config.operationTimeoutMs, shutdownGraceMs: config.shutdownGraceMs,
-          ...config.extensionId === undefined ? {} : { extensionId: config.extensionId },
           ...config.cdpEndpoint === undefined ? {} : { cdpEndpoint: config.cdpEndpoint },
           ...chromium === undefined ? {} : { cdpEndpoint: chromium.endpoint },
         }, connectionSignal, (message) => { ctx.logger.warn(message) })
@@ -193,7 +193,14 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
     if (!names.has(exec.name)) return next()
     const agent = exec.agent
     if (agent === undefined || ctx.agents.get(agent.id) !== agent) {
-      throw new Error('Stagehand browser tools require an exact live Agent')
+      throw new ToolContextUnavailableError('Stagehand browser tools require an exact live Agent')
+    }
+    // Arguments are checked before the browser is acquired, so an invalid first call launches nothing.
+    // A non-object value is read as `{}`, exactly as the MCP bridge passes it to the call.
+    const args = typeof exec.arguments === 'object' && exec.arguments !== null ? exec.arguments : {}
+    const parsed = browserInputs[exec.name.slice('stagehand_'.length) as BrowserMethod].safeParse(args)
+    if (!parsed.success) {
+      throw new ToolArgsError(parsed.error.issues.map(issue => `${['arguments', ...issue.path].join('.')}: ${issue.message}`))
     }
     return resources.run(agent, exec.signal, async (resource, activeSignal) => {
       const upstreamSignal = exec.signal

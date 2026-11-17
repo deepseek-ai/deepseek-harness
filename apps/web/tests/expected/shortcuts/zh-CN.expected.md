@@ -54,6 +54,9 @@
       - listitem:
         - button "修改关闭当前页面／窗口快捷键"
         - text: 关闭当前页面／窗口 ⌥ ⌘ W
+      - listitem:
+        - button "修改切换已读/未读快捷键"
+        - text: 切换已读/未读 ⇧ ⌘ U
   - region "消息输入":
     - heading "消息输入" [level=3]
     - list:
@@ -72,7 +75,7 @@
   - region "审批区域":
     - heading "审批区域" [level=3]
     - list:
-      - listitem: 允许一次 Enter
+      - listitem: 允许 Enter
       - listitem: 拒绝 Esc
   - contentinfo:
     - button "恢复全部默认" [disabled]

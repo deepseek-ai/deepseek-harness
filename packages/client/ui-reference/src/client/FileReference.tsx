@@ -23,6 +23,8 @@ export interface FileReferenceInjected extends PathPresenceInjected {
    * @throws if navigation fails; the reference keeps a local retry/close dialog.
    */
   readonly openFile: (path: string) => void
+  /** Resolve a reference from the live workspace root. @param path - Reference path. @returns Host path. */
+  readonly resolveFilePath: (path: string) => string
 }
 
 type FileReferenceProps = UserTextNodeProps<'file'> & InjectFace<FileReferenceInjected> & PropsLocale<typeof NS>
@@ -34,7 +36,10 @@ type FolderReferenceProps = UserTextNodeProps<'folder'> & InjectFace<PathPresenc
  * @param props - JSON node, interaction policy, Session-authorized navigation and presence, and locale seat.
  * @returns the original spelling until confirmation; afterwards an inline chip and, after a navigation failure, its body-portaled dialog.
  */
-export function FileReference({ node, raw, interactive, openFile, usePathPresence, t }: FileReferenceProps) {
+export function FileReference({
+  node, raw, interactive, openFile, resolveFilePath, sessionId, useContextMenu, usePathPresence, t,
+}: FileReferenceProps) {
+  const { getTriggerProps } = useContextMenu()
   const [failedPath, setFailedPath] = useState<string | null>(null)
   const { path, label } = node.data
   const presence = usePathPresence(path)
@@ -50,7 +55,13 @@ export function FileReference({ node, raw, interactive, openFile, usePathPresenc
     setFailedPath(null)
   }
   return <>
-    <ReferenceChip appearance="file" label={label} title={raw} {...interactive ? { onActivate: open } : {}} />
+    <ReferenceChip
+      appearance="file"
+      label={label}
+      title={raw}
+      contextMenuProps={getTriggerProps(interactive ? () => ({ kind: 'file', value: { sessionId, path: resolveFilePath(path) } }) : undefined)}
+      {...interactive ? { onActivate: open } : {}}
+    />
     {interactive && failedPath === path && <Modal
       open
       onClose={close}

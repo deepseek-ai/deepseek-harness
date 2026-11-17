@@ -37,7 +37,7 @@
             "boolean",
             "null"
           ],
-          "description": "Allows patch indexing and insertion into an entry-list config; does not select the plugin implementation."
+          "description": "Allows patch indexing and insertion into an entry-list config, which a group: true entry requires; does not select the plugin implementation."
         },
         "disabled": {
           "anyOf": [
@@ -248,6 +248,28 @@
       "allOf": [
         {
           "$ref": "#/$defs/entryMetadata"
+        },
+        {
+          "if": {
+            "properties": {
+              "group": {
+                "const": true
+              }
+            },
+            "required": [
+              "group"
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/entryList"
+              }
+            },
+            "required": [
+              "config"
+            ]
+          }
         },
         {
           "if": {

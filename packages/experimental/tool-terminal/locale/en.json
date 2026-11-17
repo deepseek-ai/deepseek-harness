@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistent terminal tools",
+    "description": "Provide six persistent PTY tools with isolated session ownership and background task integration."
+  }
+}

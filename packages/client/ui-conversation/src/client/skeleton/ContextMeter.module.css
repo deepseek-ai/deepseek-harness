@@ -24,10 +24,16 @@
   cursor: pointer;
 }
 
-.trigger:hover,
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .track {
@@ -59,6 +65,23 @@
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-context-window, --dsh-context-opposite, --dsh-context-wide-opposite, --dsh-context-tall, --dsh-context-viewport;
+  align-self: end;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .header {
@@ -119,16 +142,15 @@
 }
 
 .colorSystem {
-  --meter-tint: var(--dsw-static-neutral-bluish-400);
+  --meter-tint: var(--dsw-alias-chart-system);
 }
 
 .colorTools {
-  /* The design platform ships no purple static token; violet-400 literal. */
-  --meter-tint: rgb(167, 139, 250);
+  --meter-tint: var(--dsw-alias-chart-tools);
 }
 
 .colorMessages {
-  --meter-tint: var(--dsw-static-blue-450);
+  --meter-tint: var(--dsw-alias-chart-messages);
 }
 
 .rows {
@@ -151,4 +173,49 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-primary);
+}
+
+@position-try --dsh-context-window {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-context-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  align-self: start;
+}
+
+@position-try --dsh-context-wide-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-context-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-context-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

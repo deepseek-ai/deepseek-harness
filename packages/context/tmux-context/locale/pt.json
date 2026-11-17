@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "contexto tmux",
+    "description": "Salve os locais do painel e da janela do tmux para cada etapa, quando necessário."
+  }
+}

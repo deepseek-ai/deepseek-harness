@@ -1,10 +1,12 @@
 - banner:
   - navigation "Session hierarchy": Math rendering
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Render this mathematical proof. {{clock}}
 - button "Copy"
 - status: Completed

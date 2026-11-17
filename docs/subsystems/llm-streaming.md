@@ -311,7 +311,7 @@ Retry configuration resolves before route registration into an immutable discrim
 
 ## `AppIdentity` — app attribution
 
-The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values.
+The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values. `APP_IDENTITY.suffix` reads `DSH_USER_AGENT_SUFFIX` on each use, and `userAgent()` appends it after the comment; a value that is not an RFC 9110 product token fails the request. The `dsh` launcher sets it to `dsh-profile/<profile>` before any plugin loads, percent-encoding profile-name bytes outside `tchar` and `%` itself, so Desktop sends `deepseek-harness/<version> (+<url>) dsh-profile/desktop` and a profile named `my web` sends `dsh-profile/my%20web`. A dsh subagent child reports its own profile, because child processes do not inherit `DSH_*` variables.
 
 ```ts type-equiv
 /**
@@ -328,6 +328,8 @@ interface AppIdentity {
   version: string
   /** Repository home URL of the app, used as the `User-Agent` comment. */
   url: string
+  /** RFC 9110 product token appended after the comment, such as `dsh-profile/web`. */
+  suffix?: string | undefined
 }
 ```
 
@@ -525,6 +527,106 @@ interface LlmNativeAuth {
 }
 ```
 
+A route's adapter can also publish the credential the route currently sends, so consumers that call the same deployment outside the model request path, such as the DeepSeek web providers, reuse it through `ctx.llm.providerCredential(provider)` instead of reading provider configuration or choosing header names. A grant is Host-only and is held for one operation; `kind` is merge-extensible through `LlmCredentialKindMap`, whose declared members are `api-key` and `account`. A grant whose owner can withdraw the credential while requests carry it, as an account sign-out does, has a `revoked` signal: the consumer runs each request it authenticates under that signal and reports a request the signal ended as its own failure, not as the caller's cancellation.
+
+```ts type-equiv
+/**
+ * One credential released for one destination. Host-only: it carries the
+ * secret, so it never crosses a Remote boundary and never enters a log.
+ */
+interface ProviderCredentialGrant {
+  /**
+   * Request headers carrying the credential as the route's own protocol
+   * expects it, such as `x-api-key` for an API key. Consumers speaking that
+   * protocol send them unchanged.
+   */
+  readonly headers: Readonly<Record<string, string>>
+  /**
+   * The bare credential value, for destinations whose protocol renders it
+   * differently from {@link headers}, such as `Authorization: Bearer`.
+   */
+  readonly value: string
+  /**
+   * Invalidate this exact credential after the destination rejected it with
+   * HTTP 401 so no later request resends it. Absent for kinds without
+   * invalidation. The owner contains storage failures: the caller reports the
+   * destination's rejection, never a failure of this call.
+   * @returns settlement after the invalidation attempt.
+   */
+  reject?(): Promise<void>
+  /**
+   * Aborts when the owner withdraws this credential while requests carrying it
+   * may be in flight, as an account sign-out does. A consumer ends each request
+   * it authenticated with this grant and reports that end as its own failure,
+   * not as the caller's cancellation. Absent for kinds that are never withdrawn.
+   */
+  readonly revoked?: AbortSignal
+}
+```
+
+```ts type-equiv
+/**
+ * The credential one registered provider route currently sends, answered by
+ * the route's owning adapter so that consumers read no provider configuration
+ * and choose no header names. `ctx.llm.providerCredential()` resolves a new value
+ * per call from one configuration generation; a caller keeps it for one
+ * operation only.
+ */
+interface ProviderCredential {
+  /** Kind of credential the route sends. */
+  readonly kind: LlmCredentialKind
+  /**
+   * The route's current request base URL as its configuration resolves it,
+   * environment fallbacks included: the destination this credential is meant
+   * for. Consumers derive sibling endpoints of the same deployment from it.
+   */
+  readonly baseURL: string
+  /**
+   * Credential reference the route resolves, for diagnostics that tell the user
+   * where to configure the credential; absent for kinds without a stored
+   * reference, such as sign-in grants.
+   */
+  readonly reference?: string
+  /**
+   * Whether {@link resolve} would release a credential for `endpoint`, checked
+   * without validating the credential or contacting the destination; the owner
+   * may read its store to answer. Store failures reject.
+   * @param endpoint - absolute URL the credential would be sent to.
+   * @returns whether a credential is configured for that destination.
+   */
+  configured(endpoint: string): Promise<boolean>
+  /**
+   * Release the credential for `endpoint`, or `undefined` when none is
+   * configured or the destination may not receive it. The caller chooses the
+   * failure it reports for `undefined`. Store and format failures reject.
+   * @param endpoint - absolute URL the credential will be sent to.
+   * @param signal - cancellation for the lookup.
+   * @returns the released credential, or `undefined`.
+   */
+  resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>
+}
+```
+
+A catalog entry may carry a provider-authored `badge` that selectors show beside the model name. It is display data: `resolveModelInfo` omits it, and no model request carries it.
+
+```ts type-equiv
+/**
+ * Emphasis of a model badge: `neutral` states a plain fact, `info` highlights
+ * the model, `success` marks a benefit, and `warning` asks for attention.
+ */
+type LlmModelBadgeTone = 'neutral' | 'info' | 'success' | 'warning'
+```
+
+```ts type-equiv
+/** Short provider-authored label a selector shows beside one advertised model name. */
+interface LlmModelBadge {
+  /** One literal, or translations keyed by lowercase language id with a required English entry. */
+  text: LocalizedText
+  /** Emphasis of the label. */
+  tone: LlmModelBadgeTone
+}
+```
+
 ```ts type-equiv
 /** One adapter-discovered model; catalog membership is advisory, not request validation. */
 interface LlmModelInfo {
@@ -538,6 +640,11 @@ interface LlmModelInfo {
   description?: string
   /** Accepted request modalities; absent means unknown, while an explicit omission is negative capability. */
   inputModalities?: readonly ModelModality[]
+  /**
+   * Selector label advertised by catalog discovery; exact-route resolution
+   * omits it, and no model request or Session event carries it.
+   */
+  badge?: LlmModelBadge
 }
 ```
 
@@ -617,8 +724,21 @@ type RequestMessage = Message | RequestUserInput
 ```
 
 ```ts type-equiv
-/** A single model request, fully assembled. */
-interface GenerateOptions {
+/** Auxiliary request purposes declared by their producer packages. */
+interface LlmRequestPurposeMap {}
+```
+
+```ts type-equiv
+/** Declared auxiliary request purpose; ordinary conversation requests leave it absent. */
+type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>
+```
+
+```ts type-equiv
+/**
+ * A single model request, fully assembled.
+ * @typeParam Purpose - declared purpose keys for callers; forwarding adapters may accept `string`.
+ */
+interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {
   /** Registered provider route selecting the adapter instance. */
   provider: string
   model: string
@@ -659,7 +779,7 @@ interface GenerateOptions {
    * map the purpose to model-hidden transport metadata. Ordinary conversation
    * requests leave it unset.
    */
-  purpose?: 'compaction' | 'session-title'
+  purpose?: Purpose
 }
 ```
 
@@ -760,7 +880,7 @@ interface LlmDiscoveredModel {
 
 The loop builds each request from logged state. `EpochHeader` records call config, marks the fields supplied by adapter defaults, and records the authoritative returned tool order (configured by `toolOrder`, or lexicographic when unset) through full `request/header` snapshots. The rendered prompt is derived history — the `system/message` at surface node 0, plus any later system node an `in-history` route appended — so the header and the derived history together make the request reconstructable from the session log. See [session.md](session.md#the-request-header-event-requestheader) and the [reconstructability Agent Note](../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.md).
 
-`agent/request` receives a frozen call-config seed and may return a replacement to switch provider, model, reasoning effort, or sampling. Before the waterfall, the loop removes values marked as adapter defaults so exact-model preparation materializes the selected route's current values; unmarked explicit settings remain in the proposal. After the waterfall, preparation rejects unsupported explicit effort ids without clamping and logs the effective config plus the fields supplied by adapter defaults under the turn signal. On step admission, this waterfall and preparation run after assembly and `step/start` but before the system prompt and accepted user batch are committed; cancellation during either commits neither. The prepared capability governs prompt reconciliation, and the call keeps one adapter registration through dispatch. Requests reaching `llm/stream` are deep-frozen, so mutation throws, and carry a process-local loop identity so observers do not confuse separately logged frozen auxiliary calls with conversation requests.
+The deprecated `agent/request` hook remains available to existing listeners. New code selects models and reasoning effort through [Session model selection](../../packages/core/agent/README.md#use-this-package). The hook receives a frozen call-config seed based on the step's captured model selection and may replace controls such as sampling. A replacement must preserve provider, model, and the optional explicit reasoning effort; record a new Session selection before the next step to change them. Before the waterfall, the loop removes values marked as adapter defaults so exact-model preparation materializes the selected route's current values; unmarked explicit settings remain in the proposal. After the waterfall, preparation rejects unsupported explicit effort ids without clamping and logs the effective config plus the fields supplied by adapter defaults under the turn signal. On step admission, this waterfall and preparation run after assembly and `step/start` but before the system prompt and accepted user batch are committed; cancellation during either commits neither. The prepared capability governs prompt reconciliation, and the call keeps one adapter registration through dispatch. Requests reaching `llm/stream` are deep-frozen, so mutation throws, and carry a process-local loop identity so observers do not confuse separately logged frozen auxiliary calls with conversation requests.
 
 On the wire, a loop-built request is the derived history alone: the rendered prompt travels as the leading `system`-role message (surface node 0, a `system/message` event) and, when the prepared call declares `systemPromptUpdate: 'in-history'`, a non-empty changed prompt may follow the cached history as a later `system`-role message that the model reads as the effective prompt; the request's `system` field is unset — `GenerateOptions.system` serves direct one-shot callers such as title providers. An empty rendering leaves no system messages in derived history, even when earlier requests retained several prompt versions. The logged request ends with the newest `user/message` on a turn's first step and the previous step's tool results on later steps.
 
@@ -822,9 +942,15 @@ interface LlmCallConfigAdapterDefaults {
 
 The [wire reference](../deepseek-llm-api-wire-extensions.md) defines the exact request headers, extension transaction, field versions, and receiver obligations. The shipped composition registers [`dsh_session_log`](../../packages/session/session-log-deepseek/README.md) as a lossless incremental canonical-log suffix and [`dsh_plugin_packages`](../../packages/llm/plugin-package-inventory-deepseek/README.md) as the complete active Loader-backed package set. These fields remain outside model messages and are absent from the pi-ai adapter path.
 
+## Pi-ai request headers
+
+`PiAiRequestHeaderContext` contains the prepared call's provider, model, resolved model `baseURL`, and optional Session id and auxiliary purpose. It is immutable, contains no messages or authentication fields, and accompanies a request-owned `Headers` object in the synchronous `llm-pi-ai/request-headers` waterfall. The [adapter's request-header documentation](../../packages/llm/llm-pi-ai/README.md#request-headers) defines contribution ownership, attribution precedence, and failure behavior. This extension point is specific to pi-ai inference requests.
+
 ## Service and provider contracts
 
 `LlmAdapter` is the provider contract: subclass, implement `stream()`, and register one adapter instance with `ctx.llm.registerAdapter(providers, adapter)`. `GenerateOptions.provider` selects the registered adapter; `GenerateOptions.model` is passed to that adapter and need not be registered at lifecycle start. Duplicate provider routes fail atomically. Optional `providerRetryPolicy()` is captured per route with normal defaults, while `providerInfo()` and asynchronous `listModels()` feed `LlmRuntime.listProviders()` / `listModels()` with detached selector metadata. That catalog is advisory rather than a request whitelist: the adapter remains authoritative and may accept unlisted model ids. One asynchronous `resolveModel()` query returns exact model identity plus optional correctness-sensitive context capacity, an adapter-configured `defaultMaxTokens`, and ordered model-owned reasoning ids with an optional deployment default; absent fields mean unavailable metadata or provider-owned behavior, not invalid catalog membership. The resolver receives optional cancellation and must settle promptly after abort. `LlmRuntime.resolveModelInfo()` validates and detaches the aggregate. At the final adapter boundary, `resolveCallConfig()` materializes the output default only when `maxTokens` is absent and validates and materializes reasoning, so direct calls cannot bypass either configured behavior; direct dispatch captures one registration before awaiting that resolution. The agent loop instead uses `prepareCall()` to keep the same registration across model resolution, durable header logging, and dispatch, retain detached context metadata from that exact lookup, and report which config fields the adapter defaulted. Adapter lookup happens at the terminal continuation of the `llm/stream` waterfall, so a listener may short-circuit the call or route a mutable one-shot request before lookup. AgentLoop observes a request attempt once the outer waterfall returns a stream handle; that limited boundary does not prove a lazy terminal adapter was constructed or began provider I/O. The `block-start` / `block-end` `index` correlation and the assembler together mean an adapter only has to emit well-formed chunks — block reassembly is not each adapter's problem. [architecture.md](../architecture.md#turn-flow) shows where `ctx.llm.stream()` and the `llm/stream` waterfall sit in one turn.
+
+Optional `providerCredential()` publishes the credential a route currently sends, with the route's base URL, its kind, and an optional credential reference. `LlmRuntime.providerCredential(provider)` forwards to the owning adapter: an unregistered route answers `undefined`, because callers ask about routes a conversation named earlier, and a registered route whose configuration does not resolve propagates the adapter's failure. The DeepSeek web providers read it to call the deployment of the conversation's route with that route's credential, so no consumer reads another plugin's configuration or chooses its header names.
 
 ```ts type-equiv
 /** One model call whose config and adapter registration were resolved together. */
@@ -893,6 +1019,16 @@ declare abstract class LlmAdapter {
    * @returns the same target used by request serialization, before provider-internal processing.
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;
+  /**
+   * Describe the credential one owned route currently sends, for consumers that
+   * call the same deployment outside the model request path, such as web
+   * providers that share a route's credential and endpoint. The default
+   * publishes none. Implementations answer from one configuration generation
+   * per call and may throw when that configuration does not resolve.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @returns the route's current credential, or `undefined` when the route publishes none.
+   */
+  providerCredential(_provider: string): ProviderCredential | undefined;
   /**
    * List models this adapter can currently advertise for one owned provider.
    * Core routing accepts unlisted model ids; catalog-driven entry points such
@@ -1074,6 +1210,17 @@ imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | u
 imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget
 
 /**
+ * Resolve the credential one registered route currently sends, through its
+ * owning adapter. An unregistered route answers `undefined` rather than
+ * throwing because callers ask about routes a conversation named earlier,
+ * which may no longer be mounted; a registered route whose configuration
+ * does not resolve propagates the adapter's failure.
+ * @param provider - provider route whose credential is wanted.
+ * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
+ */
+providerCredential(provider: string): ProviderCredential | undefined
+
+/**
  * Resolve the exact text one durable file occurrence contributes to every
  * provider request in the current execution environment.
  * @param ref - durable verbatim file reference from model history.
@@ -1170,6 +1317,23 @@ The provider topology changed: an adapter registered or unregistered routes, or 
 
 Source: [`packages/llm/llm/src/types.ts`](../../packages/llm/llm/src/types.ts)
 
+<a id="llmmodels-updated--emit"></a>
+
+#### `llm/models-updated` — emit
+
+A provider's advertised models or display metadata changed; consumers reload `listModels()`.
+
+```ts cordis-catalog
+/**
+ * A provider's advertised models or display metadata changed; consumers reload `listModels()`.
+ * @mode emit
+ * @param provider - route whose model catalog changed.
+ */
+'llm/models-updated'(provider: string): void
+```
+
+Source: [`packages/llm/llm/src/types.ts`](../../packages/llm/llm/src/types.ts)
+
 <a id="llmstream--waterfall"></a>
 
 #### `llm/stream` — waterfall
@@ -1193,4 +1357,33 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 ```
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
+
+<a id="llm-pi-ai-events"></a>
+
+### `llm-pi-ai/*` events
+
+<a id="llm-pi-airequest-headers--waterfall"></a>
+
+#### `llm-pi-ai/request-headers` — waterfall
+
+Prepare headers for one pi-ai inference call, excluding model discovery. Listeners run synchronously and must call next(); they may edit only the request-owned headers and must not retain them. Throws fail the call with REQUEST_HEADERS before inference I/O. Harness attribution wins afterward. Non-TypeError messages are user-visible and must exclude secrets. TypeError details and non-Error values are replaced with safe guidance.
+
+```ts cordis-catalog
+/**
+ * Prepare headers for one pi-ai inference call, excluding model discovery.
+ * Listeners run synchronously and must call next(); they may edit only the
+ * request-owned headers and must not retain them. Throws fail the call with
+ * REQUEST_HEADERS before inference I/O. Harness attribution wins afterward.
+ * Non-TypeError messages are user-visible and must exclude secrets. TypeError
+ * details and non-Error values are replaced with safe guidance.
+ * @mode waterfall
+ * @param request - immutable routing metadata from the exact prepared call.
+ * @param headers - fresh profile headers, shared only within this dispatch.
+ * @param next - continue header preparation through the remaining listeners.
+ * @returns headers passed to pi-ai after Harness attribution is applied.
+ */
+'llm-pi-ai/request-headers'(request: PiAiRequestHeaderContext, headers: Headers, next: () => Headers): Headers
+```
+
+Source: [`packages/llm/llm-pi-ai/src/index.ts`](../../packages/llm/llm-pi-ai/src/index.ts)
 <!-- END GENERATED cordis-surface -->

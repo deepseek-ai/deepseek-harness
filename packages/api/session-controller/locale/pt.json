@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "interface de controle de sessão",
+    "description": "Fornece leitura de sessão, controle de execução e recursos de atualização de status aos clientes."
+  }
+}

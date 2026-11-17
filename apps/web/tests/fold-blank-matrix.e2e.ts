@@ -10,21 +10,22 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import {
-  SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
+  SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { sessionFixtureName } from '@deepseek-ai/dsh-session-snapshot'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage, openSettings } from './support.ts'
+import { newEnglishPage, openSettings, showSessionPanel } from './support.ts'
 
 declare global {
   interface Window {
@@ -277,7 +278,7 @@ function replyEntry(marker: string): ReplayEntry {
 function liveLongTurn(prefix: string): ReplayEntry[] {
   const entries: ReplayEntry[] = []
   for (let step = 1; step <= LIVE_STEPS; step++) {
-    const id = ToolCallId(`${prefix.toLowerCase()}-read-${step}`)
+    const id = brandString<ToolCallId>(`${prefix.toLowerCase()}-read-${step}`)
     const args = JSON.stringify({ file_path: READ_FILE })
     entries.push({ kind: 'chunks', chunks: [
       ...textChunks(paragraphs(`${prefix}_STEP_${step}`, 10, `${prefix} narration for step ${step}, paragraph`)),
@@ -525,7 +526,7 @@ function sessionKey(scenario: Case): string {
 }
 
 async function createChild(scaffold: WebScaffold, parentId: SessionId, scenario: Case): Promise<SessionId> {
-  const childId = SessionId(`${sessionKey(scenario)}-child`)
+  const childId = brandString<SessionId>(`${sessionKey(scenario)}-child`)
   const createdAt = Date.now() - 30_000
   const header: SessionHeader = {
     version: SESSION_FORMAT_VERSION, id: childId, createdAt, isSeeded: false, cwd: scaffold.workspaceCwd,
@@ -598,7 +599,7 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   await page.addInitScript(installMeasure)
   await page.setViewportSize(scenario.surface === 'main' ? { width: 1280, height: 720 } : { width: 1680, height: 900 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  const sessionId = SessionId(sessionKey(scenario))
+  const sessionId = brandString<SessionId>(sessionKey(scenario))
   if (scenario.surface === 'main') {
     const fixture = seededFixture(scenario.id, scenario.bodyParagraphs)
     await seedSession(scaffold, fixture.log, sessionId)
@@ -620,11 +621,11 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await openSessionBySearch(page, parentFixture.markers.user(1))
   await choosePreferences(page, scenario)
-  const trigger = page.getByRole('button', { name: '1 subagent', exact: true })
-  await trigger.waitFor({ timeout: 15_000 })
-  await trigger.hover()
-  await page.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
-    .getByRole('button', { name: `Open ${CHILD_LABEL} in sidebar`, exact: true }).click()
+  const panel = await showSessionPanel(page)
+  const openAside = panel.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
+    .getByRole('button', { name: /^Open .+ in sidebar$/u })
+  await expect.poll(() => openAside.count()).toBe(1)
+  await openAside.click()
   await page.locator(SIDE_ROOT).getByText('FOLDMX_BODY', { exact: false }).last().waitFor({ timeout: 30_000 })
   await page.mouse.move(0, 0)
   return {
@@ -695,31 +696,37 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
       const disposeFailure = scenario.origin === 'error'
         ? scaffold.ctx.on('system-prompt/assemble', async () => { throw new Error('FOLDMX_TURN_FAILED') })
         : () => undefined
-      // A subagent child's composer sends through the subagent continuation route.
-      const promptRoute = scenario.surface === 'side' ? '**/api/subagents/prompt' : '**/api/session/prompt'
-      const promptGate = Promise.withResolvers<undefined>()
-      const promptHeld = Promise.withResolvers<undefined>()
-      const holdPrompt = async (route: Route): Promise<void> => {
-        promptHeld.resolve(undefined)
-        await promptGate.promise
-        await route.continue()
+      // The accepted message waits before its model call, so the fold settles before the Turn streams.
+      const turnGate = Promise.withResolvers<undefined>()
+      let held: Promise<unknown> = Promise.resolve()
+      let disposeHold = (): void => {}
+      if (scenario.surface === 'side') {
+        // A subagent child's composer sends through the continuation route, which resumes the cold child.
+        disposeHold = scaffold.ctx.on('agent/pre-step', async ({ agent }, next) => {
+          if (agent.id === target) await turnGate.promise
+          return await next()
+        })
+      } else {
+        const agent = scaffold.ctx.agents.get(target)
+        if (agent === undefined) throw new Error(`${scenario.id}: the target Agent is not live`)
+        // Maintenance keeps the accepted message in the inbox without starting its Turn.
+        held = agent.runMaintenance(() => turnGate.promise)
       }
-      await page.route(promptRoute, holdPrompt)
       const ended = turnEnded(scaffold, target)
       try {
         await expandSeededSteps(page, root, scenario)
         await placeReader(page, root, scenario.reader)
         await begin()
         await send(world, NEXT_INPUT)
-        await promptHeld.promise
         await page.locator(`${root} [data-submission-echo]`).waitFor()
         afterFold = await folded()
-        promptGate.resolve(undefined)
+        turnGate.resolve(undefined)
+        await held
         await ended
       } finally {
-        promptGate.resolve(undefined)
+        turnGate.resolve(undefined)
+        disposeHold()
         disposeFailure()
-        await page.unroute(promptRoute, holdPrompt)
       }
       break
     }

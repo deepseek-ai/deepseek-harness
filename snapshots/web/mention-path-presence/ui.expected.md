@@ -1,16 +1,18 @@
 - banner:
   - navigation "Session hierarchy": "@ceshi @随便写点文字 @LICENSE @doc"
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: "@ceshi @随便写点文字"
 - button "LICENSE"
 - text: docs mail@host {{clock}}
 - button "Copy"
 - status: Completed
-- button "Completed in {{duration}}" [disabled]
+- button "Completed in {{duration}}"
 - paragraph: Reference display checked.
 - button "Copy"
 - button "Good response"

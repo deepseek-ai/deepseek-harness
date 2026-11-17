@@ -1,6 +1,6 @@
 /**
  * Assembled-app regression: a parent-owned catalog event remains sufficient
- * for direct discovery when the persisted child has no descriptor event.
+ * for descendant discovery when the persisted child has no descriptor event.
  */
 
 import { readFile, readdir, writeFile } from 'node:fs/promises'
@@ -15,9 +15,10 @@ import {
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SESSION_FORMAT_VERSION, type SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { describe, expect, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const fixtureDir = fileURLToPath(new URL('./expected/subagent-diagnostic', import.meta.url))
 const replayOverride = join(fixtureDir, 'replay.override.json')
@@ -25,8 +26,8 @@ const parentExpected = join(fixtureDir, 'parent.expected.jsonl')
 const configPath = fileURLToPath(new URL('../subagent-diagnostic-snapshot.patch.yml', import.meta.url))
 const binScript = fileURLToPath(new URL('../../../../../../packages/test-support/loader-smoke/tests/fixtures/headless-driver.ts', import.meta.url))
 const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', import.meta.url))
-const parentId = SessionId('subagent-diagnostic-parent')
-const childId = SessionId('subagent-diagnostic-child')
+const parentId = brandString<SessionId>('subagent-diagnostic-parent')
+const childId = brandString<SessionId>('subagent-diagnostic-child')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 const task = 'Call list_agents once and report what it shows.'
 
@@ -42,7 +43,7 @@ async function expectSession(actual: string, expectedPath: string): Promise<void
 
 /**
  * Seed a completed parent turn with one catalogued cold child whose own log
- * has no descriptor event. Direct discovery must not read that child log.
+ * has no descriptor event. Descendant discovery requires no activation descriptor.
  */
 async function seedCataloguedDescriptorlessChild(root: string, cwd: string): Promise<void> {
   const ctx = new Context()
@@ -106,7 +107,7 @@ async function seedCataloguedDescriptorlessChild(root: string, cwd: string): Pro
 }
 
 describe('parent-owned cold child catalog snapshot', () => {
-  it('discovers a catalogued child without reading its descriptor through the assembled headless app', async () => {
+  it('discovers a descriptorless catalogued child with its tree position through the assembled headless app', async () => {
     let cwd = ''
     const result = await runLoaderSmoke({
       label: 'subagent diagnostic headless stream-json snapshot',
@@ -131,10 +132,9 @@ describe('parent-owned cold child catalog snapshot', () => {
         const parent = logs.find(content => content.includes('"subagent-diagnostic-parent"'))
         if (parent === undefined) throw new Error('missing persisted parent log')
 
-        // THE model-visible fact: the parent catalog supplies discovery even
-        // though consulting the descriptor-less child would classify it corrupt.
+        // Discovery reads child catalogs without requiring activation descriptors.
         expect(parent).toContain(`${childId} [inactive] — descriptorless child`)
-        expect(parent).not.toContain('[diagnostic: corrupt]')
+        expect(parent).not.toContain(`${childId} [corrupt]`)
 
         const context: NormalizeContext = { sessionIds: [parentId, childId], cwd }
         const normalizedParent = normalizeSessionSnapshot(parent, context)

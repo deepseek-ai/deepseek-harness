@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Panneau de session",
+    "description": "Un panneau flottant ouvert depuis l'en-tête de la session qui regroupe les informations de la session en cours, comme son dossier de travail."
+  }
+}

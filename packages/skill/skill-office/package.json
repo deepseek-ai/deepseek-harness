@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-office",
-  "description": "Bundled Word, PowerPoint, and Excel workflows and LibreOffice Kit operations",
-  "version": "0.2.1-rc.2",
+  "description": "Bundled Word, PowerPoint, and Excel workflows and Office operation guidance",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,12 +18,17 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "assets",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -31,13 +36,15 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~"
   },
   "dependencies": {
-    "@deepseek-ai/libreoffice-kit": "^0.1.5",
     "@deepseek-ai/schemastery": "workspace:~",
     "yaml": "^2.4.2"
   }

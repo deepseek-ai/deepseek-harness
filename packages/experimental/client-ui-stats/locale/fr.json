@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vue statistiques",
+    "description": "Affiche le contexte, les durées, le cache et le coût des outils par tour et par étape à côté du chat."
+  }
+}

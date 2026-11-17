@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paramètres d'exécution des commandes",
+    "description": "Configurez le délai d'expiration de l'exécution de la commande et la limite de longueur de sortie."
+  }
+}

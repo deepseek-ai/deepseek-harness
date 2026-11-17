@@ -71,9 +71,11 @@
             config:
               provider: spawn
               toolName: reviewer_delegate
-              modelSelectionSettings: true
+              allowedAgentPresets: [reviewer]
     - id: parent-agent-preset
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/parent-agent-preset.ts'
+      config:
+        presets: [parent, reviewer, parent, reviewer, parent]
 
 - id: tool-subagent
   name: '@deepseek-ai/dsh-tool-subagent'

@@ -22,6 +22,12 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../interaction/commands"
     }
   ]
 }

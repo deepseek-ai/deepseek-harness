@@ -3,32 +3,41 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-sidebar-files/README.md
 /:
-  en: d6514e0d092a210b
-  zh: 9980cb0f4fc6f903
+  en: d7dbdeee1744fac0
+  zh: 35dc07a9e797f855
 /deepseek-ai-dsh-client-ui-sidebar-files:
   en: ae5625c23b3a864f
   zh: 20cf48a229e806bf
 /deepseek-ai-dsh-client-ui-sidebar-files/summary:
-  en: 1605ae92aee5c231
-  zh: ad519ddb9e338892
+  en: 46067f0415ea2e76
+  zh: f0b48804ad460a05
 /deepseek-ai-dsh-client-ui-sidebar-files/table-of-contents:
-  en: 9411fb4809692e09
-  zh: dd13990d39c5be7f
+  en: 81cb6e051699a7b4
+  zh: 566d0278acae69fa
 /deepseek-ai-dsh-client-ui-sidebar-files/what-it-registers:
-  en: ed52405be7c3fa24
-  zh: d06dbd49c786c5f0
+  en: c4b8f3a52f68bd51
+  zh: 30b580320637572c
+/deepseek-ai-dsh-client-ui-sidebar-files/the-navigator:
+  en: 3424600b15bde2d2
+  zh: 2cf1c99ffef2ad50
 /deepseek-ai-dsh-client-ui-sidebar-files/the-tree:
-  en: a0ae0b1f223b3df1
-  zh: 8ddc325519bd75b2
+  en: 3d71e50801761213
+  zh: e4e9ab19dd22288d
+/deepseek-ai-dsh-client-ui-sidebar-files/search:
+  en: 275bc2aa20907881
+  zh: 4dac902558cb29f5
+/deepseek-ai-dsh-client-ui-sidebar-files/reusable-tree-factory:
+  en: 76e4d93d65d3c50e
+  zh: b611bba888f86b85
 /deepseek-ai-dsh-client-ui-sidebar-files/model-experience:
   en: a18a43f6842f1371
   zh: 69f2a2b35f06dfc7
 /deepseek-ai-dsh-client-ui-sidebar-files/model-experience/kv-cache-effect:
-  en: 5a6febb45089991a
-  zh: b17ed755fd098b83
+  en: 39debadcc6cefd24
+  zh: cc212c8377851a91
 /deepseek-ai-dsh-client-ui-sidebar-files/known-limitations-and-deferred-work:
-  en: c0e1831d8975186c
-  zh: 332aac8738458bb0
+  en: f28a32e47e684f5c
+  zh: e5e38014048ebe59
 /deepseek-ai-dsh-client-ui-sidebar-files/known-limitations-and-deferred-work/dev-note:
-  en: d8b51fb935f38650
-  zh: fee9d330ecf8ec0e
+  en: 1ec99e9fb6b4c948
+  zh: c4f7883934307c3c

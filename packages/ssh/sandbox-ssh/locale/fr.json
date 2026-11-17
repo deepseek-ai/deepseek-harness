@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Bac à sable de processus SSH",
+    "description": "Créez des commandes sandbox pour les processus POSIX distants via l'assistant SSH partagé."
+  }
+}

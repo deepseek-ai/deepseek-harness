@@ -4,4 +4,9 @@ profile: sdk
 composition: default
 recording: authored
 header:
-  class: default
+  class: session-resume
+  pin: true
+  systemPromptSource: session/model-switch-notice
+  toolSchemasSource: session/agent-instructions
+  changes: 1
+  promptChanges: 1

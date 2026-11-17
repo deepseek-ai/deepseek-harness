@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Le premier message génère un titre",
+    "description": "Utilisez un modèle pour générer un titre basé sur le premier message de la conversation."
+  }
+}

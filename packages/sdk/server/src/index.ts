@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-sdk-jsonrpc-server
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
@@ -47,7 +47,7 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
   const resolvedConfig = config as JsonRpcConfig & { maxTokensAsSuccess: boolean }
   // Protocol shutdown owns the complete runtime process, so it must await the
   // root lifecycle (including persistence) before exiting.
-  const rootFiber = ctx.root.fiber
+  const rootFiber = ctx[Context.root].fiber
   /* v8 ignore next -- production stdio wiring; tests always inject the runtime hooks */
   const input = config.input ?? process.stdin
   /* v8 ignore next -- production stdio wiring; tests always inject the runtime hooks */
@@ -59,6 +59,9 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
   const server = new HarnessSdkJsonRpcServer(ctx, transport, {
     maxTokensAsSuccess: resolvedConfig.maxTokensAsSuccess,
   })
+  // Compositions can order Schedule after its activation handler is installed.
+  // Like the app startup marker, this carries readiness, not another control API.
+  ctx.provide('sdkSessionActivation', { ready: true })
 
   // Share one exit task so racing shutdown requests cannot dispose the root or
   // exit the process more than once.

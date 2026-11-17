@@ -1,5 +1,6 @@
 /** Editor-facing ranges, reference projections, and the composer keyboard interface. */
 import type { LexicalEditor } from 'lexical'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputState } from './input.ts'
 import type { InputSubmitMode } from './composer-submission.ts'
 
@@ -22,6 +23,16 @@ export interface ReferenceInsert {
 /** Persisted reference data without the current editor's occurrence identity. */
 export type DraftReference = Omit<Occurrence, 'occurrenceId'>
 
+/** One atomic quote in clipboard-text coordinates. */
+export interface DraftQuote {
+  readonly offset: number
+  readonly length: number
+  /** Selected text before Markdown quote prefixes are added. */
+  readonly text: string
+  /** Readable display the inserting owner supplied; the draft text and the sent message still carry `text`. */
+  readonly summary?: QuoteSummary | undefined
+}
+
 /**
  * Persisted command chip opening a draft. The claim itself (its submit
  * closure) is not persisted; the input rebuilds it from the token through the
@@ -41,6 +52,7 @@ export interface DraftSnapshot {
   readonly text: string
   readonly references: readonly DraftReference[]
   readonly command?: DraftCommand
+  readonly quotes?: readonly DraftQuote[]
 }
 
 /** Plain initial text or an existing document with explicit reference identities. */

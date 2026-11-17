@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, fireEvent, render } from '@testing-library/react'
@@ -44,6 +45,7 @@ const SID = 'session-1' as SessionId
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   const chatSettings = stubConfigForm<ChatSettings>()
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },
@@ -51,6 +53,7 @@ async function bench() {
       ? chatSettings.scope
       : stubConfigForm().scope,
   } as never)
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
   runtime.ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
   runtime.ctx.provide('sidebarRightTabs', {
@@ -73,6 +76,8 @@ async function bench() {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'shell.overlay': { kind: 'list', scope: 'root' },
@@ -139,6 +144,13 @@ describe('Chat apply wiring', () => {
       .toEqual(['activity', 'usage'])
     expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
       .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+    expect(b.runtime.slots.spec('conversation.chat.markdown.fence')).toMatchObject({ kind: 'hoc', scope: 'session' })
+    expect(b.runtime.slots.entries('conversation.chat.markdown.fence').map(row => [row.options.key, row.options.id]))
+      .toEqual([
+        ['math', '@deepseek-ai/dsh-client-ui-chat/fence/math'],
+        ['diff', '@deepseek-ai/dsh-client-ui-chat/fence/diff'],
+        ['patch', '@deepseek-ai/dsh-client-ui-chat/fence/diff'],
+      ])
     await b.runtime.dispose()
   })
 
@@ -150,6 +162,8 @@ describe('Chat apply wiring', () => {
     const view = b.runtime.slots.entries('conversation.view')[0]
     const flow = b.runtime.slots.entries('conversation.chat.flow')[0]
     const assistant = b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'assistant-step')
+    const user = b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'user')
+    const steering = b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'steering')
     const userContent = b.runtime.factoryOf('conversation.chat.user.content')
     expect(userContent).toMatchObject({ scope: 'session', locale: 'chat', component: UserContent })
     expect(userContent.children?.['conversation.chat.user.images']).toMatchObject({ kind: 'single', scope: 'session' })
@@ -161,6 +175,11 @@ describe('Chat apply wiring', () => {
     expect(view?.children?.['conversation.chat.message.images']).toBeUndefined()
     expect(view?.children?.['conversation.chat.user.images']).toBeUndefined()
     expect(flow?.children?.['conversation.chat.node']).toBeDefined()
+    expect(flow?.children?.['conversation.chat.user.before']).toBeUndefined()
+    expect(user?.children?.['conversation.chat.user.before']).toMatchObject({ kind: 'chain', scope: 'session' })
+    expect(steering).toBeDefined()
+    expect(steering?.children?.['conversation.chat.user.before']).toBeUndefined()
+    expect(b.runtime.slots.spec('conversation.chat.user.before')).toMatchObject({ kind: 'chain', scope: 'session' })
     expect(flow?.children?.['conversation.chat.message.images']).toBeUndefined()
     expect(flow?.children?.['conversation.chat.user.images']).toBeUndefined()
     expect(userContent.children?.['conversation.chat.message.images']).toBeUndefined()
@@ -170,6 +189,7 @@ describe('Chat apply wiring', () => {
     await b.chat.dispose()
     expect(b.runtime.slots.spec('conversation.chat.flow')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
+    expect(b.runtime.slots.spec('conversation.chat.user.before')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.message.images')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.user.images')).toBeUndefined()
     expect(() => b.runtime.factoryOf('conversation.chat.user.content')).toThrow('no definition')
@@ -284,6 +304,8 @@ describe('Chat apply wiring', () => {
   it('removes only Chat contributions when Chat unloads', async () => {
     const b = await bench()
     await b.chat.dispose()
+    expect(b.runtime.slots.spec('conversation.chat.markdown.fence')).toBeUndefined()
+    expect(b.runtime.slots.entries('conversation.chat.markdown.fence')).toHaveLength(0)
     expect(b.runtime.slots.entries('conversation.view')).toHaveLength(0)
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
     expect(b.runtime.slots.entries('main').map(row => row.options.key)).toEqual(['conversation'])

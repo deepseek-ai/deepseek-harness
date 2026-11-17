@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "tmux 上下文",
+    "description": "按需保存每一步的 tmux 窗格与窗口位置信息。"
+  }
+}

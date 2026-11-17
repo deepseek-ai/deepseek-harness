@@ -14,7 +14,7 @@ packages/<group>/<pkg>/
                    # ../../../vendor/cordis (+ ../../../vendor/schemastery if
                    # you use Config, + ../../<group>/<dep> for each dsh dep)
   src/index.ts     # service default export or plugin (name/inject/apply/Config)
-  locale/en.json   # optional display metadata: meta.title and meta.description
+  locale/en.json   # optional display metadata: meta.title, meta.description, and meta.detail
   locale/zh.json   # translations using the same fields
   README.md        # service API, events, extension points, design notes,
                    # + gated Model Experience context blocks or short form
@@ -24,7 +24,7 @@ packages/<group>/<pkg>/
 
 当已有分组与包的角色匹配时，选择该分组（`core`、`llm`、`shell`、`compaction`、`subagent`、`todo`、`session`、`client`/`host`、`util` 或 `test-support`）。允许新建分组，但分组只是纯容器：没有 `package.json`，没有源文件，包仍然恰好位于其下一层。
 
-package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-constraints.ts` 强制执行）：`private: true`，`version` 与根 `package.json` 一致，`type: module`，`main: "lib/index.js"`，`types: "lib/types/index.d.ts"`，`exports["."].types: "./lib/types/index.d.ts"`，`exports["."].default: "./lib/index.js"`，`@deepseek-ai/cordis` 同时出现在 peerDependencies 和 devDependencies 中（相同范围）。每个 dsh 对等依赖（peer dependency）都要在 devDependencies 中镜像。`@deepseek-ai/schemastery` 放在 `dependencies` 中（它是运行时校验器），与 agent-loop 保持一致。`files` 列表精确包含 `lib/index.js`、`lib/types/**/*.d.ts` 以及门禁认可的包专用运行时产物。如果包的运行时 export 指向输出树，还要包含 `lib/types/**/*.js`。不要发布 `src`、声明映射、JS map 或陈旧的根声明文件。带有 `bin` 的 CLI 应用包在 `files` 中将 `lib/bin.js` 紧跟在 `lib/index.js` 之后。
+package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-constraints.ts` 强制执行）：`private: true`，`version` 与根 `package.json` 一致，`type: module`，`main: "lib/index.js"`，`types: "lib/types/index.d.ts"`，`exports["."].types: "./lib/types/index.d.ts"`，`exports["."].default: "./lib/index.js"`，`@deepseek-ai/cordis` 同时出现在 peerDependencies 和 devDependencies 中（相同范围）。每个 dsh 对等依赖（peer dependency）都要在 devDependencies 中镜像。`@deepseek-ai/schemastery` 放在 `dependencies` 中（它是运行时校验器），与 agent-loop 保持一致。`files` 列表精确包含 `lib/index.js`、`lib/types/**/*.d.ts`、`lib/types/**/*.d.ts.map`、`src` 以及门禁认可的包专用运行时产物。如果包的运行时 export 指向输出树，还要包含 `lib/types/**/*.js`。声明映射与 JavaScript map 随各自描述的产物一起发布，`src` 也随之发布，让消费方编辑器和插件作者都能读到导出声明背后的实现；不要发布陈旧的根声明文件。带有 `bin` 的 CLI 应用包在 `files` 中将 `lib/bin.js` 紧跟在 `lib/index.js` 之后。
 
 包内的相对导入在源码中使用显式 `.ts` 后缀（例如 `export * from './types.ts'`）。编译器在输出的 JS 中将其重写为 `.js`，在声明文件中保留显式 `.ts` 后缀；标准的 NodeNext/Node16 TypeScript 消费方会将其解析到同目录的 `.d.ts` 文件。
 
@@ -75,7 +75,7 @@ package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-c
 
 ## 4. 编写包 README
 
-将包特有的服务 API、配置、事件、扩展点和设计说明放在前面。根据 [dsh-doc 元数据参考](../../.agents/skills/dsh-doc/references/metadata-links-i18n.md#the-kind-system)中的四种 kind 标签——组、参考、库或 bundle——选择 frontmatter 的 `kind`，使其匹配包在仓库中的位置与入口形态；每个 kind 恰好对应一个 README 模板。limitations 部分记录持久的消费方缺口和本包拥有的非显而易见的维护者约束；日常清理事项留在源码 TODO 或 Agent Note 中。间接的 Model Experience 语句可以点名暴露本包贡献的消费方，但不重述该消费方的实现。包 README 以如下规范序列结尾：
+将包特有的服务 API、配置、事件、扩展点和设计说明放在前面。根据 [dsh-doc-writing 元数据参考](../../.agents/skills/dsh-doc-writing/references/metadata-links-i18n.md#the-kind-system)中的四种 kind 标签——组、参考、库或 bundle——选择 frontmatter 的 `kind`，使其匹配包在仓库中的位置与入口形态；每个 kind 恰好对应一个 README 模板。limitations 部分记录持久的消费方缺口和本包拥有的非显而易见的维护者约束；日常清理事项留在源码 TODO 或 Agent Note 中。间接的 Model Experience 语句可以点名暴露本包贡献的消费方，但不重述该消费方的实现。包 README 以如下规范序列结尾：
 
 ````markdown
 ## Model Experience
@@ -136,7 +136,7 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 }
 ```
 
-语言文件统一放在 `locale/`，并保留 `en.json` 作为发现入口。字段可选，填写时必须是非空字符串。文件或字段缺失时允许回退，JSON 损坏或字段无效时显示单插件诊断。
+语言文件统一放在 `locale/`，并保留 `en.json` 作为发现入口。字段可选，填写时必须是非空字符串。英文 `meta.title` 和 `meta.description` 使用 sentence case：只大写首个单词、专有名词和产品名，例如 `Git worktrees`（[rule](../../.agents/skills/dsh-prose-standard/SKILL.md#required-coverage-by-prose-location)）。运行时文件或字段缺失时允许回退，JSON 损坏或字段无效时显示单插件诊断。仓库内的包和插件模板必须提供 `ja.json`、`es.json`、`fr.json`、`de.json`、`ru.json` 和 `pt.json`，覆盖 `en.json` 或可选 `zh.json` 中的全部字段并保留占位符、斜杠命令和 API 字段名；详情路径可指向现有英文文档。`locale/<subpath>/` 下的子路径资源使用相同检查。英文描述面向产品用户说明可见行为，并以句末标点结束。运行 `pnpm run check:i18n` 检查 JSON 元数据和 UI 字典完整性；JSON 检查也接入 `check:all`、CI 静态检查和 hygiene。
 
 各字段先独立回退，再按页面规则格式化技术名称；回退优先经过现有 locale 语言链：
 
@@ -146,6 +146,8 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 导出 `<包名>/locale/en.json` 供 locale 查询；需要包字段回退或声明图标时，开放 `<包名>/package.json`。`<包名>/search` 这样的子路径插件不是包，从不读取 `package.json`，即使导出了 `./search/package.json`；它用 `./search/locale/*.json` 提供文本，用 `./search/icon` 提供图片。
 
 要在组合包卡片、详情和组件行显示图片，包根插件在导出清单顶层设置 `"icon": "./icon.svg"`，或在省略该字段时导出 `./icon`。子路径插件导出自己的图标，例如 `"./search/icon": "./search.svg"`。将每张图片加入 `files`。清单 `icon` 相对于清单所在目录；绝对路径、URL、目录外路径，以及解析到目录外的符号链接均被拒绝。导出的图标像 locale 资源一样经 Node exports 解析，且必须位于所属包内。支持不超过 256 KiB 的 SVG、PNG、JPEG（`.jpg`/`.jpeg`）和 WebP 文件。图片必须自包含；SVG 作为图片渲染，不作为内联 HTML。Host 返回 data URL，不激活插件。声明无效或文件不可读时，显示元信息诊断并保留有效文本，不再尝试导出的图标；图片缺失或无法解码时使用面板的默认插画。
+
+组合包还可以把 `meta.detail` 设为相对于包根目录的 Markdown 文件路径，例如在 `locale/en.json` 中设为 `"docs/DETAIL.md"`，在 `locale/zh.json` 中设为 `"docs/DETAIL.zh.md"`；读取时使用包根目录下的这些文件。路径使用 `/`，必须位于包内，以 `.md` 或 `.markdown` 结尾，且没有包字段回退；图片放在该文件旁边，并按 `check-workspace-constraints` 的要求，在 `files` 中紧接语言资源之后列出该文件的顶层目录，例如 `docs`。该文件必须位于包的子目录中且已存在；包根目录下的文档会被拒绝，因为其旁边的图片不会被发布。组合包在**插件**中的页面，以及启用[自定义插件索引组合包](../../packages/experimental/plugin-market-bundle/README.zh.md)时其索引条目页面，把当前界面语言对应的该文件作为插件的详细介绍文档显示。没有 `meta.detail` 时，它们显示包 README；索引条目页面在此之后还会回退到所声明仓库的 README；规则由[文档顺序](../../packages/util/plugin-detail/README.zh.md#document-order)定义。该文档面向用户编写，图片使用相对于该文件的路径引用。
 
 已安装 bundle 的卡片和详情、组件列表与配置详情、设置中的插件清单都展示这些元信息，包括禁用插件和预设内插件。读取时不激活插件。
 

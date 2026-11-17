@@ -1,0 +1,106 @@
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.summary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.summary:focus-visible {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.summaryLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.state,
+.chevron {
+  flex: none;
+}
+
+.state {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--dsw-alias-menu-icon);
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.description {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The switch owns the whole row's pointer target. */
+.row .toggle {
+  position: static;
+  flex: none;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--dsw-radius-md);
+}
+
+@media (hover: hover) {
+  .summary:not(:disabled):hover,
+  .row:has(.toggle:not(:disabled)):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}

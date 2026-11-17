@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "JSON stockage de fichiers",
+    "description": "Enregistrez les données clé-valeur dans un fichier JSON local."
+  }
+}

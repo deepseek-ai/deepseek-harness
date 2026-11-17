@@ -4,7 +4,7 @@ import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol
 import { TerminalInventory } from '../src/client/inventory.ts'
 import type { WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
-const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, title: 'bash', shell: { name: 'bash', path: '/bin/bash', args: [] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null }
+const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, title: 'bash', shell: { name: 'bash', path: '/bin/bash', args: [] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null, origin: 'user', control: 'user' }
 const success = (value: WebTerminalInfo[]): RemoteResult<WebTerminalInfo[]> => ({ ok: true, value })
 
 it('retains an empty list and a discovery failure until an explicit shared retry', async () => {
@@ -106,4 +106,37 @@ it('preserves a non-Error transport rejection as the cached failure cause', asyn
   try {
     await expect(inventory.read()).rejects.toMatchObject({ message: 'Terminal discovery failed', cause: 'offline' })
   } finally { await inventory.dispose() }
+})
+
+it('adopts a whole roster: listed terminals update and unlisted ones leave the list', async () => {
+  const gone = { ...info, id: 'gone' as WebTerminalId }
+  const inventory = new TerminalInventory(async () => success([info, gone]))
+  try {
+    inventory.reconcile([info])
+    expect((await inventory.read()).size).toBe(2)
+    const renamed = { ...info, title: 'Build' }
+    inventory.reconcile([renamed])
+    expect([...(await inventory.read()).values()]).toEqual([renamed])
+  } finally { await inventory.dispose() }
+})
+
+it('drops terminals a roster received during loading omits, keeping later acknowledged ones', async () => {
+  const listed = Promise.withResolvers<RemoteResult<WebTerminalInfo[]>>()
+  const inventory = new TerminalInventory(() => listed.promise)
+  const gone = { ...info, id: 'gone' as WebTerminalId }
+  const created = { ...info, id: 'created' as WebTerminalId }
+  const pending = inventory.read()
+  try {
+    inventory.reconcile([info])
+    inventory.update(created)
+    listed.resolve(success([info, gone, created]))
+    expect([...(await pending).keys()]).toEqual(['terminal', 'created'])
+  } finally { await inventory.dispose() }
+})
+
+it('ignores rosters after disposal', async () => {
+  const inventory = new TerminalInventory(async () => success([info]))
+  await inventory.dispose()
+  inventory.reconcile([info])
+  await expect(inventory.read()).rejects.toThrow('disposed')
 })

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-cot-translation",
   "description": "Optional machine translation of expanded reasoning, preserving original Session text",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -60,10 +60,11 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "^4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-experimental-translator": "workspace:*",
@@ -93,9 +94,13 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ]
 }

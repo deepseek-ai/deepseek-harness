@@ -166,6 +166,12 @@ class SharedNativeChannel implements NativeChannel {
     if (!range.value) throw transportError('NATIVE_CLEANUP', 'Native launcher process range did not close')
     if (outcome.status === 'rejected') throw outcome.reason
     if (outcome.value.exitCode !== 0 || outcome.value.signal !== null) {
+      const stdout = this.launcher.collected.stdout?.readFrom(0).text ?? ''
+      let response: unknown
+      try { response = JSON.parse(stdout) }
+      catch (_error) { /* Missing or incomplete output uses the retained process diagnostics below. */ }
+      const refusal = Refusal.safeParse(response)
+      if (refusal.success) throw transportError(refusal.data.code, refusal.data.message)
       const stderr = this.launcher.collected.stderr?.readFrom(0).text ?? ''
       throw transportError('NATIVE_STARTUP', `Native launcher failed (exit ${outcome.value.exitCode}, signal ${outcome.value.signal})${stderr ? `: ${stderr}` : ''}`)
     }
@@ -208,7 +214,8 @@ class SharedNativeChannel implements NativeChannel {
       const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
         screenshotTimeoutMs, timeoutMs, graceMs } = this.config
       socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey,
-        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs, screenshotTimeoutMs, timeoutMs, graceMs } }) + '\n')
+        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
+          screenshotTimeoutMs, timeoutMs, graceMs } }) + '\n')
     })
     const receive = (chunk: Buffer): void => {
       const newline = chunk.indexOf(10)

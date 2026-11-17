@@ -49,6 +49,14 @@ The [event types](src/events.ts) own names and allowed fields. Authentication ev
 
 Only `plugin_toggle` carries `plugin_type`: plugin rows use `plugin`, and packages use `bundle`. Installation reports `is_success`; cancellation uses `is_success=false` and `error_reason=user_cancelled`, and an absent recovery result uses `is_success=false` and `error_reason=unknown_result`. Duration is milliseconds from the install click through the terminal result, including validation, inspection, and internal registry retries. `input_value` retains registry package identifiers and plain versions only; Git inputs become `[git]`, other URLs `[url]`, and paths or unrecognized inputs `[path-or-other]`. Both click and result use this redacted value. Reopening a hidden install dialog counts another `plugin_add_button_click`. `is_builtin` means installation-supplied (`installed=false`), not whether a profile explicitly depends on the package. Explicit build-approval retry starts a new attempt. Restart-required is success. A temporary disconnect retains the pending operation; only an absent recovery result reports `unknown_result`.
 
+### Navigation, preset, and new-session events
+
+Official navigation reports New Session, Plugins, Automation tasks, and More clicks with their physical placement: `sidebar`, `sidebar_more`, or `titlebar`. Opening Automation tasks from the left sidebar More menu counts as `sidebar_more`, not as a direct sidebar click. Historical `sidebar_menu_click` records without `position` remain unattributed. More-menu actions distinguish the sidebar, conversation, and rightbar regions. Third-party entry identifiers and custom preset names are excluded.
+
+Direct preset switches report accepted different choices in the mode picker: an unbound staged choice, or Host application for a blank Session. Custom source modes are `other`, and only built-in targets are reported. Default changes, automatic fallback, restoration, and Creator launchers are excluded. Each switch records the Coding Tools setting known at the action; an unknown setting reports nothing. `code_work_view_toggle` reports a successful change of that setting.
+
+`send_button_click` carries `is_new_session`, which is true while the submitting Session is still blank, and `agent_preset`, the Session's preset as `creator`, `ptc`, `minimal`, `standard`, or `other` for a custom preset; `agent_preset` is omitted while the preset is unknown. The collector receives `eventName` on the OTLP log record and business fields in its `attributes`; repository code supplies no warehouse table or dashboard.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

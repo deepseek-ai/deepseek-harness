@@ -3,7 +3,7 @@ import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
   SessionSeq,
   type CreateSessionOptions,
@@ -16,6 +16,7 @@ import { createDeveloperMessage, createAssistantMessage, createSystemMessage, cr
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import * as SessionLogDeepSeek from '../src/index.ts'
 import type { DeepSeekSessionLogExtension, DeepSeekSessionLogWireEvent, DeepSeekSessionLogWireSurfaceOp } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const SIGNAL = new AbortController().signal
@@ -43,7 +44,7 @@ async function harness(
   const options = seed === undefined
     ? undefined
     : { seed, ...creation }
-  const session = ctx.sessions.create(SessionId(id), options)
+  const session = ctx.sessions.create(brandString<SessionId>(id), options)
   return { ctx, session, disposeUpload: () => upload.dispose() }
 }
 
@@ -168,7 +169,7 @@ describe('incremental DeepSeek session-log upload', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
     await ctx.plugin(SessionLogDeepSeek, { enabled: false })
-    const session = ctx.sessions.create(SessionId('explicit-off'))
+    const session = ctx.sessions.create(brandString<SessionId>('explicit-off'))
     session.append('turn/start', { turn: 1 })
 
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({
@@ -232,7 +233,7 @@ describe('incremental DeepSeek session-log upload', () => {
   })
 
   it('uploads a migrated V3 log from the beginning before resuming current-generation acknowledgements', async () => {
-    const id = SessionId('migrated-v3-delivery')
+    const id = brandString<SessionId>('migrated-v3-delivery')
     const reader = createSessionFormatCatalogWithChildren([]).createRestore({
       type: 'session', version: 3, id, createdAt: 1, isSeeded: false, delegationDepth: 0,
     }, { recovery: 'strict', validation: 'current' })
@@ -246,6 +247,7 @@ describe('incremental DeepSeek session-log upload', () => {
       artifact.header as unknown as SessionHeader, SessionLogOffset(artifact.inheritedEventCount), 'detached')
     const { ctx } = await harness('delivery-migration-owner')
     ctx.effect(() => ctx.sessions.enter(session))
+    ctx.sessions.announce(session)
 
     const first = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: id })
     expect(first.fields.dsh_session_log).toMatchObject({ sessionFormatVersion: SESSION_FORMAT_VERSION, afterSeq: -1 })
@@ -274,7 +276,7 @@ describe('incremental DeepSeek session-log upload', () => {
   })
 
   it('folds only events appended after the cached acceptance scan', () => {
-    const id = SessionId('incremental-fold')
+    const id = brandString<SessionId>('incremental-fold')
     const events: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       {
@@ -323,19 +325,16 @@ describe('incremental DeepSeek session-log upload', () => {
   })
 
   it('rejects a missing event below the captured Session length', () => {
-    const session = {
-      id: SessionId('missing-event'),
-      header: { version: SESSION_FORMAT_VERSION },
-      seq: SessionLogOffset(1),
-      eventAt: () => undefined,
-    } as unknown as Session
+    const session = Session.create(brandString<SessionId>('missing-event'))
+    session.append('turn/start', { turn: 1 })
+    vi.spyOn(session, 'eventAt').mockReturnValue(undefined)
 
     expect(() => SessionLogDeepSeek.acceptedThrough(session))
       .toThrow('session-log-deepseek: missing event 0 below captured length 1')
   })
 
   it('ignores another format generation before interpreting its frozen sequence', () => {
-    const id = SessionId('migrated-generation')
+    const id = brandString<SessionId>('migrated-generation')
     const events = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       {
@@ -367,7 +366,7 @@ describe('incremental DeepSeek session-log upload', () => {
   })
 
   it.each([-1, -0, 0.5])('rejects malformed acceptance format version %s', (sessionFormatVersion) => {
-    const id = SessionId(`malformed-format-${sessionFormatVersion}`)
+    const id = brandString<SessionId>(`malformed-format-${sessionFormatVersion}`)
     const events = [{
       type: 'session-log-deepseek/delivery-accepted',
       seq: SessionSeq(0),
@@ -401,6 +400,112 @@ describe('incremental DeepSeek session-log upload', () => {
       throughSeq: 1,
       events: [{ type: 'session-log-deepseek/delivery-accepted' }],
     })
+  })
+
+  it.each([undefined, 'compaction', 'session-title', 'auto-review'])(
+    'uploads and acknowledges eligible requests with purpose %s by default', async (purpose) => {
+      const { ctx, session } = await harness('default-upload')
+      session.append('turn/start', { turn: 1 })
+      const prepared = await ctx.deepseekLlmApiExtensions.prepare({
+        body: body(), signal: SIGNAL, sessionId: session.id, ...purpose === undefined ? {} : { purpose },
+      })
+      expect(prepared.fields.dsh_session_log).toMatchObject({ afterSeq: -1, throughSeq: 0 })
+      await prepared.accept()
+      expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
+      expect(session.snapshotEvents().at(-1)?.type).toBe('session-log-deepseek/delivery-accepted')
+    },
+  )
+
+  it.each([false, true])('omits a matching upload independently of registration order (%s)', async (reverse) => {
+    const { ctx, session } = await harness('excluded-upload')
+    session.append('turn/start', { turn: 1 })
+    const rules = [
+      () => false,
+      (request: import('../src/types.ts').SessionLogUploadRequest) => request.purpose === 'private-operation',
+    ]
+    const consumer = ctx.inject(['sessionLogDeepSeek'], (child) => {
+      for (const rule of reverse ? rules.toReversed() : rules) child.sessionLogDeepSeek.registerExclusion(rule)
+    })
+    await consumer
+    const excluded = await ctx.deepseekLlmApiExtensions.prepare({
+      body: body(), signal: SIGNAL, sessionId: session.id, purpose: 'private-operation',
+    })
+    expect(excluded.fields).not.toHaveProperty('dsh_session_log')
+    await excluded.accept()
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
+    expect(session.snapshotEvents()).toHaveLength(1)
+
+    const ordinary = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(ordinary.fields.dsh_session_log).toMatchObject({ afterSeq: -1, throughSeq: 0 })
+    await consumer.dispose()
+    const restored = await ctx.deepseekLlmApiExtensions.prepare({
+      body: body(), signal: SIGNAL, sessionId: session.id, purpose: 'private-operation',
+    })
+    expect(restored.fields.dsh_session_log).toMatchObject({ afterSeq: -1, throughSeq: 0 })
+    await restored.accept()
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
+  })
+
+  it('owns duplicate predicates as separate disposable registrations', async () => {
+    const { ctx, session } = await harness('duplicate-exclusion')
+    session.append('turn/start', { turn: 1 })
+    const rule = () => true
+    const first = ctx.sessionLogDeepSeek.registerExclusion(rule)
+    const second = ctx.sessionLogDeepSeek.registerExclusion(rule)
+    await first()
+    const retained = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(retained.fields).not.toHaveProperty('dsh_session_log')
+    await second()
+    const restored = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(restored.fields.dsh_session_log).toMatchObject({ afterSeq: -1, throughSeq: 0 })
+  })
+
+  it('reports a throwing exclusion and omits its log contribution without acknowledgement', async () => {
+    const { ctx, session } = await harness('failed-exclusion')
+    session.append('turn/start', { turn: 1 })
+    const failure = new Error('upload exclusion failed')
+    const warnings: unknown[][] = []
+    ctx.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
+    const dispose = ctx.sessionLogDeepSeek.registerExclusion(() => { throw failure })
+    const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(prepared.fields).not.toHaveProperty('dsh_session_log')
+    await prepared.accept()
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
+    expect(session.snapshotEvents()).toHaveLength(1)
+    expect(warnings).toEqual([[expect.stringContaining('omitting field "dsh_session_log"'), failure]])
+    await dispose()
+    const restored = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(restored.fields.dsh_session_log).toMatchObject({ afterSeq: -1, throughSeq: 0 })
+  })
+
+  it('rebinds caller exclusions after the upload service is replaced', async () => {
+    const { ctx, session, disposeUpload } = await harness('replacement-exclusion')
+    session.append('turn/start', { turn: 1 })
+    const consumer = ctx.inject(['sessionLogDeepSeek'], (child) => {
+      child.sessionLogDeepSeek.registerExclusion(request => request.sessionId === session.id)
+    })
+    await consumer
+    const prepare = () => ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect((await prepare()).fields).not.toHaveProperty('dsh_session_log')
+    await disposeUpload()
+    expect(ctx.get('sessionLogDeepSeek')).toBeUndefined()
+    await ctx.plugin(SessionLogDeepSeek, { enabled: true })
+    await consumer
+    expect((await prepare()).fields).not.toHaveProperty('dsh_session_log')
+    await consumer.dispose()
+    expect((await prepare()).fields).toHaveProperty('dsh_session_log')
+  })
+
+  it('keeps prepared contributions valid when an exclusion is registered later', async () => {
+    const { ctx, session } = await harness('prepared-exclusion')
+    session.append('turn/start', { turn: 1 })
+    const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    ctx.sessionLogDeepSeek.registerExclusion(() => true)
+    expect(prepared.fields).toHaveProperty('dsh_session_log')
+    await prepared.accept()
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
+    const next = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(next.fields).not.toHaveProperty('dsh_session_log')
   })
 
   it('contributes complete events without reading request messages', async () => {
@@ -441,7 +546,7 @@ describe('incremental DeepSeek session-log upload', () => {
       inheritedEventCount: SessionLogOffset(seed.length),
       meta: {
         cwd: '/wire-workspace',
-        parentSession: SessionId('wire-parent'),
+        parentSession: brandString<SessionId>('wire-parent'),
         isSeeded: true,
         origin: 'subagent',
         delegationDepth: 1,
@@ -541,12 +646,12 @@ describe('incremental DeepSeek session-log upload', () => {
         sessionFormatVersion: SESSION_FORMAT_VERSION,
       },
     }] as unknown as SessionEvent[]
-    const session = Session.create(SessionId('malformed'), malformed)
+    const session = Session.create(brandString<SessionId>('malformed'), malformed)
     expect(() => SessionLogDeepSeek.acceptedThrough(session)).toThrow(/malformed acceptance watermark/)
   })
 
   it('rejects a negative persisted acceptance watermark before comparing it', () => {
-    const id = SessionId('negative-watermark')
+    const id = brandString<SessionId>('negative-watermark')
     const events = [{
       type: 'session-log-deepseek/delivery-accepted',
       seq: SessionSeq(0),

@@ -18,6 +18,8 @@ Var InstallerEditFrame
 Var InstallerBrowse
 Var InstallerLaunch
 Var InstallerExpanded
+Var InstallerMinimizeButton
+Var InstallerCloseButton
 !include "${__FILEDIR__}\path.nsh"
 !include "${__FILEDIR__}\drawing.nsh"
 
@@ -59,11 +61,13 @@ Function InstallerCreate
     !insertmacro InstallerControlColors $4
     ${NSD_CreateButton} 0 0 0 0 "−"
     Pop $4
+    StrCpy $InstallerMinimizeButton $4
     !insertmacro InstallerPlace $4 504 8 40 32
     ${NSD_OnClick} $4 InstallerMinimize
     ${NSD_OnNotify} $4 InstallerPaintButton
     ${NSD_CreateButton} 0 0 0 0 "×"
     Pop $4
+    StrCpy $InstallerCloseButton $4
     !insertmacro InstallerPlace $4 548 8 40 32
     ${NSD_OnClick} $4 InstallerClose
     ${NSD_OnNotify} $4 InstallerPaintButton
@@ -320,6 +324,13 @@ Function InstallerPaintButton
         IntOp $R1 $R9 & 65
         ${If} $R1 != 0
             StrCpy $R3 $InstallerControlHover
+        ${EndIf}
+        ${If} $R0 == $InstallerMinimizeButton
+        ${OrIf} $R0 == $InstallerCloseButton
+            IntOp $R1 $R9 & 1
+            ${If} $R1 != 0
+                StrCpy $R3 $InstallerControlPressed
+            ${EndIf}
         ${EndIf}
     ${EndIf}
     System::Call 'gdiplus::GdipCreateSolidFill(i R3, *p .R1)'

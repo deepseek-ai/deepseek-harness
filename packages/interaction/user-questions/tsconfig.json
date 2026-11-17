@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -30,13 +33,13 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../session/session-projection"
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

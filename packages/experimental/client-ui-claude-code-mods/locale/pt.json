@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code interface de mods",
+    "description": "Exiba a árvore de extensão de cada sessão acima da caixa de entrada e envie ações de botão para o serviço de extensão."
+  }
+}

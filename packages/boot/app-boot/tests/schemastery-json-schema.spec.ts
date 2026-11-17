@@ -343,7 +343,7 @@ describe('Schemastery input projection', () => {
     expect(accepts(result, { children: [{ children: [] }] })).toBe(true)
     expect(result.limitations.join(' ')).toContain('recursive default')
     expect(result.definitions.testRecursive0).not.toHaveProperty('anyOf')
-    expect(accepts(result, { __jsExpr: 'ctx.root' })).toBe(true)
+    expect(accepts(result, { __jsExpr: 'ctx[Symbol.for("cordis.root")]' })).toBe(true)
     expect(accepts(result, { children: [{ __jsExpr: 'ctx.child' }] })).toBe(true)
     expect(accepts(result, { children: [3] })).toBe(false)
     expect(JSON.stringify(result)).not.toContain('"uid"')

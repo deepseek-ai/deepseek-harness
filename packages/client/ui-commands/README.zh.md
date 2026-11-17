@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-input-trigger` 及 `ui-conversation` 一起挂载本插件；`/` source 随即出现在触发菜单中，业务包经 `ctx.commandUi` 注册自己的命令表面。键入 `/model` 打开已注册的弹窗；带参数声明的宿主命令打开其输入或直接执行。弹窗持有 composer 焦点：键入即在已加载的行上本地筛选，`↑`／`↓` 在行间移动，回车与 `Tab` 接受高亮行，Escape 与 `Shift+Tab` 把焦点还给 composer。高亮落在选项标记为会话当前值的行上，因此在刚打开的弹窗上接受即确认当前值。composer 的 `+` 按钮与键入的 `/` 打开同一个菜单：「添加」小节（文件、目标、计划、反馈）与「指令」小节（压缩、权限、模型、下载日志）按使用频次排列，每行带图标、本地化的标题与说明，本地化标题与命令名不同时还显示命令名作为别名。
+与 `ui-input-trigger` 及 `ui-conversation` 一起挂载本插件；`/` source 随即出现在触发菜单中，业务包经 `ctx.commandUi` 注册自己的命令表面。键入 `/model` 打开已注册的弹窗；带参数声明的宿主命令打开其输入或直接执行。桌面端的弹窗自动聚焦搜索框。手机和平板需要点击搜索框，遵循共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。搜索框聚焦后，键入即在已加载的行上本地筛选，`↑`／`↓` 在行间移动，回车与 `Tab` 接受高亮行，Escape 与 `Shift+Tab` 把焦点还给 composer。高亮落在选项标记为会话当前值的行上，因此在刚打开的弹窗上接受即确认当前值。composer 的 `+` 按钮与键入的 `/` 打开同一个菜单：「添加」小节（文件、目标、计划、反馈）与「指令」小节（压缩、权限、模型、下载日志）按使用频次排列，每行带图标、本地化的标题与说明，本地化标题与命令名不同时还显示命令名作为别名。
 
 ### 种类与装饰
 
@@ -35,7 +35,7 @@ popupSelect 规格可提供 `searchLabels()`，在每次打开时解析占位文
 
 选项可携带 `group: { name, label }`：`name` 标识分组，`label` 提供本地化吸顶标题。同名选项归入同一组；分组保持在已加载选项中首次出现的顺序，即使查询隐藏了较早的行也不变。未分组选项在首次出现的位置组成一个无标题区块。没有匹配行的分组会隐藏。
 
-可选的 `searchMode` 默认为 `'substring'`，不区分大小写地匹配 `label` 与 `detail` 的子串，不进行相关性排序。`'fuzzy-label'` 仅匹配标签中按顺序、不区分大小写的子序列，并在组内排序：前缀优先，其次按匹配得分，最后按原始行顺序。两种模式均忽略查询首尾空格；空查询按分组顺序保留所有行。渲染、键盘导航与选择使用相同的筛选顺序。`/model` 启用 `'fuzzy-label'`；其他命令未显式启用时仍使用子串匹配。
+弹窗搜索使用共享的[文本搜索](../../util/text-search/README.zh.md)：标签模糊匹配，详情按子串匹配，各行在组内按匹配程度排序。空查询按分组顺序保留所有行。渲染、键盘导航与选择使用相同的筛选顺序。
 
 ### 内置行的展示面
 
@@ -55,7 +55,7 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 <details>
 <summary>实现细节——点击展开</summary>
 
-`src/client/contract.ts` 定义贡献项和装饰的注册接口，以及 `dismiss(name)`：它关闭该命令已打开的弹窗与确认对话框，中止待完成的选项加载，阻止晚到结果重新打开弹窗，并保留 composer 草稿。`CommandDirectory` 负责会话级协议缓存，并通过 `resolution.ts` 解析输入命令；该模块负责内置命令标识匹配和本地化输入写法。`matchSpace` 同步读取就绪缓存，`matchEnter` 等待缓存就绪，预热失败或取消时拒绝。转发的目录和连接事件使缓存失效。宿主执行匹配的命令后，本浏览器发布 `command/executed`，其他客户端只观察持久命令事件。`PopupSelectController` 负责弹窗状态，`PopupSelectView` 占据输入浮层。`presentation.ts` 负责行标题、图标和分节，展示与解析辅助函数均留在插件内部。
+`src/client/contract.ts` 定义贡献项和装饰的注册接口，以及 `dismiss(name)`：它关闭该命令已打开的弹窗与确认对话框，中止待完成的选项加载，阻止晚到结果重新打开弹窗，并保留 composer 草稿。`CommandDirectory` 负责会话级协议缓存，并通过共享的 [`dsh-commands/builtin`](../../interaction/commands/README.zh.md) 库解析输入命令。Client 字典复用其中的中英文 token；`resolution.ts` 选择本地化的菜单输入写法。`matchSpace` 同步读取就绪缓存，`matchEnter` 等待缓存就绪，预热失败或取消时拒绝。转发的目录和连接事件使缓存失效。宿主执行匹配的命令后，本浏览器发布 `command/executed`，其他客户端只观察持久命令事件。`PopupSelectController` 负责弹窗状态，`PopupSelectView` 占据输入浮层。`presentation.ts` 负责行标题、图标和分节，展示与菜单输入辅助函数均留在插件内部。
 
 每次命令目录拉取都要求客户端已持有该会话，并等待首次历史打开成功后才发送 `commands.list`。临时的 `commandCatalog` 引用持续持有会话，直到拉取结束。未被持有的会话或打开失败会直接拒绝，不发送 RPC，因此后台目录刷新不会重新打开已关闭的会话。刷新后以已认领命令开头的草稿经 `matchClaim` 钩子重建认领：它等待同一个目录就绪，只应答 `leadingInput` 认领，不调用也不执行任何东西。
 

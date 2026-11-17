@@ -13,9 +13,8 @@ import {
 } from '@agentclientprotocol/sdk'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { execa } from 'execa'
-import * as yaml from 'js-yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testProfileResolution } from './profiles/headless/tests/profile-resolution.ts'
 
@@ -144,9 +143,7 @@ function createProfileLifecycleFixture(): ProfileLifecycleFixture {
   writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n')
   const linkTarget = join(profileDir, 'node_modules', 'dsh-lifecycle-bundle')
   mkdirSync(join(profileDir, 'node_modules'), { recursive: true })
-  try {
-    rmSync(linkTarget, { recursive: true, force: true })
-  } catch { /* fresh dir */ }
+  rmSync(linkTarget, { recursive: true, force: true })
   // Copy-free: a package.json redirecting via a relative main is enough for require.resolve.
   mkdirSync(linkTarget, { recursive: true })
   for (const file of ['package.json', 'cordis.patch.yml', 'plugin.mjs']) {
@@ -344,6 +341,20 @@ function startStartupProfile(fixture: StartupFixture, args: readonly string[]) {
 describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', () => {
   testProfileResolution('lib')
 
+  it.runIf(process.platform === 'win32')('resolves the installed entry before loading CLI dependencies', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-cli-alias-'))
+    try {
+      const alias = join(home, 'launcher')
+      symlinkSync(join(repoRoot, 'apps/cli/lib'), alias, 'junction')
+      const { stdout } = await execa(process.execPath, [
+        '--preserve-symlinks-main', join(alias, 'bin.js'), '--version',
+      ], { timeout: SPAWN_TIMEOUT_MS, env: { DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' } })
+      expect(stdout).toBe(cliVersion)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  }, SPAWN_TIMEOUT_MS + 5_000)
+
   it('requires a profile and rejects removed flags', async () => {
     const bare = await runBuiltBin()
     expect(bare.code).toBe(1)
@@ -443,6 +454,9 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
   }, SPAWN_TIMEOUT_MS + 30_000)
 
   it('serves the SDK protocol with an absolute-path overlay plugin and exits after shutdown', async () => {
+    // On the official endpoint the route requests its model listing with this key;
+    // the loopback mock keeps the run offline and records any model call.
+    const server = await startMockLlmServer({ sequence: ['success'] })
     const home = mkdtempSync(join(tmpdir(), 'dsh-built-sdk-'))
     const pluginPath = join(home, 'plugin #100%.mjs')
     const marker = join(home, 'plugin-loaded')
@@ -465,6 +479,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         DSH_HOME: home,
         DSH_TELEMETRY_DISABLED: '1',
         DEEPSEEK_API_KEY: 'built-sdk-profile-no-call',
+        DEEPSEEK_BASE_URL: server.baseURL,
       },
       extendEnv: false,
     })
@@ -504,10 +519,12 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(result.signal, stderr).toBeUndefined()
       expect(result.exitCode, stderr).toBe(0)
       expect(stderr).toBe('')
+      expect(server.requests).toEqual([])
       expect(readFileSync(marker, 'utf8')).toBe('loaded')
     } finally {
       child.kill('SIGKILL')
       await child
+      await server.close()
       rmSync(home, { recursive: true, force: true })
     }
   }, SPAWN_TIMEOUT_MS + 30_000)
@@ -1239,7 +1256,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       )
       expect(code).toBe(0)
       expect(stderr).toBe('')
-      const rows = yaml.load(stdout, { schema: entryListSchema }) as Array<{ id?: string; name?: string }>
+      const rows = parseEntryYaml(stdout) as Array<{ id?: string; name?: string }>
       expect(rows.map(row => [row.id, row.name])).toEqual([
         ['sdk-app-startup', '@deepseek-ai/dsh-sdk-app'],
         ['sdk-jsonrpc-server', '@deepseek-ai/dsh-sdk-jsonrpc-server'],
@@ -1268,6 +1285,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         ['session-title', '@deepseek-ai/dsh-session-title'],
         ['system-prompt', '@deepseek-ai/dsh-system-prompt'],
         ['tools', '@deepseek-ai/dsh-tools'],
+        ['tool-executor-native', '@deepseek-ai/dsh-tool-executor-native'],
         ['mcp-resources', '@deepseek-ai/dsh-mcp-resources'],
         ['agent', '@deepseek-ai/dsh-agent'],
         ['llm-retry', '@deepseek-ai/dsh-llm-retry'],

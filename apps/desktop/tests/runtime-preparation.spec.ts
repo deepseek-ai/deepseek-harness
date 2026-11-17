@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   pnpm: '11.7.0' as string | undefined,
   failure: undefined as 'electron' | 'primary' | 'cli' | undefined,
   preparePrimary: vi.fn(),
+  extractElectron: vi.fn(),
   commandLink: vi.fn(),
 }))
 vi.mock('../scripts/desktop-build-paths.mjs', async importOriginal => ({
@@ -22,9 +23,7 @@ vi.mock('../scripts/desktop-build-paths.mjs', async importOriginal => ({
   }),
 }))
 vi.mock('@electron/get', () => ({ downloadArtifact: async () => 'electron.zip' }))
-vi.mock('extract-zip', () => ({ default: async () => {
-  if (state.failure === 'electron') throw new Error('Electron extraction failed')
-} }))
+vi.mock('extract-zip', () => ({ default: state.extractElectron }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
   execFileSync: (file: string) => file === '/usr/libexec/PlistBuddy' ? '12.0\n' : '24.18.1\n',
@@ -54,6 +53,9 @@ beforeEach(() => {
   state.failure = undefined
   process.argv = [process.execPath, 'prepare-runtime.ts']
   vi.stubEnv('DSH_DESKTOP_PACKAGING_RUN_DIR', undefined)
+  state.extractElectron.mockImplementation(async () => {
+    if (state.failure === 'electron') throw new Error('Electron extraction failed')
+  })
   state.preparePrimary.mockImplementation(async () => {
     if (state.failure === 'primary') throw new Error('primary preparation failed')
     const root = join(state.root, 'runtime', 'primary-runtime')
@@ -117,4 +119,95 @@ it.each([
   state.pnpm = pnpm
   await expect(import('../scripts/prepare-runtime.ts')).rejects.toThrow(error)
   expect(existsSync(join(state.root, 'runtime', 'versions.json'))).toBe(false)
+})
+
+it.each(['electron', 'primary'] as const)('overlaps Windows payloads and waits for %s to finish last before publishing CLI and versions', async (last) => {
+  state.target = 'win-x64'
+  const electron = Promise.withResolvers<undefined>()
+  const primary = Promise.withResolvers<undefined>()
+  const started = new Set<string>()
+  const finished = new Set<string>()
+  const preparePrimary = state.preparePrimary.getMockImplementation()!
+  state.extractElectron.mockImplementation(async () => {
+    started.add('electron')
+    await electron.promise
+    finished.add('electron')
+  })
+  state.preparePrimary.mockImplementation(async () => {
+    started.add('primary')
+    await primary.promise
+    await preparePrimary()
+    finished.add('primary')
+  })
+  const outcome = import('../scripts/prepare-runtime.ts').then(() => undefined, (error: unknown) => error)
+  try {
+    await vi.waitFor(() => { expect([...started].sort()).toEqual(['electron', 'primary']) }, { timeout: 5000 })
+    ;(last === 'electron' ? primary : electron).resolve(undefined)
+    await vi.waitFor(() => { expect(finished.size).toBe(1) }, { timeout: 5000 })
+    expect(existsSync(join(state.root, 'runtime', 'cli'))).toBe(false)
+    expect(existsSync(join(state.root, 'runtime', 'versions.json'))).toBe(false)
+    ;(last === 'electron' ? electron : primary).resolve(undefined)
+    expect(await outcome).toBeUndefined()
+    expect(existsSync(join(state.root, 'runtime', 'cli', 'command-manager.js'))).toBe(true)
+    expect(existsSync(join(state.root, 'runtime', 'versions.json'))).toBe(true)
+  } finally {
+    electron.resolve(undefined)
+    primary.resolve(undefined)
+    await outcome
+  }
+})
+
+it.each(['electron', 'primary'] as const)('drains the sibling after Windows %s failure without publishing CLI or versions', async (failed) => {
+  state.target = 'win-x64'
+  const electron = Promise.withResolvers<undefined>()
+  const primary = Promise.withResolvers<undefined>()
+  const started = new Set<string>()
+  const completed = new Set<string>()
+  const failure = new Error(`${failed} payload failed`)
+  const prepare = async (name: 'electron' | 'primary', barrier: Promise<undefined>) => {
+    started.add(name)
+    try { await barrier } finally { completed.add(name) }
+  }
+  state.extractElectron.mockImplementation(() => prepare('electron', electron.promise))
+  state.preparePrimary.mockImplementation(() => prepare('primary', primary.promise))
+  const outcome = import('../scripts/prepare-runtime.ts').then(
+    () => ({ error: undefined, completed: [...completed].sort() }),
+    (error: unknown) => ({ error, completed: [...completed].sort() }),
+  )
+  try {
+    await vi.waitFor(() => { expect([...started].sort()).toEqual(['electron', 'primary']) }, { timeout: 5000 })
+    ;(failed === 'electron' ? electron : primary).reject(failure)
+    await vi.waitFor(() => { expect(completed.has(failed)).toBe(true) }, { timeout: 5000 })
+    expect(existsSync(join(state.root, 'runtime', 'cli'))).toBe(false)
+    expect(existsSync(join(state.root, 'runtime', 'versions.json'))).toBe(false)
+    ;(failed === 'electron' ? primary : electron).resolve(undefined)
+    expect(await outcome).toEqual({ error: failure, completed: ['electron', 'primary'] })
+    expect(existsSync(join(state.root, 'runtime', 'cli'))).toBe(false)
+    expect(existsSync(join(state.root, 'runtime', 'versions.json'))).toBe(false)
+  } finally {
+    electron.resolve(undefined)
+    primary.resolve(undefined)
+    await outcome
+  }
+})
+
+it.each(['mac-arm64', 'mac-x64'] as const)('keeps %s primary preparation after Electron extraction', async (target) => {
+  state.target = target
+  const electron = Promise.withResolvers<undefined>()
+  let extracting = false
+  state.extractElectron.mockImplementation(async () => {
+    extracting = true
+    await electron.promise
+  })
+  const outcome = import('../scripts/prepare-runtime.ts').then(() => undefined, (error: unknown) => error)
+  try {
+    await vi.waitFor(() => { expect(extracting).toBe(true) }, { timeout: 5000 })
+    expect(state.preparePrimary).not.toHaveBeenCalled()
+    electron.resolve(undefined)
+    expect(await outcome).toBeUndefined()
+    expect(state.preparePrimary).toHaveBeenCalledOnce()
+  } finally {
+    electron.resolve(undefined)
+    await outcome
+  }
 })

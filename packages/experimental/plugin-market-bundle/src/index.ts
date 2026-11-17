@@ -1,2 +1,2 @@
-/** Experimental custom plugin market composition; runtime rows live in cordis.patch.yml. */
+/** Experimental custom plugin index composition; runtime rows live in cordis.patch.yml. */
 export {}

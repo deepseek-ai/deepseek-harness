@@ -1,10 +1,12 @@
 - banner:
   - navigation "Session hierarchy": CJK strong emphasis
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Render adjacent CJK strong emphasis. {{clock}}
 - button "Copy"
 - status: Completed

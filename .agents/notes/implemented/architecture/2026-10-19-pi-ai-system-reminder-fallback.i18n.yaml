@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-pi-ai-system-reminder-fallback.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-pi-ai-system-reminder-fallback.md
+/agent-note-pi-ai-system-reminder-fallback:
+  en: f43b5c6974289180
+  zh: abc0a86b1d137189
+/agent-note-pi-ai-system-reminder-fallback/problem:
+  en: 5247278483ca4e7a
+  zh: ca711671a43fae76
+/agent-note-pi-ai-system-reminder-fallback/decision:
+  en: 604eb72704c73328
+  zh: 6661d1065f65ecf9
+/agent-note-pi-ai-system-reminder-fallback/alternatives-considered:
+  en: 0e2aaf897587ebb0
+  zh: 0a7f9a9cb7ddffaf
+/agent-note-pi-ai-system-reminder-fallback/consequences:
+  en: 8a0c53289a04c64a
+  zh: 591e602eb2036a1a

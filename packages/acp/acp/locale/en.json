@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP server",
+    "description": "Run agents through JSON-RPC over standard input and output for automation."
+  }
+}

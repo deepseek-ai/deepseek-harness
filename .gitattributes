@@ -13,3 +13,15 @@ docs/persistence-schema.json linguist-generated=true
 docs/persistence-changes/*.schema.json linguist-generated=true
 docs/persistence-changes/releases/*.schema.json linguist-generated=true
 docs/persistence-changes/historical-formats/*.schema.json linguist-generated=true
+
+# Unified patch blank context lines require their leading space.
+patches/*.patch whitespace=-blank-at-eol
+
+# Review layers of the forge changes view (dsh-review-layer), for this repository's own conventions:
+# plugin locale dictionaries and the session snapshot tree hide with test files, generated bilingual
+# pairing records join them, and a package's types-only module is part of its interface.
+packages/*/*/locale/*.json dsh-review-layer=test
+locales.ts dsh-review-layer=test
+snapshots/** dsh-review-layer=test
+*.i18n.yaml dsh-review-layer=test
+packages/*/*/src/types.ts dsh-review-layer=interface

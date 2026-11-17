@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MenuSurface, useAnchoredPosition } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './inspector.module.css'
 
@@ -28,7 +28,7 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
   const input = useRef<HTMLInputElement>(null)
   const id = useId()
   const listId = `${id}-types`
-  const position = useAnchoredPosition({ open, anchorRef: anchor, panelRef: panel, gap: 4, margin: 12 })
+  const anchorName = `--dsh-type-filter-${id.replaceAll(':', '')}`
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false)
     if (restoreFocus) anchor.current?.focus({ preventScroll: true })
@@ -38,6 +38,9 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
     if (!open) return
     input.current?.focus({ preventScroll: true })
     input.current?.select()
+  }, [open])
+  useEffect(() => {
+    if (!open) return
     const outside = (event: PointerEvent): void => {
       const target = event.target
       if (target instanceof Node && !panel.current?.contains(target) && !anchor.current?.contains(target)) close(false)
@@ -69,7 +72,7 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
     if (selected >= 0) panel.current?.querySelectorAll<HTMLElement>('[role="option"]')[selected]?.scrollIntoView({ block: 'nearest' })
   }, [selected])
   return <>
-    <button ref={anchor} type="button" className={css.typeFilterButton} aria-label={t('filter.title')}
+    <button ref={anchor} style={{ anchorName }} type="button" className={css.typeFilterButton} aria-label={t('filter.title')}
       title={value === '' ? t('filter.title') : `${t('filter.title')}: *${value}*`}
       aria-haspopup="dialog" aria-expanded={open} aria-pressed={value !== ''}
       onClick={() => {
@@ -81,7 +84,7 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
       </svg>
     </button>
     {open && createPortal(<MenuSurface compact ref={panel} className={css.typeFilterPanel} role="dialog" aria-label={t('filter.title')}
-      style={position ?? { left: 0, top: 0, visibility: 'hidden' }}
+      style={{ positionAnchor: anchorName }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true) }
       }}

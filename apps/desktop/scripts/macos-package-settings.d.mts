@@ -3,6 +3,7 @@
 /** Validated settings shared by preflight and stage execution. */
 export interface MacOSPackageSettings {
   readonly packConcurrency: number
+  readonly zipCompressionLevel: number
   readonly downloadProxy?: string
   readonly notarizationProxy?: string
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Controle do comprimento do resultado da ferramenta",
+    "description": "Limite o comprimento dos resultados da ferramenta colocados diretamente no contexto e preserve o caminho de leitura para os resultados completos."
+  }
+}

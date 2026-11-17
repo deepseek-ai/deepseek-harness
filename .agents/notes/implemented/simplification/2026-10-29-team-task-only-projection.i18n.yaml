@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-29-team-task-only-projection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-29-team-task-only-projection.md
+/agent-note-team-projection-retains-only-tasks-and-mode:
+  en: 030f2abb8b5137fe
+  zh: e661455f374c8b1f
+/agent-note-team-projection-retains-only-tasks-and-mode/problem:
+  en: 43bd1c0daacd2b86
+  zh: a35efb4e84cd9288
+/agent-note-team-projection-retains-only-tasks-and-mode/decision:
+  en: dd21640eb965f332
+  zh: 345bc4df573cbadf
+/agent-note-team-projection-retains-only-tasks-and-mode/alternatives-considered:
+  en: 96a0f421f9f92746
+  zh: 314f4557f391f90d
+/agent-note-team-projection-retains-only-tasks-and-mode/consequences:
+  en: 1c1b767b7905869f
+  zh: 1241351bfc433b70

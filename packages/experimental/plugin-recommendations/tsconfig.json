@@ -1,0 +1,44 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.host.json"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../action-cards"
+    }
+  ],
+  "files": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/skill.ts"
+  ]
+}

@@ -1,9 +1,10 @@
 /** Paid selection, independent native requests, audit-before-I/O and cancellation. */
 import { Context, FiberState } from '@deepseek-ai/cordis'
-import { ReasoningEffortId, createUserMessage, createAssistantMessage, type PreparedLlmCall } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ReasoningEffortId, createUserMessage, createAssistantMessage, type PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import { Config as AccountConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
 import { Config as OfficialConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
-import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import { TimeoutReason } from '@deepseek-ai/dsh-timeout'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Translator from '../src/index.ts'
@@ -25,7 +26,7 @@ describe('native Flash translation', () => {
     expect(() => ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', provider: 'deepseek-official' }))
       .toThrow(expect.objectContaining({ code: 'TRANSLATION_SESSION_REQUIRED' }))
     await expect(ctx.translator.translate(ctx.translator.resolve({ text: 'source', targetLanguage: 'zh',
-      provider: 'deepseek-account', sessionId: SessionId('missing') }))).rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
+      provider: 'deepseek-account', sessionId: brandString<SessionId>('missing') }))).rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
   })
 
   it('offers both actual native owners with customized settings ids and arbitrary model version names', async () => {
@@ -86,7 +87,7 @@ describe('native Flash translation', () => {
         source: { kind: 'user' } }), { surfaceOp: 'append' })
       const history = session.deriveMessages()
       for await (const _chunk of b.ctx.llm.stream({ provider: 'deepseek-official', model: 'deepseek-flash',
-        reasoningEffort: ReasoningEffortId('off'), messages: history, sessionId: session.id })) { /* Native main request control. */ }
+        reasoningEffort: brandString<ReasoningEffortId>('off'), messages: history, sessionId: session.id })) { /* Native main request control. */ }
       expect(b.requests[0]!.body).toHaveProperty('dsh_session_log')
       expect(b.requests[0]!.sessionHeader).toBe(true)
       const accepted = session.snapshotEvents().filter(event => event.type === 'session-log-deepseek/delivery-accepted')
@@ -157,7 +158,7 @@ describe('native Flash translation', () => {
   it('requires an existing durable Session and retains empty results without model admission or billing', async () => {
     const b = await paidFixture(cleanups)
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ provider: 'deepseek-account', sourceLanguage: 'auto',
-      targetLanguage: 'zh', text: 'source', sessionId: SessionId('missing') })))
+      targetLanguage: 'zh', text: 'source', sessionId: brandString<SessionId>('missing') })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
     b.setSignedIn(false)
     const prepare = vi.spyOn(b.ctx.llm, 'prepareCall')
@@ -179,7 +180,7 @@ describe('native Flash translation', () => {
       before.resolve(undefined)
       await continueLookup.promise
       const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'official-custom-id')!
-      const config = owner.fiber!.config as ReturnType<typeof OfficialConfig>
+      const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
       config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash', name: 'Flash' }] }).models
       return models
     })
@@ -200,7 +201,7 @@ describe('native Flash translation', () => {
     vi.spyOn(b.ctx.llm, 'listConfigurableProviders').mockImplementation(() => {
       reads += 1
       if (reads === 2) queueMicrotask(() => {
-        const config = owner.fiber!.config as ReturnType<typeof OfficialConfig>
+        const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
         config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash' }] }).models
       })
       return directory
@@ -212,9 +213,9 @@ describe('native Flash translation', () => {
 
   it('rejects a prepared call that cannot guarantee thinking off before auditing or network I/O', async () => {
     const b = await paidFixture(cleanups)
-    const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: ReasoningEffortId('off') })
+    const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: brandString<ReasoningEffortId>('off') })
     vi.spyOn(b.ctx.llm, 'prepareCall').mockResolvedValueOnce({ ...prepared,
-      config: { ...prepared.config, reasoningEffort: ReasoningEffortId('high') } })
+      config: { ...prepared.config, reasoningEffort: brandString<ReasoningEffortId>('high') } })
     await expect(b.translate('deepseek-official')).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     expect(b.requests).toEqual([])
     expect(b.session?.snapshotEvents()).toEqual([])
@@ -222,7 +223,7 @@ describe('native Flash translation', () => {
 
   it.each(['removed', 'replaced'])('rejects an audit Session %s during paid admission before dispatch', async (kind) => {
     const b = await paidFixture(cleanups, { withSession: false })
-    const sessionId = SessionId('transient-audit-session')
+    const sessionId = brandString<SessionId>('transient-audit-session')
     const scope = b.ctx.plugin({ inject: ['sessions'], apply: (ctx) => { ctx.sessions.create(sessionId) } })
     await scope
     const writer = await b.ctx.sessionPersistence.create(b.ctx.sessions.get(sessionId)!.header)
@@ -261,6 +262,7 @@ describe('native Flash translation', () => {
 
   it.each(['withdrawn', 'catalog', 'credential'])('rejects a native route %s during async preparation before audit or dispatch', async (change) => {
     const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    cleanups.push(async () => { release.resolve(undefined) })
     const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
       const call = await original(config, signal)
@@ -270,15 +272,17 @@ describe('native Flash translation', () => {
     const rejected = expect(pending).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     await entered.promise
     const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'official-custom-id')!
+    let withdrawal: Promise<void> | undefined
     if (change === 'withdrawn') {
-      await owner.fiber!.dispose()
+      withdrawal = owner.fiber!.dispose()
       await rejected
     } else if (change === 'catalog') {
-      const config = owner.fiber!.config as ReturnType<typeof OfficialConfig>
+      const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
       config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash' }] }).models
     } else b.setConfigured(false)
     release.resolve(undefined)
     await rejected
+    await withdrawal
     expect(b.requests).toEqual([])
     expect(b.session?.snapshotEvents()).toEqual([])
   })
@@ -293,7 +297,7 @@ describe('native Flash translation', () => {
     const rejected = expect(b.translate('deepseek-account')).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     await entered.promise
     const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'account-custom-id')!
-    const config = owner.fiber!.config as ReturnType<typeof AccountConfig>
+    const config = owner.fiber!.effectiveConfig as ReturnType<typeof AccountConfig>
     config.modelOverrides = AccountConfig({ modelOverrides: { 'deepseek-flash': { maxTokens: 4096 } } }).modelOverrides
     release.resolve(undefined)
     await rejected
@@ -309,7 +313,7 @@ describe('native Flash translation', () => {
       if (pluginRecordOf(event)?.type !== 'plugin:translator/request') return
       if (change === 'withdrawn') withdrawal = owner.fiber!.dispose()
       else if (change === 'catalog') {
-        const config = owner.fiber!.config as ReturnType<typeof OfficialConfig>
+        const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
         config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash' }] }).models
       } else b.setConfigured(false)
     }, { global: true })
@@ -332,7 +336,7 @@ describe('native Flash translation', () => {
 
   it.each(['block-start', 'block-end', 'reasoning-delta', 'tool-call-delta', 'missing-finish'])('rejects unwanted model output %s', async (kind) => {
     const b = await paidFixture(cleanups)
-    const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: ReasoningEffortId('off') })
+    const prepared = await b.ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: brandString<ReasoningEffortId>('off') })
     const replacement: PreparedLlmCall = { ...prepared, async *stream() {
       if (kind === 'block-start') yield { type: 'block-start', index: 0, blockType: 'reasoning' }
       else if (kind === 'block-end') yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'private output' } }

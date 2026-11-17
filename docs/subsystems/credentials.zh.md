@@ -6,6 +6,8 @@
 
 来源：[`packages/credentials/credentials/src/index.ts`](../../packages/credentials/credentials/src/index.ts)
 
+DeepSeek 账号授权是其中一条记录；其登录、请求凭据和 Platform 会话见 [account.zh.md](account.zh.md)。
+
 ## 标识
 
 引用以 POSIX 风格环境变量名命名一条凭据。brand 防止调用方将凭据引用与在包或进程之间传递的其他字符串混用；构造时校验 shell 标识符语法。
@@ -32,13 +34,12 @@ interface ResolvedCredential {
 
 ## 描述
 
-`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
+`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。可选的 `masked` 字段携带提供方生成的脱敏预览，不包含完整凭据。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
 
 ```ts type-equiv
 /**
- * Source and writability facts for one reference, safe for configuration UIs —
- * never the value. The view has no slot a value could ride in, which is what
- * lets the whole read half cross the Remote wire.
+ * Configuration facts and an optional provider-masked preview for one
+ * reference. The full credential is never part of this view.
  */
 interface CredentialInfo {
   /** Whether resolving the reference would currently return a value. */
@@ -47,20 +48,14 @@ interface CredentialInfo {
   source?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
+  /** Provider-generated masked preview of a stored value; never the full value. */
+  masked?: string
 }
 ```
 
 ## 已提交的变更
 
 `credentials/reference-updated (ref)` 在提供方管理的来源发生已提交变更后发出——`set`、`unset` 或在存储中观察到的外部编辑。进程环境自身的变化不可观测，永不发出事件。消费方不需要该事件（它们按操作重新解析）；它服务于配置界面刷新「已配置」徽标。
-
-## 内嵌 Platform 凭证
-
-PlatformSession 是 getPlatformSession 返回的仅限 Host 快照：origin 指定所配置的 Platform 签发来源，token 包含其已存账号凭证。userId 复制最近一次成功 getProfile 得到的稳定账号 ID；尚无一次成功读取或资料不含 ID 时为 null。快照复用该 ID，不自行发起资料请求，因此 ID 未知时只会让 userId 为 null，而不会延迟调用方；资料读取首次取得稳定 ID 或该 ID 变化时仅通知使用 `watch(signal, true)` 的 Host 订阅者，供标识使用方重新读取快照。使用方以 origin 和 userId 作为持久化浏览器存储的键，为 null 时退回临时存储。账号已退登或读取凭证期间凭证变化时不返回快照；签发来源不匹配时失败。原生使用方负责在凭证变化时使文档失效。账号控制器 RPC、AccountView 和 AccountDetails 均不包含此快照。
-
-AccountDetails.balance 将充值钱包投影为 value、赠送钱包投影为 bonusWallets，分别保留币种和十进制余额字符串。查询失败不包含钱包数组。
-
-赠金通知查询返回 AccountBonusBatch，包含当前 Platform 账号 id 和按服务端顺序排列的可通知订单。AccountBonusNotification 保留服务端消息与到期时间，不投影凭证。确认请求携带预期账号 id 和订单 id；账号变化后 Host 拒绝该请求。两项通知操作都通过 x-client-locale 传递发起界面的语言，不使用语言查询参数。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -154,9 +149,9 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 
 /**
  * Describe one reference for configuration surfaces without exposing the
- * value.
+ * full value.
  * @param ref - the reference to describe.
- * @returns configured state, supplying source, and writability.
+ * @returns configured state, supplying source, writability, and optional masked preview.
  */
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 
@@ -228,7 +223,7 @@ Source: [`packages/credentials/credentials/src/index.ts`](../../packages/credent
 
 ### `ctx.credentialsController` — `CredentialsController`
 
-Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.
+Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Full secret values cross in one direction only — no method here returns one.
 
 ```ts cordis-catalog
 /**
@@ -260,112 +255,6 @@ Host service backing the generated `ctx.remote.credentials` namespace. It carrie
 ```
 
 Source: [`packages/api/settings-controller/src/credentials.ts`](../../packages/api/settings-controller/src/credentials.ts)
-
-<a id="ctxdeepseekaccount--deepseekaccount-abstract-seam"></a>
-
-### `ctx.deepseekAccount` — `DeepSeekAccount` (abstract seam)
-
-Account operations; only Host consumers can obtain a request credential.
-
-```ts cordis-catalog
-/**
- * Read stored-account presence and the latest login attempt.
- * @returns a snapshot without credentials or PKCE secrets.
- */
-abstract getState(): Promise<AccountView>
-
-/**
- * Query Platform profile independently of wallet balances.
- * A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch
- * consumers, so they re-read getPlatformSession; repeated IDs stay silent.
- * @param client - identity of the requesting UI for this call.
- * @returns profile outcome, or null if signed out or the grant changed during the query.
- */
-abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails['profile'] | null>
-
-/**
- * Query Platform recharge and bonus wallet balances independently of profile data.
- * @param client - identity of the requesting UI for this call.
- * @returns balance outcome, or null if signed out or the grant changed during the query.
- */
-abstract getBalance(client: AccountClientMetadata): Promise<AccountDetails['balance'] | null>
-
-/**
- * Query the granted bonuses Platform has not yet recorded as displayed.
- * @param client - identity of the requesting UI for this call; its language selects the server-authored message.
- * @returns bonuses with their account, or null if signed out or the grant changed during the query.
- */
-abstract getUnnotifiedBonuses(client: AccountClientMetadata): Promise<AccountBonusBatch | null>
-
-/**
- * Record one displayed bonus as notified for the account it belongs to.
- * @param accountId - account the notification was read for; a different current account is never acknowledged.
- * @param orderId - granted bonus order the user saw.
- * @param client - identity of the requesting UI for this call.
- * @returns true once Platform records the acknowledgement; false if signed out or the account changed.
- */
-abstract ackBonusNotified(accountId: AccountUserId, orderId: AccountBonusOrderId, client: AccountClientMetadata): Promise<boolean>
-
-/**
- * Join an active attempt or start browser authorization.
- * @param client - identity of the requesting UI; a new attempt captures it, and joining retains the original attempt's identity.
- * @param callbackOrigin - browser-accessible loopback HTTP origin, including any SSH local port.
- * @param loginSource - initiating UI, used to return from a failed exchange.
- * @returns the initial snapshot without waiting for browser approval.
- */
-abstract startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: 'web' | 'desktop'): Promise<AccountView>
-
-/**
- * Cancel only the named attempt; committing attempts settle before returning.
- * @param id - attempt identity from this Host.
- * @returns state after cancellation or an already-started commit.
- */
-abstract cancelSignIn(id: SignInAttemptId): Promise<AccountView>
-
-/**
- * Remove the local grant while retaining API keys; the provider revokes it in the background.
- * @param client - identity of the requesting UI, captured for the background revocation retries.
- * @returns the signed-out state after local removal; remote failures never restore the grant.
- */
-abstract signOut(client: AccountClientMetadata): Promise<AccountView>
-
-/**
- * Subscribe to snapshots including a complete initial state.
- * @param signal - subscription lifetime; ending it never cancels login.
- * @param includeIdentityChanges - also notify when cached Platform identity changes; defaults to false.
- * @returns complete snapshots as account state changes.
- */
-abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>
-
-/**
- * Resolve a credential only for the inference origin allowed by the provider.
- * @param url - actual request destination or API base URL.
- * @returns stored token, or undefined for other origins or a signed-out account.
- */
-abstract resolveToken(url: string): Promise<string | undefined>
-
-/**
- * Remove an inference-rejected token only while it still matches the stored login.
- * @param token - token captured by the rejected inference request.
- * @returns after matching credentials are removed and the expiry notification is emitted.
- */
-abstract rejectToken(token: string): Promise<void>
-
-/**
- * Read credentials for the configured Platform origin, bound to their issuing environment, and
- * pair them with the account ID from the last successful profile read; no profile request is made.
- * @returns a Host-only snapshot, or null while signed out or when the credential changed during the read.
- */
-abstract getPlatformSession(): Promise<PlatformSession | null>
-
-/**
- * Read existing login identity without creating a device or returning credentials.
- * @returns optional device/account identifiers and the provider's OS version string.
- */
-abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>
-```
-
-Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
 <a id="authorization-events"></a>
 
@@ -437,57 +326,4 @@ Committed change to a provider-managed credential source: a `set`, an `unset`, o
 ```
 
 Source: [`packages/credentials/credentials/src/types.ts`](../../packages/credentials/credentials/src/types.ts)
-
-<a id="deepseek-account-events"></a>
-
-### `deepseek-account/*` events
-
-<a id="deepseek-accountmodel-sign-in-required--emit"></a>
-
-#### `deepseek-account/model-sign-in-required` — emit
-
-An account model request requires the user to sign in.
-
-```ts cordis-catalog
-/** An account model request requires the user to sign in.
- * @mode emit
- */
-'deepseek-account/model-sign-in-required'(): void
-```
-
-Source: [`packages/credentials/deepseek-account/src/types.ts`](../../packages/credentials/deepseek-account/src/types.ts)
-
-<a id="deepseek-accountsession-expired--emit"></a>
-
-#### `deepseek-account/session-expired` — emit
-
-Server rejection removed the current account credential; this notification is not replayed.
-
-```ts cordis-catalog
-/** Server rejection removed the current account credential; this notification is not replayed.
- * @mode emit
- */
-'deepseek-account/session-expired'(): void
-```
-
-Source: [`packages/credentials/deepseek-account/src/types.ts`](../../packages/credentials/deepseek-account/src/types.ts)
-
-<a id="deepseek-accountsigned-out--emit"></a>
-
-#### `deepseek-account/signed-out` — emit
-
-Local grant removal has completed.
-
-```ts cordis-catalog
-/** Local grant removal has completed.
- * @mode emit
- */
-'deepseek-account/signed-out'(): void
-```
-
-Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 <!-- END GENERATED cordis-surface -->
-
-账号服务定义提供 getState、getProfile、getBalance、getUnnotifiedBonuses、ackBonusNotified、startSignIn、cancelSignIn、signOut、watch 及仅限 Host 的 resolveToken 和 getPlatformSession。平台提供者使用 AuthorizationFlow 和私有 GrantRecord 实现这些操作。AccountView 区分本地存在与服务器验证；尝试 ID 将取消绑定到单次本地流程。参见[账号包](../../packages/credentials/deepseek-account/README.zh.md)。
-
-`AccountClientMetadata` 携带调用方 `DSH_CLIENT_VERSION` 提供的 `version`、当前界面 `locale`，以及操作发起时采样的 `timezoneOffsetSeconds`。偏移为本地时间减 UTC 的秒数：UTC+8 对应 `28800`。其中不含凭证。登录申请在兑换及取消期间保留发起时的元数据；退出操作为撤销重试保留其元数据。

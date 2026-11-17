@@ -1,10 +1,10 @@
 /** Authorized Host PDFs remain binary through Client reuse and disposal. */
-import type { OfficeToPdfGeneration } from '@deepseek-ai/dsh-office-to-pdf/types'
+import type { OfficeKitGeneration } from '@deepseek-ai/dsh-office-kit/types'
 import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
-import type {} from '@deepseek-ai/dsh-office-to-pdf/remote'
+import type {} from '@deepseek-ai/dsh-office-kit/remote'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/office/index.ts'
@@ -13,7 +13,7 @@ import { Config } from '../src/config.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { en, zh } from '../src/client/office/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/office/locales.ts'
 import { en as documentEn } from '../src/client/locales.ts'
 
 vi.mock('../src/client/office/face.ts', async (importOriginal) => {
@@ -22,7 +22,7 @@ vi.mock('../src/client/office/face.ts', async (importOriginal) => {
 })
 
 const file = { sessionId: 's1' as SessionId, path: 'report.DOCX' }
-const generation = ('renderer' as OfficeToPdfGeneration)
+const generation = ('renderer' as OfficeKitGeneration)
 const pdf = new Uint8Array([37, 80, 68, 70])
 const source = { absolutePath: '/report.docx', version: 'v1', offset: 0, eof: true, bytes: 4, data: pdf }
 const converted = { ok: true as const, value: { ...source, generation, missingFonts: ['Missing Serif'] } }
@@ -58,8 +58,8 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
   const registry = new DocumentPreviewRegistry()
   const removeLocale = vi.fn()
   const locale = { register: vi.fn(() => removeLocale), bind: (name: string) => name === 'sidebarDocumentPreview' ? makeTranslate(documentEn) : makeTranslate(en) }
-  const render = vi.fn<ClientRemote['officeToPdf']['render']>().mockResolvedValue(converted)
-  const rendererGeneration = vi.fn<ClientRemote['officeToPdf']['generation']>().mockResolvedValue({ ok: true, value: generation })
+  const render = vi.fn<ClientRemote['officeKit']['render']>().mockResolvedValue(converted)
+  const rendererGeneration = vi.fn<ClientRemote['officeKit']['generation']>().mockResolvedValue({ ok: true, value: generation })
   const stat = vi.fn<ClientRemote['workspaceFiles']['stat']>().mockResolvedValue({ ok: true, value: source })
   const readBytes = vi.fn<ClientRemote['workspaceFiles']['readBytes']>().mockResolvedValue({ ok: true, value: { ...source, data: pdf.subarray(0, 1), eof: false } })
   const removeNotice = vi.fn()
@@ -69,9 +69,9 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
   ctx.provide('slots', { inject: (_name: string, effect: () => () => void) => effect(), register } as never)
   ctx.provide('locale', locale as never)
   if (missing !== 'remote') {
-    ctx.provide('remote', { workspaceFiles: { stat, readBytes }, officeToPdf: { render, generation: rendererGeneration } } as never)
+    ctx.provide('remote', { workspaceFiles: { stat, readBytes }, officeKit: { render, generation: rendererGeneration } } as never)
     if (missing !== 'files') ctx.provide('remote.workspaceFiles', { stat, readBytes } as never)
-    if (missing !== 'render') ctx.provide('remote.officeToPdf', { render, generation: rendererGeneration } as never)
+    if (missing !== 'render') ctx.provide('remote.officeKit', { render, generation: rendererGeneration } as never)
   }
   const fiber = ctx.plugin({ apply: (scope: Context) => {
     apply(scope, Config({ office: config }).office)
@@ -91,7 +91,7 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
 it.each(['remote', 'render', 'files'] as const)('keeps Word and PowerPoint registration and guidance when %s is absent', async (missing) => {
   const h = await harness(undefined, missing)
   try {
-    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en })
+    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt })
     for (const path of ['a.DOC', 'b.DOCX', 'c.PPT', 'd.pptx']) {
       expect(h.registry.candidates(path)[0]!.binaryExtensions).toEqual(['doc', 'docx', 'ppt', 'pptx'])
       expect(h.registry.candidates(path)[0]!.title()).toBe(en.title)
@@ -130,7 +130,7 @@ it.each([
 ] as const)('shows configuration guidance when %s returns %s', async (method, code) => {
   const h = await harness()
   try {
-    const endpoint = method === 'render' ? 'officeToPdf/render' : 'officeToPdf/generation'
+    const endpoint = method === 'render' ? 'officeKit/render' : 'officeKit/generation'
     const failure = new RemoteError(code, 'Office provider is unavailable.', { endpoint })
     h[method].mockResolvedValueOnce({ ok: false, error: failure })
     await expect(h.read()).rejects.toMatchObject({ message: en.unavailable, cause: failure })
@@ -141,7 +141,7 @@ it.each([
 it('shows configuration guidance when the Host exposes no Office HTTP endpoint', async () => {
   const h = await harness()
   try {
-    const failure = new RemoteError('gateway/internal', 'transport failure for /api/officeToPdf/generation: HTTP 404', {})
+    const failure = new RemoteError('gateway/internal', 'transport failure for /api/officeKit/generation: HTTP 404', {})
     h.rendererGeneration.mockResolvedValueOnce({ ok: false, error: failure })
     await expect(h.read()).rejects.toMatchObject({ message: en.unavailable, cause: failure })
     expect(h.readBytes).not.toHaveBeenCalled()

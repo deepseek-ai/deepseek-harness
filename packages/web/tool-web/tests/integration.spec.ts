@@ -1,27 +1,33 @@
 /**
  * Integration: the real fetch backend (`dsh-web-fetch-http`) + a real search provider
- * (`dsh-web-search-exa`) + the real seam (`dsh-web`) + the model tool (`dsh-tool-web`) + the
- * tool-call timeout policy (`dsh-tool-call-timeout-policy`), exercised through `ctx.tools.execute()` —
- * nothing bypasses the tool registry. Fetch verifies world effects against loopback HTTP with
- * public-address resolution replaced by the fixture address; search uses the real Exa provider
- * with only its network boundary stubbed.
+ * (`dsh-web-deepseek-api`) + the real seam (`dsh-web`) + the model tool (`dsh-tool-web`) + the
+ * tool-call timeout policy (`dsh-tool-call-timeout-policy`), exercised through `executeToolFixture()` —
+ * nothing bypasses the tool registry. Fetch verifies world effects against loopback HTTP; search uses the real
+ * DeepSeek Search API provider with only its network boundary stubbed.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { AddressInfo } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
-import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
+import * as WebDeepSeekApi from '@deepseek-ai/dsh-web-deepseek-api'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import * as TimeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
-import { publicHttpNetwork } from '../../web-fetch-http/src/network.ts'
 
 const testToolSignal = new AbortController().signal
+const SEARCH_API_BASE = 'https://api.deepseek.test/v1/tools'
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void
 
@@ -30,9 +36,10 @@ let base: string
 let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
+// web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
+const agent = { id: brandString<SessionId>('tool-web-integration') } as Agent
 
 beforeEach(async () => {
-  vi.spyOn(publicHttpNetwork, 'resolve').mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }
   server = createServer((req, res) => { handler(req, res) })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -41,15 +48,21 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(WebRuntime, { searchProvider: WebSearchExa.EXA_PROVIDER_ID, fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID })
+  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(WebRuntime, {
+    searchProvider: WebDeepSeekApi.DEEPSEEK_SEARCH_API_PROVIDER_ID,
+    fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID,
+  })
   await ctx.plugin(WebFetchLocal, {})
-  await ctx.plugin(WebSearchExa, { apiKey: 'exa-key', baseURL: 'https://api.exa.test' })
+  ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'search-key' } }]))
+  await ctx.plugin(WebDeepSeekApi, { searchBaseURL: SEARCH_API_BASE, sendOriginalQuestion: false })
   // The shipped deployment shape: the tool-call budget is declared by tool-web
   // config (default 30s, attached as ToolDefinition.timeoutMs) and enforced by
   // the zero-config timeout-policy plugin, set above the provider backstop so the
   // policy normally wins.
   await ctx.plugin(TimeoutPolicy)
   fiber = await ctx.plugin(ToolWeb)
+  await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
 })
 
 afterEach(async () => {
@@ -60,8 +73,13 @@ afterEach(async () => {
 })
 
 let counter = 0
-function call(name: string, args: unknown): Promise<ToolExecutionResult> {
-  return ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+async function call(name: string, args: unknown, on: Context = ctx): Promise<ToolExecutionResult> {
+  const toolSet = await on.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
+  try {
+    return await executeToolFixture(on, { agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
+  } finally {
+    toolSet.dispose()
+  }
 }
 
 describe('web_fetch integration over the real backend', () => {
@@ -95,15 +113,21 @@ describe('web_fetch integration over the real backend', () => {
   })
 })
 
-describe('web_search integration over the real Exa provider', () => {
+describe('web_search integration over the real DeepSeek Search API provider', () => {
   it('runs web_search end-to-end and formats the provider result', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(
-      JSON.stringify({ results: [{ url: 'https://result.test', title: 'Result', highlights: ['a highlight'] }] }),
+    const fetchMock = vi.fn(async (_endpoint: string, _init: { headers: HeadersInit; body: string }) => new Response(
+      JSON.stringify({ results: [{ url: 'https://result.test', title: 'Result', snippet: 'a snippet', date: null }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
-    )))
+    ))
+    vi.stubGlobal('fetch', fetchMock)
     const out = await call('web_search', { queries: ['deepseek-official'] })
     expect(out.isError).toBe(false)
     expect(out.content.map(b => b.type === 'text' ? b.text : '').join('')).toContain('[Result](https://result.test)')
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [endpoint, init] = fetchMock.mock.calls[0]!
+    expect(endpoint).toBe(`${SEARCH_API_BASE}/search`)
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer search-key')
+    expect(JSON.parse(init.body)).toMatchObject({ query: 'deepseek-official' })
   })
 })
 
@@ -138,6 +162,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
     tctx = new Context()
     await tctx.plugin(SystemPrompt)
     await tctx.plugin(ToolRuntime)
+    await tctx.plugin(NativeToolExecutor)
     await tctx.plugin(WebRuntime, { fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID })
     // Provider backstop well ABOVE the tool-call budget, so the policy wins.
     await tctx.plugin(WebFetchLocal, { timeoutMs: 30_000 })
@@ -153,7 +178,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
   })
 
   it('returns a structured TOOL_TIMEOUT (not the provider WEB_FETCH_TIMEOUT) when the tool-call budget wins', async () => {
-    const out = await tctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('slow-1'), name: 'web_fetch', arguments: { url: slowBase } })
+    const out = await call('web_fetch', { url: slowBase }, tctx)
     expect(out.isError).toBe(true)
     // The outer tool-call deadline won: TOOL_TIMEOUT, owned by dsh-tool-call-timeout-policy,
     // NOT the provider's own WEB_FETCH_TIMEOUT (its 30s backstop never fired).

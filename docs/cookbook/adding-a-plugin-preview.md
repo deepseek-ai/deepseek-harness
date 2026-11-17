@@ -1,52 +1,45 @@
-# Cookbook: Add a built-in plugin feature preview
+# Cookbook: Add a plugin feature preview
 
 English | [中文](adding-a-plugin-preview.zh.md)
 
-Plugin Manager owns optional feature illustrations for built-in bundles. Follow this guide when editing its internal `BUNDLE_PREVIEWS` map. Packages cannot declare illustrations through their manifest or exports; third-party plugins have no preview interface.
+A feature preview is an optional illustration in a bundle's detail document, the document that its page in **Plugins** shows below the description. Follow this guide when drawing one for an official bundle. The detail document itself is declared through [`meta.detail`](adding-a-package.md#plugin-display-metadata).
 
 ## 1. Decide whether an image helps
 
-Show one concrete result or recognizable capability. Omit the map entry when the description is enough: no image is required, and omission reserves no space. Essential instructions stay in localized text or configuration outside the illustration.
+Show one concrete result or recognizable capability. Omit the image when the description is enough: no image is required. Essential instructions stay in the bundle's description or in configuration outside the illustration.
 
 ## 2. Draw one fixed-size SVG
 
 | Item | Requirement |
 |---|---|
-| Count | Zero or one logical feature image per bundle. English and Chinese files are alternatives for that image, not a gallery or carousel. |
-| Format | SVG only: `width="640" height="300" viewBox="0 0 640 300"` (32:15). Raster preview files and other dimensions are unsupported. |
-| Languages | Supply both `en` and `zh`. Translate headings, annotations, and example content; preserve official brand assets and names. No single strings, arrays, or extra languages. |
+| Count | Zero or one feature image per bundle. English and Chinese files are alternatives for that image, not a gallery or carousel. |
+| Format | SVG: `width="640" height="300" viewBox="0 0 640 300"` (32:15). |
+| Languages | Supply both an English and a Chinese file. Translate headings, annotations, and example content; preserve official brand assets and names. |
 | Composition | One main example, optionally with one close-up. Keep important content about 32 canvas units from the edges. Review text at the page's actual size. |
 | Typography | Outline lettering into paths using a suitable font. Match the feature and neighboring UI; do not rely on browser font substitution. |
 | Theme | Compare light and dark themes. One illustration serves both; avoid transparent dark text that disappears on dark backgrounds. |
 
-The SVG is self-contained: no fonts, remote resources, scripts, handlers, animation, stylesheets, `text`, or `foreignObject`. An `image` element may embed an unchanged official PNG/JPEG/WebP brand asset as a base64 data URL. Small plugin icons remain geometry-only. This exception preserves brand artwork and does not permit raster preview files. Validation checks the data-URL envelope, not decoded pixels; the page renders the SVG through `<img>`. Both raw language files together must stay within 1 MiB. They are embedded as base64 data URLs in the Plugin Manager client bundle, so keep them small.
+The SVG is self-contained: no fonts, remote resources, scripts, handlers, animation, stylesheets, `text`, or `foreignObject`. An `image` element may embed an unchanged official PNG/JPEG/WebP brand asset as a base64 data URL. Small plugin icons remain geometry-only. The page renders the SVG through `<img>`. Keep each file small; the Host refuses images above plugin-manager's `detailImageMaxBytes`, 5 MiB by default.
 
-## 3. Register the internal pair
+## 3. Make it the detail document
 
-Put `<feature>-preview.svg` and `<feature>-preview.zh.svg` under [Plugin Manager assets](../../packages/client/ui-plugin-manager/src/client/assets/). Import both into [PluginManagerPage.tsx](../../packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx), then add one exact built-in package name to `BUNDLE_PREVIEWS`:
+Save the pair as `docs/preview.svg` and `docs/preview.zh.svg` in the bundle package, beside `docs/DETAIL.md` and `docs/DETAIL.zh.md`, and make the image the only line of each document:
 
-```ts ignore-check
-import examplePreview from './assets/example-preview.svg'
-import examplePreviewZh from './assets/example-preview.zh.svg'
-
-// One entry in the existing Map<string, Readonly<Record<'en' | 'zh', string>>>.
-['@deepseek-ai/dsh-example-bundle', { en: examplePreview, zh: examplePreviewZh }]
+```markdown
+![Example feature preview](preview.svg)
 ```
 
-Keep the map's required `en` and `zh` type. Do not add package metadata, a Host read method, exported preview resources, or a third-party declaration path. Use the [badge skill](../../packages/client/ui-plugin-manager/src/client/assets/badge-skill-preview.svg) and [voice input](../../packages/client/ui-plugin-manager/src/client/assets/voice-input-preview.svg) illustrations as examples. The voice transcript is explanatory sample content, not a recording result.
+The Chinese document references `preview.zh.svg` with Chinese alternative text. Use the [badge skill](../../packages/experimental/badge-skill-bundle/docs/DETAIL.md) and [voice input](../../packages/experimental/voice-input-bundle/docs/DETAIL.md) documents as examples. The voice transcript is explanatory sample content, not a recording result. Describe what the bundle does and how to use it, at the level of behavior, in `meta.description`, which the page shows above the image.
 
-## 4. Keep the page contract
+## 4. Page behavior
 
 | Item | Current behavior |
 |---|---|
-| Position | Below the description and status notices, above components and source information; aligned with the description. |
-| Spacing | 24 px above the image; 32 px before the following details section. |
-| Display | One `<img>`, natural 640×300 canvas, at most the available width and 320 px high; proportional scaling. The page supplies border and 16 px corners. |
-| Language | The current UI language selects one of the required files. Alternative text uses the localized plugin name. |
-| Availability | Visible before activation. Decode failure shows a localized notice without blocking controls. Lists and component rows retain their small icons. |
+| Position | First in the detail document, which is the first section of the bundle page, below the description and status notices. |
+| Display | The detail document renders the image at most its own width, inside its height-bounded scroll area. |
+| Language | The document for the UI language references its own file. |
+| Availability | Visible before activation. Lists and component rows keep their small icons. |
 
 ## 5. Validate and review
 
-Run `pnpm exec vitest run scripts/builtin-plugin-preview.spec.ts packages/client/ui-plugin-manager/tests/components.client.spec.tsx scripts/client-bundle-css.spec.ts`, then `pnpm run build`. The asset test checks every registered pair, fixed SVG dimensions, self-contained content, and combined size. Type checking requires both languages. These checks enforce format; visual quality and equivalent meaning in both languages still require review.
-
-Open the real plugin details in English and Chinese before activation. Decode the image and confirm 640×300 natural dimensions, placement, light/dark readability, and no horizontal overflow at 390 px. Also check a built-in without artwork and a third-party plugin. Follow [record-browser-gif](../../.agents/skills/record-browser-gif/SKILL.md) for PR evidence; record from the final clean commit and label the demonstrated flow accurately.
+`scripts/plugin-preview-assets.spec.ts` checks every preview pair in a bundle's `docs` directory: the fixed canvas, absent scripts, stylesheets, text elements, and external references, the 1 MiB pair limit, and English and Chinese files that differ. Then open the real plugin details in English and Chinese before activation and confirm the image loads, its placement, light/dark readability, and no horizontal overflow at 390 px; review owns visual quality and equivalent meaning in both languages. Follow [record-browser-gif](../../.agents/skills/record-browser-gif/SKILL.md) for PR evidence; record from the final clean commit and label the demonstrated flow accurately.

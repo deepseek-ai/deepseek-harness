@@ -1,7 +1,11 @@
-/* Full-bleed, fixed-height host for the trajectory ledger. */
+/* Full-bleed, fixed-height host for the trajectory ledger. Isolation keeps the
+   sticky toolbar's z-index inside this view, so the conversation tab row
+   stacked above the view still paints its active bar over the view's top
+   edge. */
 .root {
   --dsh-trajectory-toolbar-height: 32px;
 
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   overflow: hidden;

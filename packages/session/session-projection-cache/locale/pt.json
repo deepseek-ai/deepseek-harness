@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "cache de estado de sessão",
+    "description": "Status do cache gerado a partir de logs de sessão para leitura rápida por recursos como listas de sessões."
+  }
+}

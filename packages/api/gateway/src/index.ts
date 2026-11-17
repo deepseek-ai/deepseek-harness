@@ -36,6 +36,7 @@ import {
 } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   InvokeRemoteRequest,
+  PendingRemoteEventInfo,
   TypertGateway,
   TypertGatewayErrorCode,
   TypertGatewayWireStream,
@@ -47,7 +48,6 @@ import type {
 } from './types.ts'
 import {
   RemoteStreamMuxServer,
-  rejectRemoteStreamUpgrade,
 } from './stream-server.ts'
 import {
   REMOTE_EVENT_STREAM_ENDPOINT,
@@ -70,6 +70,7 @@ import {
 
 export type {
   InvokeRemoteRequest,
+  PendingRemoteEventInfo,
   TypertGateway,
   TypertGatewayErrorCode,
   TypertGatewayWireStream,
@@ -262,46 +263,15 @@ export class TypertGatewayService extends Service implements TypertGateway {
             compression: resolved.websocketCompression === 'deflate',
           },
         )
-        const releases = new Set<Promise<void>>()
         webCtx.effect(function* () {
           yield async () => {
             await mux.close()
-            await Promise.all(releases)
           }
           const route: WebUpgradeRoute = {
             path: REMOTE_STREAM_MUX_PATH,
-            handler: (req, socket, head) => {
-              const admission = webCtx.connection.admitConnection(req)
-              if ('rejection' in admission) {
-                rejectRemoteStreamUpgrade(socket, admission.rejection)
-                return
-              }
-              const release = (): void => {
-                // release removes the API Peer synchronously, before awaiting
-                // scope cleanup or any logical-stream iterator's return.
-                const done = admission.release().catch((error: unknown) => {
-                  console.error('[api-gateway] Peer release failed:', error)
-                })
-                releases.add(done)
-                void done.then(() => { releases.delete(done) })
-              }
-              const closed = (): void => {
-                socket.removeListener('error', release)
-                release()
-              }
-              socket.on('error', release)
-              socket.once('close', closed)
-              if (socket.destroyed) {
-                closed()
-                return
-              }
-              try {
-                mux.handleUpgrade(req, socket, head, admission.peer)
-              } catch (error) {
-                release()
-                socket.destroy()
-                console.error('[api-gateway] Remote stream upgrade failed:', error)
-              }
+            auth: 'required',
+            handler: (req, socket, head, peer) => {
+              mux.handleUpgrade(req, socket, head, peer as PeerScope)
             },
           }
           yield webCtx.webServer.registerUpgrade(route)
@@ -331,6 +301,14 @@ export class TypertGatewayService extends Service implements TypertGateway {
       if (client.answers && !client.signal.aborted) return true
     }
     return false
+  }
+
+  /**
+   * Inspect unsettled forwarded events without changing their lifetime.
+   * @returns detached event names and Agent identities.
+   */
+  getPendingRemoteEvents(): readonly PendingRemoteEventInfo[] {
+    return [...this.pendingRemoteEvents.values()].map(({ frame }) => ({ event: frame.event, agentId: frame.agentId }))
   }
 
   /**

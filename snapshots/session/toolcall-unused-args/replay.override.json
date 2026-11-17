@@ -1,0 +1,17 @@
+{
+  "patches": [
+    {
+      "at": 3,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          { "type": "block-start", "index": 0, "blockType": "tool-call" },
+          { "type": "tool-call-delta", "index": 0, "id": "call_complete_goal", "name": "update_goal", "argumentsDelta": "{\"goal_id\":\"{{fromRequest:goal-[0-9a-f-]+}}\",\"revision\":1,\"action\":\"complete\",\"objective\":\"SHOULD NOT REPLACE\",\"max_goal_rounds\":12,\"blocked_reason\":\"ignored\"}" },
+          { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_complete_goal", "name": "update_goal", "arguments": "{\"goal_id\":\"{{fromRequest:goal-[0-9a-f-]+}}\",\"revision\":1,\"action\":\"complete\",\"objective\":\"SHOULD NOT REPLACE\",\"max_goal_rounds\":12,\"blocked_reason\":\"ignored\"}" } },
+          { "type": "usage", "usage": { "inputTokens": 1, "outputTokens": 1 } },
+          { "type": "finish", "reason": { "kind": "tool-calls" } }
+        ]
+      }
+    }
+  ]
+}

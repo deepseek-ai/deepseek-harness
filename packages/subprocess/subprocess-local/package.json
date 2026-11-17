@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subprocess-local",
   "description": "Local-subprocess implementation of the DeepSeek Harness subprocess seam",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -37,7 +37,10 @@
     "lib/runner-*.js",
     "lib/output.js",
     "scripts/ensure-spawn-helper.mjs",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "scripts": {
     "postinstall": "node scripts/ensure-spawn-helper.mjs"

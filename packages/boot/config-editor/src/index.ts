@@ -2,9 +2,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { Context, FiberState, Service, resolveConfig } from '@deepseek-ai/cordis'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import yaml from 'js-yaml'
+import { Context, FiberState, Service } from '@deepseek-ai/cordis'
+import { parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { Entry, EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-hmr'
 import { composeEntries, loadProfileDirectory, readProfilePatches, reconcileProfilePatches } from '@deepseek-ai/dsh-app-boot'
@@ -93,15 +92,14 @@ export class ConfigEditor extends Service {
       await withFileLock(join(this.ownerContext.profileContext.dir, 'package.json'), async () => {
         if (!this.entries().includes(entry) || entry.fiber === undefined) throw new Error('Configuration entry is no longer available')
         const beforePatches = readProfilePatches('dsh', this.ownerContext.profileContext)
-        await reconcileProfilePatches(this.ownerContext.root, beforePatches, 'dsh')
+        await reconcileProfilePatches(this.ownerContext[Context.root], beforePatches, 'dsh')
         if (!this.entries().includes(entry)) throw new Error('Configuration entry changed during reload')
         const current = structuredClone((entry.options.config ?? {}) as Record<string, unknown>)
         const inherited = this.inherited(entry, loadProfileDirectory('dsh', this.ownerContext.profileContext.dir, this.ownerContext.profileContext.installAnchor))
         const next = change(current, inherited)
         const fiber = entry.fiber
         if (fiber.state !== FiberState.ACTIVE) throw new Error('Configuration plugin is no longer active')
-        const resolved: unknown = fiber.ctx.waterfall(fiber, 'internal/config', next, () => next)
-        resolveConfig(fiber.runtime as NonNullable<typeof fiber.runtime>, resolved)
+        fiber.resolveConfig(next)
         let before: string
         try { before = await readFile(path, 'utf8') }
         catch (error) {
@@ -134,17 +132,17 @@ export class ConfigEditor extends Service {
         } })
         const profile = this.ownerContext.profileContext
         const loaded = loadProfileDirectory('dsh', profile.dir, profile.installAnchor)
-        const patches = readProfilePatches('dsh', profile, { ...loaded, patches: yaml.load(String(document), { schema: entryListSchema }) as PatchOptions[] })
+        const patches = readProfilePatches('dsh', profile, { ...loaded, patches: parseEntryYaml(String(document)) as PatchOptions[] })
         const effective = flatten(composeEntries([patches])).find(row => row.id === entry.options.id)
         if (!isDeepStrictEqual(effective?.config ?? {}, next)) {
           throw new Error(`Configuration for "${entry.options.id}" is overridden by a home patch or command-line overlay`)
         }
         await writeFileAtomic(path, String(document), { mode: 0o600 })
         try {
-          await reconcileProfilePatches(this.ownerContext.root, patches, 'dsh', [entry.options.id])
+          await reconcileProfilePatches(this.ownerContext[Context.root], patches, 'dsh', [entry.options.id])
         } catch (error) {
           await writeFileAtomic(path, before, { mode: 0o600 })
-          await reconcileProfilePatches(this.ownerContext.root, beforePatches, 'dsh')
+          await reconcileProfilePatches(this.ownerContext[Context.root], beforePatches, 'dsh')
           throw error
         }
       })

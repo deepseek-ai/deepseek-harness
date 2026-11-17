@@ -215,7 +215,7 @@ export function renderPersistenceReview(report: PersistenceReview): string {
 export function runPersistenceReview(args: readonly string[]): string {
   const { values } = parseArgs({ args: [...args], options: { before: { type: 'string' }, after: { type: 'string' }, json: { type: 'boolean' } }, strict: true, allowPositionals: false })
   if (values.before === undefined || values.after === undefined) throw new Error('persistence review: --before and --after inventory paths are required')
-  const read = (path: string): PersistenceSchemaInventory => parsePersistenceSnapshot(JSON.parse(readFileSync(path, 'utf8')))
+  const read = (path: string): PersistenceSchemaInventory => parsePersistenceSnapshot(readFileSync(path, 'utf8'))
   const report = reviewPersistenceSchemas(read(values.before), read(values.after))
   return values.json ? JSON.stringify(report, null, 2) + '\n' : renderPersistenceReview(report)
 }

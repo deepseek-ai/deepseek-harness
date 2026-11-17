@@ -12,7 +12,7 @@ import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-r
 import { sandboxDenialMarker } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 
 const TRUNCATED_MESSAGE = '<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>'
@@ -92,9 +92,9 @@ async function resolveTarget(
   path: string,
   signal: AbortSignal,
 ): Promise<FsTarget> {
-  if (path.trim().length === 0) throw new Error('path must be a non-empty string')
+  if (path.trim().length === 0) throw new ToolArgsError(['path must be a non-empty string'])
   if (!isAbsolute(path)) {
-    throw new Error(`The path ${path} is not an absolute path, it should start with \`/\`. Maybe you meant /${path}?`)
+    throw new ToolArgsError([`The path ${path} is not an absolute path, it should start with \`/\`. Maybe you meant /${path}?`])
   }
   return ctx.fs.resolve(path, { signal })
 }
@@ -128,9 +128,9 @@ function requiredForCommand(
   command: string,
   allowEmpty = true,
 ): string {
-  if (value === undefined) throw new Error(`Parameter \`${parameter}\` is required for command: ${command}`)
+  if (value === undefined) throw new ToolArgsError([`Parameter \`${parameter}\` is required for command: ${command}`])
   if (!allowEmpty && value.length === 0) {
-    throw new Error(`Parameter \`${parameter}\` is empty for command: ${command}`)
+    throw new ToolArgsError([`Parameter \`${parameter}\` is empty for command: ${command}`])
   }
   return value
 }
@@ -154,24 +154,24 @@ function formatFileView(
       || requestedFinalLine === undefined
       || !viewRange.every(Number.isInteger)
     ) {
-      throw new Error('Invalid `view_range`. It should be a list of two integers.')
+      throw new ToolArgsError(['Invalid `view_range`. It should be a list of two integers.'])
     }
     initialLine = requestedInitialLine
     finalLine = requestedFinalLine
     if (initialLine < 1 || initialLine > allLines.length) {
-      throw new Error(
+      throw new ToolArgsError([
         `Invalid \`view_range\`: [${viewRange.join(', ')}]. Its first element \`${initialLine}\` should be within the range of lines of the file: [1, ${allLines.length}]`,
-      )
+      ])
     }
     if (finalLine > allLines.length) {
-      throw new Error(
+      throw new ToolArgsError([
         `Invalid \`view_range\`: [${viewRange.join(', ')}]. Its second element \`${finalLine}\` should be smaller than the number of lines in the file: \`${allLines.length}\``,
-      )
+      ])
     }
     if (finalLine !== -1 && finalLine < initialLine) {
-      throw new Error(
+      throw new ToolArgsError([
         `Invalid \`view_range\`: [${viewRange.join(', ')}]. Its second element \`${finalLine}\` should be larger or equal than its first \`${initialLine}\``,
-      )
+      ])
     }
     lines = finalLine === -1
       ? allLines.slice(initialLine - 1)
@@ -226,7 +226,7 @@ async function viewPath(
   const info = await statExisting(ctx, target, 'view', exec)
   if (info.type === 'directory') {
     if (viewRange !== undefined) {
-      throw new Error('The `view_range` parameter is not allowed when `path` points to a directory.')
+      throw new ToolArgsError(['The `view_range` parameter is not allowed when `path` points to a directory.'])
     }
     return listDirectory(ctx, target, maxOutputChars, exec)
   }
@@ -248,9 +248,12 @@ async function createFile(
   const content = requiredForCommand(fileText, 'file_text', 'create')
   const sandboxPolicy = policy.resolve(exec)
   const target = await resolveTarget(ctx, path, exec.signal)
-  if (await ctx.fs.stat(target, exec.signal) !== undefined) {
-    throw new Error(`File already exists at: ${target.displayPath}. Cannot overwrite files using command \`create\`.`)
-  }
+  const alreadyExists = (cause?: FsError) => new FsError(
+    `File already exists at: ${target.displayPath}. Cannot overwrite files using command \`create\`.`,
+    'FS_ALREADY_EXISTS',
+    cause === undefined ? undefined : { cause },
+  )
+  if (await ctx.fs.stat(target, exec.signal) !== undefined) throw alreadyExists()
   const intent = await ctx.waterfall(
     'fs/write-intent',
     target,
@@ -267,6 +270,8 @@ async function createFile(
       sandboxPolicy,
     )
   } catch (error: unknown) {
+    // A file created after the absence check makes guarded creation report it as unread.
+    if (error instanceof FsError && error.code === 'FS_NOT_OBSERVED') throw alreadyExists(error)
     throw policy.mapError(error, sandboxPolicy)
   }
   ctx.emit('fs/observed', target, { kind: 'present', version: outcome.version }, exec)
@@ -282,7 +287,7 @@ async function replaceInFile(
   exec: ToolRunContext,
 ): Promise<string> {
   if (newStr === null) {
-    throw new Error('Parameter `new_str` must be omitted or contain a string for command: str_replace')
+    throw new ToolArgsError(['Parameter `new_str` must be omitted or contain a string for command: str_replace'])
   }
   const sandboxPolicy = policy.resolve(exec)
   const target = await resolveTarget(ctx, path, exec.signal)
@@ -335,7 +340,7 @@ async function insertInFile(
   newStr: string | undefined,
   exec: ToolRunContext,
 ): Promise<string> {
-  if (insertLine === undefined) throw new Error('Parameter `insert_line` is required for command: insert')
+  if (insertLine === undefined) throw new ToolArgsError(['Parameter `insert_line` is required for command: insert'])
   const value = requiredForCommand(newStr, 'new_str', 'insert')
   const sandboxPolicy = policy.resolve(exec)
   const target = await resolveTarget(ctx, path, exec.signal)
@@ -347,9 +352,9 @@ async function insertInFile(
   const before = await ctx.fs.readText(target, exec.signal)
   const lines = before.split('\n')
   if (!Number.isInteger(insertLine) || insertLine < 0 || insertLine > lines.length) {
-    throw new Error(
+    throw new ToolArgsError([
       `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${lines.length}]`,
-    )
+    ])
   }
   const after = [
     ...lines.slice(0, insertLine),

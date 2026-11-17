@@ -103,10 +103,17 @@ it('rejects local client artifacts in the release packing command', async () => 
 
 it('validates local tarball contents before reporting success', async () => {
   const root = fixture()
-  write(root, 'packages/client/probe/src/index.ts', 'export const source = true\n')
+  write(root, 'pnpm-workspace.yaml', 'packages:\n  - packages/*/*\n  - apps/*\n')
+  write(root, 'apps/cli/package.json', JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.2.3', files: ['lib', 'src'] }))
+  write(root, 'apps/cli/lib/index.js', 'export const cli = true\n')
+  write(root, 'apps/cli/src/bin.ts', 'export const bin = true\n')
+  for (const name of ['subagent-claude-code', 'subagent-codex']) {
+    write(root, `packages/subagent/${name}/package.json`, JSON.stringify({ name: `@deepseek-ai/dsh-${name}`, version: '1.2.3', files: ['lib'] }))
+    write(root, `packages/subagent/${name}/lib/index.js`, 'export const bundle = true\n')
+  }
   const result = await pack(root)
   expect(result.code).not.toBe(0)
-  expect(result.output).toContain('publishes source file package/src/index.ts')
+  expect(result.output).toContain('@deepseek-ai/dsh packed no documentation')
 }, testTimeout)
 
 it('rejects an invalid local pack concurrency before replacing packages', async () => {

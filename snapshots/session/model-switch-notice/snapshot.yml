@@ -6,6 +6,6 @@ recording: live
 header:
   class: model-switch-notice
   pin: true
+  toolSchemasSource: agent-instructions
   changes: 1
   promptChanges: 1
-  toolSchemasSource: compaction-recovery

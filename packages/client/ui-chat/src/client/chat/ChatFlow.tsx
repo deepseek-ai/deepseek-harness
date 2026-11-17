@@ -25,12 +25,13 @@ function isTranscriptEcho(item: PendingInput): boolean {
 /** Render the flow without adding a DOM parent or changing keyed row positions. */
 export const ChatFlow = memo(function ChatFlow({
   entries, pendingInputs, lastInputTurn, deferCollapse,
-  useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation,
+  useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation, useConnectionState,
   useStore, actions, renderSlot, renderFactorySlot, t, useGroupAction, useGroupHeaderAction,
-  cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
+  cwd, openFile, inspectCall, forkAt, loadImage,
 }: ChatFlowSlotProps) {
   const nodeStore = useChat(snapshot => snapshot.nodes)
   const running = useSession(snapshot => snapshot.running)
+  const disconnected = useConnectionState(state => state === 'disconnected' || state === 'connecting')
   const latestTurnAnchor = useChat(snapshot => snapshot.navigation.items().at(-1)?.anchorKey)
   const runningStartTime = useChatNode(latestTurnAnchor ?? '', (node) => {
     const location = node?.location
@@ -38,10 +39,15 @@ export const ChatFlow = memo(function ChatFlow({
       ? location.turn.status === 'open' ? location.turn.start?.time : undefined
       : undefined
   })
+  const latestTurnOpen = useChatNode(latestTurnAnchor ?? '', (node) => {
+    const location = node?.location
+    return (location?.kind === 'turn' || location?.kind === 'step') && location.turn.status === 'open'
+  })
+  const holding = !running && latestTurnOpen
   const seatProps = {
     nodeStore, useChatNode, useChatNodeBottom, useChatNodeProcess, usePresentation,
     useStore, actions, renderSlot, t, useGroupAction, deferCollapse,
-    cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
+    cwd, openFile, inspectCall, forkAt, loadImage,
   }
   const rows = entries.map((entry) => {
     switch (entry.kind) {
@@ -82,10 +88,13 @@ export const ChatFlow = memo(function ChatFlow({
     && node.location.turn.status === 'open' && node.location.turn.turn !== lastInputTurn) {
     rows.splice(rows.length - 1, 0, ...leadingRows.splice(0))
   }
-  // Rows enter before the keyed status and echoes after it, so React never moves its DOM node.
+  // Rows enter before the keyed status and echoes after it, so React never moves its DOM node. The
+  // running bit and the Turn's end arrive separately: after the bit clears, an open latest Turn keeps
+  // the status slot (hidden) until its actions row takes the slot in the same commit.
   return [
     ...rows, ...leadingRows, ...openingRows,
-    ...running ? [<RunningStatus key="running" startTime={runningStartTime} t={t} />] : [],
+    ...running || holding ? [<RunningStatus key="running" startTime={runningStartTime} paused={disconnected}
+      holding={holding} t={t} />] : [],
     ...pendingRows,
   ]
 })

@@ -53,7 +53,7 @@ async function run() {
   await app.whenReady()
   const { DesktopPlatformView } = await import(pathToFileURL(viewModule).href)
   const owner = new BrowserWindow({ show: false, width: 900, height: 700 })
-  const manager = new DesktopPlatformView('', () => 'en_US', process.platform === 'win32' ? 'win32' : 'darwin')
+  const manager = new DesktopPlatformView('', () => 'en_US', process.platform === 'win32' ? 'win32' : 'darwin', () => false)
   const account = userId => ({ origin: base, token: 'fixture-secret', userId })
   const states = []
   const record = async name => {

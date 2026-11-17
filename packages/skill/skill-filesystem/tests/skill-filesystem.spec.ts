@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import { FileSystem, FsError, FsVersion, type FsDirEntry, type FsEditOutcome, type FsEditRequest, type FsInfo, type FsPathInfo, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { FileSystem, FsError, type FsVersion, type FsDirEntry, type FsEditOutcome, type FsEditRequest, type FsInfo, type FsPathInfo, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import * as SkillFileSystem from '../src/index.ts'
 
 /** Every temp dir created by this file, removed after each test. */
@@ -31,6 +32,10 @@ async function writeFlatSkill(root: string, name: string, description: string, b
 }
 
 class TestFileSystem extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   listDirCalls = 0
   failResolvePaths = new Set<string>()
@@ -68,7 +73,7 @@ class TestFileSystem extends FileSystem {
       const fs = await import('node:fs/promises')
       const info = await fs.stat(target.displayPath)
       return {
-        version: FsVersion(String(info.mtimeMs)),
+        version: brandString<FsVersion>(String(info.mtimeMs)),
         type: info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'other',
         size: info.size,
       }
@@ -82,7 +87,7 @@ class TestFileSystem extends FileSystem {
       const fs = await import('node:fs/promises')
       const info = await fs.lstat(path)
       return {
-        version: FsVersion(String(info.mtimeMs)),
+        version: brandString<FsVersion>(String(info.mtimeMs)),
         type: info.isSymbolicLink() ? 'symlink' : info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'other',
         size: info.size,
       }
@@ -133,7 +138,7 @@ class TestFileSystem extends FileSystem {
         name: entry.name,
         type,
         target: { targetKey: childPath as never, displayPath: childPath },
-        version: FsVersion('test'),
+        version: brandString<FsVersion>('test'),
         ...(size !== undefined ? { size } : {}),
       })
     }
@@ -143,7 +148,7 @@ class TestFileSystem extends FileSystem {
   override async writeText(target: FsTarget, content: string): Promise<FsWriteOutcome> {
     await mkdir(dirname(target.displayPath), { recursive: true })
     await writeFile(target.displayPath, content)
-    return { operation: 'create', version: FsVersion('test'), before: null, after: content }
+    return { operation: 'create', version: brandString<FsVersion>('test'), before: null, after: content }
   }
 
   override async editText(_target: FsTarget, _request: FsEditRequest): Promise<FsEditOutcome> {
@@ -216,6 +221,19 @@ describe('FileSystemSkillProvider', () => {
     const noGit = await tempDir('skill-no-git')
     await writeSkill(join(noGit, '.dsh/skills'), 'fallback-root', 'Fallback root')
     expect((await ctx.skills.list({ cwd: noGit })).map(skill => skill.name)).toContain('fallback-root')
+  })
+
+  it('reports an unreadable trusted-host skill file as SKILL_READ_FAILED', async () => {
+    const home = await tempDir('skill-unreadable-home')
+    const bundled = await tempDir('skill-unreadable-bundled')
+    await writeSkill(bundled, 'bundled-only', 'bundled skill')
+    const ctx = await setupLocal(home, { bundledSkillDir: bundled })
+    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['bundled-only'])
+    const file = join(bundled, 'bundled-only/SKILL.md')
+    await rm(file)
+    await mkdir(file)
+    const failure = ctx.skills.get('bundled-only')
+    await expect(failure).rejects.toMatchObject({ name: 'SkillError', code: 'SKILL_READ_FAILED', cause: { code: 'EISDIR' } })
   })
 
   it('lets project skills override runtime while runtime overrides custom and user skills', async () => {
@@ -488,7 +506,7 @@ describe('FileSystemSkillProvider', () => {
     fs.failResolvePaths.add(join(nestedCwd, '.git'))
     fs.failStatPaths.add(join(project, 'packages/.git'))
     fs.statOverrides.set(join(project, '.git'), {
-      version: FsVersion('virtual-git'),
+      version: brandString<FsVersion>('virtual-git'),
       type: 'directory',
       size: 0,
     })
@@ -517,6 +535,77 @@ describe('FileSystemSkillProvider', () => {
     expect((await bundledCtx.skills.get('bundled-host'))?.source).toBe('bundled')
   })
 
+  it.each(['resolve', 'list', 'read'] as const)('isolates a root %s failure and retries without losing readable roots', async (operation) => {
+    const home = await tempDir('skill-root-isolation')
+    const before = join(home, 'before')
+    const broken = join(home, 'broken')
+    const after = join(home, 'after')
+    await writeSkill(before, 'before-skill', 'Readable earlier root')
+    await writeSkill(broken, 'a-readable-sibling', 'Readable sibling in the failed root')
+    await writeSkill(broken, 'recovered-skill', 'Recoverable root')
+    await writeSkill(after, 'after-skill', 'Readable later root')
+    await writeSkill(after, 'before-skill', 'Lower-priority duplicate')
+    const ctx = new Context()
+    const fsFiber = await ctx.plugin(TestFileSystem)
+    onTestFinished(() => fsFiber.dispose())
+    const registryFiber = await ctx.plugin(SkillRegistry)
+    onTestFinished(() => registryFiber.dispose())
+    const providerFiber = await ctx.plugin(SkillFileSystem, {
+      includeDefaultRoots: false,
+      customSkillDirs: [before, broken, after],
+      watch: false,
+    })
+    onTestFinished(() => providerFiber.dispose())
+    const warnings = vi.spyOn(ctx.logger, 'warn')
+    onTestFinished(() => { warnings.mockRestore() })
+    const fs = ctx.fs as TestFileSystem
+    const failures = operation === 'resolve' ? fs.errorResolvePaths
+      : operation === 'list' ? fs.failListDirPaths : fs.errorReadPaths
+    failures.add(operation === 'read' ? join(broken, 'recovered-skill/SKILL.md') : broken)
+
+    expect(await ctx.skills.snapshot()).toMatchObject({
+      complete: false,
+      skills: [{ name: 'after-skill' }, { name: 'before-skill', description: 'Readable earlier root' }],
+    })
+    expect((await ctx.skills.get('after-skill'))?.content).toBe('Use the skill.')
+    expect(warnings).toHaveBeenCalledWith(expect.stringContaining(broken))
+    failures.clear()
+    expect(await ctx.skills.snapshot()).toMatchObject({
+      complete: true,
+      skills: [{ name: 'a-readable-sibling' }, { name: 'after-skill' }, { name: 'before-skill' }, { name: 'recovered-skill' }],
+    })
+  })
+
+  it('selects a readable same-name skill while the preferred root fails and restores priority on recovery', async () => {
+    const home = await tempDir('skill-root-fallback')
+    const preferred = join(home, 'preferred')
+    const fallback = join(home, 'fallback')
+    await writeSkill(preferred, 'shared-skill', 'Preferred description', 'Preferred body.')
+    await writeSkill(fallback, 'shared-skill', 'Fallback description', 'Fallback body.')
+    const ctx = new Context()
+    const fsFiber = await ctx.plugin(TestFileSystem)
+    onTestFinished(() => fsFiber.dispose())
+    const registryFiber = await ctx.plugin(SkillRegistry)
+    onTestFinished(() => registryFiber.dispose())
+    const providerFiber = await ctx.plugin(SkillFileSystem, {
+      includeDefaultRoots: false, customSkillDirs: [preferred, fallback], watch: false,
+    })
+    onTestFinished(() => providerFiber.dispose())
+    const fs = ctx.fs as TestFileSystem
+    fs.failListDirPaths.add(preferred)
+
+    expect(await ctx.skills.snapshot()).toMatchObject({
+      complete: false, skills: [{ name: 'shared-skill', description: 'Fallback description' }],
+    })
+    expect((await ctx.skills.get('shared-skill'))?.content).toBe('Fallback body.')
+
+    fs.failListDirPaths.clear()
+    expect(await ctx.skills.snapshot()).toMatchObject({
+      complete: true, skills: [{ name: 'shared-skill', description: 'Preferred description' }],
+    })
+    expect((await ctx.skills.get('shared-skill'))?.content).toBe('Preferred body.')
+  })
+
   it('reports transient root reads as incomplete without caching an empty catalog', async () => {
     const home = await tempDir('skill-transient-root')
     const root = join(home, '.agents/skills')
@@ -540,7 +629,7 @@ describe('FileSystemSkillProvider', () => {
     ctx.emit(
       'fs/observed',
       { targetKey: path as never, displayPath: path },
-      { kind: 'present', version: FsVersion('failed-read') },
+      { kind: 'present', version: brandString<FsVersion>('failed-read') },
       { name: 'edit' },
     )
     expect(await ctx.skills.snapshot()).toEqual({ skills: [], complete: false })
@@ -550,6 +639,35 @@ describe('FileSystemSkillProvider', () => {
       skills: [{ name: 'stable-skill' }],
       complete: true,
     })
+  })
+
+  it.each([false, true])('does not turn cancellation into a skipped root (read rejects: %s)', async (rejectRead) => {
+    const home = await tempDir('skill-discovery-abort')
+    const root = join(home, 'skills')
+    await writeSkill(root, 'abortable-skill', 'Abortable skill')
+    const ctx = new Context()
+    const fsFiber = await ctx.plugin(TestFileSystem)
+    onTestFinished(() => fsFiber.dispose())
+    const provider = new SkillFileSystem.FileSystemSkillProvider(ctx, {
+      signal: new AbortController().signal, invalidate: () => {},
+    }, {
+      includeDefaultRoots: false, customSkillDirs: [root, join(home, 'later')], watch: false,
+    })
+    onTestFinished(() => provider.dispose())
+    const warnings = vi.spyOn(ctx.logger, 'warn')
+    onTestFinished(() => { warnings.mockRestore() })
+    const fs = ctx.fs as TestFileSystem
+    const controller = new AbortController()
+    const reason = new Error('discovery cancelled')
+    fs.readTextOverride = async (target) => {
+      const text = await readFile(target.displayPath, 'utf8')
+      controller.abort(reason)
+      if (rejectRead) throw reason
+      return text
+    }
+    await expect(provider.list({ signal: controller.signal })).rejects.toBe(reason)
+    expect(fs.listDirCalls).toBe(1)
+    expect(warnings).not.toHaveBeenCalled()
   })
 
   it('distinguishes transient filesystem entry failures from confirmed disappearance', async () => {
@@ -570,7 +688,7 @@ describe('FileSystemSkillProvider', () => {
       ctx.emit(
         'fs/observed',
         { targetKey: path as never, displayPath: path },
-        { kind: 'present', version: FsVersion('entry-failure') },
+        { kind: 'present', version: brandString<FsVersion>('entry-failure') },
         { name: 'write' },
       )
     }
@@ -598,9 +716,10 @@ describe('FileSystemSkillProvider', () => {
     const home = await tempDir('skill-native-read-failure')
     const root = join(home, '.agents/skills')
     await mkdir(join(root, 'broken-skill/SKILL.md'), { recursive: true })
+    await writeSkill(join(home, '.dsh/skills'), 'healthy-skill', 'Healthy native root')
     const ctx = await setupLocal(home)
 
-    expect(await ctx.skills.snapshot()).toEqual({ skills: [], complete: false })
+    expect(await ctx.skills.snapshot()).toMatchObject({ skills: [{ name: 'healthy-skill' }], complete: false })
   })
 
   it('forwards cancellation to filesystem reads while loading a skill', async () => {
@@ -718,7 +837,7 @@ describe('FileSystemSkillProvider', () => {
       ctx.emit(
         'fs/observed',
         { targetKey: displayPath as never, displayPath },
-        { kind: 'present', version: FsVersion('observed') },
+        { kind: 'present', version: brandString<FsVersion>('observed') },
         actor,
       )
     }
@@ -733,7 +852,7 @@ describe('FileSystemSkillProvider', () => {
     ctx.emit(
       'fs/observed',
       { targetKey: path as never, displayPath: path },
-      { kind: 'present', version: FsVersion('observed') },
+      { kind: 'present', version: brandString<FsVersion>('observed') },
       { name: 'edit' },
     )
 

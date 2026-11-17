@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK servidor",
+    "description": "Atenda SDK clientes em processos separados por meio de JSON-RPC em entrada e saída padrão."
+  }
+}

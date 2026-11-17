@@ -54,7 +54,7 @@ kind: "package-reference"
 
 ### 可能出什么问题
 
-任何预检拒绝都不会留下 job id 或已注册的工作。由随附的进程内注册表管理的任务会随 harness 进程终止而消失；跨重启的持久执行需要一个实现本约定的不同后端。
+任何预检拒绝都不会留下 job id 或已注册的工作。接缝导出 `JobError`：它是 `HarnessError`，code 取自 `JOB_ERROR_CODES`（如 `JOB_NOT_FOUND`、`JOB_FOREIGN_SESSION`、`JOB_LIMIT_REACHED`），供实现和任务工具报告预期的任务失败，使结果带有可路由的 `error.name` 和 `error.code`。由随附的进程内注册表管理的任务会随 harness 进程终止而消失；跨重启的持久执行需要一个实现本约定的不同后端。
 
 -----
 
@@ -79,9 +79,10 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `JobRegistry` 服务及其约定 |
-| [`src/types.ts`](src/types.ts) | 共享词汇：`JobSpec`、`JobHandle`、`JobHooks`、`JobOutcome`、`JobEvent` 与读取结果 |
+| [`src/types.ts`](src/types.ts) | 纯类型 `/types` 入口：共享 job 类型和 `JobId` 再导出 |
+| [`src/brand.ts`](src/brand.ts) | `JobId` 定义与兼容构造函数 |
 | [`src/view.ts`](src/view.ts) | 客户端安全叶子：`JobView`、`JobChunk`、`JobStatus` 与可合并扩展的 `JobKindMap` |
-| [`src/brand.ts`](src/brand.ts) | 带类型标记的 `JobId` 标识符，无需 agent 依赖即可导入 |
+| [`src/error.ts`](src/error.ts) | `JobError` 及其封闭的 `JOB_ERROR_CODES` 列表 |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | Workspace 注册表归档准入中的 `job` 族，由接缝构造函数为每个实现安装 |
 
 ### 服务操作

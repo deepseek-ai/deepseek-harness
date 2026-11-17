@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interfaz de modificaciones Claude Code",
+    "description": "Muestre el árbol de extensión de cada sesión encima del cuadro de entrada y envíe acciones de botones al servicio de extensión."
+  }
+}

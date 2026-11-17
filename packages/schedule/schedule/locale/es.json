@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Programación de tareas",
+    "description": "Almacena tareas de automatización, ejecuta cada una en su sesión original cuando corresponde y brinda al agente herramientas para administrarlas."
+  }
+}

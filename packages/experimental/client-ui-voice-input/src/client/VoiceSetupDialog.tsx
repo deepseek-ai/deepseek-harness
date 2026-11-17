@@ -5,8 +5,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { NS } from './locales.ts'
 
 type VoiceSetupDialogProps = PropsLocale<typeof NS>
-  & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss' | 'onOpenDetails'>
-  & { open: boolean; needsInstallation: boolean }
+  & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss'>
+  & {
+    open: boolean
+    needsInstallation: boolean
+    /** Open the plugin details; the details button is absent while it is undefined. */
+    onOpenDetails: PropsRuntime<'plugins.bundle.activation'>['onOpenDetails'] | undefined
+  }
 
 /**
  * Guide activation or microphone clicks to the existing plugin details.
@@ -18,7 +23,9 @@ export function VoiceSetupDialog({ open, needsInstallation, onDismiss, onOpenDet
     closeLabel={t('cancel')} onClose={onDismiss}
     footer={<>
       <Button variant="ghost" onClick={onDismiss}>{t('setupPrompt.later')}</Button>
-      <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>{t(needsInstallation ? 'setupPrompt.open' : 'setupPrompt.details')}</Button>
+      {onOpenDetails !== undefined && <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>
+        {t(needsInstallation ? 'setupPrompt.open' : 'setupPrompt.details')}
+      </Button>}
     </>}>
     <p>{t(needsInstallation ? 'setupPrompt.body' : 'setupPrompt.unavailableBody')}</p>
   </Modal>

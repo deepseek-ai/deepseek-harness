@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PTC tool execution",
+    "description": "Executes tools through run_code programs and generates SDK bindings."
+  }
+}

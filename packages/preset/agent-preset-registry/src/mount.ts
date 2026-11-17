@@ -1,6 +1,6 @@
 /** Runtime plugin trees shared by Agents selecting one preset revision. */
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import { EntryTree, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import { EntryTree, type EntryChange, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { prepareProfileEntries } from '@deepseek-ai/dsh-app-boot'
 import type { PresetDefinition } from './definition.ts'
 import { scopeOf, type ScopeKey } from '@deepseek-ai/dsh-scope'
@@ -20,7 +20,7 @@ class PresetTree extends EntryTree {
     }
   }
 
-  override write(): void {}
+  override commit(_change: EntryChange): void {}
 }
 
 /** One live revision shared by Agents and scoped readers. */
@@ -68,7 +68,7 @@ function withinFiber(fiber: Fiber, root: Fiber): boolean {
  */
 export function leakedServices(ctx: Context, mount: Fiber): string[] {
   const store = ctx.reflect.store
-  const rootIsolate = ctx.root[Context.isolate]
+  const rootIsolate = ctx[Context.root][Context.isolate]
   const leaked: string[] = []
   for (const key of Object.getOwnPropertySymbols(store)) {
     const impl = store[key]
@@ -76,7 +76,7 @@ export function leakedServices(ctx: Context, mount: Fiber): string[] {
        clearing it, so an own symbol always resolves; the guard exists only
        because the store's index signature is optional. */
     if (impl === undefined) continue
-    if (!withinFiber(impl.fiber, mount)) continue
+    if (!withinFiber(impl.ctx.fiber, mount)) continue
     if (rootIsolate[impl.name] === key) leaked.push(impl.name)
   }
   return leaked.sort((left, right) => left.localeCompare(right))
@@ -106,7 +106,7 @@ export function serviceForMount<K extends string & keyof Context>(
     /* v8 ignore next -- cordis deletes a store slot on disposal rather than clearing it */
     if (impl === undefined) continue
     if (impl.name !== name) continue
-    if (withinFiber(impl.fiber, mount.fiber)) return impl.value as Context[K]
+    if (withinFiber(impl.ctx.fiber, mount.fiber)) return impl.value as Context[K]
   }
   return undefined
 }

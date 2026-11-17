@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Give newly created agents a shared default provider and model when their sessions do not specify one. Provider, model, and reasoning effort are live Config fields. Saved selections update the active profile patch and apply to subsequent reads; per-session selection remains owned by the entry point.
+Give newly created agents a shared default provider and model when their sessions do not specify one. Provider, model, and reasoning effort are live Config fields. Saved selections update the active profile patch and apply to subsequent reads; per-session selection belongs to the [Agent model API](../agent/README.md).
 
 ## Table of Contents
 
@@ -112,7 +112,7 @@ Changing the default affects only agents that subsequently resolve from it. An e
 
 These limits define the service's scope. They are current package constraints, not a task backlog.
 
-- **One process-wide default** — the service owns a single default; per-session model selection remains the entry point's responsibility.
+- **One process-wide default** — the service owns a single default; per-session model selection belongs to the [Agent model API](../agent/README.md).
 - **Persistence requires a profile configuration editor** — without it, saving a default does not retain the selection.
 
 <a id="dev-note"></a>

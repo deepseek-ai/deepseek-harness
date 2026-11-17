@@ -1,0 +1,16 @@
+- region "Which checks should run before merging?":
+  - text: Checks
+  - button "Collapse the question card" [expanded]
+  - button "Dismiss all questions"
+  - heading "Which checks should run before merging?" [level=2]
+  - group:
+    - checkbox "Unit tests" [checked]: Unit tests Recommended
+    - checkbox "Full e2e suite"
+    - checkbox "Type check" [checked]: Type check Recommended
+    - textbox "Type your answer"
+  - button "Previous question" [disabled]
+  - text: 1 / 1
+  - button "Next question" [disabled]
+  - status
+  - button "Skip"
+  - button "Submit"

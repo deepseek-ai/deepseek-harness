@@ -1,14 +1,17 @@
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
@@ -101,7 +104,7 @@ describe('bash tool through the agent loop', () => {
     mkdirSync(selected)
     const ctx = await harness(new MockAdapter([]))
     try {
-      const agent = await ctx.agentLoop.create(SessionId('nested-shell-current-directory'), {}, { cwd: root })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('nested-shell-current-directory'), {}, { cwd: root })
       await ctx.workingDirectory.set(agent, selected)
       class BashBindingRuntime extends PtcRuntime {
         readonly language = 'typescript'
@@ -112,15 +115,16 @@ describe('bash tool through the agent loop', () => {
         async run(spec: PtcRunSpec): Promise<PtcRunResult> {
           const bash = spec.bindings.find(binding => binding.global === 'tools')?.functions.bash
           if (bash === undefined) throw new Error('missing bash binding')
-          const value = await bash({ command: 'pwd', description: 'Print launch directory' })
+          const resolved = await bash({ command: 'pwd', description: 'Print launch directory' })
+          const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
           expect(value).toMatchObject({ cwd: selected, stdout: { text: `${selected}\n` } })
-          return { logs: [], value }
+          return { output: [], value }
         }
       }
       await ctx.plugin(BashBindingRuntime)
-      agent.ctx.tools.presentAs('ptc')
-      const result = await ctx.tools.execute({
-        callId: ToolCallId('nested-shell-root'), agent, signal: new AbortController().signal, name: 'run_code',
+      await agent.ctx.plugin(PtcToolExecutor)
+      const result = await executeModelToolFixture(ctx, {
+        callId: brandString<ToolCallId>('nested-shell-root'), agent, signal: new AbortController().signal, name: 'run_code',
         arguments: { code: 'return await tools.bash({ command: "pwd", description: "Print launch directory" })', description: 'Inspect current directory' },
       })
       expect(result.error).toBeUndefined()
@@ -149,7 +153,7 @@ describe('bash tool through the agent loop', () => {
     ])
     const ctx = await harness(adapter, root, dshHome)
     const handle = await ctx.agents.create({
-      sessionId: SessionId('session-env-id'),
+      sessionId: brandString<SessionId>('session-env-id'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const agent = handle.agent
@@ -168,7 +172,7 @@ describe('bash tool through the agent loop', () => {
       textResponse('The command printed integration-ok.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-fg'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-fg'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'run echo integration-ok' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
@@ -198,7 +202,7 @@ describe('bash tool through the agent loop', () => {
       textResponse('It failed with code 9.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-exit'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-exit'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'run exit 9' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
@@ -208,7 +212,7 @@ describe('bash tool through the agent loop', () => {
     expect(resultText(toolResult)).toContain('[exit code: 9]')
   })
 
-  it('background: start ack → completion wakes the idle agent → job_output collects it', async () => {
+  it('background: start ack → completion wakes the idle agent with the output inline', async () => {
     // The command blocks on a sentinel this test creates only after the agent
     // has gone idle, so settlement cannot fold into the still-running turn.
     // Without that fence a fast command can settle before step 2's pre-step
@@ -234,7 +238,7 @@ describe('bash tool through the agent loop', () => {
       textResponse('Background job finished.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-bg'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-bg'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'run echo bg-ok in the background' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
@@ -255,25 +259,26 @@ describe('bash tool through the agent loop', () => {
       const found = events(agent).findLast(event => event.type === 'tool/result')
       return found === undefined ? '' : resultText(found)
     }
-    await pollUntil(() => events(agent).some(isNotice) && lastResultText().includes('bg-ok'))
+    await pollUntil(() => events(agent).some(isNotice) && lastResultText().includes('[status: completed'))
     // Two turns: the user's, then the one the completion opened by itself.
     expect(events(agent).filter(event => event.type === 'turn/start')).toHaveLength(2)
 
-    // The notice carries the gated command as its label, so this pins the id,
-    // the terminal status, and the producer identity; the verbatim notice text
-    // and its bounding are pinned in the tool-jobs unit tests.
+    // The notice carries the gated command as its label and the job's output,
+    // so this pins the id, the terminal status, the output, and the producer
+    // identity; the verbatim notice text and its bounding are pinned in the
+    // tool-jobs unit tests.
     const notice = events(agent).find(isNotice)!
     const noticeText = notice.data.content
       .filter(block => block.type === 'text').map(block => block.text).join('')
     expect(noticeText).toContain(`background job ${jobId} (bash: `)
-    expect(noticeText).toContain('finished [status: completed, exit code: 0]')
+    expect(noticeText).toContain('finished [status: completed, exit code: 0]. Output:\nbg-ok')
     expect(notice.data.source).toMatchObject({
       kind: 'tool-jobs',
       form: 'notice',
     })
     const readResult = findEvent(events(agent), 'tool/result', 'last')
     expect(readResult.data.message.isError).toBe(false)
-    expect(resultText(readResult)).toContain('bg-ok')
-    expect(resultText(readResult)).toContain('[status: completed, exit code: 0]')
+    // The notice already delivered the output, so the read has nothing new.
+    expect(resultText(readResult)).toBe('(no new output)\n[status: completed, exit code: 0]')
   })
 })

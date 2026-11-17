@@ -6,7 +6,7 @@ import { binaryDocumentPath, DocumentPreviewRegistry } from '../src/client/docum
 import { Config } from '../src/config.ts'
 import { apply } from '../src/client/excel/index.ts'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
-import { en, zh } from '../src/client/excel/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/excel/locales.ts'
 
 it('registers complete binary reads and removes the slot and locale on disposal', async () => {
   const ctx = new Context()
@@ -28,7 +28,7 @@ it('registers complete binary reads and removes the slot and locale on disposal'
       expect(candidate.title()).toBe('Spreadsheet')
       expect(binaryDocumentPath(registry.getSnapshot(), path)).toBe(/\.(xlsx|xls)$/iu.test(path))
     }
-    expect(registerLocale).toHaveBeenCalledWith('sidebarExcel', { zh, en })
+    expect(registerLocale).toHaveBeenCalledWith('sidebarExcel', { zh, en, ja, es, fr, de, ru, pt })
     expect(register).toHaveBeenCalledOnce()
     expect(register.mock.calls[0]![1]).toBe(LazyExcelBody)
     const options = register.mock.calls[0]![0] as { inject: () => unknown }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface par défaut de l'agent",
+    "description": "Sélectionnez les valeurs par défaut de l'agent pour les sessions actuelles et les nouvelles, et modifiez les plugins utilisés par les valeurs par défaut."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Uso del navegador (Dramaturgo)",
+    "description": "Deje que el modelo navegue y opere páginas web a través de Playwright MCP en un Chromium iniciado."
+  }
+}

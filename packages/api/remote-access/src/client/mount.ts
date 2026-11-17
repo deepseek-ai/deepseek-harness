@@ -19,6 +19,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { TypertRemoteContribution, TypertRemoteMap, TypertResourceKind } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteAccessFrame } from '../types.ts'
 import { ClientAccessState, type Baseline } from './state.ts'
+import { whenAllowed, type AccessEffect } from './when-allowed.ts'
+
+export type { AccessEffect } from './when-allowed.ts'
 
 /** Every endpoint the Client Remote namespaces declare. */
 export type RemoteEndpoint = Extract<keyof TypertRemoteMap, string>
@@ -29,12 +32,38 @@ export interface ClientRemoteAccess {
    * Whether the current Peer may call `action` on one resource.
    * True for the owner; false without a baseline and after a non-owner
    * stream fails; otherwise whether the resource's grant lists the action.
+   * Only the package that owns a resource kind calls it, to build that kind's
+   * access Hook; other plugins read access through the access Hooks or
+   * `whenAccess`.
    * @param kind - resource kind declared in `TypertResourceMap`.
    * @param id - resource identity.
    * @param action - endpoint action the caller would invoke.
    * @returns identity-stable boolean source for this `(kind, id, action)`.
    */
   source(kind: TypertResourceKind, id: string, action: string): HostObservable<boolean>
+  /**
+   * Keep `callback`'s effects installed while the current Peer may call
+   * `action` on the global resource: run it when the answer becomes true,
+   * dispose its effects in reverse order when it becomes false, and run it
+   * again on the next true. The callback runs synchronously when the answer
+   * is already true, as it always is for the owner. Effect forms and fiber
+   * ownership match `ctx.slots.inject`.
+   * @param action - endpoint action the guarded effects depend on.
+   * @param callback - creates one disposer or an iterable of disposers.
+   * @returns idempotent disposer for the observation and any installed effects.
+   */
+  whenAccess(action: RemoteEndpoint, callback: () => AccessEffect): () => void
+  /**
+   * {@link whenAccess} for one resource of a declared kind. Only the package
+   * that owns a resource kind calls it, to build that kind's `whenAccess`, as
+   * it builds the kind's access Hook over {@link source}.
+   * @param kind - resource kind declared in `TypertResourceMap`.
+   * @param id - resource identity.
+   * @param action - endpoint action the guarded effects depend on.
+   * @param callback - creates one disposer or an iterable of disposers.
+   * @returns idempotent disposer for the observation and any installed effects.
+   */
+  whenResourceAccess(kind: TypertResourceKind, id: string, action: RemoteEndpoint, callback: () => AccessEffect): () => void
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -65,6 +94,16 @@ class ClientRemoteAccessService extends Service implements ClientRemoteAccess {
 
   source(kind: TypertResourceKind, id: string, action: string): HostObservable<boolean> {
     return this.state.resource(kind, id, action)
+  }
+
+  // Prototype methods: the Cordis service proxy binds `this.ctx` to the caller's Context.
+  whenAccess(action: RemoteEndpoint, callback: () => AccessEffect): () => void {
+    return whenAllowed(this.ctx, this.state.global(action), callback, `remoteAccess.whenAccess(${JSON.stringify(action)})`)
+  }
+
+  whenResourceAccess(kind: TypertResourceKind, id: string, action: RemoteEndpoint, callback: () => AccessEffect): () => void {
+    return whenAllowed(this.ctx, this.state.resource(kind, id, action), callback,
+      `remoteAccess.whenResourceAccess(${JSON.stringify(kind)}, ${JSON.stringify(id)}, ${JSON.stringify(action)})`)
   }
 }
 

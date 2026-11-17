@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import ShellExecutor from '@deepseek-ai/dsh-shell'
+import { ApprovalService } from '@deepseek-ai/dsh-user-approval'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -22,13 +28,13 @@ async function storageRoot(): Promise<string> {
   return root
 }
 
-async function runtime(root: string, persistence = true) {
+async function runtime(root: string, persistence = true, reasoning?: LlmModelReasoningInfo) {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
   if (persistence) await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
-  const adapter = new MockAdapter([textResponse('remembered')])
+  const adapter = new MockAdapter([textResponse('remembered')], reasoning)
   ctx.llm.registerAdapter(['mock'], adapter)
   const events: SessionEventNotification[] = []
   const transport: JsonRpcTransportPeer = {
@@ -48,13 +54,220 @@ async function initialized(root: string) {
   return result
 }
 
+/** The resumed model only returns text; permission state still uses the real services. */
+class UnusedShell extends ShellExecutor {
+  static inject = ['sandboxPolicy']
+  override get sandboxMode() { return this.ctx.sandboxPolicy.defaultMode }
+  override resolve(): never { throw new Error('Unexpected shell resolution') }
+  override execute(): never { throw new Error('Unexpected shell execution') }
+}
+
+async function withPermissions(root: string) {
+  const result = await initialized(root)
+  await result.ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
+  await result.ctx.plugin(UnusedShell)
+  await result.ctx.plugin(ApprovalService, { policy: 'never' })
+  await result.ctx.plugin(PermissionPresetService)
+  return result
+}
+
 describe('SDK persisted session resume', () => {
+  it.each([undefined, 'danger-full-access'])('applies persisted or explicit permissions before resumed execution: %s', async (permissionMode) => {
+    const root = await storageRoot()
+    const sessionId = brandString<SessionId>('saved-permissions')
+    const first = await withPermissions(root)
+    await first.server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId })
+    first.ctx.permissionPresets.set(first.ctx.agents.get(sessionId)!.session, 'workspace-write')
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await withPermissions(root)
+    const modes: string[] = []
+    // A plugin can queue work while the restored Agent is being published.
+    second.ctx.on('agent/created', ({ agent }) => {
+      agent.followup(createUserMessage({
+        content: [{ type: 'text', text: 'continue during publication' }], source: { kind: 'user' },
+      }))
+    })
+    second.ctx.on('agent/pre-step', (input, next) => {
+      modes.push(second.ctx.sandboxPolicy.resolve({ session: input.agent.session }).mode)
+      return next()
+    })
+    await second.server.handleRequest('session/resume', { sessionId, permissionMode })
+    await second.server.wait({ sessionId })
+    const expected = permissionMode ?? 'workspace-write'
+    const session = second.ctx.agents.get(sessionId)!.session
+    expect(modes).toEqual([expected])
+    expect(second.ctx.permissionPresets.current(session)).toBe(expected)
+    expect(second.ctx.approval.overrideOf(session)).toBe(permissionMode === undefined ? 'ask' : 'never')
+    expect(second.adapter.requests).toHaveLength(1)
+    await second.server.shutdown()
+    await second.ctx.fiber.dispose()
+
+    const third = await withPermissions(root)
+    await third.server.resume({ sessionId })
+    expect(third.ctx.permissionPresets.current(third.ctx.agents.get(sessionId)!.session)).toBe(expected)
+    expect(third.ctx.sandboxPolicy.defaultMode).toBe('danger-full-access')
+    expect(third.adapter.requests).toHaveLength(0)
+  })
+
+  it('rejects unsupported permission overrides before opening history and permits retry', async () => {
+    const root = await storageRoot()
+    const { ctx, server } = await initialized(root)
+    const open = vi.spyOn(ctx.sessionPersistence, 'open')
+    await expect(server.resume({ sessionId: 'saved', permissionMode: 'danger-full-access' }))
+      .rejects.toThrow('requires the permission-presets service')
+    await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
+    await ctx.plugin(UnusedShell)
+    await ctx.plugin(ApprovalService, { policy: 'never' })
+    await ctx.plugin(PermissionPresetService)
+    await expect(server.resume({ sessionId: 'saved', permissionMode: 'unknown' })).rejects.toThrow('unknown preset')
+    expect(open).not.toHaveBeenCalled()
+    expect(ctx.agents.list()).toHaveLength(0)
+    await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow()
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects malformed permission overrides at the wire boundary', async () => {
+    const { server } = await initialized(await storageRoot())
+    for (const permissionMode of ['', null, 17, true, {}]) {
+      await expect(server.handleRequest('session/resume', { sessionId: 'saved', permissionMode }))
+        .rejects.toThrow('permissionMode must be a non-empty string')
+    }
+  })
+
+  it('rejects unknown resume fields before restoring a session', async () => {
+    const { server } = await initialized(await storageRoot())
+    const resume = vi.spyOn(server, 'resume')
+    const params = { sessionId: 'saved', permission_mode: 'read-only' }
+    await expect(server.handleRequest('session/resume', params)).rejects.toThrow('permission_mode')
+    expect(resume).not.toHaveBeenCalled()
+  })
+
+  it('rejects independent subagent restoration before opening or repairing its log', async () => {
+    const root = await storageRoot()
+    const { ctx, server } = await initialized(root)
+    const child = await ctx.agents.create({
+      sessionId: brandString<SessionId>('saved-child'),
+      meta: { origin: 'subagent', parentSession: brandString<SessionId>('creator'), cwd: root },
+    })
+    child.agent.session.append('turn/start', { turn: 1 })
+    await ctx.sessions.flush(child.agent.session)
+    await child.dispose()
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(server.resume({ sessionId: 'saved-child' })).rejects.toThrow('resume its root session instead')
+    }
+    expect(resume).not.toHaveBeenCalled()
+    expect(ctx.agents.get(brandString<SessionId>('saved-child'))).toBeUndefined()
+    await expect(server.shutdown()).resolves.toEqual({})
+  })
+
+  it.each([
+    { model: 'mock', effort: undefined, expected: 'high' },
+    { model: 'other', effort: undefined, expected: undefined },
+    { model: 'mock', effort: 'low', expected: 'low' },
+  ])('applies the initialized route and effort on resume: $model / $effort', async ({ model, effort, expected }) => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved-effort', contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId: 'saved-effort' })
+    first.ctx.agents.get(brandString<SessionId>('saved-effort'))!.model.select({
+      provider: 'mock', model: 'mock', reasoningEffort: brandString<ReasoningEffortId>('high'),
+    })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await runtime(root, true, {
+      efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }, { id: brandString<ReasoningEffortId>('low'), name: 'Low' }],
+    })
+    await second.server.initialize({
+      cwd: root, provider: 'mock', model,
+      ...effort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(effort) },
+    })
+    await second.server.resume({ sessionId: 'saved-effort' })
+    expect(second.ctx.agents.get(brandString<SessionId>('saved-effort'))!.model.current()).toEqual({
+      provider: 'mock', model,
+      ...expected === undefined ? {} : { reasoningEffort: expected },
+    })
+  })
+
+  it('restores due reminders through the SDK owner after initialization and shares client resume', async () => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'original' }] })
+    await first.server.wait({ sessionId: 'saved' })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const { ctx, server, adapter } = await runtime(root)
+    const fallback = vi.fn(async () => { throw new Error('must not activate through the Web controller') })
+    const restoring = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
+    expect(ctx.agents.list()).toHaveLength(0)
+    const actualOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<undefined>()
+    const open = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await actualOpen(...args)
+      opened.resolve(undefined)
+      await gate.promise
+      return handle
+    })
+    try {
+      await server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'reminder-model', maxTokens: 1234 })
+      await opened.promise
+      await expect(server.resume({ sessionId: 'saved', permissionMode: 'danger-full-access' }))
+        .rejects.toThrow('already restored by a reminder')
+      const resuming = server.resume({ sessionId: 'saved' })
+      const anotherReminder = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
+      gate.resolve(undefined)
+      const [agent, sameAgent] = await Promise.all([restoring, anotherReminder, resuming])
+      expect(sameAgent).toBe(agent)
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(fallback).not.toHaveBeenCalled()
+      expect(agent.session.header.cwd).toBe(root)
+      await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'scheduled reminder' }] })
+      await server.wait({ sessionId: 'saved' })
+      expect(adapter.requests[0]).toMatchObject({ model: 'reminder-model', maxTokens: 1234 })
+      await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+      await server.shutdown()
+      expect(ctx.agents.list()).toHaveLength(0)
+    } finally {
+      gate.resolve(undefined)
+    }
+  })
+
+  it('reuses an SDK-owned Session for reminders and releases failed reminder restoration for retry', async () => {
+    const { ctx, server } = await initialized(await storageRoot())
+    const fallback = vi.fn(async () => { throw new Error('unexpected fallback') })
+    const restore = () => ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
+    await expect(restore()).rejects.toThrow()
+    await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'create after failed reminder' }] })
+    await server.wait({ sessionId: 'saved' })
+    const agent = ctx.agents.get(brandString<SessionId>('saved'))
+    await expect(restore()).resolves.toBe(agent)
+    await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  it('releases a reminder waiting for initialization when the SDK shuts down', async () => {
+    const { ctx, server } = await runtime(await storageRoot())
+    const restoring = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), async () => {
+      throw new Error('unexpected fallback')
+    })
+    const rejected = expect(restoring).rejects.toThrow('shutting down')
+    await server.shutdown()
+    await rejected
+    expect(ctx.agents.list()).toHaveLength(0)
+  })
+
   it('restores a non-main identity, preserves history and origin, and appends a new turn', async () => {
     const root = await storageRoot()
     const first = await initialized(root)
     await first.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'remember kiwi' }] })
     await first.server.wait({ sessionId: 'saved-session' })
-    const original = first.ctx.agents.get(SessionId('saved-session'))!.session.snapshotEvents()
+    const original = first.ctx.agents.get(brandString<SessionId>('saved-session'))!.session.snapshotEvents()
     await first.server.shutdown()
     await first.ctx.fiber.dispose()
 
@@ -62,12 +275,17 @@ describe('SDK persisted session resume', () => {
     await second.server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'resumed-model', maxTokens: 123 })
     await expect(second.server.handleRequest('session/resume', { sessionId: 'saved-session' }))
       .resolves.toEqual({})
-    const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
+    const restored = second.ctx.agents.get(brandString<SessionId>('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
-    expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: 'session/end-seed' })
+    expect(restored.snapshotEvents().slice(original.length)).toMatchObject([
+      { type: 'session/end-seed' },
+      { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
+    ])
     expect(second.adapter.requests).toHaveLength(0)
-    expect(second.events).toEqual([])
+    expect(second.events).toEqual([
+      { sessionId: 'saved-session', event: restored.snapshotEvents().at(-1) },
+    ])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })
     await second.server.wait({ sessionId: 'saved-session' })
     expect(second.events.length).toBeGreaterThan(0)
@@ -88,7 +306,7 @@ describe('SDK persisted session resume', () => {
     await first.server.prompt({ sessionId: 'interrupted', contentBlocks: [{ type: 'text', text: 'first turn' }] })
     await first.server.wait({ sessionId: 'interrupted' })
     await first.server.shutdown()
-    const handle = await first.ctx.sessionPersistence.open(SessionId('interrupted'), 'write')
+    const handle = await first.ctx.sessionPersistence.open(brandString<SessionId>('interrupted'), 'write')
     try {
       const events = (await handle.read()).events
       const last = events.at(-1)!
@@ -103,7 +321,7 @@ describe('SDK persisted session resume', () => {
     await first.ctx.fiber.dispose()
     const second = await initialized(root)
     await second.server.resume({ sessionId: 'interrupted' })
-    const restored = second.ctx.agents.get(SessionId('interrupted'))!.session
+    const restored = second.ctx.agents.get(brandString<SessionId>('interrupted'))!.session
     expect(restored.snapshotEvents().filter(event => event.type === 'turn/end').at(-1)).toMatchObject({
       type: 'turn/end', data: { turn: 2, reason: { kind: 'interrupted' } },
     })
@@ -119,7 +337,7 @@ describe('SDK persisted session resume', () => {
     await expect(server.resume({ sessionId: 'missing' })).rejects.toThrow()
     await expect(server.resume({ sessionId: 'missing' })).rejects.toThrow()
     expect(ctx.agents.list()).toHaveLength(0)
-    expect(ctx.sessions.get(SessionId('missing'))).toBeUndefined()
+    expect(ctx.sessions.get(brandString<SessionId>('missing'))).toBeUndefined()
   })
 
   it('shares pending restoration with a prompt and rejects duplicate resume', async () => {

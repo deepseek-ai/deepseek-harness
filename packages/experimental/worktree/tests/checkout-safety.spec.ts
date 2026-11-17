@@ -72,6 +72,29 @@ describe('worktree checkout Git configuration', () => {
     expect(await contents(join(created.path, 'tracked.txt'))).toBe('initial\n')
   })
 
+  it('restores a removed checkout without running its required smudge filter', async () => {
+    const root = await repo()
+    await writeFile(join(root, '.gitattributes'), '*.txt filter=configured -text\n')
+    await git(root, 'add', '.gitattributes')
+    await git(root, 'commit', '-m', 'attributes')
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'restored' })
+    await rm(created.path, { recursive: true, force: true })
+    const { command, marker } = await filterCommand(root)
+    await git(root, 'config', 'filter.configured.smudge', command)
+    await git(root, 'config', 'filter.configured.required', 'true')
+    const control = join(root, 'ordinary-checkout')
+    await git(root, 'worktree', 'add', '-b', 'ordinary', control)
+    expect(await contents(join(control, 'tracked.txt'))).toBe('filtered\ninitial\n')
+    await rm(marker)
+
+    await ctx.worktrees.restore(agent, created)
+
+    await expect(access(marker)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await contents(join(created.path, 'tracked.txt'))).toBe('initial\n')
+  })
+
   it('retains stored binary content without running its decryption filter', async () => {
     const root = await repo()
     const stored = Buffer.from([0, 255, 17, 128, 10])
@@ -98,7 +121,9 @@ describe('worktree checkout Git configuration', () => {
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
 
-    await expect(ctx.worktrees.create(agent, { name: 'invalid' })).rejects.toThrow(/Any created checkout and branch are retained.*bad config line/s)
+    await expect(ctx.worktrees.create(agent, { name: 'invalid' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_COMMAND_FAILED', message: expect.stringMatching(/Any created checkout and branch are retained.*bad config line/s) as string,
+    })
 
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     await access(join(root, '.agents/worktrees/invalid/.git'))
@@ -112,7 +137,9 @@ describe('worktree checkout Git configuration', () => {
     ctx = await harness(root, { maxOutputBytes: 256 })
     const agent = testAgent(ctx, root)
 
-    await expect(ctx.worktrees.create(agent, { name: 'bounded' })).rejects.toThrow('output exceeds maxOutputBytes')
+    await expect(ctx.worktrees.create(agent, { name: 'bounded' })).rejects.toMatchObject({
+      code: 'WORKTREE_OUTPUT_TOO_LARGE', message: expect.stringContaining('output exceeds maxOutputBytes') as string,
+    })
 
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     await access(join(root, '.agents/worktrees/bounded/.git'))

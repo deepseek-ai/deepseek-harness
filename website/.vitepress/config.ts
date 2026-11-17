@@ -1,6 +1,7 @@
 /** VitePress configuration for the locally projected documentation site. */
 
 import { readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import type { DefaultTheme, PageData, SiteConfig } from 'vitepress'
 import type { ViteDevServer } from 'vite'
@@ -11,6 +12,8 @@ import { docsSourceFiles, emitRawMarkdownPages, llmsTxt, projectDocs } from '../
 import { rawMarkdownMiddleware } from '../raw-markdown.ts'
 
 projectDocs()
+
+const websiteRequire = createRequire(import.meta.url)
 
 function sidebar(locale: DocsLocale, collection: NonNullable<DocsPage['sidebar']>): DefaultTheme.SidebarItem[] {
   // `orderedPages` already sorts by section placement, so insertion order
@@ -341,6 +344,14 @@ export default withMermaid({
     // `srcDir` puts the Vite root inside the disposable generated tree, whose
     // own `public/` no tracked asset can live in.
     publicDir: resolve(import.meta.dirname, '../public'),
+    // `withMermaid` injects `vitepress-plugin-mermaid/Mermaid.vue` into the VitePress client, which
+    // resolves it from the `vitepress` package, and the component imports `vue` without declaring it.
+    // Both resolve from the website's declared dependencies, so the build does not rely on the
+    // installer hoisting undeclared dependencies, which pnpm's global virtual store never does.
+    resolve: {
+      alias: { 'vitepress-plugin-mermaid/Mermaid.vue': websiteRequire.resolve('vitepress-plugin-mermaid/Mermaid.vue') },
+      dedupe: ['vue'],
+    },
     plugins: [
       {
         name: 'deepseek-harness-doc-projector',

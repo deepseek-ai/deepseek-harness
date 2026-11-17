@@ -6,5 +6,6 @@ recording: authored
 header:
   class: office-skills
   pin: true
+  changes: 1
 workspace:
   setup: office-skills

@@ -1,8 +1,17 @@
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import * as childProcess from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS } from '../src/host-process.ts'
+import { OperationJournal } from '../src/operation-journal.ts'
+import { readOperationHistory } from '../src/operation-history.ts'
+import { renderCrashReport } from '../src/crash-report.ts'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:child_process')>()
+  return { ...original, spawn: vi.fn(original.spawn) }
+})
 
 const roots: string[] = []
 const hosts: DesktopHostProcess[] = []
@@ -11,6 +20,15 @@ const HTTP_HOST = `
 import { createServer } from 'node:http'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+let authenticationReceived = false
+let receivedSecret = ''
+let listening = false
+let published = false
+const publishReady = () => {
+  if (!authenticationReceived || !listening || published) return
+  published = true
+  process.send({ type: 'ready', url: 'http://127.0.0.1:' + server.address().port + '/' })
+}
 const server = createServer((request, response) => {
   if (request.url === '/fatal') {
     process.send({ type: 'fatal', message: 'plugin unavailable' })
@@ -24,12 +42,32 @@ const server = createServer((request, response) => {
     return
   }
   response.setHeader('content-type', 'application/json')
-  response.end(JSON.stringify({runtime: process.argv[2], profile: process.argv[3], cwd: process.cwd(), nodePath: process.env.NODE_PATH, registry: process.env.NPM_CONFIG_REGISTRY, nodeOptions: process.env.NODE_OPTIONS, runAsNode: process.env.ELECTRON_RUN_AS_NODE, internals: process.execArgv.includes('--expose-internals')}))
+  response.end(JSON.stringify({runtime: process.argv[2], profile: process.argv[3], cwd: process.cwd(), nodePath: process.env.NODE_PATH, registry: process.env.NPM_CONFIG_REGISTRY, nodeOptions: process.env.NODE_OPTIONS, runAsNode: process.env.ELECTRON_RUN_AS_NODE, internals: process.execArgv.includes('--expose-internals'), privateAuth: authenticationReceived && /^[A-Za-z0-9_-]{43}$/.test(receivedSecret) && !JSON.stringify(process.argv).includes(receivedSecret) && !JSON.stringify(process.env).includes(receivedSecret)}))
 })
-server.listen(0, '127.0.0.1', () => {
-  process.send({ type: 'ready', url: 'http://127.0.0.1:' + server.address().port + '/?token=fixture' })
-})
+server.listen(0, '127.0.0.1', () => { listening = true; publishReady() })
 process.on('message', message => {
+  if (message.type === 'desktop-auth') {
+    if (authenticationReceived || !/^[A-Za-z0-9_-]{43}$/.test(message.secret)) throw new Error('invalid authentication handoff')
+    authenticationReceived = true
+    receivedSecret = message.secret
+    publishReady()
+    return
+  }
+  if (message.type === 'file-drag-cancel') {
+    process.send({ type: 'file-drag-resource', requestId: message.requestId, resource: null })
+    return
+  }
+  if (message.type === 'file-drag-resource') {
+    if (message.address === 'pending') return
+    if (message.address === 'invalid') {
+      process.send({ type: 'file-drag-resource', requestId: message.requestId, resource: { path: '/invalid', sha256: 'bad', size: -1 } })
+      return
+    }
+    process.send({ type: 'file-drag-resource', requestId: message.requestId,
+      resource: message.address === 'remote' ? null : { path: '/authorized/report.pdf', sha256: 'a'.repeat(64), size: 42 },
+      ...(message.address === 'denied' ? { error: 'File read denied' } : {}) })
+    return
+  }
   if (message.type === 'update-tasks') {
     process.send({ type: 'update-tasks', requestId: message.requestId, active: message.action === 'lock' })
     return
@@ -47,6 +85,7 @@ process.on('message', message => {
   })
   server.closeAllConnections()
 })
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
 `
 
 function projectWithHost(source = HTTP_HOST): string {
@@ -73,6 +112,117 @@ afterEach(async () => {
 })
 
 describe('desktop host process', () => {
+  it('retains the announced run identity when startup fails before readiness', async () => {
+    const runtime = projectWithHost(`
+process.once('message', message => {
+  if (message.type !== 'desktop-auth') throw new Error('expected authentication')
+  process.send({ type: 'fatal', message: 'profile startup failed', diagnostic: 'required plugin failed' }, () => process.disconnect())
+})
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
+`)
+    const host = hostProcess(runtime)
+    const failure: unknown = await host.start().catch((error: unknown) => error)
+    await host.stop()
+    expect(failure).toBeInstanceOf(DesktopHostFatalError)
+    expect(failure).toHaveProperty('hostRunId', 'c254ab28-97c9-4382-95e6-2db9c66f98c8')
+  })
+
+  it.each([
+    ['exception', 'queueMicrotask(() => { throw new Error("qualification-exception", { cause: new Error("qualification-runtime-cause") }) })'],
+    ['rejection', 'Promise.reject(new Error("qualification-rejection"))'],
+    ['exit', 'process.stderr.write("qualification-exit", () => process.exit(7))'],
+  ])('retains real child %s evidence in the final report after readiness', async (kind, trigger) => {
+    const failed = Promise.withResolvers<Error>()
+    const runtime = projectWithHost(`
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
+process.once('message', message => {
+  if (message.type !== 'desktop-auth') throw new Error('expected authentication')
+  process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger} })
+})
+`)
+    const host = hostProcess(runtime, runtime, failed.resolve)
+    await host.start()
+    const failure = await failed.promise
+    await host.stop()
+    const report = renderCrashReport({ source: 'host', phase: 'running', error: failure,
+      rendererConsole: [], operationHistoryPlanned: true, time: new Date('2026-10-19T00:00:00Z'),
+      app: { name: 'qualification', version: 'test', platform: process.platform, arch: process.arch,
+        electron: 'not-running', node: process.version, locale: 'zh-CN' },
+    })
+    expect(report).toContain(`qualification-${kind}`)
+    expect(report).toContain('phase: running')
+    expect(report).toContain("hostRunId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8'")
+    if (kind === 'exception') expect(report).toContain('qualification-runtime-cause')
+    if (kind === 'exit') expect(report).toContain('7')
+  })
+
+  it('persists validated operation IPC across Host lifetimes and isolates a failing diagnostic sink', async () => {
+    const record = {
+      runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
+      operation: { id: 'c254ab28-97c9-4382-95e6-2db9c66f98c9', time: '2026-10-19T00:00:00.000Z',
+        reason: 'bundle', phase: 'started', target: 'test-bundle', stage: 'enable' },
+      secret: 'not-persisted',
+    }
+    const runtime = projectWithHost(`
+process.send({ type: 'starting', runId: ${JSON.stringify(record.runId)} })
+process.send({ type: 'plugin-operation', record: { invalid: true } })
+process.send({ type: 'plugin-operation', record: { ...${JSON.stringify(record)}, runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c0' } })
+process.send({ type: 'plugin-operation', record: ${JSON.stringify(record)} })
+${HTTP_HOST}`)
+    const directory = join(runtime, 'operation-history')
+    const journal = new OperationJournal(directory, { recordBytes: 4096, segmentBytes: 8192, queuedBytes: 8192 })
+    onTestFinished(async () => { await journal.close() })
+    const sink = vi.fn(value => journal.enqueue(JSON.stringify(value)))
+    const first = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+      undefined, undefined, undefined, undefined, sink)
+    hosts.push(first)
+    await first.start()
+    await first.stop()
+    await journal.close()
+    expect(sink).toHaveBeenCalledTimes(1)
+    const saved = await readOperationHistory(directory, { bytes: 8192, recordBytes: 4096, records: 10 }, new AbortController().signal)
+    expect(saved.records).toEqual([{ runId: record.runId, transportDropped: 0, operation: record.operation }])
+
+    const warning = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const failure = vi.fn()
+      const second = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+        failure, undefined, undefined, undefined, () => { throw new Error('sink unavailable') })
+      hosts.push(second)
+      await second.start()
+      expect(await second.updateTasks('inspect')).toBe(false)
+      await second.stop()
+      expect(failure).not.toHaveBeenCalled()
+      expect(warning).toHaveBeenCalledWith('desktop plugin operation diagnostic sink failed')
+    } finally { warning.mockRestore() }
+  })
+
+  it('correlates authorized file resources and rejects Host denial over private IPC', async () => {
+    const host = hostProcess(projectWithHost())
+    await host.start()
+    expect(await Promise.all([host.resolveDragResource('local'), host.resolveDragResource('remote')]))
+      .toEqual([{ path: '/authorized/report.pdf', sha256: 'a'.repeat(64), size: 42 }, null])
+    await expect(host.resolveDragResource('denied')).rejects.toThrow('File read denied')
+    await host.stop(true)
+    await expect(host.resolveDragResource('local')).rejects.toThrow('file drag: Host is unavailable')
+  })
+
+  it('cancels a pending resource request without invalidating later Host requests', async () => {
+    const host = hostProcess(projectWithHost())
+    await host.start()
+    const abort = new AbortController()
+    const pending = host.resolveDragResource('pending', abort.signal)
+    const rejected = expect(pending).rejects.toThrow('cancelled')
+    abort.abort(new Error('cancelled'))
+    await rejected
+    await expect(host.resolveDragResource('local')).resolves.toMatchObject({ path: '/authorized/report.pdf' })
+  })
+
+  it('rejects malformed file authorization responses and terminates the Host', async () => {
+    const host = hostProcess(projectWithHost())
+    await host.start()
+    await expect(host.resolveDragResource('invalid')).rejects.toThrow('invalid IPC event')
+  })
   it('correlates task inspections and admission changes over private IPC', async () => {
     const host = hostProcess(projectWithHost())
     await expect(host.updateTasks('inspect')).rejects.toThrow('Host is unavailable')
@@ -101,8 +251,9 @@ describe('desktop host process', () => {
     'process.exit(0)',
   ])('refuses installation when exit lacks successful teardown acknowledgement: %s', async (exit) => {
     const host = hostProcess(projectWithHost(`
-      process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })
+      process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
       process.on('message', message => {
+        if (message.type === 'desktop-auth') process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })
         if (message.type === 'shutdown') process.stderr.write('token=fixture-secret', () => { ${exit} })
       })
     `))
@@ -115,12 +266,90 @@ describe('desktop host process', () => {
     await expect(host.stop()).resolves.toBeUndefined()
   })
 
-  it('returns the Web authentication URL and waits for graceful shutdown', async () => {
+  it('rejects readiness before the private authentication handoff', async () => {
+    const host = hostProcess(projectWithHost("process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })"))
+    await expect(host.start()).rejects.toThrow('authentication handoff')
+  })
+
+  it.each([
+    'https://example.test/',
+    'http://127.0.0.1:3080/?token=untrusted',
+    'http://user:password@127.0.0.1:3080/',
+    'http://127.0.0.1:3080/other',
+  ])('rejects an unexpected ready address before using a credential: %s', async (url) => {
+    const host = hostProcess(projectWithHost(`
+process.on('message', message => {
+  if (message.type === 'desktop-auth') process.send({ type: 'ready', url: ${JSON.stringify(url)} })
+})
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
+`))
+    await expect(host.start()).rejects.toThrow('invalid IPC event')
+  })
+
+  it('provides a private per-child authentication Cookie with the ordinary ready address', async () => {
+    const source = `
+import { randomUUID } from 'node:crypto'
+process.on('message', message => {
+  if (message.type === 'desktop-auth') {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(message.secret)) throw new Error('invalid credential')
+    process.send({ type: 'ready', url: 'http://127.0.0.1:3080/', injections: [] })
+  }
+  if (message.type === 'shutdown') process.send({ type: 'shutdown-complete' }, () => process.disconnect())
+})
+process.send({ type: 'starting', runId: randomUUID() })
+`
+    const runtime = projectWithHost(source)
+    const first = await hostProcess(runtime).start()
+    const second = await hostProcess(runtime).start()
+    expect(first.url).toBe('http://127.0.0.1:3080/')
+    expect(first.authenticationCookie).toMatch(/^dsh-desktop-session=[A-Za-z0-9_-]{43}$/)
+    expect(first.authenticationCookie).not.toBe(second.authenticationCookie)
+    expect(first.injections).toEqual([])
+  })
+
+  it('sends the credential once even when the child repeats starting', async () => {
+    const source = HTTP_HOST.replace("process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })",
+      "process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' }); process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })")
+    const host = hostProcess(projectWithHost(source))
+    const ready = await host.start()
+    expect((await fetch(ready.url)).status).toBe(200)
+    await host.stop(true)
+  })
+
+  it('reports a credential-free failure when the private IPC send fails', async () => {
+    const realSpawn = (await vi.importActual<typeof import('node:child_process')>('node:child_process')).spawn
+    let secret = ''
+    vi.mocked(childProcess.spawn).mockImplementationOnce((...args) => {
+      const child = Reflect.apply(realSpawn, childProcess, args)
+      const send = child.send.bind(child)
+      vi.spyOn(child, 'send').mockImplementation((message, ...rest) => {
+        if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'desktop-auth') {
+          secret = 'secret' in message ? String(message.secret) : ''
+          const callback = rest.at(-1)
+          if (typeof callback !== 'function') throw new Error('missing send callback')
+          callback(new Error(`failed message ${secret}`))
+          return false
+        }
+        return Reflect.apply(send, child, [message, ...rest])
+      })
+      return child
+    })
+    const failures: Error[] = []
+    const host = hostProcess(projectWithHost(), undefined, error => failures.push(error))
+    await expect(host.start()).rejects.toThrow('authentication handoff failed')
+    await host.stop()
+    expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(failures).toHaveLength(1)
+    expect(String(failures[0])).not.toContain(secret)
+  })
+
+  it('returns the ordinary Host URL and waits for graceful shutdown', async () => {
     const runtime = projectWithHost()
     const failure = vi.fn()
     const host = hostProcess(runtime, runtime, failure)
     const ready = await host.start()
-    expect(new URL(ready.url).searchParams.get('token')).toBe('fixture')
+    expect(new URL(ready.url).search).toBe('')
+    expect(ready.authenticationCookie).toMatch(/^dsh-desktop-session=[A-Za-z0-9_-]{43}$/)
     expect(await host.start()).toEqual(ready)
     expect((await fetch(ready.url)).status).toBe(200)
     await host.stop()
@@ -149,7 +378,7 @@ describe('desktop host process', () => {
     await expect.poll(() => failure.mock.calls.length).toBe(1)
     await host.stop()
     expect(failure).toHaveBeenCalledTimes(1)
-    expect(failure).toHaveBeenCalledWith(new Error('plugin unavailable'))
+    expect(failure).toHaveBeenCalledWith(expect.objectContaining({ message: 'plugin unavailable', hostRunId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' }))
   })
 
   it('reports a child crash after readiness with its stderr diagnostic', async () => {
@@ -159,7 +388,7 @@ describe('desktop host process', () => {
     const { url } = await host.start()
     await fetch(new URL('/crash', url))
     await expect.poll(() => failure.mock.calls.length).toBe(1)
-    expect(failure).toHaveBeenCalledWith(new Error('dsh desktop host exited with 7: plugin crashed'))
+    expect(failure).toHaveBeenCalledWith(expect.objectContaining({ message: 'dsh desktop host exited with 7: plugin crashed', hostRunId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' }))
   })
 
   it('retains only recent diagnostics from a noisy child', async () => {
@@ -189,7 +418,7 @@ describe('desktop host process', () => {
     })
     const { url } = await host.start()
     const response = await fetch(url)
-    expect(await response.json()).toEqual({ runtime, profile, cwd: realpathSync(profile), nodePath: '/custom', registry: 'https://registry.example.test/', nodeOptions: '--no-warnings', runAsNode: '1', internals: true })
+    expect(await response.json()).toEqual({ runtime, profile, cwd: realpathSync(profile), nodePath: '/custom', registry: 'https://registry.example.test/', nodeOptions: '--no-warnings', runAsNode: '1', internals: true, privateAuth: true })
   })
 
   it.each([

@@ -48,12 +48,13 @@ export function createWorkspaceShortcutControls(): WorkspaceShortcutControls {
 
 /**
  * Register navigation commands against the existing workspace owner.
- * Rename requires a nonblank main Conversation with no modal obscuring it.
+ * Rename requires a nonblank main Conversation with no modal other than the navigation drawer obscuring it.
  * @param ctx - plugin context with the shortcut, locale, and model services.
  * @param navigation - session creation and forking from the pointer controls' navigation service.
  * @param controls - browser-owned opening requests.
  * @param archiveSession - shared archive action, including running-work confirmation and notices.
  * @param reportForkFailure - publish a classified failure through the frame-wide notice channel.
+ * @param markSession - shared reading action; only failed writes raise a notice.
  */
 export function installWorkspaceShortcuts(
   ctx: Context,
@@ -61,6 +62,7 @@ export function installWorkspaceShortcuts(
   controls: ReturnType<typeof createWorkspaceShortcutControls>,
   archiveSession: (sessionId: SessionId) => void,
   reportForkFailure: (reason: 'unavailable' | 'failed') => void,
+  markSession: (sessionId: SessionId, unread: boolean) => void,
 ): void {
   const t = ctx.locale.bind('workspace')
   const current = () => Object.values(ctx.sessions.list.getSnapshot().byId)
@@ -75,7 +77,7 @@ export function installWorkspaceShortcuts(
         'desktop:macos': { code, modifiers }, 'desktop:windows': { code, modifiers }, 'desktop:linux': { code, modifiers },
         'web:macos': { code, modifiers: webModifiers }, 'web:windows': { code, modifiers: webModifiers },
       },
-      regions: ['page', 'editable'], modals: [], resolve,
+      regions: ['page', 'editable'], modals: ['sidebar'], resolve,
     }), `ui-workspace: ${id}`)
   }
   register('session.new', () => t('session.new'), ['new session', 'new chat'], 'KeyN', ['primary'], ['primary', 'alt'],
@@ -89,7 +91,7 @@ export function installWorkspaceShortcuts(
     })
   register('session.rename', () => t('rename.session.title'), ['rename session'], 'KeyG', ['primary', 'alt'], ['primary', 'alt'], (context) => {
     const target = current()
-    return target === undefined || target.blank || context.modal !== null || ctx.layout.panelInfo.getSnapshot().activePanelId !== null
+    return target === undefined || target.blank || (context.modal !== null && context.modal !== 'sidebar') || ctx.layout.panelInfo.getSnapshot().activePanelId !== null
       ? { status: 'blocked', reason: t('shortcut.noSession') }
       : { status: 'handled', run: () => { controls.rename(target.id, target.title?.trim() ?? '') } }
   })
@@ -115,4 +117,30 @@ export function installWorkspaceShortcuts(
         archiveSession(target.id)
       } }
   })
+  ctx.effect(() => ctx.shortcuts.register({
+    id: 'session.toggleRead' as ShortcutCommandId,
+    label: () => t('shortcut.toggleRead'), aliases: ['mark as read', 'mark as unread', 'toggle unread'],
+    defaults: {
+      'desktop:macos': { code: 'KeyU', modifiers: ['primary', 'shift'] },
+      'desktop:windows': { code: 'KeyU', modifiers: ['primary', 'shift'] },
+      'web:macos': { code: 'KeyU', modifiers: ['primary', 'shift'] },
+      'web:windows': { code: 'KeyU', modifiers: ['primary', 'shift'] },
+    },
+    regions: ['page', 'editable'], modals: [],
+    resolve: (context) => {
+      const target = current()
+      if (target === undefined || target.blank) return { status: 'blocked', reason: t('shortcut.noSession') }
+      // Like the row menu, a Peer that may not mark reading has no reading command.
+      if (!ctx.remoteAccess.source('session', target.id, 'sessionStatus/mark').getSnapshot()) return { status: 'pass' }
+      if (context.modal !== null) return { status: 'blocked', reason: t('shortcut.closeDialog') }
+      if (ctx.layout.panelInfo.getSnapshot().activePanelId !== null) return { status: 'blocked', reason: t('shortcut.closePanel') }
+      if (ctx.workspaces.list.getSnapshot().archivedSessionIds.includes(target.id)) {
+        return { status: 'blocked', reason: t('shortcut.archivedReading') }
+      }
+      const status = ctx.uiSession.sessionStatus
+      if (!status.readingReady.getSnapshot()) return { status: 'blocked', reason: t('shortcut.readingUnavailable') }
+      const unread = status.getSnapshot().get(target.id)?.completionUnread === true
+      return { status: 'handled', run: () => { markSession(target.id, !unread) } }
+    },
+  }), 'ui-workspace: session.toggleRead')
 }

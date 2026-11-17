@@ -1,3 +1,4 @@
+import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { ReactNode } from 'react'
 import {
   IconApiOutlineRegular, IconBrowseOutlineRegular, IconCodeOutlineRegular, IconEditOutlineRegular, IconSearchOutlineRegular,
@@ -27,11 +28,22 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
 /** Card props: the owner payload plus the render site's locale seat (plain prop). */
 export type GenericToolCardProps = ToolCallOwnerProps & {
   t: ToolTreeProps['t']
+  /** Bind the recorded file to the original Session. */
+  getFileTriggerProps: (path: string) => ContextMenuTriggerProps
 }
 
 /** @param props - current tool stage and locale. @returns its preparation or dispatched card. */
-export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: GenericToolCardProps) {
-  const model = toolRowModel(toolName, block, cwd, home)
+export function GenericToolCard({
+  toolName, block, cwd, home, openFile, getFileTriggerProps, inspect, useDisclosure, t,
+}: GenericToolCardProps) {
+  const model = toolRowModel(toolName, block, cwd, home, (image) => {
+    if (typeof image !== 'object' || image === null || Array.isArray(image)) return undefined
+    const { attachmentId, name, width, height, bytes } = image as Record<string, unknown>
+    if (typeof attachmentId !== 'string' || attachmentId === ''
+      || name !== undefined && typeof name !== 'string'
+      || ![width, height, bytes].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0)) return undefined
+    return `${name ?? attachmentId} (${t('row.imageSize', { width, height, bytes })})`
+  })
   const autoReview = model.autoReviewDenial === null
     ? null
     : localizeAutoReviewDenial(model.autoReviewDenial, t)
@@ -48,6 +60,7 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
   const singleFile = model.filePath !== undefined
   return (
     <ToolRow
+      fileContextMenuProps={model.filePath === undefined ? undefined : getFileTriggerProps(model.filePath)}
       useDisclosure={useDisclosure}
       t={t}
       variant={model.variant}

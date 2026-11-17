@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Test driver: boot the tool-pwsh Loader composition, execute one real
  * foreground and one real background pwsh command through the tool registry,
@@ -8,7 +9,8 @@
 
 import { writeFile } from 'node:fs/promises'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const configPath = process.argv[2]
 if (configPath === undefined) throw new Error('tool-pwsh driver requires a config path')
@@ -19,17 +21,17 @@ try {
   if (schema === undefined) throw new Error('pwsh tool not registered by the composition')
   const prompt = (await ctx.systemPrompt.assemble()).sections.find(section => section.name === 'tool:pwsh')
 
-  const foreground = await ctx.tools.execute({
+  const foreground = await executeToolFixture(ctx, {
     signal: new AbortController().signal,
-    callId: ToolCallId('loader-fg'),
+    callId: brandString<ToolCallId>('loader-fg'),
     name: 'pwsh',
     arguments: { command: 'Write-Output loader-ok', description: 'loader foreground' },
   })
   const foregroundText = foreground.content.filter(block => block.type === 'text').map(block => block.text).join('')
 
-  const background = await ctx.tools.execute({
+  const background = await executeToolFixture(ctx, {
     signal: new AbortController().signal,
-    callId: ToolCallId('loader-bg'),
+    callId: brandString<ToolCallId>('loader-bg'),
     name: 'pwsh',
     arguments: {
       command: 'Start-Sleep -Milliseconds 200; Write-Output loader-bg-ok',
@@ -44,9 +46,9 @@ try {
   let backgroundText = ''
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const read = await ctx.tools.execute({
+    const read = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
-      callId: ToolCallId('loader-bg-read'),
+      callId: brandString<ToolCallId>('loader-bg-read'),
       name: 'job_output',
       arguments: { job_id: jobId },
     })
