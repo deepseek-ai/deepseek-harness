@@ -214,6 +214,30 @@ describe('web e2e: one-use QR browser login', () => {
       }
       await expectPlaceholderColor('rgb(173, 178, 184)')
       expect(await page.locator('#token-hint').innerText()).toBe('在已登录设备的「设置 → 远程连接」中复制链接，粘贴到此处')
+      const tokenHeading = page.getByRole('heading', { name: '输入登录令牌或链接', level: 2, exact: true })
+      const pairingHeading = page.getByRole('heading', { name: '配对此设备', level: 2, exact: true })
+      await pairingHeading.waitFor()
+      const methodLayout = (heading: Locator) => heading.evaluate((title) => {
+        const hint = title.nextElementSibling!
+        const control = title.parentElement!.querySelector('input,button')!
+        const titleBox = title.getBoundingClientRect()
+        const hintBox = hint.getBoundingClientRect()
+        const controlBox = control.getBoundingClientRect()
+        const typography = (element: Element) => {
+          const style = getComputedStyle(element)
+          return { size: style.fontSize, height: style.lineHeight, weight: style.fontWeight }
+        }
+        return {
+          title: typography(title.querySelector('label') ?? title), description: typography(hint),
+          titleGap: hintBox.top - titleBox.bottom, controlGap: controlBox.top - hintBox.bottom,
+        }
+      })
+      const tokenLayout = await methodLayout(tokenHeading)
+      expect(tokenLayout).toEqual(await methodLayout(pairingHeading))
+      expect(tokenLayout).toEqual({
+        title: { size: '14px', height: '21px', weight: '500' },
+        description: { size: '14px', height: '21px', weight: '400' }, titleGap: 12, controlGap: 12,
+      })
       expect(await page.getByRole('button', { name: '账号菜单', exact: true }).count()).toBe(0)
       expect(await page.evaluate(async () => {
         const reply = await fetch('./', { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: 'manual' })
@@ -264,6 +288,8 @@ describe('web e2e: one-use QR browser login', () => {
       await input.focus()
       expect(page.url()).toBe(secure.url)
       expect(await input.getAttribute('aria-invalid')).toBe('true')
+      expect(await page.locator('#token-hint').isVisible()).toBe(true)
+      expect(await methodLayout(tokenHeading)).toEqual(tokenLayout)
       expect(await inputAppearance()).toMatchObject({ borderColor: 'rgb(242, 90, 90)', outline: 'none', shadow: 'none' })
       expect(await submit.isEnabled()).toBe(true)
       const [inputBox, errorBox, submitBox] = await Promise.all([

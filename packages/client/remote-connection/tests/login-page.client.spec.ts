@@ -67,8 +67,17 @@ it.each(['en-US', 'zh-CN'])('shows the anonymous Token form without Client boot 
   const t = language.startsWith('zh') ? loginLocales.zh : loginLocales.en
   expect(document.title).toBe(t.authenticationTitle)
   expect(document.getElementById('description')?.textContent).toBe(t.authenticationDescription)
-  expect(document.getElementById('token-label')?.textContent).toBe(t.tokenLabel)
-  expect(document.getElementById('token-hint')?.textContent).toBe(t.tokenHint)
+  const title = document.getElementById('token-title')!
+  const label = document.getElementById('token-label')!
+  const hint = document.getElementById('token-hint')!
+  expect(title.tagName).toBe('H2')
+  expect(title.firstElementChild).toBe(label)
+  expect(title.textContent).toBe(t.tokenLabel)
+  expect(fixture.input.labels?.item(0)).toBe(label)
+  expect(fixture.form.getAttribute('aria-labelledby')).toBe(title.id)
+  expect(title.nextElementSibling).toBe(hint)
+  expect(hint.textContent).toBe(t.tokenHint)
+  expect(hint.nextElementSibling).toBe(fixture.input)
   expect(fixture.form.method).toBe('get')
   expect(fixture.form.action).toBe(new URL('/mount/', fixture.actualLocation.href).href)
   expect(fixture.input.type).toBe('password')

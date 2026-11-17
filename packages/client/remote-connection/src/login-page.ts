@@ -16,23 +16,22 @@ body{margin:0;min-height:100dvh}
 .card:not(:has(.methods)),.methods>*{box-sizing:border-box;min-width:0;padding:24px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:var(--dsw-radius-lg,12px);background:light-dark(#fff,#232324)}
 h1{margin:0;font-size:20px;line-height:1.3;font-weight:500}
 p{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
-.description,.hint,label{color:color-mix(in srgb,currentColor 72%,transparent)}
-form{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:'label' 'input' 'feedback' 'submit';gap:12px;min-width:0}
-label{grid-area:label;margin-bottom:-6px;font-size:13px;font-weight:500;line-height:1.5}
+.description,.hint{color:color-mix(in srgb,currentColor 72%,transparent)}
+form{display:flex;flex-direction:column;gap:12px;min-width:0}
+form h2{margin:0;font-size:14px;line-height:1.5;font-weight:500}
+form label{font:inherit;color:inherit}
 input,button{box-sizing:border-box;min-width:0;min-height:44px;padding:8px 12px;font:inherit;font-size:14px;line-height:1.5;border-radius:8px}
-input{grid-area:input;width:100%;line-height:22px;color:inherit;background:light-dark(#fafafa,#1b1b1c);border:.5px solid color-mix(in srgb,currentColor 16%,transparent);outline:none}
+input{width:100%;line-height:22px;color:inherit;background:light-dark(#fafafa,#1b1b1c);border:.5px solid color-mix(in srgb,currentColor 16%,transparent);outline:none}
 input::placeholder{color:var(--dsw-alias-label-caption,light-dark(#adb2b8,#81858c));opacity:1}
 input:focus{border-color:var(--dsw-alias-state-business-primary,light-dark(#4176e6,#7aaaff))}
 input[aria-invalid='true']{border:1px solid light-dark(#ec1313,#f25a5a)}
-.hint,.error{grid-area:feedback;font-size:13px;line-height:1.5}
-.error{color:light-dark(#ec1313,#f25a5a)}
+.error{font-size:13px;line-height:1.5;color:light-dark(#ec1313,#f25a5a)}
 .error:empty{display:none}
 .notice{display:flex;flex-direction:column;gap:8px;padding:12px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:8px;background:light-dark(#f5f5f5,#2a2a2b)}
 .notice[hidden]{display:none}
 .notice[data-state="error"]{color:light-dark(#a10c0c,#ffb3b3);border-color:light-dark(#f5b5b5,#8c3030);background:light-dark(#fff3f3,#381e1e)}
 .notice a{padding:0;font-size:13px}
-form:has(.error:not(:empty)) .hint{visibility:hidden}
-button{grid-area:submit;cursor:pointer;font-weight:500;color:light-dark(#fff,#222);background:light-dark(#222,#eee);border:0}
+button{cursor:pointer;font-weight:500;color:light-dark(#fff,#222);background:light-dark(#222,#eee);border:0}
 button:disabled{cursor:wait;opacity:.6}
 a{color:inherit;text-underline-offset:3px;padding:8px 0;font-size:14px;line-height:1.5}
 button:focus-visible,a:focus-visible{outline:2px solid currentColor;outline-offset:2px}
