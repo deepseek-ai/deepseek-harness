@@ -849,7 +849,7 @@ describe('ImSender referrers', () => {
     expect(bot.operations).toHaveLength(1)
   })
 
-  it('leaves the target without a referrer for an unknown quote, another chat, or a message without one', async () => {
+  it('leaves the target without a referrer for an unknown quote or a message without one', async () => {
     const { bot, sender, store } = await boot()
     await sender.send(CHAT, h.text('unquoted'))
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
@@ -857,15 +857,23 @@ describe('ImSender referrers', () => {
     await sender.send(CHAT, h.text('unknown'), { quote: ImMessageKey('fake:bot', 'nope') })
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
 
-    // A message stored under another chat keeps its referrer to itself (the adapter would answer the wrong route).
-    const foreign = await store.put(inboundDraft(ImMessageKey('stub:bot', 'm7'), REFERRER, STUB_CHAT), 'none')
-    await sender.send(CHAT, h.text('foreign'), { quote: foreign.key })
-    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
-
     // A stored message that arrived without a referrer contributes none.
     const plain = await store.put(ownDraft(ImMessageKey('fake:bot', 'm8')), 'none')
     await sender.send(CHAT, h.text('plain'), { quote: plain.key })
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+  })
+
+  it('rejects quoting a message from another bot or another stored chat on send and stream', async () => {
+    const { bot, sender, store } = await boot()
+    const otherBotMsg = ImMessageKey('stub:bot', 'm-other-bot')
+    await expect(sender.send(CHAT, h.text('cross-bot'), { quote: otherBotMsg })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: otherBotMsg })).rejects.toMatchObject({ code: 'access' })
+
+    const otherChat = ImChatKey('fake:bot', 'other-chat')
+    const otherChatMsg = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-other-chat'), REFERRER, otherChat), 'none')
+    await expect(sender.send(CHAT, h.text('cross-chat'), { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
+    expect(bot.operations).toHaveLength(0)
   })
 
   it('carries the referrer into a quoted stream', async () => {
