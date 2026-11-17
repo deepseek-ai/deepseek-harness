@@ -75,7 +75,8 @@ vi.mock('@modelcontextprotocol/client', async importOriginal => ({
   }),
 }))
 
-import { apply as applyMcpClient, Config as ClientConfig, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client'
+import { apply as applyMcpClient, Config as ClientConfig } from '@deepseek-ai/dsh-mcp-client'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import { managerProfile } from './profile-fixture.ts'
@@ -190,6 +191,16 @@ describe('mcp-manager', () => {
       await this.transport?.close()
     })
     mockListTools.mockResolvedValue(listing('remote'))
+  })
+
+  it('requires OAuth configuration and a credential provider for explicit operations', async () => {
+    const { manager } = await mountWorld({ managerConfig: { servers: {
+      off: stdioEntry({ enabled: false }),
+      oauth: { transport: 'streamable-http', url: 'https://example.invalid', enabled: false, oauth: { credentialKey: 'mcp-client/oauth' } },
+    } } })
+    await expect(manager.startAuthorization('off')).rejects.toThrow('OAuth is not configured')
+    await expect(manager.signOut('off')).rejects.toThrow('OAuth is not configured')
+    await expect(manager.signOut('oauth')).rejects.toThrow('credentials provider')
   })
 
   it('mounts composition-base servers without any settings provider', async () => {

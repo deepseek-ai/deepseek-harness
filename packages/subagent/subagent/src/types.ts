@@ -225,9 +225,10 @@ export interface ContinuableCreateRequest {
  */
 export interface ContinuableCreateSpec {
   /**
-   * Completed-turn prefix of the parent's log to seed the child session with,
-   * or absent for a fresh child. Same durable contract as
-   * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
+   * Unmodified completed-turn prefix of the parent's log, contiguous from seq
+   * 0 with lossless JSON and balanced steps and turns; absent for a fresh child.
+   * The manager uses its length as the fork cut and stores the prefix as
+   * supplied, so a transformed prefix would diverge from the parent history.
    */
   readonly seed?: readonly SessionEvent[]
 }

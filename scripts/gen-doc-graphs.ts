@@ -185,6 +185,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation.',
   },
   {
+    key: 'cliAccounts',
+    pkg: 'cli-account',
+    title: 'Vendor CLIs and accounts of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: adds the CLI\'s absolute path to required runtime context, runs the plugin\'s account operations one at a time through bounded commands, and registers the account with `ctx.connectorAccounts` while that registry is loaded.',
+  },
+  {
     key: 'pluginMarket',
     pkg: 'plugin-market',
     title: 'Plugin market index reader',
@@ -256,8 +263,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Session working directory',
     mode: 'seam',
     implementations: ['working-directory'],
-    consumers: ['tool-working-directory', 'tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
-    note: 'One Session projection owns the effective execution directory. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
+    consumers: ['tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
+    note: 'One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
   },
   {
     key: 'mcpResources',
@@ -756,6 +763,21 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Settings-driven MCP server fleet',
     mode: 'core',
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
+  },
+  {
+    key: 'mcpClientHost',
+    pkg: 'mcp-client',
+    title: 'MCP client host for a server manager',
+    mode: 'service',
+    consumers: ['mcp-manager'],
+    note: 'The manager creates it to validate, mount, probe, and authorize servers, and reaches no other mcp-client value; its servers run below the manager.',
+  },
+  {
+    key: 'mcpAccounts',
+    pkg: 'mcp-account',
+    title: 'MCP connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Shows the OAuth server account each MCP connector plugin registers through the connector account registry; the page\'s operations run through the manager.',
   },
   {
     key: 'schedule',

@@ -25,7 +25,7 @@ Use `dsh-tool-fs-search` to give models `glob` file discovery and `grep` content
 <a id="use-this-package"></a>
 ## Use this package
 
-Searches use the Session's current working directory, including changes made with `working_directory`.
+Searches use the Session's current working directory, including a directory entered through a Host operation such as worktree creation.
 
 Mount the tools after a `ctx.subprocess` backend; no host `rg` install is needed, and no filesystem provider is required. The model then gets modification-time-ordered file discovery and line-oriented content search, each bounded and timeout-guarded.
 

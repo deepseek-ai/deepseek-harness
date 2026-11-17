@@ -5,6 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { meta, oneTurnLog, runPersistenceContract } from '../../session-persistence/tests/contract.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
+import { storedEvents } from './fixtures/store.ts'
 
 runPersistenceContract('sqlite', async () => {
   const fixture = await persistenceFixture()
@@ -47,11 +48,7 @@ describe('SQLite persistence plugin', () => {
       expect(JSON.parse(String(thread?.header))).toEqual({ ...header, delegationDepth: 0 })
       const segment = db.prepare('SELECT parent_segment_uuid, parent_end_seq, base_seq FROM segments WHERE segment_uuid = ?').get(thread?.tail_segment_uuid as string)
       expect(segment).toEqual({ parent_segment_uuid: null, parent_end_seq: null, base_seq: 0 })
-      const stored = db.prepare('SELECT payload FROM events WHERE segment_uuid = ? ORDER BY seq').all(thread?.tail_segment_uuid as string)
-      expect(stored.map((row) => {
-        const event: unknown = JSON.parse(String(row.payload))
-        return event
-      })).toEqual(events)
+      expect(storedEvents(db, thread?.tail_segment_uuid as string)).toEqual(events)
     } finally {
       db.close()
     }

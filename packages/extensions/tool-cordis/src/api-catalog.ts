@@ -593,6 +593,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cliAccounts',
+    summary: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    description: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    methods: [
+      {
+        signature: 'register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>',
+        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s CLI, account operations, and Plugins page text.' }],
+        returns: 'the handle for the plugin\'s own reads and updates of the account.',
+        throws: ['when the runtime-context name `<name>:cli` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -2372,6 +2386,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'mcpAccounts',
+    summary: 'Shows each connector\'s MCP server account in the connector account registry.',
+    description: 'Shows each connector\'s MCP server account in the connector account registry.',
+    methods: [
+      {
+        signature: 'register(registration: McpAccountRegistration): () => void',
+        description: 'Show one connector\'s server account on its bundle page for as long as the returned disposer has not run. The account\'s key is `mcp:<server>`.',
+        parameters: [{ name: 'registration', description: 'the server name, the bundle package, and the connector\'s text.' }],
+        returns: 'the registry\'s idempotent disposer, which withdraws the account.',
+        throws: ['when another account already uses the server or the package.'],
+      },
+    ],
+  },
+  {
+    key: 'mcpClientHost',
+    summary: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    description: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    methods: [
+      {
+        signature: 'validate(input: ConfigInput, path: readonly string[]): Config',
+        description: 'Resolve a server configuration and refuse what an instance would refuse when it starts.',
+        parameters: [{ name: 'input', description: 'server configuration before defaults.' }, { name: 'path', description: 'configuration path naming the server; every failure message starts with it.' }],
+        returns: 'the resolved configuration.',
+        throws: ['when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization header is invalid.'],
+      },
+      {
+        signature: 'mount(config: Config): McpServerInstance',
+        description: 'Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.',
+        parameters: [{ name: 'config', description: 'resolved server configuration, usually from {@link McpClientHost.validate}.' }],
+        returns: 'the instance\'s activation and disposal.',
+      },
+      {
+        signature: 'probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>',
+        description: 'Probe a server without mounting it: resolve its templates, connect, list its tools, and close.',
+        parameters: [{ name: 'config', description: 'resolved server configuration; its startup budget does not bound the probe.' }, { name: 'options', description: 'whole-probe budget, listing caps, and cancellation signal.' }],
+        returns: 'the connect and list outcome with the cleanup result.',
+        throws: ['for invalid options, malformed templates, or a missing required credentials provider.'],
+      },
+      {
+        signature: 'authorization(config: StreamableHttpConfig & { oauth: McpOAuthConfig }, changed: () => void): McpOAuthAuthorization',
+        description: 'Create the explicit OAuth authorization owner of one server.',
+        parameters: [{ name: 'config', description: 'resolved Streamable HTTP configuration with OAuth.' }, { name: 'changed', description: 'called after each change of the owner\'s attempt view.' }],
+        returns: 'the owner; its caller retires and disposes it.',
+      },
+    ],
+  },
+  {
     key: 'mcpManager',
     summary: 'The manager service.',
     description: 'The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.',
@@ -2413,6 +2474,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'name', description: 'the configured or registered server key.' }, { name: 'options', description: 'probe budget, listing caps, and abort signal.' }],
         returns: 'the stage-classified probe outcome and independent cleanup result.',
         throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
+      },
+      {
+        signature: 'async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
+        description: 'Start explicit OAuth authorization, retaining the active grant until a successful commit.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry, including disabled entries.' }],
+        returns: 'current attempt progress; absent services, changing entries, or failed cleanup reject.',
+      },
+      {
+        signature: 'async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
+        description: 'Cancel the selected attempt and drain its work; an admitted credential commit completes.',
+        parameters: [{ name: 'name', description: 'managed entry.' }, { name: 'id', description: 'selected attempt; stale or absent attempts are ignored.' }],
+      },
+      {
+        signature: 'async signOut(name: string): Promise<void>',
+        description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
       },
     ],
   },
@@ -3274,10 +3351,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>',
-        description: 'Create a new stored session and take its write ownership.',
-        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'optional cancellation.' }],
+        description: 'Create a new stored session and take its write ownership. With `parentSource`, store the complete fork history before resolving; a backend may share the parent\'s stored prefix or copy it. A failed creation releases acquired write ownership; already committed history remains stored.',
+        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'cancellation, inherited-prefix count, and optional fork source.' }],
         returns: 'a `write` handle owned by the caller; close it to release ownership.',
-        throws: ['{SessionAlreadyExistsError} when the id already exists.'],
+        throws: ['{SessionAlreadyExistsError} when the id already exists.', '{SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.', '{HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.'],
       },
       {
         signature: 'abstract open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>',
@@ -4902,8 +4979,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s effective directory and its model-visible changes.',
-    description: 'One owner for each Session\'s effective directory and its model-visible changes.',
+    summary: 'One owner for each Session\'s directory and its model-visible changes.',
+    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4912,9 +4989,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'get(session: Session): string',
-        description: 'Read the committed directory without filesystem I/O.',
+        description: 'Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace root of everything that follows the Session\'s checkout.',
         parameters: [{ name: 'session', description: 'Session whose directory is requested.' }],
-        returns: 'its effective absolute directory.',
+        returns: 'the directory of the last Host move, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
@@ -4925,7 +5002,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Change one Session\'s directory without changing existing processes or permissions.',
+        description: 'Move one Session\'s directory to `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],
@@ -5145,8 +5222,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -5161,6 +5238,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins, never `fetch`; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
+      },
+      {
+        signature: 'async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree>',
+        description: 'Move the calling Session into an existing worktree in the pool of the checkout it works in. The directory `name` selects must lie inside that pool and be a registered worktree of the repository; neither Git state nor files change. The Session\'s log records the entry, so exit returns it to the checkout it entered from. Archiving the Session never removes a checkout it only entered.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the checkout and its pool.' }, { name: 'request', description: 'name of the worktree inside the pool.' }, { name: 'signal', description: 'cancellation of lookup and of the working-directory change.' }],
+        returns: 'the entered checkout, its branch, and the checkout the Session entered from.',
+        throws: ['{WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool, `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service\'s error when the registered directory no longer exists.'],
+      },
+      {
+        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree>',
+        description: 'Return the calling Session from the worktree it works in to the checkout it entered that worktree from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The worktree is the recorded creation or entry, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory lies in a recorded worktree.' }, { name: 'signal', description: 'cancellation of directory validation and of the working-directory change.' }],
+        returns: 'the worktree the Session left; the Session now works in its `repositoryRoot`.',
+        throws: ['{WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service\'s error when the source checkout no longer exists.'],
       },
       {
         signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
@@ -5586,8 +5677,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'mcp-manager/status',
     mode: 'parallel',
     signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void | Promise<void>',
-    summary: 'One managed server\'s status transitioned.',
-    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
+    summary: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view.',
+    description: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view. Emitted while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
     parameters: [{ name: 'name', description: 'the configured `servers` key or registered name.' }, { name: 'status', description: 'the status now current for that server.' }],
   },
   {
@@ -6463,8 +6554,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
   },
   {
+    name: 'CliAccountDictionaries',
+    declaration: 'export type CliAccountDictionaries<Key extends string> = {\n    readonly en: Readonly<Record<Key, string>>;\n} & {\n    readonly [language: string]: Readonly<Record<Key, string>>;\n};',
+  },
+  {
+    name: 'CliAccountHandle',
+    declaration: 'export interface CliAccountHandle<Account, Kind extends string, Phase extends string, Command extends string> {\n    snapshot(): CliAccountView<Account, Kind, Phase, Command>;\n    publish(account: Account): void;\n    refresh(): void;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'CliAccountRegistration',
+    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'CliAccountText',
+    declaration: 'export type CliAccountText<Key extends string> = (key: Key, params?: Readonly<Record<string, string>>) => LocalizedText;',
+  },
+  {
+    name: 'CliAccountView',
+    declaration: 'export type CliAccountView<Account, Kind extends string, Phase extends string, Command extends string = string> = ConnectorAccountView<Account, Kind, Phase | \'checking\' | \'cancelling\', CliCommandFailure<Command>>;',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
+    name: 'CliCommandResult',
+    declaration: 'export interface CliCommandResult {\n    readonly exitCode: number | null;\n    readonly stdout: string;\n    readonly stderr: string;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperationControl',
+    declaration: 'export interface CliOperationControl<Account, Phase extends string, Command extends string> {\n    stage(phase: Phase | \'checking\'): void;\n    offer(url: string): boolean;\n    run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>;\n    publish(account: Account): void;\n}',
+  },
+  {
+    name: 'CliPathContext',
+    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n    readonly ready?: () => boolean;\n}',
+  },
+  {
+    name: 'CliRunOptions',
+    declaration: 'export interface CliRunOptions {\n    readonly awaitsUser?: boolean;\n    readonly onLine?: (stream: \'stdout\' | \'stderr\', line: string) => void;\n}',
   },
   {
     name: 'CollectedOutput',
@@ -6549,6 +6680,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ComputerUseProviderName',
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
+  },
+  {
+    name: 'ConfigInput',
+    declaration: 'export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
   },
   {
     name: 'ConfigureCall',
@@ -6780,7 +6915,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n    };\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreatedShare',
@@ -7061,6 +7196,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EnteredWorktree',
+    declaration: 'export interface EnteredWorktree {\n    path: string;\n    branch?: string;\n    repositoryRoot: string;\n}',
+  },
+  {
+    name: 'EnterWorktreeRequest',
+    declaration: 'export interface EnterWorktreeRequest {\n    name: string;\n}',
   },
   {
     name: 'EpochHeader',
@@ -8059,12 +8202,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type MatcherValue = string | number | boolean | null | RegExp | readonly (string | number | boolean | null)[];',
   },
   {
+    name: 'McpAccountCopy',
+    declaration: 'export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {\n    readonly title: Text;\n    readonly connect: Text;\n    readonly activation: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly detail: {\n        readonly disconnected: Text;\n        readonly waitingBrowser: Text;\n        readonly authorizing: Text;\n        readonly connecting: Text;\n        readonly connected: Text;\n        readonly rejected: Text;\n        readonly scope: Text;\n    };\n    readonly signOut: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly notice: {\n        readonly connected: Text;\n        readonly signedOut: Text;\n    };\n}',
+  },
+  {
+    name: 'McpAccountRegistration',
+    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
+  },
+  {
+    name: 'McpAuthorizationReason',
+    declaration: 'export type McpAuthorizationReason = \'missing\' | \'expired\' | \'binding\' | \'rejected\' | \'scope\';',
+  },
+  {
     name: 'McpCloseResult',
     declaration: 'export interface McpCloseResult {\n    closeConfirmed: boolean;\n    cleanupError?: string;\n}',
   },
   {
     name: 'McpConnectionStatus',
-    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'waiting-authorization\';\n    reason: McpAuthorizationReason;\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+  },
+  {
+    name: 'McpConnectionStatusHandle',
+    declaration: 'export interface McpConnectionStatusHandle {\n    current(): McpConnectionStatus;\n    closure(): McpCloseResult;\n    onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void;\n}',
   },
   {
     name: 'McpManagedServerStatus',
@@ -8072,7 +8231,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpManagedServerView',
-    declaration: 'export interface McpManagedServerView {\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+    declaration: 'export interface McpManagedServerView {\n    authorization?: McpOAuthAttemptView;\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+  },
+  {
+    name: 'McpOAuthAttemptId',
+    declaration: 'export type McpOAuthAttemptId = Branded<\'McpOAuthAttemptId\'>;',
+  },
+  {
+    name: 'McpOAuthAttemptView',
+    declaration: 'export interface McpOAuthAttemptView {\n    id: McpOAuthAttemptId;\n    phase: \'starting\' | \'waiting-browser\' | \'exchanging\' | \'committing\' | \'authorized\' | \'cancelled\' | \'failed\';\n    authorizationUrl?: string;\n    lastError?: string;\n}',
+  },
+  {
+    name: 'McpOAuthAuthorization',
+    declaration: 'export class McpOAuthAuthorization {\n    constructor(private readonly ctx: Context, private readonly config: StreamableHttpConfig & {\n        oauth: McpOAuthConfig;\n    }, private readonly changed: () => void);\n    current(): McpOAuthAttemptView | undefined;\n    async start(): Promise<McpOAuthAttemptView>;\n    retire(): void;\n    async cancel(id: McpOAuthAttemptId): Promise<void>;\n    async dispose(): Promise<McpCloseResult>;\n}',
+  },
+  {
+    name: 'McpOAuthConfig',
+    declaration: 'export interface McpOAuthConfig {\n    credentialKey: string;\n    clientId?: string;\n    scope?: string;\n    requestTimeoutMs: number;\n    authorizationTimeoutMs: number;\n}',
   },
   {
     name: 'McpProbeFailure',
@@ -8101,6 +8276,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'McpResourceRequest',
     declaration: 'export type McpResourceRequest = {\n    method: \'resources/list\' | \'resources/templates/list\';\n    cursor?: string;\n} | {\n    method: \'resources/read\';\n    uri: string;\n};',
+  },
+  {
+    name: 'McpServerInstance',
+    declaration: 'export interface McpServerInstance {\n    readonly ready: Promise<McpConnectionStatusHandle>;\n    dispose(): Promise<McpCloseResult | undefined>;\n}',
   },
   {
     name: 'McpServerRegistration',
@@ -8813,6 +8992,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RecommendationDetails',
     declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
+  },
+  {
+    name: 'ReconnectConfig',
+    declaration: 'export interface ReconnectConfig {\n    enabled?: boolean;\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    maxAttempts?: number;\n}',
   },
   {
     name: 'RecurringScheduleRecord',
@@ -9536,7 +9719,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionObservation',
-    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
+    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly persistedEventCount?: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
   },
   {
     name: 'SessionObservationOptions',
@@ -9568,7 +9751,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceCreateOptions',
-    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n}',
+    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n        readonly events: readonly SessionEvent[];\n    };\n}',
   },
   {
     name: 'SessionPersistenceListOptions',
@@ -10189,6 +10372,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StoredImageAttachment',
     declaration: 'export interface StoredImageAttachment {\n    ref: ImageAttachmentRef;\n    data: Uint8Array;\n}',
+  },
+  {
+    name: 'StreamableHttpConfig',
+    declaration: 'export interface StreamableHttpConfig {\n    oauth?: McpOAuthConfig;\n    transport: \'streamable-http\';\n    serverName: string;\n    url: string;\n    headers: Record<string, string>;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n}',
   },
   {
     name: 'StreamChunk',

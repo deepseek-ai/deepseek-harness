@@ -151,6 +151,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-computer-use` | no | Exclusive named computer-use provider registration |
 
+## connector
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-cli-account` | yes | Host Service of CLI app plugins: each plugin registers its third-party CLI and account, and the Service gives the model the CLI's absolute path, runs one account operation at a time, and shows the account on the Plugins page |
+
 ## context
 
 | Package | Config | Description |
@@ -351,6 +357,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
+| `@deepseek-ai/dsh-mcp-account` | no | MCP connector accounts on the Plugins page: each connector's OAuth server in the connector account registry, authorized through the MCP manager |
 | `@deepseek-ai/dsh-mcp-client` | yes | MCP client bridge: connects to MCP servers and registers their tools on ctx.tools |
 | `@deepseek-ai/dsh-mcp-manager` | yes | MCP server manager: a settings-driven fleet of mcp-client instances with runtime status, restart, and probe |
 | `@deepseek-ai/dsh-mcp-resources` | no | Scoped MCP resource discovery and reading through shared model tools |
@@ -411,7 +418,6 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-session-title` | yes | Log-backed session title service and provider registry for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-title-first-prompt-llm` | yes | First-message LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-session-turn-outline` | no | Whole-log turn outline projection (turnOutline) for the DeepSeek Harness |
-| `@deepseek-ai/dsh-tool-working-directory` | no | Read and change the active Session working directory |
 | `@deepseek-ai/dsh-working-directory` | yes | Session working directories with durable changes and model context |
 
 ## session-query

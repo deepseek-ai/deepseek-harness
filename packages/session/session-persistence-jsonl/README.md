@@ -48,6 +48,8 @@ Choose this backend when consumers benefit from one artifact per session — nav
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
 | `listConcurrency` | `3` | Maximum directory, header, and stat reads in flight, shared by every concurrent listing of this backend |
 
+JSONL fork creation copies the supplied child history into the child's file before returning its writer; it does not read the parent artifact. Read opens wait for an in-progress local writer close to finish draining before reading that Session's history; a failed drain stops the open.
+
 Live-event write batching is not configuration: the batching window is the seam's internal scheduling policy inside each write handle.
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-persistence-jsonl) is the exhaustive source for every accepted field and its JSDoc.

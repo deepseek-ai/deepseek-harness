@@ -27,6 +27,8 @@ Desktop product events use the optional [product analytics service](../product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The section title and introduction form one group above the provider list. Expanded model fields separate adjacent field groups more than labels from their controls, and model-list actions follow the shared control-radius scale.
+
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
 DeepSeek Account appears first and DeepSeek second in the provider list; third-party providers retain their directory order.
@@ -59,7 +61,7 @@ The same fold edits the provider's `retryPolicy` for both families. **Retry poli
 
 The DeepSeek card edits the `llm-deepseek` endpoint, credentials, retry policy, and model catalog. It uses Messages, with the default endpoint placeholder `https://api.deepseek.com/anthropic`.
 
-Drag a model’s reorder handle to change its position within the provider, or focus the handle and use the up and down arrow keys. Apply saves the order; Cancel discards it. Each model keeps its settings, expanded options, and unfinished capacity text when moved. The full-row drag preview and reduced-motion-aware row animations share primitives with workspace reordering; before/after insertion markers follow the same style.
+Drag a model’s reorder handle to change its position within the provider, or focus the handle and use the up and down arrow keys. Apply saves the order; Cancel discards it. Each model keeps its settings, expanded options, and unfinished capacity text when moved. The full-row drag preview and reduced-motion-aware row animations share primitives with workspace reordering; before/after insertion markers follow the same style. Row spacing and the adjoining drop targets share one gap value so the space between rows accepts drops.
 
 Expand **Customized settings → Model options** to edit each model. When the model row is narrow, the main row shows only the model ID; expand the row to view or edit its display name. Wider rows show both fields side by side. Focusing a display name expands its row and keeps it open until explicitly collapsed. Tab reaches the option and delete buttons before the display name at every width. Both provider families share the same row layout, labels, and icons: context window and max output tokens occupy two columns, and **Input types** occupies a separate row with **Text** and **Image** checkboxes. A row without an input declaration displays the installed model’s input types, then the provider default, then Text. Known pi-ai providers load their installed catalog without endpoint I/O; opening a row does not write an override. Explicit input selections take precedence, including text-only overrides of vision models. Checkbox edits save the selected types, with at least one type required. DeepSeek writes `inputModalities`; pi-ai writes `input`. Unchecking Image for DeepSeek also removes `imagePixelBudget` and `imageMaxBytes`, because the adapter rejects those limits without image input. Clearing the input field in `cordis.patch.yml` restores adapter inheritance; **Restore default models** resets the entire catalog override. Declare only input types the upstream model can actually process.
 
@@ -83,11 +85,15 @@ The Models page includes **DeepSeek Account** (`deepseek-account`, **DeepSeek �
 
 -----
 
+Onboarding groups its title and explanation closely, then separates credential fields and the action row with larger gaps.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+Model identity and capacity fields share columns; narrow cards stack their fields. Each provider editor keeps its cancel and save actions together at the scrolling edge, and focused controls retain clearance from that action group.
 
 The page never holds a full settings section: it holds only the REDACTED descriptor, so every edit lands as `settings.mutate` path ops against the stored section — a set per changed field, an unset per cleared one, and a single unset for a deleted provider row.
 

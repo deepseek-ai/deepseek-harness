@@ -170,9 +170,6 @@
     - id: working-directory
       name: '@deepseek-ai/dsh-working-directory'
 
-    - id: tool-working-directory
-      name: '@deepseek-ai/dsh-tool-working-directory'
-
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'
 
@@ -237,6 +234,11 @@
 
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
+
+    # CLI app plugins register their vendor CLI and account with this Service,
+    # which adds nothing to a composition until one registers.
+    - id: cli-account
+      name: '@deepseek-ai/dsh-cli-account'
 
     # Every shipped CLI mode starts with the same file-effect boundary.
     # The environment remains an explicit deployment override; otherwise fresh

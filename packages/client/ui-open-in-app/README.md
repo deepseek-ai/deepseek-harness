@@ -25,6 +25,8 @@ Open a Session’s directory through **Open in** in its Header More menu or its 
 <a id="use-this-package"></a>
 ## Use this package
 
+The compact split control is 24px high inside the document toolbar’s 28px control row, with 24px minimum segment widths; the labeled large variant keeps the standard control geometry.
+
 Mount this plugin in the Web composition beside [`dsh-host-open-in-app`](../../host/open-in-app/README.md); this row takes no config. A known Session directory and at least one installed, localized catalog application enable its Open in submenu. The document preview of [`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.md) shows file controls when the Host reports a desktop through `session.canOpenWorkspacePath`; removing this row removes all its controls and menu contributions.
 
 The Header entry uses the More button owned by [`ui-conversation`](../ui-conversation/README.md), with shared button behavior from [`ui-context-menu`](../ui-context-menu/README.md). Open in remains available there without the export plugin; this package supplies menu items rather than its own Header button.

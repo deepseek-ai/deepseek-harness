@@ -114,6 +114,8 @@ CSV 和 TSV 默认使用表格查看器，也可选择纯文本；CSV 还提供�
 <details>
 <summary>Office 实现——点击展开</summary>
 
+紧凑的外部打开边框位于预览标题行的工作区导航开关之前。它与显示控件之间留出独立间距。当操作 slot 没有渲染内容时，该组不占间距，剩余图标与上排工具栏共用纵向列。
+
 Office 注册、加载、缓存和字体提示位于 `src/client/office/`。注入的 Office face 通过已声明的 store action 写入转换后的 PDF 字节、字体元数据和失败。Office 正文触发加载，将取消绑定到自身生命周期，并声明嵌套 PDF slot，复用惰性 PDF 正文及其 tab 阅读状态。keyed slot `sidebar.right.tab.document.action` 将渲染器操作放在刷新按钮前。Office 操作与正文共享 store，仅读取当前 revision 的字体元数据。Host 渲染器缺失时，注册仍然可用；可选的 `remote.officeKit` 和 `remote.workspaceFiles` 注入提供转换与版本检查回调，移除后恢复不可用提示。注册和 tab 状态保留都遵循 effect 生命周期。[转换服务](../../document/office-kit/README.zh.md)拥有 Host Remote 方法，由 `api/remotes` 挂载。
 
 Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8Array` PDF。渲染器以只读方式借用保留的字节，并在传给 Worker 前复制。

@@ -27,6 +27,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+fork 保留包含截点的 `atSeq` 请求字段，并默认选择已完成轮次的截点。命令把观察到的历史作为 fork 来源传递：截至 `persistedEventCount` 的已存储父前缀，其后是子会话的标记和冷读取修复事件。工厂用实时父会话的 log 替换该前缀，共享前缀的后端在引用前先排空父写者；父会话已存储历史短于截点时不会创建子会话。创建参数见 [fork 升级指南](../../../docs/upgrade-guide/v0.2.2-rc.3/session-fork-source/guide.zh.md)。
+
 提示重试按首次已提交入队记录中的请求标识去重，消息被领取或删除后仍然有效。异步附件准备结束后再次检查，因此并发重试只接受一条输入。接受确认入队，不代表执行或完成。
 
 控制器通过可选服务方法 `agentPresets.presetForSession(session)` 读取 Session 已记录的预设。null 结果表示未记录预设；服务缺席表示控制器无法获知预设身份。
@@ -47,7 +49,7 @@ Host 仅在配置的工作时间片耗尽时，于完整条目之间让出事件
 
 Client 列表行和驻留 Session 使用当前 `sessionListMetadata` 投影纠正过期的空白会话提示；最近活动时间取摘要时间戳与投影中最后一次用户提示词时间的较晚值。当 SessionManager 在列表行到达前创建实例时，会使用已保留的该 Session 元数据对账空白状态。因此，即使旧列表响应仍将已有对话标为空白，新会话操作也不会复用已经打开过的对话。
 
-`session.create` 返回一个用于新对话的 Session，响应指明实际使用的 Session。请求指明的 `sessionId` 在满足以下条件时被复用：仍为空白（尚未开始任何轮次）、属于请求的目录、是请求的工作区中未归档的成员，且未被其他写者占用；活动 Session 原地复用，持久化 Session 被恢复并持续持有其写锁。被复用的 Session 运行请求的 `agentPreset`，请求未指明时运行配置的默认 preset：不解析它记录的 preset，变更在 Agent 发布前记录为 `agent-preset/selected`。指明的 Session 若已开始、不满足工作区归属，或被其他写者占用，则保持不变，改为新建 Session。没有对应已存储 Session 的 `sessionId` 成为新 Session 的标识。指明其他目录中的 Session 返回 `session/conflict`，指明由 subagent 路由拥有的 Session 返回 `session/agent-busy`；这两项检查先于 preset 解析。指明同一标识的创建请求按到达顺序执行，preset 解析也包含在内，每个响应报告其自身请求完成时该 Session 运行的 preset。`session.list` 根据缓存元数据列出持久化空白会话，不打开冷日志正文。
+`session.create` 返回一个用于新对话的 Session，响应指明实际使用的 Session。请求指明的 `sessionId` 在满足以下条件时被复用：仍为空白（尚未开始任何轮次）、属于请求的目录、是请求的工作区中未归档的成员，且未被其他写者占用；活动 Session 原地复用，持久化 Session 被恢复并持续持有其写锁。被复用的 Session 运行请求的 `agentPreset`，请求未指明时运行配置的默认 preset：不解析它记录的 preset，变更在 Agent 发布前记录为 `agent-preset/selected`。指明的 Session 若已开始、不满足工作区归属，或被其他写者占用，则保持不变，改为新建 Session。没有对应已存储 Session 的 `sessionId` 成为新 Session 的标识。指明其他目录中的 Session 返回 `session/conflict`，指明由 subagent 路由拥有的 Session 返回 `session/agent-busy`；这两项检查先于 preset 解析。记录目录的符号链接写法指向同一目录。指明同一标识的创建请求按到达顺序执行，preset 解析也包含在内，每个响应报告其自身请求完成时该 Session 运行的 preset。`session.list` 根据缓存元数据列出持久化空白会话，不打开冷日志正文。
 
 Client 列表刷新保留未变化的行对象，并在顺序和值均相同时复用条目数组。每行的 `retainedBy` 包含正数的本地引用来源计数，Host 元数据刷新不能覆盖它们。缓存成员检查使用每次刷新构建的 ID 集合，因此对账成本随当前列表和保留缓存的规模线性增长。 Host 摘要更新会替换运行状态与 Agent 可用性；本地 create/fork 响应只补充已有行缺失的元数据。普通 Session 被移除后，仅在目录仍有子项时保留其投影 store。
 
