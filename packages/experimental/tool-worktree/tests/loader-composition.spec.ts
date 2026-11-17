@@ -106,6 +106,13 @@ describe('worktree tool through real Loader composition', () => {
     expect(failure.isError && failure.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     const existing = await invoke('new-checkout')
     expect(existing.isError && existing.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    // A forwarded `fetch` would make the runtime refuse `main`, which is not a remote-tracking branch.
+    const undeclared = await executeToolFixture(context, {
+      name: 'create_worktree', callId: brandString<ToolCallId>('undeclared'), arguments: { from: 'main', fetch: true }, agent,
+      signal: new AbortController().signal,
+    })
+    expect(undeclared.isError).not.toBe(true)
+    expect(undeclared.value).toMatchObject({ baseCommit, repositoryRoot: path })
     expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({
       card: 'generic', title: 'create_worktree', rawInput: { name: 'named' },
     })

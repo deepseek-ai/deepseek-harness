@@ -27,6 +27,8 @@ import type { WorktreeCreations } from './worktree.ts'
 export interface PanelConfig extends DiffConfig {
   /** Deadline in milliseconds for one provider sign-in probe. */
   readonly readinessTimeoutMs: number
+  /** Prefix of generated worktree branch names, which a name the user types starts from. */
+  readonly worktreePrefix: string
 }
 
 /** The checkout's upstream branch and the remote URL its change requests are looked up at. */
@@ -70,7 +72,7 @@ export class SessionPanel {
 
   /**
    * @param ctx - service context that provides the forge, Session, directory, and process services.
-   * @param config - Git limits and the sign-in probe deadline.
+   * @param config - Git limits, the sign-in probe deadline, and the worktree branch name prefix.
    * @param session - Session the panel describes.
    * @param worktreeStates - reads the `forgeWorktree` projection of the Session.
    * @param creations - reads the running creation and restoration, the last failed creation, and what a message of the
@@ -229,6 +231,7 @@ export class SessionPanel {
     return {
       editable: this.ctx.get('worktrees') !== undefined && !state.locked && state.created === null,
       blocker: this.blocker,
+      namePrefix: this.config.worktreePrefix,
       request: state.request,
       created: state.created,
       creation: this.creations.of(this.session),

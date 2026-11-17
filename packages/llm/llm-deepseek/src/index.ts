@@ -1,5 +1,4 @@
 /** DeepSeek Messages transport, request configuration, and model capabilities. */
-export { deepSeekApiKeyConfigured, rejectDeepSeekAccountToken, resolveDeepSeekAccountToken, resolveDeepSeekApiKey } from './credential.ts'
 export { catalogModelFields, deepSeekConfigFields, Config, isBuiltInCatalog, plainOptions, resolveAdapterOptions, PUBLIC_BASE_URL } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export {
@@ -16,7 +15,7 @@ export {
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 } from './defaults.ts'
 export { DeepSeekAdapter } from './adapter.ts'
-export type { DeepSeekRequestAuth, DeepSeekAdapterOptions, DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
+export type { DeepSeekRequestAuth, DeepSeekAdapterOptions, DeepSeekCatalogModel, DeepSeekConnectionOptions, DeepSeekProviderCredentialOptions } from './types.ts'
 export {
   DEFAULT_LOW_DETAIL_IMAGE_PIXEL_BUDGET,
   DEFAULT_MAX_IMAGES_PER_REQUEST,

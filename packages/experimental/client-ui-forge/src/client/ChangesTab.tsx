@@ -19,7 +19,7 @@ import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
   IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
-  Menu, StateDot, Tooltip,
+  Menu, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -53,6 +53,7 @@ import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
+import { ChangesLoading } from './ChangesLoading.tsx'
 import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
@@ -1218,7 +1219,7 @@ export function ChangesTab({
         </div>
       )
     } else if (failed === null) {
-      body = <div className={css.centered}><StateDot state="ongoing" /></div>
+      body = <div className={css.files} aria-busy="true"><ChangesLoading split={split} t={t} /></div>
     } else {
       body = (
         <div className={css.centered} role="status">
@@ -1332,7 +1333,9 @@ export function ChangesTab({
         {treeShown && <div className={css.lensCell}><LensControl {...lensProps} need={setLensWidth} /></div>}
         <div ref={toolbarRow} className={css.toolbarMain}>
           {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-          {tab.visible && <span className={css.filesSlot}><ChangedFilesMenu {...navigator} visible /></span>}
+          {tab.visible && (
+            <span className={css.filesSlot}><ChangedFilesMenu {...navigator} loading={data === null && failed === null} visible /></span>
+          )}
           {tab.visible && allFiles.length > 0 && (
             <span className={css.lensMenu}><LensMenu {...lensProps} visible /></span>
           )}

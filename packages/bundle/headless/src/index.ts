@@ -18,6 +18,7 @@ import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { APPROVAL_POLICIES, setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
@@ -99,10 +100,7 @@ function summarize(session: Session, firstSeq: SessionLogOffset): RunOutcome {
     }
     if (!started) continue
     if (event.type === 'assistant/message') {
-      const joined = event.data.message.content
-        .filter(block => block.type === 'text')
-        .map(block => block.text)
-        .join('')
+      const joined = extractTextContent(event.data.message.content)
       if (joined !== '') text = joined
     }
     if (event.type === 'turn/end') reason = event.data.reason

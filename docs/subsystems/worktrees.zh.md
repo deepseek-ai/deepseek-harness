@@ -6,7 +6,7 @@
 
 ## 创建与保留
 
-调用方 Session 的当前目录决定源仓库。创建操作在分配检出目录前，将请求的本地提交、分支或标签固定为具体提交；省略时选择 `HEAD`。每个名称必须对应新分支与未使用的检出路径。操作既不获取缺失对象，也不复制源检出目录中的暂存、未暂存、未跟踪或被忽略文件。
+调用方 Session 的当前目录决定源仓库。创建操作在分配检出目录前，将请求的本地提交、分支或标签固定为具体提交；省略时选择 `HEAD`。请求也可以要求先获取某个已配置远程的远程跟踪分支，此时只获取这一个分支，并固定获取到的提交。每个名称必须对应新分支与未使用的检出路径。操作既不获取其他提交或缺失对象，也不复制源检出目录中的暂存、未暂存、未跟踪或被忽略文件。
 
 默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
 
@@ -17,12 +17,17 @@
 请求只选择新名称与本地版本。结果标识创建的检出目录与确切提交；它不会改变 Session 的原始项目或写权限。可选的回调会在创建的每个阶段开始之前收到该阶段。恢复会在记录的目录重新检出已删除的检出目录：从它的分支检出；分支也已删除时，从它的基准提交检出。
 
 ```ts type-equiv
-/** A new checkout from a locally available Git commit, branch, or tag. */
+/** A new checkout from a locally available Git commit, branch, or tag, or from a remote branch fetched first. */
 interface CreateWorktreeRequest {
   /** New branch name, also used as the relative checkout directory; omission generates a name. */
   name?: string
   /** Local revision to resolve before creation; omission selects HEAD. */
   from?: string
+  /**
+   * Fetch `from` from its remote before resolving it. `from` must then be the full name of a remote-tracking
+   * branch, `refs/remotes/<remote>/<branch>`, of a configured remote; only that branch is fetched, without tags.
+   */
+  fetch?: boolean
 }
 ```
 
@@ -42,12 +47,13 @@ interface CreatedWorktree {
 
 ```ts type-equiv
 /**
- * Stage of one creation or restoration, reported before it begins: `prepare`
+ * Stage of one creation or restoration, reported before it begins: `fetch`
+ * fetches the remote base branch of a creation that asks for it; `prepare`
  * validates the request, allocates the checkout directory, and creates the
  * branch, which a restoration creates again only when it is gone; `checkout`
  * writes the files and, for a creation, enters the checkout.
  */
-type CreateWorktreePhase = 'prepare' | 'checkout'
+type CreateWorktreePhase = 'fetch' | 'prepare' | 'checkout'
 ```
 
 ```ts type-equiv
@@ -113,19 +119,21 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
 
 ```ts cordis-catalog
 /**
- * Create a fresh branch and checkout at a pinned local revision, then enter it.
+ * Create a fresh branch and checkout at a pinned local revision, then enter it. A request that asks to fetch
+ * first fetches its remote-tracking branch, only that branch and without tags, then pins the fetched commit.
  * Existing branches or checkout paths fail. Uncommitted files stay in the source checkout.
  * Checkout disables configured clean, smudge, and process filters without changing Git config.
  * Repository-local replacement refs still apply; baseCommit reports the resolved object name.
  * The new checkout becomes current only after Git setup succeeds. Failures may retain newly
  * allocated Git/filesystem artifacts; no branch or checkout is removed automatically.
  * @param agent - caller whose current directory selects the source repository and file policy.
- * @param request - optional new name and local revision; defaults are generated name and HEAD.
+ * @param request - optional new name, local revision, and fetch switch; defaults are generated name, HEAD, and no fetch.
  * @param signal - cancellation of lookup, creation, and working-directory publication.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
- * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
- *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
+ * @throws {WorktreeError} for an invalid request, a fetch request whose `from` is not a remote-tracking branch of a
+ *   configured remote, an existing branch or path, or a failed, oversized, or timed-out command, including the
+ *   fetch; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
 
@@ -140,12 +148,12 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param agent - caller whose sandbox policy confines the commands.
  * @param request - recorded directory, branch, base commit, and source repository root.
  * @param signal - cancellation of the restoration.
- * @param onPhase - receives each stage before it begins; it must not throw.
+ * @param onPhase - receives each stage before it begins, never `fetch`; it must not throw.
  * @returns the directory and whether the branch was created again.
  * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
  *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
-async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
+async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: Exclude<CreateWorktreePhase, 'fetch'>) => void, ): Promise<RestoredWorktree>
 
 /**
  * Read the archive cleanup of a Session's created checkout; waiting never

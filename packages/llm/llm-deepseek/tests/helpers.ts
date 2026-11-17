@@ -45,7 +45,7 @@ export async function assemble(stream: AsyncIterable<StreamChunk>, model = MODEL
 }
 export function adapter(config: Config = {}, dependencies: Partial<DeepSeekAdapterOptions> = {}) {
   const files = new DeepSeekFileStore()
-  return new DeepSeekAdapter({ options: () => resolveAdapterOptions(config), resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' } }), resolveUserId: () => 'test-user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions, ...dependencies })
+  return new DeepSeekAdapter({ options: () => resolveAdapterOptions(config), resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' }, value: 'test-key' }), resolveUserId: () => 'test-user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions, ...dependencies })
 }
 /**
  * Loopback Messages endpoint recording each model request.

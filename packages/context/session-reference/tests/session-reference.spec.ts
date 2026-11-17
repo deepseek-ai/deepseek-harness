@@ -493,6 +493,7 @@ describe('model-relative reference budgets', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     const resolverFiber = ctx.plugin(SessionReferenceResolver, config)
     await resolverFiber
@@ -820,9 +821,10 @@ describe('session reference discovery and preparation', () => {
     vi.restoreAllMocks()
   })
 
-  it('labels every session by id when no projection face is composed', async () => {
+  it('labels every session by id when no title projection is registered', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     await ctx.plugin(SessionReferenceResolver)
     const target = ctx.sessions.create(brandString<SessionId>('target'), { meta: { cwd: '/same' } })
@@ -1317,18 +1319,21 @@ describe('session reference discovery and preparation', () => {
   it('rejects direct invalid configuration before service publication', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(ctx, { maxReferences: 0 }))
       .toThrow(expectCode('SESSION_REFERENCE_INVALID_CONFIG'))
 
     const oversizedCtx = new Context()
     await oversizedCtx.plugin(SessionStore)
+    await oversizedCtx.plugin(SessionProjectionRegistry)
     await oversizedCtx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(oversizedCtx, { maxReferences: 4 }))
       .toThrow(expectCode('SESSION_REFERENCE_INVALID_CONFIG'))
 
     const defaultCtx = new Context()
     await defaultCtx.plugin(SessionStore)
+    await defaultCtx.plugin(SessionProjectionRegistry)
     await defaultCtx.plugin(TestSessionQueryEngine)
     expect(() => new SessionReferenceResolver(defaultCtx)).not.toThrow()
   })

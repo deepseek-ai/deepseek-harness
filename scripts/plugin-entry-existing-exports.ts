@@ -101,8 +101,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'projectToolUpdates', 'requestImageHandleText', 'requiredImageOffload', 'resolveImageAttachmentAccess',
     'resolveRetryPolicy', 'runFirstTokenTime', 'runFirstVisibleTime', 'textOnlyImageText', 'userAgent',
   ],
-  '@deepseek-ai/dsh-llm-deepseek-account': ['plainAccountOptions', 'resolveAccountOptions'],
-  '@deepseek-ai/dsh-llm-deepseek-api-key': ['plainOptions', 'resolveAdapterOptions'],
   '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'supportedProtocols'],
   '@deepseek-ai/dsh-llm-replay': [
     'deriveReplayScript', 'installLlmReplay', 'loadReplayScript', 'loadSessionScripts', 'parseSessionHeader',
