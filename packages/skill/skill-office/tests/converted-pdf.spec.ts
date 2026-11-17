@@ -31,11 +31,10 @@ it('ignores failed results, other formats, and render summaries', () => {
   expect(convertedPdfFiles(results(['Rendered 2 images of input.docx (3 in the document) at 144 DPI.']))).toEqual([])
 })
 
-it('accepts a deliverable only when the shell copies the reported file with its byte count', () => {
-  const conversions = [{ bytes: 2048, file: temporary }]
-  expect(deliveredConversions(`cp "${temporary}" result.pdf`, 2048, conversions)).toEqual(conversions)
-  // A deliverable written without copying the converter output has another origin.
-  expect(deliveredConversions('cp other.pdf result.pdf', 2048, conversions)).toEqual([])
-  // A deliverable with a different byte count is not the reported output.
-  expect(deliveredConversions(`cp "${temporary}" result.pdf`, 1024, conversions)).toEqual([])
+it('accepts a deliverable only when its byte count matches the reported conversion', () => {
+  const conversions = [{ bytes: 2048, file: temporary }, { bytes: 4096, file: `${temporary}.second` }]
+  expect(deliveredConversions(2048, conversions)).toEqual(conversions.slice(0, 1))
+  // A deliverable with a different byte count is not a reported conversion output.
+  expect(deliveredConversions(1024, conversions)).toEqual([])
+  expect(deliveredConversions(2048, [])).toEqual([])
 })

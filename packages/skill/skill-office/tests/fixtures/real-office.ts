@@ -95,33 +95,29 @@ export function convertedPdfFiles(events: readonly SessionEvent[]): ConvertedPdf
 }
 
 /**
- * Select the reported conversions the shell commands copy and whose byte count matches the deliverable.
- * @param commands - Joined `bash`/`pwsh` command text recorded for the task.
+ * Select the reported conversions whose byte count matches the deliverable.
+ *
+ * The conversion's temporary file is released when the conversation ends, so its reported size is the only
+ * post-exit signal that ties the deliverable to that conversion; the recorded commands stay in the failure
+ * diagnostic instead of being matched, because a copy expressed with a variable or a changed directory is
+ * still the same deliverable.
  * @param deliveredBytes - Byte count of the delivered file.
  * @param conversions - PDF conversions reported by the Office tool.
- * @returns Conversions the deliverable was copied from; empty when it has another origin.
+ * @returns Conversions whose report matches the deliverable; empty when none does.
  */
 export function deliveredConversions(
-  commands: string, deliveredBytes: number, conversions: readonly ConvertedPdfFile[],
+  deliveredBytes: number, conversions: readonly ConvertedPdfFile[],
 ): ConvertedPdfFile[] {
-  return conversions.filter(conversion => commands.includes(conversion.file) && conversion.bytes === deliveredBytes)
+  return conversions.filter(conversion => conversion.bytes === deliveredBytes)
 }
 
 /**
- * Reject the "Render the saved deliverable" instruction injected into recorded messages.
- * @param events - Recorded task events, including nested skill and shell results.
- */
-export function expectNoRenderInstruction(events: readonly SessionEvent[]): void {
-  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
-  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
-}
-
-/**
- * Reject recorded Office render calls and the instruction {@link expectNoRenderInstruction} names.
+ * Reject recorded Office render calls and the "Render the saved deliverable" instruction.
  * @param events - Recorded task events, including nested skill and shell results.
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
   expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
-  expectNoRenderInstruction(events)
+  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
+  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }
