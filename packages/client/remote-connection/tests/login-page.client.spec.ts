@@ -72,6 +72,7 @@ it.each(['en-US', 'zh-CN'])('shows the anonymous Token form without Client boot 
   expect(fixture.form.method).toBe('get')
   expect(fixture.form.action).toBe(new URL('/mount/', fixture.actualLocation.href).href)
   expect(fixture.input.type).toBe('password')
+  expect(fixture.input.placeholder).toBe(`${fixture.actualLocation.origin}/mount/?token=xxx`)
   expect(fixture.input.required).toBe(true)
   expect(fixture.input.getAttribute('aria-describedby')).toBe('token-hint token-error')
   expect(fixture.submit.textContent).toBe(t.tokenSubmit)
@@ -81,6 +82,25 @@ it.each(['en-US', 'zh-CN'])('shows the anonymous Token form without Client boot 
   expect(document.getElementById('status')?.textContent).toBe('')
   expect((document.getElementById('open') as HTMLAnchorElement).hidden).toBe(true)
   expect(fixture.exchange).not.toHaveBeenCalled()
+})
+
+it.each([
+  'http://192.168.1.8:3080/',
+  'http://[2001:db8::1]:3080/',
+  'https://host.example:9443/tools/dsh/',
+  'https://host.example:9443/tools/$&/$$/',
+])('shows %s without page credentials, query values, or fragments in the placeholder', (applicationUrl) => {
+  const fixture = authenticationPage()
+  vi.stubGlobal('location', {
+    href: `${applicationUrl}?token=${TOKEN}&hint=private-query#private-fragment`,
+    replace: fixture.replace,
+  } satisfies Pick<Location, 'href' | 'replace'>)
+  vi.spyOn(history, 'replaceState').mockImplementation(() => {})
+  enterAuthenticationPage(loginLocales, false, vi.fn())
+  expect(fixture.input.placeholder).toBe(`${applicationUrl}?token=xxx`)
+  expect(fixture.input.placeholder).not.toContain(TOKEN)
+  expect(fixture.input.placeholder).not.toContain('private-query')
+  expect(fixture.input.placeholder).not.toContain('private-fragment')
 })
 
 it('hides the Token form when its provider is unavailable', () => {
@@ -354,4 +374,8 @@ it('escapes embedded localized text before serializing the anonymous script', ()
   expect(html).toContain('name="referrer" content="no-referrer"')
   expect(html).toContain('id="qr-notice" class="notice" hidden')
   expect(html).toContain('id="token-form"')
+  const document = new DOMParser().parseFromString(html, 'text/html')
+  expect(document.querySelector<HTMLInputElement>('#token')?.placeholder).toBe(
+    loginLocales.en.tokenPlaceholder.replace('{url}', loginLocales.en.tokenPlaceholderFallbackUrl),
+  )
 })

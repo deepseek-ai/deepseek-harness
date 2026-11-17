@@ -167,7 +167,7 @@ describe('web e2e: one-use QR browser login', () => {
 
   it('shows the Remote-owned anonymous page, rejects an invalid Token in place, and signs in with the independent Token URL', async () => {
     const phone = await browser.newContext({
-      ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE, viewport: MOBILE, colorScheme: 'light',
+      ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE, viewport: MOBILE, colorScheme: 'light', hasTouch: true,
     })
     try {
       const page = await phone.newPage()
@@ -181,19 +181,68 @@ describe('web e2e: one-use QR browser login', () => {
       expect(body).not.toContain(startupToken)
       expect(body).not.toContain('__DSH_BOOT__')
       await page.getByRole('heading', { name: '连接到此 Host', exact: true }).waitFor()
-      const input = page.getByLabel('登录令牌或链接', { exact: true })
+      const input = page.locator('#token')
       const submit = page.getByRole('button', { name: '继续', exact: true })
       await input.waitFor()
+      const applicationUrl = new URL(secure.url)
+      const tokenPlaceholder = `${applicationUrl.origin}${applicationUrl.pathname}?token=xxx`
+      expect(await input.getAttribute('placeholder')).toBe(tokenPlaceholder)
+      expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+      const inputTypography = await input.evaluate((element) => {
+        const textStyle = (style: CSSStyleDeclaration) => ({
+          family: style.fontFamily, weight: style.fontWeight, style: style.fontStyle,
+          smoothing: style.getPropertyValue('-webkit-font-smoothing'), size: style.fontSize,
+        })
+        const style = getComputedStyle(element)
+        return {
+          input: textStyle(style), placeholder: textStyle(getComputedStyle(element, '::placeholder')),
+          family: getComputedStyle(document.documentElement).fontFamily, lineHeight: style.lineHeight,
+        }
+      })
+      expect(inputTypography.input).toEqual({
+        family: inputTypography.family, weight: '400', style: 'normal', smoothing: 'antialiased', size: '16px',
+      })
+      expect(inputTypography.placeholder).toEqual(inputTypography.input)
+      expect(inputTypography.lineHeight).toBe('24px')
+      const expectPlaceholderColor = async (color: string) => {
+        const appearance = await input.evaluate(element => ({
+          placeholder: getComputedStyle(element, '::placeholder').color,
+          foreground: getComputedStyle(element).color,
+        }))
+        expect(appearance.placeholder).toBe(color)
+        expect(appearance.placeholder).not.toBe(appearance.foreground)
+      }
+      await expectPlaceholderColor('rgb(173, 178, 184)')
+      expect(await page.locator('#token-hint').innerText()).toBe('在已登录设备的「设置 → 远程连接」中复制链接，粘贴到此处')
       expect(await page.getByRole('button', { name: '账号菜单', exact: true }).count()).toBe(0)
       expect(await page.evaluate(async () => {
         const reply = await fetch('./', { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: 'manual' })
         return { status: reply.status, body: await reply.text() }
       })).toEqual({ status: 401, body: '' })
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(MOBILE.width)
-      await input.focus()
+      const inputAppearance = () => input.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return {
+          borderWidth: style.borderTopWidth, borderColor: style.borderTopColor,
+          outline: style.outlineStyle, shadow: style.boxShadow,
+        }
+      })
+      const lightFocus = {
+        borderWidth: (await inputAppearance()).borderWidth,
+        borderColor: 'rgb(65, 118, 230)', outline: 'none', shadow: 'none',
+      }
+      await input.click()
       expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(await inputAppearance()).toEqual(lightFocus)
+      await page.keyboard.press('Tab')
+      expect(await submit.evaluate(element => document.activeElement === element)).toBe(true)
+      await page.keyboard.press('Shift+Tab')
+      expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(await inputAppearance()).toEqual(lightFocus)
       await compareOrRefreshGolden(join(EXPECTED, 'anonymous-login.expected.md'),
-        await captureStableAria(page, 'main', secure.root), MODE)
+        await captureStableAria(page, 'main', secure.root, {
+          replacements: [[tokenPlaceholder, '{{application-url}}?token=xxx']],
+        }), MODE)
       const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
       if (screenshots !== undefined) {
         await mkdir(screenshots, { recursive: true })
@@ -202,6 +251,8 @@ describe('web e2e: one-use QR browser login', () => {
       const lightBackground = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
       await page.emulateMedia({ colorScheme: 'dark' })
       await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).not.toBe(lightBackground)
+      await expectPlaceholderColor('rgb(129, 133, 140)')
+      expect(await inputAppearance()).toEqual({ ...lightFocus, borderColor: 'rgb(122, 170, 255)' })
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'anonymous-mobile-dark.png') })
 
       const invalidToken = `${startupToken.startsWith('a') ? 'b' : 'a'}${startupToken.slice(1)}`
@@ -210,13 +261,26 @@ describe('web e2e: one-use QR browser login', () => {
       await submit.click()
       expect((await rejected).status()).toBe(401)
       await page.getByRole('alert').filter({ hasText: '此登录令牌无效或已过期，请粘贴新的令牌后重试' }).waitFor()
+      await input.focus()
       expect(page.url()).toBe(secure.url)
       expect(await input.getAttribute('aria-invalid')).toBe('true')
+      expect(await inputAppearance()).toMatchObject({ borderColor: 'rgb(242, 90, 90)', outline: 'none', shadow: 'none' })
       expect(await submit.isEnabled()).toBe(true)
+      const [inputBox, errorBox, submitBox] = await Promise.all([
+        input.boundingBox(), page.locator('#token-error').boundingBox(), submit.boundingBox(),
+      ])
+      expect(inputBox).not.toBeNull()
+      expect(errorBox).not.toBeNull()
+      expect(submitBox).not.toBeNull()
+      expect(errorBox!.y).toBeGreaterThanOrEqual(inputBox!.y + inputBox!.height)
+      expect(submitBox!.y).toBeGreaterThanOrEqual(errorBox!.y + errorBox!.height)
       expect(await phone.cookies()).toEqual([])
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(MOBILE.width)
+      expect(await input.getAttribute('placeholder')).toBe(tokenPlaceholder)
       await compareOrRefreshGolden(join(EXPECTED, 'anonymous-rejected.expected.md'),
-        await captureStableAria(page, 'main', secure.root, { replacements: [[invalidToken, '{{invalid-token}}']] }), MODE)
+        await captureStableAria(page, 'main', secure.root, {
+          replacements: [[tokenPlaceholder, '{{application-url}}?token=xxx'], [invalidToken, '{{invalid-token}}']],
+        }), MODE)
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'anonymous-token-rejected-dark.png') })
 
       await input.fill(secure.authenticatedUrl)
@@ -808,7 +872,7 @@ describe('web e2e: one-use QR browser login', () => {
       await page.locator('#qr-notice[data-state="error"]').waitFor()
       await page.getByRole('alert').filter({ hasText: invalidMessage }).waitFor()
       await page.getByRole('heading', { name: '连接到此 Host', exact: true }).waitFor()
-      const input = page.getByLabel('登录令牌或链接', { exact: true })
+      const input = page.locator('#token')
       const submit = page.getByRole('button', { name: '继续', exact: true })
       expect(await input.isEnabled()).toBe(true)
       expect(await submit.isEnabled()).toBe(true)
@@ -854,7 +918,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect((await refused).status()).toBe(410)
       await page.getByRole('alert').filter({ hasText: invalidMessage }).waitFor()
       await page.getByRole('heading', { name: '连接到此 Host', exact: true }).waitFor()
-      const input = page.getByLabel('登录令牌或链接', { exact: true })
+      const input = page.locator('#token')
       const submit = page.getByRole('button', { name: '继续', exact: true })
       expect(await input.isEnabled()).toBe(true)
       expect(await submit.isEnabled()).toBe(true)

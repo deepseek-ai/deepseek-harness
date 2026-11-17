@@ -10,7 +10,7 @@ export interface AuthenticationPageOptions {
 }
 
 const pageStyle = `
-:root{color-scheme:light dark;font-family:system-ui,sans-serif;background:light-dark(#fafafa,#171717);color:light-dark(#222,#eee)}
+:root{color-scheme:light dark;font-family:var(--dsw-font-family,-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;background:light-dark(#fafafa,#171717);color:light-dark(#222,#eee)}
 body{margin:0;min-height:100dvh}
 .page{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:100dvh;padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 .card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;min-width:0;width:100%;max-width:360px;padding:24px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:16px;background:light-dark(#fff,#232324)}
@@ -20,7 +20,9 @@ p{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 form{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:'label' 'input' 'feedback' 'submit';gap:12px;min-width:0}
 label{grid-area:label;margin-bottom:-6px;font-size:13px;font-weight:500;line-height:1.5}
 input,button{box-sizing:border-box;min-width:0;min-height:44px;padding:8px 12px;font:inherit;font-size:14px;line-height:1.5;border-radius:8px}
-input{grid-area:input;width:100%;color:inherit;background:light-dark(#fafafa,#1b1b1c);border:.5px solid color-mix(in srgb,currentColor 16%,transparent)}
+input{grid-area:input;width:100%;line-height:22px;color:inherit;background:light-dark(#fafafa,#1b1b1c);border:.5px solid color-mix(in srgb,currentColor 16%,transparent);outline:none}
+input::placeholder{color:var(--dsw-alias-label-caption,light-dark(#adb2b8,#81858c));opacity:1}
+input:focus{border-color:var(--dsw-alias-state-business-primary,light-dark(#4176e6,#7aaaff))}
 input[aria-invalid='true']{border:1px solid light-dark(#ec1313,#f25a5a)}
 .hint,.error{grid-area:feedback;font-size:13px;line-height:1.5}
 .error{color:light-dark(#ec1313,#f25a5a)}
@@ -33,9 +35,9 @@ form:has(.error:not(:empty)) .hint{visibility:hidden}
 button{grid-area:submit;cursor:pointer;font-weight:500;color:light-dark(#fff,#222);background:light-dark(#222,#eee);border:0}
 button:disabled{cursor:wait;opacity:.6}
 a{color:inherit;text-underline-offset:3px;padding:8px 0;font-size:14px;line-height:1.5}
-input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+button:focus-visible,a:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 @media(hover:hover){button:not(:disabled):hover{background:light-dark(#3c3c3d,#d4d4d4)}}
-@media(pointer:coarse){input{font-size:16px}}
+@media(pointer:coarse){input{font-size:16px;line-height:24px}}
 `
 
 function scriptJson(value: typeof loginLocales): string {
@@ -78,6 +80,7 @@ export function enterAuthenticationPage(
     const label = document.getElementById('token-label') as HTMLElement
     const hint = document.getElementById('token-hint') as HTMLElement
     label.textContent = t.tokenLabel
+    input.placeholder = t.tokenPlaceholder.replace('{url}', () => `${clean.origin}${clean.pathname}`)
     hint.textContent = t.tokenHint
     submit.textContent = t.tokenSubmit
     if (tokenRejected) {
@@ -148,7 +151,8 @@ export function enterAuthenticationPage(
  */
 export function renderAuthenticationPage(options: AuthenticationPageOptions): string {
   const t = loginLocales.en
-  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p><div id="qr-notice" class="notice" hidden><p id="status" role="status"></p><a id="open" href="./" hidden>${t.open}</a></div>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
+  const placeholder = t.tokenPlaceholder.replace('{url}', t.tokenPlaceholderFallbackUrl)
+  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p><div id="qr-notice" class="notice" hidden><p id="status" role="status"></p><a id="open" href="./" hidden>${t.open}</a></div>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" placeholder="${placeholder}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"${options.tokenRejected ? ' aria-invalid="true"' : ''}><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert">${options.tokenRejected ? t.tokenInvalid : ''}</p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
   return documentHtml(t.authenticationTitle, content, `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},${options.tokenRejected === true},(${enterBrowser.toString()}))`)
 }
 
