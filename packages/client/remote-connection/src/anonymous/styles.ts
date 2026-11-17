@@ -107,6 +107,9 @@ dsh-device-pairing {
 
 .dsh-device-pairing-button:disabled {
   cursor: default;
+}
+
+.dsh-device-pairing-button:disabled:not(.dsh-device-pairing-primary) {
   color: var(--dsw-alias-label-tertiary, color-mix(in srgb, currentColor 48%, transparent));
 }
 

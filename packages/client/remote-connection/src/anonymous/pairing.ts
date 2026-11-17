@@ -162,13 +162,13 @@ export function mountPairing(
       return exchange(operation, held, signal).then((reply) => {
         if (signal.aborted) return undefined
         if (reply !== undefined && reply.status !== 429 && reply.status < 500) return reply
-        if (failures === recovery.maxRetries) return undefined
-        show(state, t.pairRecovering)
+        if (failures === recovery.maxRetries) return reply
+        show(state, reply?.status === 429 ? t.pairRateLimited : t.pairRecovering)
         return pause(Math.min(recovery.retryMaxDelayMs, recovery.pollIntervalMs * 2 ** failures), signal)
           .then(() => signal.aborted ? undefined : read(operation, held, state, signal, failures + 1))
       })
     },
-    fail(this: void, text: string): void { stop(); show('error', text) },
+    fail(this: void, text: string, reply?: Reply): void { stop(); show('error', reply?.status === 429 ? t.pairRateLimitError : text) },
     navigate(this: void): void {
       stop()
       credential = undefined
@@ -197,7 +197,7 @@ export function mountPairing(
       const admission = expiring ? read('check', held, state, signal).then((reply) => {
         if (!current(version)) return
         if (reply?.status === 200) { navigate(); return }
-        if (reply?.status !== 401) fail(t.pairCheckError)
+        if (reply?.status !== 401) fail(t.pairCheckError, reply)
         // A 401 alone cannot retire a Host request that outlives the browser's deadline.
       }) : Promise.resolve()
       return admission.then(() => {
@@ -206,7 +206,7 @@ export function mountPairing(
         const creation = ticket === undefined ? read('request', held, state, signal).then((reply) => {
           if (!current(version)) return undefined
           const received = reply?.status === 200 ? ticketOf(reply.value, held) : undefined
-          if (received === undefined) { fail(t.pairCreateError); return undefined }
+          if (received === undefined) { fail(t.pairCreateError, reply); return undefined }
           ticket = received
           deadline = Math.min(deadline, performance.now() + received.expiresInMs)
           clearTimeout(countdown)
@@ -241,7 +241,7 @@ export function mountPairing(
             if (next === 'status' && reply?.status === 200 && status === 'pending') {
               show('waiting')
               timer = setTimeout(() => { void execute('status', held) }, received.pollIntervalMs)
-            } else fail(t.pairError)
+            } else fail(t.pairError, reply)
           })
         })
       })

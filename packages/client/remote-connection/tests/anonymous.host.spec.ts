@@ -108,6 +108,68 @@ it('retries a lost creation response with the same credentials without duplicati
   expect(state()).toBe('waiting')
 })
 
+it.each(['zh', 'en'] as const)('shows rate limiting during creation and status recovery with the same credentials in %s', async (language) => {
+  const f = fixture(language)
+  const locale = pairingLocales[language]
+  f.request.mockResolvedValueOnce(new Response('{"status":"busy"}', { status: 429 }))
+  await create()
+  const held = payload(f.request.mock.calls[0]?.[1])
+  expect(state()).toBe('creating')
+  expect(document.querySelector('[role="status"]')?.textContent).toBe(locale.pairRateLimited)
+  expect(document.querySelector('[role="alert"]')).toBeNull()
+  expect(document.body.innerHTML).not.toContain(held.secret)
+  expect(button('request').disabled).toBe(true)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(payload(f.request.mock.calls[1]?.[1])).toEqual(held)
+  expect(f.pool.list()).toHaveLength(1)
+  expect(state()).toBe('waiting')
+  expect(document.querySelector('[role="status"]')?.textContent).toBe(locale.pairWaiting)
+
+  f.request.mockResolvedValueOnce(new Response('{"status":"slow-down"}', { status: 429 }))
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(document.querySelector('[role="status"]')?.textContent).toBe(locale.pairRateLimited)
+  expect(document.querySelector('[role="alert"]')).toBeNull()
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(f.request.mock.calls.slice(2).map(([, init]) => payload(init))).toEqual([held, held])
+  expect(document.body.innerHTML).not.toContain(held.secret)
+  expect(state()).toBe('waiting')
+  expect(document.querySelector('[role="status"]')?.textContent).toBe(locale.pairWaiting)
+  f.approve()
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(f.navigate).toHaveBeenCalledOnce()
+})
+
+it.each([
+  ['zh', 'request', 2], ['en', 'status', 0],
+] as const)('offers Request again when rate limits exhaust %s %s recovery with %s retries', async (language, operation, maxRetries) => {
+  const f = fixture(language, { maxRetries })
+  if (operation === 'status') await create()
+  const before = f.request.mock.calls.length
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    f.request.mockResolvedValueOnce(new Response('{"status":"busy"}', { status: 429 }))
+  }
+  if (operation === 'request') await create()
+  else await vi.advanceTimersByTimeAsync(1000)
+  await vi.advanceTimersByTimeAsync(3000)
+  const attempts = f.request.mock.calls.slice(before)
+  const held = payload(attempts[0]?.[1])
+  expect(attempts).toHaveLength(maxRetries + 1)
+  expect(attempts.map(([, init]) => payload(init))).toEqual(Array.from({ length: maxRetries + 1 }, () => held))
+  expect(state()).toBe('error')
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe(pairingLocales[language].pairRateLimitError)
+  expect(document.body.innerHTML).not.toContain(held.secret)
+  expect(button('request').disabled).toBe(false)
+  expect(vi.getTimerCount()).toBe(0)
+  await create()
+  await vi.advanceTimersByTimeAsync(1000)
+  const cancellation = f.request.mock.calls.find(([input]) => url(input).endsWith('/cancel'))
+  expect(payload(cancellation?.[1])).toEqual(held)
+  expect(f.pool.decide(held.id, 'allow')).toBe('unavailable')
+  expect(f.ticket().id).not.toBe(held.id)
+  expect(f.pool.list().map(row => row.id)).toEqual([f.ticket().id])
+  expect(state()).toBe('waiting')
+})
+
 it.each(['zh', 'en'])('automatically backs off status failures and exposes only Request again after exhaustion in %s', async (language) => {
   const f = fixture(language)
   await create()

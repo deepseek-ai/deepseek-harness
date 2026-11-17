@@ -328,6 +328,89 @@ describe('web e2e: one-use QR browser login', () => {
   })
 
   it.each([
+    { language: 'zh', locale: ZH_BROWSER_LOCALE, limited: '请求过于频繁，稍后自动重试…', creating: '正在申请配对…', again: '重新申请' },
+    { language: 'en', locale: 'en-US', limited: 'Too many requests. Retrying shortly…', creating: 'Requesting approval…', again: 'Request again' },
+  ])('keeps the pairing action readable during rate-limit recovery in $language', async ({ language, locale, limited, creating, again }) => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, locale, viewport: MOBILE, colorScheme: 'light', hasTouch: true })
+    const page = await context.newPage()
+    const releaseRetry = Promise.withResolvers<undefined>()
+    try {
+      const console = watchConsole(page)
+      await page.clock.install()
+      expect((await page.goto(secure.url))?.status()).toBe(401)
+      const request = page.locator('#auth-pair-request')
+      const panel = page.locator('#auth-pair-panel')
+      await request.click()
+      await page.locator('#auth-pair-code').waitFor()
+      const originalCode = await page.locator('#auth-pair-code').innerText()
+      await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1000)))
+      let limitedOnce = false
+      const retryStarted = Promise.withResolvers<undefined>()
+      await page.route('**/pairing/request', async (route) => {
+        if (!limitedOnce) {
+          limitedOnce = true
+          await route.fulfill({ status: 429, contentType: 'application/json', body: '{"status":"busy"}' })
+          return
+        }
+        retryStarted.resolve(undefined)
+        await releaseRetry.promise
+        await route.continue()
+      })
+      await request.click()
+      const status = panel.getByRole('status')
+      await status.getByText(limited, { exact: true }).waitFor()
+      await page.clock.fastForward(2000)
+      await retryStarted.promise
+      expect(await request.isDisabled()).toBe(true)
+      expect(await request.textContent()).toBe(creating)
+      expect(await status.textContent()).toBe(limited)
+      await compareOrRefreshGolden(join(EXPECTED, `pairing-rate-limited.${language}.expected.md`),
+        await captureStableAria(page, 'dsh-device-pairing', secure.root), MODE)
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      const screenshotDirectory = screenshots === undefined ? undefined : join(screenshots, 'pairing-rate-limited')
+      if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true })
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme })
+        const contrast = await request.evaluate((element) => {
+          const style = getComputedStyle(element)
+          const canvas = document.createElement('canvas')
+          canvas.width = canvas.height = 1
+          const drawing = canvas.getContext('2d')!
+          drawing.fillStyle = style.backgroundColor
+          drawing.fillRect(0, 0, 1, 1)
+          const luminance = (pixel: Uint8ClampedArray) => {
+            const linear = Array.from(pixel.slice(0, 3), (value) => {
+              const channel = value / 255
+              return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+            })
+            return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722
+          }
+          const background = luminance(drawing.getImageData(0, 0, 1, 1).data)
+          drawing.fillStyle = style.color
+          drawing.fillRect(0, 0, 1, 1)
+          const foreground = luminance(drawing.getImageData(0, 0, 1, 1).data)
+          return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+        })
+        expect(contrast, colorScheme).toBeGreaterThanOrEqual(3)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(MOBILE.width)
+        if (screenshotDirectory !== undefined) await page.screenshot({ path: join(screenshotDirectory, `${language}-${colorScheme}.png`) })
+      }
+      releaseRetry.resolve(undefined)
+      await page.clock.resume()
+      await page.locator('#auth-pair-panel[data-state="waiting"]').waitFor()
+      expect(await request.isEnabled()).toBe(true)
+      expect(await request.textContent()).toBe(again)
+      expect(await page.locator('#auth-pair-code').innerText()).not.toBe(originalCode)
+      expect(console.pageErrors).toEqual([])
+      expect(console.warnings).toEqual([])
+    } finally {
+      releaseRetry.resolve(undefined)
+      await page.unrouteAll({ behavior: 'wait' })
+      await context.close()
+    }
+  })
+
+  it.each([
     {
       name: 'unreachable', hostname: '127.0.0.1', options: {},
       warning: '当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址',
