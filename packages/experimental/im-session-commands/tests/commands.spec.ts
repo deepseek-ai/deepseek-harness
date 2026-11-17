@@ -585,11 +585,12 @@ describe('lifecycle', () => {
     // (as if the process crashed after persisting intent and running `/stop`, before `done` could be written).
     vi.spyOn(first.store, 'settle').mockRejectedValueOnce(new Error('crash before settle'))
     await first.receive(stopFrame)
+    await first.intake.idle()
     first.base.pool.media.get('im_session_commands')?.tables.get('commands')?.set(stopKey, {
       status: 'pending',
       reply: '',
       sessions: [shared.sessionId],
-      createdAt: 0,
+      createdAt: Date.now(),
     })
     await first.close()
 
@@ -608,6 +609,22 @@ describe('lifecycle', () => {
     expect(second.base.pool.media.get('im_session_commands')?.tables.get('commands')?.get(stopKey)).toMatchObject({
       status: 'done',
     })
+  })
+
+  it('rolls back the pending receipt when passthrough execute() returns undefined so retries pass through', async () => {
+    const harness = await bootCommands({
+      commands: { passthrough: ['compact'] },
+      dshCommands: [{ name: 'compact', description: 'Compact context' }],
+    })
+    await ensureShared(harness)
+    // Simulate a command disappearing between `list(agent)` and `execute(...)`.
+    vi.spyOn(harness.base.ctx.commands, 'execute').mockResolvedValue(undefined)
+
+    const msg = inbound('/compact')
+    await harness.receive(msg)
+    const key = ImMessageKey('fake:bot', msg.id)
+    expect(harness.base.pool.media.get('im_session_commands')?.tables.get('commands')?.get(key)).toBeUndefined()
+    expect(harness.outcome(msg.id)).toEqual({ kind: 'ignored' })
   })
 
   it('serializes concurrent dispatches of one message key and recovers after a reply failure', async () => {

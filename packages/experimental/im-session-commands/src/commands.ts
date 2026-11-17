@@ -177,7 +177,10 @@ export class SessionCommands {
         createdAt: Date.now(),
       })
       const decided = await this.decide(event, name, builtin, command.rawInput, persistPending)
-      if (decided === undefined) return undefined
+      if (decided === undefined) {
+        if (table.get(message.key)?.status === 'pending') await table.delete(message.key)
+        return undefined
+      }
       const now = Date.now()
       const receipt: StoredCommandReceipt = {
         status: 'done',
@@ -338,7 +341,7 @@ export class SessionCommands {
     const cutoff = now - this.config.retentionMs
     const expired: ImMessageKey[] = []
     for (const [key, receipt] of table.entries()) {
-      if (receipt.status === 'pending' || receipt.createdAt >= cutoff) continue
+      if (receipt.createdAt >= cutoff) continue
       expired.push(key)
     }
     if (expired.length > 0) await table.deleteMany(expired)
