@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Conversations latérales",
-    "description": "Créez une branche à partir d’une réponse terminée et poursuivez-la dans la barre latérale droite."
+    "description": "Créez une branche de la conversation à partir de son point actuel et poursuivez-la dans la barre latérale droite."
   }
 }

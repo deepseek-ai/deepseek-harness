@@ -1,4 +1,4 @@
-/** Browser plugin: `/side` forks the conversation at its latest completed Turn into the right Sidebar. */
+/** Browser plugin: `/side` forks the conversation at its newest event into the right Sidebar. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -25,7 +25,7 @@ export function apply(ctx: Context): void {
   const control = new SidechatControl(ctx)
   ctx.effect(() => () => control.dispose(), 'sidechat: in-flight forks')
   const t = ctx.locale.bind(NS)
-  // `/side` forks at the latest completed Turn; a blank Session has nothing to branch.
+  // A blank Session has nothing to branch; a running first Turn forks at its newest durable event.
   ctx.effect(() => ctx.commandUi.register({
     name: 'side', label: () => t('command'), description: () => t('command.description'), icon: IconCompareSplitOutlineRegular,
     available: session => ctx.sessions.list.getSnapshot().byId[session.sessionId]?.blank === false

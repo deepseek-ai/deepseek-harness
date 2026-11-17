@@ -4,7 +4,7 @@ export const NS = 'sidechat'
 /** Chinese side conversation copy. */
 export const zh = {
   'command': '侧栏对话',
-  'command.description': '从最后一个已完成的回合分支，在右侧栏继续',
+  'command.description': '从当前位置分支，在右侧栏继续',
   'title': '侧栏对话',
   'loading': '正在打开对话…',
   'openFailed': '无法打开对话',
@@ -14,7 +14,7 @@ export const zh = {
 /** English side conversation copy. */
 export const en: Record<keyof typeof zh, string> = {
   'command': 'Side conversation',
-  'command.description': 'Branch from the latest completed turn and continue in the right sidebar',
+  'command.description': 'Branch from the current point and continue in the right sidebar',
   'title': 'Side conversation',
   'loading': 'Opening conversation…',
   'openFailed': 'Could not open conversation',
@@ -24,7 +24,7 @@ export const en: Record<keyof typeof zh, string> = {
 /** Japanese side conversation copy. */
 export const ja: Record<keyof typeof zh, string> = {
   'command': 'サイド会話',
-  'command.description': '最後に完了したターンから分岐し、右サイドバーで続ける',
+  'command.description': '現在の位置から分岐し、右サイドバーで続ける',
   'title': 'サイド会話',
   'loading': '会話を開いています…',
   'openFailed': '会話を開けませんでした',
@@ -34,7 +34,7 @@ export const ja: Record<keyof typeof zh, string> = {
 /** Spanish side conversation copy. */
 export const es: Record<keyof typeof zh, string> = {
   'command': 'Conversación lateral',
-  'command.description': 'Crear una rama desde el último turno completado y continuar en la barra lateral derecha',
+  'command.description': 'Crear una rama desde el punto actual y continuar en la barra lateral derecha',
   'title': 'Conversación lateral',
   'loading': 'Abriendo la conversación…',
   'openFailed': 'No se pudo abrir la conversación',
@@ -44,7 +44,7 @@ export const es: Record<keyof typeof zh, string> = {
 /** French side conversation copy. */
 export const fr: Record<keyof typeof zh, string> = {
   'command': 'Conversation latérale',
-  'command.description': 'Créer une branche depuis le dernier tour terminé et continuer dans la barre latérale droite',
+  'command.description': 'Créer une branche depuis le point actuel et continuer dans la barre latérale droite',
   'title': 'Conversation latérale',
   'loading': 'Ouverture de la conversation…',
   'openFailed': 'Impossible d’ouvrir la conversation',
@@ -54,7 +54,7 @@ export const fr: Record<keyof typeof zh, string> = {
 /** German side conversation copy. */
 export const de: Record<keyof typeof zh, string> = {
   'command': 'Seitengespräch',
-  'command.description': 'Vom letzten abgeschlossenen Zug verzweigen und in der rechten Seitenleiste fortsetzen',
+  'command.description': 'Vom aktuellen Punkt verzweigen und in der rechten Seitenleiste fortsetzen',
   'title': 'Seitengespräch',
   'loading': 'Gespräch wird geöffnet…',
   'openFailed': 'Gespräch konnte nicht geöffnet werden',
@@ -64,7 +64,7 @@ export const de: Record<keyof typeof zh, string> = {
 /** Russian side conversation copy. */
 export const ru: Record<keyof typeof zh, string> = {
   'command': 'Боковой разговор',
-  'command.description': 'Создать ветку от последнего завершённого хода и продолжить в правой боковой панели',
+  'command.description': 'Создать ветку от текущей точки и продолжить в правой боковой панели',
   'title': 'Боковой разговор',
   'loading': 'Открытие разговора…',
   'openFailed': 'Не удалось открыть разговор',
@@ -74,7 +74,7 @@ export const ru: Record<keyof typeof zh, string> = {
 /** Portuguese side conversation copy. */
 export const pt: Record<keyof typeof zh, string> = {
   'command': 'Conversa lateral',
-  'command.description': 'Criar uma ramificação a partir do último turno concluído e continuar na barra lateral direita',
+  'command.description': 'Criar uma ramificação a partir do ponto atual e continuar na barra lateral direita',
   'title': 'Conversa lateral',
   'loading': 'Abrindo a conversa…',
   'openFailed': 'Não foi possível abrir a conversa',

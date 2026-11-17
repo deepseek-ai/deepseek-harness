@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidechat",
-  "description": "Branch a completed reply into a side conversation that opens in the right Sidebar",
+  "description": "Branch the conversation at its current point into a side conversation that opens in the right Sidebar",
   "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
