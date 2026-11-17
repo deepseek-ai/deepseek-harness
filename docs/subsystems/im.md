@@ -27,7 +27,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImDeliveryMode` | Delivery mode: `steer` joins a running turn or starts one, `followup` queues a turn, `inject` adds context without waking an idle agent |
 | `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `deliveredTo`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
 | `ImResetOptions` | Session reset options: durable receipt `operationId` and optimistic `expectedGeneration` guard |
-| `ImSendOptions` | Outbound publication options: receipt `operationId`, quoted message key, target thread, and the session used for grant checks and attribution |
+| `ImSendOptions` | Outbound publication options: receipt `operationId`, same-chat stored quoted message key (`ImError('access')` otherwise), target thread, and the session used for grant checks and attribution |
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |
 | `ImHistory` | Per-chat history queries by `seq`: `after`, `before`, `get`, and `latest` |
 | `ImFormatOptions` | Message formatting options: `xml` or `line` style, media attachment flag, optional header, and abort signal |

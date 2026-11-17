@@ -525,8 +525,9 @@ export interface ImSendOptions extends SendOptions {
   /** Durable receipt key (tools pass sha256(sessionId, toolCallId)); absent = fire-and-forget. */
   operationId?: string
   /**
-   * Message the publication answers: rendered as the content's `<quote>` envelope, and — when it names a stored
-   * message of the same chat — its `referrer` becomes the target's, so passive replies and thread placement work.
+   * Message the publication answers: must name a message stored in `im_messages` for the target chat (keys from
+   * another bot, another chat, or unstored/expired keys are rejected with `ImError('access')`). Rendered as the
+   * content's `<quote>` envelope, and its stored `referrer` becomes the target's for passive replies and thread placement.
    */
   quote?: ImMessageKey
   /**
