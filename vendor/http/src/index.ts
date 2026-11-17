@@ -346,15 +346,13 @@ export class Http extends Service<Http.Intercept> {
     const url = this.resolveURL(args[0], config)
     method ??= config.method ?? 'GET'
 
-    const controller = new AbortController()
-    if (config.signal) {
-      if (config.signal.aborted) {
-        throw config.signal.reason
-      }
-      config.signal.addEventListener('abort', () => {
-        controller.abort(config.signal!.reason)
-      })
+    if (config.signal?.aborted) {
+      throw config.signal.reason
     }
+    const controller = new AbortController()
+    // Combine without attaching a strong listener to `config.signal` so repeated requests sharing a long-lived
+    // signal cannot accumulate closures while still cancelling both headers and response-body reads.
+    const requestSignal = config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal
 
     const dispose = this.ctx.effect(() => {
       const timer = config.timeout && setTimeout(() => {
@@ -374,7 +372,7 @@ export class Http extends Service<Http.Intercept> {
         body: config.data,
         keepalive: config.keepAlive,
         redirect: config.redirect,
-        signal: controller.signal,
+        signal: requestSignal,
       }
 
       if (config.data && typeof config.data === 'object') {
