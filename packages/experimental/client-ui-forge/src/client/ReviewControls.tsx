@@ -94,7 +94,7 @@ export function SegmentedChoice<Value extends string>({ segments, value, choose,
         const tip = segment.disabledTip ?? (counted || segment.count === null ? null : `${segment.label} ${String(segment.count)}`)
         // Every segment keeps its Tooltip, disabled without hover text, so showing or hiding the counts keeps the
         // button mounted and the focus on it.
-        return <Tooltip key={segment.value} label={tip ?? segment.label} side="bottom" disabled={tip === null}>{button}</Tooltip>
+        return <Tooltip key={segment.value} label={tip ?? segment.label} side="bottom" delayMs={500} disabled={tip === null}>{button}</Tooltip>
       })}
     </div>
   )
@@ -205,7 +205,7 @@ export function HideTestsSwitch({ hidden, toggle, t }: PropsLocale<typeof NS> & 
   readonly toggle: () => void
 }): ReactNode {
   return (
-    <Tooltip label={t('tests.hideHint')} side="bottom">
+    <Tooltip label={t('tests.hideHint')} side="bottom" delayMs={500}>
       {/* A label forwards a click on its text to the switch, its first labelable descendant. */}
       <label className={css.switch} data-forge-hide-tests="">
         <Switch checked={hidden} label={t('tests.hide')} onChange={toggle} />

@@ -264,8 +264,8 @@ async function withScrollWorld(
     runFailure = error
     try {
       await saveFailureShot(world.page, options.failureShot)
-    } catch {
-      // Best-effort evidence must never prevent cleanup of the owned world.
+    } catch (_failureShotFailed) {
+      // A missing screenshot loses evidence only; cleanup of the owned world and the rethrown run failure still follow.
     }
   }
   let cleanupFailure: unknown

@@ -105,7 +105,7 @@ function candidateKeys({ record, label, displayTitle }: LabelledCandidate): Sear
 
 /** Exact-read consumer that prepares immutable cross-session message context. */
 export class SessionReferenceResolver extends TypertRemoteService {
-  static inject = ['sessionQuery']
+  static inject = ['sessionQuery', 'sessions', 'sessionProjections']
   static Config: z<Config> = z.object({
     maxReferences: z.number().step(1).min(1).max(MAX_REFERENCES).default(MAX_REFERENCES),
     candidateLimit: z.number().step(1).min(1).default(DEFAULT_CANDIDATE_LIMIT),
@@ -272,17 +272,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
   private projectedLabels<T extends { readonly record: SessionRecord }>(
     items: readonly T[],
   ): Array<T & { label: string; displayTitle: string }> {
-    const projections = this.ctx.get('sessionProjections')
-    const sessions = this.ctx.get('sessions')
-    // An attached session answers from its live cut only while the registry is mounted.
-    const attached = new Map(sessions === undefined || projections === undefined
-      ? undefined
-      : sessions.list().map(session => [session.id, session]))
+    const projections = this.ctx.sessionProjections
+    const attached = new Map(this.ctx.sessions.list().map(session => [session.id, session]))
     const cache = this.ctx.get('sessionProjectionCache')
     const cachedSnapshot = cache?.cachedSnapshot.bind(cache)
     return items.map((item) => {
       const session = attached.get(item.record.header.id)
-      const snapshot = session !== undefined && projections !== undefined
+      const snapshot = session !== undefined
         ? projections.snapshot(session, LABEL_KEYS)
         : cachedSnapshot?.(item.record.header, LABEL_KEYS)
       const label = titleOf(snapshot) ?? item.record.header.id

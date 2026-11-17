@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -104,7 +104,7 @@ export function forgeChangeRequestsProjection(rules: CommandRules): ForgeChangeR
     if (pending === undefined) return state
     const settled = { ...state, pending: state.pending.filter(entry => entry !== pending) }
     if (result.message.isError === true) return settled
-    return settle(settled, pending, textOf(result.message.content), seq)
+    return settle(settled, pending, extractTextContent(result.message.content, { separator: '\n' }), seq)
   }
 
   const applyDispatch = (
@@ -114,7 +114,7 @@ export function forgeChangeRequestsProjection(rules: CommandRules): ForgeChangeR
     const command = commandIn(dispatch.arguments)
     const evidence = command === undefined || !rules.hint.test(command) ? undefined : rules.evidence(command)
     if (evidence === undefined) return state
-    return settle(state, evidence, textOf(dispatch.content), seq)
+    return settle(state, evidence, extractTextContent(dispatch.content, { separator: '\n' }), seq)
   }
 
   /** Bind the URLs and record the pushes one successful shell result carries; returns the input state when nothing changes. */
@@ -134,11 +134,6 @@ export function forgeChangeRequestsProjection(rules: CommandRules): ForgeChangeR
     apply,
     wire: { viewSchema: bindingsSchema, view: (state: ForgeChangeRequestsState) => state.bindings },
   }
-}
-
-/** Text blocks of a rendered shell result, joined by newlines. */
-function textOf(content: readonly ContentBlock[]): string {
-  return content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
 }
 
 function applyRecord(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChangeRequestsState {

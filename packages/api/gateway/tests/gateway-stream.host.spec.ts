@@ -146,7 +146,7 @@ class FeedService extends TypertRemoteService {
   async *swallow(signal: AbortSignal): RemoteStream<string, string> {
     try {
       for await (const item of this.invocation().uplink<string>()) yield item
-    } catch {
+    } catch (_uplinkFailed) {
       // The fixture keeps yielding after the rejected item on purpose.
     }
     yield 'swallowed'

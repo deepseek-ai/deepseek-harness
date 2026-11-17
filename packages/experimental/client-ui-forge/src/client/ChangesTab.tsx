@@ -17,9 +17,9 @@ import {
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
-  IconInfoOutlineRegular, IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
+  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
-  Menu, StateDot, Tooltip,
+  Menu, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -53,6 +53,7 @@ import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
+import { ChangesLoading } from './ChangesLoading.tsx'
 import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
@@ -397,7 +398,7 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
           {t('review.submit')}{reviewCount > 0 ? ` (${reviewCount})` : ''}
         </Button>
       </span>
-      <Tooltip label={t('change.view')} side="bottom">
+      <Tooltip label={t('change.view')} side="bottom" delayMs={500}>
         <button type="button" className={css.tool} aria-label={t('change.view')} onClick={() => { openLink(href) }}>
           <IconRightUpOutlineRegular size={14} />
         </button>
@@ -431,7 +432,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
     <div className={css.header}>
       {scope === 'branch' ? <>
         <span className={css.headerIcon}><IconBranchOutlineRegular size={15} /></span>
-        <Tooltip label={head} side="bottom">
+        <Tooltip label={head} side="bottom" delayMs={500}>
           <span className={css.headerHead} tabIndex={0} data-forge-head="">{head}</span>
         </Tooltip>
         <span className={css.headerArrow} aria-hidden="true">→</span>
@@ -439,7 +440,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
           visible={visible} list={diffBases} choose={choose} t={t} />
         <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>
       </> : <>
-        <span className={css.headerIcon}><IconListPenOutlineRegular size={15} /></span>
+        <span className={css.headerIcon}><IconFilesDiffOutlineRegular size={15} /></span>
         <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
       </>}
       {(scope === 'branch' || creatable) && <span className={css.headerEnd}>
@@ -627,9 +628,12 @@ export function ChangesTab({
   useEffect(() => {
     if (choices?.navigated === navigation.revision) return
     actions.navigated(tab.id, navigation.revision)
-    const lensParam = navigation.params?.lens
+    // Every tab of this kind is a `forge-changes` resource address, so its params are that type's; the union is
+    // narrowed on the field read, not validated.
+    const params = navigation.params
+    const lensParam = params !== undefined && 'lens' in params ? params.lens : undefined
     if (lensParam !== undefined) actions.filtered(tab.id, lensParam)
-    const path = navigation.params?.path
+    const path = params !== undefined && 'path' in params ? params.path : undefined
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
@@ -1215,7 +1219,7 @@ export function ChangesTab({
         </div>
       )
     } else if (failed === null) {
-      body = <div className={css.centered}><StateDot state="ongoing" /></div>
+      body = <div className={css.files} aria-busy="true"><ChangesLoading split={split} t={t} /></div>
     } else {
       body = (
         <div className={css.centered} role="status">
@@ -1329,7 +1333,9 @@ export function ChangesTab({
         {treeShown && <div className={css.lensCell}><LensControl {...lensProps} need={setLensWidth} /></div>}
         <div ref={toolbarRow} className={css.toolbarMain}>
           {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-          {tab.visible && <span className={css.filesSlot}><ChangedFilesMenu {...navigator} visible /></span>}
+          {tab.visible && (
+            <span className={css.filesSlot}><ChangedFilesMenu {...navigator} loading={data === null && failed === null} visible /></span>
+          )}
           {tab.visible && allFiles.length > 0 && (
             <span className={css.lensMenu}><LensMenu {...lensProps} visible /></span>
           )}
@@ -1357,31 +1363,31 @@ export function ChangesTab({
             <span className={clsx(css.totals, css.foldViews)}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>
           )}
           <span className={css.tools}>
-            <Tooltip label={t('diff.refresh')} side="bottom">
+            <Tooltip label={t('diff.refresh')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldRefresh)} aria-label={t('diff.refresh')} onClick={refresh}>
                 <RefreshGlyph busy={rereading} size={16} />
               </button>
             </Tooltip>
-            <Tooltip label={expansionLabel} side="bottom">
+            <Tooltip label={expansionLabel} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} data-expanded={anyExpanded ? '' : undefined} aria-label={expansionLabel}
                 disabled={files.length === 0} onClick={toggleExpansion}>
                 <IconChevronsUpDownOutlineRegular />
               </button>
             </Tooltip>
-            <Tooltip label={t(split ? 'diff.unified' : 'diff.split')} side="bottom">
+            <Tooltip label={t(split ? 'diff.unified' : 'diff.split')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={split} aria-label={t('diff.splitAria')}
                 onClick={toggleSplit}>
                 <IconCompareSplitOutlineRegular className={css.compareIcon} />
               </button>
             </Tooltip>
-            <Tooltip label={t(wrap ? 'diff.nowrap' : 'diff.wrap')} side="bottom">
+            <Tooltip label={t(wrap ? 'diff.nowrap' : 'diff.wrap')} side="bottom" delayMs={500}>
               <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={wrap} aria-label={t('diff.wrapAria')}
                 onClick={toggleWrap}>
                 {wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
               </button>
             </Tooltip>
             <span className={css.treeToggle}>
-              <Tooltip label={treeAction} side="bottom">
+              <Tooltip label={treeAction} side="bottom" delayMs={500}>
                 <button type="button" className={css.tool} aria-label={treeAction} aria-expanded={treePosition !== 'hidden'}
                   aria-controls={treeId} disabled={allFiles.length === 0}
                   onClick={() => { setTreePosition(value => value === 'left' ? 'right' : value === 'right' ? 'hidden' : 'left') }}>

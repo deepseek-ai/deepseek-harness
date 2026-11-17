@@ -138,7 +138,7 @@ export function ThreadList(props: ThreadListProps): ReactNode {
         <span className={css.title}>{t('thread.list')}</span>
         <span className={css.total}>{threads.length}</span>
         <span className={css.spacer} />
-        <Tooltip label={t('thread.close')} side="bottom">
+        <Tooltip label={t('thread.close')} side="bottom" delayMs={500}>
           <button type="button" className={css.close} aria-label={t('thread.close')} onClick={props.close}><IconCloseOutlineRegular size={14} /></button>
         </Tooltip>
       </div>

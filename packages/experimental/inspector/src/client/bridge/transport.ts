@@ -101,7 +101,7 @@ export class ClientInspectorSource extends InspectorSourceConnection {
       if (!isJsonValue(frame) || jsonByteLength(frame) > this.bootstrap.maxFrameBytes) return
       try {
         socket.send(JSON.stringify(frame))
-      } catch {
+      } catch (_closingSocket) {
         // The socket close path resets this generation's Runtime and Console state.
       }
     }, url => this.sourceCatalog?.scriptKeyForUrl(url))

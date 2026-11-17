@@ -117,13 +117,15 @@ async function tornFrame(plaintext: string, accepts: (decoded: string) => boolea
   for (const end of candidateEnds) {
     const candidate = frame.subarray(0, end)
     if (scanZstdFrames(candidate).tornStart !== 0) continue
+    let decoded: string
     try {
-      const decoded = (await decompressZstdPrefix(candidate)).toString('utf8')
-      if (accepts(decoded)) return candidate
-    } catch {
+      decoded = (await decompressZstdPrefix(candidate)).toString('utf8')
+    } catch (_undecodableCut) {
       // Some early cuts precede the first decodable block; keep searching for
       // a cut that exercises partial-plaintext recovery.
+      continue
     }
+    if (accepts(decoded)) return candidate
   }
   throw new Error('test fixture could not produce the requested torn Zstandard frame')
 }

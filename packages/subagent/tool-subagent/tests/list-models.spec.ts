@@ -383,7 +383,7 @@ describe('list_subagent_models', () => {
 
   it.each([
     { args: { model: 'fast' }, expected: '`model` requires `provider`', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
-    { args: { provider: '' }, expected: '`provider` must be non-empty', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    { args: { provider: '', model: 'fast' }, expected: '`model` requires `provider`', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
     { args: { provider: 'missing' }, expected: 'is not allowed for this Session', info: { name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' } },
   ])('rejects incomplete or unavailable provider requests', async ({ args, expected, info }) => {
     const ctx = await setupListTool()
@@ -393,13 +393,12 @@ describe('list_subagent_models', () => {
     expect(result.error?.info).toEqual(info)
   })
 
-  it('rejects an empty exact model after resolving the provider', async () => {
+  it('treats empty query fields as omitted', async () => {
     const ctx = await setupListTool()
     ctx.llm.registerAdapter(['alpha'], new CatalogAdapter())
-    const result = await call(ctx, { provider: 'alpha', model: '' })
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain('`model` must be non-empty')
-    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect(text(await call(ctx, { provider: '', model: '' }))).toBe(text(await call(ctx, {})))
+    expect(text(await call(ctx, { provider: 'alpha', model: '' }))).toBe(text(await call(ctx, { provider: 'alpha' })))
+    expect((await call(ctx, { provider: 'alpha', model: '' })).isError).toBe(false)
   })
 
   it('reports registered alternatives for an unavailable provider', async () => {

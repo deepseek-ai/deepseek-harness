@@ -26,6 +26,8 @@ Each section is one list registration with `id`, `order`, and a required `label`
 
 Rows from every contributor share one look through the panel's stylesheet instead of a shared component: each contributor writes its row's markup and marks the parts, and the panel lays them out, so icon, text, and trailing areas align across packages. A shared row component would receive each contributor's icon, text, and controls as React nodes in props, which the client rules forbid, and a feature package cannot share its own row component with another feature package.
 
+A section's list shows five rows of each group and then a fold control, because a Session with many subagents, shared tasks, or background jobs would otherwise push the later sections out of the panel's height. Each list orders its rows so that the ones it holds back are the least current: running rows first and then the most recent ones, or for shared tasks, which carry no times, the unfinished tasks before the completed ones. The fold control is the one row the panel does offer as a Component Factory, `conversation.session.panel.fold`: it is the same in every section and takes only data and a callback, while each section keeps its fold state and decides which rows show.
+
 ### The turn rail sits at the start edge
 
 The turn rail sits at the scrollport's start edge with its marks, focus ring, and preview mirrored, leaving the end gutter to the docked panel; its 900px hiding rule guarantees room beside the start-side width handle.
@@ -47,3 +49,4 @@ The turn rail sits at the scrollport's start edge with its marks, focus ring, an
 - `ui-chat` gained one slot and one custom property on its layer and observes nothing for them. Each mounted panel adds one `ResizeObserver` on its dock probe, which calls back only when the docking decision flips. `ui-conversation` caps the default transcript width at 880px.
 - The panel shows only in Chat Views; elsewhere the toggle stays in the header, unavailable. Every Chat View occurrence renders the aside, so a Session shown in the main body and in an embedded Conversation at once shows its overlay in both.
 - The turn rail's position changed for every user; its behavior and hiding rule did not.
+- Change requests, background jobs, and subagents became sections, replacing the change requests sidebar tab, its start-page entry, and the header controls of jobs and subagents; the header keeps the subagent breadcrumb switcher for child Sessions. A section mounts only while the panel shows, so state that must outlast hiding the panel, such as cleared job rows, lives in a per-Session slot store.
