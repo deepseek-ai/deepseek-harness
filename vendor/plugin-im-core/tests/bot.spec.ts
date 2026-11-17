@@ -364,6 +364,31 @@ describe('bot.send', () => {
     expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(1)
   })
 
+  it('aborts retry after backoff sleep if the deduplication window expires during sleep', async () => {
+    let windowOpen = true
+    const { adapter, bot } = await setup(TestAdapter, { idempotentSend: () => windowOpen })
+    adapter.fail('sendPayload', new PlatformError('retryable', 'lost response', { published: 'unknown', retryAfterMs: 20 }), 1)
+    setTimeout(() => { windowOpen = false }, 5)
+    await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({
+      kind: 'retryable',
+      published: 'unknown',
+    })
+    expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(1)
+  })
+
+  it('requires idempotentSend after an earlier unknown outcome even when a subsequent attempt fails with published:no', async () => {
+    let windowOpen = true
+    const { adapter, bot } = await setup(TestAdapter, { idempotentSend: () => windowOpen })
+    adapter.fail('sendPayload', new PlatformError('retryable', 'lost response', { published: 'unknown', retryAfterMs: 0 }), 1)
+    adapter.fail('sendPayload', new PlatformError('retryable', 'token fetch failed', { published: 'no', retryAfterMs: 20 }), 1)
+    setTimeout(() => { windowOpen = false }, 5)
+    await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({
+      kind: 'retryable',
+      published: 'unknown',
+    })
+    expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(2)
+  })
+
   it('rejects with PartialSendError when a later part fails', async () => {
     const { adapter, bot } = await setup()
     adapter.fail('sendPayload', new PlatformError('invalid', 'second part rejected'), 1,

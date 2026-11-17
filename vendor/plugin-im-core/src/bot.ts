@@ -819,27 +819,28 @@ export abstract class Bot<C = unknown> {
   ): Promise<R> {
     let sawUnknown = false
     const isIdempotent = () => typeof idempotent === 'function' ? idempotent() : idempotent
+    const preserveUnknown = (classified: PlatformError): PlatformError =>
+      sawUnknown && classified.published !== 'unknown'
+        ? new PlatformError(classified.kind, classified.message, {
+            cause: classified,
+            published: 'unknown',
+            ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
+          })
+        : classified
     for (let attempt = 1; ; attempt++) {
       try {
         return await operation()
       } catch (error) {
         const classified = this.classifyError(error)
         if (classified.published === 'unknown') sawUnknown = true
+        const safe = (!sawUnknown && classified.published === 'no') || isIdempotent()
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit')
-          && (classified.published === 'no' || isIdempotent())
+          && safe
           && attempt < PIPELINE_ATTEMPTS
-        if (!again) {
-          throw sawUnknown && classified.published !== 'unknown'
-            ? new PlatformError(classified.kind, classified.message, {
-                cause: classified,
-                published: 'unknown',
-                ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
-              })
-            : classified
-        }
+        if (!again) throw preserveUnknown(classified)
         await this.sleep(streamBackoff(attempt, classified.retryAfterMs), signal)
-        if (classified.published !== 'no' && !isIdempotent()) {
-          throw classified
+        if ((sawUnknown || classified.published !== 'no') && !isIdempotent()) {
+          throw preserveUnknown(classified)
         }
       }
     }
