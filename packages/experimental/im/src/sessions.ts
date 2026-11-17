@@ -334,13 +334,13 @@ export class ImSessionHost implements ImSessions {
       if (recorded !== undefined && known.generation > recorded.fromGeneration) return recorded.replaced
     }
     // The whole lifecycle of the generation being replaced — cancel, dispose, and the record advance that publishes
-    // the next one — runs as ONE serial operation for that session id, because `admit()` queues on the same chain.
+    // the next one — runs as ONE serial operation for that session key, because `admit()` queues on the same chain.
     // Releasing the chain between the dispose and the write let a queued admission read the disposed generation and
     // write its stale record back, which rolled the counter back and made the cleared session current again.
     const outcome = await this.serial<{
       replaced: SessionId | undefined
       advanced?: { old: ImSessionRecord; record: ImSessionRecord }
-    }>(known.sessionId, async () => {
+    }>(key, async () => {
       const current = this.resolve(key)
       const recorded = receiptKey === undefined ? undefined : this.resets.get(receiptKey)
       if (recorded !== undefined) {
@@ -497,7 +497,7 @@ export class ImSessionHost implements ImSessions {
    * @param fresh - recorded by this very call, so the log cannot hold it yet and no read is needed.
    */
   admit(sessionId: SessionId, id: string, fresh: boolean = false): Promise<void> {
-    return this.serial(sessionId, async () => {
+    return this.serial(this.hosted(sessionId)?.key ?? sessionId, async () => {
       const stored = this.deliveries.get(id)
       if (stored === undefined || stored.admitted) return
       const record = this.hosted(sessionId)
@@ -615,8 +615,8 @@ export class ImSessionHost implements ImSessions {
     return this.writes.run(operation)
   }
 
-  private serial<T>(sessionId: SessionId, operation: () => Promise<T>): Promise<T> {
-    return runKeyed(this.chains, sessionId, operation)
+  private serial<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    return runKeyed(this.chains, key, operation)
   }
 
   private domainOf(): ImSessionsDomain {

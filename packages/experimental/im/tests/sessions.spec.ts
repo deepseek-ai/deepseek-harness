@@ -1034,4 +1034,20 @@ describe('stored delivery validation', () => {
     expect(second.host.pendingDeliveries()).toBe(0)
     expect(second.model.requests).toEqual([])
   })
+
+  it('serializes concurrent reset(key) calls without operationId/expectedGeneration and concurrent admit()', async () => {
+    const harness = await booted()
+    const initial = await harness.host.ensure(spec())
+    const reset1 = harness.host.reset(initial.key, 'first')
+    const reset2 = harness.host.reset(initial.key, 'second')
+    const admit = harness.host.admit(initial.sessionId, 'missing-delivery')
+    const [replaced1, replaced2] = await Promise.all([reset1, reset2, admit])
+
+    expect(replaced1).toBe(initial.sessionId)
+    expect(replaced2).toBeDefined()
+    expect(replaced2).not.toBe(replaced1)
+    const finalRecord = harness.host.resolve(initial.key)
+    expect(finalRecord?.generation).toBe(2)
+    expect(finalRecord?.sessionId).not.toBe(replaced2)
+  })
 })
