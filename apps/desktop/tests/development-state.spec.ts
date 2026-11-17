@@ -1,5 +1,5 @@
 /** Development launches keep Harness state where repository cleaning does not remove it. */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -59,5 +59,17 @@ it('uses explicit locations without moving legacy state', () => {
   expect(prepareDevelopmentState(root, { DSH_HOME: join(root, 'h'), DSH_DESKTOP_USER_DATA_DIR: join(root, 'u') }))
     .toEqual({ home: join(root, 'h'), userData: join(root, 'u') })
   expect(existsSync(join(root, '.desktop-build', 'development', 'home'))).toBe(true)
+  expect(existsSync(join(root, '.desktop-dev'))).toBe(false)
+})
+
+it.skipIf(process.platform === 'win32')('does not move state that a running Harness Dev still owns', () => {
+  const root = fixture()
+  const legacy = join(root, '.desktop-build', 'development')
+  mkdirSync(join(legacy, 'home'), { recursive: true })
+  mkdirSync(join(legacy, 'electron-user-data'))
+  symlinkSync(`host-${String(process.pid)}`, join(legacy, 'electron-user-data', 'SingletonLock'))
+
+  expect(() => prepareDevelopmentState(root, {})).toThrow('a running Harness Dev still uses')
+  expect(existsSync(join(legacy, 'home'))).toBe(true)
   expect(existsSync(join(root, '.desktop-dev'))).toBe(false)
 })
