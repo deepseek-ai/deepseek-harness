@@ -35,7 +35,7 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 ### 已发送的文件与目录引用
 
-在已发送消息、排队行和本地回显中，`@path` 或 `@"path"` token 只有在 Session 的文件系统确认该路径存在后才渲染为文件或目录引用。确认之前，以及路径不存在时（例如手写的 `@notes`），原文保持不变；邮箱地址永远不会匹配。从候选中选择的路径视为已确认，因此其回显会立即显示引用。每个 Session 与路径在一次页面加载中只检查一次。
+在已发送消息、排队行和本地回显中，`@path` 或 `@"path"` token 只有在 Session 的文件系统确认该路径存在后才渲染为文件或目录引用。确认之前，以及路径不存在时（例如手写的 `@notes`），原文保持不变；邮箱地址永远不会匹配。在同一 Session、同一次页面加载内从候选中选择并发送的路径视为已确认，因此其回显会立即显示引用。
 
 ### 失败行为
 
@@ -65,7 +65,7 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 文件选择把共享 `@path` 语法所定义的自然文本保留为隐藏的序列化与剪贴板形式。会话选择使用规范的 `@[label](dsh-session:…)` mention；序列化永远不会根据可见标题重建身份。
 
-插件还向 [UserText](../ui-conversation/README.zh.md#sent-user-text) 注册文件和目录匹配器，并拥有它们的 `conversation.user.text.node` renderer。每次查询返回原文偏移之后的下一个完整候选引用，不执行文件发现；共享计算器按原文位置裁定重叠。两个节点 renderer 都订阅绑定 Session 的 `pathPresence` 键控 Hook，其背后是 `workspaceFiles/stat`：stat 成功或 `workspace-file/not-regular-file` 失败即确认路径存在，`workspace-file/not-found` 判定不存在，其他失败则保持未确认，由下一个订阅者重试。插件持有这些结果，每个 Session 与路径保留一份，并在卸载时中止未完成的 stat；选定 pick 会把其路径记为已确认。可交互的文件节点还通过 Injection 接收绑定 Session 的 `openFile`；导航失败时保留引用，提供局部重试／关闭对话框。目录节点仍为标签。
+插件还向 [UserText](../ui-conversation/README.zh.md#sent-user-text) 注册文件和目录匹配器，并拥有它们的 `conversation.user.text.node` renderer。每次查询返回原文偏移之后的下一个完整候选引用，不执行文件发现；共享计算器按原文位置裁定重叠。两个节点 renderer 都订阅绑定 Session 的 `pathPresence` 键控 Hook，其背后是 `workspaceFiles/stat`：stat 成功或 `workspace-file/not-regular-file` 失败（目录、无论指向何处的符号链接或其他非普通条目）即确认路径存在，`workspace-file/not-found` 判定不存在，其他失败则保持未确认，由下一个订阅者重试。插件持有这些结果，每个 Session 与路径保留一份，并在卸载时中止未完成的 stat；选定 pick 会把其路径记为已确认。存在性不通过 `useResource` 读取 [`file` 资源](../../api/workspace-files/README.zh.md)：该 provider 在有读取方挂载期间为每个 Session 与路径保持一个 Host 变更订阅，而一次提及只需要一个结果。可交互的文件节点还通过 Injection 接收绑定 Session 的 `openFile`；导航失败时保留引用，提供局部重试／关闭对话框。目录节点仍为标签。
 
 </details>
 

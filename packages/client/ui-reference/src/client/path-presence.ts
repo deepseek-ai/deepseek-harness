@@ -5,7 +5,9 @@
  * is live. Only a definitive Host answer is retained; any other failure leaves
  * the pair unconfirmed, and the next subscriber asks again. Retained answers
  * are not refreshed when the path is created or removed later. Entries live as
- * long as the plugin, one per distinct mention the client has rendered.
+ * long as the plugin, one per distinct mention the client has rendered. Each
+ * unconfirmed pair starts its own Host request when first subscribed; nothing
+ * bounds how many are outstanding at once.
  */
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceFileStat } from '@deepseek-ai/dsh-api-remotes/client'
@@ -58,8 +60,9 @@ interface Entry {
 }
 
 /**
- * Classify one stat. A directory or other non-regular entry still exists;
- * failures that do not describe the path leave it unconfirmed.
+ * Classify one stat. A directory, a symbolic link whatever it points to, or
+ * another non-regular entry still exists; failures that do not describe the
+ * path leave it unconfirmed.
  * @param result - Host stat result.
  * @returns the definitive presence, or undefined.
  */
@@ -92,15 +95,15 @@ export function createPathPresence(stat: PathStat): PathPresenceSources {
   const probe = (entry: Entry, sessionId: MentionSessionId, path: string) => {
     if (entry.probing || entry.presence !== undefined || lifetime.signal.aborted) return
     entry.probing = true
-    // Cancellation and carrier faults resolve as failures; only a Remote
-    // assembly fault rejects, and it surfaces as an unhandled rejection.
+    // Cancellation and carrier faults resolve as failures. Only a Remote
+    // assembly fault rejects: it stays an unhandled rejection so the fault is
+    // reported, and the pair stays unconfirmed for the next subscriber.
     void stat(sessionId, path, lifetime.signal).then((result) => {
-      entry.probing = false
       const presence = presenceOf(result)
       // A confirmation recorded while this stat was outstanding is newer.
       if (presence === undefined || entry.presence !== undefined || lifetime.signal.aborted) return
       publish(entry, presence)
-    })
+    }).finally(() => { entry.probing = false })
   }
 
   const entryFor = (sessionId: MentionSessionId, path: string): Entry => {

@@ -95,6 +95,28 @@ describe('createPathPresence', () => {
     expect(stat).toHaveBeenCalledTimes(2)
   })
 
+  it('reports a rejected stat as an unhandled rejection and asks again for the next subscriber', async () => {
+    const fault = new Error('client api: workspaceFiles/stat has no active Connection')
+    const stat = vi.fn<PathStat>()
+      .mockRejectedValueOnce(fault)
+      .mockResolvedValueOnce({ ok: true, value: STAT })
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown): void => { rejections.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const presence = createPathPresence(stat)
+      const source = presence.source(sid('a'), 'LICENSE')
+      source.subscribe(vi.fn())
+      await vi.waitFor(() => { expect(rejections).toEqual([fault]) })
+      expect(source.getSnapshot()).toBeUndefined()
+      source.subscribe(vi.fn())
+      expect(stat).toHaveBeenCalledTimes(2)
+      await vi.waitFor(() => { expect(source.getSnapshot()).toBe('present') })
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
   it('aborts outstanding stats on disposal, drops their answers, and starts no further stats', async () => {
     const { stat, calls } = deferredStat()
     const presence = createPathPresence(stat)

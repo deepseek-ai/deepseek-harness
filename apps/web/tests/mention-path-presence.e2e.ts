@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
-  captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, readPersistedEvents, recordFixture,
+  captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, readPersistedEvents,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
@@ -60,7 +60,6 @@ describe.skipIf(MODE === 'record')('web e2e: mention path presence', () => {
     const persisted = (await readPersistedEvents(scaffold, sessionId))
       .find(event => event.type === 'user/message' && event.data.source.kind === 'user')
     expect(persisted).toMatchObject({ data: { content: [{ type: 'text', text: PROMPT }] } })
-    if (MODE === 'refresh') await recordFixture(scaffold, sessionId, FIXTURE)
     expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual([PROMPT])
 
     for (const reload of [false, true]) {

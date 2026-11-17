@@ -31,7 +31,7 @@ import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/
 import {
   FileReference, FolderReference, type FileReferenceInjected, type PathPresenceInjected,
 } from './FileReference.tsx'
-import { createPathPresence } from './path-presence.ts'
+import { createPathPresence, type MentionSessionId } from './path-presence.ts'
 import { fileReferenceRule, folderReferenceRule, mentionPath } from './user-text-rules.ts'
 export type {} from './user-text-rules.ts'
 import type {
@@ -66,7 +66,7 @@ export function apply(ctx: ClientContext): void {
   const sessions = ctx.get('sessions') as ISessions
   const presence = createPathPresence((sessionId, path, signal) => ctx.remote.workspaceFiles.stat(sessionId, path, signal))
   ctx.effect(() => () => { presence.dispose() }, 'ui-reference: mention path stats')
-  const presenceFor = (sessionId: UserTextNodeProps<'file'>['sessionId']): PathPresenceInjected => ({
+  const presenceFor = (sessionId: MentionSessionId): PathPresenceInjected => ({
     keyedHooks: { pathPresence: path => presence.source(sessionId, path) },
   })
   ctx.uiConversation.userText.register(fileReferenceRule)
@@ -182,7 +182,7 @@ export function apply(ctx: ClientContext): void {
     },
     openReference(session, { ref, appearance }) {
       if (appearance !== 'file') return false
-      const path = ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1)
+      const path = mentionPath(ref)
       const cwd = sessions.list.getSnapshot().byId[session.sessionId]?.cwd
       ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
       return true
