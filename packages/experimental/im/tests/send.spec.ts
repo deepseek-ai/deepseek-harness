@@ -5,8 +5,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  Bot, createRenderReport, h, normalize, PartialSendError, PlatformError, type Fragment, type MessageHandle,
-  type MessageStream, type SendOptions, type SendResult, type Target,
+  Bot, createRenderReport, h, normalize, PartialSendError, PlatformError, StreamAbortError, StreamLimitError,
+  type Fragment, type MessageHandle, type MessageStream, type SendOptions, type SendResult, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import { createTextMode, mountFakeAdapter, type FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -643,6 +643,57 @@ describe('ImSender.stream', () => {
     expect(receiptsOf(pool).get('op-partial-stream')?.message).toBe('fake:bot|m_stream_1')
     expect(sender.sessionOf(ImMessageKey('fake:bot', 'm_stream_1'))).toBe(sessionId)
     streamSpy.mockRestore()
+  })
+
+  it('settles a recalled stream abort or limit recall as failed without message attribution', async () => {
+    const { bot, sender, pool } = await boot()
+    const makeStream = (err: Error, handleAfterFail?: MessageHandle): { stream: MessageStream; reject: (e: unknown) => void } => {
+      let rejectDone!: (reason: unknown) => void
+      const done = new Promise<never>((_resolve, reject) => { rejectDone = reject })
+      done.catch(() => {})
+      let handle: MessageHandle | undefined = {
+        bot: 'fake:bot',
+        target: { channel: 'c1', platform: 'fake' } as never,
+        mode: 'card',
+        parts: [{ id: 'm_recalled', kind: 'card', time: 1 }],
+        createdAt: 1,
+        edits: 0,
+        content: h('message', h.text('first')),
+      }
+      return {
+        stream: {
+          update: () => {},
+          close: async () => await done,
+          abort: async () => true,
+          get state() { return 'closed' as const },
+          get handle() { return handle },
+          strategy: 'edit',
+          done,
+        },
+        reject: (e: unknown) => {
+          handle = handleAfterFail
+          rejectDone(e)
+        },
+      }
+    }
+
+    const abortRecalled = makeStream(new StreamAbortError('empty', true))
+    const spy1 = vi.spyOn(bot, 'stream').mockReturnValueOnce(abortRecalled.stream)
+    const s1 = await sender.stream(CHAT, { operationId: 'op-abort-recalled' })
+    abortRecalled.reject(new StreamAbortError('empty', true))
+    await expect(s1.done).rejects.toThrow(/aborted/)
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-abort-recalled')?.status).toBe('failed') })
+    expect(receiptsOf(pool).get('op-abort-recalled')?.message).toBeUndefined()
+    spy1.mockRestore()
+
+    const limitRecalled = makeStream(new StreamLimitError({ kind: 'size', message: 'too big' }))
+    const spy2 = vi.spyOn(bot, 'stream').mockReturnValueOnce(limitRecalled.stream)
+    const s2 = await sender.stream(CHAT, { operationId: 'op-limit-recalled' })
+    limitRecalled.reject(new StreamLimitError({ kind: 'size', message: 'too big' }))
+    await expect(s2.done).rejects.toThrow(/too big/)
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-limit-recalled')?.status).toBe('failed') })
+    expect(receiptsOf(pool).get('op-limit-recalled')?.message).toBeUndefined()
+    spy2.mockRestore()
   })
 
   it('keeps a stream receipt pending when its outcome cannot be saved', async () => {

@@ -97,7 +97,7 @@ kind: "package-reference"
 
 所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。显式指定 `thread` 字符串时，该线程必须属于目标聊天：发送器优先复用同聊天已存消息的匹配 `referrer`，未命中时由适配器向平台解析并校验归属（解析或归属校验失败时以 `published: 'no'` 拒绝发布）。当 `options.session` 在该聊天上的全部可写绑定都受 `thread` 约束、未传入显式 `options.thread`、且 `options.quote` 指向话题根消息（自身无 `thread` 字段）时，`send` 与 `stream` 会将该根消息 id 作为 `Target.thread` 转发给适配器，使回复留在话题内。
 
-传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容）、`partial`（多段消息仅部分发布成功）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
+传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容）、`partial`（多段消息或已开流的流式消息在部分内容已留在聊天中后失败）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
 
 发布内容用 URL 指明其中的媒体。`data:` 或 `base64:` 源自带字节，`satori:` 源由核心自行解析；`file:` 或 `http(s)` 源则在 prepare 阶段由本进程通过 `ctx.http` 抓取——与任何插件使用的是同一个服务，没有 scheme 策略也没有地址策略。因此 `im_send_file` 在宿主文件系统上以绝对 `file:` URL 发布会话给出的路径，只有工作目录位于另一执行世界（SSH 工作区）时才把字节内联，并受 `send.maxMediaBytes` 约束。该路径不受额外限制：`cwd` 只是相对路径的基准，`~` 会展开，可读范围就是本进程能打开的范围。
 

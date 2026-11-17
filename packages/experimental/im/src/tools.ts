@@ -647,8 +647,8 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
         + 'and answers it, im_send_file publishes a local file.')
     parts.push('confirmed means the platform published the message; failed means nothing was published and the same '
       + 'content may be sent again; uncertain means the chat must be inspected before a new intentional send, because '
-      + 'the same tool call is never resent; partial means only some parts were published. The report line names what '
-      + 'the platform could not render natively.')
+      + 'the same tool call is never resent; partial means part of a multi-part send or an opened stream was published '
+      + 'before a later step failed. The report line names what the platform could not render natively.')
     parts.push('A publication carries only what you pass it: im_send and im_reply publish their own text and inline '
       + 'images, and im_send_file publishes the file at the path you name.')
     parts.push('To notify one person, write the mention in your markdown: <at user_id="ou_…">张三</at>. It addresses'

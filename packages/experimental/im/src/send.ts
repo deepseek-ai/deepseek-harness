@@ -13,9 +13,11 @@
  *   quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for a
  *   stream on every state, because the target is resolved once.
  * - **Receipts.** A publication with `options.operationId` records `pending` *before* it reaches the platform and the
- *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing,
- *   `PlatformError.published === 'no'`), `partial` (`PartialSendError`) or `uncertain` (anything else — transport
- *   errors, timeouts, cancellation after dispatch). Replaying one operation id returns the recorded outcome and never
+ *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing —
+ *   `PlatformError.published === 'no'`, `StrictRenderError`, or a stream whose message was never opened or was
+ *   confirmed recalled via `StreamLimitError` / `StreamAbortError.recalled`), `partial` (`PartialSendError` or a
+ *   stream whose handle still sits in the chat after a later failure) or `uncertain` (anything else — transport
+ *   errors, timeouts, cancellation without confirmed recall). Replaying one operation id returns the recorded outcome and never
  *   sends again: an operation whose dispatch has no recorded outcome reads as `uncertain`, because the only safe
  *   statement about it is "inspect the chat". A reused operation id with *different* content is a `conflict`. A stream
  *   cannot be replayed: an operation id that already opened one is a `conflict` whatever its content.
@@ -29,8 +31,8 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  h, isElement, PartialSendError, PlatformError, StrictRenderError, type Bot, type Fragment, type MessageHandle,
-  type MessageStream, type SendResult, type StreamOptions, type Target,
+  h, isElement, PartialSendError, PlatformError, StreamAbortError, StreamLimitError, StrictRenderError, type Bot,
+  type Fragment, type MessageHandle, type MessageStream, type SendResult, type StreamOptions, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -415,6 +417,9 @@ export class ImSender {
     }
     if (error instanceof StrictRenderError) {
       return { status: 'failed', report: error.report, error: error.message }
+    }
+    if (error instanceof StreamLimitError || (error instanceof StreamAbortError && error.recalled)) {
+      return { status: 'failed', error: error.message }
     }
     if (error instanceof PlatformError && error.published === 'no') {
       return { status: 'failed', error: `${REFUSED}${error.message}` }
