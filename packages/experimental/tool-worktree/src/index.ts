@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 /** Cordis plugin name. */
 export const name = 'tool-worktree'
@@ -34,9 +34,10 @@ export function apply(ctx: Context): void {
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args, exec) {
-      if (exec.agent === undefined) throw new Error('create_worktree requires a calling agent')
-      return ctx.worktrees.create(exec.agent, args, exec.signal)
+    async execute({ name, from }, exec) {
+      if (exec.agent === undefined) throw new ToolContextUnavailableError('create_worktree requires a calling agent')
+      // The parameter object is open, so only the declared fields reach the runtime; it never fetches for this tool.
+      return ctx.worktrees.create(exec.agent, { ...name === undefined ? {} : { name }, ...from === undefined ? {} : { from } }, exec.signal)
     },
     presentCall: args => ({ card: 'generic', title: 'create_worktree', rawInput: args }),
   }))

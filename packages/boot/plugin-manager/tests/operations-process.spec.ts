@@ -86,7 +86,7 @@ function fixture(child: string, descendant: string) {
     writeFileSync(stopFile, '')
     if (existsSync(pidFile)) {
       const pid = Number(readFileSync(pidFile, 'utf8'))
-      try { process.kill(pid, 'SIGKILL') } catch { /* the descendant exited with its own timer */ }
+      try { process.kill(pid, 'SIGKILL') } catch (_alreadyExited) { /* The descendant exited on its own timer, so there is nothing left to kill. */ }
       await awaitGone(pid)
     }
     rmSync(home, { recursive: true, force: true })
@@ -150,7 +150,7 @@ it('waits for a run recorded by an exited operation before starting its own', as
     stdio: 'ignore',
   })
   onTestFinished(async () => {
-    try { orphan.kill('SIGKILL') } catch { /* the recorded run already exited */ }
+    try { orphan.kill('SIGKILL') } catch (_alreadyExited) { /* The recorded run already exited, so there is nothing left to kill. */ }
     await awaitGone(orphan.pid as number)
   })
   const dir = join(context.home, 'profiles', 'test')

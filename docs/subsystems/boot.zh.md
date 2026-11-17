@@ -116,6 +116,27 @@ Types: [Agent](core.zh.md) · [Session](session.zh.md) · [ToolCallId](core.zh.m
 
 Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
 
+<a id="ctxcliaccounts--cliaccounts"></a>
+
+### `ctx.cliAccounts` — `CliAccounts`
+
+Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.
+
+```ts cordis-catalog
+/**
+ * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
+ * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
+ * loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active
+ * operation and the CLI processes it started have stopped.
+ * @param registration - the plugin's CLI, account operations, and Plugins page text.
+ * @returns the handle for the plugin's own reads and updates of the account.
+ * @throws when the runtime-context name `<name>:cli` is already registered.
+ */
+register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>
+```
+
+Source: [`packages/connector/cli-account/src/index.ts`](../../packages/connector/cli-account/src/index.ts)
+
 <a id="ctxconfigeditor--configeditor"></a>
 
 ### `ctx.configEditor` — `ConfigEditor`

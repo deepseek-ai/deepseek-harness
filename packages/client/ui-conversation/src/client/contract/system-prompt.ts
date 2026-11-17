@@ -1,4 +1,5 @@
 /** Immutable system-only interpretation of the loaded Session surface. */
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { isSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { SystemPromptNode } from './request-inspection.ts'
@@ -61,7 +62,7 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
       time: event.time,
       turn: event.data.turn,
       step: event.data.step,
-      text: event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join(''),
+      text: extractTextContent(event.data.message.content),
       update: op === 'append' && previous?.nodes.some(item => item.node.text !== '') === true,
     }
     : undefined

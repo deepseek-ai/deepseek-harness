@@ -3,7 +3,7 @@ import { preferredShell, rememberShell } from './shell-preference.ts'
 import type { TerminalInventory } from './inventory.ts'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Deque } from '@deepseek-ai/dsh-deque'
-import { RemoteStreamCarrierError, type ClientRemote, type RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
+import { isRemoteStreamCarrierFailure, type ClientRemote, type RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError, remoteErrorOf, type RemoteResult, type RemoteStreamHandle, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -407,7 +407,7 @@ export class TerminalView {
     const failure = remoteErrorOf(error)
     const issue = failure?.code === 'terminal/view' ? failure.details.issue : failure?.code === 'terminal/limit-reached' ? 'terminalLimit' : failure?.code === 'terminal/unavailable' ? 'missingTerminal' : undefined
     if (!this.stopped() && issue === 'missingTerminal') this.inventory.remove(this.id)
-    this.patch({ phase: error instanceof RemoteStreamCarrierError ? 'disconnected' : 'failed', writable: false, issue, error: error instanceof Error ? error.message : String(error) })
+    this.patch({ phase: isRemoteStreamCarrierFailure(error) ? 'disconnected' : 'failed', writable: false, issue, error: error instanceof Error ? error.message : String(error) })
   }
 }
 

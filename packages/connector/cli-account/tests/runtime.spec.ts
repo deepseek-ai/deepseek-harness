@@ -2,45 +2,38 @@ import { Context } from '@deepseek-ai/cordis'
 import type { ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
-import { CliAccountRuntime, exitFailure, failureDetails, type CliOperationControl } from '../src/runtime.ts'
-import type { CliAccountView, CliCommandFailure } from '../src/types.ts'
+import { CliAccountRuntime, failureDetails } from '../src/runtime.ts'
+import type { CliAccountView, CliOperationControl } from '../src/types.ts'
 import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 interface Account { readonly state: 'unchecked' | 'signed-out' | 'signed-in' }
 type Kind = 'check' | 'connect'
 type Phase = 'authorizing'
 type Command = 'status' | 'login'
-interface Failure extends CliCommandFailure<Command> { readonly code?: 'E42' }
-type Control = CliOperationControl<Phase, Command>
-type View = CliAccountView<Account, Kind, Phase, Failure>
-type Script = (kind: Kind, control: Control, signal: AbortSignal, publish: (account: Account) => void) => Promise<void>
-
-/** Delegates each operation to the spec's script so one runtime covers every path. */
-class FixtureAccount extends CliAccountRuntime<Account, Kind, Phase, Failure> {
-  script: Script = async () => {}
-
-  protected perform(kind: Kind, control: Control, signal: AbortSignal): Promise<void> {
-    return this.script(kind, control, signal, (account) => { this.publish(account) })
-  }
-}
+type Control = CliOperationControl<Account, Phase, Command>
+type View = CliAccountView<Account, Kind, Phase, Command>
+type Script = (kind: Kind, control: Control, signal: AbortSignal) => Promise<void>
 
 let ctx: Context
 let subprocess: ScriptedSubprocess
-let account: FixtureAccount
+let account: CliAccountRuntime<Account, Kind, Phase, Command>
+/** What each operation does; one runtime covers every path by replacing it. */
+let script: Script
 
 beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(ScriptedSubprocess)
   subprocess = ctx.subprocess as ScriptedSubprocess
-  account = new FixtureAccount({
+  script = async () => {}
+  account = new CliAccountRuntime({
     name: 'fixture',
-    cli: new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: EXECUTABLE, commandTimeoutMs: 5_000 }),
+    executor: new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: EXECUTABLE, commandTimeoutMs: 5_000 }),
     logger: ctx.logger,
     account: { state: 'unchecked' },
     check: 'check',
     cancellable: ['authorizing'],
     authorizationHosts: ['example.com'],
-    classify: (command, result) => ({ ...exitFailure(command, result), ...result.stderr.includes('E42') ? { code: 'E42' as const } : {} }),
+    perform: (kind, control, signal) => script(kind, control, signal),
   })
 })
 
@@ -57,15 +50,15 @@ async function settled(id: ConnectorOperationId): Promise<View> {
 }
 
 /** Check by running `status`, whose stdout names the account state. */
-const checkScript: Script = async (_kind, control, signal, publish) => {
+const checkScript: Script = async (_kind, control, signal) => {
   const result = await control.run('status', ['status'], signal)
   if (result.exitCode !== 0) throw new Error('status failed')
-  publish({ state: result.stdout.trim() === 'in' ? 'signed-in' : 'signed-out' })
+  control.publish({ state: result.stdout.trim() === 'in' ? 'signed-in' : 'signed-out' })
 }
 
 describe('CliAccountRuntime', () => {
   it('checks, publishes the account, and reports the outcome', async () => {
-    account.script = checkScript
+    script = checkScript
     subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
 
     const id = account.start('check')
@@ -74,8 +67,17 @@ describe('CliAccountRuntime', () => {
     expect(await settled(id)).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'check', outcome: 'succeeded' } })
   })
 
+  it('publishes an account outside an operation and notifies observers', () => {
+    const changes: View[] = []
+    account.observe(() => { changes.push(account.snapshot()) })
+
+    account.publish({ state: 'signed-out' })
+
+    expect(changes).toEqual([{ account: { state: 'signed-out' } }])
+  })
+
   it('notifies an observer of each change without starting a check, until its disposer runs', async () => {
-    account.script = checkScript
+    script = checkScript
     subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
     const changes: View[] = []
     const stop = account.observe(() => { changes.push(account.snapshot()) })
@@ -91,6 +93,22 @@ describe('CliAccountRuntime', () => {
     expect(changes).toHaveLength(seen)
   })
 
+  it('logs what an observer throws and still notifies the other observers and finishes the operation', async () => {
+    script = checkScript
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const thrown = new Error('observer failed')
+    account.observe(() => { throw thrown })
+    const changes: View[] = []
+    account.observe(() => { changes.push(account.snapshot()) })
+
+    const id = account.start('check')
+
+    const view = await settled(id)
+    expect(view).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(changes.at(-1)).toEqual(view)
+    expect(errors()).toEqual(changes.map(() => ['fixture: account observer failed: %o', thrown]))
+  })
+
   it('offers only trusted HTTPS authorization links, reports which it accepted, and clears them on the next stage', async () => {
     let login!: ScriptedProcess
     const offers: boolean[] = []
@@ -98,13 +116,13 @@ describe('CliAccountRuntime', () => {
       if (process.spec.argv[1] === 'status') process.reply({ stdout: 'in' })
       else login = process
     }
-    account.script = async (kind, control, signal, publish) => {
-      if (kind === 'check') return checkScript(kind, control, signal, publish)
+    script = async (kind, control, signal) => {
+      if (kind === 'check') return checkScript(kind, control, signal)
       control.stage('authorizing')
       const result = await control.run('login', ['login'], signal, { awaitsUser: true, onLine: (_stream, line) => { offers.push(control.offer(line)) } })
       if (result.exitCode !== 0) throw new Error('login failed')
       control.stage('checking')
-      await checkScript(kind, control, signal, publish)
+      await checkScript(kind, control, signal)
     }
 
     const id = account.start('connect')
@@ -126,7 +144,7 @@ describe('CliAccountRuntime', () => {
   it('cancels only the named operation in a cancellable phase, withdraws its link, and ignores later links', async () => {
     subprocess.respond = (process) => { process.write('stdout', 'https://example.com/device\n') }
     let late: boolean | undefined
-    account.script = async (_kind, control, signal) => {
+    script = async (_kind, control, signal) => {
       control.stage('authorizing')
       try {
         await control.run('login', ['login'], signal, { awaitsUser: true, onLine: (_stream, line) => { control.offer(line) } })
@@ -152,7 +170,7 @@ describe('CliAccountRuntime', () => {
   it('ignores cancellation outside the declared phases', async () => {
     let status!: ScriptedProcess
     subprocess.respond = (process) => { status = process }
-    account.script = checkScript
+    script = checkScript
     const id = account.start('check')
     await vi.waitFor(() => { expect(status).toBeDefined() })
 
@@ -166,7 +184,7 @@ describe('CliAccountRuntime', () => {
   it('runs one operation at a time and refreshes only when idle', async () => {
     let status!: ScriptedProcess
     subprocess.respond = (process) => { status = process }
-    account.script = checkScript
+    script = checkScript
     const id = account.start('check')
 
     expect(() => account.start('connect')).toThrow('fixture: another account operation is in progress')
@@ -182,9 +200,9 @@ describe('CliAccountRuntime', () => {
     await vi.waitFor(() => { expect(account.snapshot().account).toEqual({ state: 'signed-in' }) })
   })
 
-  it('reports a failed operation by its classified command and never logs the exception', async () => {
+  it('reports a failed operation by its last command and exit code and never logs the exception', async () => {
     subprocess.respond = (process) => { process.reply({ exitCode: 7, stderr: 'E42 token=secret-token' }) }
-    account.script = async (_kind, control, signal) => {
+    script = async (_kind, control, signal) => {
       control.stage('authorizing')
       await control.run('login', ['login'], signal)
       throw new Error('login printed secret-token')
@@ -194,18 +212,18 @@ describe('CliAccountRuntime', () => {
 
     expect(await settled(id)).toEqual({
       account: { state: 'unchecked' },
-      result: { id, kind: 'connect', outcome: 'failed', failure: { command: 'login', exitCode: 7, code: 'E42' } },
+      result: { id, kind: 'connect', outcome: 'failed', failure: { command: 'login', exitCode: 7 } },
     })
     expect(errors()).toEqual([[
       'fixture: account operation failed: %o',
-      { id, kind: 'connect', phase: 'authorizing', command: 'login', exitCode: 7, code: 'E42' },
+      { id, kind: 'connect', phase: 'authorizing', command: 'login', exitCode: 7 },
     ]])
     expect(JSON.stringify(errors())).not.toContain('secret-token')
   })
 
   it('reports an attempted command that produced no exit', async () => {
     subprocess.lookup = () => Promise.reject(new Error('lookup failed with secret-token'))
-    account.script = checkScript
+    script = checkScript
 
     const id = account.start('check')
 
@@ -214,7 +232,7 @@ describe('CliAccountRuntime', () => {
   })
 
   it('fails without a failure when no command ran', async () => {
-    account.script = () => Promise.reject(new Error('bad state'))
+    script = () => Promise.reject(new Error('bad state'))
 
     const id = account.start('check')
 
@@ -224,7 +242,7 @@ describe('CliAccountRuntime', () => {
 
   it('stops account work and refuses new work on disposal', async () => {
     subprocess.respond = () => {}
-    account.script = async (_kind, control, signal) => {
+    script = async (_kind, control, signal) => {
       control.stage('authorizing')
       await control.run('login', ['login'], signal, { awaitsUser: true })
     }
@@ -241,11 +259,7 @@ describe('CliAccountRuntime', () => {
   })
 })
 
-it('classifies a command by its exit code alone', () => {
-  expect(exitFailure('status', { exitCode: 3, stdout: 'out', stderr: 'token' })).toEqual({ command: 'status', exitCode: 3 })
-})
-
-it('lists a classified command as diagnostic items, with its exit code when it has one', () => {
+it('lists the last command of a failed operation as diagnostic items, with its exit code when it has one', () => {
   expect(failureDetails({ command: 'login', exitCode: 3 })).toEqual(['login', 'exit 3'])
   expect(failureDetails({ command: 'status', exitCode: null })).toEqual(['status'])
 })

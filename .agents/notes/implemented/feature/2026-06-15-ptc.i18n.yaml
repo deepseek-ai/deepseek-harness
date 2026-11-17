@@ -9,23 +9,23 @@
   en: 4b312be894531bee
   zh: d655648ea5843ef5
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision:
-  en: 109e418dd92ead24
-  zh: e2564f0f98cc4641
+  en: 920a552af96d95a9
+  zh: b619aa830dc29750
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/per-program-execution-controls:
   en: da694641e1d009de
   zh: 9d7492d39039af66
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-registry-owns-the-mode:
-  en: 4cd76a34f4712e1a
-  zh: 303ef72a18644d7c
+  en: 33acc5b7393514f8
+  zh: b58db10dc096e3bd
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-run-code-tool-and-the-dispatch-bridge:
-  en: 69e4683ac3150bdf
-  zh: d8eaa12eaba6d67e
+  en: 13fc9291d3d49020
+  zh: 62220faa32e6b412
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/observability-tool-ptc-dispatch:
-  en: 951fb03a27841eea
-  zh: 38928d1ca859eced
+  en: 5b49e09f358f6425
+  zh: cc6a7e889ce6428c
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-ptc-runtime-seam:
-  en: 4c423f4e9cef6055
-  zh: 5c23a3637eb420c0
+  en: f4684560af65cfbb
+  zh: 1b1d6222eec05a2e
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-node-process-runtime:
   en: b2a8d7d654d1832b
   zh: 5852a2a3660e5a2e
@@ -33,8 +33,8 @@
   en: d62b41a6a5c58e5f
   zh: ef72c5a9b32b370e
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/what-the-model-sees:
-  en: 109d4c326bfcf572
-  zh: 9f6be5afc281054d
+  en: e49585967dea8dcc
+  zh: 6f8e4b6d1e00aa17
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/consequences:
   en: 761eb6c1aeb7af18
   zh: 5434456a3d0a1b65
@@ -45,5 +45,5 @@
   en: e78530994a88d14f
   zh: 49f64c7f1421f507
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/risks:
-  en: d58925bdb912de23
-  zh: d3a70237d656e5a4
+  en: a194c1f84b7291ed
+  zh: 72856312bca4421d

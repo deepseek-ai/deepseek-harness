@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop-host",
   "description": "Private Node-mode host process for the Electron desktop application",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -18,6 +18,7 @@
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-host-authentication-desktop": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-schedule": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
@@ -25,6 +26,11 @@
     "@deepseek-ai/dsh-plugin-manager": "workspace:*"
   },
   "devDependencies": {
+    "ws": "^8.21.3",
+    "@types/ws": "^8.18.1",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",

@@ -860,7 +860,7 @@ describe('WorkspaceBrowser', () => {
     })
     const status = (id: string, value: Partial<SessionStatus>) =>
       hook<SessionStatusSnapshot>(new Map([[sid(id), {
-        running: false, pendingInteraction: undefined, completionUnread: false, ...value,
+        running: false, pendingInteraction: undefined, completionUnread: false, completionFailed: false, ...value,
       }]]))
     const expectVisible = (count: number) => {
       expect(screen.getAllByRole('treeitem').map(row => within(row).getByText(/^(alpha|session-\d+)$/u).textContent))
@@ -881,7 +881,7 @@ describe('WorkspaceBrowser', () => {
       pendingInteraction: { key: 'question:1', kind: 'plan-review', sessionId: sid('session-7') } as SessionPendingInteraction,
     }) })
     expectVisible(7)
-    rerender(b, { useSessionStatus: status('session-8', { completionUnread: true }) })
+    rerender(b, { useSessionStatus: status('session-8', { completionUnread: true, completionFailed: false }) })
     expectVisible(8)
     fireEvent.click(screen.getByRole('button', { name: '展开其余 4 个会话' }))
     expectVisible(12)
@@ -897,7 +897,7 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByText('alpha'))
     const running = (value: boolean) => hook<SessionStatusSnapshot>(new Map([[sid('session-9'), {
-      running: value, pendingInteraction: undefined, completionUnread: false,
+      running: value, pendingInteraction: undefined, completionUnread: false, completionFailed: false,
     }]]))
     rerender(b, { useSessionStatus: running(true) })
     rerender(b, { useSessionStatus: running(false) })
@@ -920,15 +920,15 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByText('alpha'))
     const running = (...ids: string[]) => hook<SessionStatusSnapshot>(new Map(ids.map(id => [sid(id), {
-      running: true, pendingInteraction: undefined, completionUnread: false,
+      running: true, pendingInteraction: undefined, completionUnread: false, completionFailed: false,
     }])))
     rerender(b, {
       useSessions: hook(sessionState(items, { main: sid('session-53') })),
       useSessionStatus: hook<SessionStatusSnapshot>(new Map([
-        [sid('session-55'), { running: true, pendingInteraction: undefined, completionUnread: false }],
-        [sid('session-56'), { running: false, pendingInteraction: undefined, completionUnread: true }],
+        [sid('session-55'), { running: true, pendingInteraction: undefined, completionUnread: false, completionFailed: false }],
+        [sid('session-56'), { running: false, pendingInteraction: undefined, completionUnread: true, completionFailed: false }],
         [sid('session-57'), {
-          running: false, completionUnread: false,
+          running: false, completionUnread: false, completionFailed: false,
           pendingInteraction: { key: 'question:1', kind: 'question', sessionId: sid('session-57') } as SessionPendingInteraction,
         }],
       ])),
@@ -2695,7 +2695,7 @@ describe('Workspace tree grouping', () => {
     fireEvent.click(screen.getByText('Child'))
     fireEvent.click(screen.getByText('Projects'))
     const status = (running: boolean) => hook<SessionStatusSnapshot>(new Map([[sid('child-8'), {
-      running, pendingInteraction: undefined, completionUnread: false,
+      running, pendingInteraction: undefined, completionUnread: false, completionFailed: false,
     }]]))
     rerender(b, { useSessionStatus: status(true) })
     rerender(b, { useSessionStatus: status(false) })

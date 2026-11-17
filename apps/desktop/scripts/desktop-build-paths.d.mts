@@ -1,4 +1,4 @@
-import type { DesktopAutoUpdateTarget } from './desktop-auto-update-environment.mjs'
+import type { DesktopAutoUpdateTarget } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 
 /** Mutable target directories plus shared download and package caches. */
 export interface DesktopTargetBuildPaths {

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Uso do computador",
-    "description": "Controle aplicativos no macOS e no Windows. Se instalar o DSH pelo npm no Windows, configure o programa auxiliar separadamente.",
+    "description": "Permite que o agente controle diretamente os aplicativos do seu computador.",
     "detail": "docs/DETAIL.md"
   }
 }

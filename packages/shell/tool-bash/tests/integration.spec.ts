@@ -11,7 +11,7 @@ import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
@@ -115,7 +115,8 @@ describe('bash tool through the agent loop', () => {
         async run(spec: PtcRunSpec): Promise<PtcRunResult> {
           const bash = spec.bindings.find(binding => binding.global === 'tools')?.functions.bash
           if (bash === undefined) throw new Error('missing bash binding')
-          const value = await bash({ command: 'pwd', description: 'Print launch directory' })
+          const resolved = await bash({ command: 'pwd', description: 'Print launch directory' })
+          const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
           expect(value).toMatchObject({ cwd: selected, stdout: { text: `${selected}\n` } })
           return { output: [], value }
         }

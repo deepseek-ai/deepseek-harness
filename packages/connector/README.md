@@ -1,5 +1,5 @@
 ---
-description: "The connector group map: application plugins that connect a third-party service to agents through existing Skill, Shell, and subprocess capabilities, and the CLI account library they share."
+description: "The connector group map: application plugins that connect a third-party service to agents through existing Skill, Shell, and subprocess capabilities, and the CLI account Service they register with."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Each application plugin in this group is installed into a profile to use one third-party service in conversations. A plugin composes existing capabilities, such as skills, runtime context, and subprocesses, and keeps application-specific configuration and model guidance in its own package. Plugins whose vendor CLI keeps the user's account share the CLI account library for running commands and account operations.
+Each application plugin in this group is installed into a profile to use one third-party service in conversations. A plugin composes existing capabilities, such as skills, runtime context, and subprocesses, and keeps application-specific configuration and model guidance in its own package. Plugins whose vendor CLI keeps the user's account register that CLI and account with the CLI account Service, which runs their commands and account operations.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Each application plugin in this group is installed into a profile to use one thi
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`cli-account/`](cli-account/README.md) | Runs a vendor CLI by its absolute path, gives the model that path in runtime context, and runs one Host-owned account operation at a time for CLI app plugins | — |
+| [`cli-account/`](cli-account/README.md) | Holds the vendor CLIs and accounts CLI app plugins register: gives the model each CLI's absolute path in runtime context, runs each plugin's account operations one at a time, and shows the account on the Plugins page | `ctx.cliAccounts` |
 | [`dingtalk/`](dingtalk/README.md) | The DingTalk plugin: downloads the pinned official `dws` and its skills, gives the model the absolute path of `dws`, registers its skill, and runs the account operations the Plugins page drives | registers on `ctx.skills`, `ctx.systemPrompt`, and `ctx.connectorAccounts` |
 
 -----

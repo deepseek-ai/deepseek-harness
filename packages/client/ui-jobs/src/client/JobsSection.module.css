@@ -1,0 +1,266 @@
+/* The panel toggle sizes and places this dot; it names the state for assistive technology. */
+.runningIndicator {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Rows sit inside the Session panel section body, which supplies the inset and
+   scrolling. They share the panel's columns: the status glyph's center 14px
+   from the row start, text at 30px, and the chevron's center 14px from the row
+   end. */
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Fold toggle and clear action over the settled tail. */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+/* The leading section needs no divider above it. */
+.sectionHeader:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.sectionToggle,
+.sectionClear {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.sectionToggle:focus-visible,
+.sectionClear:focus-visible {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .sectionToggle:hover,
+  .sectionClear:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.sectionChevron {
+  transform: rotate(-90deg);
+  transition: transform 120ms ease;
+}
+
+.sectionChevronOpen {
+  transform: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One 28px line per job: the command, its duration, the stop control, and the
+   chevron; the kind and state show in the row's hover card. The row button's
+   overlay covers the whole line, so the line highlights as one row; the stop
+   control sits above the overlay and the chevron reads through it. */
+.rowLine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+@media (hover: hover) {
+  .rowInteractive:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowLine:has(> .row:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+}
+
+button.row {
+  cursor: pointer;
+}
+
+button.row::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+}
+
+button.row:focus-visible {
+  outline: none;
+}
+
+.glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 20px;
+}
+
+.label {
+  flex: 1;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.duration {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}
+
+/* The trailing column; a row without output keeps it empty so the durations
+   stay aligned. It takes no presses: the row button's overlay below takes
+   them, also once the open chevron's rotation would paint it above that overlay. */
+.chevron {
+  display: grid;
+  pointer-events: none;
+  flex: none;
+  align-self: center;
+  place-items: center;
+  width: 16px;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Two-press kill: a plain glyph like the row's other trailing icons, with a 24px
+   target that overhangs the 20px line, so a running row keeps its 28px. */
+.stop {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin: -2px -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.stop:focus-visible {
+  outline-offset: -2px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .stop:hover {
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+/* The armed press widens into a labeled danger pill so the confirm step is
+   legible without hover; the state-error token is the one StateDot uses. The
+   pill is the 20px the row's padding leaves, so arming keeps the 28px line. */
+.stopArmed {
+  gap: 4px;
+  height: 20px;
+  margin: 0;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.stopLabel {
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.stopFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.panel {
+  margin: 2px 6px 6px;
+  /* Long commands and output lines wrap in full instead of ellipsizing or
+     scrolling sideways, and the output region scrolls within a fixed height
+     instead of folding its middle lines. */
+  --dsl-terminal-command-whitespace: pre-wrap;
+  --dsl-terminal-line-whitespace: pre-wrap;
+  --dsl-terminal-output-max-height: 288px;
+}
+
+/* The row carries the state dot, so the panel omits its own and reclaims the
+   dot gutter down to an ordinary content inset. It takes the density of a tool
+   call's terminal card. The overrides target the card element itself because
+   these variables are declared on it — a value inherited from this container
+   would lose to that declaration. */
+.panel :global([data-terminal]) {
+  --dsl-terminal-gutter: 12px;
+  --dsl-terminal-font: var(--dsw-font-markdown-code-block-small);
+  --dsl-terminal-line-height: 18px;
+  margin: 0;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.notice {
+  margin: 0 8px 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.noticeError {
+  color: var(--dsw-alias-state-error-primary);
+}

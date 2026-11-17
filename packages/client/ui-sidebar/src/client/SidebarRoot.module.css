@@ -81,7 +81,7 @@
   padding: 0;
 }
 
-:global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
+:global([data-windows-titlebar]) .root:not(.collapsed) .newSessionRow {
   margin-top: 6px;
 }
 
@@ -156,9 +156,14 @@
    rail right edge over the remaining 150ms of the AppFrame track transition.
    The bottom-pinned settings seat shares their opacity timeline but stays
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static. */
+   render stays static.
+   The New Session row renders its content through the `sidebar.session.action`
+   HOC slot, whose `display: contents` outlet anchor sits between the row and
+   its content. The shell's New-session button and the occupant's own controls
+   are that anchor's children, so the fade targets them through the anchor; the
+   boxless anchor itself cannot carry an animation. */
 .railIn .iconButton,
-.railIn .newSession,
+.railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
 .railIn .panelList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
@@ -415,19 +420,29 @@
   white-space: nowrap;
 }
 
+/* New session fills the row; the session-action HOC layer renders it, then the occupant's controls. */
+.newSessionRow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px);
+}
+
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
    corners); collapsed it renders as the rail's plain icon control. */
 .newSession {
   container-type: inline-size;
   position: relative;
-  flex: none;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
   height: 38px;
   padding: 8px 12px;
-  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px);
+  margin: 0;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
@@ -459,12 +474,20 @@
   }
 }
 
+/* The rail stacks the occupant's controls under the New session icon. */
+.collapsed .newSessionRow {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
 .collapsed .newSession {
-  align-self: flex-start;
+  flex: none;
   width: 36px;
   height: 36px;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0;
   gap: 0;
   border-color: transparent;
   background: transparent;
@@ -811,7 +834,7 @@
   .wide,
   .fading > *,
   .railIn .iconButton,
-  .railIn .newSession,
+  .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
   .railIn .panelList,
   .railIn .footArea,
   .railIn .regionArea {

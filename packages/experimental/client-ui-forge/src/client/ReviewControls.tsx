@@ -4,7 +4,7 @@
  * share of shown files the reader marked viewed. The thread list shares the segmented radio group.
  */
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { IconChevronDownOutlineRegular, Menu, Switch, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangesLens } from './changes-store.ts'
@@ -47,15 +47,19 @@ export interface Segment<Value extends string> {
 
 /**
  * Render a radio group whose segments share its width, each with a count after its label; arrow keys, Home, and End
- * move between enabled segments.
- * @param props - the segments, the chosen value, the choose action, and the group's localized accessible name.
+ * move between enabled segments. Segments are equally wide, or as wide as their labels with the rest shared equally.
+ * Without shown counts, a segment keeps its count in its accessible name and its hover text.
+ * @param props - the segments, the chosen value, the choose action, the group's localized accessible name, how segments
+ * size, and whether counts show.
  * @returns the radio group.
  */
-export function SegmentedChoice<Value extends string>({ segments, value, choose, label }: {
+export function SegmentedChoice<Value extends string>({ segments, value, choose, label, sizing = 'equal', counted = true }: {
   readonly segments: readonly Segment<Value>[]
   readonly value: Value
   readonly choose: (value: Value) => void
   readonly label: string
+  readonly sizing?: 'equal' | 'content'
+  readonly counted?: boolean
 }): ReactNode {
   const group = useRef<HTMLDivElement>(null)
   const enabled = segments.filter(segment => segment.disabledTip === null).map(segment => segment.value)
@@ -77,32 +81,84 @@ export function SegmentedChoice<Value extends string>({ segments, value, choose,
     group.current?.querySelector<HTMLButtonElement>(`[data-segment="${next}"]`)?.focus()
   }
   return (
-    <div ref={group} role="radiogroup" aria-label={label} className={css.segmented}>
+    <div ref={group} role="radiogroup" aria-label={label} className={css.segmented} data-sizing={sizing}>
       {segments.map((segment) => {
         const button = (
-          <button key={segment.value} type="button" role="radio" className={css.segment} aria-checked={value === segment.value}
+          <button type="button" role="radio" className={css.segment} aria-checked={value === segment.value}
             disabled={segment.disabledTip !== null} tabIndex={value === segment.value ? 0 : -1} data-segment={segment.value}
             onKeyDown={move} onClick={() => { choose(segment.value) }}>
             <span className={css.segmentLabel}>{segment.label}</span>
-            <span className={css.count}>{segment.count ?? ''}</span>
+            <span className={counted ? css.count : css.hiddenCount}>{segment.count ?? ''}</span>
           </button>
         )
-        return segment.disabledTip === null ? button : <Tooltip key={segment.value} label={segment.disabledTip} side="bottom">{button}</Tooltip>
+        const tip = segment.disabledTip ?? (counted || segment.count === null ? null : `${segment.label} ${String(segment.count)}`)
+        // Every segment keeps its Tooltip, disabled without hover text, so showing or hiding the counts keeps the
+        // button mounted and the focus on it.
+        return <Tooltip key={segment.value} label={tip ?? segment.label} side="bottom" delayMs={500} disabled={tip === null}>{button}</Tooltip>
       })}
     </div>
   )
 }
 
 /**
- * Render the lens as a radio group whose segments share its width.
- * @param props - the lens, its counts, whether test files hide, the choose action, and copy.
- * @returns the radio group.
+ * Render the lens above the file tree as a radio group whose segments are as wide as their labels. Counts show while
+ * every segment fits whole beside its count; otherwise only labels show. The widths both forms need are measured on
+ * hidden copies whenever the cell, the labels, the counts, or the fonts change, and `need` receives the width of the
+ * cell that labels alone fill, which the file tree keeps as its least width.
+ * @param props - the lens, its counts, whether test files hide, the choose action, copy, and the receiver of the
+ * labels' width.
+ * @returns the radio group with its hidden measures.
  */
-export function LensControl({ lens, counts, hideTests, choose, t }: LensProps): ReactNode {
+export function LensControl({ lens, counts, hideTests, choose, t, need }: LensProps & {
+  /** Receives the cell width, padding included, at which the labels fit without counts. */
+  readonly need: (width: number) => void
+}): ReactNode {
+  const root = useRef<HTMLDivElement>(null)
+  const withCounts = useRef<HTMLDivElement>(null)
+  const labelsOnly = useRef<HTMLDivElement>(null)
+  const [counted, setCounted] = useState(true)
   // A disabled lens shows no count, since hidden test files are not counted.
-  return <SegmentedChoice label={t('lens.aria')} value={lens} choose={choose} segments={LENSES.map(item => item === 'test' && hideTests
+  const segments = LENSES.map((item): Segment<ChangesLens> => item === 'test' && hideTests
     ? { value: item, label: t(LENS_LABEL[item]), count: null, disabledTip: t('lens.testHidden') }
-    : { value: item, label: t(LENS_LABEL[item]), count: counts[item], disabledTip: null })} />
+    : { value: item, label: t(LENS_LABEL[item]), count: counts[item], disabledTip: null })
+  const key = JSON.stringify(segments.map(segment => [segment.label, segment.count]))
+  const needRef = useRef(need)
+  needRef.current = need
+  useLayoutEffect(() => {
+    const element = root.current
+    const full = withCounts.current
+    const bare = labelsOnly.current
+    const cell = element?.parentElement
+    /* v8 ignore next -- the refs are attached, inside a cell, before layout effects run */
+    if (element === null || full === null || bare === null || cell === null || cell === undefined) return
+    let live = true
+    // Fractional widths: a segment row a fraction of a pixel short of its labels still cuts every label short.
+    const width = (node: Element): number => node.getBoundingClientRect().width
+    const measure = (): void => {
+      const available = width(element)
+      // A hidden cell, such as one below the tree's breakpoint or in a hidden tab, has no width to compare.
+      if (!live || available === 0) return
+      setCounted(width(full) <= available)
+      needRef.current(Math.ceil(width(bare) + width(cell) - available))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    const fonts = document.fonts
+    fonts.addEventListener('loadingdone', measure)
+    return () => {
+      live = false
+      observer.disconnect()
+      fonts.removeEventListener('loadingdone', measure)
+    }
+  }, [key])
+  return <div ref={root} className={css.lensFit}>
+    <SegmentedChoice label={t('lens.aria')} value={lens} choose={choose} segments={segments} sizing="content" counted={counted} />
+    <div className={css.measures} aria-hidden="true" {...{ inert: '' }}>
+      <div ref={withCounts}><SegmentedChoice label="" value={lens} choose={choose} segments={segments} sizing="content" /></div>
+      <div ref={labelsOnly}><SegmentedChoice label="" value={lens} choose={choose} segments={segments} sizing="content" counted={false} /></div>
+    </div>
+  </div>
 }
 
 /**
@@ -149,7 +205,7 @@ export function HideTestsSwitch({ hidden, toggle, t }: PropsLocale<typeof NS> & 
   readonly toggle: () => void
 }): ReactNode {
   return (
-    <Tooltip label={t('tests.hideHint')} side="bottom">
+    <Tooltip label={t('tests.hideHint')} side="bottom" delayMs={500}>
       {/* A label forwards a click on its text to the switch, its first labelable descendant. */}
       <label className={css.switch} data-forge-hide-tests="">
         <Switch checked={hidden} label={t('tests.hide')} onChange={toggle} />

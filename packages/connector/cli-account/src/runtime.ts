@@ -7,84 +7,36 @@ import type {
   ConnectorAccountSource, ConnectorOperation, ConnectorOperationId, ConnectorOperationResult,
 } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import type { CliCommandExecutor, CliCommandResult, CliRunOptions } from './executor.ts'
-import type { CliAccountView, CliCommandFailure } from './types.ts'
+import type { CliAccountRegistration, CliAccountView, CliCommandFailure, CliOperationControl } from './types.ts'
 
-/** What a plugin's operation may do while it runs. */
-export interface CliOperationControl<Phase extends string, Command extends string> {
-  /**
-   * Enter a phase and withdraw the current link.
-   * @param phase - the plugin's phase, or `checking` for a check that follows another step.
-   * @throws the cancellation reason after the operation was cancelled.
-   */
-  stage(phase: Phase | 'checking'): void
-  /**
-   * Offer an authorization link to the page; an untrusted, malformed, or late link is ignored.
-   * @param url - an HTTPS URL on one of the plugin's authorization hosts or their subdomains, without credentials.
-   * @returns whether the page now shows the link.
-   */
-  offer(url: string): boolean
-  /**
-   * Run one command and record its classification as the operation's failure if the operation then fails.
-   * @param command - the plugin's identifier for the command.
-   * @param args - native arguments without the executable.
-   * @param signal - the operation's signal.
-   * @param options - the deadline choice and an output-line observer.
-   * @returns the command's exit code and output, whatever the exit code.
-   * @throws what {@link CliCommandExecutor.run} throws.
-   */
-  run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>
-}
-
-/** A plugin's account identity, executor, and rules. */
-export interface CliAccountRuntimeOptions<Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
-  /** Prefix for errors and log records, such as `wecom`. */
-  readonly name: string
-  /** The executor the runtime runs commands with and disposes with itself. */
-  readonly cli: CliCommandExecutor
-  readonly logger: Context['logger']
-  /** The account before the first check. */
-  readonly account: Account
-  /** The operation each new subscriber starts when none runs. */
-  readonly check: Kind
-  /** The plugin phases in which `cancel` stops an operation; the runtime's own phases are never cancellable. */
-  readonly cancellable: readonly Phase[]
-  /**
-   * Hosts whose HTTPS links, and their subdomains' links, may reach the page. Write each in lowercase ASCII, with an
-   * internationalized domain name in punycode: the runtime compares them with the URL's normalized `hostname`.
-   */
-  readonly authorizationHosts: readonly string[]
-  /**
-   * Keep only safe, allowlisted facts from a command result; it never sees exception messages.
-   * Before a command exits it receives a result with a null exit code and empty output.
-   */
-  readonly classify: (command: Failure['command'], result: CliCommandResult) => Failure
-}
+/** The registration fields the runtime reads, and the executor and logger it works through. */
+export type CliAccountRuntimeOptions<Account, Kind extends string, Phase extends string, Command extends string> =
+  & Pick<
+    CliAccountRegistration<Account, Kind, Phase, Command, string>,
+    'name' | 'account' | 'check' | 'cancellable' | 'authorizationHosts' | 'perform'
+  >
+  & {
+    /** The executor the runtime runs commands with and disposes with itself. */
+    readonly executor: CliCommandExecutor
+    readonly logger: Context['logger']
+  }
 
 /**
- * Classify a command by its exit code alone, for CLIs whose error output has no safe structure.
- * @param command - the plugin's identifier for the command.
- * @param result - the command's observed exit code and output.
- * @returns the command identifier and exit code.
- */
-export function exitFailure<Command extends string>(command: Command, result: CliCommandResult): CliCommandFailure<Command> {
-  return { command, exitCode: result.exitCode }
-}
-
-/**
- * List a classified command as the diagnostic items a Plugins page failure shows after the plugin's guidance.
- * @param failure - the classification of the last command a failed operation ran.
+ * List the last command of a failed operation as the diagnostic items a Plugins page failure shows after the plugin's
+ * guidance.
+ * @param failure - the last command a failed operation ran and its exit code.
  * @returns the command, then its exit code when it has one, such as `login` and `exit 3`; untranslated.
  */
 export function failureDetails(failure: CliCommandFailure): string[] {
   return failure.exitCode === null ? [failure.command] : [failure.command, `exit ${failure.exitCode}`]
 }
 
-class Operation<Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
+class Operation<Kind extends string, Phase extends string, Command extends string> {
   readonly id = brandString<ConnectorOperationId>(randomUUID())
   readonly controller = new AbortController()
   phase: Phase | 'checking' | 'cancelling' = 'checking'
   authorizationUrl: string | undefined
-  failure: Failure | undefined
+  failure: CliCommandFailure<Command> | undefined
   done: Promise<void> = Promise.resolve()
 
   constructor(readonly kind: Kind, private readonly cancellable: ReadonlySet<string>) {}
@@ -100,40 +52,31 @@ class Operation<Kind extends string, Phase extends string, Failure extends CliCo
 }
 
 /**
- * Runs at most one account operation at a time; observers see it without owning it, and the plugin registers it as its
- * Plugins page account source. A failed operation logs and returns only its last command's classification, because
- * exceptions and native output may contain credentials.
+ * Runs at most one account operation at a time; observers see it without owning it, and the Service registers it as
+ * the plugin's Plugins page account source. A failed operation logs and returns only its last command and that
+ * command's exit code, because exceptions and native output may contain credentials.
  */
-export abstract class CliAccountRuntime<
-  Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure = CliCommandFailure,
-> implements ConnectorAccountSource<CliAccountView<Account, Kind, Phase, Failure>> {
+export class CliAccountRuntime<
+  Account, Kind extends string, Phase extends string, Command extends string,
+> implements ConnectorAccountSource<CliAccountView<Account, Kind, Phase, Command>> {
   private account: Account
-  private active: Operation<Kind, Phase, Failure> | undefined
-  private result: ConnectorOperationResult<Kind, Failure> | undefined
+  private active: Operation<Kind, Phase, Command> | undefined
+  private result: ConnectorOperationResult<Kind, CliCommandFailure<Command>> | undefined
   private readonly cancellable: ReadonlySet<string>
   private readonly listeners = new Set<() => void>()
   private readonly lifetime = new AbortController()
 
-  /** @param options - the plugin's account identity, executor, and rules. */
-  constructor(private readonly options: CliAccountRuntimeOptions<Account, Kind, Phase, Failure>) {
+  /** @param options - the plugin's registration fields, executor, and logger. */
+  constructor(private readonly options: CliAccountRuntimeOptions<Account, Kind, Phase, Command>) {
     this.account = options.account
     this.cancellable = new Set(options.cancellable)
   }
 
   /**
-   * Carry out one operation. Throwing fails it, unless the operation was cancelled.
-   * @param kind - the requested operation.
-   * @param control - phase changes, link offers, and classified command runs for this operation.
-   * @param signal - aborts on cancellation or disposal.
-   * @returns after the operation finishes.
-   */
-  protected abstract perform(kind: Kind, control: CliOperationControl<Phase, Failure['command']>, signal: AbortSignal): Promise<void>
-
-  /**
    * Replace the account the view reports and notify subscribers.
    * @param account - the account the latest check observed.
    */
-  protected publish(account: Account): void {
+  publish(account: Account): void {
     this.account = account
     this.changed()
   }
@@ -142,7 +85,7 @@ export abstract class CliAccountRuntime<
    * Read the account, the active operation, and the last result.
    * @returns a view without credentials.
    */
-  snapshot(): CliAccountView<Account, Kind, Phase, Failure> {
+  snapshot(): CliAccountView<Account, Kind, Phase, Command> {
     return {
       account: this.account,
       ...this.active === undefined ? {} : { operation: this.active.view() },
@@ -159,7 +102,7 @@ export abstract class CliAccountRuntime<
   start(kind: Kind): ConnectorOperationId {
     this.lifetime.signal.throwIfAborted()
     if (this.active !== undefined) throw new Error(`${this.options.name}: another account operation is in progress`)
-    const operation = new Operation<Kind, Phase, Failure>(kind, this.cancellable)
+    const operation = new Operation<Kind, Phase, Command>(kind, this.cancellable)
     this.active = operation
     this.result = undefined
     operation.done = this.execute(operation)
@@ -185,7 +128,8 @@ export abstract class CliAccountRuntime<
   }
 
   /**
-   * Call `listener` after each change of the view, without starting a check.
+   * Call `listener` after each change of the view, without starting a check. An exception a listener throws is logged
+   * and stops neither the other listeners nor the operation or call that changed the view.
    * @param listener - called synchronously after the account, operation, or result changes.
    * @returns a disposer that stops the calls.
    */
@@ -207,33 +151,40 @@ export abstract class CliAccountRuntime<
         await operation.done
       }
     } finally {
-      await this.options.cli.dispose()
+      await this.options.executor.dispose()
     }
   }
 
   private changed(): void {
-    for (const notify of this.listeners) notify()
+    for (const notify of this.listeners) {
+      try {
+        notify()
+      } catch (error) {
+        this.options.logger.error(`${this.options.name}: account observer failed: %o`, error)
+      }
+    }
   }
 
-  private interrupt(operation: Operation<Kind, Phase, Failure>): void {
+  private interrupt(operation: Operation<Kind, Phase, Command>): void {
     operation.controller.abort(new Error(`${this.options.name}: account operation cancelled`))
     operation.phase = 'cancelling'
     operation.authorizationUrl = undefined
     this.changed()
   }
 
-  private async execute(operation: Operation<Kind, Phase, Failure>): Promise<void> {
-    let outcome: ConnectorOperationResult<Kind, Failure>['outcome'] = 'succeeded'
-    let failure: Failure | undefined
-    const control: CliOperationControl<Phase, Failure['command']> = {
+  private async execute(operation: Operation<Kind, Phase, Command>): Promise<void> {
+    let outcome: ConnectorOperationResult<Kind>['outcome'] = 'succeeded'
+    let failure: CliCommandFailure<Command> | undefined
+    const control: CliOperationControl<Account, Phase, Command> = {
       stage: (phase) => { this.stage(operation, phase) },
       offer: url => this.offer(operation, url),
       run: (command, args, signal, options) => this.run(operation, command, args, signal, options),
+      publish: (account) => { this.publish(account) },
     }
     try {
-      await this.perform(operation.kind, control, AbortSignal.any([operation.controller.signal, this.lifetime.signal]))
+      await this.options.perform(operation.kind, control, AbortSignal.any([operation.controller.signal, this.lifetime.signal]))
     } catch (_error) {
-      // Exceptions and native output may contain credentials; report only the classified command fields.
+      // Exceptions and native output may contain credentials; report only the last command and its exit code.
       outcome = operation.controller.signal.aborted ? 'cancelled' : 'failed'
       if (outcome === 'failed') {
         failure = operation.failure
@@ -249,23 +200,23 @@ export abstract class CliAccountRuntime<
   }
 
   private async run(
-    operation: Operation<Kind, Phase, Failure>, command: Failure['command'], args: readonly string[],
+    operation: Operation<Kind, Phase, Command>, command: Command, args: readonly string[],
     signal: AbortSignal, options?: CliRunOptions,
   ): Promise<CliCommandResult> {
-    operation.failure = this.options.classify(command, { exitCode: null, stdout: '', stderr: '' })
-    const result = await this.options.cli.run(args, signal, options)
-    operation.failure = this.options.classify(command, result)
+    operation.failure = { command, exitCode: null }
+    const result = await this.options.executor.run(args, signal, options)
+    operation.failure = { command, exitCode: result.exitCode }
     return result
   }
 
-  private stage(operation: Operation<Kind, Phase, Failure>, phase: Phase | 'checking'): void {
+  private stage(operation: Operation<Kind, Phase, Command>, phase: Phase | 'checking'): void {
     operation.controller.signal.throwIfAborted()
     operation.phase = phase
     operation.authorizationUrl = undefined
     this.changed()
   }
 
-  private offer(operation: Operation<Kind, Phase, Failure>, value: string): boolean {
+  private offer(operation: Operation<Kind, Phase, Command>, value: string): boolean {
     if (operation.controller.signal.aborted || !URL.canParse(value)) return false
     const url = new URL(value)
     const trusted = url.protocol === 'https:' && url.username === '' && url.password === ''

@@ -1,0 +1,10 @@
+version: 1
+scenario: cua-run-code-ptc
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: cua-run-code-ptc
+  pin: true
+  toolSchemasSource: ptc-turn
+permission: danger-full-access

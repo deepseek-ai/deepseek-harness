@@ -18,7 +18,7 @@ async function fixture() {
   const ctx = new Context()
   roots.push(ctx)
   await ctx.plugin(SessionStore)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   const history = new HistoryController(ctx)
   const web = new WebController(ctx, history, (observation) => { observation[Symbol.dispose]() })
   const session = ctx.sessions.create(brandString<SessionId>('history-target'), { meta: { cwd: '/history-test' } })

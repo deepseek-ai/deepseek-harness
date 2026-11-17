@@ -119,9 +119,11 @@ export function MenuItemButton({ onSelect, ...props }: MenuItemButtonProps) {
  * @param props.selectedId - row shown as selected.
  * @param props.selectedIds - rows shown as selected when a menu contains independent option groups.
  * @param props.onSelect - data-row activation callback (not called for disabled rows or submenu parents that only open children).
- * @param props.onClose - invoked on outside click, Escape, or a window blur
- * that moved focus into an iframe (the only signal a pointerdown inside a
- * cross-origin iframe leaves).
+ * @param props.onClose - invoked on outside click, on activating another popup
+ * trigger (an `aria-haspopup` control outside this menu that
+ * `isExternalTrigger` does not claim) even when that trigger stops its
+ * pointer presses, on Escape, or on a window blur that moved focus into an
+ * iframe (the only signal a pointerdown inside a cross-origin iframe leaves).
  * @param props.align - list alignment against the anchor (default 'start').
  * @param props.side - open below (`bottom`, default) or above (`top`) the anchor.
  * @param props.portal - render the list into document.body, fixed-positioned
@@ -337,6 +339,17 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
       if (listRef.current?.contains(e.target) === true || submenuEvents.current.contains(e.target)) return
       onClose()
     }
+    // Activating another popup trigger closes this menu even when that trigger
+    // isolates its presses from its owners, as the shared context-menu button
+    // does: its pointerdown never reaches the listener above, so the
+    // activating click is caught in the capture phase instead.
+    const onOtherTrigger = (e: MouseEvent) => {
+      const trigger = e.target instanceof Element ? e.target.closest('[aria-haspopup]') : null
+      if (trigger === null || rootRef.current?.contains(trigger) === true || anchorRef?.current?.contains(trigger) === true) return
+      if (isExternalTrigger?.(trigger) === true) return
+      if (listRef.current?.contains(trigger) === true || submenuEvents.current.contains(trigger)) return
+      onClose()
+    }
     const onKeyDown = (e: KeyboardEvent) => {
       if (composition.guards(e) || isBehindModal(triggerRef.current ?? rootRef.current)
         || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
@@ -435,6 +448,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
       if (document.activeElement instanceof HTMLIFrameElement) onClose()
     }
     document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('click', onOtherTrigger, true)
     const onEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') onKeyDown(event) }
     const onOtherKey = (event: KeyboardEvent): void => { if (event.key !== 'Escape') onKeyDown(event) }
     document.addEventListener('keydown', onOtherKey)
@@ -443,6 +457,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
     return () => {
       composition.dispose()
       document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('click', onOtherTrigger, true)
       document.removeEventListener('keydown', onOtherKey)
       document.removeEventListener('keydown', onEscape, true)
       window.removeEventListener('blur', onWindowBlur)

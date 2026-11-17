@@ -210,12 +210,12 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
       // by the same setup every agent creation runs through. Preparing the source Session through the owner's
       // own service is what makes that happen; the state is read back afterwards, and a host that still has
       // no usable layer refuses rather than driving the Session unconstrained.
-      let prepared = false
+      let prepared = deps.prepareSource !== undefined
       try {
         await deps.prepareSource?.(source)
-        prepared = deps.prepareSource !== undefined
-      } catch {
+      } catch (_preparationFailed) {
         // An unsuccessful preparation changes nothing: the refusal below is the answer either way.
+        prepared = false
       }
       const refusedDuringPreparation = lifecycle.shareRefusal(shareId, actor)
       if (refusedDuringPreparation !== undefined) return refusedDuringPreparation

@@ -10,6 +10,7 @@ import { WebError } from '@deepseek-ai/dsh-web'
 import type { WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { Response } from 'undici'
+import { classifyTransportFailure } from './transport-failure.ts'
 import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from './policy.ts'
 
 /** Resolved provider limits (the plugin's schemastery Config supplies defaults). */
@@ -249,11 +250,12 @@ function resolveRedirect(location: string, base: URL): URL {
  * recovering OUR reason means our timeout fired (`WEB_FETCH_TIMEOUT`); any other
  * abort — an upstream cancel, or a foreign/outer deadline's timeout under
  * nesting — is `WEB_ABORTED`; a throw with the signal NOT aborted is a
- * transport/network failure (`WEB_PROVIDER_ERROR`).
+ * transport failure, classified by {@link classifyTransportFailure}.
  */
 function translateAbortOrNetwork(error: unknown, signal: AbortSignal): WebError {
   const timeout = timeoutOf(signal, 'WEB_FETCH_TIMEOUT')
   if (timeout !== undefined) return new WebError('web fetch timed out', 'WEB_FETCH_TIMEOUT', { cause: timeout })
   if (signal.aborted) return new WebError('web fetch aborted', 'WEB_ABORTED', { cause: error })
-  return new WebError(`web fetch failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+  const failure = classifyTransportFailure(error)
+  return new WebError(`web fetch failed: ${failure.message}`, failure.code, { cause: error })
 }

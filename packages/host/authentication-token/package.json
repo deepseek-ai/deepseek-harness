@@ -1,0 +1,48 @@
+{
+  "name": "@deepseek-ai/dsh-host-authentication-token",
+  "description": "Default token authentication provider and HTTP cookie exchange",
+  "version": "0.2.2-rc.3",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/host/authentication-token"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./locale/de.json": "./locale/de.json",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/es.json": "./locale/es.json",
+    "./locale/fr.json": "./locale/fr.json",
+    "./locale/ja.json": "./locale/ja.json",
+    "./locale/pt.json": "./locale/pt.json",
+    "./locale/ru.json": "./locale/ru.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": ["locale/de.json", "locale/en.json", "locale/es.json", "locale/fr.json", "locale/ja.json", "locale/pt.json", "locale/ru.json", "locale/zh.json", "lib/index.js", "lib/types/**/*.d.ts", "lib/types/**/*.d.ts.map", "lib/**/*.js.map", "src"],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:~"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-credentials-local": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-host-frontend-static": "workspace:*"
+  }
+}
