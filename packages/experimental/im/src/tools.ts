@@ -493,7 +493,6 @@ interface SendView {
 
 /** One stored message in the tool-facing form. */
 function viewOf(message: ImMessage, selfId?: string): MessageView {
-  const { bot } = splitKey(message.chat.key)
   return {
     key: message.key,
     seq: message.seq,
@@ -505,7 +504,7 @@ function viewOf(message: ImMessage, selfId?: string): MessageView {
     text: message.text,
     // The bot's own mention is how the message addressed it, not a person a reply can address.
     mentions: message.mentions.users
-      .filter(user => user.id !== bot && user.id !== selfId)
+      .filter(user => user.id !== selfId)
       .map(user => ({ id: user.id, ...user.name === undefined ? {} : { name: user.name } })),
     ...message.quote === undefined ? {} : { quote: message.quote.key },
     ...message.thread === undefined ? {} : { thread: message.thread.id },
