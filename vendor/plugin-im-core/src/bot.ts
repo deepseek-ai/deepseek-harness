@@ -98,6 +98,8 @@ export interface SentPart {
   thread?: { id: string; root?: string }
   /** Adapter-opaque reply context (referrer) of this published part, when reported by the send answer. */
   referrer?: unknown
+  /** Platform-local alternate ids (such as QQ `ext_info.ref_idx`) by which later quotes may refer to this part. */
+  aliases?: string[]
   raw?: unknown
 }
 
