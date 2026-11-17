@@ -387,6 +387,23 @@ export interface UpdateState {
   readonly outputOpen: boolean
 }
 
+/**
+ * The build scripts a finished update can be retried with: the pending names of a failed target installation, while the
+ * installed version stayed or was installed again. A package the update left uninstalled is not updated again.
+ * @param update - the update.
+ * @returns The pending names, empty when no retry is offered.
+ */
+export function pendingUpdateBuilds(update: UpdateState): readonly string[] {
+  const result = update.phase === 'done' ? update.result : null
+  if (result?.step !== 'install' || !failedChange(result.result) || (result.restore !== undefined && failedChange(result.restore))) return []
+  return result.result.pendingBuilds ?? []
+}
+
+/** Whether a change result left its operation undone. */
+export function failedChange(change: PluginUpdateResult['result']): boolean {
+  return change.application === 'failed' || change.application === 'cancelled'
+}
+
 /** What the tab renders. */
 export interface PluginManagerState {
   /** `unavailable` when the Host runs without a managed profile; `error` keeps the last packages. */
@@ -892,8 +909,9 @@ export class PluginManagerController {
       },
       runUpdate: () => { void this.runUpdate() },
       approveUpdateBuildsAndRetry: () => {
-        const pending = this.getSnapshot().update?.result?.result.pendingBuilds
-        if (pending !== undefined && pending.length > 0) void this.runUpdate(pending)
+        const update = this.getSnapshot().update
+        const pending = update === null ? [] : pendingUpdateBuilds(update)
+        if (pending.length > 0) void this.runUpdate(pending)
       },
       closeUpdate: () => { if (this.getSnapshot().update?.phase !== 'running') this.patch({ update: null }) },
       toggleUpdateOutput: () => {

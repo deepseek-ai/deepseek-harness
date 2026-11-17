@@ -2350,6 +2350,7 @@ describe('version checks and updates', () => {
     const listBundles = vi.fn(() => Promise.resolve(ok([{ ...BUNDLE, update: 'git' as const, source: 'git+https://git.example/o/plugins.git#aaaaaaa&path:/packages/sidebar' }])))
     const { controller, face, state } = bench({ updateBundle, listBundles })
     await controller.load()
+    face.approveUpdateBuildsAndRetry()
     face.openGitUpdate({ packageName: 'dsh-better-sidebar', version: '0.17.0', spec })
     // Only a confirmed update starts without approval, and only a failure with pending scripts is retried with it.
     face.approveUpdateBuildsAndRetry()

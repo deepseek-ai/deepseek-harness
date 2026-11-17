@@ -36,7 +36,7 @@ import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan }
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { PluginManagerError, readProfileState } from './error.ts'
-import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
+import { approveBuilds, readPendingBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
@@ -766,13 +766,21 @@ export class PluginManager extends TypertRemoteService {
     if ('code' in planned) return refusedBefore(planned)
     const { spec, registry, saveExact } = planned
     const { enabled } = bundle
+    // An approval no longer pending is refused before the installed version is removed.
+    const approved = options?.approvedBuilds
+    if (approved !== undefined) {
+      let pending: string[]
+      try { pending = await readPendingBuilds(this.profile.dir) }
+      catch (error) { return refusedBefore({ code: 'operation-error', diagnostic: messageOf(error) }) }
+      if (approved.some(name => !pending.includes(name))) return refusedBefore({ code: 'stale-approval' })
+    }
     // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
     const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
       operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
     const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
       saveExact, enabled, expected: { name, version },
       ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
-      ...options?.approvedBuilds === undefined ? {} : { approvedBuilds: options.approvedBuilds },
+      ...approved === undefined ? {} : { approvedBuilds: approved },
     }))
     if (this.ownerContext.get('hmr') === undefined) {
       announce('installing')

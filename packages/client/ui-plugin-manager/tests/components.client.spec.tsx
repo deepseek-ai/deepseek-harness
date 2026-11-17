@@ -3235,6 +3235,9 @@ describe('registry versions and updates', () => {
     expect([...approval.querySelectorAll('code')].map(item => item.textContent)).toEqual(['native', '@scope/other'])
     fireEvent.click(within(approval).getByRole('button', { name: en.installApproveAndRetry }))
     expect(actions.approveUpdateBuildsAndRetry).toHaveBeenCalledOnce()
+    // A package the reinstallation left uninstalled is not updated again.
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: blocked, restore: change('failed') } } })
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
     // A failure the reinstallation reports offers nothing: only the target's installation is retried with approval.
     set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'check', result: { ...blocked, changed: false } } } })
     expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()

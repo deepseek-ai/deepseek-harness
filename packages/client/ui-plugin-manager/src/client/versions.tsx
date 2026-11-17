@@ -13,7 +13,7 @@ import {
   Button, Checkbox, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
   IconDownloadOutlineRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular, Modal, StateDot, Tag, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { installable, updateCandidate, type PackageView, type UpdateSource, type UpdateState, type VersionCheck } from './manager-store.ts'
+import { failedChange, installable, pendingUpdateBuilds, updateCandidate, type PackageView, type UpdateSource, type UpdateState, type VersionCheck } from './manager-store.ts'
 import { managementText, registryText, restartText, type Translate } from './presentation.ts'
 import { BuildApproval } from './BuildApproval.tsx'
 import css from './PluginManagerPage.module.css'
@@ -318,11 +318,6 @@ function stepLabel(step: PluginUpdateStep, update: UpdateState, t: Translate): s
   }
 }
 
-/** Whether a change result left its operation undone. */
-function failed(application: PluginUpdateResult['result']['application']): boolean {
-  return application === 'failed' || application === 'cancelled'
-}
-
 /** The steps in the order the Host runs them. */
 const STEP_ORDER: readonly PluginUpdateStep[] = ['checking', 'removing', 'installing', 'restoring']
 
@@ -343,8 +338,8 @@ function stepState(step: PluginUpdateStep, update: UpdateState, last: boolean): 
   switch (step) {
     case 'checking': return result.step === 'check' ? 'failed' : 'done'
     case 'removing': return result.step === 'remove' ? 'failed' : 'done'
-    case 'installing': return failed(result.result.application) ? 'failed' : 'done'
-    case 'restoring': return result.restore !== undefined && failed(result.restore.application) ? 'failed' : 'done'
+    case 'installing': return failedChange(result.result) ? 'failed' : 'done'
+    case 'restoring': return result.restore !== undefined && failedChange(result.restore) ? 'failed' : 'done'
   }
 }
 
@@ -365,7 +360,7 @@ function outcomeOf(update: UpdateState, title: string, t: Translate): Omit<Summa
   const reason = (change: PluginUpdateResult['result']): string => managementText({ code: 'operation-error', ...change.error, installing: true }, t)
   if (result.step === 'check') return { ...error, title: t('updateRefused', { version: update.to }), detail: reason(result.result) }
   if (result.step === 'remove') return { ...error, title: t('updateRemoveFailed', { version: update.from }), detail: reason(result.result) }
-  if (!failed(result.result.application)) {
+  if (!failedChange(result.result)) {
     return result.result.application === 'restart-required'
       ? { tone: 'warn', glyph: <IconWarningOutlineRegular size={14} />, title: t('updateRestart', { version: update.to }), detail: restartText('restartNotice', result.result.restartReason, t) }
       : { tone: 'success', glyph: <IconCheckOutlineRegular size={14} />, title: t('updateDone', { version: update.to }), detail: t('updateDoneDetail') }
@@ -374,7 +369,7 @@ function outcomeOf(update: UpdateState, title: string, t: Translate): Omit<Summa
   if (result.restore === undefined) {
     return { ...error, title: t('updateKept', { version: update.to }), detail: t('updateKeptDetail', { from: update.from, reason: reason(result.result) }) }
   }
-  return failed(result.restore.application)
+  return failedChange(result.restore)
     ? { ...error, title: t('updateBroken'), detail: t('updateBrokenDetail', { from: update.from, to: update.to, name: title }) }
     : {
       ...error, title: t('updateRestored', { version: update.from }),
@@ -403,11 +398,11 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput,
   const outcome = update.phase === 'done' ? outcomeOf(update, title, t) : undefined
   // The failed run's own output: the target's installation, else the removal or the reinstallation.
   const output = [update.result?.result, update.result?.restore]
-    .map(change => change !== undefined && failed(change.application) ? change.packageResult?.output : undefined)
+    .map(change => change !== undefined && failedChange(change) ? change.packageResult?.output : undefined)
     .find(text => text !== undefined && text !== '')
+  const pendingBuilds = pendingUpdateBuilds(update)
   const target = update.phase === 'done' && update.result?.step === 'install' ? update.result.result : undefined
-  const pendingBuilds = target !== undefined && failed(target.application) ? target.pendingBuilds ?? [] : []
-  const approvedBuilds = target !== undefined && !failed(target.application) ? target.approvedBuilds ?? [] : []
+  const approvedBuilds = target !== undefined && !failedChange(target) ? target.approvedBuilds ?? [] : []
   return (
     <Modal
       open
@@ -422,7 +417,8 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput,
         </>
       ) : running
         ? <Button variant="outline" disabled>{t('updateRunning')}</Button>
-        : <Button variant="primary" onClick={onClose}>{t('updateFinish')}</Button>}
+        // The approval's own button is the primary action while it is offered.
+        : <Button variant={pendingBuilds.length > 0 ? 'outline' : 'primary'} onClick={onClose}>{t('updateFinish')}</Button>}
     >
       <div className={css.updateBody} data-plugin-update={update.phase}>
         {update.phase === 'confirm' ? (

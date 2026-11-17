@@ -2468,6 +2468,18 @@ it('reports the build scripts pnpm blocked for a Git target and allows them on a
   })
   // The reinstallation allows nothing, so the target's blocked script stays undecided.
   expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: 'set this to true or false' } })
+  // A name no longer pending is refused before the installed version is removed.
+  pnpm.mockClear()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['other'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', changed: false, error: { code: 'stale-approval' } },
+  })
+  const pending = readFileSync(policy, 'utf8')
+  writeFileSync(policy, 'allowBuilds: false\n')
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', error: { code: 'operation-error', diagnostic: 'allowBuilds must be a YAML mapping' } },
+  })
+  writeFileSync(policy, pending)
+  expect(pnpm).not.toHaveBeenCalled()
   expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
     step: 'install', result: { application: 'applied', version: '1.1.0', approvedBuilds: ['native'] },
   })
