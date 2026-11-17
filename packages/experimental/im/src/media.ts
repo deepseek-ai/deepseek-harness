@@ -420,6 +420,7 @@ export class ImMediaStore {
     await admitMediaSource(src, this.config.media.source, {
       timeout: this.config.media.timeoutMs,
       resolve: this.resolveHost,
+      signal,
       ...src.trim().startsWith('satori:') ? { receiver: this.receiver(ref.chat) } : {},
     })
     this.fetcher ??= createResourceFetcher(this.ctx, {

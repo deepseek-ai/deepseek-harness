@@ -574,6 +574,25 @@ describe('ImMediaStore.read', () => {
     await expect(pending).rejects.toThrow('cancelled by user')
     expect(seenSignal).toBe(controller.signal)
   })
+
+  it('settles immediately when aborted while the DNS admission lookup is hanging', async () => {
+    const controller = new AbortController()
+    const target = fileMessage(8)
+    const history = {
+      after: (chat: string, seq: number, limit: number) =>
+        [target].filter(entry => entry.chat.key === chat && entry.seq > seq).slice(0, limit),
+      before: () => [],
+      get: () => undefined,
+      latest: () => undefined,
+    }
+    const ctx = fakeContext({ im: { history } })
+    const store = new ImMediaStore(ctx, config({ timeoutMs: 30_000 }), {
+      resolveHost: () => new Promise(() => {}),
+    })
+    const pending = store.readFile(CHAT.key, '8.1', controller.signal)
+    controller.abort(new Error('cancelled during dns'))
+    await expect(pending).rejects.toThrow('cancelled during dns')
+  })
 })
 
 describe('ImMediaStore.readFile', () => {

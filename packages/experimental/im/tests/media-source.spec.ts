@@ -139,6 +139,24 @@ describe('admitMediaSource', () => {
     await expect(admitMediaSource('https://slow.example/x.png', REFUSING, { timeout: 10, resolve: hanging })).rejects.toThrow('did not resolve')
   })
 
+  it('aborts a hanging host lookup immediately when the caller signal fires', async () => {
+    const hanging: HostResolver = () => new Promise(() => {})
+    const controller = new AbortController()
+    const pending = admitMediaSource('https://slow.example/x.png', REFUSING, {
+      timeout: 30_000,
+      resolve: hanging,
+      signal: controller.signal,
+    })
+    controller.abort(new Error('cancelled by user'))
+    await expect(pending).rejects.toThrow('cancelled by user')
+
+    await expect(admitMediaSource('https://slow.example/x.png', REFUSING, {
+      timeout: 30_000,
+      resolve: hanging,
+      signal: controller.signal,
+    })).rejects.toThrow('cancelled by user')
+  })
+
   it('refuses a satori: resource of another bot, and every one when the receiver is unknown', async () => {
     for (const src of [
       'satori:lark/ou_other/messages/om_1/resources/file_1?type=image',

@@ -39,6 +39,8 @@ export interface ImMediaSourceOptions {
    * name; without it every `satori:` source is refused.
    */
   receiver?: { platform: string; selfId: string } | undefined
+  /** Cancellation of the caller; aborts an in-flight address lookup immediately instead of waiting for `timeout`. */
+  signal?: AbortSignal | undefined
 }
 
 /** A source a received message named but this deployment does not fetch. */
@@ -168,7 +170,7 @@ export async function admitMediaSource(
     case 'http:':
     case 'https:':
       if (policy.internal) return
-      await refuseInternal(url, options.resolve ?? systemHostResolver, options.timeout)
+      await refuseInternal(url, options.resolve ?? systemHostResolver, options.timeout, options.signal)
       return
     default:
       throw new RefusedSourceError(
@@ -212,9 +214,14 @@ function admitInternal(src: string, url: URL, receiver: ImMediaSourceOptions['re
  * @param timeout - deadline of that lookup in milliseconds.
  * @returns a promise that resolves when every address the host has is public.
  */
-async function refuseInternal(url: URL, resolve: HostResolver, timeout: number): Promise<void> {
+async function refuseInternal(
+  url: URL,
+  resolve: HostResolver,
+  timeout: number,
+  signal?: AbortSignal,
+): Promise<void> {
   const hostname = url.hostname.replace(/^\[|\]$/g, '')
-  const addresses = isIP(hostname) === 0 ? await resolveAddresses(hostname, resolve, timeout) : [hostname]
+  const addresses = isIP(hostname) === 0 ? await resolveAddresses(hostname, resolve, timeout, signal) : [hostname]
   // The fetch resolves the name again, and a resolver that answers this lookup differently then is exactly the case
   // this rule cannot classify: an unresolved name is refused rather than handed over to the fetch.
   if (addresses === undefined) {
@@ -241,23 +248,36 @@ async function resolveAddresses(
   hostname: string,
   resolve: HostResolver,
   timeout: number,
+  signal?: AbortSignal,
 ): Promise<readonly string[] | undefined> {
-  // `lookup` takes no cancellation, so the deadline settles this call: a resolver that hangs must not hold the
-  // admission (and the chat's arrival order behind it) open.
+  if (signal?.aborted) throw signal.reason
+  // `lookup` takes no cancellation, so the deadline and caller signal settle this call: a resolver that hangs must not
+  // hold the admission (and the chat's arrival order or tool cancellation behind it) open.
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<undefined>((settle) => {
     timer = setTimeout(() => { settle(undefined) }, timeout)
     timer.unref()
   })
+  let onAbort: (() => void) | undefined
+  const aborted = signal === undefined
+    ? undefined
+    : new Promise<never>((_resolve, reject) => {
+      onAbort = () => { reject(signal.reason) }
+      signal.addEventListener('abort', onAbort, { once: true })
+    })
   try {
-    return await Promise.race([resolve(hostname), deadline])
+    const racers: Promise<readonly string[] | undefined>[] = [resolve(hostname), deadline]
+    if (aborted !== undefined) racers.push(aborted)
+    return await Promise.race(racers)
   } catch (error: unknown) {
+    if (signal?.aborted) throw error
     // A failed lookup (no such name, a resolver error) is the same outcome as one that never answers: a name this rule
     // cannot classify, which the caller refuses whatever the cause was.
     void error
     return undefined
   } finally {
     clearTimeout(timer)
+    if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
   }
 }
 
