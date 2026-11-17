@@ -106,7 +106,8 @@ export const Config: z<Omit<ConnectionConfig, 'recovery'> & { recovery?: Connect
  * @param config - resolved plugin config (schema defaults applied).
  */
 export function apply(ctx: Context, config?: ConnectionConfig): void {
-  // Config boundary: the schema admits a NaN backoff factor, which the browser would reject only when it activates.
+  // Config boundary: the schema admits a NaN backoff factor, which the synced Config projection cannot carry as lossless
+  // JSON; rejecting it at load keeps a row with an unprojectable recovery value off the graph.
   resolveConnectionConfig(config?.recovery?.get())
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
   const trustedHosts = config?.trustedHosts ?? []
