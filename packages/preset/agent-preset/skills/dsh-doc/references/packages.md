@@ -151,6 +151,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-computer-use` | no | Exclusive named computer-use provider registration |
 
+## connector
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-cli-account` | yes | Host Service of CLI app plugins: each plugin registers its third-party CLI and account, and the Service gives the model the CLI's absolute path, runs one account operation at a time, and shows the account on the Plugins page |
+
 ## context
 
 | Package | Config | Description |

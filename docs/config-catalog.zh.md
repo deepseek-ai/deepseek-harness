@@ -484,6 +484,23 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-bash-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cli-account -->
+<a id="deepseek-aidsh-cli-account"></a>
+
+## `@deepseek-ai/dsh-cli-account`
+
+- `inject`: `subprocess` · `systemPrompt`
+- `source`: [`packages/connector/cli-account/src/index.ts:33`](../packages/connector/cli-account/src/index.ts)
+
+```ts config-catalog
+/** Settings that apply to every registered CLI. */
+export interface Config {
+  /** Deadline in milliseconds for a command that does not wait for the user, including executable lookup. */
+  commandTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cli-account -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
 <a id="deepseek-aidsh-client-connection"></a>
 
@@ -4014,7 +4031,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:265`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:266`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */

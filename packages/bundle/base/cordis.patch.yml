@@ -238,6 +238,11 @@
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
 
+    # CLI app plugins register their vendor CLI and account with this Service,
+    # which adds nothing to a composition until one registers.
+    - id: cli-account
+      name: '@deepseek-ai/dsh-cli-account'
+
     # Every shipped CLI mode starts with the same file-effect boundary.
     # The environment remains an explicit deployment override; otherwise fresh
     # sessions pin workspace-write + ask through the permission service below.
