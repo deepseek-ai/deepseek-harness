@@ -154,7 +154,9 @@ describe('the Timeline Settings section', () => {
     expect(within(section).getByRole('heading', { level: 2 }).textContent).toBe('Task writing guidance')
     expect(section.previousElementSibling).toBe(screen.getByRole('region', { name: 'Timed reports' }))
     expect(taskPrompt.maxLength).toBe(32768)
-    const count = (length: number) => `${length.toLocaleString()} / ${taskPrompt.maxLength.toLocaleString()}`
+    // The counter renders with the locale the fixture supplies; do not follow the host ICU locale.
+    const count = (length: number) =>
+      `${length.toLocaleString('en')} / ${taskPrompt.maxLength.toLocaleString('en')}`
     const prompt = 'Explain results and remaining evidence in task details.'
     expect(within(section).getByText(count(value.taskPrompt.length))).toBeTruthy()
     fireEvent.change(taskPrompt, { target: { value: prompt } })
