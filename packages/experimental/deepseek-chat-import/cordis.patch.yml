@@ -1,0 +1,6 @@
+# Optional DeepSeek chat export import: the sidebar action after New session,
+# the owner-only upload route, and the limits Remote. Shipped profiles do not
+# include this layer.
+- insert:
+    - id: deepseek-chat-import
+      name: '@deepseek-ai/dsh-deepseek-chat-import'

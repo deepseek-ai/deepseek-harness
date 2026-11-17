@@ -179,7 +179,7 @@ export function verifyProductUse(
       const content: unknown = existsSync(filename) ? loadCordisYaml(readFileSync(filename, 'utf8')) : row.config.initial
       configs.add(filename)
       if (!Array.isArray(content)) { failures.push(`${display(filename)}: Include requires an entry array or initial entries`); continue }
-      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {})
+      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {}).data
       scanEntries(entries, filename, reach, new Set([...stack, filename]))
     }
   }

@@ -9,7 +9,7 @@ export function apply(ctx) {
   const selections = new WeakMap()
   ctx.on('tools/result', (exec, result) => {
     if (exec.agent === undefined || exec.parent !== undefined || result.error !== undefined) return
-    if (exec.name === 'cordis_inspect_list' && !selections.has(exec.agent)) {
+    if (exec.name === 'cordis_inspect' && !selections.has(exec.agent)) {
       selections.set(exec.agent, exec.agent.ctx.tools.setExecutor(new PtcExecutor(exec.agent.ctx)))
     } else if (exec.name === 'run_code') {
       selections.get(exec.agent)?.()

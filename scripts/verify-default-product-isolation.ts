@@ -219,7 +219,7 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
           failures.push(`${display(filename)}: included composition must contain an entry array`)
           return
         }
-        const entries = applyEntryPatches(content as EntryOptions[], entry.config.patches as PatchOptions[] | undefined, () => {})
+        const entries = applyEntryPatches(content as EntryOptions[], entry.config.patches as PatchOptions[] | undefined, () => {}).data
         scanEntries(entries, filename, true, nestedStack)
       }
     }

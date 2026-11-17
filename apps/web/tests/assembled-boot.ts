@@ -21,6 +21,9 @@ import {
   createAssembledRemote, type AssembledRemote, type AssembledRemoteOptions,
 } from './assembled-remote.ts'
 
+// Dynamic plugins use built bundles; this in-process shell shares source platform namespaces.
+vi.mock('@deepseek-ai/dsh-client-web/src/seed.ts', () => import('./source-static-modules.client.ts'))
+
 interface AssembledPlugin extends WebBootEntry {
   /** Absolute path to the built client artifact declared by this package. */
   bundlePath: string

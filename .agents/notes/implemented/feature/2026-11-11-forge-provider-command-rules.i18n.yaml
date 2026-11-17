@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-11-forge-provider-command-rules.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-11-forge-provider-command-rules.md
+/agent-note-forge-provider-command-rules:
+  en: 1b602c42430a77b4
+  zh: 8109a6a56901fb89
+/agent-note-forge-provider-command-rules/problem:
+  en: 29def264f0ee5401
+  zh: 829cdb87861757f5
+/agent-note-forge-provider-command-rules/decision:
+  en: 17e84e777b0d7380
+  zh: 2cc4720c9437a839
+/agent-note-forge-provider-command-rules/alternatives-considered:
+  en: a5bdd96f8e814246
+  zh: 29a4f0026cd9abaf
+/agent-note-forge-provider-command-rules/consequences:
+  en: 506047cfeb4645d3
+  zh: b587240a69b46b8a

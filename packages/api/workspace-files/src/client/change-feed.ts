@@ -174,7 +174,7 @@ class SessionFeed {
             assertNever(frame)
         }
       }
-    } catch {
+    } catch (_streamEnded) {
       // A terminal stream failure or the Host's end: followers end quietly
       // below, and the metadata they hold stays the last known.
     } finally {

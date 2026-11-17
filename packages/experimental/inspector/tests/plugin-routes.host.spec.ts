@@ -2,15 +2,26 @@
 
 import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createConnection, createServer, type AddressInfo, type Socket } from 'node:net'
+import { connect, createConnection, createServer, type AddressInfo, type Socket } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
 import type { Message } from '@deepseek-ai/cordis'
 import type { WebRoute, WebServer, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import * as Connection from '@deepseek-ai/dsh-client-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, inject, name } from '../src/index.ts'
 import { startInspector, type InspectorHandle } from '../src/host/bridge/controller.ts'
+import { dispatchHttp, dispatchUpgrade } from './fixtures/web-carrier.ts'
+
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface PrincipalMap {
+    inspectorAuthorizationTest: { readonly kind: 'inspector-authorization-test' }
+  }
+}
+
+vi.mock('node:net', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:net')>()
+  return { ...actual, connect: vi.fn(actual.connect) }
+})
 
 type AssetMiddleware = (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void
 
@@ -49,7 +60,7 @@ describe('experimental Inspector Host DevTools routes', () => {
     vi.clearAllMocks()
   })
 
-  async function mount(options: { indexAllowed?: () => boolean; before?: (ctx: Context) => void } = {}) {
+  async function mount(options: { authenticated?: () => boolean; principal?: Connection.Principal; before?: (ctx: Context) => void } = {}) {
     context = new Context()
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const routes: WebRoute[] = []
@@ -59,17 +70,12 @@ describe('experimental Inspector Host DevTools routes', () => {
       registerUpgrade: (route) => { upgrades.push(route); return () => {} },
     }
     context.provide('webServer', webServer as WebServer)
-    const auth: Pick<BrowserAuth, 'isAuthenticated' | 'authenticateApi' | 'authorizeIndex'> = {
-      isAuthenticated: () => true,
-      authenticateApi: () => undefined,
-      authorizeIndex: (_request, response) => {
-        if (options.indexAllowed?.() !== false) return true
-        response.writeHead(401)
-        response.end()
-        return false
-      },
-    }
-    new HostConnectionService(context, [], auth as BrowserAuth)
+    await context.plugin(Connection).await()
+    const connection = context.connection
+    const peer = options.principal === undefined ? connection.browserPeer : connection.createPeer({ principal: options.principal })
+    context.connection.authentication.register({
+      authenticate: () => options.authenticated?.() !== false ? peer : undefined,
+    })
     const messages: Message[] = []
     context.logger.exporter({ levels: { default: 3 }, export: (message) => { messages.push(message) } })
     options.before?.(context)
@@ -77,13 +83,14 @@ describe('experimental Inspector Host DevTools routes', () => {
     return { fiber, routes, upgrades, messages }
   }
 
-  it('answers frontend requests by method, index authorization, redirect, and asset outcome', async () => {
-    let indexAllowed = true
-    const { fiber, routes, messages } = await mount({ indexAllowed: () => indexAllowed })
+  it('answers frontend requests by authorization, method, redirect, and asset outcome', async () => {
+    let authenticated = true
+    const { fiber, routes, messages } = await mount({ authenticated: () => authenticated })
     await fiber.await()
     const route = routes.find(row => row.path === '/inspector/devtools')
     if (route === undefined) throw new Error('DevTools route was not registered')
-    const call = async (method: string | undefined, url: string | undefined, headersSent = false) => {
+    const handler = vi.spyOn(route, 'handler')
+    const call = async (method: string | undefined, url: string | undefined, headersSent = false, origin = 'http://127.0.0.1') => {
       const recorded: RecordedResponse = { headers: {}, ended: false, destroyed: false }
       const res = {
         get headersSent() { return headersSent },
@@ -96,15 +103,19 @@ describe('experimental Inspector Host DevTools routes', () => {
         end() { recorded.ended = true; return this },
         destroy() { recorded.destroyed = true; return this },
       }
-      const req = { method, url, headers: {} }
-      await route.handler(req as IncomingMessage, res as ServerResponse)
+      const req = { method, url, headers: { host: '127.0.0.1', origin } }
+      await dispatchHttp(context!, route, req as IncomingMessage, res as ServerResponse)
       return { recorded, req }
     }
 
     expect((await call('POST', '/inspector/devtools/devtools_app.html')).recorded).toMatchObject({ status: 405, headers: { allow: 'GET, HEAD' }, ended: true })
-    indexAllowed = false
+    handler.mockClear()
+    authenticated = false
     expect((await call('GET', '/inspector/devtools/devtools_app.html')).recorded.status).toBe(401)
-    indexAllowed = true
+    expect((await call('POST', '/inspector/devtools/devtools_app.html')).recorded.status).toBe(401)
+    authenticated = true
+    expect((await call('GET', '/inspector/devtools/devtools_app.html', false, 'http://untrusted.invalid')).recorded.status).toBe(403)
+    expect(handler).not.toHaveBeenCalled()
     expect(assets.middleware).not.toHaveBeenCalled()
     expect((await call('GET', '/inspector/devtools?panel=console')).recorded).toMatchObject({
       status: 302, headers: { location: 'devtools/devtools_app.html?panel=console' },
@@ -117,6 +128,7 @@ describe('experimental Inspector Host DevTools routes', () => {
     })
     const served = await call('GET', '/inspector/devtools/devtools_app.html?ws=1')
     expect(served.req.url).toBe('/devtools_app.html?ws=1')
+    expect(handler.mock.lastCall?.[2]).toBe(context!.connection.browserPeer)
     expect(served.recorded).toMatchObject({ status: 200, headers: { 'x-content-type-options': 'nosniff' } })
 
     assets.middleware.mockImplementationOnce((_req, _res, next) => { next() })
@@ -135,6 +147,41 @@ describe('experimental Inspector Host DevTools routes', () => {
       .map((message): unknown => message.args[1])).toEqual([failure, failure])
   })
 
+  it('refuses an authenticated non-owner before serving assets or connecting CDP upstream', async () => {
+    const { fiber, routes, upgrades } = await mount({ principal: { kind: 'inspector-authorization-test' } })
+    await fiber.await()
+    const route = routes.find(row => row.path === '/inspector/devtools')
+    const upgrade = upgrades.find(row => row.path === '/inspector/devtools/cdp')
+    if (route === undefined || upgrade === undefined) throw new Error('DevTools routes were not registered')
+    const writeHead = vi.fn().mockReturnThis()
+    const end = vi.fn().mockReturnThis()
+    const response: Pick<ServerResponse, 'writeHead' | 'end'> = { writeHead, end }
+    const handler = vi.spyOn(route, 'handler')
+    await dispatchHttp(context!, route, {
+      method: 'GET', url: '/inspector/devtools/devtools_app.html', headers: { host: '127.0.0.1' },
+    } as IncomingMessage, response as ServerResponse)
+    expect(handler.mock.lastCall?.[2]?.principal.kind).toBe('inspector-authorization-test')
+    expect(writeHead).toHaveBeenCalledWith(403, expect.objectContaining({ 'cache-control': 'no-store' }))
+    expect(end).toHaveBeenCalled()
+    expect(assets.middleware).not.toHaveBeenCalled()
+
+    const pair = await socketPair()
+    const routeHandler = vi.spyOn(upgrade, 'handler')
+    vi.mocked(connect).mockClear()
+    try {
+      await dispatchUpgrade(context!, upgrade, upgradeRequest('/inspector/devtools/cdp', {}), pair.server, Buffer.alloc(0))
+      expect(routeHandler.mock.lastCall?.[3]?.principal.kind).toBe('inspector-authorization-test')
+      expect(connect).not.toHaveBeenCalled()
+      await pair.closed
+      expect(pair.received().toString('latin1')).toContain('HTTP/1.1 403 Forbidden')
+      expect(pair.received().toString('latin1').toLowerCase()).toContain('cache-control: no-store')
+    } finally {
+      pair.server.destroy()
+      pair.client.destroy()
+      await pair.closed
+    }
+  })
+
   it('proxies authenticated CDP upgrades with their WebSocket headers and early bytes to the Worker', async () => {
     const { fiber, upgrades } = await mount()
     await fiber.await()
@@ -143,7 +190,7 @@ describe('experimental Inspector Host DevTools routes', () => {
 
     const selected = await socketPair()
     const reply = readUpgrade(selected.client)
-    await upgrade.handler(upgradeRequest('/inspector/devtools/cdp?clientSourceId=client-fixture', {
+    await dispatchUpgrade(context!, upgrade, upgradeRequest('/inspector/devtools/cdp?clientSourceId=client-fixture', {
       'sec-websocket-protocol': ['dsh-fixture', 'dsh-other'],
       'sec-websocket-extensions': undefined,
       'user-agent': 'fixture',
@@ -156,13 +203,13 @@ describe('experimental Inspector Host DevTools routes', () => {
 
     const unselected = await socketPair()
     const later = readUpgrade(unselected.client)
-    await upgrade.handler(upgradeRequest(undefined, {}), unselected.server, Buffer.alloc(0))
+    await dispatchUpgrade(context!, upgrade, upgradeRequest(undefined, {}), unselected.server, Buffer.alloc(0))
     await vi.waitFor(() => { expect(unselected.received().toString('latin1')).toMatch(/^HTTP\/1\.1 101 /u) })
     unselected.client.write(clientTextFrame(JSON.stringify({ id: 1, method: 'DSHInspector.getSources' })))
     expect((await later).message).toMatchObject({ id: 1 })
 
     const reset = await socketPair()
-    await upgrade.handler(upgradeRequest(undefined, {}), reset.server, Buffer.alloc(0))
+    await dispatchUpgrade(context!, upgrade, upgradeRequest(undefined, {}), reset.server, Buffer.alloc(0))
     reset.server.destroy(new Error('fixture browser reset'))
     await reset.closed
 
@@ -183,7 +230,7 @@ describe('experimental Inspector Host DevTools routes', () => {
     const upgrade = upgrades.find(row => row.path === '/inspector/devtools/cdp')
     if (upgrade === undefined) throw new Error('CDP upgrade route was not registered')
     const pair = await socketPair()
-    await upgrade.handler(upgradeRequest(undefined, {}), pair.server, Buffer.alloc(0))
+    await dispatchUpgrade(context!, upgrade, upgradeRequest(undefined, {}), pair.server, Buffer.alloc(0))
     await pair.closed
     expect(pair.received().length).toBe(0)
   })

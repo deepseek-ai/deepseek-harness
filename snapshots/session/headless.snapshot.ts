@@ -755,12 +755,12 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
   const events = parseSessionLog(logs[0]!.content)
   const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
-  expect(calls).toEqual(['cordis_inspect_list', 'run_code', 'subagent', 'workflow', 'cordis_inspect_list'])
+  expect(calls).toEqual(['cordis_inspect', 'run_code', 'subagent', 'workflow', 'cordis_inspect'])
   const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
   expect(results).toHaveLength(5)
   expect(results.every(result => result.isError === false)).toBe(true)
   const dispatches = events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [event.data] : [])
-  expect(dispatches).toEqual([expect.objectContaining({ name: 'cordis_inspect_list', isError: false })])
+  expect(dispatches).toEqual([expect.objectContaining({ name: 'cordis_inspect', isError: false })])
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
@@ -783,7 +783,7 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(headers[1]!.tools?.map(tool => tool.name)).toEqual(['run_code'])
   for (const header of [headers[0]!, headers[2]!]) {
     const names = header.tools?.map(tool => tool.name) ?? []
-    expect(names).toEqual(expect.arrayContaining(['cordis_inspect_list', 'subagent', 'workflow']))
+    expect(names).toEqual(expect.arrayContaining(['cordis_inspect', 'subagent', 'workflow']))
     expect(names).not.toContain('run_code')
   }
 }

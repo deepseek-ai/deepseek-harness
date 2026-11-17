@@ -1,0 +1,66 @@
+/* The details of a panel row in its HoverCard, on the card's dark surface in
+   both themes: the title in primary ink, lines in secondary ink, then the
+   state and measures in tertiary ink, as the sidebar's Session hover card sets
+   them. */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title {
+  color: var(--dsw-alias-hovercard-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+/* A long line, such as a task's description, stops after six lines; the row's own view shows all of it. */
+.line {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-hovercard-label-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+}
+
+.status,
+.facts {
+  display: flex;
+  align-items: center;
+  color: var(--dsw-alias-hovercard-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.status {
+  gap: 8px;
+}
+
+.facts {
+  flex-wrap: wrap;
+  gap: 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.factIcon {
+  display: inline-flex;
+  flex: none;
+}
+
+.factIcon svg {
+  width: 14px;
+  height: 14px;
+}

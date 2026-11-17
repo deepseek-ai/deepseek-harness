@@ -12,8 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import * as yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { loadOverlayPatches, renderConfigDump } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
@@ -73,7 +72,7 @@ describe('renderConfigDump', () => {
     ], () => {})
     // Comments do not break loadability: the dump parses as one document
     // equal to what boot() would mount.
-    const parsed = yaml.load(dump, { schema: entryListSchema }) as {
+    const parsed = parseEntryYaml(dump) as {
       id: string
       config?: Record<string, unknown>
     }[]
@@ -116,12 +115,9 @@ describe('renderConfigDump', () => {
   })
 
   it('composes all layers as one flattened patch list, exactly like boot()', () => {
-    // boot() flattens every layer into ONE applyEntryPatches call, whose id
-    // index sees inserted rows but NOT children introduced by a plain group
-    // `config` replacement. A per-layer composition would rebuild the index
-    // between layers and let the second layer patch that child — a tree the
-    // real boot never mounts. Pin the single-call semantics: the child patch
-    // is skipped (with the layer-labeled warning), matching boot.
+    // boot() flattens every layer into ONE applyEntryPatches call. Children
+    // supplied by a group `config` replacement join the id index, so a later
+    // layer can patch them, and the dump lists that layer on the group row.
     const dir = tmp()
     const base = join(dir, 'base.yml')
     writeFileSync(base, [
@@ -139,14 +135,50 @@ describe('renderConfigDump', () => {
       },
       { label: 'b.yml', patches: [{ id: 'child', config: { v: 2 } }] },
     ], line => void warnings.push(line))
-    expect(warnings).toEqual([`${NAME}: [b.yml] patch: entry "child" not found`])
-    const parsed = yaml.load(dump, { schema: entryListSchema }) as {
+    expect(warnings).toEqual([])
+    const parsed = parseEntryYaml(dump) as {
       config?: { config?: { v?: number } }[]
     }[]
-    expect(parsed[0]?.config?.[0]?.config?.v).toBe(1)
-    // The skipped layer did not change the row, so the comment does not list it.
+    expect(parsed[0]?.config?.[0]?.config?.v).toBe(2)
+    expect(dump).toContain('# == base.yml, patched by a.yml, b.yml\n- id: g')
+  })
+
+  it('keeps generated ids of anonymous replaced group children across layers', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: g\n  name: ./group.mjs\n  group: true\n  config: []\n- id: other\n  name: ./noop.mjs\n')
+    const patches = [{ id: 'g', config: [{ name: './noop.mjs' }] }]
+    const dump = renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches },
+      { label: 'b.yml', patches: [{ id: 'other', disabled: true }] },
+    ], () => {})
     expect(dump).toContain('# == base.yml, patched by a.yml\n- id: g')
-    expect(dump).not.toContain('b.yml\n- id: g')
+    expect(dump).toContain('# == base.yml, patched by b.yml\n- id: other')
+    expect(patches).toEqual([{ id: 'g', config: [{ name: './noop.mjs' }] }])
+  })
+
+  it('keeps each layer\'s snapshot when a later layer inserts into a config array an earlier layer supplied', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: x\n  name: ./group.mjs\n')
+    const dump = renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches: [{ id: 'x', config: [] }] },
+      { label: 'b.yml', patches: [{ id: 'x', group: true }] },
+      { label: 'c.yml', patches: [{ id: 'x', insert: [{ id: 'child', name: './noop.mjs' }] }] },
+    ], () => {})
+    expect((parseEntryYaml(dump) as { config: unknown[] }[])[0]!.config).toEqual([{ id: 'child', name: './noop.mjs' }])
+    expect(dump).toContain('# == base.yml, patched by a.yml, b.yml, c.yml\n- id: x')
+  })
+
+  it('drops the children of a replaced group config from the patch index', () => {
+    const dir = tmp()
+    const base = join(dir, 'base.yml')
+    writeFileSync(base, '- id: g\n  name: ./group.mjs\n  group: true\n  config:\n    - id: child\n      name: ./noop.mjs\n')
+    const warnings: string[] = []
+    renderConfigDump(NAME, base, [
+      { label: 'a.yml', patches: [{ id: 'g', config: [] }, { id: 'child', disabled: true }] },
+    ], line => void warnings.push(line))
+    expect(warnings).toEqual([`${NAME}: [a.yml] patch: entry "child" not found`])
   })
 
   it('reports a patch whose target row is absent through warn with its layer label and keeps composing', () => {
@@ -169,7 +201,7 @@ describe('renderConfigDump', () => {
       line => void warnings.push(line),
     )
     expect(warnings).toEqual([`${NAME}: [overlay.yml] patch: entry "only-on-another-surface" not found`])
-    const parsed = yaml.load(dump, { schema: entryListSchema }) as { config?: { value?: string } }[]
+    const parsed = parseEntryYaml(dump) as { config?: { value?: string } }[]
     expect(parsed[0]?.config?.value).toBe('patched')
   })
 

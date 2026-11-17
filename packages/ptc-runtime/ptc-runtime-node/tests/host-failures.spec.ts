@@ -540,7 +540,7 @@ it('preserves execution context for bindings delivered by an external control st
   h.receive((raw) => {
     const message = raw as { t: string; m?: string; r?: unknown }
     if ('m' in message && message.m === 'run') booted.resolve(undefined)
-    if (message.t === 's') h.complete({ value: message.r })
+    if (message.t === 's') h.complete(message.r)
   })
   const context = new AsyncLocalStorage<string>()
   const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),

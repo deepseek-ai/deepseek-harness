@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeDiffFile } from '../src/types.ts'
 import { ChangedFiles, ChangedFilesMenu, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
-import { changedFileTree, filesInTreeOrder, filterFileTree } from '../src/client/file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree, viewedNodes } from '../src/client/file-tree.ts'
 import { en } from '../src/client/locales.ts'
 import { FileTreePane } from '../src/client/FileTreePane.tsx'
 
@@ -25,6 +25,30 @@ it('compacts directory chains, sorts directories before files, and keeps identic
   expect(filterFileTree(tree, 'missing')).toEqual([])
   expect(changedFileTree([])).toEqual([])
   expect(filesInTreeOrder([])).toEqual([])
+})
+
+it('finds the viewed files and the directories whose every file is viewed', () => {
+  const tree = changedFileTree([file('z.ts'), file('src/client/b.ts'), file('src/client/a.ts'), file('src/server/c.ts'), file('docs/a.ts')])
+  expect([...viewedNodes(tree, new Set(['src/client/a.ts', 'src/client/b.ts', 'z.ts', 'docs/missing.ts']))].sort())
+    .toEqual(['src/client', 'src/client/a.ts', 'src/client/b.ts', 'z.ts'])
+  expect([...viewedNodes(tree, new Set(['src/client/a.ts', 'src/client/b.ts', 'src/server/c.ts']))].sort())
+    .toEqual(['src', 'src/client', 'src/client/a.ts', 'src/client/b.ts', 'src/server', 'src/server/c.ts'])
+  expect(viewedNodes(tree, new Set()).size).toBe(0)
+})
+
+it('draws viewed files and fully viewed directories subdued and says so to assistive technology', () => {
+  const files = [file('src/a.ts'), file('src/b.ts'), file('z.ts')]
+  const props = { files, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), state: { query: '', collapsed: {}, selected: null } }
+  const view = render(<ChangedFiles {...props} viewed={new Set(['src/a.ts'])} />)
+  const row = (path: string): HTMLElement => view.getByRole('button', { name: path })
+  expect([row('src').hasAttribute('data-viewed'), row('src/a.ts').hasAttribute('data-viewed'), row('src/b.ts').hasAttribute('data-viewed')])
+    .toEqual([false, true, false])
+  expect(row('src/a.ts').getAttribute('aria-description')).toBe(en['viewed.label'])
+  view.rerender(<ChangedFiles {...props} viewed={new Set(['src/a.ts', 'src/b.ts'])} />)
+  expect(row('src').getAttribute('aria-description')).toBe(en['viewed.directory'])
+  expect(row('z.ts').hasAttribute('aria-description')).toBe(false)
+  view.rerender(<ChangedFiles {...props} />)
+  expect(view.container.querySelectorAll('[data-viewed]')).toHaveLength(0)
 })
 
 it('matches renamed paths and keeps file names containing backslashes literal', () => {
@@ -197,6 +221,19 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
     view.unmount()
     expect(disconnect).toHaveBeenCalled()
   } finally { vi.unstubAllGlobals() }
+})
+
+it('keeps the width the cell above the tree needs as its least width', () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 1000)
+  const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree', onWidth: vi.fn() }
+  const view = render(<FileTreePane {...props} position="left" least={276} />)
+  const handle = view.getByRole('separator')
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['276', '276'])
+  expect(props.onWidth).toHaveBeenLastCalledWith(276)
+  fireEvent.keyDown(handle, { key: 'Home' })
+  expect(handle.getAttribute('aria-valuenow')).toBe('276')
+  view.rerender(<FileTreePane {...props} position="left" least={150} />)
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['200', '276'])
 })
 
 it('can mount into a detached fragment without measuring a nonexistent parent element', () => {

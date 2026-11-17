@@ -56,6 +56,8 @@ kind: "package-library"
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification`（仅进程内运行） |
 
+`session/resume.permissionMode` 可选地指定已配置的权限预设，在恢复后的执行前生效；省略时保留历史权限。持久化与拒绝行为见[服务端恢复约定](../server/README.zh.md#use-this-package)。
+
 `HarnessSdkRequestMap`、`HarnessSdkClientRequestMap`、`HarnessSdkHostRequestMap` 与 `HarnessSdkNotificationMap` 按方法名索引这些结构；包根与传输一起导出它们。
 
 `session/wait` 接受已有 SDK 会话的 `{ sessionId }`，在根 Agent 持续空闲且活跃的受管理后代工作结束后返回 `{}`。带有停放输入的空闲后代保持驻留，不阻塞这次等待。未知 id，以及没有后续终止事件记录的 Agent 运行时错误，都会使请求失败。等待期间提交的通知在同一传输上先于响应到达；原始 `session.status` 转换仍表示整个 Agent 的状态。

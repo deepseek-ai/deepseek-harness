@@ -34,10 +34,11 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
   })
 
   it.each(['per-call', 'vm-script'] as const)('runs TypeScript and bindings through published exports in %s mode', async (executionMode) => {
-    const program = 'const doubled: number = await tools.double({ n: 21 }); inspect("halfway", doubled); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }; const env = Object.keys((await import("node:process")).env); ' + (executionMode === 'per-call' ? 'return { doubled, failure, env };' : '({ doubled, failure, env })')
+    const program = 'const doubled: number = await tools.double({ n: 21 }); inspect("halfway", doubled); const structured = await tools.structured({}); inspect(structured); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }; const env = Object.keys((await import("node:process")).env); ' + (executionMode === 'per-call' ? 'return { doubled, structured, failure, env };' : '({ doubled, structured, failure, env })')
     const script = `
       const { Context } = await import('@deepseek-ai/cordis')
       const { NodePtcRuntime } = await import('@deepseek-ai/dsh-ptc-runtime-node')
+      const { PtcInspectableValue } = await import('@deepseek-ai/dsh-ptc-runtime')
       const ctx = new Context()
       for (const name of ['session-projection', 'fs-local', 'subprocess-local', 'sandbox-local']) {
         const plugin = await import('@deepseek-ai/dsh-' + name)
@@ -52,6 +53,7 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
           global: 'tools',
           functions: {
             double: async args => args.n * 2,
+            structured: async () => new PtcInspectableValue({ value: 42 }, 'rendered result 42'),
             fail: async () => { throw new Error('denied') },
           },
           errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' },
@@ -76,9 +78,11 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({
       doubled: 42,
+      structured: { value: 42 },
       failure: { typed: true, name: 'ToolCallError', toolName: 'fail', message: 'denied' },
       env: [],
     })
     expect(result.output).toContainEqual({ type: 'text', text: 'halfway 42\n' })
+    expect(result.output).toContainEqual({ type: 'text', text: 'rendered result 42\n' })
   })
 })

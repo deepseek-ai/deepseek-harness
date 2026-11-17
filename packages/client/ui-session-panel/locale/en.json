@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session panel",
+    "description": "A floating panel opened from the Session header that gathers facts about the current Session, such as its working folder."
+  }
+}

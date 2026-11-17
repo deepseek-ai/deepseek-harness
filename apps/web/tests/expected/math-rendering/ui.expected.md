@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Math rendering
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
