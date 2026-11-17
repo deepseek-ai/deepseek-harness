@@ -35,7 +35,7 @@
 | `authorization/settled` | `emit` | [`packages/credentials/authorization/src/index.ts:57`](../packages/credentials/authorization/src/index.ts) | [`authorization`](../packages/credentials/authorization) (`events.dispatch`) | - |
 | `commands/change` | `emit` | [`packages/interaction/commands/src/types.ts:89`](../packages/interaction/commands/src/types.ts) | [`commands`](../packages/interaction/commands) (`events.dispatch`) | `remotes` |
 | `compaction/summary-error` | `waterfall` | [`packages/compaction/compaction/src/index.ts:106`](../packages/compaction/compaction/src/index.ts) | [`compaction-basic`](../packages/compaction/compaction-basic) (`waterfall`) | [`compaction-image-offload`](../packages/compaction/compaction-image-offload) |
-| `connection/request` | `waterfall` | [`packages/client/connection/src/index.ts:67`](../packages/client/connection/src/index.ts) | `connection` (`waterfall`) | - |
+| `connection/request` | `waterfall` | [`packages/client/connection/src/index.ts:68`](../packages/client/connection/src/index.ts) | `connection` (`waterfall`) | - |
 | `cordis/dynamic-package` | `emit` | [`packages/extensions/cordis-host-runner/src/types.ts:383`](../packages/extensions/cordis-host-runner/src/types.ts) | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) (`emit`) | `remotes` |
 | `cordis/dynamic-retract` | `emit` | [`packages/extensions/cordis-host-runner/src/types.ts:389`](../packages/extensions/cordis-host-runner/src/types.ts) | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) (`emit`) | `remotes` |
 | `cordis/inspect-query` | `emit` | [`packages/extensions/cordis-host-runner/src/types.ts:395`](../packages/extensions/cordis-host-runner/src/types.ts) | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) (`emit`) | `remotes` |
@@ -97,7 +97,7 @@
 | `web/providers-changed` | `emit` | [`packages/web/web/src/types.ts:21`](../packages/web/web/src/types.ts) | [`web`](../packages/web/web) (`events.dispatch`) | `remotes` |
 | `webserver/authorize` | `bail` | [`packages/host/webserver/src/index.ts:60`](../packages/host/webserver/src/index.ts) | `webserver` (`bail`) | `connection` |
 | `webserver/entry-url` | `emit` | [`packages/host/webserver/src/index.ts:53`](../packages/host/webserver/src/index.ts) | [`web-app`](../packages/bundle/web-app) (`emit`) | `authentication-token` |
-| `webserver/index-inject` | `emit` | [`packages/host/webserver/src/index.ts:90`](../packages/host/webserver/src/index.ts) | `webserver` (`emit`) | `connection`, `inspector`, `modules`, `remote-access`, `shortcuts`, `ui-sidebar-documentpreview`, `ui-theme` |
+| `webserver/index-inject` | `emit` | [`packages/host/webserver/src/index.ts:90`](../packages/host/webserver/src/index.ts) | `webserver` (`emit`) | `inspector`, `modules`, `remote-access`, `ui-theme` |
 | `webserver/request` | `waterfall` | [`packages/host/webserver/src/index.ts:68`](../packages/host/webserver/src/index.ts) | `webserver` (`waterfall`) | `authentication-token`, [`deepseek-account`](../packages/account/deepseek-account), [`mcp-client`](../packages/mcp/mcp-client) |
 | `webserver/upgrade` | `waterfall` | [`packages/host/webserver/src/index.ts:78`](../packages/host/webserver/src/index.ts) | `webserver` (`waterfall`) | `authentication-token` |
 | `workflow/agent-end` | `emit` | [`packages/workflow/workflow/src/index.ts:79`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`tool-workflow`](../packages/workflow/tool-workflow) |

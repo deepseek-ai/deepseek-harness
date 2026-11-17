@@ -132,11 +132,23 @@ export class SyncedConfigPublisher {
       ? runtimeSchema as z
       : undefined
     this.defaults.set(id, schema === undefined ? undefined : this.defaultValues(schema, fiber, id))
+    let effective = fiber.effectiveConfig
+    if (schema !== undefined && effective === undefined) {
+      try {
+        // Before activation there is no effective Config; resolving the raw config with the instance's own schema gives
+        // the object activation will receive.
+        effective = fiber.resolveConfig(fiber.rawConfig)
+      } catch (error) {
+        // A config expression may read an injection the pending plugin is still waiting for. The row carries no values
+        // until the plugin activates, when its status change republishes them; a Config the schema rejects fails the
+        // activation itself.
+        this.ctx.logger.debug(error)
+        effective = undefined
+      }
+    }
     let values: SyncedConfigValues | undefined
     try {
-      // Before activation there is no effective Config; resolving the raw config with the instance's own schema gives
-      // the object activation will receive.
-      values = schema === undefined ? undefined : syncedValues(schema, fiber.effectiveConfig ?? fiber.resolveConfig(fiber.rawConfig), id)
+      values = schema === undefined || effective === undefined ? undefined : syncedValues(schema, effective, id)
     } catch (error) {
       // Containment: one plugin's unsyncable value keeps its last published values and leaves the other rows intact.
       this.ctx.logger.error(error)

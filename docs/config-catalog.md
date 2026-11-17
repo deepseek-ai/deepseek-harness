@@ -504,13 +504,14 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-connection`
 
-- `source`: [`packages/client/connection/src/index.ts:92`](../packages/client/connection/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/connection/src/types.ts:6`](../packages/client/connection/src/types.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
 export interface ConnectionConfig {
-  /** Browser recovery timing, injected into each served page. */
-  recovery?: ConnectionRecoveryConfig
+  /** Browser recovery timing; the browser receives it through its synced Config and reads it once when the plugin activates. */
+  recovery?: Volatile<ConnectionRecoveryConfig>
   /**
    * Authorities this deployment serves beyond loopback: exact `host:port`, or
    * port-less `host` matching any port. The fence accepts loopback and the
@@ -587,13 +588,17 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-shortcuts`
 
-- `source`: [`packages/client/shortcuts/src/config.ts:5`](../packages/client/shortcuts/src/config.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/shortcuts/src/index.ts:7`](../packages/client/shortcuts/src/index.ts)
 
 ```ts config-catalog
-/** Fixed shortcut sequence settings. */
-export interface Config {
+/** Fixed shortcut sequence timing; the browser receives it through its synced Config. */
+export type Config = ShortcutsConfig
+
+/** Fixed shortcut sequence timing; the browser receives it through its synced Config. */
+export interface ShortcutsConfig {
   /** Maximum interval between independent Escape presses for stopping a reply, in milliseconds. */
-  stopSequenceMs: number
+  stopSequenceMs: Volatile<number>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-shortcuts -->
@@ -603,16 +608,40 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-ui-account-notifications`
 
-- `source`: [`packages/client/ui-account-notifications/src/config.ts:5`](../packages/client/ui-account-notifications/src/config.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/ui-account-notifications/src/index.ts:7`](../packages/client/ui-account-notifications/src/index.ts)
 
 ```ts config-catalog
-/** Initial polling interval before the server supplies its next delay. */
-export interface Config {
+/** Initial polling interval; the browser receives it through its synced Config. */
+export type Config = AccountNotificationsConfig
+
+/** Initial polling interval; the browser receives it through its synced Config. */
+export interface AccountNotificationsConfig {
   /** Initial query delay in milliseconds, replaced by each successful server response. */
-  notificationPollIntervalMs: number
+  notificationPollIntervalMs: Volatile<number>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-account-notifications -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-context-menu -->
+<a id="deepseek-aidsh-client-ui-context-menu"></a>
+
+## `@deepseek-ai/dsh-client-ui-context-menu`
+
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/ui-context-menu/src/index.ts:7`](../packages/client/ui-context-menu/src/index.ts)
+
+```ts config-catalog
+/** Live preparation budget; the browser receives it through its synced Config. */
+export type Config = ContextMenuConfig
+
+/** Live preparation budget; the browser receives it through its synced Config. */
+export interface ContextMenuConfig {
+  /** Maximum time in milliseconds to prepare each contribution before omitting its pending actions. */
+  resolutionTimeoutMs: Volatile<number>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-context-menu -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-plugin-manager -->
 <a id="deepseek-aidsh-client-ui-plugin-manager"></a>
@@ -685,13 +714,17 @@ export type OnboardingProcess = 'compact' | 'standard' | 'detailed'
 
 ## `@deepseek-ai/dsh-client-ui-settings-models`
 
-- `source`: [`packages/client/ui-settings-models/src/onboarding-config.ts:6`](../packages/client/ui-settings-models/src/onboarding-config.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/ui-settings-models/src/index.ts:7`](../packages/client/ui-settings-models/src/index.ts)
 
 ```ts config-catalog
-/** Onboarding options after schema defaults are applied. */
-export interface Config {
-  /** Offer the browser API-key step when no native shell owns credential onboarding. */
-  credentialOnboarding: boolean
+/** Credential-onboarding choice synced to the browser. */
+export type Config = ModelsConfig
+
+/** Credential-onboarding choice; the browser receives it through its synced Config. */
+export interface ModelsConfig {
+  /** Offer the browser API-key step automatically when no native shell owns credential onboarding. */
+  credentialOnboarding: Volatile<boolean>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-settings-models -->
@@ -701,31 +734,41 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-ui-sidebar-documentpreview`
 
-- `source`: [`packages/client/ui-sidebar-documentpreview/src/config.ts:5`](../packages/client/ui-sidebar-documentpreview/src/config.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/ui-sidebar-documentpreview/src/index.ts:8`](../packages/client/ui-sidebar-documentpreview/src/index.ts)
 
 ```ts config-catalog
-/** Transient Office conversion reuse within one Client connection. */
-export interface Config {
-  /** Retained PDF limits; pending conversions share cancellation by reader lifetime. */
-  office: {
-    /** Maximum retained completed PDFs. */
-    maxCachedEntries: number
-    /** Maximum retained PDF bytes, counted by each binary buffer's byteLength. */
-    maxCachedBytes: number
-    /** Maximum unsettled Host conversion RPCs, including cancellation teardown. */
-    maxPending: number
-    /** Maximum readers including source and renderer metadata lookups. */
-    maxReaders: number
-  }
-  /** Browser spreadsheet parser and dense cell allocation limits. */
-  excel: {
-    /** Maximum source file bytes. */
-    maxBytes: number
-    /** Maximum combined rectangular cell area across worksheets. */
-    maxCells: number
-    /** Maximum parser Worker lifetime in milliseconds. */
-    timeoutMs: number
-  }
+/** Preview limits synced to the browser. */
+export type Config = DocumentPreviewConfig
+
+/** Preview limits; the browser receives each object through its synced Config and reads it once when the plugin activates. */
+export interface DocumentPreviewConfig {
+  /** Transient Office conversion reuse within one Client connection. */
+  office: Volatile<OfficeLimits>
+  /** Browser spreadsheet parser limits. */
+  excel: Volatile<ExcelLimits>
+}
+
+/** Retained PDF limits; pending conversions share cancellation by reader lifetime. */
+export interface OfficeLimits {
+  /** Maximum retained completed PDFs. */
+  maxCachedEntries: number
+  /** Maximum retained PDF bytes, counted by each binary buffer's byteLength. */
+  maxCachedBytes: number
+  /** Maximum unsettled Host conversion RPCs, including cancellation teardown. */
+  maxPending: number
+  /** Maximum readers including source and renderer metadata lookups. */
+  maxReaders: number
+}
+
+/** Browser spreadsheet parser and dense cell allocation limits. */
+export interface ExcelLimits {
+  /** Maximum source file bytes. */
+  maxBytes: number
+  /** Maximum combined rectangular cell area across worksheets. */
+  maxCells: number
+  /** Maximum parser Worker lifetime in milliseconds. */
+  timeoutMs: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-sidebar-documentpreview -->
@@ -5323,7 +5366,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-connector-account` | — | [`packages/client/ui-connector-account/src/index.ts`](../packages/client/ui-connector-account/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-context-menu` | — | [`packages/client/ui-context-menu/src/index.ts`](../packages/client/ui-context-menu/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/experimental/client-ui-creation-recommendations/src/index.ts`](../packages/experimental/client-ui-creation-recommendations/src/index.ts) |
