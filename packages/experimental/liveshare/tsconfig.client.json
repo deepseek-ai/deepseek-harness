@@ -99,7 +99,7 @@
       "path": "../../client/ui-slots/tsconfig.json"
     },
     {
-      "path": "../../client/ui-workspace/tsconfig.json"
+      "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../../core/session"
