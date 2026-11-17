@@ -122,6 +122,10 @@
       config:
         desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' && ['darwin', 'win32'].includes(process.platform) ? process.platform : null"
 
+    # DeepSeek model routes and web providers ask this service for the API key or the account sign-in of each request.
+    - id: deepseek-auth
+      name: '@deepseek-ai/dsh-deepseek-auth'
+
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
 

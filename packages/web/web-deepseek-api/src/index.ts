@@ -2,16 +2,16 @@
  * Register the DeepSeek Search and Fetch APIs in `ctx.web` as `deepseek-search-api` and `deepseek-fetch-api`. Each
  * operation is one direct API request without an auxiliary model request. `web.searchProvider` and `web.fetchProvider`
  * select them. Each capability's billing setting chooses its credential. `auto` follows the conversation: a Session
- * whose latest model request used the `deepseek-account` route sends the account credential to that route's origin and
- * otherwise the API key; one on the `deepseek-official` route sends the API key; any other operation sends the API key
- * and, without a key, the signed-in account's credential. `account` sends only the account credential and `api-key`
- * only the API key. Each mounted DeepSeek model route publishes its credential and base URL through
- * `ctx.llm.providerCredential()`: the API key is that of the `deepseek-official` route, sent to its origin, or
- * `DEEPSEEK_API_KEY` sent to the official base without that route; the account credential is that of the
- * `deepseek-account` route, sent to its origin, or outside an account conversation without that route the signed-in
- * account's credential sent to the origin `DEEPSEEK_BASE_URL` names, by default the official one. An operation that
- * needs a mounted route whose settings do not resolve fails instead of changing its endpoint or credential. A capability
- * with its own `*BaseURL` or `*ApiKeyEnv` uses only that endpoint and key instead, whatever its billing
+ * whose latest model request used the mounted `deepseek-account` route sends the account credential to that route's
+ * origin and otherwise the API key; one on the mounted `deepseek-official` route sends the API key; any other
+ * operation, including one on either route id while its plugin is not mounted, sends the API key and, without a key,
+ * the signed-in account's credential. `account` sends only the account credential and `api-key` only the API key.
+ * `ctx.deepseekAuth` orders the two kinds and binds each to its deployment: the API key is that of the mounted
+ * `deepseek-official` route, sent to its origin, or `DEEPSEEK_API_KEY` sent to the official base without that route;
+ * the account credential is sent to the origin of the mounted `deepseek-account` route, or without that route to the
+ * origin `DEEPSEEK_BASE_URL` names, by default the official one. An operation that needs a mounted route whose
+ * settings do not resolve fails instead of changing its endpoint or credential. A capability with its own `*BaseURL`
+ * or `*ApiKeyEnv` uses only that endpoint and key instead, whatever its billing
  * ([rationale](../../../../.agents/notes/implemented/architecture/2026-10-29-web-provider-selection.md#credential-resolution)).
  * Both providers report themselves not ready when their next operation would have no credential.
  * @module @deepseek-ai/dsh-web-deepseek-api
@@ -19,10 +19,8 @@
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
-import { credentialRef, credentialRefConfigured, resolveCredentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
-import type {} from '@deepseek-ai/dsh-deepseek-account'
-import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertUsableApiKey, type LlmCredentialKind } from '@deepseek-ai/dsh-llm'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { DeepSeekAuthCandidate, DeepSeekAuthKind, DeepSeekAuthUnresolved } from '@deepseek-ai/dsh-deepseek-auth'
 import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
@@ -45,8 +43,8 @@ export type { DeepSeekSearchApiOptions } from './search.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'web-deepseek-api'
 
-/** The web seam both providers register into. */
-export const inject = ['web']
+/** The web seam both providers register into, and the DeepSeek authentication their operations ask for credentials. */
+export const inject = ['web', 'deepseekAuth']
 
 /**
  * Settings read by the next search or fetch without re-registering either provider. A non-empty `*BaseURL` or
@@ -119,23 +117,12 @@ const TOOLS_PATH = '/v1/tools'
 /** Credential reference of the official DeepSeek API key. */
 const DEEPSEEK_API_KEY = credentialRef('DEEPSEEK_API_KEY')
 
-/** Provider id of the DeepSeek account route. */
-const ACCOUNT_PROVIDER = 'deepseek-account'
-
-/** Provider id of the DeepSeek API-key route. */
-const OFFICIAL_PROVIDER = 'deepseek-official'
-
-/** Model route whose published credential an operation can send. */
-type RouteName = typeof ACCOUNT_PROVIDER | typeof OFFICIAL_PROVIDER
-
-/**
- * Credential kind each DeepSeek model route publishes. Billing chooses between the two kinds by route id, so an
- * adapter registered under one of these ids that publishes the other kind is not that route.
- */
-const ROUTE_CREDENTIAL_KIND = {
-  [ACCOUNT_PROVIDER]: 'account',
-  [OFFICIAL_PROVIDER]: 'api-key',
-} as const satisfies Record<RouteName, LlmCredentialKind>
+/** Rule of an `auto` billing by the credential kind that bills the conversation's model route. */
+const CONVERSATION_RULE = {
+  'account': 'account-conversation',
+  'api-key': 'official-conversation',
+  'other': 'other-conversation',
+} as const satisfies Record<DeepSeekAuthKind | 'other', Rule>
 
 /**
  * Launch-environment variable naming the DeepSeek deployment the model routes default to. Without the account route,
@@ -177,7 +164,7 @@ export function apply(ctx: Context, config: Config): void {
   const current = (capability: Capability) =>
     target(capability, ctx.get('agents')?.currentInitiator()?.session.requestContext()?.provider)
   const ready = (capability: Capability) => (llmProvider: string | undefined): Promise<boolean> =>
-    isDeepSeekWebAuthReady(target(capability, llmProvider).auth, CAPABILITY[capability].path)
+    isDeepSeekWebAuthReady(target(capability, llmProvider).auth)
   const searchApi = new DeepSeekSearchApiProvider(() => ({
     ...current('search'),
     count: config.count.get(),
@@ -204,9 +191,10 @@ export function apply(ctx: Context, config: Config): void {
 }
 
 /**
- * Resolve the ordered credentials and endpoint guidance of one capability without reading credential values. Route
- * endpoints use the origin of the route's published base URL with `/v1/tools`.
- * @param ctx - context with the model, credential, and account services.
+ * Resolve the ordered credentials and endpoint guidance of one capability without reading credential values.
+ * `ctx.deepseekAuth` orders the credential kinds and binds each to the capability's path under the origin of its
+ * deployment.
+ * @param ctx - context with the DeepSeek authentication service.
  * @param capability - the capability being resolved.
  * @param own - the capability's own base URL and credential reference, where empty values count as unset, and its
  *   billing.
@@ -217,133 +205,66 @@ function resolveTarget(
   ctx: Context, capability: Capability,
   own: { baseURL: string | undefined; ref: string | undefined; billing: Billing }, llmProvider: string | undefined,
 ): { auth: DeepSeekWebAuth; guidance: DeepSeekWebGuidance } {
-  const { subject, prefix } = CAPABILITY[capability]
+  const { subject, prefix, path } = CAPABILITY[capability]
   const guidance = (custom: boolean): DeepSeekWebGuidance =>
     ({ subject, plugin: name, custom, baseURLField: `${prefix}BaseURL`, apiKeyEnvField: `${prefix}ApiKeyEnv` })
   const ownBaseURL = nonEmpty(own.baseURL), ownRef = nonEmpty(own.ref)
   if (ownBaseURL !== undefined || ownRef !== undefined) {
-    const ref = ownRef === undefined ? DEEPSEEK_API_KEY : credentialRef(ownRef)
-    const json = JSON.stringify(ref)
+    const reference = ownRef === undefined ? DEEPSEEK_API_KEY : credentialRef(ownRef)
+    const baseURL = ownBaseURL ?? DEEPSEEK_WEB_API_BASE_URL
+    const json = JSON.stringify(reference)
+    // A base URL that does not parse, or that embeds credentials, leaves no source, so the provider is unavailable.
+    const sources = ctx.deepseekAuth.candidates({
+      consumer: name, accepts: ['api-key'], billing: 'api-key',
+      destination: { url: `${baseURL.replace(/\/+$/u, '')}${path}` }, connections: { 'api-key': { baseURL, reference } },
+    }).filter(isCandidate)
     return { guidance: guidance(true), auth: {
-      sources: [apiKeySource(ctx, ownBaseURL ?? DEEPSEEK_WEB_API_BASE_URL, ref)],
+      sources,
       missingCredentialMessage: `DeepSeek ${subject} API sends the API key under ${json} to its own endpoint, and no key is`
         + ` configured for ${json}. Guide the user to export ${json} in the launching environment, or to correct`
         + ` ${name}.${prefix}ApiKeyEnv.`,
     } }
   }
-  const rule: Rule = own.billing !== 'auto' ? own.billing
-    : llmProvider === ACCOUNT_PROVIDER ? 'account-conversation'
-      : llmProvider === OFFICIAL_PROVIDER ? 'official-conversation' : 'other-conversation'
-  const sources = ruleSources(ctx, capability, rule)
-  const ref: string = sources.flatMap(keyReference)[0] ?? DEEPSEEK_API_KEY
-  return { guidance: guidance(false), auth: { sources, missingCredentialMessage: missingMessage(capability, rule, ref) } }
-}
-
-/**
- * The credentials one rule tries, in order.
- * @param ctx - context with the model, credential, and account services.
- * @param capability - the capability whose diagnostics misconfigured sources name.
- * @param rule - the rule.
- * @returns the sources; the account source is absent in an account conversation without a mounted account route.
- */
-function ruleSources(ctx: Context, capability: Capability, rule: Rule): DeepSeekWebAuthSource[] {
-  switch (rule) {
-    case 'account-conversation': {
-      const account = routeSource(ctx, capability, ACCOUNT_PROVIDER)
-      return account === undefined ? [officialSource(ctx, capability)] : [account, officialSource(ctx, capability)]
-    }
-    case 'official-conversation':
-    case 'api-key': return [officialSource(ctx, capability)]
-    case 'other-conversation': return [officialSource(ctx, capability), accountSource(ctx, capability)]
-    case 'account': return [accountSource(ctx, capability)]
-    /* v8 ignore next -- the switch is exhaustive. */
-    default: return assertNever(rule)
-  }
-}
-
-/**
- * The credential a mounted model route publishes, sent to the Search and Fetch APIs under the origin of the route's
- * base URL.
- * @param ctx - context with the optional model service.
- * @param capability - the capability whose diagnostics a misconfigured source names.
- * @param provider - the route.
- * @returns the source; undefined when no mounted route publishes a credential of that route's kind as `provider`; a
- *   misconfigured source when the route's settings do not resolve or its published base URL does not parse.
- */
-function routeSource(ctx: Context, capability: Capability, provider: RouteName): DeepSeekWebAuthSource | undefined {
-  try {
-    const credential = ctx.get('llm')?.providerCredential(provider)
-    if (credential === undefined || credential.kind !== ROUTE_CREDENTIAL_KIND[provider]) return undefined
-    return { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
-  } catch (error: unknown) {
-    return misconfigured(capability, provider, error)
-  }
-}
-
-/**
- * The API key of the DeepSeek API-key route sent to its origin, or `DEEPSEEK_API_KEY` sent to the official base
- * without that route.
- * @returns the source, or a misconfigured source when the route's settings do not resolve.
- */
-function officialSource(ctx: Context, capability: Capability): DeepSeekWebAuthSource {
-  return routeSource(ctx, capability, OFFICIAL_PROVIDER) ?? apiKeySource(ctx, DEEPSEEK_WEB_API_BASE_URL, DEEPSEEK_API_KEY)
-}
-
-/**
- * The account credential of the DeepSeek account route sent to its origin, or without that route the signed-in
- * account's credential sent to the origin `DEEPSEEK_BASE_URL` names, by default the official one. The account service
- * releases its credential only for destinations it allows.
- * @returns the source, or a misconfigured source when the route's settings or `DEEPSEEK_BASE_URL` do not resolve.
- */
-function accountSource(ctx: Context, capability: Capability): DeepSeekWebAuthSource {
-  const route = routeSource(ctx, capability, ACCOUNT_PROVIDER)
-  if (route !== undefined) return route
-  const configured = nonEmpty(launchEnvironmentOf(ctx).get(DEEPSEEK_BASE_URL_ENV)?.value)
-  let baseURL = DEEPSEEK_WEB_API_BASE_URL
-  if (configured !== undefined) {
-    try { baseURL = toolsBase(deploymentURL(configured)) }
-    catch (error: unknown) { return misconfiguredDeployment(capability, error) }
-  }
-  return { kind: 'route', baseURL, credential: {
-    kind: 'account',
-    configured: async endpoint => (await ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint)) !== undefined,
-    resolve: endpoint => ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint) ?? Promise.resolve(undefined),
+  const candidates = ctx.deepseekAuth.candidates({
+    consumer: name, accepts: ['account', 'api-key'], billing: own.billing, route: llmProvider,
+    destination: { path: `${TOOLS_PATH}${path}` },
+  })
+  const rule: Rule = own.billing !== 'auto' ? own.billing : CONVERSATION_RULE[ctx.deepseekAuth.routeKind(llmProvider) ?? 'other']
+  const ref: string = candidates.filter(isCandidate).find(candidate => candidate.reference !== undefined)?.reference ?? DEEPSEEK_API_KEY
+  return { guidance: guidance(false), auth: {
+    sources: candidates.map(candidate => isCandidate(candidate) ? candidate : unresolved(capability, candidate)),
+    missingCredentialMessage: missingMessage(capability, rule, ref),
   } }
 }
 
-/** The key under `ref`, read from the credentials service or the launch environment, sent to `baseURL`. */
-function apiKeySource(ctx: Context, baseURL: string, ref: CredentialRef): DeepSeekWebAuthSource {
-  return { kind: 'api-key', baseURL, key: {
-    ref,
-    configured: () => credentialRefConfigured(ctx, ref),
-    resolve: async () => {
-      const value = await resolveCredentialRef(ctx, ref)
-      return value === undefined ? undefined : assertUsableApiKey(value, name, ref)
-    },
-  } }
+/** Whether `ctx.deepseekAuth` bound a credential kind to its endpoint, as opposed to a kind whose settings do not resolve. */
+function isCandidate(candidate: DeepSeekAuthCandidate | DeepSeekAuthUnresolved): candidate is DeepSeekAuthCandidate {
+  return !('unresolved' in candidate)
 }
 
-/** The credential reference an API-key source names in missing-credential diagnostics. */
-function keyReference(source: DeepSeekWebAuthSource): string[] {
-  switch (source.kind) {
-    case 'api-key': return [source.key.ref]
-    case 'route': return source.credential.kind === 'api-key' && source.credential.reference !== undefined ? [source.credential.reference] : []
-    case 'misconfigured': return []
-    /* v8 ignore next -- the switch is exhaustive. */
-    default: return assertNever(source)
-  }
+/**
+ * The source of a credential kind whose model route settings, or whose deployment in `DEEPSEEK_BASE_URL`, do not
+ * resolve.
+ * @param capability - the capability that stops.
+ * @param candidate - the kind and its failure.
+ * @returns the source whose diagnostic names what failed and both recoveries.
+ */
+function unresolved(capability: Capability, candidate: DeepSeekAuthUnresolved): DeepSeekWebAuthSource {
+  return candidate.unresolved === 'deployment'
+    ? misconfiguredDeployment(capability, candidate.error)
+    : misconfigured(capability, candidate.kind, candidate.error)
 }
 
 /**
  * The source of a credential whose model route settings do not resolve.
  * @param capability - the capability that stops.
- * @param route - the route whose settings failed.
+ * @param kind - the credential kind whose route settings failed.
  * @param error - the route's failure.
  * @returns the source whose diagnostic names the route and both recoveries.
  */
-function misconfigured(capability: Capability, route: RouteName, error: unknown): DeepSeekWebAuthSource {
-  const provider = route === ACCOUNT_PROVIDER ? 'DeepSeek account model provider' : 'DeepSeek API-key model provider'
-  const credential = route === ACCOUNT_PROVIDER ? 'the DeepSeek account sign-in' : 'that provider\'s API key'
+function misconfigured(capability: Capability, kind: DeepSeekAuthKind, error: unknown): DeepSeekWebAuthSource {
+  const provider = kind === 'account' ? 'DeepSeek account model provider' : 'DeepSeek API-key model provider'
+  const credential = kind === 'account' ? 'the DeepSeek account sign-in' : 'that provider\'s API key'
   return unresolvedSource(capability, `${credential} to the origin of the ${provider}, and that provider's settings do not resolve`,
     error, 'correct that provider\'s settings on the Models page or in the deployment configuration')
 }
@@ -408,25 +329,6 @@ function missingMessage(capability: Capability, rule: Rule, keyRef: string): str
 /** The message of a thrown value. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-/**
- * Accept a deployment base URL that may receive the account credential: HTTP(S) without embedded credentials.
- * @param value - the configured URL.
- * @returns the value.
- * @throws {Error} when the value is not such a URL.
- */
-function deploymentURL(value: string): string {
-  const url = new URL(value)
-  if (!/^https?:$/u.test(url.protocol) || url.username.length > 0 || url.password.length > 0) {
-    throw new Error(`${DEEPSEEK_BASE_URL_ENV} must be an HTTP(S) URL without credentials`)
-  }
-  return value
-}
-
-/** The Search and Fetch API base under the origin of a Messages base URL. */
-function toolsBase(messagesBaseURL: string): string {
-  return `${new URL(messagesBaseURL).origin}${TOOLS_PATH}`
 }
 
 /** A string with content, or undefined for an absent or empty value. */

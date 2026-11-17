@@ -1,7 +1,8 @@
 /**
- * The one definition of a well-formed provider API key, shared by every
- * adapter that puts one in an HTTP header.
- * @module @deepseek-ai/dsh-llm/api-key
+ * The one definition of a well-formed API key, shared by every consumer that
+ * puts a resolved key in an HTTP header. A consumer words its own diagnostic
+ * for a key that is not.
+ * @module @deepseek-ai/dsh-credentials/api-key
  */
 
 /**

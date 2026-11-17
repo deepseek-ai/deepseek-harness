@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek リクエスト認証",
+    "description": "DeepSeek へのリクエストごとに API キーまたはアカウントログインを選び、リクエストヘッダーを提供します。"
+  }
+}

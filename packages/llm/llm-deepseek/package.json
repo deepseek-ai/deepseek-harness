@@ -82,7 +82,8 @@
     "@deepseek-ai/dsh-credentials-local": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
-    "@types/semver": "^7.8.0"
+    "@types/semver": "^7.8.0",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis-plugin-loader": {

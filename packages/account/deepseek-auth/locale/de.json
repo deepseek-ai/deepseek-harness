@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek-Anfrageauthentifizierung",
+    "description": "Wählt für jede Anfrage an DeepSeek den API-Schlüssel oder die Kontoanmeldung aus und stellt die Anfrage-Header bereit."
+  }
+}

@@ -11,7 +11,7 @@ kind: "package-reference"
 
 提供共享的 DeepSeek Messages 传输、请求配置和模型能力。组合 [API key](../llm-deepseek-api-key/README.zh.md) 或[账号](../llm-deepseek-account/README.zh.md)插件以提供鉴权、模型发现与 provider 注册。有效的设置更改在后续请求生效，进行中的请求保留原配置。本包可与 [pi-ai 适配器](../llm-pi-ai/README.zh.md)并用。
 
-`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、裸凭据值以及可选的失败回调；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
+`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
 
 ## 目录
 
@@ -94,7 +94,7 @@ Messages 以内容块发送文本、思考、工具调用和工具结果，以 `
 
 Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号路由负责 HTTP 401 分类，账号服务负责凭据失效处理；传输层将错误交给凭据的回调。
 
-提供方插件通过三个适配器钩子拥有凭据。`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：Messages、Files 和列表请求发送的请求头、裸凭据值、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。凭据的所有者撤回凭据时，该信号结束模型请求及其文件操作，失败回调为这次结束命名。`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`。`credential` 通过 `ctx.llm.providerCredential(provider)` 发布路由的凭据种类、可选引用和存在性检查，并附带路由的基础地址，使 Web 提供方无需读取提供方配置即可用同一凭据调用同一部署。插件通过 `dsh-credentials` 的[凭据引用函数](../../credentials/credentials/README.zh.md)读取 API Key，通过[账号服务](../../account/deepseek-account/README.zh.md)读取账号凭据；本传输层两者都不读取。
+提供方插件通过两个适配器钩子提供凭据。`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：Messages、Files 和列表请求发送的请求头、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。凭据的所有者撤回凭据时，该信号结束模型请求及其文件操作，失败回调为这次结束命名。`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`。插件的 API Key 和账号登录凭据都取自 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md)；本传输层不读取任何凭据。
 
 ### 带 thinking 与图片的流式调用
 

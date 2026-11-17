@@ -177,7 +177,8 @@
     "@types/ws": "8.18.1",
     "ajv": "^8.20.0",
     "execa": "^10.0.1",
-    "ws": "8.21.3"
+    "ws": "8.21.3",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "exports": {
     "./profile-boot": {

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -28,6 +29,7 @@ function captureAuthorization(): () => (string | null)[] {
 async function mount(ctx: Context, config: Record<string, unknown>, environment: Record<string, string>): Promise<void> {
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: environment }]))
   await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api' })
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(webApiPlugin, config)
 }
 
@@ -76,6 +78,19 @@ describe('web-deepseek-api API-key resolution', () => {
       await mount(ctx, {}, { DEEPSEEK_API_KEY: '' })
       await expect(ctx.web.search({ query: 'q' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
       expect(authorization()).toEqual([])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('names the reference of an unusable key, and never the key', async () => {
+    captureAuthorization()
+    const ctx = new Context()
+    try {
+      ctx.provide('credentials', { resolve: async () => ({ value: '非法密钥' }), describe: async () => ({ configured: true }) } as never)
+      await mount(ctx, {}, {})
+      await expect(ctx.web.search({ query: 'q' })).rejects.toThrow(
+        'DeepSeek web credential resolution failed: DeepSeekAuthError: web-deepseek-api: the API key resolved from DEEPSEEK_API_KEY'
+        + ' contains characters no HTTP header can carry; set DEEPSEEK_API_KEY to the raw key alone (the web Models page writes it)',
+      )
     } finally { await ctx.fiber.dispose() }
   })
 
