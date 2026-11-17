@@ -61,7 +61,7 @@ See the generated [configuration catalog](../../../docs/config-catalog.md#deepse
 | `/help` | List the built-in commands followed by registered `passthrough` commands | `可用命令：` plus one line per command |
 | `<passthrough>` | Execute the named command in `ctx.commands` against the chat's `home` session | The command's output text, or `已完成。` |
 
-When no matching session is active or present, the plugin replies with `没有正在运行的会话。`, `没有可重置的会话。`, or `当前聊天还没有会话。`. Senders rejected by `allow: 'admins'` receive `你没有权限执行这个命令。`. If a side-effecting command was interrupted before its receipt could settle, a replayed retry replies with `该命令在完成前中断，结果未知。`. `/status` and `/help` are always permitted for all senders because they do not modify session state.
+When no matching session is active or present, the plugin replies with `没有正在运行的会话。`, `没有可重置的会话。`, or `当前聊天还没有会话。`. Senders rejected by `allow: 'admins'` receive `你没有权限执行这个命令。`. If a side-effecting command was interrupted before its receipt could settle, a replayed retry replies with `该命令此前已开始执行，但结果未能落盘（结果未知，未重复执行）。`. `/status` and `/help` are always permitted for all senders because they do not modify session state.
 
 ### Command matching rules
 
