@@ -541,11 +541,12 @@ describe('reset', () => {
     let resumeSave: (() => void) | undefined
     const saveBlocked = new Promise<void>((resolve) => { resumeSave = resolve })
     let sawResetReceipt = false
+    let bindPromise: Promise<void> | undefined
     const onChanged = (change: { domain: string; table: string }) => {
       if (!sawResetReceipt && change.domain === 'im_sessions' && change.table === 'resets') {
         sawResetReceipt = true
         harness.host.retry()
-        void harness.host.bind(record.key, [{ chat: CHAT.key, writable: true, home: true }, { chat: ImChatKey('fake:bot', 'other'), writable: false }])
+        bindPromise = harness.host.bind(record.key, [{ chat: CHAT.key, writable: true, home: true }, { chat: ImChatKey('fake:bot', 'other'), writable: false }])
         resumeSave?.()
       }
     }
@@ -554,6 +555,7 @@ describe('reset', () => {
     const resetPromise = harness.host.reset(record.key, 'cmd', { operationId: 'op-concurrent', expectedGeneration: 0 })
     await saveBlocked
     await resetPromise
+    await bindPromise
     await harness.host.whenRecovered()
 
     expect(harness.host.get(record.key)?.generation).toBe(1)
