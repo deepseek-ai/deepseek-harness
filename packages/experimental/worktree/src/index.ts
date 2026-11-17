@@ -64,7 +64,12 @@ type ResolvedConfig = Required<Config> & ProcessConfig
 interface WorktreeSpec {
   branch: string
   revision: string
+  /** Whether the remote-tracking branch `revision` is fetched before it is resolved. */
+  fetch: boolean
 }
+
+/** Prefix of the full names of remote-tracking branches. */
+const REMOTE_REFS = 'refs/remotes/'
 
 /** Runs one confined Git command; output with an exit code outside `allowedExitCodes` throws. */
 type GitRun = (directory: string, args: string[], allowedExitCodes?: number[], env?: NodeJS.ProcessEnv) => ReturnType<typeof runCommand>
@@ -147,19 +152,21 @@ export class WorktreeService extends Service {
   }
 
   /**
-   * Create a fresh branch and checkout at a pinned local revision, then enter it.
+   * Create a fresh branch and checkout at a pinned local revision, then enter it. A request that asks to fetch
+   * first fetches its remote-tracking branch, only that branch and without tags, then pins the fetched commit.
    * Existing branches or checkout paths fail. Uncommitted files stay in the source checkout.
    * Checkout disables configured clean, smudge, and process filters without changing Git config.
    * Repository-local replacement refs still apply; baseCommit reports the resolved object name.
    * The new checkout becomes current only after Git setup succeeds. Failures may retain newly
    * allocated Git/filesystem artifacts; no branch or checkout is removed automatically.
    * @param agent - caller whose current directory selects the source repository and file policy.
-   * @param request - optional new name and local revision; defaults are generated name and HEAD.
+   * @param request - optional new name, local revision, and fetch switch; defaults are generated name, HEAD, and no fetch.
    * @param signal - cancellation of lookup, creation, and working-directory publication.
    * @param onPhase - receives each stage before it begins; it must not throw.
    * @returns canonical checkout path, branch name, pinned commit, and source repository root.
-   * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
-   *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
+   * @throws {WorktreeError} for an invalid request, a fetch request whose `from` is not a remote-tracking branch of a
+   *   configured remote, an existing branch or path, or a failed, oversized, or timed-out command, including the
+   *   fetch; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
    */
   async create(
     agent: Agent,
@@ -189,7 +196,7 @@ export class WorktreeService extends Service {
    * @param agent - caller whose sandbox policy confines the commands.
    * @param request - recorded directory, branch, base commit, and source repository root.
    * @param signal - cancellation of the restoration.
-   * @param onPhase - receives each stage before it begins; it must not throw.
+   * @param onPhase - receives each stage before it begins, never `fetch`; it must not throw.
    * @returns the directory and whether the branch was created again.
    * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
    *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
@@ -198,7 +205,7 @@ export class WorktreeService extends Service {
     agent: Agent,
     request: RestoreWorktreeRequest,
     signal?: AbortSignal,
-    onPhase?: (phase: CreateWorktreePhase) => void,
+    onPhase?: (phase: Exclude<CreateWorktreePhase, 'fetch'>) => void,
   ): Promise<RestoredWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
     operationSignal.throwIfAborted()
@@ -252,16 +259,20 @@ export class WorktreeService extends Service {
     if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree name must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
     const revision = request.from ?? 'HEAD'
     if (revision.length === 0) throw new WorktreeError('worktree from must name a local commit, branch, or tag', 'WORKTREE_INVALID_ARGUMENT')
-    return { branch, revision }
+    const fetch = request.fetch === true
+    if (fetch && !revision.startsWith(REMOTE_REFS)) {
+      throw new WorktreeError('worktree fetch needs from to name a remote-tracking branch under refs/remotes/', 'WORKTREE_INVALID_ARGUMENT')
+    }
+    return { branch, revision, fetch }
   }
 
   private async createCheckout(
     agent: Agent,
-    { branch, revision }: WorktreeSpec,
+    { branch, revision, fetch }: WorktreeSpec,
     signal: AbortSignal,
     onPhase: ((phase: CreateWorktreePhase) => void) | undefined,
   ): Promise<CreatedWorktree> {
-    onPhase?.('prepare')
+    onPhase?.(fetch ? 'fetch' : 'prepare')
     const cwd = await this.ctx.workingDirectory.ensure(agent, signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
@@ -269,6 +280,10 @@ export class WorktreeService extends Service {
     const rootOutput = await run(cwd, ['rev-parse', '--show-toplevel'])
     const rootTarget = await this.ctx.fs.resolve(rootOutput.stdout.replace(/\r?\n$/, ''), { cwd, signal })
     const repositoryRoot = this.ctx.fs.processPath(rootTarget)
+    if (fetch) {
+      await fetchRemoteBranch(run, repositoryRoot, revision)
+      onPhase?.('prepare')
+    }
     const base = await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`])
     const baseCommit = base.stdout.trim()
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
@@ -297,7 +312,7 @@ export class WorktreeService extends Service {
     agent: Agent,
     { path, branch, baseCommit, repositoryRoot }: RestoreWorktreeRequest,
     signal: AbortSignal,
-    onPhase: ((phase: CreateWorktreePhase) => void) | undefined,
+    onPhase: ((phase: Exclude<CreateWorktreePhase, 'fetch'>) => void) | undefined,
   ): Promise<RestoredWorktree> {
     onPhase?.('prepare')
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
@@ -376,6 +391,32 @@ export class WorktreeService extends Service {
 async function assertBranchName(run: GitRun, directory: string, branch: string, field: string): Promise<void> {
   const checked = await run(directory, ['check-ref-format', `refs/heads/${branch}`], [0, 1])
   if (checked.exitCode !== 0) throw new WorktreeError(`${field} must be a valid Git branch name`, 'WORKTREE_INVALID_ARGUMENT')
+}
+
+/**
+ * Fetch one remote branch into its remote-tracking branch, without tags, submodules, `FETCH_HEAD`, or automatic
+ * maintenance.
+ * @param run - confined Git runner.
+ * @param repositoryRoot - root of the source checkout.
+ * @param ref - remote-tracking branch `refs/remotes/<remote>/<branch>`.
+ * @throws {WorktreeError} `WORKTREE_INVALID_ARGUMENT` when no configured remote owns `ref`; the command's failure when
+ *   listing the remotes or fetching fails.
+ */
+async function fetchRemoteBranch(run: GitRun, repositoryRoot: string, ref: string): Promise<void> {
+  const rest = ref.slice(REMOTE_REFS.length)
+  const listed = await run(repositoryRoot, ['remote'])
+  // A remote name may contain slashes, so the longest configured name that owns the ref wins.
+  const [remote] = listed.stdout.split(/\r?\n/)
+    .filter(name => name.length > 0 && rest.startsWith(`${name}/`))
+    .sort((left, right) => right.length - left.length)
+  const branch = remote === undefined ? '' : rest.slice(remote.length + 1)
+  if (remote === undefined || !relativePath(branch)) {
+    throw new WorktreeError(`worktree from is not a remote-tracking branch of a configured remote: ${ref}`, 'WORKTREE_INVALID_ARGUMENT')
+  }
+  await run(repositoryRoot, [
+    'fetch', '--quiet', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', '--no-auto-maintenance',
+    '--end-of-options', remote, `+refs/heads/${branch}:${ref}`,
+  ])
 }
 
 /**
