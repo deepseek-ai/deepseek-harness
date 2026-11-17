@@ -446,18 +446,26 @@ export class ImSessionHost implements ImSessions {
       if (this.held) return
     }
     const cutoff = Date.now() - this.config.retentionMs
-    await this.write(async () => {
-      for (const [id, stored] of this.deliveries) {
-        if (!stored.admitted || stored.createdAt >= cutoff) continue
-        await this.domainOf().table('deliveries').delete(id)
-        this.deliveries.delete(id)
-      }
-      for (const [id, stored] of this.resets) {
-        if (stored.createdAt >= cutoff) continue
-        await this.domainOf().table('resets').delete(id)
-        this.resets.delete(id)
-      }
-    })
+    const expiredDeliveries: string[] = []
+    for (const [id, stored] of this.deliveries) {
+      if (stored.admitted && stored.createdAt < cutoff) expiredDeliveries.push(id)
+    }
+    const expiredResets: string[] = []
+    for (const [id, stored] of this.resets) {
+      if (stored.createdAt < cutoff) expiredResets.push(id)
+    }
+    if (expiredDeliveries.length > 0 || expiredResets.length > 0) {
+      await this.write(async () => {
+        if (expiredDeliveries.length > 0) {
+          await this.domainOf().table('deliveries').deleteMany(expiredDeliveries)
+          for (const id of expiredDeliveries) this.deliveries.delete(id)
+        }
+        if (expiredResets.length > 0) {
+          await this.domainOf().table('resets').deleteMany(expiredResets)
+          for (const id of expiredResets) this.resets.delete(id)
+        }
+      })
+    }
   }
 
   /**
