@@ -162,21 +162,8 @@ export class SessionController extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     ctx.typert.resources.register('session', { resolve: resolveSessionResource })
-    // Registered before history so reverse-order teardown closes every
-    // follower before waiting for already-admitted promotions.
-    ctx.effect(() => async () => {
-      await Promise.allSettled([...this.promotions])
-    }, 'session-controller.promotions')
-    // Assistant-stream observation is active before asynchronous initialization yields.
-    this.historyController = new HistoryController(ctx)
-    await ctx.plugin({
-      name: 'session-controller-agent-owner',
-      apply: (owner: Context) => {
-        this.agents = new ApiSessionAgentController(owner)
-        this.agents.initialize()
-      },
-    })
-    ctx.fiber.assertActive()
+    this.agents = new ApiSessionAgentController(ctx)
+    this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)
@@ -184,6 +171,14 @@ export class SessionController extends TypertRemoteService {
       return result.agent
     }), 'session-controller: file-upload Agent resolver')
     this.controlState = new SessionControlController(ctx)
+    // Registered before history so reverse-order teardown closes every
+    // follower before waiting for already-admitted promotions.
+    ctx.effect(() => async () => {
+      await Promise.allSettled([...this.promotions])
+    }, 'session-controller.promotions')
+    // Assistant-stream observation must be live before the list read yields: an Agent's
+    // opening frame arriving during that await would otherwise have no listener.
+    this.historyController = new HistoryController(ctx)
     this.stateController = new StateController(ctx, this.historyController)
     this.webController = new WebController(ctx, this.historyController, (observation) => { this.promote(observation) })
     this.listState = new ApiSessionList(ctx, this.listWorkSliceMs)
