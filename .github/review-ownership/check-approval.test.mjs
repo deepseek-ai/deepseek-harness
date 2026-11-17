@@ -45,7 +45,9 @@ test('loads the repository approval score policy', () => {
   assert.equal(policy.defaultPoints, 1)
   assert.deepEqual([...policy.reviewerPoints], [
     ['07akioni', 2],
+    ['creatixchu', 2],
     ['imccyu', 2],
+    ['leggasai', 2],
     ['tianyicui', 2],
     ['tianyicui-bot', 2],
     ['turtle1999', 2],
