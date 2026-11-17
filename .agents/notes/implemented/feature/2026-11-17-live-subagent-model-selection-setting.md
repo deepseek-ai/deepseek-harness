@@ -10,9 +10,9 @@ English | [中文](2026-11-17-live-subagent-model-selection-setting.zh.md)
 
 ## Decision
 
-`SubagentModelSelectionConfig.allowedRoutes()` reads the volatile `enabled` and `allowedModels` values at each call and returns a detached route list, or `undefined` when selection is disabled. The `subagent` executor and `list_subagent_models` call it through `ctx.get('subagentModelSelection')` for every delegation and discovery call, so an edit applies to the next call in every running, restored, and child Session. When the service is absent or the setting is disabled, explicit selection permits only the current parent route, as before.
+`SubagentModelSelectionConfig.allowedRoutes()` reads the volatile `enabled` value at each call and returns `undefined` immediately when selection is disabled; otherwise it validates `allowedModels` and returns a detached route list. The `subagent` executor and `list_subagent_models` call it through `ctx.get('subagentModelSelection')` for explicit route selection by model-selectable tools and for every discovery call, so an edit applies to the next call in every running, restored, and child Session. When the service is absent or the setting is disabled, explicit selection permits only the current parent route, as before.
 
-No Session event is appended and no projection is registered. The `subagent/model-selection-policy` declaration remains so released Session logs still validate, but no code reads it; a Session that recorded a policy follows the current setting. An enabled setting with an empty or repeated route list fails each call that reads it rather than Agent creation.
+No Session event is appended and no projection is registered. The `subagent/model-selection-policy` declaration remains so released Session logs still validate, but no code reads it; a Session that recorded a policy follows the current setting. An enabled setting with an empty, malformed, or repeated route list fails each call that reads it with `INVALID_MODEL_SELECTION_SETTINGS` rather than rejecting Agent creation. Ordinary delegation and tools with model selection disabled do not read the list.
 
 ## Alternatives considered
 

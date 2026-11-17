@@ -4037,7 +4037,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the routes the setting currently authorizes. Each call samples the live setting, so an edit applies to the next delegation in every Session.',
         parameters: [],
         returns: 'a detached route list, or undefined when the setting is disabled.',
-        throws: ['{Error} when the setting is enabled with no route, or its routes are malformed or repeated.'],
+        throws: ['{SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route, or its routes are malformed or repeated. Disabled settings do not read or validate routes.'],
       },
     ],
   },

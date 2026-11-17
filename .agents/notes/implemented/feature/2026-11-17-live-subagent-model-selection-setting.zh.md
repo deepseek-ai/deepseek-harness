@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-`SubagentModelSelectionConfig.allowedRoutes()` 在每次调用时读取 volatile 的 `enabled` 与 `allowedModels`，返回独立的路由列表；选择关闭时返回 `undefined`。`subagent` 执行器和 `list_subagent_models` 在每次委派和发现调用时通过 `ctx.get('subagentModelSelection')` 调用它，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。服务缺失或设置关闭时，显式选择与之前一样只允许当前父级路由。
+`SubagentModelSelectionConfig.allowedRoutes()` 在每次调用时读取 volatile 的 `enabled`；选择关闭时立即返回 `undefined`，否则校验 `allowedModels` 并返回独立的路由列表。`subagent` 执行器和 `list_subagent_models` 在允许模型选择的工具显式选择路由时、每次发现调用时通过 `ctx.get('subagentModelSelection')` 调用它，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。服务缺失或设置关闭时，显式选择与之前一样只允许当前父级路由。
 
-不追加 Session 事件，也不注册投影。`subagent/model-selection-policy` 声明保留，使已发布的 Session 日志仍能通过校验，但没有代码读取它；记录过策略的 Session 遵循当前设置。启用但路由列表为空或重复的设置会使读取它的每次调用失败，而不是使 Agent 创建失败。
+不追加 Session 事件，也不注册投影。`subagent/model-selection-policy` 声明保留，使已发布的 Session 日志仍能通过校验，但没有代码读取它；记录过策略的 Session 遵循当前设置。启用但路由列表为空、格式无效或重复时，读取该设置的每次调用都会以 `INVALID_MODEL_SELECTION_SETTINGS` 失败，而不是使 Agent 创建失败。普通委派和关闭模型选择的工具不读取该列表。
 
 ## Alternatives considered
 

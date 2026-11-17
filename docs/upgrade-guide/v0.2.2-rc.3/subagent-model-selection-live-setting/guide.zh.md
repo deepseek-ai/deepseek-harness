@@ -9,9 +9,9 @@ description: "Subagent 模型选择在每次调用时读取当前 Host 设置，
 
 ## 变更
 
-Host 的 `@deepseek-ai/dsh-tool-subagent/model-selection-settings` 服务在创建 Agent（智能体）时不再追加 `subagent/model-selection-policy`。`subagent` 和 `list_subagent_models` 在每次调用时读取 `ctx.subagentModelSelection.allowedRoutes()`，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。设置关闭或服务未挂载时，显式选择只允许当前父级路由。早期版本中记录过策略的 Session 会忽略该策略，改用当前设置。
+Host 的 `@deepseek-ai/dsh-tool-subagent/model-selection-settings` 服务在创建 Agent（智能体）时不再追加 `subagent/model-selection-policy`。允许模型选择的 `subagent` 工具在显式选择路由时读取 `ctx.subagentModelSelection.allowedRoutes()`，`list_subagent_models` 在每次调用时读取它，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。设置关闭或服务未挂载时，显式选择只允许当前父级路由。早期版本中记录过策略的 Session 会忽略该策略，改用当前设置。
 
-启用但路由列表为空或重复的设置不再使 Agent 创建失败，而是使读取它的每次委派或发现调用失败。该服务不再注入 `sessions` 或 `sessionProjections`，`@deepseek-ai/dsh-tool-subagent` 也不再注入 `sessionProjections`。已移除 `subagentModelSelectionProjectionDefinition`、`subagentModelSelectionPolicy` 和 `SubagentModelSelectionSettings` 导出。
+启用但路由列表为空、格式无效或重复的设置不再使 Agent 创建失败；读取它的显式选择和发现调用会抛出错误码为 `INVALID_MODEL_SELECTION_SETTINGS` 的 `SubagentError`。普通委派和关闭模型选择的工具不读取路由列表。Host 设置关闭时会在读取或校验列表之前返回。该服务不再注入 `sessions` 或 `sessionProjections`，`@deepseek-ai/dsh-tool-subagent` 也不再注入 `sessionProjections`。已移除 `subagentModelSelectionProjectionDefinition`、`subagentModelSelectionPolicy` 和 `SubagentModelSelectionSettings` 导出。
 
 ## 迁移
 

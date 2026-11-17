@@ -2,6 +2,7 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import z from '@deepseek-ai/schemastery'
 // Retains the released Session event declaration in emitted declarations.
 import './model-selection-state.ts'
@@ -13,7 +14,7 @@ import {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** User preference read at each delegation and route-discovery call. */
+    /** User preference read for explicit child route selection and route discovery. */
     subagentModelSelection: SubagentModelSelectionConfig
   }
 }
@@ -41,15 +42,15 @@ export class SubagentModelSelectionConfig extends Service {
    * Read the routes the setting currently authorizes. Each call samples the
    * live setting, so an edit applies to the next delegation in every Session.
    * @returns a detached route list, or undefined when the setting is disabled.
-   * @throws {Error} when the setting is enabled with no route, or its routes are malformed or repeated.
+   * @throws {SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route,
+   *   or its routes are malformed or repeated. Disabled settings do not read or validate routes.
    */
   allowedRoutes(): AllowedModelRoute[] | undefined {
-    const enabled = this.config.enabled.get()
+    if (!this.config.enabled.get()) return undefined
     const allowedModels = this.config.allowedModels.get()
     assertAllowedModelRoutes(allowedModels)
-    if (!enabled) return undefined
     if (allowedModels.length === 0) {
-      throw new Error('enabled subagent model selection requires at least one allowed model')
+      throw new SubagentError('enabled subagent model selection requires at least one allowed model', 'INVALID_MODEL_SELECTION_SETTINGS')
     }
     return allowedModels.map(route => ({ ...route }))
   }

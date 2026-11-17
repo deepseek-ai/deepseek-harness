@@ -279,10 +279,12 @@ export function apply(ctx: Context, config: Config): void {
           throw new ToolContextUnavailableError('subagent tool requires a calling agent (exec.agent was undefined)')
         }
 
-        const routes = ctx.get('subagentModelSelection')?.allowedRoutes()
-        const modelSelectionPolicy = routes === undefined ? undefined : { routes }
         const agentPreset = presets.resolve(args as PresetSelectionRequest)
         const modelRequest = delegationModelRequest(args as DelegationModelRequest)
+        const routes = modelSelectionEnabled && hasDelegationModelRequest(modelRequest)
+          ? ctx.get('subagentModelSelection')?.allowedRoutes()
+          : undefined
+        const modelSelectionPolicy = routes === undefined ? undefined : { routes }
         const parentOptions = parentAgentOptionsForDelegation(parent)
         const requiresRoutePreflight = hasDelegationModelRequest(modelRequest)
           || hasConfiguredLlmSelection(config.agentOptions)

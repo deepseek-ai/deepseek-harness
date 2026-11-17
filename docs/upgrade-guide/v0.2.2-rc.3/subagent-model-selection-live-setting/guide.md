@@ -9,9 +9,9 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The Host `@deepseek-ai/dsh-tool-subagent/model-selection-settings` service no longer appends `subagent/model-selection-policy` when an Agent is created. `subagent` and `list_subagent_models` read `ctx.subagentModelSelection.allowedRoutes()` at each call, so a settings edit applies to the next call in every running, restored, and child Session. When the setting is disabled or the service is not mounted, explicit selection permits only the current parent route. Sessions that recorded a policy in an earlier release ignore it and follow the current setting.
+The Host `@deepseek-ai/dsh-tool-subagent/model-selection-settings` service no longer appends `subagent/model-selection-policy` when an Agent is created. Model-selectable `subagent` tools read `ctx.subagentModelSelection.allowedRoutes()` for explicit route selection, and `list_subagent_models` reads it at each call, so a settings edit applies to the next call in every running, restored, and child Session. When the setting is disabled or the service is not mounted, explicit selection permits only the current parent route. Sessions that recorded a policy in an earlier release ignore it and follow the current setting.
 
-An enabled setting with an empty or repeated route list no longer rejects Agent creation; each delegation or discovery call that reads it fails instead. The service no longer injects `sessions` or `sessionProjections`, and `@deepseek-ai/dsh-tool-subagent` no longer injects `sessionProjections`. The `subagentModelSelectionProjectionDefinition`, `subagentModelSelectionPolicy`, and `SubagentModelSelectionSettings` exports are removed.
+An enabled setting with an empty, malformed, or repeated route list no longer rejects Agent creation; explicit selection and discovery calls that read it fail with `SubagentError` code `INVALID_MODEL_SELECTION_SETTINGS`. Ordinary delegation and tools with model selection disabled do not read the route list. A disabled Host setting returns before reading or validating the list. The service no longer injects `sessions` or `sessionProjections`, and `@deepseek-ai/dsh-tool-subagent` no longer injects `sessionProjections`. The `subagentModelSelectionProjectionDefinition`, `subagentModelSelectionPolicy`, and `SubagentModelSelectionSettings` exports are removed.
 
 ## Migration
 

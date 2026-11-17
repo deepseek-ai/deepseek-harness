@@ -105,14 +105,19 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects duplicate routes and enabled empty settings when read', async () => {
+  it('ignores disabled routes and rejects duplicate or empty routes only while enabled', async () => {
     const ctx = ownContext(new Context())
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
     await selectionConfigs.get(ctx)!.update({ allowedModels: [...ALLOWED_MODELS, ...ALLOWED_MODELS] })
-    expect(() => ctx.subagentModelSelection.allowedRoutes()).toThrow('repeats route "alpha/fast-model"')
+    expect(ctx.subagentModelSelection.allowedRoutes()).toBeUndefined()
+    await selectionConfigs.get(ctx)!.update({ enabled: true })
+    expect(() => ctx.subagentModelSelection.allowedRoutes()).toThrow(expect.objectContaining({
+      name: 'SubagentError', code: 'INVALID_MODEL_SELECTION_SETTINGS',
+      message: 'subagent model selection repeats route "alpha/fast-model"',
+    }))
     await selectionConfigs.get(ctx)!.update({ enabled: true, allowedModels: [] })
     expect(() => ctx.subagentModelSelection.allowedRoutes())
-      .toThrow('enabled subagent model selection requires at least one allowed model')
+      .toThrow(expect.objectContaining({ name: 'SubagentError', code: 'INVALID_MODEL_SELECTION_SETTINGS' }))
     await selectionConfigs.get(ctx)!.update({ enabled: false })
     expect(ctx.subagentModelSelection.allowedRoutes()).toBeUndefined()
     await ctx.fiber.dispose()
@@ -211,7 +216,7 @@ describe('SubagentModelSelectionConfig', () => {
     })
 
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('is not allowed for this Session')
+    expect(text(result)).toContain('is not allowed by the current subagent model selection setting')
     expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
     await ctx.fiber.dispose()
   })

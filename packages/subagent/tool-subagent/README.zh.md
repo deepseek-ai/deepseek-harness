@@ -74,7 +74,7 @@ kind: "package-reference"
 
 ### 选择子级 LLM
 
-设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。在每个工具作用域的一个实例上设置 `modelDiscovery: true`，以注册 `list_subagent_models`；该选项独立于 `modelSelection`，默认关闭。同一作用域的第二个发现工具所有者会注册失败。发现工具随其所属插件实例存续，在委派提供方缺席时仍然可用，并在该实例卸载时移除。Web 与 Desktop preset 为 spawn 启用发现和路由字段，为 fork 保持两者关闭。每次委派和发现调用都读取 Host 的 `/model-selection-settings` 服务，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。启用时，发现和显式选择允许其精确路由列表。设置关闭或未挂载时，只允许父 Agent 当前生效的 provider/model 及其支持的强度。启用但路由列表为空或重复时，读取该设置的每次调用都会被拒绝。Session 不记录授权；忽略早期的 `subagent/model-selection-policy` 事件。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
+设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。在每个工具作用域的一个实例上设置 `modelDiscovery: true`，以注册 `list_subagent_models`；该选项独立于 `modelSelection`，默认关闭。同一作用域的第二个发现工具所有者会注册失败。发现工具随其所属插件实例存续，在委派提供方缺席时仍然可用，并在该实例卸载时移除。Web 与 Desktop preset 为 spawn 启用发现和路由字段，为 fork 保持两者关闭。允许模型选择的委派工具在显式选择路由时、发现工具在每次调用时读取 Host 的 `/model-selection-settings` 服务，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。启用时，发现和显式选择允许其精确路由列表。设置关闭或未挂载时，只允许父 Agent 当前生效的 provider/model 及其支持的强度。启用但路由列表为空、格式无效或重复时，读取该设置的每次调用都会抛出错误码为 `INVALID_MODEL_SELECTION_SETTINGS` 的 `SubagentError`。普通委派和关闭模型选择的工具不读取路由列表；Host 设置关闭时也不读取该列表。Session 不记录授权；忽略早期的 `subagent/model-selection-policy` 事件。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
 一次调用需同时提供 `provider` 与 `model`；`reasoning_effort` 要求同一次调用包含这两个字段。仅指定强度的调用会在查询路由或创建子级之前被拒绝。省略全部三个字段时，保留配置的子级默认值与现有回退行为。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。显式提供提供方／模型组合但省略强度时，会清除配置及继承的强度，即使路由未变，也由所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
@@ -94,7 +94,7 @@ kind: "package-reference"
 
 ### Activation 所有权
 
-工具调用 `ctx.subagents.startActivation()`，并选择向父任务交付。运行时拥有启动取消、执行、结果汇报与清理。启动失败产生出错的工具结果。启动前的拒绝都带 code：缺少调用方 Agent、`llm` 服务或有效的父级路由时抛出 `ToolContextUnavailableError`；路由字段未成对提供时抛出 `ToolArgsError`，空字符串路由字段视为未提供；`SubagentError` 报告选择被禁用（`MODEL_SELECTION_DISABLED`、`PRESET_SELECTION_DISABLED`）、preset 不在允许列表中（`PRESET_NOT_ALLOWED`）、当前 Host 设置未授权该路由（`MODEL_ROUTE_NOT_ALLOWED`）、发现查询的 LLM 提供方未注册（`LLM_PROVIDER_NOT_FOUND`），或路由预检期间提供方被替换（`PROVIDER_CHANGED`）。调用方可以调用 `list_subagent_models` 时，未成对字段和未授权路由的拒绝会提示模型调用它。发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
+工具调用 `ctx.subagents.startActivation()`，并选择向父任务交付。运行时拥有启动取消、执行、结果汇报与清理。启动失败产生出错的工具结果。启动前的拒绝都带 code：缺少调用方 Agent、`llm` 服务或有效的父级路由时抛出 `ToolContextUnavailableError`；路由字段未成对提供时抛出 `ToolArgsError`，空字符串路由字段视为未提供；`SubagentError` 报告选择被禁用（`MODEL_SELECTION_DISABLED`、`PRESET_SELECTION_DISABLED`）、preset 不在允许列表中（`PRESET_NOT_ALLOWED`）、当前 Host 设置未授权该路由（`MODEL_ROUTE_NOT_ALLOWED`）、已启用的模型选择设置无效（`INVALID_MODEL_SELECTION_SETTINGS`）、发现查询的 LLM 提供方未注册（`LLM_PROVIDER_NOT_FOUND`），或路由预检期间提供方被替换（`PROVIDER_CHANGED`）。调用方可以调用 `list_subagent_models` 时，未成对字段和未授权路由的拒绝会提示模型调用它。发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
 
 ### 结果确认
 
@@ -243,7 +243,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 - **本工具不等待结果**——使用完成通知或子任务消息。程序化结果等待由 subagent 服务提供。
 - **预设选项不含描述**——`agent_preset` 只公开 id 及默认或继承提示。schema 不读取候选预设文档，因此注册不依赖它们的声明顺序。请使用能够表达各候选用途的 id。
 - **预设引用在委派时检查**——Host 挂载和预设内挂载的工具都在启动子级时解析目标。目标可以在工具注册后声明或替换，因此加载工具无法确定后续调用时目标是否可用。拼错或不可用的 id 在被选中前不会被发现；选中它的调用会返回错误。
-- **随附 fork 工具省略模型选择**：其配置保持 `modelSelection` 关闭，以保留对继承前缀的复用。自定义 fork 工具可以启用它，并接受与其他委派工具相同的 Session 授权和适配器校验。
+- **随附 fork 工具省略模型选择**：其配置保持 `modelSelection` 关闭，以保留对继承前缀的复用。自定义 fork 工具可以启用它，并接受与其他委派工具相同的 Host 授权和适配器校验。
 - **深度上限按实例固定** — 更换上限需要另一个不同名称的工具。子级角色和工具由所选 Agent Preset 配置。显式 LLM 选择需要 `modelSelection`，并受调用时 Host 设置授权的路由限制，设置关闭时只允许当前父级路由。
 
 <a id="dev-note"></a>
