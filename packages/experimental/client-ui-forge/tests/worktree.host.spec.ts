@@ -117,9 +117,9 @@ describe('forgeWorktree projection', () => {
     const { session, state } = await folded()
 
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null })
-    expect(state()?.request).toEqual({ from: null })
+    expect(state()?.request).toEqual({ from: null, name: null })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
-    expect(state()?.request).toEqual({ from: 'main' })
+    expect(state()?.request).toEqual({ from: 'main', name: null })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'cancel' })
     const withdrawn = state()
     expect(withdrawn).toEqual(EMPTY)
@@ -129,10 +129,22 @@ describe('forgeWorktree projection', () => {
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'feat' })
     startTurn(session, 1)
     const locked = state()
-    expect(locked).toEqual({ ...EMPTY, request: { from: 'feat' }, locked: true })
+    expect(locked).toEqual({ ...EMPTY, request: { from: 'feat', name: null }, locked: true })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'cancel' })
     expect(state()).toBe(locked)
+  })
+
+  it('keeps the branch name a request chooses, and none for a request that names no branch or an empty one', async () => {
+    const { session, state } = await folded()
+
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'refs/remotes/origin/main', name: 'fix/login' })
+    expect(state()?.request).toEqual({ from: 'refs/remotes/origin/main', name: 'fix/login' })
+    const named = state()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null, name: '' })
+    expect(state()).toBe(named)
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null })
+    expect(state()?.request).toEqual({ from: null, name: null })
   })
 
   it('applies the first created worktree of an open request, after which requests, withdrawals, and creations change nothing', async () => {
@@ -145,7 +157,7 @@ describe('forgeWorktree projection', () => {
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'cancel' })
 
-    expect(created).toEqual({ ...EMPTY, request: { from: 'main' }, created: { ...WORKTREE, from: 'main' } })
+    expect(created).toEqual({ ...EMPTY, request: { from: 'main', name: null }, created: { ...WORKTREE, from: 'main' } })
     expect(state()).toBe(created)
   })
 
@@ -158,8 +170,8 @@ describe('forgeWorktree projection', () => {
     const created = state()
     startStep(session, 1)
 
-    expect(created).toEqual({ ...EMPTY, request: { from: null }, created: WORKTREE, locked: true })
-    expect(state()).toEqual({ ...EMPTY, request: { from: null }, created: WORKTREE, locked: true, stepped: true })
+    expect(created).toEqual({ ...EMPTY, request: { from: null, name: null }, created: WORKTREE, locked: true })
+    expect(state()).toEqual({ ...EMPTY, request: { from: null, name: null }, created: WORKTREE, locked: true, stepped: true })
   })
 
   it('ignores a created worktree without an open request or after the first step starts', async () => {
@@ -180,7 +192,7 @@ describe('forgeWorktree projection', () => {
     const stepped = state()
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
 
-    expect(stepped).toEqual({ ...EMPTY, request: { from: null }, locked: true, stepped: true })
+    expect(stepped).toEqual({ ...EMPTY, request: { from: null, name: null }, locked: true, stepped: true })
     expect(state()).toBe(stepped)
   })
 
@@ -215,7 +227,7 @@ describe('forgeWorktree projection', () => {
     session.append('step/end', { turn: 1, step: 1 })
 
     expect(state()).toBe(requested)
-    expect(requested).toEqual({ ...EMPTY, request: { from: 'main' } })
+    expect(requested).toEqual({ ...EMPTY, request: { from: 'main', name: null } })
   })
 })
 
@@ -280,7 +292,7 @@ describe('creating a requested worktree', () => {
     const head = await git(repo, 'rev-parse', 'HEAD')
     request(opened, null)
 
-    const result = await opened.creations.create(opened.agent, null, signal, false)
+    const result = await opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false)
 
     const branch = result.branch
     expect(branch).toMatch(/^dsh-[0-9a-f]{8}$/)
@@ -302,9 +314,9 @@ describe('creating a requested worktree', () => {
     const opened = await creating(repo)
     request(opened, null)
 
-    const result = await opened.creations.create(opened.agent, null, signal, false)
+    const result = await opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false)
 
-    const running = { branch: result.branch, from: null, held: false }
+    const running = { branch: result.branch, from: null, fetch: false, held: false }
     expect(opened.changes).toEqual([{ ...running, phase: 'prepare' }, { ...running, phase: 'prepare' }, { ...running, phase: 'checkout' }, null])
     expect(opened.recorded).toEqual([null, null, null, worktreeOf(opened)])
     expect(worktreeOf(opened)).not.toBeNull()
@@ -319,7 +331,7 @@ describe('creating a requested worktree', () => {
     const opened = await creating(repo)
     request(opened, 'base')
 
-    await opened.creations.create(opened.agent, 'base', signal, false)
+    await opened.creations.create(opened.agent, { from: 'base', name: null }, signal, false, false)
 
     const created = worktreeOf(opened)
     expect(created).toMatchObject({ from: 'base', baseCommit: base })
@@ -333,7 +345,7 @@ describe('creating a requested worktree', () => {
     const opened = await creating(repo, { prefix: 'agent/task-' })
     request(opened, null)
 
-    const result = await opened.creations.create(opened.agent, null, signal, false)
+    const result = await opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false)
 
     expect(result.branch).toMatch(/^agent\/task-[0-9a-f]{8}$/)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(join(repo, '.agents', 'worktrees', ...result.branch.split('/')))
@@ -344,7 +356,7 @@ describe('creating a requested worktree', () => {
     const opened = await creating(repo)
     request(opened, 'later')
 
-    const attempt = opened.creations.create(opened.agent, 'later', signal, false)
+    const attempt = opened.creations.create(opened.agent, { from: 'later', name: null }, signal, false, false)
     const branch = opened.changes[0]?.branch
     const cause: unknown = expect.objectContaining({ message: MISSING_BASE })
 
@@ -358,10 +370,10 @@ describe('creating a requested worktree', () => {
       cause,
     })
     expect(branch).toEqual(GENERATED_BRANCH)
-    const running = { phase: 'prepare', branch, from: 'later', held: false }
+    const running = { phase: 'prepare', branch, from: 'later', fetch: false, held: false }
     expect(opened.changes).toEqual([running, running, null])
     expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' }, cwd: repo })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later', name: null }, cwd: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
@@ -371,7 +383,7 @@ describe('creating a requested worktree', () => {
     request(opened, null)
     opened.sandbox.gate = argv => argv.includes('reset') ? Promise.reject(new Error('checkout refused')) : undefined
 
-    const attempt = opened.creations.create(opened.agent, null, signal, false)
+    const attempt = opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false)
     const branch = opened.changes[0]?.branch ?? ''
 
     await expect(attempt).rejects.toMatchObject({
@@ -386,13 +398,52 @@ describe('creating a requested worktree', () => {
     expect(await branches(repo)).toEqual([branch, 'main'])
   })
 
+  it('creates the branch a request names on every attempt', async () => {
+    const repo = await project()
+    const opened = await creating(repo)
+
+    const result = await opened.creations.create(opened.agent, { from: null, name: 'fix/login' }, signal, false, false)
+
+    expect(result.branch).toBe('fix/login')
+    expect(opened.changes[0]).toMatchObject({ branch: 'fix/login', phase: 'prepare', fetch: false })
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(join(repo, '.agents', 'worktrees', 'fix', 'login'))
+  })
+
+  it('fetches a remote base branch first, then starts from the fetched commit', async () => {
+    const { path: parent, remove } = await scratch('dsh-forge-worktree-fetch-')
+    cleanups.push(remove)
+    const upstream = await repository(parent, 'upstream')
+    const repo = join(parent, 'clone')
+    await git(parent, 'clone', '--quiet', upstream, repo)
+    const fetched = await commitAt(upstream, 'remote.txt', '2026-02-01T00:00:00Z')
+    const opened = await creating(repo)
+
+    const result = await opened.creations.create(opened.agent, { from: 'refs/remotes/origin/main', name: null }, signal, false, true)
+
+    expect(result.baseCommit).toBe(fetched)
+    expect(opened.changes.map(change => change?.phase ?? null)).toEqual(['fetch', 'fetch', 'prepare', 'checkout', null])
+    expect(opened.changes[0]).toMatchObject({ from: 'refs/remotes/origin/main', fetch: true })
+    await expect(access(join(result.path, 'remote.txt'))).resolves.toBeUndefined()
+  })
+
+  it('says when the branch an attempt names already exists', async () => {
+    const repo = await project()
+    const opened = await creating(repo)
+
+    await expect(opened.creations.create(opened.agent, { from: null, name: 'main' }, signal, false, false))
+      .rejects.toMatchObject({ name: 'CreationFailure', branch: 'main', phase: 'prepare', exists: true })
+    opened.sandbox.failure = new Error('confinement denied')
+    await expect(opened.creations.create(opened.agent, { from: null, name: 'other' }, signal, false, false))
+      .rejects.toMatchObject({ name: 'CreationFailure', exists: false })
+  })
+
   it('reports a failure that is not an Error by its text', async () => {
     const repo = await project()
     const opened = await creating(repo)
     request(opened, null)
     opened.sandbox.failure = 'confinement denied'
 
-    await expect(opened.creations.create(opened.agent, null, signal, false))
+    await expect(opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false))
       .rejects.toMatchObject({ phase: 'prepare', reason: 'confinement denied', cause: 'confinement denied' })
     expect(opened.changes.at(-1)).toBeNull()
   })
@@ -497,7 +548,7 @@ describe('worktree creation at the first step proposal', () => {
     const repo = await project()
     const opened = await creating(repo)
     request(opened, null)
-    const created = await opened.creations.create(opened.agent, null, signal, false)
+    const created = await opened.creations.create(opened.agent, { from: null, name: null }, signal, false, false)
     const reports = opened.changes.length
     const proposed = prompt('go')
 
@@ -520,7 +571,7 @@ describe('worktree creation at the first step proposal', () => {
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] }))
       .rejects.toMatchObject({ name: 'CreationFailure', branch: GENERATED_BRANCH, phase: 'prepare', reason: MISSING_BASE })
     const failed = opened.changes[0]?.branch
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' }, locked: true, cwd: repo })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later', name: null }, locked: true, cwd: repo })
     expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
 
@@ -551,7 +602,7 @@ describe('worktree creation at the first step proposal', () => {
     expect(await settled).toBe(cause)
     expect(opened.changes.at(-1)).toBeNull()
     expect(opened.records).toEqual([{ action: 'request', from: null }])
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null }, cwd: repo })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null, name: null }, cwd: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(await branches(repo)).toEqual(['main'])
   })
@@ -563,12 +614,23 @@ describe('worktree creation at the first step proposal', () => {
 
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] }))
       .rejects.toThrow('No worktree service is mounted')
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null }, cwd: repo })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null, name: null }, cwd: repo })
     expect(opened.changes).toEqual([])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 })
 
+
+it('names the fetch as the failed step of a remote-based attempt that fails before it reaches the worktree service', async () => {
+  const opened = await creating(await project(), { worktrees: false })
+  request(opened, 'refs/remotes/origin/main')
+  opened.creations.holdCreation(opened.agent)
+  await vi.waitFor(() => { expect(opened.creations.failureOf(opened.session)).not.toBeNull() })
+  expect(opened.creations.failureOf(opened.session)).toEqual({
+    branch: null, from: 'refs/remotes/origin/main', fetch: true, phase: 'fetch', message: 'No worktree service is mounted', exists: false,
+  })
+  await opened.creations.dispose()
+})
 
 it('does not admit a new message hold after worktree operations stop', async () => {
   const opened = await creating(await project())

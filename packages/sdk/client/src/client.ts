@@ -20,6 +20,7 @@ import {
   type InitializeParams,
   type InitializeResult,
   type SessionPromptParams,
+  type SessionResumeParams,
   type SessionQueryParams,
   type SessionQueryResult,
   type SdkPromptContentBlock,
@@ -364,10 +365,11 @@ export class HarnessClient {
   /**
    * Restore persisted history without sending a prompt; failures propagate without creating a session.
    * @param sessionId - persisted identity in this runtime's configured persistence store.
+   * @param options - explicit permission preset to persist before execution; omission retains saved permissions.
    * @returns after the session is ready for prompts.
    */
-  async resumeSession(sessionId: string): Promise<void> {
-    await this.request('session/resume', { sessionId })
+  async resumeSession(sessionId: string, options: Omit<SessionResumeParams, 'sessionId'> = {}): Promise<void> {
+    await this.request('session/resume', { ...options, sessionId })
   }
 
   /**

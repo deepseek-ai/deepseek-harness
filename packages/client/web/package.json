@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-web",
   "description": "Web boot kernel: static module table, Cordis loader, framework-free boot page, and UI-renderer handoff",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -29,6 +29,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
+    "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-dockkit": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",

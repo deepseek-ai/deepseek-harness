@@ -2,7 +2,7 @@
 
 import type {} from '@deepseek-ai/dsh-typert-protocol'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeCommit, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeCommit, ForgeDescription, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -34,7 +34,10 @@ export interface ForgeSessionWorktree {
   readonly path: string
   /** Branch created for the checkout. */
   readonly branch: string
-  /** Requested base branch, or null when the checkout started from HEAD of the source checkout. */
+  /**
+   * Requested base: the full name of a local or remote-tracking branch, a short branch name that earlier panels
+   * recorded, or null when the checkout started from HEAD of the source checkout.
+   */
   readonly from: string | null
   /** Commit object name the branch started from. */
   readonly baseCommit: string
@@ -44,8 +47,11 @@ export interface ForgeSessionWorktree {
 
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
 export type WorktreeRecord =
-  /** Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null. */
-  | { readonly action: 'request'; readonly from: string | null }
+  /**
+   * Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null, on the
+   * branch `name`, or on a generated branch name when `name` is absent.
+   */
+  | { readonly action: 'request'; readonly from: string | null; readonly name?: string }
   /** Withdraw the open request. */
   | { readonly action: 'cancel' }
   /** The requested worktree was created and became the Session's working directory. */
@@ -57,8 +63,13 @@ export type WorktreeRecord =
 
 /** One open worktree request. */
 export interface ForgeWorktreeRequest {
-  /** Base branch, or null for HEAD of the source checkout. */
+  /**
+   * Base: the full name of a local or remote-tracking branch, a short branch name that earlier panels recorded, or
+   * null for HEAD of the source checkout. A remote-tracking branch is fetched before each attempt that does not skip it.
+   */
   readonly from: string | null
+  /** New branch name the user chose, which every attempt uses, or null for a generated name per attempt. */
+  readonly name: string | null
 }
 
 /** Host-only state of the `forgeWorktree` projection. */
@@ -88,12 +99,17 @@ export type ForgeWorktreeBlocker =
 
 /** One running worktree creation. */
 export interface ForgeWorktreeCreation {
-  /** Running step: `prepare` validates and creates the branch, then `checkout` writes the files. */
-  readonly phase: 'prepare' | 'checkout'
+  /**
+   * Running step: `fetch` fetches a remote base branch, `prepare` validates and creates the branch, then
+   * `checkout` writes the files.
+   */
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Branch the attempt creates. */
   readonly branch: string
-  /** Base branch, or null for HEAD. */
+  /** Base as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetches its remote base branch first. */
+  readonly fetch: boolean
   /**
    * Whether a message waits for the creation before its turn starts. Only
    * such a creation can be stopped, after which the message keeps waiting; a
@@ -112,12 +128,16 @@ export interface ForgeWorktreeRestoration {
 export interface ForgeWorktreeFailure {
   /** Branch the attempt created, or null when it failed before naming one. */
   readonly branch: string | null
-  /** Base branch of the attempt, or null for HEAD. */
+  /** Base of the attempt as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetched, or tried to fetch, its remote base branch first. */
+  readonly fetch: boolean
   /** Step that failed. */
-  readonly phase: 'prepare' | 'checkout'
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Failure text. */
   readonly message: string
+  /** Whether the branch or the checkout directory of that name already existed, which another name avoids. */
+  readonly exists: boolean
 }
 
 /**
@@ -142,6 +162,8 @@ export interface ForgePanelWorktree {
   readonly editable: boolean
   /** Why the checkout cannot host a worktree, or null when it can, before the first inspection, and after a failed one. */
   readonly blocker: ForgeWorktreeBlocker | null
+  /** Prefix of generated branch names, the Config `worktreePrefix`, which a name the user types starts from. */
+  readonly namePrefix: string
   /** Open request, or null without one. */
   readonly request: ForgeWorktreeRequest | null
   /** Created worktree, or null before creation. */
@@ -184,6 +206,8 @@ export type ForgeChangeRequestStatesFrame =
 
 /** One bound change request in the panel state. */
 export interface ForgePanelChangeRequest extends SessionChangeRequest {
+  /** How readers name the change request's code host and its change requests, or null when no provider serves its URL. */
+  readonly forge: ForgeDescription | null
   /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
   readonly snapshot: ChangeRequestSnapshot | null
   /**
@@ -214,12 +238,35 @@ export interface ForgePanelState {
   readonly local: ForgeLocalChanges | null
 }
 
-/** Local branches offered as the base of a new worktree. */
-export interface ForgeBranches {
-  /** Checked-out branch, or null when HEAD is detached. */
-  readonly current: string | null
-  /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
-  readonly branches: readonly string[]
+/** Branches offered as the base of a new worktree whose names contain a query. */
+export interface ForgeWorktreeBases {
+  /** Checked-out branch, or null when HEAD is detached or its name does not contain the query. */
+  readonly current: ForgeBaseBranch | null
+  /** Default branch of each remote that names one with `refs/remotes/<remote>/HEAD`, in remote order. */
+  readonly defaults: readonly ForgeRemoteDefault[]
+  /** Other local branches, most recently committed first, at most `maxBranches`. */
+  readonly local: readonly ForgeBaseBranch[]
+  /**
+   * Remote-tracking branches of each configured remote in remote order: the remote the checked-out branch tracks,
+   * then `origin`, then the others as Git lists them. Remotes without a matching branch are left out.
+   */
+  readonly remotes: readonly ForgeRemoteBranches[]
+}
+
+/** A remote's default branch, which `refs/remotes/<remote>/HEAD` names. */
+export interface ForgeRemoteDefault extends ForgeBaseBranch {
+  /** Remote the branch belongs to; it may contain `/`. */
+  readonly remote: string
+}
+
+/** Remote-tracking branches of one remote, without its default branch. */
+export interface ForgeRemoteBranches {
+  /** Remote name such as `origin`; it may contain `/`. */
+  readonly name: string
+  /** `owner/name` of the repository a provider recognizes from the remote's URLs, else its fetch URL, or null without one. */
+  readonly repository: string | null
+  /** Branches named `<remote>/<branch>`, most recently committed first, at most `maxBranches`. */
+  readonly branches: readonly ForgeBaseBranch[]
 }
 
 /** A branch the `branch` scope can compare with. */
@@ -471,7 +518,7 @@ export interface ForgeChangedFile {
   readonly binary: boolean
 }
 
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 export interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string
@@ -500,7 +547,7 @@ export interface Config {
   worktreePrefix?: string
   /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
-  /** Most untracked files a local diff or the local changes card includes. */
+  /** Most untracked files a local diff or the local changes row includes. */
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
@@ -543,6 +590,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/worktrees-unavailable': Record<string, never>
     /** The requested base branch name is empty. */
     'forgePanel/invalid-branch': Record<string, never>
+    /** The requested new branch name breaks one of Git's branch-name rules, or the worktree service's refusal of a leading `-`. */
+    'forgePanel/invalid-name': Record<string, never>
+    /** A local branch with the requested new branch name exists in the Session's checkout. */
+    'forgePanel/branch-exists': Record<string, never>
     /** The Session has no created worktree to restore or leave. */
     'forgePanel/no-worktree': Record<string, never>
     /** The Session's Agent is not loaded or has other work, so its checkout cannot change now. */

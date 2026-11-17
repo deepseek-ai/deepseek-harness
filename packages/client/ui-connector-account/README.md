@@ -84,7 +84,7 @@ The `connectorAccount` dictionary holds the copy every account shares: Close, Ca
 
 The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes the account's source, and each `watch` stream reads every account's entry after each change, coalescing changes that arrive before the next read: the key and package, the copy, `present(view)`, the operation in progress, and the latest result with its success text. `start` and `cancel` route by key to the account's source.
 
-[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The surfaces receive `start` and `cancel` callbacks that call the Remote and reject when the Host refuses or the call does not answer; the buttons await them and report the started operation to `BrowserAccounts`. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
+[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The surfaces receive `start` and `cancel` callbacks that call the Remote and return its result; the buttons report the operation of a successful start to `BrowserAccounts`, and a failed result or a rejected call as the failure notice. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
 
 | File | Role |
 |---|---|
@@ -94,7 +94,7 @@ The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes t
 | [`src/client/state.ts`](src/client/state.ts) | The stream store, the operations this browser started, and their pages and notices |
 | [`src/client/components.tsx`](src/client/components.tsx) | The slot entries of each surface and the buttons' Remote calls |
 | [`src/client/locales.ts`](src/client/locales.ts) | The shared dictionary |
-| [`src/client/types.ts`](src/client/types.ts) | Browser state, notice, Remote, and face types |
+| [`src/client/types.ts`](src/client/types.ts) | Browser state, notice, and face types |
 
 </details>
 

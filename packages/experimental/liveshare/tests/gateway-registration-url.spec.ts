@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { LIVESHARE_CAPABILITIES, LIVESHARE_PROTOCOL_VERSION } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import {
+  LIVESHARE_CAPABILITIES,
+  LIVESHARE_OWNER_PLATFORMS,
+  LIVESHARE_PROTOCOL_VERSION,
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import { registrationUrl } from '../src/owner-gateway/registration-url.ts'
 import type { TunnelShareSpec } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 
@@ -54,8 +58,14 @@ describe('Liveshare registration handshake', () => {
   it('leaves every optional fact absent until the share states it', () => {
     const url = registrationUrl(minimal)
 
-    for (const absent of ['sessionMode', 'allowsFork', 'dshVersion', 'ownerInstanceId', 'expiresAt', 'ownerProviderId', 'ownerTenantId', 'allowedSubjectId']) {
+    for (const absent of ['sessionMode', 'allowsFork', 'dshVersion', 'platform', 'ownerInstanceId', 'expiresAt', 'ownerProviderId', 'ownerTenantId', 'allowedSubjectId']) {
       expect(url.searchParams.get(absent), absent).toBeNull()
+    }
+  })
+
+  it('sends the platform this owner reports', () => {
+    for (const platform of LIVESHARE_OWNER_PLATFORMS) {
+      expect(registrationUrl({ ...minimal, platform }).searchParams.get('platform'), platform).toBe(platform)
     }
   })
 

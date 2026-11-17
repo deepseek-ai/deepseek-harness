@@ -343,8 +343,10 @@ describe('ui-settings-general apply', () => {
     await c.reload(SIDEBAR)
     await c.flush()
     expectSeated(c)
+    // The General page sits in the Factory-declared `settings.section`, which the sidebar rebuild does not collapse.
     SEATS.forEach(([name], index) => {
-      expect(ownEntries(c, name)[0]).not.toBe(before[index])
+      if (name === 'settings.section') expect(ownEntries(c, name)[0]).toBe(before[index])
+      else expect(ownEntries(c, name)[0]).not.toBe(before[index])
     })
     expect(c.ctx.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
     expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools', 'current-version'])

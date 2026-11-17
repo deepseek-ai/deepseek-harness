@@ -1,4 +1,24 @@
 {
+  "permissionEvents": [
+    {
+      "type": "permission/preset",
+      "data": {
+        "preset": "read-only"
+      }
+    },
+    {
+      "type": "sandbox/mode",
+      "data": {
+        "mode": "read-only"
+      }
+    },
+    {
+      "type": "approval/policy",
+      "data": {
+        "policy": "ask"
+      }
+    }
+  ],
   "model": "resumed-smoke-model",
   "final_response": "RESUMED_PROCESS_OK",
   "eventTypes": [
@@ -6,6 +26,7 @@
     "turn/start",
     "agent/inbox/spliced",
     "step/start",
+    "user/message",
     "user/message",
     "request/header",
     "request/context",

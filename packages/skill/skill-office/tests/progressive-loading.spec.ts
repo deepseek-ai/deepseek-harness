@@ -11,7 +11,7 @@ import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { PtcRuntime, type PtcRunRequest, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as ToolSkill from '../../tool-skill/src/index.ts'
 import * as SkillOffice from '../src/index.ts'
@@ -27,7 +27,9 @@ class SkillProgram extends PtcRuntime {
   readonly isolation = 'fixture'
   resolve(request: PtcRunRequest): PtcRunSpec { return { ...request, cwd: process.cwd(), timeoutMs: 120_000 } }
   async run(request: PtcRunSpec) {
-    return { output: [{ type: 'text' as const, text: JSON.stringify(await request.bindings[0]!.functions.skill!({ name: request.program })) }] }
+    const resolved = await request.bindings[0]!.functions.skill!({ name: request.program })
+    const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
+    return { output: [{ type: 'text' as const, text: JSON.stringify(value) }] }
   }
 }
 

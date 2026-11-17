@@ -124,6 +124,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
   },
   {
+    key: 'deepseekChatImport',
+    pkg: 'deepseek-chat-import',
+    title: 'DeepSeek chat export import',
+    mode: 'service',
+    note: 'Serves the owner-only upload route that imports each conversation of a DeepSeek chat export as a Session, and the upload limits the browser checks first.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',
@@ -167,7 +174,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'plugin-manager',
     title: 'Current-profile plugin and bundle management',
     mode: 'core',
-    consumers: ['plugin-manager', 'ui-settings-plugin-inventory'],
+    consumers: ['plugin-manager'],
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
@@ -176,6 +183,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Connector accounts on the Plugins page',
     mode: 'service',
     note: 'Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation.',
+  },
+  {
+    key: 'cliAccounts',
+    pkg: 'cli-account',
+    title: 'Vendor CLIs and accounts of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: adds the CLI\'s absolute path to required runtime context, runs the plugin\'s account operations one at a time through bounded commands, and registers the account with `ctx.connectorAccounts` while that registry is loaded.',
   },
   {
     key: 'pluginMarket',
@@ -199,14 +213,23 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authenticated browser transport',
     mode: 'core',
     consumers: ['api-gateway', 'host-frontend-static'],
-    note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
+    note: 'Applies source policy and shared HTTP request dispatch; credential verification belongs to ConnectionAuthentication, and API adapters register endpoints and streams.',
+  },
+  {
+    key: 'connection.authentication',
+    pkg: 'client-connection',
+    title: 'Connection authentication provider registry',
+    mode: 'seam',
+    implementations: ['host-authentication-token', 'host-authentication-desktop'],
+    consumers: ['client-connection'],
+    note: 'Tries scope-owned credential verifiers in registration order and returns the first live Peer; transport source policy and business authorization stay with their consumers.',
   },
   {
     key: 'forge',
     pkg: 'experimental-forge',
     title: 'Code host change requests',
     mode: 'seam',
-    implementations: ['experimental-forge-github'],
+    implementations: ['experimental-forge-github', 'forge-gitlab'],
     consumers: ['experimental-forge-session', 'experimental-client-ui-forge'],
     note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
   },
@@ -276,6 +299,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
+    key: 'cuaPrograms', pkg: 'cua', title: 'Computer Use program environments',
+    mode: 'core', consumers: ['cua-mcp'],
+    note: 'The provider owns the retained cua_run_code runtime; a host without a model releases one Agent\'s environment and reads the configured screenshot request target through it.',
+  },
+  {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
@@ -303,8 +331,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'LLM adapter registry',
     mode: 'seam',
     implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
-    consumers: ['agent-loop', 'compaction-basic'],
-    note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
+    consumers: ['agent-loop', 'compaction-basic', 'web-deepseek-api', 'web-search-deepseek'],
+    note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service, and the DeepSeek web providers read the credential a route publishes.',
   },
   {
     key: 'sessionLogDeepSeek',
@@ -353,6 +381,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Experimental transcription Remote',
     mode: 'core',
     note: 'Validates bounded browser audio before provider dispatch.',
+  },
+  {
+    key: 'sessionStatus',
+    pkg: 'client-ui-session-status',
+    title: 'Host Session reading records',
+    mode: 'core',
+    consumers: ['client-ui-session-status'],
+    note: 'Stores owner reading acknowledgements and manual unread marks outside Session history; its Client half follows committed changes over Remote, acknowledges loaded completions, and serves the Session status table.',
   },
   {
     key: 'sessionController',
@@ -493,7 +529,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Credential seam',
     mode: 'seam',
     implementations: ['credentials-local'],
-    consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
+    consumers: ['api-settings-controller', 'llm-deepseek-api-key', 'llm-pi-ai', 'web-deepseek-api', 'web-search-deepseek'],
     note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
   },
   {
@@ -502,8 +538,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'DeepSeek account',
     mode: 'service',
     implementations: [],
-    consumers: ['llm-deepseek'],
-    note: 'The Host owns browser authorization and local credentials; UI consumers receive state without tokens.',
+    consumers: ['llm-deepseek-account', 'web-deepseek-api'],
+    note: 'The Host owns browser authorization and local credentials and releases per-request credentials to the account model route and the web providers; UI consumers receive state without tokens.',
   },
   {
     key: 'authorization',
@@ -687,6 +723,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['sandbox-windows-acl', 'skill-badge', 'skill-filesystem', 'skill-office'],
     consumers: ['tool-skill'],
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
+  },
+  {
+    key: 'upstreamSkills',
+    pkg: 'upstream-skills',
+    title: 'Upstream skills of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: downloads the pinned upstream files its entry skill indexes from the vendor\'s GitHub repository, verifies and caches them, and lists the entry skill through `ctx.skills` once they are in place.',
   },
   {
     key: 'agents',
@@ -1172,7 +1215,7 @@ type CallSiteIndex = Map<ts.SignatureDeclaration | ts.JSDocSignature, ts.CallExp
  * must appear here — the prefilter drops non-members before any branch runs,
  * so a branch for an unlisted name is silently dead.
  */
-const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'waterfall', 'dispatch'])
+const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'bail', 'waterfall', 'dispatch'])
 
 /**
  * Collect event dispatch/listener relations from real cross-file receiver types.
@@ -1330,7 +1373,7 @@ export class EventRelationCollector {
             const eventNames = this.eventNamesFromCall(node, receiverKind)
             if (method === 'on' || method === 'once') {
               for (const event of eventNames) this.ensure(event).listeners.add(source.pkg)
-            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'waterfall') {
+            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'bail' || method === 'waterfall') {
               for (const event of eventNames) this.addDispatcher(event, source.pkg, method)
             }
           }

@@ -172,6 +172,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
+  const windows = observed?.platform === 'windows' || (observed === null && state.windowsProvider.value === true)
   const apps = state.applications.value
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
@@ -186,10 +187,25 @@ export function PermissionPanel(props: PermissionPanelProps) {
   }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
+      <div className={css.guidance} data-cua-guidance>
+        <p>{t('previewNotice')}</p>
+        {windows && <>
+          <p>{t('windowsHelperBuild', {
+            directory: 'packages/experimental/cua-windows',
+            x64: 'pnpm run build:native:x64', arm64: 'pnpm run build:native:arm64',
+          })}</p>
+          <p>{t('windowsHelperPath', {
+            patch: 'cordis.patch.yml', entry: 'cua-windows', config: 'config', path: 'helperPath', exe: 'dsh-cua-windows.exe',
+          })}</p>
+        </>}
+      </div>
       <h3>{t('title')}</h3>
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
         <PersistentPtcSetting {...props} />
+        {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
+          {t('providerLookupFailed', { message: state.windowsProvider.error })}
+        </p>}
         {state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>

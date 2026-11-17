@@ -1,7 +1,7 @@
 /**
- * Upstream skills of CLI app plugins: download the files that a plugin's entry skill indexes from one directory of the
- * vendor's GitHub repository at a pinned commit, verify them, publish them in the DSH cache, and list the entry skill
- * over them once they are there.
+ * Upstream skills of CLI app plugins: the Host Service `ctx.upstreamSkills` downloads the files that a plugin's entry
+ * skill indexes from one directory of the vendor's GitHub repository at a pinned commit, verifies them, publishes them
+ * in the DSH cache, and lists the entry skill over them once they are there.
  * @module @deepseek-ai/dsh-upstream-skills
  */
 
@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { mkdir, rename, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { BUNDLED_SKILL_RANK, isSkillName } from '@deepseek-ai/dsh-skill'
@@ -17,14 +17,19 @@ import type { SkillCandidate, SkillDefinition, SkillProvider, SkillProviderContr
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { parse as parseYaml } from 'yaml'
 import { downloadSkillSet, writeFiles } from './archive.ts'
-import type { UpstreamSkills, UpstreamSkillSet, UpstreamSkillsState } from './types.ts'
+import type { UpstreamSkillsHandle, UpstreamSkillsRegistration, UpstreamSkillsState } from './types.ts'
 
 export type * from './types.ts'
 
-/** Where the upstream files come from; a plugin adds these fields to its own `Config`. */
-export interface UpstreamSkillsConfig {
-  /** Directory holding the kept files at their repository paths; when set, nothing is downloaded. */
-  skillsDir?: string
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The upstream skills CLI app plugins register. */
+    upstreamSkills: UpstreamSkills
+  }
+}
+
+/** Where every registered plugin's upstream files are downloaded from. */
+export interface Config {
   /** Archive download prefixes tried in order; each serves `<owner>/<repository>/tar.gz/<commit>`. */
   skillsUrls: string[]
   /** How long one prefix may take to deliver the whole archive before the next one is tried. */
@@ -39,46 +44,50 @@ function skillsUrl(value: string): string {
   return value
 }
 
-/** The shared fields' schema; `skillsUrls` defaults to GitHub's archive host. */
-export const UpstreamSkillsConfig: z<Partial<UpstreamSkillsConfig>, UpstreamSkillsConfig> = z.object({
-  skillsDir: z.string().min(1),
-  skillsUrls: z.array(z.transform(z.string(), skillsUrl)).min(1).default(['https://codeload.github.com']),
-  skillsTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(120_000),
-})
+/** Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes. */
+export default class UpstreamSkills extends Service {
+  static inject = ['skills']
 
-/** One plugin's packaged entry skill and the upstream files it indexes. */
-export interface UpstreamSkillsOptions {
-  /** The skill provider's name, also the directory under `$DSH_HOME/cache` that receives the download. */
-  readonly name: string
-  /** Absolute path of the packaged entry `SKILL.md`, whose frontmatter gives the skill's name and description. */
-  readonly entry: string
-  /** The pinned upstream files. */
-  readonly set: UpstreamSkillSet
-  /** The plugin's `skillsDir`, `skillsUrls`, and `skillsTimeoutMs`. */
-  readonly config: UpstreamSkillsConfig
-}
-
-/**
- * Register the entry skill's provider and start downloading the upstream files unless they are in place. The download
- * starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits
- * for `retry()`. Disposing the plugin aborts the download and removes the provider.
- * @param ctx - Context carrying the skill registry and the logger.
- * @param options - the provider name, entry, pinned files, and configured sources.
- * @returns the handle the plugin's view observes and its check retries.
- * @throws when the entry has no skill name or description in its frontmatter, or `skillsDir` is not a directory.
- */
-export function registerUpstreamSkills(ctx: Context, options: UpstreamSkillsOptions): UpstreamSkills {
-  let skills!: UpstreamSkillProvider
-  ctx.skills.registerProvider((control) => {
-    skills = new UpstreamSkillProvider(options, control, ctx.logger)
-    return skills
+  /** `skillsUrls` defaults to GitHub's archive host. */
+  static Config: z<Partial<Config>, Config> = z.object({
+    skillsUrls: z.array(z.transform(z.string(), skillsUrl)).min(1).default(['https://codeload.github.com']),
+    skillsTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(120_000),
   })
-  skills.retry()
-  return skills
+
+  constructor(ctx: Context, private readonly config: Config) {
+    super(ctx, 'upstreamSkills')
+  }
+
+  /**
+   * Register the calling plugin's entry skill and start downloading the upstream files unless they are in place. The
+   * download starts at load so that a session without a client also gets the skill; a failure is logged as a warning
+   * and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download
+   * and removes the entry skill.
+   * @param registration - the plugin's provider name, entry, pinned files, and optional skills directory.
+   * @returns the handle the plugin's view observes and its check retries.
+   * @throws when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a
+   *   skill provider named `name` is already registered.
+   */
+  register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle {
+    const caller = this.ctx
+    let provider!: UpstreamSkillProvider
+    const withdraw = caller.skills.registerProvider((control) => {
+      provider = new UpstreamSkillProvider(registration, this.config, control, caller.logger)
+      return provider
+    })
+    provider.retry()
+    return {
+      directory: provider.directory,
+      get state() { return provider.state },
+      watch: listener => provider.watch(listener),
+      retry: () => { provider.retry() },
+      dispose: withdraw,
+    }
+  }
 }
 
 /** Lists the entry skill while its upstream files are in place, and owns their download. */
-class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
+class UpstreamSkillProvider implements SkillProvider {
   readonly name: string
   readonly directory: string
   private readonly candidate: SkillCandidate
@@ -87,12 +96,13 @@ class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
   private running = false
 
   constructor(
-    private readonly options: UpstreamSkillsOptions,
+    private readonly options: UpstreamSkillsRegistration,
+    private readonly config: Config,
     private readonly control: SkillProviderControl,
     private readonly logger: Context['logger'],
   ) {
     this.name = options.name
-    const { skillsDir } = options.config
+    const { skillsDir } = options
     if (skillsDir === undefined) {
       this.directory = dshCachePath(options.name, `skills-${options.set.sha256.slice(0, 16)}`)
     } else {
@@ -137,7 +147,7 @@ class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
 
   retry(): void {
     const { signal } = this.control
-    if (this.state !== 'failed' || this.options.config.skillsDir !== undefined || signal.aborted) return
+    if (this.state !== 'failed' || this.options.skillsDir !== undefined || signal.aborted) return
     this.running = true
     this.notify()
     void this.install(signal).then(
@@ -165,8 +175,8 @@ class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
 
   /** Download and verify the files, then publish them by renaming a sibling staging directory. */
   private async install(signal: AbortSignal): Promise<void> {
-    const { set, config } = this.options
-    const files = await downloadSkillSet(set, config.skillsUrls, config.skillsTimeoutMs, signal, (message, error) => {
+    const { skillsUrls, skillsTimeoutMs } = this.config
+    const files = await downloadSkillSet(this.options.set, skillsUrls, skillsTimeoutMs, signal, (message, error) => {
       this.logger.warn(`${this.name}: ${message}`, error)
     })
     const staging = join(dirname(this.directory), `.${basename(this.directory)}-${randomUUID()}`)
@@ -183,7 +193,7 @@ class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
 }
 
 /** Read the entry's skill name and description from its YAML frontmatter, and its body after the frontmatter. */
-function readEntry(options: UpstreamSkillsOptions): { name: string; description: string; content: string } {
+function readEntry(options: UpstreamSkillsRegistration): { name: string; description: string; content: string } {
   const raw = readFileSync(options.entry, 'utf8')
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(raw)
   const metadata: unknown = frontmatter?.[1] === undefined ? undefined : parseYaml(frontmatter[1])

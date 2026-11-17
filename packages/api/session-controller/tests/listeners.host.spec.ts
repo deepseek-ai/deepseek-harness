@@ -25,7 +25,7 @@ async function fixture() {
   const ctx = new Context()
   roots.push(ctx)
   await ctx.plugin(SessionStore)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   const session = ctx.sessions.create(brandString<SessionId>('listener-target'), { meta: { cwd: '/listeners' } })
   const abort = cancellation()
   const partial: Partial<Agent> = { id: session.id, session }

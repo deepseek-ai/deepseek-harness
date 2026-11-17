@@ -29,7 +29,7 @@ const target: ChangesTarget = { sessionId: SESSION, source: { kind: 'change', ur
 function service(mounted: SessionId | undefined = SESSION) {
   const openResource = vi.fn()
   const extensions = createSnapshotStore<ForgeExtensionState | null>(null)
-  const forge = new ForgeChangesService({ mounted: () => mounted, openResource }, extensions, { changes: 'forge-changes', panel: 'forge-panel' })
+  const forge = new ForgeChangesService({ mounted: () => mounted, openResource }, extensions, { changes: 'forge-changes' })
   return { forge, openResource, extensions }
 }
 
@@ -56,7 +56,7 @@ describe('ForgeChangesService', () => {
     expect(address).toBe(changesAddress(target))
     expect(forge.parse(address)).toEqual(target)
     expect(forge.parse('dsh-resource://other/x')).toBeUndefined()
-    expect(forge.kinds).toEqual({ changes: 'forge-changes', panel: 'forge-panel' })
+    expect(forge.kinds).toEqual({ changes: 'forge-changes' })
     forge.open(target, { lens: 'fixture/exports' })
     forge.open(target)
     expect(openResource.mock.calls).toEqual([[address, { lens: 'fixture/exports' }], [address, undefined]])

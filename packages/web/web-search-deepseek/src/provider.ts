@@ -14,6 +14,7 @@ import type {
   WebSearchSource,
 } from '@deepseek-ai/dsh-web'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import type { ProviderCredentialGrant } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session'
 import type {
   AnthropicError,
@@ -93,13 +94,13 @@ declare module '@deepseek-ai/dsh-session/types' {
 /** Resolved provider options (the plugin's `apply` supplies credential and constant defaults). */
 export interface DeepSeekSearchProviderOptions {
   /**
-   * Resolve the DeepSeek account token for one search endpoint. A token takes
-   * precedence over every API key and is sent only as `x-dsh-auth-token`;
-   * `undefined` selects API-key authentication.
+   * Resolve the DeepSeek account credential for one search endpoint. A credential takes
+   * precedence over every API key and is sent only through the headers of its grant, which
+   * also invalidates it after HTTP 401; a failure of that invalidation is contained, and the
+   * search reports the HTTP rejection. The grant's `revoked` signal ends the search when the
+   * account signs out. `undefined` selects API-key authentication.
    */
-  resolveAccountToken?: (endpoint: string) => Promise<string | undefined>
-  /** Invalidate the exact account token rejected by HTTP 401; failures must not replace the search error. */
-  rejectAccountToken?: (token: string) => Promise<void>
+  resolveAccountCredential?: (endpoint: string) => Promise<ProviderCredentialGrant | undefined>
   /** Literal DeepSeek API key; when present it wins over {@link resolveApiKey}. */
   apiKey?: string
   /** Resolve the current DeepSeek API key for one search operation. */
@@ -189,12 +190,14 @@ export function mapAnthropicResponse(response: AnthropicResponse): WebSearchResu
 
 /** Authentication headers for one search, tagged by the credential that produced them. */
 interface SearchAuth {
-  /** `account` for a DeepSeek account token, `api-key` for an API key. */
+  /** `account` for a DeepSeek account credential, `api-key` for an API key. */
   readonly kind: 'account' | 'api-key'
   /** Headers carrying the credential. */
   readonly headers: Readonly<Record<string, string>>
-  /** Request-bound invalidation, present only when an account token was sent. */
+  /** Request-bound invalidation, present when the sent account credential offers one. */
   readonly reject?: () => Promise<void>
+  /** Sign-out of the sent account credential, present when its grant offers one; it ends the request. */
+  readonly revoked?: AbortSignal
 }
 
 /**
@@ -226,7 +229,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
 
   available(): boolean {
     const options = this.resolveOptions()
-    return ((options.apiKey?.length ?? 0) > 0 || options.resolveApiKey !== undefined || options.resolveAccountToken !== undefined)
+    return ((options.apiKey?.length ?? 0) > 0 || options.resolveApiKey !== undefined || options.resolveAccountCredential !== undefined)
       && URL.canParse(options.baseURL)
       && isPositiveInteger(options.maxTokens)
       && isPositiveInteger(options.maxUses)
@@ -257,6 +260,17 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
     })
     throwIfSearchAborted(signal)
     let response: Response
+    const live = requestSignal(signal, auth.revoked)
+    /**
+     * The failure of an interrupted request: the caller's cancellation first, then the sign-out of the sent account.
+     * @param error - what the interrupted fetch or body read threw.
+     * @returns the failure to report, or undefined when `error` is no interruption.
+     */
+    const interrupted = (error: unknown): WebError | undefined => {
+      if (signal?.aborted === true) return searchAborted(signal, error)
+      if (auth.revoked?.aborted === true) return accountSignedOutError(error)
+      return isAbortError(error) ? searchAborted(signal, error) : undefined
+    }
     try {
       response = await fetch(endpoint, {
         method: 'POST',
@@ -269,11 +283,10 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
           'user-agent': USER_AGENT,
         },
         body: JSON.stringify(body),
-        ...signal !== undefined ? { signal } : {},
+        ...live !== undefined ? { signal: live } : {},
       })
     } catch (error: unknown) {
-      if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
-      throw searchEndpointError(
+      throw interrupted(error) ?? searchEndpointError(
         endpoint,
         `DeepSeek search request failed: ${String(error)}`,
         error,
@@ -289,21 +302,21 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
         const detail = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message ?? parsed.message
         if (detail !== undefined && detail.length > 0) message += `: ${detail}`
       } catch (error: unknown) {
-        // An abort fired mid-body must surface as WEB_ABORTED, not be swallowed
+        // An interruption mid-body must surface as itself, not be swallowed
         // into a generic HTTP-error message — cancellation is not a provider
         // error (the seam's cancellation contract).
-        if (signal?.aborted === true || isAbortError(error)) aborted = searchAborted(signal, error)
+        aborted = interrupted(error)
         // Otherwise: the HTTP status is already captured in `message` above; a
         // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
         // cost a richer provider message, never the real error.
       }
-      // The account service released this token only for its inference
+      // The account service released this credential only for its inference
       // origin, so the endpoint is not what the user must change.
       if (status === 401 && auth.kind === 'account') {
         // Invalidation can cancel this Session; finish reading the HTTP failure before it does. A cancelled read
-        // still invalidates the token the status rejected.
+        // still invalidates the credential the status rejected.
         try { await auth.reject?.() }
-        catch (_credentialRemovalFailed) { /* Report the original failure even if credential removal fails. */ }
+        catch (_invalidationFailed) { /* The HTTP rejection stays the reported failure when the invalidation itself fails. */ }
         throw aborted ?? accountRejectedError(message)
       }
       if (aborted !== undefined) throw aborted
@@ -314,7 +327,8 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
       const payload = await response.json() as AnthropicResponse
       return mapAnthropicResponse(payload)
     } catch (error: unknown) {
-      if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+      const stopped = interrupted(error)
+      if (stopped !== undefined) throw stopped
       const message = error instanceof WebError
         ? error.message
         : `DeepSeek returned an unprocessable response body: ${String(error)}`
@@ -327,18 +341,22 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
    * @param options - the caller's snapshot, so the credential and the endpoint it is sent to come from one section.
    * @param endpoint - the Messages endpoint this operation dispatches to.
    * @param signal - abort signal for the surrounding search.
-   * @returns the account-token header when one resolves, otherwise the API-key headers, tagged by credential kind.
+   * @returns the account credential's headers when one resolves, otherwise the API-key headers, tagged by credential kind.
    */
   private async authHeaders(
     options: DeepSeekSearchProviderOptions, endpoint: string, signal?: AbortSignal,
   ): Promise<SearchAuth> {
-    const { resolveAccountToken, rejectAccountToken } = options
-    const token = resolveAccountToken === undefined
+    const { resolveAccountCredential } = options
+    const credential = resolveAccountCredential === undefined
       ? undefined
-      : await resolveCredential(() => resolveAccountToken(endpoint), signal)
-    if (token !== undefined && token.length > 0) return {
-      kind: 'account', headers: { 'x-dsh-auth-token': token },
-      ...rejectAccountToken === undefined ? {} : { reject: () => rejectAccountToken(token) },
+      : await resolveCredential(() => resolveAccountCredential(endpoint), signal)
+    if (credential !== undefined) {
+      const invalidate = credential.reject?.bind(credential)
+      return {
+        kind: 'account', headers: credential.headers,
+        ...invalidate === undefined ? {} : { reject: invalidate },
+        ...credential.revoked === undefined ? {} : { revoked: credential.revoked },
+      }
     }
     const apiKey = await this.apiKey(options, signal)
     // Official DeepSeek expects `x-api-key`; an Anthropic-compatible proxy
@@ -377,9 +395,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
  * @returns the resolved credential, or undefined when the resolver supplied none.
  * @throws {@link WebError} `WEB_ABORTED` on cancellation, `WEB_PROVIDER_ERROR` when the resolver fails.
  */
-async function resolveCredential(
-  resolve: () => Promise<string | undefined>, signal?: AbortSignal,
-): Promise<string | undefined> {
+async function resolveCredential<T>(resolve: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   throwIfSearchAborted(signal)
   try {
     return await abortable(resolve(), signal)
@@ -391,6 +407,32 @@ async function resolveCredential(
       { cause: error },
     )
   }
+}
+
+/**
+ * The signal one search runs under: the caller's cancellation and the sign-out of the account credential it carries.
+ * @param signal - caller cancellation, when the caller supplies one.
+ * @param revoked - sign-out of the sent account credential, when its grant offers one.
+ * @returns the composed signal, or undefined when neither exists.
+ */
+function requestSignal(signal: AbortSignal | undefined, revoked: AbortSignal | undefined): AbortSignal | undefined {
+  if (signal === undefined || revoked === undefined) return signal ?? revoked
+  return AbortSignal.any([signal, revoked])
+}
+
+/**
+ * Report a search that ended because the account it authenticated with signed out. The caller did not cancel, so the
+ * failure is the provider's.
+ * @param cause - what the interrupted fetch or body read threw.
+ * @returns the provider failure with sign-in guidance.
+ */
+function accountSignedOutError(cause: unknown): WebError {
+  return new WebError(
+    'The DeepSeek account signed out before this web search finished. Guide the user to sign in to DeepSeek again;'
+    + ' the search endpoint does not need changing.',
+    'WEB_PROVIDER_ERROR',
+    { cause },
+  )
 }
 
 /** Replace endpoint guidance with sign-in guidance when DeepSeek rejects the account token. */

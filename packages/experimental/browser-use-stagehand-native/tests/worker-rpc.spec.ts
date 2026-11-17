@@ -4,6 +4,7 @@ import { getEventListeners, once } from 'node:events'
 import { MessageChannel } from 'node:worker_threads'
 import type { MessagePort } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
+import { StagehandError } from '../src/error.ts'
 import { answer, request, requestSchema } from '../src/worker-rpc.ts'
 
 const cleanups: Array<() => Promise<void>> = []
@@ -51,12 +52,36 @@ it.each([new Error('Browser operation failed'), 'Browser operation refused'])(
     const { port1, port2 } = channel()
     const incoming = receive(port2)
     const result = request(port1, 'navigate', { url: 'https://example.com' })
-    const rejected = expect(result).rejects.toThrow(failure instanceof Error ? failure.message : failure)
+    const rejected = expect(result).rejects.toMatchObject({
+      constructor: StagehandError, code: 'STAGEHAND_OPERATION_FAILED', message: failure instanceof Error ? failure.message : failure,
+    })
     const raw = await incoming
     await answer(raw, async () => { throw failure })
     await rejected
   },
 )
+
+it('rebuilds a StagehandError from its transported name and code', async () => {
+  const { port1, port2 } = channel()
+  const incoming = receive(port2)
+  const result = request(port1, 'act', { instruction: 'Click the button.' })
+  const rejected = expect(result).rejects.toMatchObject({ constructor: StagehandError, name: 'StagehandError', code: 'STAGEHAND_ACT_FAILED', message: 'Button missing' })
+  await answer(await incoming, async () => { throw new StagehandError('Button missing', 'STAGEHAND_ACT_FAILED') })
+  await rejected
+})
+
+it.each([
+  { ok: false, error: 'Unknown failure', name: 'StagehandError', code: 'STAGEHAND_UNKNOWN' },
+  { ok: false, error: 'Foreign failure', name: 'OtherError', code: 'STAGEHAND_ACT_FAILED' },
+])('classifies an unknown transported identity as an operation failure: %j', async (response) => {
+  const { port1, port2 } = channel()
+  const incoming = receive(port2)
+  const result = request(port1, 'act', { instruction: 'Click the button.' })
+  const rejected = expect(result).rejects.toMatchObject({ name: 'StagehandError', code: 'STAGEHAND_OPERATION_FAILED', message: response.error })
+  const { reply } = requestSchema.parse(await incoming)
+  reply.postMessage(response)
+  await rejected
+})
 
 it.each([
   { ok: true, value: 'unexpected', extra: true },
@@ -66,7 +91,7 @@ it.each([
   const { port1, port2 } = channel()
   const incoming = receive(port2)
   const result = request(port1, 'tabs', { action: 'list' })
-  const rejected = expect(result).rejects.toThrow()
+  const rejected = expect(result).rejects.toMatchObject({ name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED', message: 'Stagehand Worker returned a malformed response' })
   const raw = await incoming
   const { reply } = requestSchema.parse(raw)
   const closed = once(reply, 'close')
@@ -79,7 +104,7 @@ it('rejects peer shutdown before a response instead of leaving the request pendi
   const { port1, port2 } = channel()
   const incoming = receive(port2)
   const result = request(port1, 'observe', { instruction: 'Find a button.' })
-  const rejected = expect(result).rejects.toThrow('Worker reply channel closed')
+  const rejected = expect(result).rejects.toMatchObject({ name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED', message: expect.stringContaining('Worker reply channel closed') as string })
   const raw = await incoming
   const { reply } = requestSchema.parse(raw)
   const closed = once(reply, 'close')
@@ -94,7 +119,7 @@ it.each([new Error('Session disposed'), 'canceled'])(
     const incoming = receive(port2)
     const controller = new AbortController()
     const result = request(port1, 'act', { instruction: 'Click the button.' }, controller.signal)
-    const rejected = expect(result).rejects.toThrow(reason instanceof Error ? reason.message : 'Worker request canceled')
+    const rejected = expect(result).rejects.toMatchObject(reason instanceof Error ? reason : { name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED', message: 'Stagehand Worker request canceled' })
     const raw = await incoming
     const { reply } = requestSchema.parse(raw)
     const closed = once(reply, 'close')
@@ -120,7 +145,7 @@ it('does not dispatch an already canceled request', async () => {
 
 it('reports clone failure when request arguments cannot cross a Worker boundary', async () => {
   const { port1 } = channel()
-  await expect(request(port1, 'extract', { callback() {} })).rejects.toThrow(/clone/u)
+  await expect(request(port1, 'extract', { callback() {} })).rejects.toMatchObject({ name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED', message: expect.stringMatching(/clone/u) as string })
 })
 
 it('rejects malformed request envelopes before invoking the operation', async () => {

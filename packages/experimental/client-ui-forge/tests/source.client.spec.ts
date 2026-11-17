@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates } from '../src/client/source.ts'
+import { createNoticeSource, createPanelSource, createStreamSource, foldStates } from '../src/client/source.ts'
 import type { PanelStream } from '../src/client/source.ts'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelState } from '../src/types.ts'
 import { entry, listState, ready, snapshot } from './client-fixtures.client.ts'
@@ -276,26 +276,5 @@ describe('createNoticeSource', () => {
 
     expect(notices.hooks.notice.getSnapshot()).toEqual({ key: 'toast.removed', params: { name: '#7' }, tone: 'success', undo, seq: 1 })
     expect(undo).not.toHaveBeenCalled()
-  })
-})
-
-describe('createVisibilitySource', () => {
-  it('starts hidden and notifies only when the visibility changes', () => {
-    const visibility = createVisibilitySource()
-    const listener = vi.fn()
-    const unsubscribe = visibility.hooks.visible.subscribe(listener)
-    expect(visibility.hooks.visible.getSnapshot()).toBe(false)
-
-    visibility.set(false)
-    expect(listener).not.toHaveBeenCalled()
-    visibility.set(true)
-    visibility.set(true)
-    expect(listener).toHaveBeenCalledOnce()
-    expect(visibility.hooks.visible.getSnapshot()).toBe(true)
-
-    unsubscribe()
-    visibility.set(false)
-    expect(listener).toHaveBeenCalledOnce()
-    expect(visibility.hooks.visible.getSnapshot()).toBe(false)
   })
 })

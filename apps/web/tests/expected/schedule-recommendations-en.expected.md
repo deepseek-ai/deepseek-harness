@@ -1,0 +1,19 @@
+- region "Recommended":
+  - heading "Recommended" [level=2]
+  - list:
+    - listitem:
+      - button "Daily brief": Daily brief Recent changes in the workspace and what needs follow-up, with what to do first today. Weekdays at 9:00
+    - listitem:
+      - button "Weekly review": Weekly review Your work in the workspace this week, with loose ends and what to do first next week. Fridays at {{clock}}
+    - listitem:
+      - button "Issue scan": Issue scan Sort new issues into bugs, requests, and questions, and flag duplicates and ones that need a reply. Weekdays at {{clock}}
+    - listitem:
+      - button "Plugin compatibility check": Plugin compatibility check When a new DSH version ships, check whether installed and self-made plugins need changes. Daily at {{clock}}
+    - listitem:
+      - button "Topic and paper tracking": Topic and paper tracking Search for news and new arXiv papers on chosen topics and list the key points. Daily at 9:00
+    - listitem:
+      - button "Branch and worktree cleanup": Branch and worktree cleanup List local branches and worktrees whose pull requests merged or closed, and delete them after confirmation. Fridays at {{clock}}
+    - listitem:
+      - button "Weather and travel": Weather and travel Weather for today and the next three days, with a note when an umbrella or warmer clothes are needed. Daily at 7:30
+    - listitem:
+      - button "Weekly workout plan": Weekly workout plan Plan next week's workouts around your goals and training days. Sundays at {{clock}}

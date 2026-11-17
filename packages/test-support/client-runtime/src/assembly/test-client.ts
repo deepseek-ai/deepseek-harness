@@ -282,7 +282,7 @@ export class TestClient {
     } catch (error) {
       try {
         await settle(() => ctx.fiber.dispose())
-      } catch {
+      } catch (_disposeAfterBootFailed) {
         // The boot failure is the error to report; a half-built tree failing to dispose adds nothing to it.
       } finally {
         restore()

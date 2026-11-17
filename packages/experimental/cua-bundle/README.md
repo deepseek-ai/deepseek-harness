@@ -24,7 +24,7 @@ Enable Computer Use from Plugins on macOS and Windows for existing and new sessi
 <a id="use-this-package"></a>
 ## Use this package
 
-On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only.
+On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. Once enabled, the details show usage guidance below the preview and above the settings. On Windows they also explain how to configure the helper.
 
 On macOS, the bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Grant Accessibility and Screen Recording to `DSH Computer Use.app`.
 
@@ -37,7 +37,7 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. PTC sessions receive the raw `cua` binding; other composed presets receive `cua_run_code` with an automatically initialized `cua` object and separate persistent state. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Other presets keep their CUA program state independently of this setting. Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. PTC sessions receive the raw `cua` binding; other Agents, with or without a preset, receive `cua_run_code` with an automatically initialized `cua` object and separate persistent state. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Other presets keep their CUA program state independently of this setting. Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
@@ -75,7 +75,7 @@ The bundle patch mounts the native provider and permission UI with `agentPreset:
 
 #### What the model sees
 
-Existing and new PTC sessions receive `cua` through the generated SDK and `run_code`, plus CUA guidance. Other composed presets receive `cua_run_code` and the same operation guidance. Disabling withdraws these contributions and disposes the dedicated CUA runtime. [CUA](../cua/README.md) and [PTC](../../ptc-runtime/ptc-runtime-node/README.md#persistent-repl) own the interfaces and output semantics.
+Existing and new PTC sessions receive `cua` through the generated SDK and `run_code`, plus CUA guidance. Other Agents receive `cua_run_code` and the same operation guidance. Disabling withdraws these contributions and disposes the dedicated CUA runtime. [CUA](../cua/README.md) and [PTC](../../ptc-runtime/ptc-runtime-node/README.md#persistent-repl) own the interfaces and output semantics.
 
 #### Token effect
 
