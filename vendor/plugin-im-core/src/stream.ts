@@ -775,7 +775,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   // -- retry ----------------------------------------------------------------------------------------------------
 
   private context(content: Element<'message'>, quote: string | undefined, report: RenderReport, attempt: number, signal = this.controller.signal): StreamTickContext {
-    return { target: this.host.target, mode: this.host.mode.id, options: this.options, ...quote === undefined ? {} : { quote }, signal, report, content, attempt }
+    return { target: this.host.target, mode: this.host.mode.id, options: { ...this.options, signal }, ...quote === undefined ? {} : { quote }, signal, report, content, attempt }
   }
 
   private classify(error: unknown): PlatformError {

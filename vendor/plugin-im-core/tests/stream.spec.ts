@@ -908,4 +908,25 @@ describe('abort', () => {
     expect(host.recalls).toEqual([])
     await expect(stream.done).resolves.toBe(result)
   })
+
+  it('aborts an in-flight createEditDriver.open via ctx.options.signal when stream.abort() is called', async () => {
+    let seenSignal: AbortSignal | undefined
+    const adapter: EditDriverAdapter = {
+      id: 'b',
+      sendPayload: (_payload, _target, opts) => new Promise((_resolve, reject) => {
+        seenSignal = opts.options?.signal
+        seenSignal?.addEventListener('abort', () => reject(seenSignal?.reason), { once: true })
+      }),
+      editPayload: async () => {},
+      recall: async () => {},
+    }
+    const stream = createMessageStream(fakeHost(createEditDriver<FakeTypes>(adapter, { limit: 5 })), { firstDelayMs: 0 })
+    stream.update('hello')
+    await flush()
+    expect(seenSignal).toBeDefined()
+    expect(seenSignal?.aborted).toBe(false)
+    await stream.abort()
+    expect(seenSignal?.aborted).toBe(true)
+    await expect(stream.done).rejects.toBeInstanceOf(StreamAbortError)
+  })
 })
