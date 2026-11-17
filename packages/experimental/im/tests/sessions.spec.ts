@@ -531,6 +531,39 @@ describe('reset', () => {
     expect(second.resets).toHaveLength(1)
     expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
   })
+
+  it('serializes recover() behind an in-flight reset() without duplicating events or dropping concurrent bindings', async () => {
+    const harness = await booted()
+    const record = await harness.host.ensure(spec())
+
+    // Pause `reset()` after it wrote the reset receipt and is about to advance the generation, then trigger `retry()`
+    // and a concurrent `bind()` before letting `reset()` finish.
+    let resumeSave: (() => void) | undefined
+    const saveBlocked = new Promise<void>((resolve) => { resumeSave = resolve })
+    let sawResetReceipt = false
+    const onChanged = (change: { domain: string; table: string }) => {
+      if (!sawResetReceipt && change.domain === 'im_sessions' && change.table === 'resets') {
+        sawResetReceipt = true
+        harness.host.retry()
+        void harness.host.bind(record.key, [{ chat: CHAT.key, writable: true, home: true }, { chat: ImChatKey('fake:bot', 'other'), writable: false }])
+        resumeSave?.()
+      }
+    }
+    harness.ctx.on('domain/changed', onChanged)
+
+    const resetPromise = harness.host.reset(record.key, 'cmd', { operationId: 'op-concurrent', expectedGeneration: 0 })
+    await saveBlocked
+    await resetPromise
+    await harness.host.whenRecovered()
+
+    expect(harness.host.get(record.key)?.generation).toBe(1)
+    expect(harness.host.get(record.key)?.bindings).toEqual([
+      { chat: CHAT.key, writable: true, home: true },
+      { chat: ImChatKey('fake:bot', 'other'), writable: false },
+    ])
+    expect(harness.resets).toHaveLength(1)
+    expect(harness.created).toHaveLength(2)
+  })
 })
 
 describe('ephemeral sessions', () => {

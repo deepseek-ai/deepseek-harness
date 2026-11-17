@@ -430,12 +430,10 @@ export class ImSessionHost implements ImSessions {
   private async recover(): Promise<void> {
     // Finish any committed reset receipt whose generation advance never persisted before admitting pending deliveries,
     // so deliveries queued for the replaced generation are discarded instead of executing in the old session.
-    for (const stored of this.resets.values()) {
+    for (const [receiptKey, stored] of [...this.resets]) {
       const current = this.hosted(stored.replaced)
       if (current === undefined) continue
-      const advanced = await this.write(() => this.advanceGeneration(current, Date.now()))
-      this.ctx.emit('im/session/reset', advanced.old, 'recover')
-      this.ctx.emit('im/session/created', advanced.record)
+      await this.reset(current.key, 'recover', { operationId: receiptKey.slice(current.key.length + 1) })
     }
     for (const [id, stored] of [...this.deliveries]) {
       if (stored.admitted) continue
