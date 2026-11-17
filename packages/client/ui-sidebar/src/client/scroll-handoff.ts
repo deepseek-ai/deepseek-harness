@@ -16,7 +16,7 @@ import type { SectionScroller, UseSectionScroller } from './contract/slots.ts'
 
 /** Sidebar-owned state of one hand-off. */
 export interface ScrollHandoff {
-  /** Ref callback for the sidebar's own viewport; binds the wheel listener. */
+  /** Ref callback for the sidebar's own viewport; binds the wheel hand-off and the drag edge-scrolling listeners. */
   readonly bindViewportRef: RefCallback<HTMLElement>
   /** Hook handed to the `sidebar.workspaces` occupant through the slot's hookContext. */
   readonly useSectionScroller: UseSectionScroller
