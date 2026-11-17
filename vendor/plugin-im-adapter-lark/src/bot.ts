@@ -201,8 +201,8 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
    * @param payload - new payload of the part.
    * @param handle - message handle (mode, parts, `edits`, adapter state).
    */
-  override async editPayload(part: SentPart, payload: unknown, handle: MessageHandle): Promise<void> {
-    await editMessagePayload(this, part, payload, handle)
+  override async editPayload(part: SentPart, payload: unknown, handle: MessageHandle, signal?: AbortSignal): Promise<void> {
+    await editMessagePayload(this, part, payload, handle, signal)
   }
 
   /**

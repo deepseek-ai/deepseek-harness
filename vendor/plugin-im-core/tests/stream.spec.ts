@@ -975,4 +975,29 @@ describe('abort', () => {
     await closeAll(stream, 'A')
     expect(edits).toEqual([{ text: 'B' }, { text: 'A' }])
   })
+
+  it('aborts an in-flight createEditDriver.tick editPayload when stream.abort() is called', async () => {
+    let editSignal: AbortSignal | undefined
+    const adapter: EditDriverAdapter = {
+      id: 'b',
+      sendPayload: async () => ({ id: 'm1', kind: 'card', time: 1 }),
+      editPayload: (_part, _payload, _handle, signal) => new Promise((_resolve, reject) => {
+        editSignal = signal
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      }),
+    }
+    const stream = createMessageStream(fakeHost(createEditDriver<FakeTypes>(adapter, { limit: 5 })), {
+      firstDelayMs: 0,
+      intervalMs: 100,
+    })
+    stream.update('A')
+    await flush()
+    stream.update('B')
+    await advance(100)
+    expect(editSignal).toBeDefined()
+    expect(editSignal?.aborted).toBe(false)
+    await stream.abort({ recall: true })
+    expect(editSignal?.aborted).toBe(true)
+    await expect(stream.done).rejects.toBeInstanceOf(StreamAbortError)
+  })
 })

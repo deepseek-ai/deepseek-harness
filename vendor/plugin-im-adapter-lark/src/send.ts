@@ -344,16 +344,17 @@ export async function editMessagePayload(
   part: SentPart,
   payload: unknown,
   _handle: MessageHandle,
+  signal?: AbortSignal,
 ): Promise<void> {
   const request = asPayload(payload)
   switch (request.msg_type) {
     case 'post':
     case 'text':
-      await bot.api.updateMessage(part.id, requestBody(request))
+      await bot.api.updateMessage(part.id, requestBody(request), signal)
       return
     case 'interactive':
       // The whole card JSON travels as the `content` string; the message keeps its identity and its place in the chat.
-      await bot.api.patchMessage(part.id, { content: JSON.stringify(request.content) })
+      await bot.api.patchMessage(part.id, { content: JSON.stringify(request.content) }, signal)
       return
     default:
       throw new PlatformError(

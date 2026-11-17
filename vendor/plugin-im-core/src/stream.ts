@@ -154,6 +154,8 @@ export class StreamAbortError extends Error {
 export const STREAM_INTERVAL_MS = 300
 /** Default first-publication delay of the `edit` strategy. */
 export const STREAM_EDIT_FIRST_DELAY_MS = 800
+/** Maximum time best-effort `driver.close` may take after `abort({ recall: false })`. */
+export const STREAM_ABORT_CLOSE_TIMEOUT_MS = 5000
 /** Retry backoff: base, factor 2, cap. */
 export const STREAM_BACKOFF_BASE_MS = 500
 export const STREAM_BACKOFF_MAX_MS = 8_000
@@ -185,7 +187,7 @@ export function createMessageStream<T extends ModeTypes>(host: StreamHost<T>, op
 export interface EditDriverAdapter {
   readonly id: string
   sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart>
-  editPayload(part: SentPart, payload: unknown, handle: MessageHandle): Promise<void>
+  editPayload(part: SentPart, payload: unknown, handle: MessageHandle, signal?: AbortSignal): Promise<void>
 }
 
 export interface EditDriverOptions {
@@ -205,12 +207,12 @@ export interface EditDriverOptions {
  */
 export function createEditDriver<T extends ModeTypes = ModeTypes>(adapter: EditDriverAdapter, options: EditDriverOptions = {}): StreamDriver<T> {
   const published = new WeakMap<MessageHandle, string | undefined>()
-  const edit = async (handle: MessageHandle, payload: unknown) => {
+  const edit = async (handle: MessageHandle, payload: unknown, signal?: AbortSignal) => {
     const part = handle.parts[0]
     if (!part) throw new PlatformError('invalid', 'edit stream: handle has no part')
     handle.edits += 1
     try {
-      await adapter.editPayload(part, payload, handle)
+      await adapter.editPayload(part, payload, handle, signal)
     } catch (error) {
       // The platform may have applied the edit before the error (or left the message in an unknown state):
       // drop the cached last-published key so `close` does not skip writing back an earlier payload.
@@ -236,13 +238,13 @@ export function createEditDriver<T extends ModeTypes = ModeTypes>(adapter: EditD
       published.set(handle, payloadKey(payload))
       return handle
     },
-    async tick(handle, change) {
-      await edit(handle, change.payload)
+    async tick(handle, change, ctx) {
+      await edit(handle, change.payload, ctx.signal)
     },
-    async close(handle, last) {
+    async close(handle, last, ctx) {
       const key = payloadKey(last.payload)
       if (key !== undefined && key === published.get(handle)) return
-      await edit(handle, last.payload)
+      await edit(handle, last.payload, ctx.signal)
     },
     budget(handle) {
       if (options.limit === undefined) return {}
@@ -403,8 +405,8 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       if (options.recall) {
         recalled = await this.recall(handle)
       } else if (this.driver && this.applied && handle.parts.length && !this.resent) {
-        // End platform streaming on what is shown (CardKit streaming_mode off, QQ input_state 10); best effort.
-        const signal = new AbortController().signal
+        // End platform streaming on what is shown (CardKit streaming_mode off, QQ input_state 10); best effort, bounded.
+        const signal = AbortSignal.timeout(STREAM_ABORT_CLOSE_TIMEOUT_MS)
         await this.driver.close(handle, this.applied, this.context(handle.content, this.lastQuote, this.lastReport!, 1, signal)).catch(() => {})
       }
     }
