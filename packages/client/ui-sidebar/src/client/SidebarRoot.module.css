@@ -426,7 +426,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 10px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 8px;
 }
 
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
