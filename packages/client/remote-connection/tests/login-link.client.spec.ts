@@ -48,6 +48,26 @@ it('reports clipboard refusal and rejection without claiming that a link was cop
   await controller.dispose()
 })
 
+it('resets the copy warning without losing the credential or clipboard outcomes', async () => {
+  const { remote, write, controller, state } = setup()
+  const writing = Promise.withResolvers<boolean>()
+  onTestFinished(async () => { writing.resolve(true); await controller.dispose() })
+  await controller.load()
+  await controller.copy()
+  controller.resetCopyWarning()
+  expect(state()).toMatchObject({ phase: 'ready', url, copied: false, notice: 'linkCopied', sequence: 1 })
+
+  write.mockReturnValueOnce(writing.promise)
+  const copying = controller.copy()
+  controller.resetCopyWarning()
+  writing.resolve(true)
+  await copying
+  expect(state()).toMatchObject({ phase: 'ready', url, copied: false, notice: 'linkCopied', sequence: 2 })
+  await controller.copy()
+  expect(state()).toMatchObject({ copied: true, notice: 'linkCopied', sequence: 3 })
+  expect(remote.loginUrl).toHaveBeenCalledOnce()
+})
+
 it('keeps failed link reads retryable and shares an outstanding read', async () => {
   const { remote, controller, write, state } = setup()
   remote.loginUrl.mockRejectedValueOnce(new Error('connection unavailable'))

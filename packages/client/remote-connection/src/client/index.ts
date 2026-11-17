@@ -60,6 +60,7 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('settings.section', () => scope.slots.register({
       name: 'settings.section', id: 'remote-connection', order: 25,
       label: () => t('title'),
+      inject: () => ({ onLeave: () => { link.resetCopyWarning() } }),
       children: {
         'settings.remoteConnection.content': { kind: 'single', scope: 'root', inject: face },
         'settings.remoteConnection.extensions': { kind: 'list', scope: 'root', inject: face },

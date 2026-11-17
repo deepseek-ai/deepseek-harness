@@ -8,7 +8,7 @@ export interface LoginLinkState {
   url: string | null
   /** Credential-read or clipboard activity; failed reads leave the clean address copyable. */
   phase: 'loading' | 'ready' | 'copying' | 'error'
-  /** Whether the latest loaded credential URL has been copied successfully. */
+  /** Whether the credential warning is enabled for the current Remote connection settings visit. */
   copied: boolean
   /** Transient clipboard outcome presented by the shell overlay. */
   notice: 'linkCopied' | 'copyFailed' | null
@@ -35,6 +35,7 @@ export class LoginLinkController {
   private live = true
   private loading: Promise<void> | undefined
   private copying: Promise<void> | undefined
+  private warningGeneration = 0
   private readonly pending = new Set<Promise<void>>()
 
   /**
@@ -89,6 +90,12 @@ export class LoginLinkController {
     return operation === undefined ? this.load() : this.track(operation.then(() => this.load()))
   }
 
+  /** Clear the page's credential warning without discarding clipboard outcomes or the cached URL. */
+  resetCopyWarning(): void {
+    this.warningGeneration += 1
+    this.store.update((state) => { state.copied = false })
+  }
+
   /**
    * Copy the cached credential or current clean address directly from the user's gesture.
    * @returns after clipboard completion; overlapping gestures share the write, and failures remain retryable.
@@ -99,10 +106,11 @@ export class LoginLinkController {
     const credentialUrl = this.canCopyCredential() ? this.store.getSnapshot().url : null
     const url = credentialUrl ?? this.accessAddress()
     if (url === null) return Promise.resolve()
+    const warningGeneration = this.warningGeneration
     const completion = Promise.withResolvers<void>()
     this.copying = this.track(completion.promise.finally(() => { this.copying = undefined }))
     this.store.update((state) => { state.phase = 'copying'; state.notice = null })
-    void this.writeLink(url, credentialUrl !== null).then(completion.resolve, completion.reject)
+    void this.writeLink(url, credentialUrl !== null, warningGeneration).then(completion.resolve, completion.reject)
     return this.copying
   }
 
@@ -122,13 +130,13 @@ export class LoginLinkController {
     return operation
   }
 
-  private async writeLink(url: string, credential: boolean): Promise<void> {
+  private async writeLink(url: string, credential: boolean, warningGeneration: number): Promise<void> {
     let copied: boolean
     try { copied = await this.write(url) } catch (_clipboardFailure) { copied = false }
     if (!this.active()) return
     this.store.update((state) => {
       state.phase = 'ready'
-      state.copied ||= copied && credential && state.url === url
+      state.copied ||= copied && credential && state.url === url && this.warningGeneration === warningGeneration
       state.notice = copied ? 'linkCopied' : 'copyFailed'
       state.sequence += 1
     })

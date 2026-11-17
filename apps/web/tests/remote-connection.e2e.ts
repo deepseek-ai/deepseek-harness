@@ -503,6 +503,17 @@ describe('web e2e: one-use QR browser login', () => {
       await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click()
       expect(await page.getByRole('dialog', { name: '设置', exact: true }).count()).toBe(0)
       expect(await page.getByText('链接已复制', { exact: true }).count()).toBe(1)
+      await remoteSettings(page)
+      expect(await linkSection.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+      expect(await linkSection.locator('code').textContent()).toBe(copiedUrl)
+      expect(await qrSection.getByRole('img').count()).toBe(1)
+      expect(await qrSection.getByText('请勿分享登录二维码', { exact: true }).count()).toBe(1)
+      await snapshot(page, secure, 'link-reopened')
+      if (screenshots !== undefined) {
+        await page.getByRole('dialog', { name: '设置', exact: true }).screenshot({ path: join(screenshots, 'link-reopened-desktop.png') })
+      }
+      await linkSection.getByRole('button', { name: '复制链接', exact: true }).click()
+      await linkSection.getByText('请勿公开分享登录链接', { exact: true }).waitFor()
       expect(console.pageErrors).toEqual([])
     } finally {
       await Promise.all([desktop.close(), phone.close()])

@@ -323,11 +323,15 @@ describe('remote connection settings registration', () => {
     expect(screen.queryByRole('region', { name: zh.title })).toBeNull()
     expect(screen.getByRole('alert').textContent).toBe(zh.linkCopied)
     fireEvent.click(screen.getByRole('button', { name: 'Toggle settings' }))
+    expect(screen.queryByText(zh.linkWarning)).toBeNull()
     write.mockRejectedValueOnce(new Error('clipboard permission'))
     fireEvent.click(await screen.findByRole('button', { name: zh.copyLink }))
     await screen.findByText(zh.copyFailed)
-    expect(screen.getByText(zh.linkWarning)).toBeTruthy()
+    expect(screen.queryByText(zh.linkWarning)).toBeNull()
     expect(screen.getByText(url)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.copyLink }))
+    await screen.findByText(zh.linkWarning)
+    expect(screen.getByRole('alert').textContent).toBe(zh.linkCopied)
     call.mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/loginUrl' ? `${url}-new`
         : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
@@ -347,6 +351,40 @@ describe('remote connection settings registration', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps a late clipboard outcome in the shell without warning a reopened settings panel', async () => {
+    const writing = Promise.withResolvers<undefined>()
+    const write = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined).mockReturnValueOnce(writing.promise)
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } })
+    onTestFinished(() => {
+      writing.resolve(undefined)
+      if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    })
+    const url = 'https://host.example/?token=private-login-token'
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
+      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? url
+        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+    }))
+    const { slots } = await bench(call)
+    render(slots.renderSlot('root', {}))
+    await screen.findByText(url)
+    fireEvent.click(screen.getByRole('button', { name: zh.copyLink }))
+    expect(write).toHaveBeenCalledExactlyOnceWith(url)
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle settings' }))
+    expect(screen.getByRole('button', { name: zh.copyLink })).toHaveProperty('disabled', true)
+    await act(async () => { writing.resolve(undefined); await writing.promise })
+    await screen.findByText(zh.linkCopied)
+    expect(screen.queryByText(zh.linkWarning)).toBeNull()
+    expect(screen.getByText(url)).toBeTruthy()
+    await vi.waitFor(() => { expect(screen.getByRole('button', { name: zh.copyLink })).toHaveProperty('disabled', false) })
+    fireEvent.click(screen.getByRole('button', { name: zh.copyLink }))
+    await screen.findByText(zh.linkWarning)
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
   })
 
   it('refreshes deployment on every reconnect and prefetches the login link once available', async () => {
