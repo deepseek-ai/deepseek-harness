@@ -15011,6 +15011,9 @@ importers:
       '@deepseek-ai/dsh-authorization':
         specifier: workspace:*
         version: link:../../credentials/authorization
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:*
+        version: link:../../client/connection
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:*
         version: link:../../credentials/credentials
