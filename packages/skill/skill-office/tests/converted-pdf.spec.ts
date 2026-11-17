@@ -8,7 +8,7 @@ import { convertedPdfFiles, deliveredConversions } from './fixtures/real-office.
 const temporary = '/h/.dsh/office-kit/outputs/session-0123456789abcdef01234567/2f0f8c3e-7d1b-4c1e-9b0a-0d5e6f7a8b9c/input.pdf'
 
 /** Record native tool results carrying one text block each. */
-function results(texts: readonly string[], isError = false): SessionEvent[] {
+function results(texts: readonly string[], isError = false): readonly SessionEvent[] {
   const session = Session.create(brandString<SessionId>('converted-pdf'))
   for (const text of texts) {
     session.append('tool/result', { turn: 1, step: 1,
