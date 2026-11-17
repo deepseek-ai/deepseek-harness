@@ -331,13 +331,15 @@ describe('web e2e: one-use QR browser login', () => {
     { language: 'zh', locale: ZH_BROWSER_LOCALE, limited: '请求过于频繁，稍后自动重试…', creating: '正在申请配对…', again: '重新申请' },
     { language: 'en', locale: 'en-US', limited: 'Too many requests. Retrying shortly…', creating: 'Requesting approval…', again: 'Request again' },
   ])('keeps the pairing action readable during rate-limit recovery in $language', async ({ language, locale, limited, creating, again }) => {
+    const fixture = await launchRemoteConnectionFixture(true)
+    onTestFinished(() => fixture.close())
     const context = await browser.newContext({ ignoreHTTPSErrors: true, locale, viewport: MOBILE, colorScheme: 'light', hasTouch: true })
     const page = await context.newPage()
     const releaseRetry = Promise.withResolvers<undefined>()
     try {
       const console = watchConsole(page)
       await page.clock.install()
-      expect((await page.goto(secure.url))?.status()).toBe(401)
+      expect((await page.goto(fixture.url))?.status()).toBe(401)
       const request = page.locator('#auth-pair-request')
       const panel = page.locator('#auth-pair-panel')
       await request.click()
@@ -365,7 +367,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await request.textContent()).toBe(creating)
       expect(await status.textContent()).toBe(limited)
       await compareOrRefreshGolden(join(EXPECTED, `pairing-rate-limited.${language}.expected.md`),
-        await captureStableAria(page, 'dsh-device-pairing', secure.root), MODE)
+        await captureStableAria(page, 'dsh-device-pairing', fixture.root), MODE)
       const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
       const screenshotDirectory = screenshots === undefined ? undefined : join(screenshots, 'pairing-rate-limited')
       if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true })
