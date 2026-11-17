@@ -277,6 +277,20 @@ export class ImSessionHost implements ImSessions {
     return this.list({ chat })
   }
 
+  /**
+   * Session id of any generation of `key` (including generations retired by reset) that already admitted
+   * `deliveryId`, or `undefined` when none did.
+   */
+  deliveredTo(key: string, deliveryId: string): SessionId | undefined {
+    const current = this.records.get(key)
+    if (!current) return undefined
+    for (let generation = current.generation; generation >= 0; generation -= 1) {
+      const sessionId = sessionIdOf(key, generation)
+      if (this.deliveries.get(`${sessionId}|${deliveryId}`)?.admitted) return sessionId
+    }
+    return undefined
+  }
+
   async deliver(target: SessionId | string, delivery: ImDelivery): Promise<void> {
     const record = this.resolve(target)
     const id = `${record.sessionId}|${delivery.id}`

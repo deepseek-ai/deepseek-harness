@@ -184,6 +184,27 @@ describe('default dispatcher', () => {
     await expect(service.dispatcher!.handle(event)).rejects.toThrow(ImError)
     await expect(service.dispatcher!.handle(event)).rejects.toThrow(/belongs to squatter/)
   })
+
+  it('does not re-deliver an already admitted message into a newer generation after reset', async () => {
+    const { service, bot } = await mount(DISPATCHER)
+    expect(service.sessions.deliveredTo('unhosted', 'm-none')).toBeUndefined()
+
+    await deliver(bot, inbound('m1'))
+    await outcomeOf(service, 'm1')
+    const gen0 = service.sessions.get(DISPATCHER_KEY)!.sessionId
+
+    await service.sessions.reset(DISPATCHER_KEY, 'clear')
+    const gen1 = service.sessions.get(DISPATCHER_KEY)!.sessionId
+    expect(gen1).not.toBe(gen0)
+
+    const stored = service.store.get(ImMessageKey('fake:bot', 'm1'))!
+    const deliverSpy = vi.fn().mockResolvedValue(undefined)
+    const retry = await service.dispatcher!.handle({
+      message: stored, source: SOURCES[0]!, deliver: deliverSpy,
+    } as unknown as ImMessageEvent)
+    expect(retry).toEqual({ kind: 'handled', by: DISPATCHER_OWNER, sessions: [gen0] })
+    expect(deliverSpy).not.toHaveBeenCalled()
+  })
 })
 
 describe('chatHeader', () => {
