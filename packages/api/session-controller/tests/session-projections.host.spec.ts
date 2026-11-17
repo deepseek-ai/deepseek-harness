@@ -462,10 +462,10 @@ describe('session.history projections block', () => {
   it('removes the gateway-owned Session-list unit when the gateway fiber unloads', async () => {
     const { ctx, session } = await harness(true)
     expect('sessionListMetadata' in ctx.sessionProjections.snapshot(session).values).toBe(false)
-    const fiber = ctx.plugin(Object.assign(async (gatewayCtx: Context) => {
-      await createSessionTestRemote(gatewayCtx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
-    }, { inject: ['sessions', 'agents', 'sessionProjections'] }))
+    const fiber = ctx.plugin(Object.assign(() => {}, { inject: ['sessions', 'agents', 'sessionProjections'] }))
     await fiber.await()
+    // The fixture providers must be active before their controller child can inject them.
+    await createSessionTestRemote(fiber.ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await vi.waitFor(() => {
       expect(ctx.sessionProjections.snapshot(session).values.sessionListMetadata)
         .toEqual({ blank: true, lastPromptAt: null })
