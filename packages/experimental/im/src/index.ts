@@ -447,9 +447,20 @@ async function readPlatform<T>(bot: Bot, read: Promise<T>, timeout: number, sign
     return await readWithin(read, timeout, signal)
   } catch (error: unknown) {
     if (error instanceof ImError) throw error
-    const classified = error instanceof PlatformError ? error : bot.classify(error)
-    const code: ImError['code'] = classified.kind === 'permission' ? 'access' : 'unavailable'
-    throw new ImError(code, classified.message, { cause: error })
+    const classified = error instanceof PlatformError ? error : classifyPlatformError(bot, error)
+    const code: ImError['code'] = classified?.kind === 'permission' ? 'access' : 'unavailable'
+    const message = classified?.message ?? (error instanceof Error ? error.message : String(error))
+    throw new ImError(code, message, { cause: error })
+  }
+}
+
+function classifyPlatformError(bot: Bot, error: unknown): PlatformError | undefined {
+  const candidate = bot as { classify?: (error: unknown) => PlatformError }
+  if (typeof candidate.classify !== 'function') return undefined
+  try {
+    return candidate.classify(error)
+  } catch {
+    return undefined
   }
 }
 
