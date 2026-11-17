@@ -154,6 +154,11 @@
       name: '@deepseek-ai/dsh-mcp-manager'
       inject: [credentials]
 
+    # MCP connector accounts on the Plugins page; connectors register their
+    # OAuth server with `ctx.mcpAccounts`.
+    - id: mcp-account
+      name: '@deepseek-ai/dsh-mcp-account'
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'

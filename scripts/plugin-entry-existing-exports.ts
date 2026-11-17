@@ -107,10 +107,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   ],
   '@deepseek-ai/dsh-llm-retry': ['RetryId'],
   '@deepseek-ai/dsh-lsp': ['LspProviderId', 'finalExtension'],
-  '@deepseek-ai/dsh-mcp-client': [
-    'ReconnectSchema', 'SERVER_NAME_PATTERN', 'assertTemplateSyntax', 'connectionStatusOf', 'createMcpToolDefinition',
-    'probeServer', 'resolveReconnectPolicy',
-  ],
+  '@deepseek-ai/dsh-mcp-client': ['createMcpToolDefinition'],
   '@deepseek-ai/dsh-office-kit': ['Config', 'OfficeKitGeneration', 'OfficeKitKey', 'OfficeSourceKey'],
   '@deepseek-ai/dsh-permission-presets': ['AUTO_PRESET', 'CUSTOM_PRESET'],
   '@deepseek-ai/dsh-persona': ['PERSONA_PREFIX_SECTION', 'PERSONA_SUFFIX_SECTION'],
