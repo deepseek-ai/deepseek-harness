@@ -579,8 +579,9 @@ export class ImSender {
 
   /**
    * Resolve the platform-facing `<quote id>` for a quoted message key: uses the first recorded alias (e.g. QQ
-   * `msg_idx`) when present, falling back to the key's message id. Rejects quotes belonging to another bot or to
-   * another stored chat so cross-chat/cross-bot quote spoofing fails with `ImError('access')`.
+   * `msg_idx`) when present, falling back to the key's message id. Rejects quotes belonging to another bot or not
+   * stored in `chat` so cross-chat/cross-bot quote spoofing (including unstored or expired messages from another
+   * chat) fails with `ImError('access')`.
    */
   private quoteId(chat: ImChatKey, quote: ImMessageKey | undefined): string | undefined {
     if (quote === undefined) return undefined
@@ -588,10 +589,10 @@ export class ImSender {
       throw new ImError('access', `Quoted message ${quote} belongs to another bot and cannot be quoted in ${chat}.`)
     }
     const stored = this.deps.store.get(quote)
-    if (stored !== undefined && stored.chat.key !== chat) {
-      throw new ImError('access', `Quoted message ${quote} belongs to ${stored.chat.key} and cannot be quoted in ${chat}.`)
+    if (stored === undefined || stored.chat.key !== chat) {
+      throw new ImError('access', `Quoted message ${quote} is not stored in chat ${chat} and cannot be quoted.`)
     }
-    return stored?.aliases?.[0] ?? splitKey(quote).id
+    return stored.aliases?.[0] ?? splitKey(quote).id
   }
 
   /** The same stream with the reply quote wrapped around every state the caller publishes. */

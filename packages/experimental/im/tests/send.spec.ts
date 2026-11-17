@@ -257,7 +257,8 @@ describe('ImSender.send', () => {
   })
 
   it('applies the quote envelope and the thread wish', async () => {
-    const { bot, sender } = await boot()
+    const { bot, sender, store } = await boot()
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9')), 'none')
     await sender.send(CHAT, h.text('hello'), { quote: ImMessageKey('fake:bot', 'm9') })
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
     expect(bot.operations[0]?.target?.thread).toBeUndefined()
@@ -638,7 +639,8 @@ describe('ImSender receipts', () => {
 
 describe('ImSender.stream', () => {
   it('applies the quote to every published state', async () => {
-    const { bot, sender, sessions } = await boot()
+    const { bot, sender, sessions, store } = await boot()
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9')), 'none')
     const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
     const stream = await sender.stream(CHAT, {
       quote: ImMessageKey('fake:bot', 'm9'), operationId: 'op-quoted', session: session.sessionId,
@@ -665,8 +667,9 @@ describe('ImSender.stream', () => {
   })
 
   it('closes a quoted stream without a final state and aborts another one', async () => {
-    const { sender } = await boot()
+    const { sender, store } = await boot()
     const quote = ImMessageKey('fake:bot', 'm9')
+    await store.put(inboundDraft(quote), 'none')
     const closed = await sender.stream(CHAT, { quote })
     closed.update(h.text('last'))
     expect((await closed.close()).handle.parts).toHaveLength(1)
@@ -849,12 +852,9 @@ describe('ImSender referrers', () => {
     expect(bot.operations).toHaveLength(1)
   })
 
-  it('leaves the target without a referrer for an unknown quote or a message without one', async () => {
+  it('leaves the target without a referrer when unquoted or quoting a message without one', async () => {
     const { bot, sender, store } = await boot()
     await sender.send(CHAT, h.text('unquoted'))
-    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
-
-    await sender.send(CHAT, h.text('unknown'), { quote: ImMessageKey('fake:bot', 'nope') })
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
 
     // A stored message that arrived without a referrer contributes none.
@@ -863,7 +863,7 @@ describe('ImSender referrers', () => {
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
   })
 
-  it('rejects quoting a message from another bot or another stored chat on send and stream', async () => {
+  it('rejects quoting a message from another bot, another stored chat, or unstored/expired keys on send and stream', async () => {
     const { bot, sender, store } = await boot()
     const otherBotMsg = ImMessageKey('stub:bot', 'm-other-bot')
     await expect(sender.send(CHAT, h.text('cross-bot'), { quote: otherBotMsg })).rejects.toMatchObject({ code: 'access' })
@@ -873,6 +873,11 @@ describe('ImSender referrers', () => {
     const otherChatMsg = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-other-chat'), REFERRER, otherChat), 'none')
     await expect(sender.send(CHAT, h.text('cross-chat'), { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
     await expect(sender.stream(CHAT, { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
+
+    // Unstored or expired message keys (e.g. from a store: 'none' readonly chat) are also rejected.
+    const unstored = ImMessageKey('fake:bot', 'nope')
+    await expect(sender.send(CHAT, h.text('unstored'), { quote: unstored })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: unstored })).rejects.toMatchObject({ code: 'access' })
     expect(bot.operations).toHaveLength(0)
   })
 
