@@ -146,6 +146,7 @@ A load that finds the files in place lists the entry in the session's first cata
 - Published directories stay in `$DSH_HOME/cache/<name>` after a plugin pins another commit and after the plugin is removed; nothing prunes them. A process that exits while it writes a download leaves its `.skills-<digest>-<uuid>` staging directory there too.
 - Only the published directory's existence is checked. When files inside it are deleted or changed, the entry skill stays listed over them; deleting the directory makes the next check or load download the pin again.
 - File modes are not kept, so an upstream script is not executable; the current upstream guides run their scripts through `python3`.
+- In the experimental Web preview, which runs Host plugins in a browser worker, the Service loads but node-tar does not, so every download fails there.
 
 <a id="dev-note"></a>
 ### Dev Note
