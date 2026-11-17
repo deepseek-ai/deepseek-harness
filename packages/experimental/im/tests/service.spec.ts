@@ -310,6 +310,34 @@ describe('ImService facade', () => {
     expect(bot.sentPayloads().length).toBeGreaterThanOrEqual(2)
   })
 
+  it('keeps the send listener active during teardown so in-flight sends still store their own message', async () => {
+    const { base, service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    let releaseSend!: () => void
+    const sendGate = new Promise<void>((resolve) => { releaseSend = resolve })
+    let enteredSend!: () => void
+    const sendStarted = new Promise<void>((resolve) => { enteredSend = resolve })
+    const origSend = bot.sendPayload.bind(bot)
+    bot.sendPayload = async (payload, target, sendCtx) => {
+      enteredSend()
+      await sendGate
+      return origSend(payload, target, sendCtx)
+    }
+
+    const sending = service.send(CHAT, h('message', h.text('during-teardown')), { operationId: 'op-teardown' })
+    await sendStarted
+    const disposing = base.ctx.fiber.dispose()
+    await Promise.resolve()
+    releaseSend()
+
+    const [result] = await Promise.all([sending, disposing])
+    expect(result.status).toBe('confirmed')
+    expect(result.message?.text).toBe('during-teardown')
+    expect(result.message?.seq).toBe(2)
+  })
+
   it('formats messages through its formatter', async () => {
     const { service } = await mount()
     // No messages is an empty text block, the shape every user-message content takes.

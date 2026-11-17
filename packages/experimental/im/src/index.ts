@@ -151,6 +151,7 @@ export class ImService extends Service implements ImApi {
     let closing = false
     let releaseTimer: ReturnType<typeof setTimeout> | undefined
     let warnTimer: ReturnType<typeof setTimeout> | undefined
+    let offSend: (() => void) | undefined
     const checkActive = (): void => {
       if (closing || ctx.fiber.uid === null) {
         throw new Error('The IM service was disposed before startup finished.')
@@ -163,7 +164,9 @@ export class ImService extends Service implements ImApi {
       checkActive()
       await this.sender.start()
       checkActive()
-      ctx.on('send', (bot, result) => {
+      // Register on `ctx[Context.root]` and remove manually after `sender.dispose()` drains in-flight sends so a
+      // publication that completes during teardown still stores its own message before `store.dispose()` closes.
+      offSend = ctx[Context.root].on('send', (bot, result) => {
         void this.intake.outbound(bot, result).catch((error: unknown) => {
           ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
         })
@@ -202,6 +205,11 @@ export class ImService extends Service implements ImApi {
           ['the hosted agents', () => this.agentHost.disposeAll()],
           ['the turn outputs', () => this.outputs.dispose()],
           ['the sender', () => this.sender.dispose()],
+          ['the outbound send listener', () => {
+            offSend?.()
+            return Promise.resolve()
+          }],
+          ['the outbound announcements', () => this.intake.dispose()],
           ['the message store', () => this.store.dispose()],
         ]
         for (const [what, release] of releases) {
