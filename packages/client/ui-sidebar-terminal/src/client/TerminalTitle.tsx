@@ -1,8 +1,7 @@
 /** Live terminal names in docked and floating tab chrome. */
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { TerminalIcon } from './TerminalIcon.tsx'
+import { IconApiOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TerminalInjected } from './face.ts'
 import type {} from './locales.ts'
 import css from './TerminalTitle.module.css'
@@ -40,7 +39,7 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
     input.current?.select()
   }, [editing])
   return <>
-    <TerminalIcon />
+    <IconApiOutlineRegular size={16} />
     {/* The badge precedes the name because the tab's close button covers the end of the title. One badge at a time:
         Agent control first, then the sandbox of a taken-over terminal. */}
     {agentControl
