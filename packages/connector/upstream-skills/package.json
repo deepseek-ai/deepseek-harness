@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-upstream-skills",
   "description": "Upstream skills of CLI app plugins: download a pinned directory of the vendor's GitHub repository into the DSH cache and list the plugin's entry skill over it",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
