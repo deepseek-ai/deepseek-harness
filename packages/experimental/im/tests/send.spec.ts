@@ -616,7 +616,7 @@ describe('ImSender.stream', () => {
       bot: 'fake:bot',
       target: { channel: 'c1', platform: 'fake' } as never,
       mode: 'card',
-      parts: [{ id: 'm_stream_1' }],
+      parts: [{ id: 'm_stream_1', kind: 'card', time: 1 }],
       createdAt: 1,
       edits: 0,
       content: h('message', h.text('first')),
@@ -641,7 +641,7 @@ describe('ImSender.stream', () => {
     await expect(stream.done).rejects.toThrow('final edit refused')
     await vi.waitFor(() => { expect(receiptsOf(pool).get('op-partial-stream')?.status).toBe('partial') })
     expect(receiptsOf(pool).get('op-partial-stream')?.message).toBe('fake:bot|m_stream_1')
-    expect(sender.sessionOf('fake:bot|m_stream_1')).toBe(sessionId)
+    expect(sender.sessionOf(ImMessageKey('fake:bot', 'm_stream_1'))).toBe(sessionId)
     streamSpy.mockRestore()
   })
 
