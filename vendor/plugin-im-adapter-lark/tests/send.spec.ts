@@ -362,6 +362,15 @@ describe('sendPayload: reply and thread', () => {
     expect(calls.every(call => call.method === 'GET')).toBe(true)
   })
 
+  it('marks an HTTP 200 send answer missing data as published: unknown', async () => {
+    const { bot } = await mount({
+      '/open-apis/im/v1/messages': () => Response.json({ code: 0 }),
+    })
+    await expect(bot.sendPayload(post, group, send())).rejects.toMatchObject({
+      published: 'unknown',
+    })
+  })
+
   it('verifies a quoted root message on the platform when its stored referrer has no thread info yet', async () => {
     const { bot, calls } = await mount({
       '/open-apis/im/v1/messages/om_root': () =>
