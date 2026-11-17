@@ -4,7 +4,7 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ActionCardId } from '@deepseek-ai/dsh-action-cards'
 import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { readFile, rm } from 'node:fs/promises'
+import { readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
@@ -18,6 +18,22 @@ function settled(phase: string, data: object) {
 }
 
 describe('interface creation', () => {
+  it('resolves the Creator guide and location references from the shipped dsh-doc skill', async () => {
+    const skill = new URL('../../../preset/agent-preset/skills/dsh-doc/', import.meta.url)
+    const content = await readFile(new URL('SKILL.md', skill), 'utf8')
+    expect(content).toContain('name: dsh-doc')
+    expect(content).toContain('references/plugin-development.md')
+    const guides = new URL('../references/', import.meta.url)
+    const documents = [await readFile(new URL('references/plugin-development.md', skill), 'utf8')]
+    for (const file of await readdir(guides)) documents.push(await readFile(new URL(file, guides), 'utf8'))
+    for (const document of documents) {
+      expect(document).not.toContain('cordis-plugin-development')
+      for (const match of document.matchAll(/`(references\/[^`]+)`/gu)) {
+        expect(await readFile(new URL(match[1]!, skill), 'utf8')).toMatch(/^# /u)
+      }
+    }
+  })
+
   it('loads page planning with a live duplicate-check catalog and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
     f.bundles.push(
@@ -59,6 +75,9 @@ describe('interface creation', () => {
     const spec = await f.complete()
     expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', agentPreset: 'cordis' })
     expect(spec.parent).toBe(f.agent)
+    const prompt = spec.prompt.find(block => block.type === 'text')!.text
+    expect(prompt).toContain('Load the dsh-doc skill and read references/plugin-development.md from its reported base directory.')
+    expect(prompt).not.toContain('cordis-plugin-development')
     const guide = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/session-tab.md'))
     expect(spec.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
     expect(await readFile(guide, 'utf8')).toContain('conversation.view')
