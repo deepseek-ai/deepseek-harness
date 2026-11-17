@@ -142,7 +142,7 @@ describe('WorkspaceBrowser.module.css list', () => {
       expect(rowDeclarations(selector)?.get('background-clip')).toBe('padding-box')
       expect(rowDeclarations(selector)?.get('border-inline')).toBe('var(--dsh-sidebar-paint-inset) solid transparent')
     }
-    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('10px')
+    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('12px')
     expect(rowDeclarations('.iconButton')?.get('width')).toBe('24px')
     expect(rowDeclarations('.time')?.get('margin-inline-end')).toBe('-1px')
     expect(declarations('.sectionLabel')?.get('left')).toBe('-1px')
