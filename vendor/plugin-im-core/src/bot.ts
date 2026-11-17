@@ -677,7 +677,6 @@ export abstract class Bot<C = unknown> {
         }
         const part = await this.withRetry(
           () => this.adapterHooks.sendPayload(frame.payloads[index], target, ctx),
-          target,
           options.signal,
           () => this.adapterHooks.idempotentSend?.(target, ctx) ?? false,
         )
@@ -702,7 +701,7 @@ export abstract class Bot<C = unknown> {
       const part = handle.parts[index]!
       // Count before the request: a failed edit may still have consumed platform budget.
       handle.edits += 1
-      await this.withRetry(() => editPayload.call(this.adapterHooks, part, frame.payloads[index], handle), handle.target, options.signal)
+      await this.withRetry(() => editPayload.call(this.adapterHooks, part, frame.payloads[index], handle), options.signal)
     }
     handle.content = frame.content
     const result: SendResult = { handle, report: frame.result.report }
@@ -746,7 +745,7 @@ export abstract class Bot<C = unknown> {
     const deletePart = this.adapterHooks.deletePart
     if (!deletePart) throw new PlatformError('invalid', `${this.id}: the adapter cannot delete messages`)
     for (const part of handle.parts) {
-      await this.withRetry(() => deletePart.call(this.adapterHooks, part, handle), handle.target)
+      await this.withRetry(() => deletePart.call(this.adapterHooks, part, handle))
     }
   }
 
@@ -813,7 +812,6 @@ export abstract class Bot<C = unknown> {
   /** Run a platform call, retrying `retryable` / `rate-limit` failures when safe (`published: 'no'` or idempotent). */
   private async withRetry<R>(
     operation: () => Promise<R>,
-    target: Target,
     signal?: AbortSignal,
     idempotent: boolean | (() => boolean) = true,
   ): Promise<R> {
