@@ -12,11 +12,49 @@ namespace fetchFile {
   }
 }
 
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError')
+}
+
+async function sniffWithSignal(
+  stream: Parameters<typeof fileTypeFromStream>[0],
+  raw: ReturnType<typeof createReadStream>,
+  signal?: AbortSignal | null,
+) {
+  if (signal?.aborted) {
+    raw.destroy()
+    throw abortError(signal)
+  }
+  if (!signal) return await fileTypeFromStream(stream)
+  return await new Promise<Awaited<ReturnType<typeof fileTypeFromStream>>>((resolve, reject) => {
+    const onAbort = () => {
+      raw.destroy()
+      reject(abortError(signal))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    fileTypeFromStream(stream).then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(result)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
 async function fetchFile(url: string | URL, init: RequestInit = {}, options: fetchFile.Options = {}) {
   url = new URL(url)
+  if (init.signal?.aborted) throw abortError(init.signal)
   try {
-    const stream1 = Readable.toWeb(createReadStream(fileURLToPath(url)))
-    const fileType = await fileTypeFromStream(stream1)
+    const raw1 = createReadStream(fileURLToPath(url))
+    const stream1 = Readable.toWeb(raw1) as Parameters<typeof fileTypeFromStream>[0]
+    const fileType = await sniffWithSignal(stream1, raw1, init.signal)
+    if (init.signal?.aborted) throw abortError(init.signal)
     const stream2 = Readable.toWeb(createReadStream(fileURLToPath(url))) as ReadableStream
     const filename = basename(url.pathname)
     return new Response(stream2, {
@@ -32,6 +70,7 @@ async function fetchFile(url: string | URL, init: RequestInit = {}, options: fet
       },
     })
   } catch (error: any) {
+    if (init.signal?.aborted) throw error
     if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR' || error?.code === 'EISDIR') {
       return new Response(null, { status: 404, statusText: 'Not Found' })
     } else if (error?.code === 'EACCES' || error?.code === 'EPERM') {
