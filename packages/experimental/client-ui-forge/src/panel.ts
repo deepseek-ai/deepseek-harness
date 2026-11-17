@@ -330,13 +330,11 @@ export class SessionPanel {
 
   /** Decide whether the Session's sandbox lets the worktree service write the checkout and its shared Git directory. */
   private async blockerOf(inspection: Inspection): Promise<ForgeWorktreeBlocker | null> {
-    await this.ctx.sandboxPolicy.prepare({ session: this.session }, this.lifetime.signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: this.session })
     if (policy.mode === 'danger-full-access') return null
     if (policy.mode === 'read-only') return 'read-only'
     const root = this.ctx.fs.processPath(await this.ctx.fs.resolve(policy.workspaceRoot, { signal: this.lifetime.signal }))
-    const writable = [root, ...policy.additionalWritableRoots ?? []]
-    return within(root, inspection.checkout.root) && writable.some(directory => within(directory, inspection.commonDir)) ? null : 'outside-writable-root'
+    return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
   }
 
   /** Measure the `branch` scope; a failed measurement only hides the local changes row. */

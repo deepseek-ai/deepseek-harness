@@ -48,7 +48,7 @@ kind: "package-reference"
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用所用的绝对回退根目录；未挂载工作目录服务时，header 没有目录的会话也使用它；相对值在加载时拒绝。普通 agent 调用使用会话的工作目录；根为相对路径或含 NUL 字节时调用以 `SANDBOX_INVALID_ROOT` 失败 |
 | `additionalWritableRoots` | `[]` | 在 `workspace-write` 下额外允许写入的物理绝对目录；Windows 文件工具执行这些授权，Windows 子进程忽略它们，`read-only` 不授予访问权限 |
 
-会话的工作区根是它所在的检出目录，从[工作目录服务](../../session/working-directory/README.zh.md)读取：Host 每次移动 Session 的目录（例如进入或离开 worktree）都会一并移动边界。对于关联的 Git worktree，`prepare({ session })` 通过执行环境的文件系统读取检出目录的 `.git` 指针，把仓库公共目录加入解析出的 `additionalWritableRoots`，但只认 Git 写出的布局：指针指向 `<common>/worktrees/<name>`，该目录的 `commondir` 指向 `<common>`、`gitdir` 指回检出目录的 `.git`。检出目录在 `workspace-write` 下可写，它自己的指针不能作为证据；反向指针位于将被授权的目录内。其他指针、缺失的 `.git`、`.git` 本身是目录，以及包含根的公共目录都不授权任何内容。会话创建、每次目录变更和每次工具执行都会启动该推导，工具执行会等待它完成；根的结果在读取布局后即固定：之后写入的指针在 Host 操作把某个 Session 的工作区移到该根之前不改变任何内容，已推导的目录消失时重新推导，读取失败每个根只记录一次。推导出的目录不进入模型可见的策略文本。除这些目录之外，策略不授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机拒绝不存在的路径、文件和符号链接根目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
+会话的工作区根是它所在的目录，读取自[工作目录服务](../../session/working-directory/README.zh.md)：Host 每次移动 Session 的目录（例如进入或离开 worktree），边界都随之移动。对于关联的 Git worktree，仓库的 Git 目录位于该根之外，因此在 `workspace-write` 下写入它的 Git 命令会被拒绝，直到有授权覆盖它：部署可以通过 `additionalWritableRoots` 向所有会话授权，Host 插件可以通过 `registerWritableRoot` 向单个 live Session 授权。调用方必须显式选择该目录；策略不会读取 Git 文件或授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机在每次调用时拒绝不存在的路径、非目录和符号链接目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 
 ### 切换会话模式
 
-会话的模式可以在运行时通过 UI 策略控件或显式切换来更改；切换记录在会话日志中，并在该会话的下一次受限调用时生效。切换通过回放跨重启保留，每个会话保持自己的模式——两个会话绝不会看到彼此状态。切换后的会话继续以工作区根作为写入边界。
+会话的模式可以在运行时通过 UI 策略控件或显式切换来更改；切换记录在会话日志中，并在该会话的下一次受限调用时生效。切换通过回放跨重启保留，每个会话保持自己的模式——两个会话绝不会看到彼此状态。切换后的会话继续以其工作区根作为写入边界。
 
 ### 失败与恢复
 
@@ -78,11 +78,11 @@ kind: "package-reference"
 
 ### 解析优先级
 
-`resolve({ session, mode })` 返回一份完整的逐调用策略：已批准的显式模式优先于会话最后一条 `sandbox/mode` 事件，后者又优先于部署默认值。工作目录服务给出的会话目录提供边界；没有该服务时依次使用 header 目录和配置的根；该根推导出的 Git 管理目录与配置的额外目录合并。`prepare({ directory })` 为没有会话在其中工作的检出目录推导同样的目录，不改变任何已解析的策略：在该检出目录中运行的 Host 操作（例如 worktree 服务从源仓库移除或恢复会话的 worktree）把结果加入它自己构造的策略。执行环境中的绝对路径写法保持不变。执行限制的提供方在自己的文件系统上规范化根目录，因此远端 `symlink/..` 路径绝不会在 Harness 主机上解析。
+`resolve({ session, mode })` 返回一份完整的逐调用策略：已批准的显式模式优先于会话最后一条 `sandbox/mode` 事件，后者又优先于部署默认值。工作目录服务给出的会话目录提供工作区根目录；没有该服务时依次使用 header 目录和配置的根。执行环境中的绝对路径写法保持不变。执行限制的提供方在自己的文件系统上规范化根目录，因此远端 `symlink/..` 路径绝不会在 Harness 主机上解析。
 
 ### 逐会话存储
 
-运行时切换是在对应会话日志中追加的一条仅写入日志的 `sandbox/mode` 事件——切换本身就是事件，任何机制都不会在带外修改模式状态。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖通过回放跨重启保留，两个会话也绝不会看到彼此状态。工作区标识无需自己的事件：工作目录服务的 `workingDirectory` 投影给出该会话每次调用使用的根，推导出的 Git 管理目录是本进程的内存事实，重启后重新读取。事件仍只进入日志；在每次请求前，归属方会把当前事实贡献给完整运行时上下文快照，agent loop（智能体循环）将该快照记录为一条带来源的 `user/message`。
+运行时切换是在对应会话日志中追加的一条仅写入日志的 `sandbox/mode` 事件——切换本身就是事件，任何机制都不会在带外修改模式状态。`effective = explicit grant ?? fold(events) ?? deployment default`，因此覆盖通过回放跨重启保留，两个会话也绝不会看到彼此状态。工作区标识无需自己的事件：工作目录服务的 `workingDirectory` 投影给出该会话每次调用使用的根。事件仍只进入日志；在每次请求前，归属方会把当前事实贡献给完整运行时上下文快照，agent loop（智能体循环）将该快照记录为一条带来源的 `user/message`。
 
 ### 模型可见文本
 
@@ -94,7 +94,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPolicyService`、`Config` schema、策略解析与上下文贡献 |
 | [`src/session-mode.ts`](src/session-mode.ts) | `sandbox/mode` 事件、其 fold 与写入路径 |
-| [`src/linked-checkout.ts`](src/linked-checkout.ts) | 通过文件系统读取链接检出目录的 Git 管理目录布局；不含服务状态 |
 
 </details>
 

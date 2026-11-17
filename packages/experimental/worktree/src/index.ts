@@ -301,7 +301,7 @@ export class WorktreeService extends Service {
   ): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const policy = await this.sourcePolicy(session, request.repositoryRoot, control)
+    const policy = this.sourcePolicy(session, request.repositoryRoot)
     const git = { read: this.gitRunner(policy, control), scan: this.gitScanner(policy, control) }
     const operation = removeCheckout(this.ctx, this.config.directory, request, git, control, admit)
     this.pending.add(operation)
@@ -343,10 +343,7 @@ export class WorktreeService extends Service {
     const rootTarget = await this.ctx.fs.resolve(rootOutput.stdout.replace(/\r?\n$/, ''), { cwd, signal })
     const repositoryRoot = this.ctx.fs.processPath(rootTarget)
     if (fetch) {
-      // The fetch writes the remote-tracking branch into the Git directory, which a linked source checkout
-      // shares outside its root; the policy grants that directory before the write.
-      await this.ctx.sandboxPolicy.prepare({ session: agent.session }, signal)
-      await fetchRemoteBranch(this.gitRunner(this.ctx.sandboxPolicy.resolve({ session: agent.session }), signal), repositoryRoot, revision)
+      await fetchRemoteBranch(run, repositoryRoot, revision)
       onPhase?.('prepare')
     }
     const base = await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`])
@@ -359,15 +356,11 @@ export class WorktreeService extends Service {
     const path = this.ctx.fs.processPath(destination)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
     try {
-      // A linked source checkout writes its shared Git directory outside the root; the policy grants it before the first write.
-      await this.ctx.sandboxPolicy.prepare({ session: agent.session }, signal)
-      const writing = this.ctx.sandboxPolicy.resolve({ session: agent.session })
-      const write = this.gitRunner(writing, signal)
-      await this.prepareDirectory(writing, repositoryRoot, poolPath, path, signal)
-      await write(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
-      const overrides = await filterOverrides(write, path)
+      await this.prepareDirectory(policy, repositoryRoot, poolPath, path, signal)
+      await run(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
+      const overrides = await filterOverrides(run, path)
       onPhase?.('checkout')
-      await write(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
+      await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
       const canonicalPath = await this.ctx.workingDirectory.set(agent, path, signal)
       const created: CreatedWorktree = { path: canonicalPath, branch, baseCommit, repositoryRoot }
       appendPluginRecord(agent.session, CREATED_RECORD, created)
@@ -408,9 +401,9 @@ export class WorktreeService extends Service {
     onPhase: ((phase: Exclude<CreateWorktreePhase, 'fetch'>) => void) | undefined,
   ): Promise<RestoredWorktree> {
     onPhase?.('prepare')
-    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
-    const policy = await this.sourcePolicy(agent.session, repositoryRoot, signal)
+    const policy = this.sourcePolicy(agent.session, repositoryRoot)
     const run = this.gitRunner(policy, signal)
+    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
     if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree branch must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
     if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(baseCommit)) throw new WorktreeError('worktree baseCommit must be a full commit object name', 'WORKTREE_INVALID_ARGUMENT')
     const identity = await checkoutIdentity(this.ctx, this.config.directory, { path, branch, baseCommit, repositoryRoot }, run, signal)
@@ -447,13 +440,10 @@ export class WorktreeService extends Service {
   /**
    * The policy removal and restoration run under: the Session's mode and grants, bounded by the source
    * checkout of the recorded worktree instead of the Session's own root, which may be the worktree
-   * directory, removed or being removed. A linked source checkout's shared Git directory is granted too.
+   * directory, removed or being removed.
    */
-  private async sourcePolicy(session: Session, repositoryRoot: string, signal: AbortSignal): Promise<SandboxExecutionPolicy> {
-    const shared = await this.ctx.sandboxPolicy.prepare({ directory: repositoryRoot }, signal)
-    const policy = this.ctx.sandboxPolicy.resolve({ session })
-    const additional = [...new Set([...policy.additionalWritableRoots ?? [], ...shared])]
-    return { ...policy, workspaceRoot: repositoryRoot, ...additional.length === 0 ? {} : { additionalWritableRoots: additional } }
+  private sourcePolicy(session: Session, repositoryRoot: string): SandboxExecutionPolicy {
+    return { ...this.ctx.sandboxPolicy.resolve({ session }), workspaceRoot: repositoryRoot }
   }
 
   /** Confine Git commands to the caller's sandbox policy, collecting bounded stdout. */

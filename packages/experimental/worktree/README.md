@@ -54,7 +54,7 @@ The default checkout directory is `<current checkout root>/.agents/worktrees/<na
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy. Creation runs under the Session's resolved policy; the sandbox policy grants a linked source checkout's shared Git administration directory before the first write, and creation widens nothing else. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
+Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy. Creation does not widen write access to the destination or shared Git administration directory. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
 
 | Source | Responsibility |
 |---|---|

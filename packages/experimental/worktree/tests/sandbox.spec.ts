@@ -1,10 +1,10 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
+import { runCommand } from '../src/process.ts'
 import { filterCommand, git, harness, repository, testAgent } from './harness.ts'
 
 let ctx: Context | undefined
@@ -93,14 +93,27 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(root)
   })
 
-  it('creates from a linked checkout once the policy grants its shared Git administration directory', async () => {
+  it('does not widen a linked-checkout grant to the shared Git administration directory', async () => {
+    root = await repository(process.cwd())
+    const linked = join(root, 'linked')
+    await git(root, 'worktree', 'add', '-b', 'linked', linked)
+    ctx = await harness(linked, {}, 'workspace-write')
+    const agent = testAgent(ctx, linked)
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+    await expect(ctx.worktrees.create(agent, { name: 'denied-admin' })).rejects.toThrow(/permission denied|operation not permitted|read-only file system/i)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(linked)
+    expect(await git(root, 'branch', '--list', 'denied-admin')).toBe('')
+    expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === linked)).toBe(true)
+  })
+
+  it('creates and restores from a linked checkout once a registered grant covers its shared Git administration directory', async () => {
     root = await repository(process.cwd())
     const administration = join(root, '.git')
     const linked = join(root, 'linked')
     await git(root, 'worktree', 'add', '-b', 'linked', linked)
     ctx = await harness(linked, {}, 'workspace-write')
     const agent = testAgent(ctx, linked)
-    const confine = vi.spyOn(ctx.sandbox, 'confine')
+    ctx.sandboxPolicy.registerWritableRoot(agent.session, administration)
     const created = await ctx.worktrees.create(agent, { name: 'shared-admin' })
     const checkout = join(linked, '.agents', 'worktrees', 'shared-admin')
 
@@ -108,59 +121,37 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(await git(checkout, 'branch', '--show-current')).toBe('shared-admin')
     expect(await git(root, 'worktree', 'list', '--porcelain')).toContain(`worktree ${checkout}`)
     expect(ctx.workingDirectory.get(agent.session)).toBe(checkout)
-    expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === linked)).toBe(true)
-    // The registration write lands in the shared Git directory outside the linked root; only the derived grant admits it.
-    expect(confine.mock.calls.some(call => call[1].additionalWritableRoots?.includes(administration))).toBe(true)
+
+    // The Session's root is now the removed checkout; restoration is bounded by the linked source checkout and keeps the grant.
+    await rm(checkout, { recursive: true, force: true })
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: checkout, branchRecreated: false })
+    expect(await git(checkout, 'branch', '--show-current')).toBe('shared-admin')
+    expect(confine.mock.calls.length).toBeGreaterThan(0)
+    const bounded = confine.mock.calls
+      .every(call => call[1].workspaceRoot === linked && call[1].additionalWritableRoots?.includes(administration))
+    expect(bounded).toBe(true)
   })
 
-  it('fetches the remote base branch from a linked checkout under the granted shared Git administration directory', async () => {
+  it('denies a commit inside the Session\'s worktree under workspace-write until a grant covers the repository\'s Git directory', async () => {
     root = await repository(process.cwd())
-    const clone = join(root, 'clone')
-    await git(root, 'clone', pathToFileURL(root).href, clone)
-    await git(clone, 'config', 'core.autocrlf', 'false')
-    const linked = join(clone, 'linked')
-    await git(clone, 'worktree', 'add', '-b', 'linked', linked)
-    await writeFile(join(root, 'tracked.txt'), 'remote\n')
-    await git(root, 'commit', '-am', 'remote')
-    const fetched = await git(root, 'rev-parse', 'HEAD')
-    ctx = await harness(linked, {}, 'workspace-write')
-    const agent = testAgent(ctx, linked)
-    const confine = vi.spyOn(ctx.sandbox, 'confine')
+    ctx = await harness(root, {}, 'workspace-write')
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'committing' })
+    const limits = { timeoutMs: 30_000, graceMs: 1_000, maxOutputBytes: 65_536 }
+    const commit = () => runCommand(
+      ctx!, limits, ctx!.sandboxPolicy.resolve({ session: agent.session }), created.path,
+      ['git', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'from the worktree'], new AbortController().signal,
+    )
 
-    const created = await ctx.worktrees.create(agent, { name: 'fetched', from: 'refs/remotes/origin/main', fetch: true })
+    // The worktree's index and the repository's objects live in the source checkout's Git directory, outside the Session's root.
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(created.path)
+    await expect(commit()).rejects.toThrow(/permission denied|operation not permitted|read-only file system/i)
+    expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(created.baseCommit)
 
-    // The fetch writes the remote-tracking branch into the shared Git directory outside the linked root.
-    expect(created.baseCommit).toBe(fetched)
-    expect(await git(clone, 'rev-parse', 'refs/remotes/origin/main')).toBe(fetched)
-    const fetches = confine.mock.calls.filter(call => call[0].includes('fetch'))
-    expect(fetches).toHaveLength(1)
-    expect(fetches[0]![1]).toMatchObject({ mode: 'workspace-write', workspaceRoot: linked, additionalWritableRoots: [join(clone, '.git')] })
-  })
-
-  it('restores a missing worktree of a linked source checkout in a process that never worked in it', async () => {
-    root = await repository(process.cwd())
-    const linked = join(root, 'linked')
-    await git(root, 'worktree', 'add', '-b', 'linked', linked)
-    const first = await harness(linked, {}, 'workspace-write')
-    let created
-    try {
-      created = await first.worktrees.create(testAgent(first, linked), { name: 'cold' })
-    } finally {
-      await first.fiber.dispose()
-    }
-    await rm(created.path, { recursive: true, force: true })
-    // A new process: nothing is derived yet, and the Session's own root no longer exists.
-    ctx = await harness(linked, {}, 'workspace-write')
-    const agent = testAgent(ctx, linked, 'cold-resumed')
-    agent.session.append('workspace-root/change', { cwd: created.path })
-    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
-    const confine = vi.spyOn(ctx.sandbox, 'confine')
-
-    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: created.path, branchRecreated: false })
-
-    // The source checkout's shared Git directory lies outside it; the worktree service adds the derived grant.
-    expect(await git(created.path, 'branch', '--show-current')).toBe('cold')
-    expect(confine.mock.calls.every(call => call[1].workspaceRoot === linked && call[1].additionalWritableRoots?.includes(join(root!, '.git')))).toBe(true)
+    ctx.sandboxPolicy.registerWritableRoot(agent.session, join(root, '.git'))
+    await commit()
+    expect(await git(created.path, 'log', '-1', '--format=%s')).toBe('from the worktree')
   })
 
   it('restores a removed worktree under the source checkout boundary while the Session root is the removed directory', async () => {

@@ -33,12 +33,6 @@
       "path": "../../session/session-projection"
     },
     {
-      "path": "../../fs/fs"
-    },
-    {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../session/working-directory"
     }
   ]

@@ -131,7 +131,6 @@ describe('archive-triggered worktree cleanup', () => {
     const head = await git(f.worktree.path, 'rev-parse', 'HEAD')
     const statuses: WorktreeCleanup['status'][] = []
     f.ctx.on('worktree/cleanup', ({ cleanup }) => { statuses.push(cleanup.status) })
-    const prepare = vi.spyOn(f.ctx.sandboxPolicy, 'prepare')
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toMatchObject({ status: 'scheduled' })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
@@ -139,9 +138,8 @@ describe('archive-triggered worktree cleanup', () => {
     await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
-    // The creator's root is the checkout being removed; its commands are bounded by the source checkout instead.
+    // The creator's root is the checkout being removed; `sandbox.spec.ts` covers the source-checkout boundary of its commands.
     expect(f.ctx.workingDirectory.get(f.session)).toBe(f.worktree.path)
-    expect(prepare).toHaveBeenCalledWith({ directory: f.root }, expect.any(AbortSignal))
   })
 
   it('removes a clean checkout whose file listing exceeds maxOutputBytes', async () => {
