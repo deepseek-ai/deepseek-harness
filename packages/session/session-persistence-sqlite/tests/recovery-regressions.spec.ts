@@ -25,7 +25,11 @@ it('retries initialization after a database lock without reporting corruption or
   const blocker = new DatabaseSync(path)
   try {
     blocker.exec('BEGIN IMMEDIATE')
-    const failure = await logs.start().then(() => undefined, (error: unknown) => error)
+    // Expire the busy budget without racing the test's own deadline.
+    const clock = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(5000)
+    let failure: unknown
+    try { failure = await logs.start().then(() => undefined, (error: unknown) => error) }
+    finally { clock.mockRestore() }
     expect(failure).toMatchObject({ errcode: 5 })
     expect(failure).not.toBeInstanceOf(SessionPersistenceCorruptionError)
     blocker.exec('ROLLBACK')

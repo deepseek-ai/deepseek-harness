@@ -30,7 +30,7 @@ import { sessionDir } from './paths.ts'
 export const SCHEMA_VERSION = 1
 const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
-const SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
+const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 /**
  * Internal scheduling constant, not deployment configuration: decoded events
  * between two event-loop yields while reading a stored history slice.
@@ -191,7 +191,18 @@ export class SqliteStore {
       const opened = new DatabaseSync(this.path, { timeout: BUSY_TIMEOUT_MS })
       db = opened
       // Readers can acquire a snapshot as soon as schema creation commits.
-      opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+      opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;')
+      const deadline = performance.now() + BUSY_TIMEOUT_MS
+      for (;;) {
+        try { opened.exec('PRAGMA journal_mode = WAL'); break }
+        catch (error: unknown) {
+          const code = (error as { errcode?: unknown } | null)?.errcode
+          if (typeof code !== 'number' || (code & 0xff) !== SQLITE_BUSY || performance.now() >= deadline) throw error
+          // SQLite can bypass its busy handler during the journal-mode lock upgrade.
+          // No schema or Session writes have started, so retrying this pragma is safe.
+          await setImmediate()
+        }
+      }
       this.transaction(opened, () => {
         const current = this.schemaState(opened)
         if (current.version === 0 && current.application === 0) {

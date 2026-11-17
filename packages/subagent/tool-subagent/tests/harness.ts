@@ -70,7 +70,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
       ...parentAgentOptions !== undefined ? { agentOptions: parentAgentOptions } : {},
       setup: async (agentCtx) => {
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
-          return tool.apply(runtimeCtx, { ...config, modelSelection: true, modelDiscovery: true })
+          tool.apply(runtimeCtx, { ...config, modelSelection: true, modelDiscovery: true })
         })
         await fiber.await()
       },
