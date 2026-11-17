@@ -14,15 +14,16 @@ import type {
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { gitIn, inspectCheckout, listBranches } from './git.ts'
+import { gitIn, hasBranch, inspectCheckout } from './git.ts'
 import type { Inspection } from './git.ts'
+import { branchNameProblem } from './branch-name.ts'
 import { parseDiff } from './diff.ts'
 import {
   aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, FilterConfigError, forkPoint,
@@ -35,14 +36,15 @@ import { lensVersion } from './lens-version.ts'
 import { rangeStart } from './commit-range.ts'
 import { ATTRIBUTES_PATH, FileLayers } from './layers.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
+import { BASE_REF_PREFIXES, parseWorktreeBases, remoteOrder, remoteRepository } from './parse.ts'
 import { PatchCache } from './patch-cache.ts'
 import { ReviewCache } from './review-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
-  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
+  Config, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
   ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
-  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
+  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeBases, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
@@ -56,11 +58,10 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Panel limits plus the branch and commit listing limits, the worktree branch prefix, and the lens and annotation limits. */
+/** Panel limits and worktree branch prefix plus the branch and commit listing limits and the lens and annotation limits. */
 type ControllerConfig = PanelConfig & {
   readonly maxBranches: number
   readonly maxCommits: number
-  readonly worktreePrefix: string
   readonly lensTimeoutMs: number
   readonly maxLensReadBytes: number
   readonly maxCachedLensBytes: number
@@ -141,7 +142,8 @@ export class ForgePanelController extends TypertRemoteService {
     ] as const) {
       if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-panel: ${key} must be a positive integer`)
     }
-    if (!branchPrefix(resolved.worktreePrefix)) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
+    // Generated names append hexadecimal digits, so the prefix followed by one digit must be a valid branch name.
+    if (branchNameProblem(`${resolved.worktreePrefix}0`) !== null) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
     for (const key of ['testPaths', 'interfacePaths'] as const) {
       if (resolved[key].some(glob => glob.trim() === '')) throw new Error(`forge-panel: ${key} entries must not be empty`)
     }
@@ -176,7 +178,7 @@ export class ForgePanelController extends TypertRemoteService {
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
     })
-    const inbox = ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
+    const inbox = ctx.on('agent/inbox/inserted', ({ agent, message }) => { this.holdTurn(agent, message) })
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
@@ -241,15 +243,24 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * List the local branches that can start a worktree of the Session's current checkout.
-   * @param session - Session whose current directory is listed.
+   * List the branches that can start a worktree of the Session's current checkout: the checked-out branch, each
+   * remote's default branch, other local branches, and each remote's other remote-tracking branches, remotes in the
+   * order the panel recognizes code hosts.
+   * @param session - Session whose checkout is read.
+   * @param query - text the branch names must contain, ignoring case; empty for every branch.
    * @param signal - request cancellation.
-   * @returns the checked-out branch and at most `maxBranches` local branches, the checked-out one first.
-   * @throws when the current directory is not inside a checkout or Git fails.
+   * @returns the branches, at most `maxBranches` local branches and `maxBranches` per remote, most recently committed first.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
    */
   @Remote
-  async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches> {
-    return await listBranches(this.home, this.config, session, this.home.workingDirectory.get(session), this.config.maxBranches, signal)
+  async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    // A search can match any branch, so every ref is listed; a repository's refs can far exceed other short Git output.
+    const git = gitIn(this.home, { ...this.config, maxOutputBytes: this.config.maxDiffBytes }, session, inspection.checkout.root, signal)
+    const refs = await git('worktree-bases', ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(symref)', ...BASE_REF_PREFIXES])
+    return parseWorktreeBases(refs.stdout, inspection.checkout.branch, remoteOrder(inspection.upstream, inspection.remotes), query,
+      this.config.maxBranches, remote => remoteRepository(remote, url => this.home.forge.repositoryFromRemote(url)))
   }
 
   /**
@@ -820,24 +831,34 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Ask for a new worktree before the Session's first turn, replacing an open
    * request and forgetting a failed attempt. While the next message waits in
-   * the inbox, or else at the first step proposal, the panel creates a branch
-   * from `from`, or from HEAD of the current checkout when it is null, and
-   * enters its checkout. A message that already waits after a failed or
-   * stopped attempt keeps waiting for {@link ForgePanelController.retryWorktree}.
+   * the inbox, or else at the first step proposal, the panel creates the
+   * branch `name`, or a generated branch per attempt when it is null, from
+   * `from`, or from HEAD of the current checkout when it is null, and enters
+   * its checkout; a remote-tracking `from` is fetched first. A message that
+   * already waits after a failed or stopped attempt keeps waiting for
+   * {@link ForgePanelController.retryWorktree}.
    * @param session - Session without a started turn.
-   * @param from - local base branch, or null for HEAD.
+   * @param from - full name of a local or remote-tracking base branch, or null for HEAD.
+   * @param name - new branch name, or null to generate one per attempt.
    * @param signal - request cancellation.
-   * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable`
+   * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/invalid-name` when `name` breaks
+   * a branch-name rule; `forgePanel/branch-exists` when the checkout has a local branch named `name`;
+   * `forgePanel/not-a-checkout` when a name is checked outside a checkout; `forgePanel/worktrees-unavailable`
    * without a worktree service; `forgePanel/session-started` after a turn started or the worktree was
    * created; `forgePanel/session-busy` while the worktree is being created.
    */
   @Remote
-  async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void> {
+  async requestWorktree(session: Session, from: string | null, name: string | null, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     if (from?.length === 0) throw new RemoteError('forgePanel/invalid-branch', 'The base branch name is empty', {})
     this.editableWorktree(session)
+    if (name !== null) {
+      await this.checkBranchName(session, name, signal)
+      // The Session may have started or begun a creation while Git answered.
+      this.editableWorktree(session)
+    }
     this.creations.forget(session)
-    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from, ...name === null ? {} : { name } })
     this.creations.recheck(session)
   }
 
@@ -873,16 +894,19 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * Make another attempt, with a new branch name, at the worktree a message
-   * of the Session waits for after a failed or stopped attempt.
+   * Make another attempt, on the requested branch name or a new generated
+   * one, at the worktree a message of the Session waits for after a failed or
+   * stopped attempt.
    * @param session - Session whose message waits.
+   * @param fetch - false skips fetching a remote-tracking base branch for this attempt, which then starts from the
+   * commit last fetched.
    * @param signal - request cancellation.
    * @throws `forgePanel/not-waiting` when no message waits or an attempt is running.
    */
   @Remote
-  async retryWorktree(session: Session, signal: AbortSignal): Promise<void> {
+  async retryWorktree(session: Session, fetch: boolean, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    if (!this.creations.retry(session)) {
+    if (!this.creations.retry(session, fetch)) {
       throw new RemoteError('forgePanel/not-waiting', 'No message waits for another attempt at the worktree', {})
     }
   }
@@ -943,14 +967,17 @@ export class ForgePanelController extends TypertRemoteService {
   /* oxlint-enable typescript/require-await */
 
   /**
-   * Hold the turn of a message entering a Session's inbox while the
+   * Hold the turn of a message entering a Session's next-turn queue while the
    * Session's requested worktree does not exist yet, or while the worktree
    * the Session works in is checked and, when gone, until it is restored or
    * left. The message is entering, so the delivery has not woken the Agent
-   * yet and its wake waits for the hold.
+   * yet and its wake waits for the hold. A message for the next step, such as
+   * a notice another plugin queues, opens no turn and gets no hold.
    * @param agent - Agent whose inbox receives the message.
+   * @param message - the entering message.
    */
-  private holdTurn(agent: Agent): void {
+  private holdTurn(agent: Agent, message: UserMessage): void {
+    if (!agent.inbox.nextTurn.some(queued => queued.id === message.id)) return
     const session = agent.session
     const state = this.worktreeState(session)
     if (state.request !== null && state.created === null && !state.locked) {
@@ -1058,6 +1085,18 @@ export class ForgePanelController extends TypertRemoteService {
 
   private worktreeState(session: Session): ForgeWorktreeState {
     return this.worktreeStates.stateOf(session)
+  }
+
+  /**
+   * Refuse a new branch name that breaks a branch-name rule or names a local branch of the Session's checkout. The
+   * rules cover every name `git check-ref-format` refuses, which the worktree service runs again at creation.
+   */
+  private async checkBranchName(session: Session, name: string, signal: AbortSignal): Promise<void> {
+    if (branchNameProblem(name) !== null) throw new RemoteError('forgePanel/invalid-name', 'The new branch name is invalid', {})
+    const root = (await this.checkoutOf(session, signal)).checkout.root
+    if (await hasBranch(this.home, this.config, session, root, name, signal)) {
+      throw new RemoteError('forgePanel/branch-exists', `A local branch named ${name} exists`, {})
+    }
   }
 
   private editableWorktree(session: Session): ForgeWorktreeState {
@@ -1344,23 +1383,6 @@ function actionError(failure: ForgeActionFailure): RemoteError {
   const code = failure.code === 'stale' ? 'forgePanel/stale-head' : failure.code === 'unknown' ? 'forgePanel/action-unknown'
     : 'forgePanel/action-failed'
   return new RemoteError(code, failure.message, {})
-}
-
-/**
- * Whether `prefix` followed by hexadecimal digits is a branch name that Git
- * accepts: no leading `-` or `/`, no empty component, no component that
- * starts with `.` or ends with `.lock`, and none of `..`, `@{`, whitespace,
- * control characters, `~`, `^`, `:`, `?`, `*`, `[`, or `\`.
- * @param prefix - configured worktree branch prefix.
- * @returns whether every generated name passes `git check-ref-format --branch`.
- */
-function branchPrefix(prefix: string): boolean {
-  const name = `${prefix}0`
-  if (name.startsWith('-') || name.includes('..') || name.includes('@{')) return false
-  for (const char of name) {
-    if (char <= ' ' || char === '\x7f' || '~^:?*[\\'.includes(char)) return false
-  }
-  return name.split('/').every(part => part.length > 0 && !part.startsWith('.') && !part.endsWith('.lock'))
 }
 
 export default ForgePanelController

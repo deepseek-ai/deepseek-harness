@@ -170,6 +170,20 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
+### Message authorship
+
+#### What the model sees
+
+Local continuable agents receive initial delegated tasks and later agent-to-agent messages with the `agent-message` source and the actual sender's Session id. Both start with `Agent <sender name> sent a message: ` followed by the supplied content blocks. Direct human messages keep their original content and `user` source. The child delegation-scope statement below tells the child that user messages without the agent prefix come from the human user and that it answers them in its reply. Root input and retained history are unchanged.
+
+#### Token effect
+
+One short author prefix per initial delegated task or agent-to-agent message. Human input adds no attribution tokens; the authorship rule is part of the child's fixed delegation statement.
+
+#### KV Cache effect
+
+The initial task follows any inherited history; later messages append without changing retained history.
+
 ### Settlement notice
 
 #### What the model sees
@@ -213,7 +227,7 @@ Every in-process child's runtime-context snapshot carries the `subagent:delegati
 ##### The delegation-scope statement
 
 ```markdown
-You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the job needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.
+You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with "Agent <name> sent a message:". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply.
 ```
 
 #### Token effect

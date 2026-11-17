@@ -13,13 +13,14 @@ const hmrTest = createClientTest({ roster: hmrRoster }, { awaitConnected: false 
 const sessionTest = createClientTest({ roster: sessionRoster })
 
 describe('bundle dependency closures', () => {
-  hmrTest('activates HMR with its declared module provider and no Connection', async ({ start }) => {
+  hmrTest('activates HMR with its declared module and Remote carrier providers', async ({ start }) => {
     expect(hmrRoster.rows.map(row => row.name)).toContain(MODULES)
     const client = await start()
     const entry = [...client.ctx.loader.entries()].find(row => row.options.name === HMR)
     expect(entry?.fiber?.state).toBe(FiberState.ACTIVE)
     expect(client.ctx.get('modules')).toBeDefined()
-    expect(client.ctx.get('connection')).toBeUndefined()
+    expect(client.ctx.get('config')).toBeDefined()
+    expect(client.ctx.get('remote')).toBeDefined()
   }, 60_000)
 
   sessionTest('activates Session Controller with its declared file-upload provider', async ({ mock, start }) => {

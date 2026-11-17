@@ -36,7 +36,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'API_PATH', 'CONNECT_PATH', 'Peer', 'RpcId', 'clientRequestSchema', 'rpcErrorSchema', 'rpcIdSchema',
     'rpcMessageSchema', 'rpcResultSchema', 'serverResponseSchema', 'transportError',
   ],
-  '@deepseek-ai/dsh-client-hmr': ['EVENTS_ENDPOINT'],
   '@deepseek-ai/dsh-client-locale': ['LOCALE_IDS', 'LOCALE_PREFERENCE_FIELD', 'LOCALE_SETTINGS_NAMESPACE'],
   '@deepseek-ai/dsh-client-modules': ['bootInjections', 'orderByModuleGraph', 'stripClientSuffix'],
   '@deepseek-ai/dsh-client-ui-chat': [
@@ -101,8 +100,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'projectToolUpdates', 'requestImageHandleText', 'requiredImageOffload', 'resolveImageAttachmentAccess',
     'resolveRetryPolicy', 'runFirstTokenTime', 'runFirstVisibleTime', 'textOnlyImageText', 'userAgent',
   ],
-  '@deepseek-ai/dsh-llm-deepseek-account': ['plainAccountOptions', 'resolveAccountOptions'],
-  '@deepseek-ai/dsh-llm-deepseek-api-key': ['plainOptions', 'resolveAdapterOptions'],
   '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'supportedProtocols'],
   '@deepseek-ai/dsh-llm-replay': [
     'deriveReplayScript', 'installLlmReplay', 'loadReplayScript', 'loadSessionScripts', 'parseSessionHeader',

@@ -106,7 +106,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The fresh child receives the task content verbatim as its only user message in a new empty conversation, with the parent provider, model, reasoning effort, output-token limit, and working directory by default. The inherited or selected preset supplies tools and prompt sections. No parent conversation message is included.
+The fresh child receives the task as its only user message in a new empty conversation, attributed to the parent agent: `Agent <parent name> sent a message: ` followed by the task content verbatim. It uses the parent provider, model, reasoning effort, output-token limit, and working directory by default. The inherited or selected preset supplies tools and prompt sections. No parent conversation message is included.
 
 #### Token effect
 

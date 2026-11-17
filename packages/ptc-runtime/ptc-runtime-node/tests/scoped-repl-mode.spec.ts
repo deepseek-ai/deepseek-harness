@@ -42,7 +42,7 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     + "while process.cwd() and relative file paths follow each program's working directory. "
     + "Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. "
     + 'Timeout and cancellation results say whether retained variables were preserved or cleared. '
-    + 'Restart, sandbox changes, output overflow, or process failure clears them. '
+    + 'Restart, sandbox changes, or process failure clears them. '
     + 'Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. '
     + 'Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. '
     + 'After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. '

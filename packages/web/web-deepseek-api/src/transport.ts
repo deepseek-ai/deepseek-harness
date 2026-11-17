@@ -5,15 +5,13 @@
  * @module @deepseek-ai/dsh-web-deepseek-api/transport
  */
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import type { LlmCredentialKind, ProviderCredential } from '@deepseek-ai/dsh-llm'
 import { WebError } from '@deepseek-ai/dsh-web'
 
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
-/**
- * API key of one {@link DeepSeekWebAuthSource}: a literal value, where an empty string means no key, or a credential
- * reference read once per use without retention.
- */
-export type DeepSeekWebApiKey = string | {
+/** API key of one {@link DeepSeekWebAuthSource}: a credential reference read once per use without retention. */
+export interface DeepSeekWebApiKey {
   /** Credential reference the key is stored under. */
   ref: CredentialRef
   /** Report key presence without reading or validating its value; store failures reject. */
@@ -27,15 +25,16 @@ export type DeepSeekWebApiKey = string | {
  * `/search`, to `baseURL`.
  */
 export type DeepSeekWebAuthSource =
-  /** The account token released for the dispatch endpoint, sent as `x-dsh-auth-token`. */
+  /**
+   * A credential released per use for the dispatch endpoint, as a DeepSeek model route publishes it. An API key is
+   * sent as `Authorization: Bearer`; any other kind is sent through the headers of its grant.
+   */
   | {
-    kind: 'account'
-    /** API base the token is sent to, including its path prefix. */
+    kind: 'route'
+    /** API base the credential is sent to, including its path prefix. */
     baseURL: string
-    /** Read the token released for a dispatch endpoint; undefined or empty means no token, and read failures reject. */
-    resolveToken: (endpoint: string) => Promise<string | undefined>
-    /** Invalidate the exact token rejected by HTTP 401; failures must not replace the request error. */
-    rejectToken: (token: string) => Promise<void>
+    /** The credential's owner: it answers presence and releases a grant for an endpoint, and read failures reject. */
+    credential: Omit<ProviderCredential, 'baseURL'>
   }
   /** An API key, sent as `Authorization: Bearer`. */
   | {
@@ -86,7 +85,7 @@ interface DeepSeekWebRequest<T> {
   body: object
   /** Protocol headers without credentials. */
   headers?: Readonly<Record<string, string>>
-  /** Additional API-key headers; not applied to account tokens. */
+  /** Additional headers sent beside an API key; other credential kinds send only their grant's headers. */
   apiKeyHeaders?: (key: string) => Readonly<Record<string, string>>
   /** Validate and project the response. */
   decode: (payload: unknown) => T
@@ -101,18 +100,19 @@ interface DeepSeekWebRequest<T> {
 /**
  * Check synchronously whether an operation has a source to try, without reading credentials.
  * @param auth - Sources for the operation.
- * @returns Whether any source is an account, a credential reference, a non-empty literal key, or a misconfigured source
- *   the operation reports.
+ * @returns Whether any source exists: a route credential, a credential reference, or a misconfigured source the
+ *   operation reports.
  */
 export function hasDeepSeekWebCredential(auth: DeepSeekWebAuth): boolean {
-  return auth.sources.some(source => source.kind !== 'api-key' || typeof source.key !== 'string' || source.key.length > 0)
+  return auth.sources.length > 0
 }
 
 /**
  * Check whether an operation would find a credential, reading the sources in the order {@link dispatchDeepSeekWeb}
- * does. An account source reads its token for the operation's endpoint; a referenced key is only checked for presence,
- * so a malformed or wrong key counts as ready. A misconfigured source or a failed read answers false without reading
- * later sources, because the operation fails there too. Nothing is sent and nothing is retained.
+ * does. A route source asks its credential whether one is configured for the operation's endpoint; a referenced key is
+ * only checked for presence, so a malformed or wrong key counts as ready. A misconfigured source or a failed read
+ * answers false without reading later sources, because the operation fails there too. Nothing is sent and nothing is
+ * retained.
  * @param auth - Sources for the operation.
  * @param path - Operation path appended to each source's base.
  * @returns Whether a source before any misconfigured or unreadable one is present.
@@ -121,20 +121,13 @@ export async function isDeepSeekWebAuthReady(auth: DeepSeekWebAuth, path: '/sear
   for (const source of auth.sources) {
     switch (source.kind) {
       case 'misconfigured': return false
-      case 'account': {
-        let token: string | undefined
-        try { token = await source.resolveToken(joinPath(source.baseURL, path)) }
-        catch (_unreadableGrant) { return false /* The operation fails on this read before it tries another source. */ }
-        if (token !== undefined && token.length > 0) return true
+      case 'route': {
+        try { if (await source.credential.configured(joinPath(source.baseURL, path))) return true }
+        catch (_unreadableCredential) { return false /* The operation fails on this read before it tries another source. */ }
         break
       }
       case 'api-key': {
-        const { key } = source
-        if (typeof key === 'string') {
-          if (key.length > 0) return true
-          break
-        }
-        try { if (await key.configured()) return true }
+        try { if (await source.key.configured()) return true }
         catch (_unreadableStore) { return false /* The operation fails on this read before it tries another source. */ }
         break
       }
@@ -160,16 +153,18 @@ export function invalidResponse(): WebError {
   return new WebError('DeepSeek returned an invalid response body', 'WEB_PROVIDER_ERROR')
 }
 
-/** Authentication headers and endpoint for one operation, tagged by the credential that produced them. */
+/** Authentication headers and endpoint for one operation, tagged by the kind of credential that produced them. */
 interface SearchAuth {
-  /** `account` for a DeepSeek account token, `api-key` for an API key. */
-  readonly kind: 'account' | 'api-key'
+  /** Kind of the credential sent; an API-key source sends `api-key`. */
+  readonly kind: LlmCredentialKind
   /** Absolute dispatch URL under the base of the source. */
   readonly endpoint: string
   /** Headers carrying the credential. */
   readonly headers: Readonly<Record<string, string>>
-  /** Request-bound invalidation, present only when an account token was sent. */
+  /** Request-bound invalidation of the sent credential, present when its grant offers one; the dispatch contains its failure. */
   readonly reject?: () => Promise<void>
+  /** Withdrawal of the sent credential, present when its grant offers one; it ends the request. */
+  readonly revoked?: AbortSignal
 }
 
 /** Dispatch one operation using a single settings and credential snapshot: one request, with the first present source.
@@ -190,6 +185,17 @@ export async function dispatchDeepSeekWeb<T>(
   throwIfSearchAborted(signal)
   let response: Response
   /* jscpd:ignore-start */
+  const live = requestSignal(signal, auth.revoked)
+  /**
+   * The failure of an interrupted request: the caller's cancellation first, then the withdrawal of the sent credential.
+   * @param error - what the interrupted fetch or body read threw.
+   * @returns the failure to report, or undefined when `error` is no interruption.
+   */
+  const interrupted = (error: unknown): WebError | undefined => {
+    if (signal?.aborted === true) return searchAborted(signal, error)
+    if (auth.revoked?.aborted === true) return credentialWithdrawnError(auth.kind, error)
+    return isAbortError(error) ? searchAborted(signal, error) : undefined
+  }
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -202,11 +208,10 @@ export async function dispatchDeepSeekWeb<T>(
         'user-agent': USER_AGENT,
       },
       body: JSON.stringify(body),
-      ...signal !== undefined ? { signal } : {},
+      ...live !== undefined ? { signal: live } : {},
     })
   } catch (error: unknown) {
-    if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
-    throw searchEndpointError(
+    throw interrupted(error) ?? searchEndpointError(
       guidance,
       endpoint,
       `DeepSeek web request failed: ${String(error)}`,
@@ -226,22 +231,22 @@ export async function dispatchDeepSeekWeb<T>(
         if (typeof detail === 'string' && detail.length > 0) message += `: ${detail}`
       }
     } catch (error: unknown) {
-      // An abort fired mid-body must surface as WEB_ABORTED, not be swallowed
+      // An interruption mid-body must surface as itself, not be swallowed
       // into a generic HTTP-error message — cancellation is not a provider
       // error (the seam's cancellation contract).
-      if (signal?.aborted === true || isAbortError(error)) aborted = searchAborted(signal, error)
+      aborted = interrupted(error)
       // Otherwise: the HTTP status is already captured in `message` above; a
       // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
       // cost a richer provider message, never the real error.
     }
-    // The account service released this token only for its inference
-    // origin, so the endpoint is not what the user must change.
-    if (status === 401 && auth.kind === 'account') {
+    if (status === 401) {
       // Invalidation can cancel this Session; finish reading the HTTP failure before it does. A cancelled read still
-      // invalidates the token the status rejected.
+      // invalidates the credential the status rejected.
       try { await auth.reject?.() }
-      catch (_credentialRemovalFailed) { /* Report the original failure even if credential removal fails. */ }
-      throw aborted ?? accountRejectedError(message)
+      catch (_invalidationFailed) { /* The HTTP rejection stays the reported failure when the invalidation itself fails. */ }
+      // The account service released its credential only for its inference origin, so the endpoint is not what the
+      // user must change.
+      if (auth.kind === 'account') throw aborted ?? accountRejectedError(message)
     }
     if (aborted !== undefined) throw aborted
     throw searchEndpointError(guidance, endpoint, message)
@@ -253,12 +258,43 @@ export async function dispatchDeepSeekWeb<T>(
     throwIfSearchAborted(signal)
     return decode(payload)
   } catch (error: unknown) {
-    if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+    const stopped = interrupted(error)
+    if (stopped !== undefined) throw stopped
     const message = error instanceof WebError
       ? error.message
       : `DeepSeek returned an unprocessable response body: ${String(error)}`
     throw searchEndpointError(guidance, endpoint, message, error)
   }
+}
+
+/**
+ * The signal one request runs under: the caller's cancellation and the withdrawal of the credential it carries.
+ * @param signal - caller cancellation, when the caller supplies one.
+ * @param revoked - withdrawal of the sent credential, when its grant offers one.
+ * @returns the composed signal, or undefined when neither exists.
+ */
+function requestSignal(signal: AbortSignal | undefined, revoked: AbortSignal | undefined): AbortSignal | undefined {
+  if (signal === undefined || revoked === undefined) return signal ?? revoked
+  return AbortSignal.any([signal, revoked])
+}
+
+/**
+ * Report a request that ended because the owner withdrew the credential it carried. The caller did not cancel, so the
+ * failure is the provider's.
+ * @param kind - kind of the withdrawn credential.
+ * @param cause - what the interrupted fetch or body read threw.
+ * @returns the provider failure, with sign-in guidance for an account credential.
+ */
+function credentialWithdrawnError(kind: LlmCredentialKind, cause: unknown): WebError {
+  return new WebError(
+    kind === 'account'
+      ? 'The DeepSeek account signed out before this web request finished. Guide the user to sign in to DeepSeek again;'
+        + ' the endpoint does not need changing.'
+      : 'The credential this web request carried was withdrawn before the request finished. Guide the user to check that'
+        + ' credential on the Models page.',
+    'WEB_PROVIDER_ERROR',
+    { cause },
+  )
 }
 
 /** Replace endpoint guidance with sign-in guidance when DeepSeek rejects the account token. */
@@ -315,21 +351,21 @@ async function authHeaders(
     throwIfSearchAborted(signal)
     switch (source.kind) {
       case 'misconfigured': throw new WebError(source.message, 'WEB_PROVIDER_MISCONFIGURED')
-      case 'account': {
+      case 'route': {
         const endpoint = joinPath(source.baseURL, request.path)
-        const token = await resolveCredential(() => source.resolveToken(endpoint), signal)
-        if (token !== undefined && token.length > 0) return {
-          kind: 'account', endpoint, headers: { 'x-dsh-auth-token': token },
-          reject: async () => { await source.rejectToken(token) },
+        const grant = await resolveCredential(() => source.credential.resolve(endpoint, signal), signal)
+        if (grant === undefined) break
+        const { kind } = source.credential
+        const invalidate = grant.reject?.bind(grant)
+        return {
+          kind, endpoint,
+          headers: kind === 'api-key' ? { ...request.apiKeyHeaders?.(grant.value), authorization: `Bearer ${grant.value}` } : grant.headers,
+          ...invalidate === undefined ? {} : { reject: invalidate },
+          ...grant.revoked === undefined ? {} : { revoked: grant.revoked },
         }
-        break
       }
       case 'api-key': {
-        const { key } = source
-        // A conditional await in a ternary can produce negative branch counts in V8-to-Istanbul mapping.
-        let apiKey: string | undefined
-        if (typeof key === 'string') apiKey = key
-        else apiKey = await resolveCredential(key.resolve, signal)
+        const apiKey = await resolveCredential(source.key.resolve, signal)
         if (apiKey !== undefined && apiKey.length > 0) return { kind: 'api-key', endpoint: joinPath(source.baseURL, request.path), headers: {
           ...request.apiKeyHeaders?.(apiKey),
           'authorization': `Bearer ${apiKey}`,
@@ -367,9 +403,7 @@ function assertNever(value: never): never {
  * @returns the resolved credential, or undefined when the resolver supplied none.
  * @throws {@link WebError} `WEB_ABORTED` on cancellation, `WEB_PROVIDER_ERROR` when the resolver fails.
  */
-async function resolveCredential(
-  resolve: () => Promise<string | undefined>, signal?: AbortSignal,
-): Promise<string | undefined> {
+async function resolveCredential<T>(resolve: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   throwIfSearchAborted(signal)
   try {
     return await abortable(resolve(), signal)

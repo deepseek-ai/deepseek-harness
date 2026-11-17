@@ -11,6 +11,7 @@ import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import {
@@ -70,6 +71,12 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     dismissOverlay: vi.fn<() => void>(),
     // Plugins' card actions: a marker naming the change request it was drawn for.
     renderSlot: vi.fn((_name: string, owner: { url: string }) => <span data-plugin-action={owner.url} />),
+    // The panel's Component Factories: the fold control as a button, and a row's hover details as a marker.
+    renderFactorySlot: vi.fn((name: string, input: object) => {
+      if (name !== 'conversation.session.panel.fold') return <span data-panel-details="" />
+      const fold = input as PanelFoldProps
+      return <button type="button" data-fold="" aria-expanded={fold.expanded} aria-label={fold.name} onClick={fold.onToggle}>{fold.label}</button>
+    }),
   }
   const props = {
     sessionId: SESSION,
@@ -82,7 +89,7 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     t,
   } as Pick<ChangeRequestsSectionProps,
     'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
-    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot'
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 'renderFactorySlot'
     | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
@@ -152,6 +159,65 @@ describe('ChangeRequestsSection', () => {
     const again = section(two, { store: one.store })
     expect(expansion(again.view)).toEqual([false, true])
     expect(expansion(section(ready({ changeRequests: [entry(1, snapshot(1))] })).view)).toEqual([true])
+  })
+
+  /** The numbers of the rendered cards, in list order. */
+  const numbers = (view: ReturnType<typeof render>): string[] =>
+    [...view.container.querySelectorAll('[data-forge-change]')].map(card => card.getAttribute('data-forge-change')?.split('/').at(-1) ?? '')
+  const several = (count: number): ForgePanelState =>
+    ready({ changeRequests: Array.from({ length: count }, (_unused, index) => entry(index + 1, snapshot(index + 1))) })
+
+  it('shows up to three cards without a fold control', () => {
+    const b = section(several(3))
+    expect(numbers(b.view)).toEqual(['1', '2', '3'])
+    expect(b.view.container.querySelector('[data-fold]')).toBeNull()
+  })
+
+  it('shows three cards of four or more and then the fold control, which shows the rest and folds them again', () => {
+    const b = section(several(4))
+    expect(numbers(b.view)).toEqual(['1', '2', '3'])
+    const fold = (): HTMLElement => b.view.container.querySelector('[data-fold]') as HTMLElement
+    expect([fold().textContent, fold().getAttribute('aria-label'), fold().getAttribute('aria-expanded')])
+      .toEqual(['Show 1 more', 'Show 1 more (change requests)', 'false'])
+    // The control is the list's last row, after the cards.
+    expect(fold().compareDocumentPosition(b.view.container.querySelector('ul') as HTMLElement) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+
+    fireEvent.click(fold())
+    expect(numbers(b.view)).toEqual(['1', '2', '3', '4'])
+    expect([fold().textContent, fold().getAttribute('aria-label'), fold().getAttribute('aria-expanded')])
+      .toEqual(['Show less', 'Show less (change requests)', 'true'])
+    act(() => { b.panel.set({ state: several(6), disconnected: false }) })
+    expect(numbers(b.view)).toEqual(['1', '2', '3', '4', '5', '6'])
+
+    fireEvent.click(fold())
+    expect(numbers(b.view)).toEqual(['1', '2', '3'])
+    expect(fold().textContent).toBe('Show 3 more')
+  })
+
+  it('keeps the fold choice of the Session while the panel is hidden and shown again', () => {
+    const b = section(several(5))
+    fireEvent.click(b.view.container.querySelector('[data-fold]') as HTMLElement)
+    b.view.unmount()
+    expect(numbers(section(several(5), { store: b.store }).view)).toEqual(['1', '2', '3', '4', '5'])
+    expect(numbers(section(several(5)).view)).toEqual(['1', '2', '3'])
+  })
+
+  it('draws each card\'s hover details through the panel\'s details Factory', () => {
+    const b = section(ready({ changeRequests: [entry(7, snapshot(7)), entry(8, null)] }))
+    expect(b.renderFactorySlot).toHaveBeenCalledWith('conversation.session.panel.details', {
+      title: 'Change 7', lines: ['#7 · feat → main'], status: { state: 'done', label: en['change.ci.passed'] },
+    })
+    expect(b.renderFactorySlot).toHaveBeenCalledWith('conversation.session.panel.details', { title: 'github.com/octo/demo/pull/8', lines: ['#8'] })
+  })
+
+  it('opens the changes of a card from its line and closes the panel\'s overlay', () => {
+    const value = entry(7, snapshot(7))
+    const b = section(ready({ changeRequests: [value, entry(8, snapshot(8))] }))
+    const line = b.view.container.querySelector('[data-forge-change="https://github.com/octo/demo/pull/7"] [data-row-part="body"]') as HTMLElement
+    fireEvent.click(line)
+    expect(b.viewChanges.mock.calls).toEqual([[value]])
+    expect(b.dismissOverlay).toHaveBeenCalledOnce()
+    expect(b.openLink).not.toHaveBeenCalled()
   })
 
   it('draws the actions plugins add to each card before its actions menu', () => {

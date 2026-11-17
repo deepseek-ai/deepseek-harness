@@ -8,7 +8,6 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
@@ -19,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Translator, { type Config } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 
 /** Provider-visible request, without credential values. */
 export interface NativeRequest {
@@ -174,9 +174,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
       describe: async () => ({ configured, writable: true }),
       resolve: async () => configured ? { value: 'fixture-native-key', source: 'fixture' } : undefined,
     } as never)
-    host.provide('deepseekAccount', {
-      resolveToken: async (_baseURL: string): Promise<string | undefined> => signedIn ? 'fixture-account-token' : undefined,
-    } as DeepSeekAccount)
+    host.provide('deepseekAccount', accountStub({ token: () => signedIn ? 'fixture-account-token' : undefined }))
   })
   let ctx = await start(), session: Session | undefined
   cleanups.push(async () => { await ctx.fiber.dispose() })

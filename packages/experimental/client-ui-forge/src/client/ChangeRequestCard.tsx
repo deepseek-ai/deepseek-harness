@@ -1,20 +1,22 @@
 /**
- * One change request as a card: its one-line title links to the host and
- * crawls into view while the pointer rests on the card's head, a one-line
- * summary shows while collapsed, and while expanded one row per fact (checks,
- * review, merge state, the changed lines, which open its changes, and the
- * linked issues) above the merge action. Opening, copying, viewing changes,
- * marking a draft ready, and removing live in the card's actions menu.
+ * One change request as a compact card of the Session panel: one line with
+ * the state glyph, the title, the number, and the checks outcome, which opens
+ * the changes view, and, while expanded, one row per fact (checks, review,
+ * merge state, the changed lines, which open its changes too, and the linked
+ * issues) above the merge action. Opening on the host, copying, viewing
+ * changes, marking a draft ready, and removing live in the card's actions
+ * menu, which shows on hover or focus as on the panel's other rows.
  */
 
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useState, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
-  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, MarqueeText, Menu,
-  MenuItemButton, StateDot, Tooltip, useHoverMarquee,
-  type MenuEntry, type MenuItem,
+  Button, HoverCard, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
+  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, Menu,
+  MenuItemButton, StateDot, Tooltip,
+  type MenuEntry, type MenuItem, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, MergeMethod, MergeRequest,
@@ -25,7 +27,7 @@ import { formatAgo } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
-import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
+import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf, type ChangeRequestTone } from './status.ts'
 import css from './Forge.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -53,6 +55,10 @@ export interface ChangeRequestActions extends OverviewActions {
   readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
   /** Draw the icon buttons plugins add to the card's head through `forge.change-request.card.actions`. */
   readonly renderActions?: ((owner: ForgeChangeRequestCardActionsProps) => ReactNode) | undefined
+  /**
+   * Draw the content of the card's hover card, as the Session panel's rows do. A surface without it shows none.
+   */
+  readonly renderDetails?: ((details: PanelDetailsProps) => ReactNode) | undefined
 }
 
 /** Props of one change request card. */
@@ -170,39 +176,51 @@ function finished(snapshot: ChangeRequestSnapshot, now: number, t: Translate): s
   return ago === undefined ? state : t('time.finished', { state, time: ago })
 }
 
-/** Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress. */
-function Summary({ snapshot, now, t }: {
-  readonly snapshot: ChangeRequestSnapshot | null
-  readonly now: number
-  readonly t: Translate
-}): ReactNode {
-  if (snapshot === null) return <StateDot state="ongoing" size={11} />
-  if (snapshot.state !== 'open') {
-    return <span className={css.finished} data-tone={snapshot.state}>{finished(snapshot, now, t)}</span>
-  }
+/**
+ * The checks outcome after the number: a spinner before the first read, the combined outcome of an open change
+ * request that has checks, and nothing for a finished one, whose glyph already says how it ended.
+ */
+function Mark({ snapshot }: { readonly snapshot: ChangeRequestSnapshot | null }): ReactNode {
+  if (snapshot === null) return <StateDot state="ongoing" size={12} />
+  if (snapshot.state !== 'open') return null
   const ci = ciSummary(snapshot)
-  const flag = flagOf(snapshot)
-  return (
-    <>
-      <span className={css.ci} data-tone={ci.kind === 'failed' ? 'error' : undefined}>
-        {ci.kind !== 'none' && <CheckGlyph state={ci.kind === 'cancelled' ? 'cancelled' : ROLLUP[snapshot.checksRollup]} size={12} />}
-        {ci.kind === 'failed'
-          ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
-          : ci.kind === 'cancelled' ? t('change.ci.cancelled', { count: ci.count }) : t(`change.ci.${ci.kind}`)}
-      </span>
-      {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
-    </>
-  )
+  if (ci.kind === 'none') return null
+  return <CheckGlyph state={ci.kind === 'cancelled' ? 'cancelled' : ROLLUP[snapshot.checksRollup]} size={12} />
 }
 
-/** Expanded identity after the number: draft state and the head and base branches. */
-function Target({ snapshot, t }: { readonly snapshot: ChangeRequestSnapshot; readonly t: Translate }): ReactNode {
-  return (
-    <>
-      {snapshot.state === 'open' && snapshot.draft && <span>{t('change.state.draft')}</span>}
-      <span className={css.ellipsis}>{`${snapshot.headBranch} → ${snapshot.baseBranch}`}</span>
-    </>
-  )
+/**
+ * The status in words: the checks and the most urgent flag of an open change request, or the merge or close time.
+ * The card's line shows it as glyphs, so assistive technology and the hover card read it here.
+ * @param snapshot - change request status.
+ * @param now - current epoch milliseconds for the relative time.
+ * @param t - copy.
+ * @returns the status text.
+ */
+function statusText(snapshot: ChangeRequestSnapshot, now: number, t: Translate): string {
+  if (snapshot.state !== 'open') return finished(snapshot, now, t)
+  const ci = ciSummary(snapshot)
+  const checks = ci.kind === 'failed'
+    ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
+    : ci.kind === 'cancelled' ? t('change.ci.cancelled', { count: ci.count }) : t(`change.ci.${ci.kind}`)
+  const flag = flagOf(snapshot)
+  return flag === undefined ? checks : `${checks} · ${t(`change.flag.${flag}`)}`
+}
+
+/** The state dot of the hover card: red for what needs the user, and a spinner while the checks run. */
+function dotOf(tone: ChangeRequestTone, snapshot: ChangeRequestSnapshot): StateDotState {
+  if (tone === 'blocked') return 'error'
+  if (snapshot.state !== 'open') return snapshot.state === 'merged' ? 'done' : 'idle'
+  return snapshot.checksRollup === 'pending' ? 'ongoing' : snapshot.checksRollup === 'success' ? 'done' : 'idle'
+}
+
+/** The hover card's line under the title: the number, draft state, and the head and base branches. */
+function identity(number: number | null, snapshot: ChangeRequestSnapshot | null, t: Translate): string[] {
+  const parts = [
+    ...number === null ? [] : [t('change.number', { number })],
+    ...snapshot?.state === 'open' && snapshot.draft ? [t('change.state.draft')] : [],
+    ...snapshot === null ? [] : [`${snapshot.headBranch} → ${snapshot.baseBranch}`],
+  ]
+  return parts.length === 0 ? [] : [parts.join(' · ')]
 }
 
 /** The merge button and its menu: a title row, one row per method with the chosen one checked, and the confirmation. */
@@ -308,8 +326,8 @@ function Primary({ entry, snapshot, name, actions, t }: {
 }
 
 /**
- * The card's actions menu: open on the host, copy the link, view the changes
- * of a served change request, mark an open draft ready, and remove the binding.
+ * The card's actions menu: view the changes of a served change request, open
+ * on the host, copy the link, mark an open draft ready, and remove the binding.
  */
 function CardMenu({ entry, snapshot, name, url, actions, t }: {
   readonly entry: ForgePanelChangeRequest
@@ -331,12 +349,12 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
     : undefined
   // Each item carries the action it runs, so a selection never reaches another item's action.
   const choices: { readonly item: MenuItem; readonly run: () => void }[] = [
-    { item: { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> }, run: () => { actions.openLink(url) } },
-    { item: { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> }, run: () => { actions.copyLink(url) } },
     ...viewChanges !== undefined && snapshot !== null && entry.ref !== null ? [{
       item: { id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> },
       run: () => { viewChanges(entry) },
     }] : [],
+    { item: { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> }, run: () => { actions.openLink(url) } },
+    { item: { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> }, run: () => { actions.copyLink(url) } },
     ...ready === undefined ? [] : [{
       item: { id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy },
       run: ready,
@@ -362,13 +380,12 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
       anchor={(
         <button
           type="button"
-          className={`${css.iconButton} ${css.moreButton}`}
           aria-label={t('change.actions', { name })}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => { setOpen(!open) }}
         >
-          <IconEllipsisOutlineRegular size={14} />
+          <IconEllipsisOutlineRegular size={16} />
         </button>
       )}
       items={items}
@@ -419,7 +436,10 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
 }
 
 /**
- * Render one change request.
+ * Render one change request. A press on the card's line opens the changes view of a change request a provider serves
+ * and has read; with the platform's modifier key or the middle button, and for any other change request, it opens
+ * the host's page. The line shows its status as glyphs and, while collapsed, reads it in words to assistive
+ * technology, which the expanded rows do otherwise; the hover card names the full title, the branches, and that status.
  * @param props - change request, expansion, current time, actions, and copy.
  * @returns the card.
  */
@@ -431,49 +451,60 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
   const notice = entry.ref === null ? 'change.unserved' : failure === undefined ? undefined : FAILURE[failure.code]
   const tone = toneOf(snapshot)
   const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
-  const titleRef = useRef<HTMLSpanElement>(null)
-  const marquee = useHoverMarquee(titleRef)
-  // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
-  const meta = expanded
-    ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
-    : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
-  return (
-    <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
-      <div className={css.changeHead} {...marquee}>
-        <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
-        <div className={css.headText}>
-          <a
-            className={css.changeTitle}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => {
-              event.preventDefault()
-              actions.openLink(url)
-            }}
-          >
-            <MarqueeText ref={titleRef}>{snapshot?.title ?? url.replace(/^https?:\/\//i, '')}</MarqueeText>
-          </a>
-          {(number !== null || meta !== null) && (
-            <div className={css.meta}>
-              {number !== null && <span>{t('change.number', { number })}</span>}
-              {number !== null && meta !== null && <span aria-hidden="true">·</span>}
-              {meta}
-            </div>
-          )}
-        </div>
+  const title = snapshot?.title ?? url.replace(/^https?:\/\//i, '')
+  // A notice replaces the status, so a failed read never reads its stale status beside it.
+  const status: PanelDetailsProps['status'] = notice !== undefined
+    ? { state: 'warning', label: t(notice) }
+    : snapshot === null ? undefined : { state: dotOf(tone, snapshot), label: statusText(snapshot, now, t) }
+  const viewChanges = snapshot !== null && entry.ref !== null ? actions.viewChanges : undefined
+  const open = (event: MouseEvent): void => {
+    if (viewChanges === undefined || event.metaKey || event.ctrlKey) actions.openLink(url)
+    else viewChanges(entry)
+  }
+  const head = (
+    <div className={css.changeHead} data-session-panel-row="">
+      <button
+        type="button"
+        data-row-part="body"
+        data-forge-opens={viewChanges === undefined ? 'link' : 'changes'}
+        onClick={open}
+        onAuxClick={(event) => { if (event.button === 1) actions.openLink(url) }}
+      >
+        <span data-row-part="icon">
+          <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
+        </span>
+        <span data-row-part="content">{title}</span>
+      </button>
+      <span data-row-part="trailing" className={css.status}>
+        {number !== null && <span className={css.number}>{t('change.number', { number })}</span>}
+        {notice === undefined && <Mark snapshot={snapshot} />}
+        {!expanded && notice === undefined && status !== undefined && <span className={css.visuallyHidden}>{status.label}</span>}
         {actions.renderActions?.({ url: entry.url, ref: entry.ref, headSha: snapshot?.headSha ?? null, state: snapshot?.state ?? null })}
+      </span>
+      <span data-row-part="menu">
         <CardMenu entry={entry} snapshot={snapshot} name={name} url={url} actions={actions} t={t} />
+      </span>
+      <span data-row-part="trailing" className={css.end}>
         <button
           type="button"
-          className={css.iconButton}
+          className={css.expand}
           aria-expanded={expanded}
           aria-label={t(expanded ? 'change.collapse' : 'change.expand', { name })}
           onClick={onToggle}
         >
-          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, expanded && css.chevronOpen)} />
+          <IconChevronDownOutlineRegular size={14} className={clsx(css.chevron, expanded && css.chevronOpen)} />
         </button>
-      </div>
+      </span>
+    </div>
+  )
+  const details = actions.renderDetails?.({
+    title,
+    lines: identity(number, snapshot, t),
+    ...status === undefined ? {} : { status },
+  })
+  return (
+    <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
+      {details === undefined ? head : <HoverCard grouped anchor={head} content={details} />}
       {notice !== undefined && (
         <div className={css.notice}>
           <span>{t(notice)}</span>
