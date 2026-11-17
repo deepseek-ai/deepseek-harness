@@ -1,35 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types",
-    "lib": [
-      "ES2024",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "types": [
-      "node"
-    ]
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "./tsconfig.host.json"
     },
     {
-      "path": "../../../vendor/loader"
-    },
-    {
-      "path": "../modules"
-    },
-    {
-      "path": "../../host/webserver"
-    },
-    {
-      "path": "../../../vendor/schemastery"
+      "path": "./tsconfig.client.json"
     }
   ]
 }

@@ -1,10 +1,10 @@
 /**
- * Frozen input-machine contract. Types
- * only. Three-tier visibility: business packages see InputState via the
- * InputZone currency; the scoped input events carry the mutation verbs; the
- * conversation wiring layer alone sees the full SessionInput. The draft text
- * and its reference chips live in the shell's Lexical editor; the machine
- * here is the submit plane (phase, claim, attempt) alone.
+ * Input-machine types and Session-addressed draft operations. Business packages
+ * read InputState through InputZone and use scoped input events for guarded
+ * mutations. Conversation wiring and direct draft consumers resolve SessionInput
+ * through conversation.input.for(), including reference insertion through addReferences.
+ * Draft text and reference chips live in the shell's Lexical editor; the machine
+ * here owns submission state (phase, claim, attempt).
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -195,6 +195,19 @@ export interface SessionInput extends InputTarget {
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
   addAttachments(ids: readonly DraftAttachmentId[]): boolean
+  /**
+   * Insert file references after the retained selection in one undo step without replacing text.
+   * @param references - validated reference chips in source order.
+   * @returns false while {@link canInsertReferences} is false or when the editor refuses insertion.
+   */
+  addReferences(references: readonly ReferenceInsert[]): boolean
+  /**
+   * Read whether {@link addReferences} can currently edit the draft. Callers read it when they
+   * present the operation; the answer does not notify changes, and addReferences rechecks it.
+   * @returns false after disposal, during submission, for removed or non-continuable subagent Sessions,
+   * and while a composer block is set.
+   */
+  canInsertReferences(): boolean
   /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
   removeAttachment(id: DraftAttachmentId): boolean
   /** Drop ids whose browser-owned objects no longer exist. */

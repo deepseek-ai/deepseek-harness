@@ -71,6 +71,8 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字
 <details>
 <summary>实现细节——点击展开</summary>
 
+通用与 Bash 回退的 IN/OUT 卡片跨分区共用标签列，并保留输入、输出各自独立的滚动。
+
 本包实现一条分派规则：原子工具视图按 wire 工具名称键控、由所属业务包注册；本包只渲染树与回退。
 
 ### 渲染约定

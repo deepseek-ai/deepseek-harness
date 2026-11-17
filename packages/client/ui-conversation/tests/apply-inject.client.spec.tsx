@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { render, cleanup } from '@testing-library/react'
 import { $getRoot, $isTextNode, PASTE_COMMAND } from 'lexical'
@@ -79,7 +80,7 @@ async function bench(renderQuote = false) {
   const opened = vi.fn<(id: SessionId) => void>()
   let mainReference: SessionReference | undefined
   const replaceMain = (id: SessionId, beforeOpen?: (id: SessionId) => void): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     try {
       beforeOpen?.(id)
     } catch (error: unknown) {
@@ -110,7 +111,7 @@ async function bench(renderQuote = false) {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'quote-probe': { kind: 'single', scope: 'session' },
@@ -120,7 +121,7 @@ async function bench(renderQuote = false) {
     </SessionProvider>
   ) : null)
 
-  const feature = await runtime.mount({ inject: [...inject], apply })
+  const feature = await runtime.mount({ inject: [...inject], apply }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   if (renderQuote) await runtime.mount(messageQuotes)
   runtime.renderRoot()
   const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
@@ -475,7 +476,7 @@ describe('Conversation inject API', () => {
       expect(activate).toHaveBeenLastCalledWith('custom')
       activate.mockClear()
 
-      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView' })
+      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView', facets: { conversation: true } })
       await b.runtime.flush()
       expect(mainReference.sessionId).toBe(ROOT)
       expect(activate).not.toHaveBeenCalled()

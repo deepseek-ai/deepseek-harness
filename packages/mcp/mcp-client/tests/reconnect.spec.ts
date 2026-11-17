@@ -86,7 +86,8 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
 
 // vi.mock is hoisted above static imports, so the modules under test see the
 // mocked SDK even through a static import.
-import { Config as ConfigSchema, apply, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { Config as ConfigSchema, apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from '@deepseek-ai/dsh-mcp-client/src/connection.ts'
 import { McpStatusCell } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { McpGeneration } from '@deepseek-ai/dsh-mcp-client/src/generation.ts'

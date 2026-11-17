@@ -14,7 +14,7 @@ import type { SessionSearchResultItem } from '../sessions/manager.ts'
 import type { SessionBinding, SessionListState } from '../sessions/service.ts'
 import type { SessionFace } from './session.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { SessionReferenceSource } from '../index.ts'
+import type { SessionReferenceSource, SessionRetainFacet } from '../index.ts'
 
 export type { AgentContext } from '../scope.ts'
 
@@ -32,9 +32,20 @@ export interface SessionReference extends Disposable {
   release(): void
 }
 
-/** Consumer identity and optional cancellation of one acquisition waiter. */
+/** Consumer identity, retained facets, and optional cancellation of one acquisition waiter. */
 export interface SessionRetainOptions {
   readonly source: SessionReferenceSource
+  /**
+   * Whether this reference keeps the Session's own event connection and the event window it keeps current, so a
+   * return shows the data at once. Defaults to `true`; `false` keeps only the Session object and its local state,
+   * such as the composer draft. This is not the page's transport connection.
+   */
+  readonly connection?: boolean | undefined
+  /**
+   * Owner-declared facets this reference keeps computing over the Session's data; an absent key is not computed.
+   * The set is fixed for the reference's lifetime.
+   */
+  readonly facets?: Readonly<Partial<Record<SessionRetainFacet, true>>> | undefined
   readonly signal?: AbortSignal | undefined
 }
 
@@ -43,6 +54,13 @@ export interface SessionRetainInfo {
   readonly referenceCount: number
   /** Positive source counts only; a source without references is absent. */
   readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>
+  /**
+   * Positive counts of references retaining each facet; absent while no reference retains any facet.
+   * Owners read their facet here, for example `(info.retainedFacets?.conversation ?? 0) > 0`.
+   */
+  readonly retainedFacets?: Readonly<Partial<Record<SessionRetainFacet, number>>>
+  /** Positive count of references keeping the event connection; absent while none does. */
+  readonly connectionCount?: number
 }
 
 /** The sessions-service face injected as `ctx.sessions`. */

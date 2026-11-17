@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/upstream-skills/README.md
+/:
+  en: 2901b7fe88b3d1e8
+  zh: 231b9b01a75b317f
+/deepseek-ai-dsh-upstream-skills:
+  en: f3158e9291ae2f3d
+  zh: 58b89910c6fa6980
+/deepseek-ai-dsh-upstream-skills/summary:
+  en: 985af9365ec4f322
+  zh: 62bf184310772f11
+/deepseek-ai-dsh-upstream-skills/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-upstream-skills/use-this-package:
+  en: 4fb803d56a5f4160
+  zh: a0746a984d3cb313
+/deepseek-ai-dsh-upstream-skills/use-this-package/when-to-choose-it:
+  en: 864a01de5a4ba7aa
+  zh: 06db4091df86a934
+/deepseek-ai-dsh-upstream-skills/use-this-package/minimal-configuration:
+  en: 2ac0be96902c0c7c
+  zh: a6412287a1ac4487
+/deepseek-ai-dsh-upstream-skills/use-this-package/register-an-entry-skill:
+  en: a4adb17bd22ccf36
+  zh: 0afd5dbd5e6d4c11
+/deepseek-ai-dsh-upstream-skills/use-this-package/kept-files-and-verification:
+  en: 0633b5470e6b4e6c
+  zh: 419916b5b305aa7d
+/deepseek-ai-dsh-upstream-skills/use-this-package/pinning-a-commit:
+  en: ea5587081cc3b471
+  zh: e0993a154ae79dc1
+/deepseek-ai-dsh-upstream-skills/understand-the-implementation:
+  en: 620b702a4b6c162c
+  zh: 209f776f7c49ddd0
+/deepseek-ai-dsh-upstream-skills/further-exploration:
+  en: 95c015940a49bef1
+  zh: d1d3c6162cd4fa68
+/deepseek-ai-dsh-upstream-skills/model-experience:
+  en: 330d735bd7263f89
+  zh: 26096e961db1acc5
+/deepseek-ai-dsh-upstream-skills/model-experience/kv-cache-effect:
+  en: 2a09699bc1130758
+  zh: 972fc624936c8c2f
+/deepseek-ai-dsh-upstream-skills/known-limitations-and-deferred-work:
+  en: 31293ef35d3c40da
+  zh: db7b8e190085008e
+/deepseek-ai-dsh-upstream-skills/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

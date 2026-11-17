@@ -23,6 +23,9 @@
     - id: plugin-package-inventory-deepseek
       name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 
+    - id: deepseek-auth
+      name: '@deepseek-ai/dsh-deepseek-auth'
+
     - id: llm-deepseek
       name: '@deepseek-ai/dsh-llm-deepseek-api-key'
       config:
@@ -51,9 +54,6 @@
 
     - id: working-directory
       name: '@deepseek-ai/dsh-working-directory'
-
-    - id: tool-working-directory
-      name: '@deepseek-ai/dsh-tool-working-directory'
 
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'

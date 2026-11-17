@@ -3,12 +3,14 @@ import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import { expect, it, vi } from 'vitest'
 import * as ApiKey from '../src/index.ts'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 
 it.each([undefined, ''])('hides models without an API key: %j', async (key) => {
   vi.stubEnv('DEEPSEEK_API_KEY', key)
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, {})
     expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
   } finally {
@@ -22,6 +24,7 @@ it('advertises configured models with an API key', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, { models: [{ id: 'configured-model' }] })
     expect(await ctx.llm.listModels('deepseek-official')).toEqual([
       expect.objectContaining({ provider: 'deepseek-official', id: 'configured-model' }),
@@ -37,6 +40,7 @@ it('reports malformed credentials during discovery under the settings namespace 
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(ApiKey, {})
     const [directory] = ctx.llm.listConfigurableProviders()
     expect(directory?.settingsNs).toBe('llm-deepseek-api-key')
@@ -54,6 +58,7 @@ it('names the Loader entry id in credential diagnostics, as product profiles mou
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin({
       name: ApiKey.name, inject: ApiKey.inject, Config: ApiKey.Config,
       apply: (inner: Context, config: ApiKey.Config) => {
@@ -72,52 +77,39 @@ it('names the Loader entry id in credential diagnostics, as product profiles mou
   }
 })
 
-it('publishes the route API key for its consumers from the credential planes it reads itself', async () => {
-  vi.stubEnv('DEEPSEEK_API_KEY', 'fixture-api-key')
+it('connects its route id, key reference and deployment, so other DeepSeek consumers send its key to its origin', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'default-key')
+  vi.stubEnv('ROUTE_KEY', 'fixture-api-key')
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
-    const credential = ctx.llm.providerCredential('deepseek-official')
-    expect(credential).toMatchObject({ kind: 'api-key', baseURL: 'https://route.deepseek.test/anthropic', reference: 'DEEPSEEK_API_KEY' })
-    const endpoint = 'https://route.deepseek.test/v1/tools/search'
-    await expect(credential!.configured(endpoint)).resolves.toBe(true)
-    await expect(credential!.resolve(endpoint)).resolves.toEqual({ headers: { 'x-api-key': 'fixture-api-key' }, value: 'fixture-api-key' })
-    vi.stubEnv('DEEPSEEK_API_KEY', '')
-    await expect(credential!.configured(endpoint)).resolves.toBe(false)
-    await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
-    vi.stubEnv('DEEPSEEK_API_KEY', 'invalid\nheader')
-    await expect(credential!.configured(endpoint)).resolves.toBe(true)
-    await expect(credential!.resolve(endpoint)).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+    await ctx.plugin(DeepSeekAuth)
+    const search = { consumer: 'web-test', accepts: ['api-key'], billing: 'api-key', destination: { path: '/v1/tools/search' } } as const
+    const route = await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic', apiKeyEnv: 'ROUTE_KEY' })
+    expect(ctx.deepseekAuth.routeKind('deepseek-official')).toBe('api-key')
+    expect(await ctx.deepseekAuth.authorize(search)).toEqual({
+      kind: 'api-key', endpoint: 'https://route.deepseek.test/v1/tools/search', reference: 'ROUTE_KEY', headers: { authorization: 'Bearer fixture-api-key' },
+    })
+    vi.stubEnv('ROUTE_KEY', 'invalid\nheader')
+    await expect(ctx.deepseekAuth.authorize(search)).rejects.toThrow('llm-deepseek-api-key: the API key resolved from ROUTE_KEY contains characters')
+    await route.dispose()
+    expect(ctx.deepseekAuth.routeKind('deepseek-official')).toBeUndefined()
+    expect(await ctx.deepseekAuth.authorize(search)).toMatchObject({ endpoint: 'https://api.deepseek.com/v1/tools/search', reference: 'DEEPSEEK_API_KEY' })
   } finally {
     await ctx.fiber.dispose()
     vi.unstubAllEnvs()
   }
 })
 
-it.each([
-  'https://other-origin.example/v1/tools/search',
-  'http://route.deepseek.test/v1/tools/search',
-  'https://route.deepseek.test:8443/v1/tools/search',
-  'https://user@route.deepseek.test/v1/tools/search',
-  'https://:secret@route.deepseek.test/v1/tools/search',
-])('releases no key for %s, a destination outside the origin of its base URL, without reading the credential store', async (endpoint) => {
-  const resolve = vi.fn(async () => ({ value: 'stored-key' }))
-  const describe = vi.fn(async () => ({ configured: true }))
+it('fails a model listing whose credential store cannot be read with the store\'s failure', async () => {
+  const failure = new Error('credential store unreadable')
   const ctx = new Context()
   try {
-    ctx.provide('credentials', { resolve, describe } as never)
+    ctx.provide('credentials', { resolve: () => Promise.reject(failure) } as never)
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
-    const credential = ctx.llm.providerCredential('deepseek-official')
-    await expect(credential!.configured(endpoint)).resolves.toBe(false)
-    await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
-    expect(resolve).not.toHaveBeenCalled()
-    expect(describe).not.toHaveBeenCalled()
-    // The same store answers for a destination under the route's origin.
-    const served = 'https://route.deepseek.test/v1/tools/search'
-    await expect(credential!.configured(served)).resolves.toBe(true)
-    await expect(credential!.resolve(served)).resolves.toEqual({ headers: { 'x-api-key': 'stored-key' }, value: 'stored-key' })
+    await ctx.plugin(DeepSeekAuth)
+    await ctx.plugin(ApiKey, { models: [{ id: 'configured-model' }] })
+    await expect(ctx.llm.listModels('deepseek-official')).rejects.toBe(failure)
   } finally {
     await ctx.fiber.dispose()
   }

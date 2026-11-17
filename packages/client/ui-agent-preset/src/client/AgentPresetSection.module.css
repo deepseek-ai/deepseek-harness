@@ -1,21 +1,23 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 720px;
   color: var(--dsw-alias-label-primary);
 }
 
 .title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 
 .intro {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--dsw-alias-label-tertiary);
+  line-height: 22px;
 }
 
 /* Cards, not rows: a preset is a thing you pick, and the description is the
@@ -26,18 +28,15 @@
   gap: 10px;
 }
 
-/* Group-to-group breathing room: the section's 12px gap plus 20px reads the
-   two rosters as separate blocks (32px total). */
+/* Separate the two rosters by 32px, including the section gap. */
 .group + .group {
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .groupHead {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -233,12 +232,10 @@
 /* Bounded to four lines. A preset publishes its own description, so one long
    one would otherwise stretch every card in its grid row. Clamping is CSS
    alone: the whole text stays in the DOM for assistive
-   tech, and the card offers it on hover when it is actually cut off. The
-   description does not grow to fill the card — `-webkit-line-clamp` on a
-   flex-stretched box leaves the clamp height and the box height disagreeing,
-   so auto margins center the text between the header and footer instead. */
+   tech, and the card offers it on hover when it is actually cut off.
+   Descriptions start below their headings; spare height remains below them. */
 .cardDesc {
-  margin-block: auto;
+  margin: 0;
   font-size: 13px;
   line-height: 1.55;
   color: var(--dsw-alias-label-secondary);
@@ -417,4 +414,10 @@
 .creatorButton:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

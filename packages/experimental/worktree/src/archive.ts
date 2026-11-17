@@ -3,6 +3,7 @@
  * the service constructor, as the job and Agent registries install their own
  * archive-admission families, so it holds for every Session the Workspace archives.
  */
+import { sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -46,11 +47,14 @@ interface Attempt {
 
 /**
  * Whether `path` is `root` or lies below it. Both are canonical absolute
- * directories of one execution world without a trailing separator, so string
- * prefixing is exact.
+ * process paths without a trailing separator, so prefixing with the platform
+ * separator is exact.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute directory to test.
+ * @returns whether `root` contains `path`.
  */
-function within(root: string, path: string): boolean {
-  return path === root || path.startsWith(`${root}/`)
+export function within(root: string, path: string): boolean {
+  return path === root || path.startsWith(`${root}${sep}`)
 }
 
 /** Owns pending cleanup, gates directory entry into a checkout being removed, and drains before the service is released. */

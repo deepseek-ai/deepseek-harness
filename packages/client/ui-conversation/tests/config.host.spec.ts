@@ -18,9 +18,11 @@ describe('ui-conversation host', () => {
     await ctx.plugin(SessionProjectionRegistry)
     const configuration = await liveConfig(ctx, HostPlugin)
     const { fiber } = configuration
-    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ busyEnter: DEFAULT_BUSY_ENTER_BEHAVIOR })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({
+      busyEnter: DEFAULT_BUSY_ENTER_BEHAVIOR, maxConcurrentFileUploads: 2,
+    })
     await configuration.update({ busyEnter: 'steer' })
-    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ busyEnter: 'steer' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ busyEnter: 'steer', maxConcurrentFileUploads: 2 })
     await expect(configuration.update({ busyEnter: 'invalid' })).rejects.toThrow()
     await fiber.dispose()
   })
