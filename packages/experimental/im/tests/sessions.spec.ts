@@ -601,7 +601,7 @@ describe('reset', () => {
     })
     await expect(first.host.reset(a.key, 'cmd', { operationId: 'op-stuck', expectedGeneration: 0 }))
       .rejects.toThrow()
-    await expect(first.host.deliver(a.key, messagesDelivery('followup', [message('d-a', 1)]))).rejects.toThrow(/format offline/)
+    await expect(first.host.deliver(a.key, messagesDelivery('followup', [message('d-a', 1)]))).rejects.toThrow(/uncommitted reset/)
     await first.host.dispose()
 
     const second = await booted({ pool: first.pool, withoutStart: true })
@@ -634,7 +634,7 @@ describe('reset', () => {
       }
     })
     await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-aged', expectedGeneration: 0 })).rejects.toThrow()
-    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-stale', 2)]))).rejects.toThrow(/format offline/)
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-stale', 2)]))).rejects.toThrow(/uncommitted reset/)
 
     const resetsTable = first.pool.media.get('im_sessions')?.tables.get('resets')
     for (const [id, stored] of resetsTable ?? []) {
@@ -653,6 +653,27 @@ describe('reset', () => {
     expect(second.pool.media.get('im_sessions')?.tables.get('resets')?.size).toBe(1)
     expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
     expect(second.host.pendingDeliveries()).toBe(1)
+  })
+
+  it('refuses direct deliver() / admit() to a session with an uncommitted reset receipt', async () => {
+    const harness = await booted()
+    const a = await harness.host.ensure(spec({ key: 'conv:a' }))
+    const b = await harness.host.ensure(spec({ key: 'conv:b' }))
+    await harness.host.reset(b.key, 'clear', { operationId: 'op-b-done', expectedGeneration: 0 })
+
+    let failSessionWrite = true
+    harness.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        harness.pool.failNextWrites = 1
+      }
+    })
+    await expect(harness.host.reset(a.key, 'clear', { operationId: 'op-a-stuck', expectedGeneration: 0 })).rejects.toThrow()
+
+    await expect(harness.host.deliver(a.key, messagesDelivery('followup', [message('d-blocked', 1)])))
+      .rejects.toMatchObject({ code: 'unavailable' })
+    expect(harness.ctx.agents.get(a.sessionId)).toBeUndefined()
+    await expect(harness.host.deliver(b.key, messagesDelivery('followup', [message('d-ok', 1)]))).resolves.toBeUndefined()
   })
 })
 

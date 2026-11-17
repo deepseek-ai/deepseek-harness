@@ -500,6 +500,9 @@ export class ImSessionHost implements ImSessions {
         if (this.retired.has(sessionId)) await this.discard(id)
         throw new ImError('unavailable', `IM session ${sessionId} of delivery ${id} is no longer hosted.`)
       }
+      if (this.hasPendingReset(sessionId)) {
+        throw new ImError('unavailable', `IM session ${sessionId} has an uncommitted reset; delivery ${id} remains pending.`)
+      }
       const { delivery } = stored
       const agent = await this.deps.agents.open(record)
       const messageId = deliveryMessageId(sessionId, delivery.id)
@@ -582,6 +585,13 @@ export class ImSessionHost implements ImSessions {
   }
 
   /** Forget one delivery intent whose generation is gone, so no recovery pass retries it. */
+  private hasPendingReset(sessionId: SessionId): boolean {
+    for (const stored of this.resets.values()) {
+      if (stored.replaced === sessionId) return true
+    }
+    return false
+  }
+
   private async discard(id: string): Promise<void> {
     await this.write(async () => {
       await this.domainOf().table('deliveries').delete(id)
