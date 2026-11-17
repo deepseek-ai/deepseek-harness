@@ -67,7 +67,7 @@ kind: "package-reference"
 
 插件提供原有持久化服务，并在隔离的服务上下文中使用 JSONL 提供者读取旧历史。导入取得 Session 的文件租约，在数据库事务中提交元数据和事件，然后记录 SQLite 路由。write open 在交接过程中保持租约。
 
-SQLite 保存 thread 元数据、前驱关联的 Segment 元数据及带索引的 JSON 事件行。发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
+SQLite 保存 thread 元数据、前驱关联的 Segment 元数据及带索引的 JSON 事件行。发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。日志模式的锁竞争会在五秒 busy 等待预算内重试，此时尚未写入 schema 或 Session；持续的锁竞争及其他失败仍会报告。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
 
 | 源码 | 职责 |
 |---|---|
