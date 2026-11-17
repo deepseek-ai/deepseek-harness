@@ -67,7 +67,7 @@ Direct append, live Session events and durability checkpoints use the same handl
 
 The plugin supplies the existing persistence service and uses a JSONL provider in an isolated service context to read legacy histories. Import acquires the Session's artifact lease, commits its metadata and events in a database transaction, then records SQLite routing. A write open retains the lease through the handoff.
 
-SQLite keeps thread metadata, predecessor-linked Segment metadata and indexed JSON event rows. WAL is enabled before schema publication so a concurrent reader cannot prevent the first mode switch. The backend owns write queues, live-event buffering, transaction completion and handle cleanup; callers do not address Segments.
+SQLite keeps thread metadata, predecessor-linked Segment metadata and indexed JSON event rows. WAL is enabled before schema publication so a concurrent reader cannot prevent the first mode switch. Journal-mode lock contention retries within the five-second busy budget before any schema or Session write; persistent contention and other failures are reported. The backend owns write queues, live-event buffering, transaction completion and handle cleanup; callers do not address Segments.
 
 | Source | Responsibility |
 |---|---|

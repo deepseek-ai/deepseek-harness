@@ -4721,9 +4721,9 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-subagent`
 
-- `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
+- `inject`: `tools` · `subagents` · `systemPrompt`
 - `refs`: [`AgentOptions`](subsystems/core.zh.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:47`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:46`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -4737,8 +4737,8 @@ export interface Config extends PresetSelectionConfig {
   toolName?: string
   /**
    * Expose optional child `provider`, `model`, and `reasoning_effort` fields.
-   * Requires provider `agentOptions` support. Execution enforces the Session
-   * policy, or restricts explicit selection to the current parent route.
+   * Requires provider `agentOptions` support. Each call enforces the current
+   * Host setting, or restricts explicit selection to the current parent route.
    */
   modelSelection?: boolean
   /**
