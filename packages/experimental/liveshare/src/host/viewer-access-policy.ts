@@ -107,6 +107,7 @@ const VIEWER_GLOBAL_ROLE: RemoteAccessRole<'global'> = {
     'session/control',
     'session/list',
     'session/modelCatalog',
+    'pluginEvents/follow',
     'productAnalytics/enabled',
     'productAnalytics/report',
     'productAnalytics/watchPolicy',

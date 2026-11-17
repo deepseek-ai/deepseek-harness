@@ -1,9 +1,9 @@
 /** API-key authentication, credential-gated discovery, and the official model listing for the official DeepSeek route. */
 import type { Context } from '@deepseek-ai/cordis'
-import { APP_IDENTITY, assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
+import { APP_IDENTITY, INVALID_CREDENTIAL_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
+import { DeepSeekAuthError } from '@deepseek-ai/dsh-deepseek-auth'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
   catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, resolveListedCatalog,
@@ -15,7 +15,7 @@ import type { ResolvedDeepSeekOptions } from './config.ts'
 export { Config } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export const name = 'llm-deepseek-api-key'
-export const inject = ['llm']
+export const inject = ['llm', 'deepseekAuth']
 
 const PROVIDER = 'deepseek-official'
 /** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
@@ -36,24 +36,29 @@ export function apply(ctx: Context, config: Config): void {
   const settingsNs = ctx.fiber.entry?.options.id ?? name
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
-  /** The validated API key, or `undefined` when none is configured; store and format failures propagate. */
-  const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
-    const value = await resolveCredentialRef(ctx, connection.apiKeyEnv)
-    return value === undefined ? undefined : assertUsableApiKey(value, settingsNs, connection.apiKeyEnv)
-  }
+  // Every other DeepSeek consumer billed by the API key sends this route's key to this route's deployment.
+  ctx.effect(() => ctx.deepseekAuth.connect('api-key', PROVIDER, () => {
+    const connection = options()
+    return { baseURL: connection.baseURL, reference: connection.apiKeyEnv, owner: settingsNs }
+  }), 'llm-deepseek-api-key: API-key deployment')
   /**
-   * Whether `endpoint` belongs to the deployment this route sends its key to: the origin of the route's base URL,
-   * without credentials embedded in the URL.
+   * The key `ctx.deepseekAuth` releases for `endpoint` from one configuration generation, in the header Messages
+   * expects; `undefined` when none is configured or `endpoint` is outside the route's deployment. An unusable key fails
+   * as this route's `INVALID_CREDENTIAL`; store failures propagate.
    */
-  const servedByRoute = (connection: ResolvedDeepSeekOptions, endpoint: string): boolean => {
-    const destination = new URL(endpoint)
-    return destination.origin === new URL(connection.baseURL).origin && destination.username === '' && destination.password === ''
-  }
   const resolveAuth = async (connection: ResolvedDeepSeekOptions, endpoint: string): Promise<DeepSeekRequestAuth | undefined> => {
-    // The store is read only for a destination this route serves, as the presence check below.
-    if (!servedByRoute(connection, endpoint)) return undefined
-    const key = await resolveApiKey(connection)
-    return key === undefined ? undefined : { headers: { 'x-api-key': key }, value: key }
+    try {
+      return await ctx.deepseekAuth.authorize({
+        consumer: settingsNs, accepts: ['api-key'], billing: 'api-key', destination: { url: endpoint },
+        connections: { 'api-key': { baseURL: connection.baseURL, reference: connection.apiKeyEnv } },
+        apiKeyHeaders: ['x-api-key'],
+      })
+    } catch (error) {
+      if (error instanceof DeepSeekAuthError && error.code === 'INVALID_CREDENTIAL') {
+        throw new LlmError(error.message, INVALID_CREDENTIAL_CODE, { cause: error })
+      }
+      throw error
+    }
   }
   const missingCredential = (connection: ResolvedDeepSeekOptions) => new LlmError(
     `llm-deepseek: no API key for provider route "${PROVIDER}"; store ${connection.apiKeyEnv} through the credentials`
@@ -105,17 +110,11 @@ export function apply(ctx: Context, config: Config): void {
     },
     resolveAuth,
     missingCredential,
-    credential: {
-      kind: 'api-key',
-      reference: connection => connection.apiKeyEnv,
-      configured: async (connection, endpoint) =>
-        servedByRoute(connection, endpoint) && await credentialRefConfigured(ctx, connection.apiKeyEnv),
-    },
     admit: (connection, model) => { refuseListedModel(model, connection.refusals.get(model)) },
     discoverModels: async (provider) => {
       const connection = options()
       if (connection.listing === undefined) {
-        if (await resolveApiKey(connection) === undefined) return []
+        if (await resolveAuth(connection, connection.baseURL) === undefined) return []
         return connection.models.map(model => catalogModelInfo(provider, model))
       }
       const view = await listings.view(connection.listing)

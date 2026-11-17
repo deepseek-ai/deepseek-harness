@@ -4,6 +4,7 @@ import { BlockAssembler, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { afterEach, expect, it, vi } from 'vitest'
 import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import * as Account from '../src/index.ts'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -42,6 +43,7 @@ async function route(options: { reject?: (token: string) => void; agents?: boole
     accountStub({ token: () => 'account-token', signedOut: signedOut.signal, ...reject === undefined ? {} : { reject } }),
     { registerRunningTaskReport: () => () => {} },
   ))
+  await ctx.plugin(DeepSeekAuth)
   const plugin = ctx.plugin(Account)
   await plugin
   return { ctx, signedOut, cancelAccountTask, cancelApiKeyTask, plugin }

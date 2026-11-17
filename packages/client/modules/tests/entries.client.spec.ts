@@ -2,7 +2,9 @@
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import z from '@deepseek-ai/schemastery'
 import { createClientModuleSystem } from '../src/client/index.ts'
+import type { SyncedConfigRef } from '@deepseek-ai/dsh-client-config/types'
 import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootRelease, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
 
 type Factory = ClientBundleRegistration['factory']
@@ -86,6 +88,149 @@ function visible(id: string, effects: { mounted: number; disposed: number; hits:
 }
 
 describe('client manifest entries', () => {
+  it('hands each activation its own synced Config object and updates changed fields without remounting', async () => {
+    interface Synced { size: SyncedConfigRef<number>; office: SyncedConfigRef<{ maxBytes: number }> }
+    const received: Synced[] = []
+    const b = await bench(graph(row('bootstrap'), row('a', 'r0', { config: { size: 1, office: { maxBytes: 8 } } })), {
+      a: () => ({ apply(_ctx: Context, config: Synced) { received.push(config) } }),
+    })
+    const config = received[0]!
+    expect(b.modules.entries.resolveConfigByPackage('a')).toBe(config)
+    expect(b.modules.entries.resolveConfigByPackage('missing')).toBeUndefined()
+    expect(Object.keys(config)).toEqual(['size', 'office'])
+    expect('size' in config).toBe(true)
+    expect('missing' in config).toBe(false)
+    expect('toString' in config).toBe(false)
+    expect(Object.getOwnPropertyDescriptor(config, 'hasOwnProperty')).toBeUndefined()
+    expect(Object.getOwnPropertyDescriptor(config, 'missing')).toBeUndefined()
+    expect(Reflect.get(config, Symbol.iterator)).toBeUndefined()
+    expect(Reflect.set(config, 'size', 1)).toBe(false)
+    expect(Reflect.defineProperty(config, 'size', { value: 1 })).toBe(false)
+    expect(Reflect.deleteProperty(config, 'size')).toBe(false)
+    const size = config.size
+    expect(config.size).toBe(size)
+    expect(Object.getOwnPropertyDescriptor(config, 'size')?.value).toBe(size)
+    expect(size.get()).toBe(1)
+    const office = config.office.getSnapshot()
+    expect(Object.isFrozen(office)).toBe(true)
+    const sizeListener = vi.fn()
+    const officeListener = vi.fn()
+    const unsubscribe = size.subscribe(sizeListener)
+    config.office.subscribe(officeListener)
+
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { office: { maxBytes: 8 }, size: 1 } })))
+    expect(sizeListener).not.toHaveBeenCalled()
+
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 2, office: { maxBytes: 8 } } })))
+    expect(size.get()).toBe(2)
+    expect(size.getSnapshot()).toBe(2)
+    expect(sizeListener).toHaveBeenCalledOnce()
+    expect(officeListener).not.toHaveBeenCalled()
+    expect(config.office.getSnapshot()).toBe(office)
+
+    // Every changed field is set before any subscriber runs.
+    const seen: unknown[] = []
+    size.subscribe(() => { seen.push([size.get(), config.office.get()]) })
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 4, office: { maxBytes: 9 } } })))
+    expect(seen).toEqual([[4, { maxBytes: 9 }]])
+    unsubscribe()
+
+    // Removal releases the activation: like a Host fiber that is no longer active, it receives no later values.
+    await b.modules.entries.sync(graph(row('bootstrap')))
+    expect(b.modules.entries.resolveConfigByPackage('a')).toBeUndefined()
+    expect(size.get()).toBe(4)
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 5 } })))
+    expect(size.get()).toBe(4)
+    // A re-added row's new activation receives a new object with the latest values.
+    expect(received).toHaveLength(2)
+    expect(received[1]).not.toBe(config)
+    expect(received[1]!.size.get()).toBe(5)
+    expect(b.modules.entries.resolveConfigByPackage('a')).toBe(received[1])
+
+    // Code replacement: a value arriving before teardown begins updates the still-active activation, as on the Host;
+    // the replacement then starts with the latest values, and the released activation receives nothing later.
+    const second = received[1]!
+    const replacing = b.modules.entries.reload('a', 'r1')
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r1', { config: { size: 6 } })))
+    await replacing
+    expect(received).toHaveLength(3)
+    expect(second.size.get()).toBe(6)
+    expect(received[2]!.size.get()).toBe(6)
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r1', { config: { size: 7 } })))
+    expect(received[2]!.size.get()).toBe(7)
+    expect(second.size.get()).toBe(6)
+  })
+
+  it('stops writing to an activation that unloads because a required service was withdrawn', async () => {
+    interface Synced { size: SyncedConfigRef<number> }
+    const received: Synced[] = []
+    const b = await bench(graph(row('bootstrap'), row('a', 'r0', { config: { size: 1 } })), {
+      a: () => ({ inject: ['dependency'], apply(_ctx: Context, config: Synced) { received.push(config) } }),
+    })
+    const dispose = b.ctx.provide('dependency', {})
+    await vi.waitFor(() => { expect(received).toHaveLength(1) })
+    const first = received[0]!
+    expect(b.modules.entries.resolveConfigByPackage('a')).toBe(first)
+    dispose()
+    await b.ctx.loader.await()
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 2 } })))
+    expect(first.size.get()).toBe(1)
+    expect(b.modules.entries.resolveConfigByPackage('a')).toBeUndefined()
+  })
+
+  it('keeps the running activation\'s object when a candidate config is resolved for it', async () => {
+    interface Synced { size: SyncedConfigRef<number> }
+    const received: Synced[] = []
+    const b = await bench(graph(row('bootstrap'), row('a', 'r0', { config: { size: 1 } })), {
+      a: () => ({ apply(_ctx: Context, config: Synced) { received.push(config) } }),
+    })
+    const fiber = [...b.ctx.loader.entries()].find(entry => entry.options.name === 'a')!.fiber!.ctx.fiber
+    expect(fiber.resolveConfig(fiber.rawConfig)).toBe(received[0])
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 2 } })))
+    expect(received[0]!.size.get()).toBe(2)
+  })
+
+  it('gives a row without values an empty object that later values fill without another apply', async () => {
+    const configs: unknown[] = []
+    const b = await bench(graph(row('bootstrap'), row('a')), {
+      a: () => ({ apply(_ctx: Context, config: unknown) { configs.push(config) } }),
+    })
+    const config = configs[0] as { size: SyncedConfigRef<number> }
+    expect(Object.keys(config)).toEqual([])
+    expect(config.size.get()).toBeUndefined()
+    await b.modules.entries.sync(graph(row('bootstrap'), row('a', 'r0', { config: { size: 1 } })))
+    expect(configs).toEqual([config])
+    expect(config.size.get()).toBe(1)
+  })
+
+  it('keeps ordinary configuration for a Client Config schema and rejects one that also receives synced values', async () => {
+    const own: unknown[] = []
+    const b = await bench(graph(row('bootstrap'), row('own'), row('schema', 'r0', { config: { size: 1 } })), {
+      own: () => ({ Config: z.object({ limit: z.natural().default(3) }), apply(_ctx: Context, config: unknown) { own.push(config) } }),
+      schema: () => ({ Config: z.object({}), apply() {} }),
+    })
+    expect(own).toEqual([{ limit: 3 }])
+    const schemaFiber = [...b.ctx.loader.entries()].find(entry => entry.options.name === 'schema')!.fiber!
+    await expect(schemaFiber.await()).rejects.toThrow('exports a Config schema')
+    // A fiber outside the managed entries resolves its own config.
+    const plain = await b.ctx.plugin({ apply(_ctx: Context, config: unknown) { own.push(config) } }, { plain: true })
+    expect(plain.state).toBe(2)
+    expect(own.at(-1)).toEqual({ plain: true })
+  })
+
+  it('keeps a child plugin\'s explicit config inside a managed entry', async () => {
+    const child: unknown[] = []
+    await bench(graph(row('bootstrap'), row('a', 'r0', { config: { size: 1 } })), {
+      a: () => ({ apply(ctx: Context) { ctx.plugin({ apply(_ctx: Context, config: unknown) { child.push(config) } }, { input: 1 }) } }),
+    })
+    expect(child).toEqual([{ input: 1 }])
+  })
+
+  it('rejects a graph row whose config is not an object', async () => {
+    const b = await bench(graph(row('bootstrap')), {})
+    expect(() => b.modules.entries.sync(graph(row('bootstrap', 'r0', { config: [] as never })))).toThrow('config must be an object')
+  })
+
   it('adds, drains removal and re-enables one module record; unrelated entries survive', async () => {
     const effects = { mounted: 0, disposed: 0, hits: 0 }
     const cleanup = deferred()

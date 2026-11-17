@@ -26,6 +26,8 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
       config: {}
 ```
 
+To declare the DSH versions the bundle supports in `engines.dsh`, read `references/dsh-version.md` first.
+
 ## Display metadata, detail document, and icon
 
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. The bundle's page in Plugin Manager shows the detail document that `meta.detail` names, otherwise the package README. Complete this checklist before installation:

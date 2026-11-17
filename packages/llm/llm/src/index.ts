@@ -22,7 +22,6 @@ import type {
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
-  ProviderCredential,
   StreamChunk,
   SystemPromptUpdate,
   ToolSchema,
@@ -34,10 +33,9 @@ import type { ResolvedRetryPolicy } from './retry-policy.ts'
 import type { ProviderRequestId } from './brand.ts'
 import { callConfigEquals } from './call-config.ts'
 import type { ConfigureCall, LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
-import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
+import { HarnessError } from './error.ts'
 import type { BuiltinLlmFailureCode } from './error.ts'
 import { normalizeLlmFailure } from './adapter-failure.ts'
-import { normalizeApiKey } from './api-key.ts'
 import {
   contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates,
 } from './content.ts'
@@ -46,7 +44,6 @@ import type { FileAttachmentRef, ImageAttachmentRef, ImageRequestTarget } from '
 export * from './attribution.ts'
 export * from './brand.ts'
 export * from './error.ts'
-export * from './api-key.ts'
 export type * from './types.ts'
 export * from './content.ts'
 export * from './assistant-stream.ts'
@@ -150,41 +147,6 @@ export class LlmError extends HarnessError {
   }
 }
 
-/**
- * Accept one supplied credential, or refuse it as unusable.
- *
- * A stored key arrives from the credentials seam, a `.env` line, or a shell
- * export, all of which pick up surrounding whitespace, so trimming is silent.
- * Anything else fails here rather than inside `fetch`, whose ByteString
- * refusal names a UTF-16 code point instead of the setting to change. The key
- * never enters the message: `ref` names where to fix it, and echoing any part
- * of a secret into a log or a UI is the failure this diagnosis avoids.
- *
- * Lives beside {@link LlmError} rather than in `./api-key.ts` so the predicate
- * module stays dependency-free; both adapters share this one diagnosis instead
- * of keeping near-identical local copies.
- * @param raw - the credential exactly as supplied.
- * @param pkg - the refusing plugin's settings namespace or package name, prefixed to the diagnostic.
- * @param ref - the credential reference the value resolved through.
- * @returns the trimmed, usable key.
- */
-export function assertUsableApiKey(raw: string, pkg: string, ref: string): string {
-  const checked = normalizeApiKey(raw)
-  if (checked.ok) return checked.value
-  // The Models page is named as the writer it usually is, not as the only one:
-  // the same value can arrive from a hand-edited .env or a shell export in a
-  // composition that mounts no credentials seam at all, where directing the
-  // user to a page that deployment does not serve would be a dead end.
-  throw new LlmError(
-    checked.reason === 'empty'
-      ? `${pkg}: the API key resolved from ${ref} is blank; set ${ref} to the raw key`
-        + ' (the web Models page writes it) or export it in the launching environment'
-      : `${pkg}: the API key resolved from ${ref} contains characters no HTTP header can carry;`
-        + ` set ${ref} to the raw key alone (the web Models page writes it)`,
-    INVALID_CREDENTIAL_CODE,
-  )
-}
-
 /** One model call whose config and adapter registration were resolved together. */
 export interface PreparedLlmCall {
   /** Detached, deep-frozen config with any adapter-owned default materialized. */
@@ -267,19 +229,6 @@ export abstract class LlmAdapter {
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget {
     return { width: image.width, height: image.height, maxBytes: image.bytes }
-  }
-
-  /**
-   * Describe the credential one owned route currently sends, for consumers that
-   * call the same deployment outside the model request path, such as web
-   * providers that share a route's credential and endpoint. The default
-   * publishes none. Implementations answer from one configuration generation
-   * per call and may throw when that configuration does not resolve.
-   * @param _provider - a route passed to `registerAdapter()` for this instance.
-   * @returns the route's current credential, or `undefined` when the route publishes none.
-   */
-  providerCredential(_provider: string): ProviderCredential | undefined {
-    return undefined
   }
 
   /**
@@ -724,19 +673,6 @@ export class LlmRuntime extends TypertRemoteService {
    */
   imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget {
     return this.registration(provider).adapter.imageRequestTarget(provider, model, image)
-  }
-
-  /**
-   * Resolve the credential one registered route currently sends, through its
-   * owning adapter. An unregistered route answers `undefined` rather than
-   * throwing because callers ask about routes a conversation named earlier,
-   * which may no longer be mounted; a registered route whose configuration
-   * does not resolve propagates the adapter's failure.
-   * @param provider - provider route whose credential is wanted.
-   * @returns the route's credential, or `undefined` when the route is unregistered or publishes none.
-   */
-  providerCredential(provider: string): ProviderCredential | undefined {
-    return this.adapters.get(provider)?.adapter.providerCredential(provider)
   }
 
   /**
