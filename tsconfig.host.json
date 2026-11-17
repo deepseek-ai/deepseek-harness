@@ -148,6 +148,7 @@
     "apps/web/tests/default-workspace.e2e.ts",
     "apps/web/tests/new-session-refused.e2e.ts",
     "apps/web/tests/workspace-recency.e2e.ts",
+    "apps/web/tests/session-drag-scroll.e2e.ts",
     "apps/web/tests/session-unarchive.e2e.ts",
     "apps/web/tests/session-archive-active.e2e.ts",
     "apps/web/tests/replay-round-trip.e2e.ts",

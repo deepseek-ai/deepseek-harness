@@ -8,7 +8,7 @@
  */
 export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-acp-app': ['ACP_APP_STARTUP_SERVICE'],
-  '@deepseek-ai/dsh-action-cards': ['Config', 'isPluginStopping'],
+  '@deepseek-ai/dsh-action-cards': ['isPluginStopping'],
   '@deepseek-ai/dsh-agent': [
     'AgentModel', 'agentCarrier', 'agentEvents', 'assembleContextFor', 'emitAgentEvent', 'foldConsumedWork',
     'installModelSelection', 'modelSelectionProjectionDefinition',

@@ -1,4 +1,4 @@
-/** The completed answer offers creation through a propose_action card; choosing a location does not start it. */
+/** The completed answer offers creation through an action-card block shown as a card; choosing a location does not start it. */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -46,6 +46,9 @@ describe('creation recommendation after an explicit wish', () => {
     const cardBox = await card.boundingBox()
     expect(answerBox).not.toBeNull()
     expect(cardBox!.y).toBeGreaterThanOrEqual(answerBox!.y + answerBox!.height)
+    // The answer's action-card block stays hidden; only the card below shows its proposal.
+    expect(await page.getByText('create_personalized_page').count()).toBe(0)
+    expect(await page.locator('.md-code-block').count()).toBe(0)
     expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
     await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
     const info = card.getByRole('button', { name: 'How creation works and token usage', exact: true })

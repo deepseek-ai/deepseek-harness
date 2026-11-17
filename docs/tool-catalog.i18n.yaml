@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 9a75613dfc69ce8b
-  zh: 5f52b86658f1dff7
+  en: d4cdae26fd91c82f
+  zh: 48e8900c12195af4
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -54,14 +54,8 @@
   en: 4910ab327694ee97
   zh: 17e79e4366cb636d
 /tool-schema-catalog/deepseek-ai-dsh-experimental-browser-use-stagehand-native/stagehand-tabs:
-  en: a0d5b9b891358120
-  zh: 25793a62709770b5
-/tool-schema-catalog/deepseek-ai-dsh-action-cards:
-  en: 60c9df6ffda98a1d
-  zh: 60c9df6ffda98a1d
-/tool-schema-catalog/deepseek-ai-dsh-action-cards/propose-action:
-  en: 633c32b6df889830
-  zh: b88ea00b2033c11b
+  en: 095b18f9376e073d
+  zh: abd8785f8acaa555
 /tool-schema-catalog/deepseek-ai-dsh-tool-ask-user:
   en: e713a4a11a15d13c
   zh: e713a4a11a15d13c
