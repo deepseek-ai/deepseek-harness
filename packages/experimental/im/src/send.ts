@@ -48,8 +48,8 @@ import type { ImStore } from './store.ts'
 /** What the sender writes through and checks grants against: the message store and the session lookups. */
 export interface ImSenderDeps {
   store: ImStore
-  /** The two lookups of the grants check: the session record and its parent chain. */
-  sessions: Pick<ImSessions, 'of' | 'get'>
+  /** The three lookups of the grants check and of the placement: session record, parent chain, last answered message. */
+  sessions: Pick<ImSessions, 'of' | 'get' | 'trigger'>
   /**
    * The own message one publication is being stored as. The core announces a publication on its `send` event and does
    * not await the listener that stores it, so without this the receipt raced the store and lost `message` and `seq`.
@@ -479,8 +479,9 @@ export class ImSender {
   /**
    * Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat, and if all writable bindings
    * for `chat` are confined to specific threads (`binding.thread`), the publication must target one of them.
-   * @returns a thread id to forward to `target()` when a confined session quotes a thread root whose stored record
-   *   carries no `thread` field, else `undefined`.
+   * @returns the thread a publication that names none belongs in — the thread of the message this session answered
+   *   last, which is where its own answers go — or a thread id to forward to `target()` when a confined session quotes
+   *   a thread root whose stored record carries no `thread` field, else `undefined`.
    */
   private grant(
     chat: ImChatKey,
@@ -497,24 +498,40 @@ export class ImSender {
     const confined = writable.filter(
       (binding): binding is typeof binding & { thread: string } => binding.thread !== undefined,
     )
-    if (confined.length < writable.length) return undefined
     const allowedThreads = new Set(confined.map(binding => binding.thread))
     const explicit = typeof options.thread === 'string' ? options.thread.trim() : undefined
     const quoted = options.quote === undefined ? undefined : this.deps.store.get(options.quote)
     const fromQuote = quoted?.chat.key === chat ? quoted : undefined
+    // A publication that names neither a thread nor a message stays in the thread this session is talking in: its
+    // output renderers quote the trigger and inherit that thread, so the chat's own timeline is not where its work is.
+    const answered = explicit === undefined && fromQuote === undefined ? this.answeredThread(chat, session) : undefined
+    // An open chat binds the session to the whole conversation, so any of its threads is allowed.
+    if (confined.length < writable.length) return answered
     const allowed = explicit !== undefined
       ? allowedThreads.has(explicit)
-      : (fromQuote !== undefined && messageInThreads(fromQuote, allowedThreads))
+      : fromQuote !== undefined
+        ? messageInThreads(fromQuote, allowedThreads)
+        : answered !== undefined && allowedThreads.has(answered)
     if (!allowed) {
       throw new ImError(
         'access',
         `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
       )
     }
-    if (explicit === undefined && fromQuote !== undefined && fromQuote.thread === undefined) {
-      return splitKey(fromQuote.key).id
-    }
+    if (explicit === undefined && fromQuote === undefined) return answered
+    if (fromQuote !== undefined && fromQuote.thread === undefined) return splitKey(fromQuote.key).id
     return undefined
+  }
+
+  /**
+   * The thread of the message a session answered last (`ImSessions.trigger`), when that message belongs to `chat`.
+   * @param chat - chat the publication goes to.
+   * @param session - publishing session.
+   * @returns the thread id, or `undefined` for a message outside any thread or of another chat.
+   */
+  private answeredThread(chat: ImChatKey, session: SessionId): string | undefined {
+    const trigger = this.deps.sessions.trigger(session)
+    return trigger?.chat.key === chat ? trigger.thread?.id : undefined
   }
 
   /** The bot of a chat (`ImError('unavailable')` when it is not mounted). */

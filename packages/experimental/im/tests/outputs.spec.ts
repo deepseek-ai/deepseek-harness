@@ -527,6 +527,7 @@ describe('ImOutputRegistry referrers', () => {
       of: (id: SessionId) => (id === hosted.sessionId ? hosted : undefined),
       get: (keyOrId: string) => (keyOrId === hosted.sessionId || keyOrId === hosted.key ? hosted : undefined),
       stop: async () => true,
+      trigger: () => undefined,
     }
     const sender = new ImSender(ctx, config, { store, sessions })
     await sender.start()

@@ -31,9 +31,11 @@ const CHAT = ImChatKey('fake:bot', 'chat')
 const STUB_CHAT = ImChatKey('stub:bot', 'chat')
 const COMPOSITION = { agentPreset: 'im', cwd: process.cwd(), provider: 'mock', model: 'mock' }
 
-/** The two session lookups of `ImSenderDeps.sessions` (the grants check). */
+/** The session lookups of `ImSenderDeps.sessions` (the grants check and the placement). */
 class FakeSessions {
   private readonly records = new Map<string, ImSessionRecord>()
+  /** Last message each session answered (`ImSessions.trigger`). */
+  private readonly triggers = new Map<string, ImMessage>()
 
   add(session: string, bindings: ImBinding[], parent?: string): ImSessionRecord {
     const record: ImSessionRecord = {
@@ -50,6 +52,15 @@ class FakeSessions {
 
   get(keyOrId: string): ImSessionRecord | undefined {
     return this.records.get(keyOrId)
+  }
+
+  trigger(sessionId: SessionId): ImMessage | undefined {
+    return this.triggers.get(sessionId)
+  }
+
+  /** Record the message a session answered last. */
+  answered(session: ImSessionRecord, message: ImMessage): void {
+    this.triggers.set(session.sessionId, message)
   }
 }
 
@@ -243,6 +254,34 @@ describe('ImSender.send', () => {
     expect(bot.operations[0]?.target?.thread).toBeUndefined()
     await sender.send(CHAT, h.text('hello'), { thread: 't1' })
     expect(bot.operations[1]?.target?.thread).toBe('t1')
+  })
+
+  it('keeps a publication in the thread the session answered in', async () => {
+    const { bot, sender, sessions, store } = await boot()
+    const task = sessions.add('task', [{ chat: CHAT, writable: true, home: true }])
+    // A task placed on the whole chat answers a request posted inside one thread: its work happens there and its
+    // output renderers quote that message, so a publication that names no thread belongs in the same thread.
+    const request = await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-request'), { threadId: 'th-7' }), thread: { id: 'th-7' },
+    }, 'none')
+    sessions.answered(task, request)
+    await sender.send(CHAT, h.text('in the topic'), { session: task.sessionId })
+    expect(bot.operations.at(-1)?.target?.thread).toBe('th-7')
+    // A stored message of that thread supplies the adapter referrer, which is what places a Lark reply inside it.
+    expect(bot.operations.at(-1)?.target?.referrer).toMatchObject({ threadId: 'th-7' })
+
+    // A named thread wins, and a quoted message keeps its own placement.
+    await sender.send(CHAT, h.text('elsewhere'), { session: task.sessionId, thread: 'th-8' })
+    expect(bot.operations.at(-1)?.target?.thread).toBe('th-8')
+    const plain = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-plain'), undefined), 'none')
+    await sender.send(CHAT, h.text('answer'), { session: task.sessionId, quote: plain.key })
+    expect(bot.operations.at(-1)?.target?.thread).toBeUndefined()
+
+    // A message of another chat says nothing about this one.
+    const foreign = await store.put(inboundDraft(ImMessageKey('stub:bot', 'm-foreign'), undefined, STUB_CHAT), 'none')
+    sessions.answered(task, { ...foreign, thread: { id: 'th-9' } })
+    await sender.send(CHAT, h.text('back in the chat'), { session: task.sessionId })
+    expect(bot.operations.at(-1)?.target?.thread).toBeUndefined()
   })
 
   it('marks a platform refusal as failed and replays that verdict', async () => {
@@ -486,6 +525,23 @@ describe('ImSender grants', () => {
     })
     await okRootStream.close(h.text('stream-reply'))
     expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
+  })
+
+  it('accepts the thread a confined session answered in, and refuses any other', async () => {
+    const { sender, sessions, store, bot } = await boot()
+    const confined = sessions.add('confined', [{ chat: CHAT, writable: true, home: true, thread: 't1' }])
+    const request = await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-t1-request'), { threadId: 't1' }), thread: { id: 't1' },
+    }, 'none')
+    sessions.answered(confined, request)
+    const result = await sender.send(CHAT, h.text('in its topic'), { session: confined.sessionId })
+    expect(result.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('t1')
+
+    // An answered message of another thread still needs an explicit allowed thread.
+    sessions.answered(confined, { ...request, thread: { id: 't2' } })
+    await expect(sender.send(CHAT, h.text('elsewhere'), { session: confined.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
   })
 
   it('bounds a grants chain whose parent points back into it', () => {
