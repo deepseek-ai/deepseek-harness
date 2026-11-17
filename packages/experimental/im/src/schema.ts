@@ -115,7 +115,10 @@ export const imMembersParameters = {
 export const imSendParameters = {
   ...{ chat: chatParameter },
   text: { type: 'string', required: true, description: 'Complete markdown to publish as one message.' },
-  thread: { type: 'string', description: 'Thread id to publish into; omit for the chat itself.' },
+  thread: {
+    type: 'string',
+    description: 'Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none.',
+  },
 } as const satisfies ParameterSchemaSpec
 
 /** `im_reply` parameters. */
@@ -133,7 +136,10 @@ export const imReplyParameters = {
 export const imSendFileParameters = {
   ...{ chat: chatParameter },
   path: { type: 'string', required: true, description: 'Local path of the file to publish.' },
-  quote: { type: 'string', description: 'Message to answer, by key or seq; omit to publish into the chat.' },
+  quote: {
+    type: 'string',
+    description: 'Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none.',
+  },
 } as const satisfies ParameterSchemaSpec
 
 /** `im_read_image` parameters. */
