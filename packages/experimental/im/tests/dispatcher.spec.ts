@@ -201,7 +201,7 @@ describe('default dispatcher', () => {
     const deliverSpy = vi.fn().mockResolvedValue(undefined)
     const retry = await service.dispatcher!.handle({
       message: stored, source: SOURCES[0]!, deliver: deliverSpy,
-    } as unknown as ImMessageEvent)
+    } as ImMessageEvent)
     expect(retry).toEqual({ kind: 'handled', by: DISPATCHER_OWNER, sessions: [gen0] })
     expect(deliverSpy).not.toHaveBeenCalled()
   })
