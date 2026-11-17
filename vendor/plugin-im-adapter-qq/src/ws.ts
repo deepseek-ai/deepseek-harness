@@ -187,8 +187,8 @@ export class WsClient extends WsClientBase<QQBot> {
     const receive = (event: WebSocket.MessageEvent) => {
       if (connection.signal.aborted) return
       this.track(this.receiveFrame(socket, event.data, connection).catch((error) => {
- // The gateway has no per-event acknowledgement: a decode/intake failure cannot be re-requested, so it is
- // reported and the connection stays up (the durable consumer owns deduplication).
+        // A decode failure is logged inside dispatch() and leaves the connection up; a receive() persistence
+        // failure aborts the connection and closes the socket so RESUME replays the unpersisted frame.
         this.bot.ctx.logger.error('QQ gateway frame failed: %s', error)
       }))
     }
