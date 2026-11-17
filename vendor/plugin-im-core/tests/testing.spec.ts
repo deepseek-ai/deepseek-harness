@@ -496,7 +496,7 @@ describe('testkit helpers', () => {
     const testing = await import(testingUrl.href) as { FakeAdapter: typeof FakeAdapter }
     const { Context } = await import('@deepseek-ai/cordis')
     const ctx = new Context()
-    await ctx.plugin(runtime.Satori, {})
+    await ctx.plugin(runtime.Satori)
     const err = new runtime.PlatformError('permission', 'denied', { published: 'no' })
     const adapter = new testing.FakeAdapter(ctx, { modes: {} })
     expect(adapter.classify(err)).toBe(err)
