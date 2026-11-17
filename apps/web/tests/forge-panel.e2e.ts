@@ -776,7 +776,7 @@ async function expectNumberedReference({ scaffold, page, project, tripwire }: Pa
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
-  await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   await change.getByText('等待评审', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
@@ -884,7 +884,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await page.getByRole('tooltip').filter({ hasText: `工作树（基于 release）：${abbreviateHomePath(directory, homedir())}` }).waitFor()
   await page.mouse.move(0, 0)
   const change = panel.locator(`[data-forge-change="${PULL}"]`)
-  const title = change.getByRole('link', { name: 'Add the pull request panel', exact: true })
+  const title = change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' })
   await title.waitFor({ timeout: 20_000 })
   // The only open change request starts expanded.
   await change.getByText('等待评审', { exact: true }).waitFor()
@@ -1004,7 +1004,7 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
   scaffold.ctx.forgeSession.track(session, DRAFT)
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${DRAFT}"]`)
-  await change.getByRole('link', { name: 'Add the merge button', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the merge button' }).waitFor({ timeout: 20_000 })
 
   // The only open change request starts expanded, so its Merge action shows once it is ready.
   await chooseCardAction(page, change, '#9', '标记为可评审')
@@ -1137,7 +1137,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   scaffold.ctx.forgeSession.track(session, PULL)
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
-  await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
   // The open change request of the checked-out branch replaces the offer to create one.
   await card.getByRole('button', { name: '本地变更操作', exact: true }).click()
@@ -1150,7 +1150,8 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).click()
   await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
   await showSessionPanel(page)
-  await change.getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
+  // A press on the card's line opens the changes, as its Changes row and its View changes item do.
+  await change.locator('[data-forge-opens="changes"]').click()
   const view = page.locator('[data-forge-changes="change"]')
   const panelFile = view.locator('[data-forge-diff-file="src/panel.ts"]')
   const title = await view.getByText('Add the pull request panel', { exact: true }).boundingBox()
@@ -1774,9 +1775,9 @@ it.skipIf(MODE === 'record')('aligns localized status rows by their glyphs in th
             width: document.documentElement.clientWidth,
           }
         })
+        // The glyph starts 30px into the card, where the card's title starts.
         expect(geometry.iconInset).toBe(8)
-        expect(geometry.rowInset).toBeGreaterThanOrEqual(6)
-        expect(geometry.rowInset).toBeLessThanOrEqual(7)
+        expect(geometry.rowInset).toBe(22)
         offsets.add(geometry.valueOffset)
         expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.right).toBeLessThanOrEqual(geometry.width)
@@ -2507,7 +2508,7 @@ it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state 
   await showSessionPanel(page)
   const card = page.locator(`[data-forge-change="${PULL}"]`)
   // The card chooses its default expansion once its first status arrives, which names the title.
-  await card.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await card.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   if (await card.getAttribute('data-expanded') === null) await card.getByRole('button', { name: '展开 #7', exact: true }).click()
   const checks = card.locator('[data-forge-checks]')
   await expect.poll(() => checks.textContent(), { timeout: 20_000 }).toBe('检查3 项失败 · 1 项进行中')
