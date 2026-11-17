@@ -76,11 +76,19 @@ try {
         try { $key.SetValue('Path', $commandDirectory + ';C:\Windows', [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
         try { $key.SetValue('Directory', $commandDirectory); $key.SetValue('RetainedEntries', 0) } finally { $key.Dispose() }
+        if ($mode -eq 'unowned') {
+            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($ownerKey, $true)
+            try { $key.DeleteValue('Directory'); $key.DeleteValue('RetainedEntries') } finally { $key.Dispose() }
+        }
+        if ($mode -eq 'owned-retained') {
+            Set-ItemProperty -LiteralPath ('HKCU:\' + $ownerKey) -Name RetainedEntries -Value 1
+            Set-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey) -Name Path -Value ($commandDirectory + ';' + $commandDirectory + ';C:\Windows')
+        }
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
         try { $key.SetValue('', '"' + (Join-Path $installPath ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
         $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
         if ($mode -eq 'upgrade') {
             Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')
@@ -194,7 +202,9 @@ try {
         $owner = Get-ItemProperty -LiteralPath ('HKCU:\' + $ownerKey)
         if ([bool]$owner.Directory -ne $integrationsRetained) { throw "Command ownership cleanup failed: $mode" }
         $path = (Get-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey)).Path
-        if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $integrationsRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
+        $pathRetained = $integrationsRetained -or $mode -eq 'owned-retained'
+        if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $pathRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
+        if ($mode -eq 'owned-retained' -and $path -ne ($commandDirectory + ';C:\Windows')) { throw 'Owned cleanup removed a pre-existing manual PATH entry' }
         if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
         Write-Output "passed: $mode"
     }

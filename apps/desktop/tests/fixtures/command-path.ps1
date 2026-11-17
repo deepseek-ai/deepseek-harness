@@ -115,6 +115,28 @@ try {
     Require ($LASTEXITCODE -eq 0) 'owned integration cleanup failed'
     Require (-not (State $bin).managed) 'uninstall retained command ownership'
     Require (-not (Test-Path -LiteralPath ('HKCU:\' + $protocolKey))) 'uninstall retained protocol'
+    # Missing ownership does not authorize removal while any of the installation remains.
+    $orphanPath = $bin + ';"' + $bin.ToUpperInvariant() + '\";C:\Windows;' + $other
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
+    try { $key.SetValue('Path', $orphanPath, [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
+    $report = Join-Path $Root 'unowned-report.txt'
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 1) 'unowned cleanup accepted an existing installation'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey)
+    try { Require ($key.GetValue('Path') -eq $orphanPath) 'unowned cleanup changed PATH before directory removal' } finally { $key.Dispose() }
+    Require ([IO.File]::ReadAllText($report).Contains('installation directory remains')) 'unowned refusal lacks a report'
+    [IO.Directory]::Delete($app, $true)
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 0) 'unowned cleanup failed after directory removal'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey)
+    try {
+        Require ($key.GetValue('Path') -eq ('C:\Windows;' + $other)) 'unowned cleanup failed to preserve other PATH entries'
+        Require ($key.GetValueKind('Path') -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) 'unowned cleanup changed PATH type'
+    } finally { $key.Dispose() }
+    [void](Apply 'install' $other)
+    $foreignState = State $other
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 0 -and (State $other).fingerprint -eq $foreignState.fingerprint) 'unowned cleanup changed a new owner'
     'WINDOWS_COMMAND_PATH_OK'
 } finally {
     [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($keyRoot, $false)

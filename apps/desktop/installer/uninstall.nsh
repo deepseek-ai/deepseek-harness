@@ -10,6 +10,9 @@ Var UnBody
 Var UnMode
 Var UnResult
 Var UnRegistered
+Var UnRegistrationArguments
+Var UnRegistrationEligible
+Var UnCleanupResult
 
 Function un.ShowCleanup
   System::Call '$PLUGINSDIR\window-frame.dll::UninstallPersist(p $UnSession) ?c'
@@ -89,7 +92,12 @@ Function un.FinishCleanup
     Return
   ${EndIf}
   System::Call '$PLUGINSDIR\window-frame.dll::UninstallFinish(p $UnSession, w "$INSTDIR", w "${UNINSTALL_FILENAME}") i.r0 ?c'
-  ${If} $0 != 0
+  StrCpy $UnCleanupResult $0
+  ${If} $UnRegistrationEligible == 1
+    StrCpy $UnRegistrationArguments "-UnownedOnly"
+    Call un.RunRegistrationCleanup
+  ${EndIf}
+  ${If} $UnCleanupResult != 0
     DetailPrint $UnReportPath
     StrCpy $UnMode 3
     StrCpy $UnHeading "$(INSTALLER_UNINSTALL_COMPLETE)"
@@ -161,14 +169,24 @@ Function un.CleanRegistration
   ${If} $UnDirectoryOnly == 1
     Return
   ${EndIf}
+  Delete "$PLUGINSDIR\unowned-path"
+  StrCpy $UnRegistrationArguments ""
+  Call un.RunRegistrationCleanup
+  IfFileExists "$PLUGINSDIR\unowned-path" 0 +2
+    StrCpy $UnRegistrationEligible 1
+FunctionEnd
+
+Function un.RunRegistrationCleanup
   InitPluginsDir
   File /oname=$PLUGINSDIR\command-path.ps1 "${__FILEDIR__}\..\scripts\command-path.ps1"
   File /oname=$PLUGINSDIR\uninstall-registration.ps1 "${__FILEDIR__}\..\scripts\uninstall-registration.ps1"
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\uninstall-registration.ps1" -Directory "$INSTDIR" -ExecutableName "${APP_EXECUTABLE_FILENAME}" -EnvironmentKey "${DSH_COMMAND_ENVIRONMENT_KEY}" -OwnerKey "${DSH_COMMAND_OWNER_KEY}" -ProtocolKey "${DSH_PROTOCOL_KEY}" -ReportPath "$PLUGINSDIR\registration-report.txt" -MutexName "${DSH_COMMAND_MUTEX}"'
+  Delete "$PLUGINSDIR\registration-report.txt"
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\uninstall-registration.ps1" -Directory "$INSTDIR" -ExecutableName "${APP_EXECUTABLE_FILENAME}" -EnvironmentKey "${DSH_COMMAND_ENVIRONMENT_KEY}" -OwnerKey "${DSH_COMMAND_OWNER_KEY}" -ProtocolKey "${DSH_PROTOCOL_KEY}" -ReportPath "$PLUGINSDIR\registration-report.txt" -MutexName "${DSH_COMMAND_MUTEX}" -UnownedMarker "$PLUGINSDIR\unowned-path" $UnRegistrationArguments'
   Pop $0
   Pop $1
   System::Call '$PLUGINSDIR\window-frame.dll::UninstallImport(p $UnSession, w "$PLUGINSDIR\registration-report.txt") ?c'
   ${If} $0 != 0
+    StrCpy $UnCleanupResult 1
     DetailPrint $1
     System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "Registration cleanup failed or did not return a result. Exit: $0. Targets: HKCU\${DSH_COMMAND_ENVIRONMENT_KEY} [Path]; HKCU\${DSH_COMMAND_OWNER_KEY}; HKCU\${DSH_PROTOCOL_KEY}. Unverified registrations may remain.") ?c'
   ${EndIf}

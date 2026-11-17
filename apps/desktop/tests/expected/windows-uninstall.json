@@ -2,6 +2,8 @@
   "cases": [
     "interactive",
     "silent",
+    "unowned",
+    "owned-retained",
     "upgrade",
     "replaced",
     "home-inside",
