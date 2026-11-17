@@ -399,7 +399,11 @@ export function pendingUpdateBuilds(update: UpdateState): readonly string[] {
   return result.result.pendingBuilds ?? []
 }
 
-/** Whether a change result left its operation undone. */
+/**
+ * Whether a change result left its operation undone.
+ * @param change - a step's result.
+ * @returns Whether the step failed or was cancelled.
+ */
 export function failedChange(change: PluginUpdateResult['result']): boolean {
   return change.application === 'failed' || change.application === 'cancelled'
 }
