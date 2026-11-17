@@ -837,10 +837,12 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
 
   /**
    * Run `op` with up to `attempts` tries for `retryable` / `rate-limit` errors (exponential backoff, honouring
-   * `retryAfterMs`). An operation whose publication outcome is unknown (`published !== 'no'`) is retried only when
-   * `idempotent` allows it (subsequent edits on an existing handle, or an initial open with platform deduplication).
-   * Throws the classified error otherwise; `StreamLimitError` passes through untouched. An interruptible retry
-   * (intermediate ticks) is cut short by close/abort with `Interrupted`.
+   * `retryAfterMs`). Once any attempt fails with `published: 'unknown'` (`sawUnknown`), every subsequent retry
+   * (including after backoff sleep, before the next attempt) requires `idempotent(attempt)` to hold — even if a later
+   * attempt fails with `published: 'no'` — and any terminal failure preserves `published: 'unknown'`. `StreamLimitError`
+   * passes through untouched only when `sawUnknown` is false; otherwise it is converted to a `fatal` `PlatformError`
+   * with `published: 'unknown'` so `tick()`'s open branch does not fall back to plain `host.send()`. An interruptible
+   * retry (intermediate ticks) is cut short by close/abort with `Interrupted`.
    */
   private async retry<R>(
     op: (attempt: number) => Promise<R>,
