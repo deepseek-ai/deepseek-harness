@@ -26,7 +26,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: SessionPanelSectionOwnerProps
     }
-    /** Trailing controls of one section title, keyed by the section's `id`. */
+    /**
+     * Trailing content of one section title, such as a count, keyed by the
+     * section's `id`. The section's drag handle covers its last 20px while the
+     * title row is hovered, and the content fades out under it.
+     */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**
      * Marks over the panel toggle, such as an attention dot. Each occupant is

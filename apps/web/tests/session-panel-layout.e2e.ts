@@ -392,10 +392,12 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     const registered = ['environment', 'subagents', 'background-jobs']
     await expect.poll(order, { timeout: 20_000 }).toEqual(registered)
 
-    // At rest the handle keeps its column and does not show; over the title row it shows, on the rows' More column.
+    // At rest the handle does not show and takes no room: the title's trailing count runs to the row's 6px padding.
+    // Over the title row the handle shows on the rows' More column, and the count stays where it was and fades under it.
     await page.mouse.move(5, 5)
     const handle = (id: string) => head(id).evaluate((element) => {
       const button = element.querySelector<HTMLElement>('[data-session-panel-grip]')!
+      const trailing = element.children[1] as HTMLElement
       const box = element.getBoundingClientRect()
       const target = button.getBoundingClientRect()
       return {
@@ -403,14 +405,17 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
         opacity: getComputedStyle(button).opacity,
         target: [target.width, target.height],
         center: box.right - (target.left + target.width / 2),
+        trailing: trailing.textContent,
+        trailingEnd: box.right - trailing.getBoundingClientRect().right,
+        faded: getComputedStyle(trailing).maskImage !== 'none',
       }
     })
-    const resting = { cursor: 'grab', target: [24, 24], center: 14 }
-    expect(await handle('subagents')).toEqual({ ...resting, opacity: '0' })
+    const resting = { cursor: 'grab', target: [24, 24], center: 14, trailing: '1 external', trailingEnd: 6 }
+    expect(await handle('subagents')).toEqual({ ...resting, opacity: '0', faded: false })
     await head('subagents').hover()
     await expect.poll(async () => (await handle('subagents')).opacity).toBe('1')
-    expect(await handle('subagents')).toEqual({ ...resting, opacity: '1' })
-    expect((await handle('background-jobs')).opacity).toBe('0')
+    expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', faded: true })
+    expect(await grip('background-jobs').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
 
     // Drag Background jobs by its title row onto the upper half of Environment.
     const from = (await head('background-jobs').boundingBox())!

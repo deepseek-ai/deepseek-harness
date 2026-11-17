@@ -106,18 +106,24 @@ describe('SessionPanel.module.css docking geometry', () => {
 })
 
 describe('SessionPanel.module.css section reordering', () => {
-  it('makes the title row a drag source and ends it with a handle on the More column, whose room is always kept', () => {
-    expect(declarationsOf('.head')['cursor']).toBe('grab')
-    // A 16px column like the rows' menu part: the 24px target reaches 4px past it on both sides.
+  it('makes the title row a drag source and lays the handle over its end, on the More column, without taking room in the row', () => {
+    expect(declarationsOf('.head')).toMatchObject({ cursor: 'grab', position: 'relative' })
+    // Out of the row's flow: 2px in and 24px wide puts its center 14px from the row's end, the rows' More column.
     expect(declarationsOf('.grip')).toMatchObject({
-      'flex': 'none', 'width': '24px', 'height': '24px', 'margin': '0 -4px 0 auto', 'cursor': 'grab',
-      'color': 'var(--dsw-alias-label-tertiary)', 'background': 'transparent',
+      'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px', 'margin': '0', 'cursor': 'grab',
+      'color': 'var(--dsw-alias-label-tertiary)', 'background': 'transparent', 'opacity': '0',
     })
-    // It hides by opacity, never by display, so the trailing controls keep their place when it shows.
-    expect(declarationsOf('.grip')['display']).toBe('inline-flex')
+  })
+
+  it('shows the handle on title-row hover, keyboard focus, and during a drag, and fades the trailing content under it', () => {
+    const fade = 'linear-gradient(to left, transparent 20px, #000 36px)'
+    expect(declarationsOf('.grip:focus-visible, .section[data-dragging] .grip')).toEqual({ opacity: '1' })
+    expect(declarationsOf('.head:has(> .grip:focus-visible) > .actions, .section[data-dragging] > .head > .actions'))
+      .toEqual({ 'mask-image': fade })
+    // The pointer rules stay inside the hover media query, so a touch that latches hover shows no handle.
     const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
-    expect(hover).toMatch(/\.grip \{\s*opacity: 0;/)
-    expect(hover).toMatch(/\.head:hover > \.grip,\s*\.grip:focus-visible,\s*\.section\[data-dragging\] \.grip \{\s*opacity: 1;/)
+    expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: 1;/)
+    expect(hover).toContain(`.head:hover > .actions {\n    mask-image: ${fade};`)
   })
 
   it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {

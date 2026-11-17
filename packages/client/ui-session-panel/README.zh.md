@@ -47,14 +47,14 @@ kind: "package-reference"
 <a id="section-order"></a>
 ### 分栏顺序
 
-用户调整之前，分栏按 `order` 升序显示。每个分栏的标题行都可以拖动：指针移到标题行上时变为抓手，行末出现拖动图标，位于各行「更多」按钮所在的那一列。图标所在的列始终保留，因此图标出现时标题行末尾的控件不会移动；图标在悬停标题行、键盘聚焦、拖动期间显示，在不支持悬停的设备上始终显示。拖动标题行时，该分栏变淡，指针下方的分栏在上边缘或下边缘显示一条 2px 的线，取决于指针位于它的上半还是下半；松开后被拖动的分栏移到那里。
+用户调整之前，分栏按 `order` 升序显示。每个分栏的标题行都可以拖动：指针移到标题行上时变为抓手，拖动图标浮现在行末，位于各行「更多」按钮所在的那一列。图标不占用标题行的空间：标题行末尾的内容（例如计数）一直排到行末，图标出现时位置不变，被图标盖住的部分渐隐。图标在指针位于标题行上、获得键盘焦点以及拖动期间显示。拖动标题行时，该分栏变淡，指针下方的分栏在上边缘或下边缘显示一条 2px 的线，取决于指针位于它的上半还是下半；松开后被拖动的分栏移到那里。
 
 拖动图标是一个按钮，名称为「调整」加分栏标题，提示文字说明调整顺序的方式。焦点在它上面时，上下方向键让分栏越过最近一个显示着的分栏，焦点留在图标上。顺序是所有会话共用的一个偏好，以全部有效分栏（包括当前没有内容的分栏）的 id 列表存放在 `localStorage` 的 `dsh.sessionPanel.sectionOrder` 中。用户调整之后才注册的分栏，排在按注册顺序位于它前面的那个分栏之后。
 
 <a id="contribute-a-section"></a>
 ### 贡献分栏
 
-一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 在用户[调整分栏顺序](#section-order)之前决定升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
+一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 在用户[调整分栏顺序](#section-order)之前决定升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的内容（例如计数）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`；悬停标题行时，[拖动图标](#section-order)会盖住它末尾的 20px，因此放在那里的控件要避开行末。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
 
 多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`，其中的行与分栏收到相同的 owner props；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。forge 套件在 order 20 与 30 处添加检出行与本地变更行。拥有共享分栏的插件用同样方式声明自己的行 slot。
 

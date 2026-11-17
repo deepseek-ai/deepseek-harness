@@ -195,8 +195,9 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-/* The title row is the section's drag source. */
+/* The title row is the section's drag source, and the box its drag handle is placed in. */
 .head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -233,41 +234,54 @@
   display: none;
 }
 
-/* The drag handle ends the title row in the column of the rows' More
-   buttons: a 16px column whose 24px target reaches past it, as theirs does.
-   The column is always there, so the title's trailing controls do not move
-   when the handle shows: on hover of the title row, on keyboard focus, during
-   a drag, and always without hover. The start margin keeps it at the row's
-   end when the section has no trailing controls. */
+/* The drag handle lies over the end of the title row, in the column of the
+   rows' More buttons: a 24px target whose center is 14px from the row's
+   end. It takes no room in the row, so the title's trailing content runs to
+   the row's end as it does without the handle. The handle shows while the
+   pointer is over the title row, while it has keyboard focus, and during a
+   drag; the trailing content then fades out under it. */
 .grip {
+  position: absolute;
+  top: 0;
+  right: 2px;
   display: inline-flex;
-  flex: none;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin: 0 -4px 0 auto;
+  margin: 0;
   padding: 0;
   border: 0;
   border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-label-tertiary);
   background: transparent;
   cursor: grab;
+  opacity: 0;
 }
 
 .grip:focus-visible {
   outline-offset: -2px;
 }
 
+.grip:focus-visible,
+.section[data-dragging] .grip {
+  opacity: 1;
+}
+
+/* The trailing content ends 6px from the row's end and the handle reaches
+   26px from it: transparent across the handle, opaque 16px further in. */
+.head:has(> .grip:focus-visible) > .actions,
+.section[data-dragging] > .head > .actions {
+  mask-image: linear-gradient(to left, transparent 20px, #000 36px);
+}
+
 @media (hover: hover) {
-  .grip {
-    opacity: 0;
+  .head:hover > .grip {
+    opacity: 1;
   }
 
-  .head:hover > .grip,
-  .grip:focus-visible,
-  .section[data-dragging] .grip {
-    opacity: 1;
+  .head:hover > .actions {
+    mask-image: linear-gradient(to left, transparent 20px, #000 36px);
   }
 
   .grip:hover {

@@ -2465,7 +2465,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.environment.row\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.environment.row\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:46',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:50',
   },
   {
     key: 'conversation.session.panel.indicator',
@@ -2529,7 +2529,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.indicator\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.indicator\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:39',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:43',
   },
   {
     key: 'conversation.session.panel.section',
@@ -2603,8 +2603,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.session.panel.section.actions',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Trailing controls of one section title, keyed by the section\'s `id`.',
-    doc: 'Trailing controls of one section title, keyed by the section\'s `id`.',
+    summary: 'Trailing content of one section title, such as a count, keyed by the section\'s `id`.',
+    doc: 'Trailing content of one section title, such as a count, keyed by the\nsection\'s `id`. The section\'s drag handle covers its last 20px while the\ntitle row is hovered, and the content fades out under it.',
     registerOptions: [
       {
         name: 'key',
@@ -2647,7 +2647,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.section.actions\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.section.actions\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:30',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:34',
   },
   {
     key: 'conversation.trajectory.images',
