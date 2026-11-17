@@ -22,7 +22,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type { FileSystem, FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
+import { FsError, type FileSystem, type FsInfo, type FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
@@ -587,7 +587,15 @@ async function fileContent(
   if (fs.processPathFromHostPath(fs.processPath(target)) !== undefined) {
     return fileElement(name, fs.fileUrl(target), info.size)
   }
-  const data = await fs.readBytes(target, signal, config.send.maxMediaBytes)
+  let data: Uint8Array
+  try {
+    data = await fs.readBytes(target, signal, config.send.maxMediaBytes)
+  } catch (error: unknown) {
+    if (error instanceof FsError && error.code === 'FS_TOO_LARGE') {
+      throw new ImError('capacity', error.message, { cause: error })
+    }
+    throw error
+  }
   return fileElement(name, `data:${mediaTypeOf(extensionOf(name))};base64,${Buffer.from(data).toString('base64')}`,
     data.byteLength)
 }

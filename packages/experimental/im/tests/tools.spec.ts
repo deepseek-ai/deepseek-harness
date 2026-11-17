@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createRenderReport, h, type Fragment, type MembersPage } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
@@ -680,6 +681,21 @@ describe('im_send, im_reply and im_send_file', () => {
     expect(failed.isError).toBe(true)
     expect(textOf(failed)).toContain('the filesystem is offline')
     expect(directory.im.sends).toHaveLength(0)
+  })
+
+  it('converts FS_TOO_LARGE from another execution world into a capacity error and rethrows other read failures', async () => {
+    const tooLargeFs = fakeFs({ remote: true })
+    tooLargeFs.readBytes = () => Promise.reject(new FsError('file exceeds maxMediaBytes', 'FS_TOO_LARGE'))
+    const oversized = await mount({ fs: tooLargeFs })
+    expect(value(await oversized.call('im_send_file', { path: 'big.bin' })))
+      .toMatchObject({ status: 'error', code: 'capacity', message: 'file exceeds maxMediaBytes' })
+
+    const ioFs = fakeFs({ remote: true })
+    ioFs.readBytes = () => Promise.reject(new FsError('ssh channel closed', 'FS_IO_ERROR'))
+    const broken = await mount({ fs: ioFs })
+    const failed = await broken.call('im_send_file', { path: 'bad.bin' })
+    expect(failed.isError).toBe(true)
+    expect(textOf(failed)).toContain('ssh channel closed')
   })
 })
 
