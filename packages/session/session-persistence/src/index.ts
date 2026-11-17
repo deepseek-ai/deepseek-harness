@@ -161,8 +161,10 @@ export abstract class SessionPersistence extends Service {
   /**
    * Open an existing stored session.
    *
-   * `read` never takes ownership and works while another handle (or process)
-   * holds write ownership. `write` atomically claims single-writer ownership;
+   * Returned `read` handles retain no write ownership and work while another
+   * handle (or process) holds write ownership. A first legacy read open may
+   * acquire ownership temporarily to import history into the selected backend.
+   * `write` atomically claims single-writer ownership;
    * an existing active owner rejects.
    * @param id - the stored session to open.
    * @param access - `read` or `write`.

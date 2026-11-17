@@ -12,6 +12,7 @@ import MessageFeedback from '@deepseek-ai/dsh-message-feedback'
 import { recordFeedback } from '@deepseek-ai/dsh-command-feedback'
 import LlmRuntime, { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import DeepSeekLlmApiExtensions from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { startMockLlmServer, type MockLlmServer, type MockLlmServerOptions } from '@deepseek-ai/dsh-llm-mock-server'
 import * as SessionLogDeepSeek from '../src/index.ts'
@@ -45,6 +46,7 @@ async function boot(
     ['@deepseek-ai/dsh-session-persistence-jsonl', JsonlSessionPersistence],
     ['@deepseek-ai/dsh-message-feedback', MessageFeedback],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
+    ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
     ['@deepseek-ai/dsh-llm-deepseek-api-key', LlmDeepSeek],
     ['@deepseek-ai/dsh-deepseek-llm-api-extensions', DeepSeekLlmApiExtensions],
     ['@deepseek-ai/dsh-session-log-deepseek', SessionLogDeepSeek],

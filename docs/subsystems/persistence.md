@@ -336,9 +336,10 @@ The optional `eventCount`/`sizeBytes` fields remain cheap backend observations f
 
 ## The backend
 
-The shipped provider implements the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and passes the shared persistence contract suite:
+The shipped providers implement the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and pass the shared persistence contract suite:
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)** — an append-only logical JSONL log per session, stored as checksummed concatenated Zstandard frames by default or raw lines by configuration, with crash-safe atomic materialization, per-batch `fsync` appends, and torn-tail truncation before the first new append. `stat`/`list` carry `sizeBytes` and a best-effort `fs.stat`-derived revision.
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)** — logical JSON event storage with indexed metadata and predecessor-linked Segments. The optional provider imports existing JSONL on first open and coordinates concurrent readers with a single writer per Session; `stat`/`list` do not import history.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -392,8 +393,10 @@ abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions
 /**
  * Open an existing stored session.
  *
- * `read` never takes ownership and works while another handle (or process)
- * holds write ownership. `write` atomically claims single-writer ownership;
+ * Returned `read` handles retain no write ownership and work while another
+ * handle (or process) holds write ownership. A first legacy read open may
+ * acquire ownership temporarily to import history into the selected backend.
+ * `write` atomically claims single-writer ownership;
  * an existing active owner rejects.
  * @param id - the stored session to open.
  * @param access - `read` or `write`.

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionPendingInteractionBase } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Shortcuts, ShortcutContext, ShortcutGesture } from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -30,7 +31,7 @@ async function bench() {
   await reference.ready
   const hub = new InputHub(runtime.ctx, makeTranslate(zh, {}))
   const fiber = runtime.ctx.plugin(ConversationController, {
-    input: hub, blocks: new ComposerBlockRegistry(), maxConcurrentFileUploads: 2,
+    input: hub, blocks: new ComposerBlockRegistry(), maxConcurrentFileUploads: createSnapshotStore(2),
   })
   await fiber.await()
   const conversation = new UiConversation(runtime.ctx, runtime.sessions)

@@ -332,7 +332,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     // Direct apply with only `provider` — no toolName, no agentOptions.
-    await tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
+    tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
     await new Promise(r => setTimeout(r, 10))
 
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
@@ -355,7 +355,7 @@ describe('dsh-tool-subagent', () => {
     // Tool first: no provider yet — the tool must be absent, not broken.
     // Direct apply (schema bypass): also covers the waiting-note's default
     // toolName fallback, which validated config pre-fills.
-    await tool.apply(ctx, { provider: 'mock' })
+    tool.apply(ctx, { provider: 'mock' })
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(false)
     // Backend arrives (as a delayed sibling fiber would): the tool appears.
     await mock.mountScriptedProvider(ctx, { name: 'mock', reply: 'late but fine' })
@@ -368,7 +368,7 @@ describe('dsh-tool-subagent', () => {
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await tool.apply(ctx, {
+    tool.apply(ctx, {
       provider: 'later-continuable',
       maxDepth: 'provider-managed',
     })
@@ -573,13 +573,13 @@ describe('dsh-tool-subagent', () => {
     // load with "cannot get property … without inject". Guard the shape directly.
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'systemPrompt'])
 
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(tool) as Record<string, unknown>
     expect(unwrapped).toBe(tool)
     expect(unwrapped.name).toBe('tool-subagent')
-    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt'])
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })
@@ -627,10 +627,12 @@ describe('dsh-tool-subagent', () => {
 
   it('validates maxDepth during initialization without Schemastery', async () => {
     const ctx = await projectedContext()
-    await expect(tool.apply(ctx, {
-      provider: 'unused',
-      maxDepth: Number.NaN,
-    })).rejects.toThrow('subagent maxDepth must be a non-negative safe integer')
+    expect(() => {
+      tool.apply(ctx, {
+        provider: 'unused',
+        maxDepth: Number.NaN,
+      })
+    }).toThrow('subagent maxDepth must be a non-negative safe integer')
   })
 
   it.each([
@@ -820,7 +822,7 @@ describe('dsh-tool-subagent local activation', () => {
         return {}
       },
     })
-    await tool.apply(ctx, {
+    tool.apply(ctx, {
       provider: 'gated',
       toolName: 'subagent_gated',
       maxDepth: 3,

@@ -12,6 +12,7 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
@@ -51,6 +52,7 @@ async function loopHarness(): Promise<Context> {
   await created.plugin(NativeToolExecutor)
   await created.plugin(AgentRegistry)
   await created.plugin(AgentLoop, { agents: [] })
+  await created.plugin(DeepSeekAuth)
   await created.plugin(LlmDeepSeek)
   created.tools.register(defineContentToolFixture({
     name: 'lookup',

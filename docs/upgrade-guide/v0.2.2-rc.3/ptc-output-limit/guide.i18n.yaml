@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/ptc-output-limit/guide.md
+/:
+  en: 0f89c66e70c37465
+  zh: a80ca7a5c6b392bc
+/ptc-output-truncation:
+  en: 7655f9eb80930413
+  zh: 4664b640aa95291b
+/ptc-output-truncation/change:
+  en: 55abb1d0227dc89a
+  zh: 6a93f97e22ca90e0
+/ptc-output-truncation/migration:
+  en: dfa6e80718350ca7
+  zh: c06d1e686dff1938

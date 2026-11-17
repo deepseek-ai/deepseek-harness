@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIndexInjections, type WebServer, type WebResourceRoute, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import * as modulesClient from '../src/client/index.ts'
@@ -178,7 +178,8 @@ function constructWithRoute(
       for (const packageName of packageNames) {
         yield {
           options: { name: packageName },
-          fiber: {},
+          // The Loader addresses an entry's plugin instance as `entry.fiber.ctx.fiber`.
+          fiber: { ctx: { fiber: {} } },
           disabled: false,
           parent: { tree: { ctx: { baseUrl: options.entryBaseUrl ?? ctx.baseUrl } } },
         }
@@ -1289,7 +1290,8 @@ describe('client bundle activation', () => {
 function emitLoaderEntryChange(context: Context, name: string): void {
   context.emit('internal/plugin', {
     entry: { options: { name } },
-  } as unknown as Fiber)
+    parent: { fiber: {} },
+  } as never)
 }
 
 describe('shared module declarations', () => {
