@@ -15,6 +15,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
+import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import {
   assertAllowedModelRoutes,
   assertAllowedModelSelection,
@@ -625,16 +626,16 @@ describe('dsh-tool-subagent model selection', () => {
     expect(requests).toHaveLength(1)
   })
 
-  it('keeps fork model selection unavailable without instance opt-in even with Session authorization', async () => {
+  it('keeps fork model selection unavailable without instance opt-in even with Host authorization', async () => {
     const started = vi.fn()
     const ctx = await setup({ provider: 'mock' }, {
       inheritsParentContext: true,
       onStart: started,
     })
-    const agent = modelSelectionSetupAgent(ctx)
-    agent.session.append('subagent/model-selection-policy', {
-      allowedModels: [{ provider: 'alpha', model: 'fast-model' }],
+    await ctx.plugin(SubagentModelSelectionConfig, {
+      enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast-model' }],
     })
+    const agent = modelSelectionSetupAgent(ctx)
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'name', 'prompt'])

@@ -193,7 +193,7 @@ describe('list_subagent_models', () => {
     expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
-  it('reads the recorded Session allowlist through the delegation plugin', async () => {
+  it('reads the Host allowlist through the delegation plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await executeToolFixture(ctx, {
@@ -214,6 +214,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] })
     await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
     callingAgents.set(ctx, callingAgents.get(parent)!)
     expect(ctx.tools.get('list_subagent_models')).toBeDefined()

@@ -6,9 +6,8 @@ import type { LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { parentAgentOptionsForDelegation, SubagentError } from '@deepseek-ai/dsh-subagent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
-import { subagentModelSelectionPolicy } from './model-selection-state.ts'
+import type { ModelSelectionPolicy } from './model-selection.ts'
+import type {} from './model-selection-settings.ts'
 import { hasText } from './model-selection.ts'
 
 interface ListSubagentModelsRequest {
@@ -40,12 +39,11 @@ function modelLine(provider: string, model: { id: string; name: string; descript
 /** Read the requested provider, allowed models, or exact-model efforts. */
 async function listSubagentModels(
   ctx: Context,
-  policyHandle: ProjectionHandle<AllowedModelRoute[] | null>,
   request: ListSubagentModelsRequest,
   exec: ToolRunContext,
 ): Promise<string> {
   if (exec.agent === undefined) throw new ToolContextUnavailableError('list_subagent_models requires a calling agent')
-  const routes = subagentModelSelectionPolicy(policyHandle, exec.agent.session)
+  const routes = ctx.get('subagentModelSelection')?.allowedRoutes()
   let policy = routes === undefined ? undefined : { routes }
   const selectionEnabled = policy !== undefined
   if (policy === undefined) {
@@ -97,14 +95,10 @@ async function listSubagentModels(
 }
 
 /**
- * Register discovery of the calling Session’s authorized child models.
- * @param ctx - Context carrying the tool registry and LLM service.
- * @param policyHandle - retained reader for the Session’s authorized child routes.
+ * Register discovery of the child models the Host setting authorizes.
+ * @param ctx - Context carrying the tool registry, LLM service, and optional Host model-selection setting.
  */
-export function registerListSubagentModels(
-  ctx: Context,
-  policyHandle: ProjectionHandle<AllowedModelRoute[] | null>,
-): void {
+export function registerListSubagentModels(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
@@ -127,7 +121,7 @@ export function registerListSubagentModels(
     // Route and model metadata reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     execute(args, exec) {
-      return listSubagentModels(ctx, policyHandle, {
+      return listSubagentModels(ctx, {
         ...hasText(args.provider) ? { provider: args.provider } : {},
         ...hasText(args.model) ? { model: args.model } : {},
       }, exec)

@@ -22,7 +22,7 @@ export const AllowedModelRouteSchema: z<AllowedModelRoute> = z.object({
   model: z.string().min(1).required(),
 })
 
-/** Exact routes authorized for one Session. */
+/** Exact routes the Host setting currently authorizes. */
 export interface ModelSelectionPolicy {
   /** Exact provider/model routes authorized for explicit selection. */
   readonly routes: readonly AllowedModelRoute[]
@@ -109,18 +109,18 @@ export function hasDelegationModelRequest(request: DelegationModelRequest): bool
 const ROUTE_DISCOVERY_HINT = ' Call `list_subagent_models` to see the routes you may select.'
 
 /**
- * Validate explicit selection against the Session policy and merge it over child defaults.
+ * Validate explicit selection against the current Host setting and merge it over child defaults.
  * Explicit selection requires both provider and model; an omitted effort then
  * uses the selected model's default, even when the route is unchanged.
  * @param configured - Tool-instance child defaults.
  * @param request - Route fields read by {@link delegationModelRequest}.
  * @param enabled - Whether this tool instance permits model-facing selection.
- * @param policy - Session allowlist; omission permits only the current parent route.
- * @param parentOptions - Current parent route used when no policy is recorded.
+ * @param policy - Current Host allowlist; omission permits only the current parent route.
+ * @param parentOptions - Current parent route used when the Host setting is disabled or absent.
  * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; rejections then point to it.
  * @returns Child Agent options, preserving omission when no layer contributes one.
  * @throws {SubagentError} `MODEL_SELECTION_DISABLED` when this tool instance
- *   forbids selection, or `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
+ *   forbids selection, or `MODEL_ROUTE_NOT_ALLOWED` when the allowlist excludes the route.
  * @throws {ToolArgsError} when `provider` and `model` are not supplied together.
  */
 export function requestedAgentOptions(
@@ -153,12 +153,12 @@ export function requestedAgentOptions(
 }
 
 /**
- * Enforce Session authorization for a complete, explicitly selected child route.
- * @param policy - Session allowlist; omission permits only the current parent route.
- * @param parentOptions - Current parent route used when no policy is recorded.
+ * Enforce Host authorization for a complete, explicitly selected child route.
+ * @param policy - Current Host allowlist; omission permits only the current parent route.
+ * @param parentOptions - Current parent route used when the Host setting is disabled or absent.
  * @param route - Validated provider/model pair from the tool call.
  * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; the rejection then points to it.
- * @throws {SubagentError} `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
+ * @throws {SubagentError} `MODEL_ROUTE_NOT_ALLOWED` when the allowlist excludes the route.
  */
 export function assertAllowedModelSelection(
   policy: ModelSelectionPolicy | undefined,
@@ -173,7 +173,7 @@ export function assertAllowedModelSelection(
   if (allowed) return
   throw new SubagentError(`child LLM route "${provider}/${model}" is not allowed for this Session`
     + (policy === undefined
-      ? '; without a recorded model-selection policy, explicit selection is limited to the parent route'
+      ? '; while subagent model selection is disabled, explicit selection is limited to the parent route'
       : '')
     + '.' + (routeDiscoveryVisible ? ROUTE_DISCOVERY_HINT : ''), 'MODEL_ROUTE_NOT_ALLOWED')
 }

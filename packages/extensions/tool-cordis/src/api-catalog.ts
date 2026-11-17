@@ -4029,9 +4029,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Host settings owner that records Session authorization before the first model request.',
-    description: 'Host settings owner that records Session authorization before the first model request.',
-    methods: [],
+    summary: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    description: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    methods: [
+      {
+        signature: 'allowedRoutes(): AllowedModelRoute[] | undefined',
+        description: 'Read the routes the setting currently authorizes. Each call samples the live setting, so an edit applies to the next delegation in every Session.',
+        parameters: [],
+        returns: 'a detached route list, or undefined when the setting is disabled.',
+        throws: ['{Error} when the setting is enabled with no route, or its routes are malformed or repeated.'],
+      },
+    ],
   },
   {
     key: 'subagents',
@@ -6095,6 +6103,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentTerminalRequest',
     declaration: 'export interface AgentTerminalRequest {\n    readonly title: string;\n    readonly cwd?: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly policy: SandboxExecutionPolicy;\n    readonly preferredShells: readonly string[];\n    readonly env?: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'AllowedModelRoute',
+    declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
     name: 'AnalyticsPreset',
