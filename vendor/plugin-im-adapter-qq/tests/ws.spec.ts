@@ -309,6 +309,18 @@ describe('QQ gateway reconnect', () => {
     expect(second.sent[0]).toMatchObject({ op: Opcode.IDENTIFY })
   })
 
+  it('drops the session and re-identifies after a non-resumable close code such as 4007', async () => {
+    const mounted = await mount()
+    const first = await dial(mounted)
+    first.receive(ready('session-4007', 7))
+    await vi.waitFor(() => { expect(mounted.adapter.sessionId).toBe('session-4007') })
+    first.close(4007)
+    expect(mounted.adapter.sessionId).toBe('')
+    expect(mounted.adapter.seq).toBeUndefined()
+    const second = await dial(mounted, 1)
+    expect(second.sent[0]).toMatchObject({ op: Opcode.IDENTIFY })
+  })
+
   it('survives a frame the decoder cannot handle', async () => {
     const mounted = await mount()
     const socket = await dial(mounted)

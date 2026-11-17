@@ -197,11 +197,10 @@ export class WsClient extends WsClientBase<QQBot> {
     const cleanup = () => {
       this.stopHeartbeat()
       socket.removeEventListener('message', receive)
-      socket.removeEventListener('close', close)
     }
     signal.addEventListener('abort', cleanup, { once: true })
     socket.addEventListener('message', receive)
-    socket.addEventListener('close', close)
+    socket.addEventListener('close', close, { once: true })
   }
 
  // -------------------------------------------------------------------------------------------------------------
