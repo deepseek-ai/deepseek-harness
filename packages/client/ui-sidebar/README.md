@@ -61,7 +61,7 @@ Under `html[data-platform='darwin']` (set only by the desktop preload) the expan
 
 ### Scrollbars
 
-Scrollbars in the column are a pointer affordance: the shell rebinds the scrollbar indirection to `transparent` whenever the pointer is outside the column and keeps the thumb drawn for 2s after the pointer leaves, so a list nobody is pointing at carries no bar. The reservation that keeps rows from moving belongs to the scrolling region (ui-workspace), so revealing a thumb never reflows.
+Scrollbars in the column are a pointer affordance: the shell rebinds the scrollbar indirection to `transparent` whenever the pointer is outside the column, so a list nobody is pointing at carries no bar. After the pointer leaves, the thumb stays drawn for 500ms and then fades out linearly over 200ms; a pointer that returns before the fade ends redraws it at once, and reduced motion keeps the delay without the fade. Outside is decided by the column's box for every pointer move that reaches the column, so a pointer over the fixed-position Settings panel or a portalled menu outside the box also counts as outside. The reservation that keeps rows from moving belongs to the scrolling region (ui-workspace), so revealing a thumb never reflows.
 
 ### Click analytics
 

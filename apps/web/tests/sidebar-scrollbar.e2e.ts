@@ -161,8 +161,8 @@ interface PaletteMetrics {
  */
 async function measurePalette(page: Page): Promise<PaletteMetrics> {
   await pointAt(page, 'away')
-  // Poll rather than sleep the linger out: the wait is the column's, and a
-  // fixed sleep would either race it or pad every palette.
+  // Poll rather than sleep out the column's delay and fade: a fixed sleep
+  // would either race them or pad every palette.
   await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).toBe(NO_THUMB)
   const quietThumb = await resolveThumb(page)
   await pointAt(page, 'list')
@@ -385,13 +385,13 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('draws no thumb until the pointer is over the column, and lingers on the way out', async () => {
+  it('draws no thumb until the pointer is over the column, and fades it out shortly after the pointer leaves', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-scrollbar-pointer'))
     const revealed = await resolveThumb(page)
     expect(revealed).not.toBe(NO_THUMB)
     await pointAt(page, 'away')
-    // The linger, measured as a state rather than a duration: the thumb is
-    // still drawn on the leave itself, and gone once the window has passed. A
+    // The delay, measured as a state rather than a duration: the thumb is
+    // still drawn on the leave itself, and gone once the fade has run. A
     // tighter timing assertion would pin the wall clock of a CI machine.
     expect(await resolveThumb(page)).toBe(revealed)
     await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).toBe(NO_THUMB)
