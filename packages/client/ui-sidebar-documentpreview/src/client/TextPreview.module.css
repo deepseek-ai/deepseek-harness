@@ -58,7 +58,7 @@
   margin-inline-end: 6px;
 }
 
-.externalActions:empty {
+.externalActions:not(:has(:global([data-slot]) > *)) {
   display: none;
 }
 
