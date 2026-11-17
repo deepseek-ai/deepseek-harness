@@ -71,7 +71,7 @@ it.each(['closed', 'other-code', 'foreign'] as const)('contains only typed time-
   const failure = kind === 'closed' ? new SourceError('Schedule has stopped', 'SOURCE_CLOSED')
     : kind === 'other-code' ? new SourceError('Task is busy', 'SOURCE_TASK_BUSY')
       : new Error('Foreign transaction failure')
-  const transaction = vi.fn(async <T>(_work: () => Promise<T>): Promise<T> => { throw failure })
+  const transaction = vi.fn(async (): Promise<never> => { throw failure })
   const scan = vi.fn(() => [])
   const runtime = new ScheduleRuntime(test.ctx, scan, transaction, async () => {}, () => {}, LIMITS,
     test.resolveAgent, () => test.ctx.get('sessionController'))

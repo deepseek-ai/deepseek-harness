@@ -882,7 +882,7 @@ it.each([false, true])('retires the native controller child after accepted work 
   })
   await child.await()
   const retired = vi.fn<() => void>()
-  child.context.effect(() => retired)
+  child.ctx.effect(() => retired)
   const reported = vi.spyOn(test.fiber.ctx.logger, 'error').mockImplementation(() => {})
   const failure = new Error('Schedule domain close rejected')
   const domain = test.ctx.storageDomain.get(scheduleDomain.name)!
