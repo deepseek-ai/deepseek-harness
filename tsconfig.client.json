@@ -96,6 +96,7 @@
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare-protocol/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare/tsconfig.client.json" },
+    { "path": "./packages/experimental/client-ui-sidechat" },
     { "path": "./packages/experimental/session-inspector" },
     { "path": "./packages/experimental/client-ui-forge/tsconfig.client.json" },
     { "path": "./packages/client/config" },
