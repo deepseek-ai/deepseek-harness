@@ -284,6 +284,18 @@ describe('ImService facade', () => {
     await expect(service.readMessage(CHAT, 'm-rate')).rejects.toMatchObject({
       code: 'unavailable', message: 'rate limited by platform', cause: rawRateLimit,
     })
+
+    // Bots without classify() fall back to unavailable with Error.message or String(error).
+    Object.defineProperty(bot, 'classify', { value: undefined, configurable: true })
+    const plainError = new Error('plain adapter boom')
+    bot.getMessage = () => Promise.reject(plainError)
+    await expect(service.readMessage(CHAT, 'm-plain')).rejects.toMatchObject({
+      code: 'unavailable', message: 'plain adapter boom', cause: plainError,
+    })
+    bot.members = () => Promise.reject('raw string failure')
+    await expect(service.members(CHAT)).rejects.toMatchObject({
+      code: 'unavailable', message: 'raw string failure', cause: 'raw string failure',
+    })
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {
