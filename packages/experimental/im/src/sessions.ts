@@ -397,7 +397,7 @@ export class ImSessionHost implements ImSessions {
       throw new ImError('unavailable', `IM session ${target} was replaced by a reset.`)
     }
     const initial = this.resolve(target)
-    return this.serial(initial.key, async () => {
+    return await this.serial(initial.key, async () => {
       // Re-resolve inside `serial(key)` after any in-flight `reset()` finishes so a retired `SessionId` or a
       // generation with an uncommitted reset receipt is never reopened after disposal.
       const current = this.resolve(initial.key)
@@ -407,7 +407,7 @@ export class ImSessionHost implements ImSessions {
       if (this.hasPendingReset(current.sessionId)) {
         throw new ImError('unavailable', `IM session ${current.sessionId} has an uncommitted reset; retry after recovery.`)
       }
-      return this.deps.agents.open(current)
+      return await this.deps.agents.open(current)
     })
   }
 
