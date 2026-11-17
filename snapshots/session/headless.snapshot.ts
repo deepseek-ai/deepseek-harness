@@ -827,7 +827,7 @@ function verifyMcpError(log: string, secret: string, oauth: boolean): void {
   expect(results[0]).toMatchObject({ isError: true })
   const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
   expect(diagnostic).toBe(oauth
-    ? 'Error: SdkError: Error: MCP OAuth requires authorization: scope'
+    ? 'Error: MCP OAuth requires authorization: scope'
     : 'Error: MCP fixture rejected Bearer [redacted]')
   expect(log).not.toContain(secret)
   const resultIndex = events.findIndex(event => event.type === 'tool/result')
