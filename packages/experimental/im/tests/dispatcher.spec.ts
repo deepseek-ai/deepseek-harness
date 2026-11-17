@@ -200,8 +200,8 @@ describe('default dispatcher', () => {
     const stored = service.store.get(ImMessageKey('fake:bot', 'm1'))!
     const deliverSpy = vi.fn().mockResolvedValue(undefined)
     const retry = await service.dispatcher!.handle({
-      message: stored, source: SOURCES[0]!, deliver: deliverSpy,
-    } as ImMessageEvent)
+      message: stored, source: SOURCES[0]!, bot, reply: vi.fn(), send: vi.fn(), deliver: deliverSpy,
+    })
     expect(retry).toEqual({ kind: 'handled', by: DISPATCHER_OWNER, sessions: [gen0] })
     expect(deliverSpy).not.toHaveBeenCalled()
   })
