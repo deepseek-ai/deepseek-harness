@@ -13,7 +13,8 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { AccountUpdate, AccountDetails } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { OnboardingChange } from './onboarding-contract.ts'
 import type { PlatformBridge } from './PlatformOverlay.tsx'
-import { ContactConfig, CONTACT_CONFIG_GLOBAL } from '../contact-config.ts'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { ContactConfig } from '../contact-config.ts'
 import { contactUrl } from './contact-url.ts'
 import { authorizeUrlWithTheme } from './authorize-url.ts'
 import { BrowserLogin } from './browser-login.ts'
@@ -44,13 +45,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by account settings. */
 export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms', 'remoteAccess']
-/** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
-export function apply(ctx: Context): void {
+/**
+ * Register account UI in Desktop and plain Web clients.
+ * @param ctx - client plugin context.
+ * @param config - Host-synced questionnaire options, read when the user opens the form.
+ */
+export function apply(ctx: Context, config: SyncedConfig<ContactConfig>): void {
   const desktop = 'dshDesktop' in globalThis
   ctx.effect(() => ctx.locale.register('settings.account', { en, zh, ja, es, fr, de, ru, pt }), 'account: dictionaries')
   const t = ctx.locale.bind('settings.account')
-  const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
-  const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
   let snapshot: AccountSnapshot = {
     view: undefined, details: undefined, avatar: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
   }

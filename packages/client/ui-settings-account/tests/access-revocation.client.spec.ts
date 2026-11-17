@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /** Account surfaces follow `account/watch` access: a revocation withdraws them and a later grant restores them. */
 import { afterEach, expect, it, vi } from 'vitest'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { apply, type AccountSectionInjected } from '../src/client/index.ts'
 
@@ -95,7 +96,7 @@ it('withdraws every account surface and the account stream on revocation, and re
     ['settings.launcher', 'settings.notice', 'shell.quota-notice', 'settings.models.sign-in', 'settings.section'].map(name => [name, registered.get(name)]),
   )
   try {
-    apply(ctx as never)
+    apply(ctx as never, syncedConfig({}))
     expect(new Set(guards.map(guard => guard.action))).toEqual(new Set(['account/watch']))
     grant(guards)
     await streams[0]!.accepted
@@ -174,7 +175,7 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
     },
   }
   try {
-    apply(ctx as never)
+    apply(ctx as never, syncedConfig({}))
     grant(guards)
     firstFrames[0]!.release()
     await firstFrames[0]!.accepted
@@ -267,7 +268,7 @@ function revocationHarness(scripts: StreamScript[]) {
       },
     },
   }
-  apply(ctx as never)
+  apply(ctx as never, syncedConfig({}))
   return {
     guards, registered, accepted, getProfile, getNotifications, startSignIn,
     operations: () => operations!,

@@ -1,17 +1,26 @@
 import { expect, it } from 'vitest'
 import type { AccountUserId } from '@deepseek-ai/dsh-deepseek-account/types'
-import { ContactConfig } from '../src/contact-config.ts'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SyncedConfigValues } from '@deepseek-ai/dsh-client-config/types'
+import type { ContactConfig } from '../src/contact-config.ts'
+import { Config } from '../src/index.ts'
 import { contactUrl } from '../src/client/contact-url.ts'
 
+/** The browser's synced questionnaire options holding fixed values. */
+function contactConfig(values: SyncedConfigValues = {}) {
+  return syncedConfig<ContactConfig>(values)
+}
+
 it('prefills the available support context and hides every context field', () => {
-  const config = ContactConfig({ contactSource: 'app_harness' })
+  const config = contactConfig({ contactSource: 'app_harness' })
   const url = new URL(contactUrl(config, {
     uid: 'account-user' as AccountUserId, version: '1.2.3',
     deviceInfo: 'Mozilla/5.0 (Macintosh) Harness/1.2.3', width: 1512, height: 982, pixelRatio: 2,
   }))
   expect(url.origin).toBe('https://trtgsjkv6r.feishu.cn')
   expect(url.pathname).toBe('/share/base/form/shrcnlCoGElW7MQznGy9r3YYXcg')
-  expect(Object.fromEntries(new URL(ContactConfig({}).contactFormUrl).searchParams)).toEqual({
+  expect(Object.fromEntries(new URL(Config({}).contactFormUrl.get()).searchParams)).toEqual({
     hide_uid: '1', hide_device_info: '1', hide_harness_version: '1',
   })
   expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -23,7 +32,7 @@ it('prefills the available support context and hides every context field', () =>
 })
 
 it('percent-encodes context values that carry URL delimiters', () => {
-  const url = new URL(contactUrl(ContactConfig({ contactSource: 'a&b=c' }), {
+  const url = new URL(contactUrl(contactConfig({ contactSource: 'a&b=c' }), {
     uid: 'user&admin=1' as AccountUserId, version: '1.0.0-rc.1+build',
     deviceInfo: 'platform=darwin; os=15.0; app_arch=arm64; cpu=Apple M3; memory_gib=16.0',
     width: 800, height: 600, pixelRatio: 1,
@@ -36,7 +45,7 @@ it('percent-encodes context values that carry URL delimiters', () => {
 })
 
 it('opens a configured form and omits unavailable context', () => {
-  const url = new URL(contactUrl(ContactConfig({ contactFormUrl: 'https://example.test/form/' }), {
+  const url = new URL(contactUrl(contactConfig({ contactFormUrl: 'https://example.test/form/' }), {
     uid: null, version: undefined, deviceInfo: '', width: 0, height: 0, pixelRatio: 1,
   }))
   expect(url.origin).toBe('https://example.test')
@@ -49,11 +58,11 @@ it('opens a configured form and omits unavailable context', () => {
   expect(url.searchParams.get('hide_source')).toBe('1')
   expect(url.searchParams.get('hide_harness_version')).toBe('1')
   expect(url.searchParams.get('hide_device_info')).toBe('1')
-  expect(() => ContactConfig({ contactFormUrl: 'javascript:alert(1)' })).toThrow()
+  expect(() => Config({ contactFormUrl: 'javascript:alert(1)' })).toThrow()
 })
 
 it.each([NaN, Infinity])('uses CSS pixel dimensions when device pixel ratio is %s', (pixelRatio) => {
-  const url = new URL(contactUrl(ContactConfig({}), {
+  const url = new URL(contactUrl(contactConfig(), {
     uid: null, version: undefined, deviceInfo: '', width: 800, height: 600, pixelRatio,
   }))
   expect(url.searchParams.get('prefill_device_info')).toBe('screen_resolution=800x600')
@@ -67,7 +76,7 @@ it('drops unsupported prefill and hide parameters while preserving form options'
     form.searchParams.set(`hide_${field}`, '1')
   }
   form.searchParams.set('prefill_device_info', 'stale')
-  const url = new URL(contactUrl(ContactConfig({ contactFormUrl: form.href }), {
+  const url = new URL(contactUrl(contactConfig({ contactFormUrl: form.href }), {
     uid: null, version: undefined, deviceInfo: '', width: 800, height: 600, pixelRatio: 1,
   }))
   expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -77,15 +86,39 @@ it('drops unsupported prefill and hide parameters while preserving form options'
 })
 
 it.each([[0, 600], [800, 0], [-1, 600]])('keeps the device description without unavailable screen dimensions (%s, %s)', (width, height) => {
-  const url = new URL(contactUrl(ContactConfig({}), {
+  const url = new URL(contactUrl(contactConfig(), {
     uid: null, version: undefined, deviceInfo: 'platform=darwin', width, height, pixelRatio: 1,
   }))
   expect(url.searchParams.get('prefill_device_info')).toBe('platform=darwin')
 })
 
 it('rounds physical screen dimensions in the device description', () => {
-  const url = new URL(contactUrl(ContactConfig({}), {
+  const url = new URL(contactUrl(contactConfig(), {
     uid: null, version: undefined, deviceInfo: '', width: 801, height: 601, pixelRatio: 1.25,
   }))
   expect(url.searchParams.get('prefill_device_info')).toBe('screen_resolution=1001x751')
+})
+
+it('falls back to the Host defaults while the Host sends no questionnaire options', () => {
+  const context = { uid: null, version: undefined, deviceInfo: '', width: 0, height: 0, pixelRatio: 1 }
+  const defaults = Config({})
+  expect(contactUrl(contactConfig(), context)).toBe(contactUrl(contactConfig({
+    contactFormUrl: defaults.contactFormUrl.get(), contactSource: defaults.contactSource.get(),
+  }), context))
+})
+
+it('reads the current questionnaire options at each call', () => {
+  const context = { uid: null, version: undefined, deviceInfo: '', width: 0, height: 0, pixelRatio: 1 }
+  const form = createSnapshotStore<string | undefined>('https://example.test/first/')
+  const source = createSnapshotStore<string | undefined>('first')
+  const config: ReturnType<typeof contactConfig> = {
+    contactFormUrl: { get: () => form.getSnapshot(), getSnapshot: () => form.getSnapshot(), subscribe: fn => form.subscribe(fn) },
+    contactSource: { get: () => source.getSnapshot(), getSnapshot: () => source.getSnapshot(), subscribe: fn => source.subscribe(fn) },
+  }
+  expect(new URL(contactUrl(config, context)).pathname).toBe('/first/')
+  form.set('https://example.test/second/')
+  source.set('second')
+  const url = new URL(contactUrl(config, context))
+  expect(url.pathname).toBe('/second/')
+  expect(url.searchParams.get('prefill_source')).toBe('second')
 })
