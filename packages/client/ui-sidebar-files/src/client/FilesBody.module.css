@@ -158,7 +158,8 @@
 
 /* The page's 38px row flush under the pane's strip: the root's path, then
    reload and the directory actions. With the strip's 38px above, its rule lies where the conversation header's does
-   (ui-conversation ConversationRoot `.header`, 76px with the same rule). */
+   (ui-conversation ConversationRoot `.header`, 76px with the same rule).
+   The trailing capsule meets the upper collapse glyph, 7.5px inside its hit target. */
 .header {
   display: flex;
   flex: 0 0 auto;
@@ -166,7 +167,7 @@
   align-items: center;
   box-sizing: border-box;
   height: 38px;
-  padding: 0 6px 0 16px;
+  padding: 0 13.5px 0 16px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
@@ -253,6 +254,12 @@
 .tool svg {
   width: 15px;
   height: 15px;
+}
+
+/* The landscape folder needs the full 16px slot to match the adjacent glyphs visually. */
+.tool[data-files-navigator-toggle] svg {
+  width: 16px;
+  height: 16px;
 }
 
 @media (hover: hover) {
