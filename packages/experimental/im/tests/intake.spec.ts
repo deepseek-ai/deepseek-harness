@@ -253,12 +253,29 @@ describe('ImIntake admission', () => {
     await deliver(bot, 'evt-aliased', inbound({
       id: 'm-aliased',
       aliases: ['REFIDX_orig'],
+      referrer: { ref: 'chat-1-ref' },
       content: h('message', h.text('aliased original')),
     }))
     bot.getMessage = async () => { throw new Error('should not reread stored aliased message') }
     await deliver(bot, 'evt-reply-alias', inbound({ id: 'm-reply-alias', quote: { id: 'REFIDX_orig' } }))
     await intake.idle()
     expect(store.get(ImMessageKey('fake:bot', 'm-reply-alias'))?.quote?.text).toBe('aliased original')
+
+    // Another chat on the same bot must not inherit quote text or referrer from chat-1's alias.
+    const otherChat = { id: 'chat-2', type: 'group' as const }
+    bot.getMessage = undefined
+    await deliver(bot, 'evt-other-chat', inbound({
+      id: 'm-other-chat',
+      chat: otherChat,
+      quote: { id: 'REFIDX_orig' },
+    }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-other-chat'))?.quote?.text).toBeUndefined()
+
+    await bot.send(otherChat, h('message', h('quote', { id: 'REFIDX_orig' }), h.text('own reply')))
+    await intake.idle()
+    const ownReply = store.latest(ImChatKey('fake:bot', 'chat-2'))
+    expect(ownReply?.referrer).toBeUndefined()
   })
 
   it('stops waiting for a platform read that never answers', async () => {

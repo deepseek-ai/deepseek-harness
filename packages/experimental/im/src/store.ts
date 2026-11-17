@@ -300,6 +300,10 @@ export class ImStore implements ImHistory {
     return out
   }
 
+  /**
+   * Look up a stored message by canonical `key` or by any recorded platform `aliases` key (`bot|alias`).
+   * Callers scoping lookups to one chat must verify `message.chat.key`.
+   */
   get(key: ImMessageKey): ImMessage | undefined {
     const direct = this.records.get(key)?.message
     if (direct !== undefined) return direct

@@ -553,6 +553,10 @@ export interface ImHistory {
   after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
   /** The same walk backwards: up to `limit` messages with seq < `seq`, oldest first. */
   before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
+  /**
+   * Look up a stored message by canonical `key` or by any recorded platform `aliases` key (`bot|alias`).
+   * Callers scoping lookups to one chat must verify `message.chat.key`.
+   */
   get(key: ImMessageKey): ImMessage | undefined
   latest(chat: ImChatKey): ImMessage | undefined
 }

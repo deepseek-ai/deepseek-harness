@@ -244,12 +244,14 @@ export class ImIntake {
     const target = result.handle.target
     const source = this.config.sources.find(candidate => admitsChat(candidate, bot.id, target.chat))
     if (source === undefined) return undefined
+    const chat = chatOf(bot.id, target.chat, source)
     const quoteNode = result.handle.content.children.find(
       (child): child is Element<'quote'> => child.type === 'quote',
     )
-    const quoted = quoteNode === undefined
+    const quotedCandidate = quoteNode === undefined
       ? undefined
       : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id))
+    const quoted = quotedCandidate?.chat.key === chat.key ? quotedCandidate : undefined
     const resolvedThread = part.thread !== undefined
       ? { id: part.thread.id, ...part.thread.root === undefined ? {} : { root: part.thread.root } }
       : typeof target.thread === 'string'
@@ -261,7 +263,7 @@ export class ImIntake {
     const time = part.time || Date.now()
     const draft: ImMessageDraft = {
       key: ImMessageKey(bot.id, part.id),
-      chat: chatOf(bot.id, target.chat, source),
+      chat,
       ...resolvedThread === undefined ? {} : { thread: resolvedThread },
       sender: { id: bot.selfId, ...bot.user?.name === undefined ? {} : { name: bot.user.name }, isBot: true, self: true },
       content: result.handle.content,
@@ -393,23 +395,23 @@ export class ImIntake {
   private async withQuoteText(bot: Bot, draft: ImMessageDraft): Promise<ImMessageDraft> {
     const quote = draft.quote
     if (quote === undefined || quote.text !== undefined) return draft
-    const text = await this.quotedText(bot, draft.chat.ref, quote.key)
+    const text = await this.quotedText(bot, draft.chat, quote.key)
     return text === undefined ? draft : { ...draft, quote: { ...quote, text } }
   }
 
   /**
-   * The text of one quoted message: the store when this deployment received it, the platform otherwise.
+   * The text of one quoted message: the store when this deployment received it in the same chat, the platform otherwise.
    * @param bot - the bot of the chat being read.
-   * @param chat - platform reference of the chat the reply arrived in.
+   * @param chat - admitted chat the reply arrived in.
    * @param key - key of the quoted message.
    * @returns its text, or undefined when neither the store nor the platform can show it.
    */
-  private async quotedText(bot: Bot, chat: ChatRef, key: ImMessageKey): Promise<string | undefined> {
+  private async quotedText(bot: Bot, chat: ImChat, key: ImMessageKey): Promise<string | undefined> {
     const stored = this.store.get(key)
-    if (stored !== undefined) return stored.text
+    if (stored !== undefined && stored.chat.key === chat.key) return stored.text
     if (bot.getMessage === undefined) return undefined
     try {
-      return toText((await this.readWithin(bot.getMessage(chat, splitKey(key).id))).content)
+      return toText((await this.readWithin(bot.getMessage(chat.ref, splitKey(key).id))).content)
     } catch (error: unknown) {
       // The reply is still a deliverable message: a quote the platform will not hand back stays an id.
       this.ctx.logger.warn('IM quoted message %s could not be read: %s', key,
