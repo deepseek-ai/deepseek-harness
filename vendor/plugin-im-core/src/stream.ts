@@ -73,7 +73,7 @@ export interface MessageStream {
    */
   abort(options?: { recall?: boolean; reason?: string }): Promise<boolean>
   readonly state: 'idle' | 'open' | 'closing' | 'closed' | 'failed'
-  /** After the first platform message exists. */
+  /** After the first platform message exists, until a confirmed recall clears it back to `undefined`. */
   readonly handle: MessageHandle | undefined
   readonly strategy: StreamStrategy
   /** Rejects with StreamLimitError / PlatformError when the stream failed; resolves on close. */
