@@ -12,6 +12,47 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+/**
+ * Start one worker whose child reports the environment it received.
+ * The child stays alive so the Host keeps this process until the test disposes it.
+ * @returns Environment entries the spawned worker process read.
+ */
+async function observedWorkerEnvironment(): Promise<Record<string, string | undefined>> {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'liveshare-worker-env-')))
+  const envFile = join(root, 'env.json')
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+  const script = `
+      const { writeFileSync } = require('node:fs')
+      writeFileSync(process.argv[1], JSON.stringify({
+        extraCaCerts: process.env.NODE_EXTRA_CA_CERTS,
+        sslCertFile: process.env.SSL_CERT_FILE,
+        httpsProxy: process.env.HTTPS_PROXY,
+        noProxy: process.env.NO_PROXY,
+        emptyProxy: process.env.HTTP_PROXY,
+        nodeMode: process.env.ELECTRON_RUN_AS_NODE,
+        mode: process.env.LIVESHARE_TUNNEL_MODE,
+        ipc: typeof process.send,
+      }))
+      process.send({ type: 'ready' })
+      setInterval(() => {}, 1_000)
+    `
+  const worker = new TunnelWorker({ command: { executable: process.execPath, args: ['-e', script, envFile] } })
+  onTestFinished(() => worker.stop())
+  worker.send({ type: 'add-share', share })
+  try {
+    await expect.poll(() => {
+      try {
+        return readFileSync(envFile, 'utf8') !== ''
+      } catch {
+        return false
+      }
+    }, { timeout: 10_000 }).toBe(true)
+    return JSON.parse(readFileSync(envFile, 'utf8')) as Record<string, string | undefined>
+  } finally {
+    await worker.stop()
+  }
+}
+
 describe('Liveshare tunnel worker transport environment', () => {
   it('spawns the worker with the transport settings the Host itself resolves and trusts', async () => {
     // The worker is a separate process: a Relay the Host reaches through a private CA or an explicit
@@ -21,49 +62,33 @@ describe('Liveshare tunnel worker transport environment', () => {
     vi.stubEnv('HTTPS_PROXY', 'http://proxy.example.test:3128')
     vi.stubEnv('NO_PROXY', 'relay.internal.example.test')
     vi.stubEnv('HTTP_PROXY', '')
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'liveshare-worker-env-')))
-    const envFile = join(root, 'env.json')
-    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
-    const script = `
-      const { writeFileSync } = require('node:fs')
-      writeFileSync(process.argv[1], JSON.stringify({
-        extraCaCerts: process.env.NODE_EXTRA_CA_CERTS,
-        sslCertFile: process.env.SSL_CERT_FILE,
-        httpsProxy: process.env.HTTPS_PROXY,
-        noProxy: process.env.NO_PROXY,
-        emptyProxy: process.env.HTTP_PROXY,
-        mode: process.env.LIVESHARE_TUNNEL_MODE,
-        ipc: typeof process.send,
-      }))
-      process.send({ type: 'ready' })
-      setInterval(() => {}, 1_000)
-    `
-    const worker = new TunnelWorker({ command: { executable: process.execPath, args: ['-e', script, envFile] } })
-    onTestFinished(() => worker.stop())
-    worker.onEvent(() => {})
-    worker.send({ type: 'add-share', share })
-    try {
-      await expect.poll(() => {
-        try {
-          return readFileSync(envFile, 'utf8') !== ''
-        } catch {
-          return false
-        }
-      }, { timeout: 10_000 }).toBe(true)
-      expect(JSON.parse(readFileSync(envFile, 'utf8'))).toEqual({
-        extraCaCerts: '/etc/liveshare/relay-ca.pem',
-        sslCertFile: '/etc/liveshare/tls-ca.pem',
-        httpsProxy: 'http://proxy.example.test:3128',
-        noProxy: 'relay.internal.example.test',
-        mode: 'gateway',
-        ipc: 'function',
-      })
-      // An empty variable is not forwarded as an empty value: the worker keeps its own default rather
-      // than reading a blank proxy as configured.
-      expect(JSON.parse(readFileSync(envFile, 'utf8'))).not.toHaveProperty('emptyProxy')
-    } finally {
-      await worker.stop()
-    }
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
+    const environment = await observedWorkerEnvironment()
+    expect(environment).toEqual({
+      extraCaCerts: '/etc/liveshare/relay-ca.pem',
+      sslCertFile: '/etc/liveshare/tls-ca.pem',
+      httpsProxy: 'http://proxy.example.test:3128',
+      noProxy: 'relay.internal.example.test',
+      mode: 'gateway',
+      ipc: 'function',
+    })
+    // An empty variable is not forwarded as an empty value: the worker keeps its own default rather
+    // than reading a blank proxy as configured.
+    expect(environment).not.toHaveProperty('emptyProxy')
+  })
+})
+
+describe('Liveshare tunnel worker Node mode', () => {
+  it('starts the worker in the Node mode the Host itself runs in', async () => {
+    // The worker runs process.execPath, which under the Desktop shell is Electron. Electron selects
+    // Node mode from this variable alone, so the mode has to travel with the spawn.
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
+    expect(await observedWorkerEnvironment()).toHaveProperty('nodeMode', '1')
+  })
+
+  it('starts a plain Node Host worker without an Electron mode the Host never had', async () => {
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
+    expect(await observedWorkerEnvironment()).not.toHaveProperty('nodeMode')
   })
 })
 
