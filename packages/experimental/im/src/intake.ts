@@ -271,6 +271,7 @@ export class ImIntake {
       mentions: { self: false, all: false, users: [] },
       addressed: false,
       time,
+      ...part.aliases?.length ? { aliases: [...part.aliases] } : {},
       ...referrer === undefined ? {} : { referrer },
       via: 'self',
     }

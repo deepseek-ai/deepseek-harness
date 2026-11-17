@@ -276,6 +276,24 @@ describe('ImIntake admission', () => {
     await intake.idle()
     const ownReply = store.latest(ImChatKey('fake:bot', 'chat-2'))
     expect(ownReply?.referrer).toBeUndefined()
+
+    // Own outbound parts carrying platform aliases (e.g. QQ ext_info.ref_idx) are indexed so replies can quote them.
+    await intake.outbound(bot, {
+      status: 'sent',
+      handle: {
+        bot: bot.id,
+        target: { chat: CHAT },
+        mode: 'text',
+        parts: [{ id: 'ROBOT1.0_own', kind: 'text', time: 1000, aliases: ['REFIDX_own'] }],
+        createdAt: 1000,
+        edits: 0,
+        content: h('message', h.text('own aliased')),
+      },
+    })
+    expect(store.get(ImMessageKey('fake:bot', 'REFIDX_own'))).toMatchObject({
+      key: ImMessageKey('fake:bot', 'ROBOT1.0_own'),
+      aliases: ['REFIDX_own'],
+    })
   })
 
   it('stops waiting for a platform read that never answers', async () => {
