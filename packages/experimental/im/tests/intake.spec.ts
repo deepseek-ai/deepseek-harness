@@ -263,7 +263,7 @@ describe('ImIntake admission', () => {
 
     // Another chat on the same bot must not inherit quote text or referrer from chat-1's alias.
     const otherChat = { id: 'chat-2', type: 'group' as const }
-    bot.getMessage = undefined
+    delete bot.getMessage
     await deliver(bot, 'evt-other-chat', inbound({
       id: 'm-other-chat',
       chat: otherChat,
@@ -272,7 +272,7 @@ describe('ImIntake admission', () => {
     await intake.idle()
     expect(store.get(ImMessageKey('fake:bot', 'm-other-chat'))?.quote?.text).toBeUndefined()
 
-    await bot.send(otherChat, h('message', h('quote', { id: 'REFIDX_orig' }), h.text('own reply')))
+    await bot.send({ chat: otherChat }, h('message', h('quote', { id: 'REFIDX_orig' }), h.text('own reply')))
     await intake.idle()
     const ownReply = store.latest(ImChatKey('fake:bot', 'chat-2'))
     expect(ownReply?.referrer).toBeUndefined()
