@@ -200,7 +200,7 @@ export async function disposeCodexChild(
   )
   try {
     child.stdin?.end()
-  } catch {
+  } catch (_stdinAlreadyClosed) {
     // A concurrently closed stdin does not change range ownership below.
   }
   child.terminate()
@@ -259,7 +259,7 @@ export async function startCodexRun(
       // Synchronous fd forwarding preserves byte order without owning a
       // backpressure queue. A slow host sink can block this event-loop turn.
       writeFileSync(process.stderr.fd, bytes)
-    } catch {
+    } catch (_hostStderrWriteFailed) {
       // Host stderr is an observation sink, not a child-run failure authority.
     }
   }
@@ -401,11 +401,8 @@ export async function startCodexRun(
           && !runAbort.signal.aborted
         ) {
           try {
-            const exited = await child.waitForExit(
-              AbortSignal.timeout(Math.ceil(spec.disposeGraceMs)),
-            )
-            if (exited) await child.done
-          } catch {
+            if (await child.waitForExit(AbortSignal.timeout(Math.ceil(spec.disposeGraceMs)))) await child.done
+          } catch (_exitObservationFailed) {
             // The wire failure remains authoritative when exit observation fails.
           }
         }

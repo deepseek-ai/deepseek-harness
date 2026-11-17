@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import LlmRuntime, { type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import * as ApiKey from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as Account from '../src/index.ts'
 
@@ -51,9 +51,7 @@ async function host(origin: string, token: () => string | undefined = () => 'fix
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
-  ctx.provide('deepseekAccount', {
-    resolveToken: (url: string) => Promise.resolve(new URL(url).origin === origin ? token() : undefined),
-  } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: url => new URL(url).origin === origin ? token() : undefined }))
   return ctx
 }
 
@@ -207,4 +205,35 @@ it('aborts an in-flight listing request when the plugin is disposed', async () =
   await account.dispose()
   await closed
   await expect(pending).resolves.toEqual(expect.any(Array))
+})
+
+it('publishes the account credential for its consumers, asking the account for each endpoint', async () => {
+  const asked: string[] = []
+  let token: string | undefined = 'fixture-account-token'
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime)
+  ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return token } }))
+  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  const credential = ctx.llm.providerCredential('deepseek-account')
+  expect(credential).toMatchObject({ kind: 'account', baseURL: 'https://account.deepseek.test/anthropic' })
+  expect(credential).not.toHaveProperty('reference')
+  const endpoint = 'https://account.deepseek.test/v1/tools/search'
+  await expect(credential!.configured(endpoint)).resolves.toBe(true)
+  await expect(credential!.resolve(endpoint)).resolves.toMatchObject({ headers: { 'x-dsh-auth-token': 'fixture-account-token' }, value: 'fixture-account-token' })
+  token = undefined
+  await expect(credential!.configured(endpoint)).resolves.toBe(false)
+  await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
+  expect(asked).toEqual([endpoint, endpoint, endpoint, endpoint])
+  expect(ctx.llm.providerCredential('deepseek-official')).toBeUndefined()
+})
+
+it('publishes a credential nobody holds without the account service', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(Account, { baseURL: 'https://account.deepseek.test/anthropic' })
+  const credential = ctx.llm.providerCredential('deepseek-account')!
+  await expect(credential.configured('https://account.deepseek.test/v1/tools/search')).resolves.toBe(false)
+  await expect(credential.resolve('https://account.deepseek.test/v1/tools/search')).resolves.toBeUndefined()
 })

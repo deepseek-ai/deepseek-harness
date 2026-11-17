@@ -43,7 +43,7 @@ describe('background job ownership during asynchronous shell startup', () => {
     child.process.status = 'completed'
     child.process.exitCode = 5
     child.exited.resolve(undefined)
-    expect(await hooks.done).toEqual({ status: 'completed', detail: 'exit code: 5' })
+    expect(await hooks.done).toEqual({ status: 'completed', detail: 'exit code: 5', exitCode: 5 })
   })
 
   it('aborts pending preparation through the job-owned signal', async () => {

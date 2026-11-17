@@ -80,7 +80,7 @@ export function ViewOptionsMenu({ options, visible, t }: PropsLocale<typeof NS> 
         run(id)
       }}
       anchor={(
-        <Tooltip label={t('diff.moreOptions')} side="bottom">
+        <Tooltip label={t('diff.moreOptions')} side="bottom" delayMs={500}>
           <button type="button" className={clsx(css.tool, css.more)} aria-label={t('diff.moreOptions')}
             aria-haspopup="menu" aria-expanded={open} data-forge-view-options=""
             onClick={(event) => { setFold(fold === null ? foldOf(event.currentTarget) : null) }}>

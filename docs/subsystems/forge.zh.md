@@ -917,7 +917,10 @@ interface ForgeSessionWorktree {
   readonly path: string
   /** Branch created for the checkout. */
   readonly branch: string
-  /** Requested base branch, or null when the checkout started from HEAD of the source checkout. */
+  /**
+   * Requested base: the full name of a local or remote-tracking branch, a short branch name that earlier panels
+   * recorded, or null when the checkout started from HEAD of the source checkout.
+   */
   readonly from: string | null
   /** Commit object name the branch started from. */
   readonly baseCommit: string
@@ -930,8 +933,11 @@ interface ForgeSessionWorktree {
 ```ts type-equiv
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
 type WorktreeRecord =
-  /** Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null. */
-  | { readonly action: 'request'; readonly from: string | null }
+  /**
+   * Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null, on the
+   * branch `name`, or on a generated branch name when `name` is absent.
+   */
+  | { readonly action: 'request'; readonly from: string | null; readonly name?: string }
   /** Withdraw the open request. */
   | { readonly action: 'cancel' }
   /** The requested worktree was created and became the Session's working directory. */
@@ -945,8 +951,13 @@ type WorktreeRecord =
 ```ts type-equiv
 /** One open worktree request. */
 interface ForgeWorktreeRequest {
-  /** Base branch, or null for HEAD of the source checkout. */
+  /**
+   * Base: the full name of a local or remote-tracking branch, a short branch name that earlier panels recorded, or
+   * null for HEAD of the source checkout. A remote-tracking branch is fetched before each attempt that does not skip it.
+   */
   readonly from: string | null
+  /** New branch name the user chose, which every attempt uses, or null for a generated name per attempt. */
+  readonly name: string | null
 }
 ```
 
@@ -964,12 +975,17 @@ type ForgeWorktreeBlocker =
 ```ts type-equiv
 /** One running worktree creation. */
 interface ForgeWorktreeCreation {
-  /** Running step: `prepare` validates and creates the branch, then `checkout` writes the files. */
-  readonly phase: 'prepare' | 'checkout'
+  /**
+   * Running step: `fetch` fetches a remote base branch, `prepare` validates and creates the branch, then
+   * `checkout` writes the files.
+   */
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Branch the attempt creates. */
   readonly branch: string
-  /** Base branch, or null for HEAD. */
+  /** Base as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetches its remote base branch first. */
+  readonly fetch: boolean
   /**
    * Whether a message waits for the creation before its turn starts. Only
    * such a creation can be stopped, after which the message keeps waiting; a
@@ -992,12 +1008,16 @@ interface ForgeWorktreeRestoration {
 interface ForgeWorktreeFailure {
   /** Branch the attempt created, or null when it failed before naming one. */
   readonly branch: string | null
-  /** Base branch of the attempt, or null for HEAD. */
+  /** Base of the attempt as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetched, or tried to fetch, its remote base branch first. */
+  readonly fetch: boolean
   /** Step that failed. */
-  readonly phase: 'prepare' | 'checkout'
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Failure text. */
   readonly message: string
+  /** Whether the branch or the checkout directory of that name already existed, which another name avoids. */
+  readonly exists: boolean
 }
 ```
 
@@ -1028,6 +1048,8 @@ interface ForgePanelWorktree {
   readonly editable: boolean
   /** Why the checkout cannot host a worktree, or null when it can, before the first inspection, and after a failed one. */
   readonly blocker: ForgeWorktreeBlocker | null
+  /** Prefix of generated branch names, the Config `worktreePrefix`, which a name the user types starts from. */
+  readonly namePrefix: string
   /** Open request, or null without one. */
   readonly request: ForgeWorktreeRequest | null
   /** Created worktree, or null before creation. */
@@ -1088,12 +1110,39 @@ interface ForgePanelState {
 ```
 
 ```ts type-equiv
-/** Local branches offered as the base of a new worktree. */
-interface ForgeBranches {
-  /** Checked-out branch, or null when HEAD is detached. */
-  readonly current: string | null
-  /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
-  readonly branches: readonly string[]
+/** Branches offered as the base of a new worktree whose names contain a query. */
+interface ForgeWorktreeBases {
+  /** Checked-out branch, or null when HEAD is detached or its name does not contain the query. */
+  readonly current: ForgeBaseBranch | null
+  /** Default branch of each remote that names one with `refs/remotes/<remote>/HEAD`, in remote order. */
+  readonly defaults: readonly ForgeRemoteDefault[]
+  /** Other local branches, most recently committed first, at most `maxBranches`. */
+  readonly local: readonly ForgeBaseBranch[]
+  /**
+   * Remote-tracking branches of each configured remote in remote order: the remote the checked-out branch tracks,
+   * then `origin`, then the others as Git lists them. Remotes without a matching branch are left out.
+   */
+  readonly remotes: readonly ForgeRemoteBranches[]
+}
+```
+
+```ts type-equiv
+/** A remote's default branch, which `refs/remotes/<remote>/HEAD` names. */
+interface ForgeRemoteDefault extends ForgeBaseBranch {
+  /** Remote the branch belongs to; it may contain `/`. */
+  readonly remote: string
+}
+```
+
+```ts type-equiv
+/** Remote-tracking branches of one remote, without its default branch. */
+interface ForgeRemoteBranches {
+  /** Remote name such as `origin`; it may contain `/`. */
+  readonly name: string
+  /** `owner/name` of the repository a provider recognizes from the remote's URLs, else its fetch URL, or null without one. */
+  readonly repository: string | null
+  /** Branches named `<remote>/<branch>`, most recently committed first, at most `maxBranches`. */
+  readonly branches: readonly ForgeBaseBranch[]
 }
 ```
 
@@ -1123,7 +1172,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更（提供方只返回描述该 head 提交的补丁），或经提供方的 `compare` 读取它指定的 `ForgeCommitRange`；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk，并带有分层与改动摘要。`localCommits` 与 `changeRequestCommits` 列出范围可以指定的提交，提供方不读取提交时后者返回 null。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。head 已越过最新状态时，提供方返回 `stale`，`ctx.forge.diff` 立即重新轮询该变更请求（每个 head 提交一次）；`changeRequestDiff` 以 `forgePanel/stale-head` 拒绝且不缓存任何内容，变更视图保持加载，直到更新的状态到达后按该状态的 head 重新读取。因此评审评论始终指向视图所显示行的那个提交。
+变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更（提供方只返回描述该 head 提交的补丁），或经提供方的 `compare` 读取它指定的 `ForgeCommitRange`；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk，并带有分层与改动摘要。`localCommits` 与 `changeRequestCommits` 列出范围可以指定的提交，提供方不读取提交时后者返回 null。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供会话面板的本地变更行使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。head 已越过最新状态时，提供方返回 `stale`，`ctx.forge.diff` 立即重新轮询该变更请求（每个 head 提交一次）；`changeRequestDiff` 以 `forgePanel/stale-head` 拒绝且不缓存任何内容，变更视图保持加载，直到更新的状态到达后按该状态的 head 重新读取。因此评审评论始终指向视图所显示行的那个提交。
 
 `changeRequestReview(session, url, headSha, fresh)` 在视图所显示 diff 的 head 处读取已绑定变更请求的讨论；head 不同时以 `forgePanel/stale-head` 拒绝，提供方不支持读取讨论时返回 `forgePanel/review-unsupported`，其他失败返回 `forgePanel/review-failed`。每个变更请求在内存里保留一次读取结果，以 head 提交和状态的更新时间为键、受 `maxCachedReviewBytes` 约束，保留时间达到 `reviewRefreshMs` 后，或 `fresh` 要求时（读者刷新视图后的第一次读取就是这样）重新读取：在 GitHub 上，新评论和回复会改变 PR 的更新时间，解决讨论则不会。变更视图可见时，每收到一次状态就重新请求一次，并按[面板 README](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package) 所述把讨论叠加到文件上。
 
@@ -1311,7 +1360,7 @@ interface ForgeChangedFile {
 ```
 
 ```ts type-equiv
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string
@@ -1777,13 +1826,16 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
 
 /**
- * List the local branches that can start a worktree of the Session's current checkout.
- * @param session - Session whose current directory is listed.
+ * List the branches that can start a worktree of the Session's current checkout: the checked-out branch, each
+ * remote's default branch, other local branches, and each remote's other remote-tracking branches, remotes in the
+ * order the panel recognizes code hosts.
+ * @param session - Session whose checkout is read.
+ * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param signal - request cancellation.
- * @returns the checked-out branch and at most `maxBranches` local branches, the checked-out one first.
- * @throws when the current directory is not inside a checkout or Git fails.
+ * @returns the branches, at most `maxBranches` local branches and `maxBranches` per remote, most recently committed first.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
  */
-@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>
+@Remote async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases>
 
 /**
  * List the branches the `branch` scope of the Session's current checkout can compare with.
@@ -2116,18 +2168,23 @@ registerLens(lens: ForgeLens): () => Promise<void>
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open
  * request and forgetting a failed attempt. While the next message waits in
- * the inbox, or else at the first step proposal, the panel creates a branch
- * from `from`, or from HEAD of the current checkout when it is null, and
- * enters its checkout. A message that already waits after a failed or
- * stopped attempt keeps waiting for {@link ForgePanelController.retryWorktree}.
+ * the inbox, or else at the first step proposal, the panel creates the
+ * branch `name`, or a generated branch per attempt when it is null, from
+ * `from`, or from HEAD of the current checkout when it is null, and enters
+ * its checkout; a remote-tracking `from` is fetched first. A message that
+ * already waits after a failed or stopped attempt keeps waiting for
+ * {@link ForgePanelController.retryWorktree}.
  * @param session - Session without a started turn.
- * @param from - local base branch, or null for HEAD.
+ * @param from - full name of a local or remote-tracking base branch, or null for HEAD.
+ * @param name - new branch name, or null to generate one per attempt.
  * @param signal - request cancellation.
- * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable`
+ * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/invalid-name` when `name` breaks
+ * a branch-name rule; `forgePanel/branch-exists` when the checkout has a local branch named `name`;
+ * `forgePanel/not-a-checkout` when a name is checked outside a checkout; `forgePanel/worktrees-unavailable`
  * without a worktree service; `forgePanel/session-started` after a turn started or the worktree was
  * created; `forgePanel/session-busy` while the worktree is being created.
  */
-@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>
+@Remote async requestWorktree(session: Session, from: string | null, name: string | null, signal: AbortSignal): Promise<void>
 
 /**
  * Withdraw the open worktree request of a Session with its failed attempt,
@@ -2150,13 +2207,16 @@ registerLens(lens: ForgeLens): () => Promise<void>
 @Remote async stopCreation(session: Session, signal: AbortSignal): Promise<void>
 
 /**
- * Make another attempt, with a new branch name, at the worktree a message
- * of the Session waits for after a failed or stopped attempt.
+ * Make another attempt, on the requested branch name or a new generated
+ * one, at the worktree a message of the Session waits for after a failed or
+ * stopped attempt.
  * @param session - Session whose message waits.
+ * @param fetch - false skips fetching a remote-tracking base branch for this attempt, which then starts from the
+ * commit last fetched.
  * @param signal - request cancellation.
  * @throws `forgePanel/not-waiting` when no message waits or an attempt is running.
  */
-@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>
+@Remote async retryWorktree(session: Session, fetch: boolean, signal: AbortSignal): Promise<void>
 
 /**
  * Check out the created worktree of a Session again at its recorded

@@ -17,6 +17,7 @@ import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
@@ -116,17 +117,13 @@ function requireAgent(context: OpContext<AgentBinding>, op: string): Agent {
   return agent
 }
 
-function textOf(content: readonly ContentBlock[]): string {
-  return content.filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join('')
-}
-
 /**
  * Project one tool outcome onto Claude Code's `tool.call` result.
  * @param result - the harness tool outcome.
  * @returns its text as `result`, with `isError` on a failure.
  */
 export function toolCallResultOf(result: ToolExecutionResult): ToolCallResult {
-  return result.isError ? { result: textOf(result.content), isError: true } : { result: textOf(result.content) }
+  return result.isError ? { result: extractTextContent(result.content), isError: true } : { result: extractTextContent(result.content) }
 }
 
 /** The model's raw JSON arguments as an object; an unparsable string is an empty input. */
@@ -146,7 +143,7 @@ function sessionMessages(messages: readonly Message[], aliases: ToolNameAliases)
     const toolUses = message.content
       .filter((block): block is Extract<ContentBlock, { type: 'tool-call' }> => block.type === 'tool-call')
       .map(block => ({ tool_use_id: block.id, tool: aliases.toMod(block.name), input: argumentsOf(block.arguments) }))
-    out.push({ role: message.role, text: textOf(message.content), toolUses })
+    out.push({ role: message.role, text: extractTextContent(message.content), toolUses })
   }
   return out
 }

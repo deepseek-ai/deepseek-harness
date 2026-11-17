@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -20,7 +21,8 @@ const searchProvider = (options: DeepSeekSearchApiOptions): DeepSeekSearchApiPro
   new DeepSeekSearchApiProvider(() => options)
 
 const BASE = 'https://api.deepseek.test/api/v1/tools'
-const auth = (key: string, baseURL = BASE): DeepSeekSearchApiOptions['auth'] => ({ sources: [{ kind: 'api-key', baseURL, key }] })
+const auth = (key: string, baseURL = BASE): DeepSeekSearchApiOptions['auth'] =>
+  ({ sources: [{ kind: 'api-key', baseURL, key: { ref: credentialRef('TEST_KEY'), configured: async () => key.length > 0, resolve: async () => key.length > 0 ? key : undefined } }] })
 
 const options = {
   auth: auth('ds-key'),
@@ -74,16 +76,18 @@ describe('mapSearchResponse', () => {
 })
 
 describe('DeepSeekSearchApiProvider availability', () => {
-  it('is unavailable without a key', () => {
-    expect(searchProvider({ ...options, auth: auth('') }).available()).toBe(false)
+  it('is unavailable without a source, and available with a referenced key whose presence only ready() reads', () => {
+    expect(searchProvider({ ...options, auth: { sources: [] } }).available()).toBe(false)
+    expect(searchProvider({ ...options, auth: auth('') }).available()).toBe(true)
   })
 
   it('is available with a key', () => {
     expect(searchProvider(options).available()).toBe(true)
   })
 
-  it('is available with only an account token resolver', () => {
-    expect(searchProvider({ ...options, auth: { sources: [{ kind: 'account', baseURL: BASE, resolveToken: async () => 'account-token', rejectToken: async () => {} }] } }).available()).toBe(true)
+  it('is available with only a route credential', () => {
+    const credential = { kind: 'account', configured: async () => true, resolve: async () => undefined } as const
+    expect(searchProvider({ ...options, auth: { sources: [{ kind: 'route', baseURL: BASE, credential }] } }).available()).toBe(true)
   })
 
   it('is available with only a misconfigured source, which the search reports', () => {

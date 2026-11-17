@@ -138,7 +138,7 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
-  it('releases draft previews when their session scope is disposed', async () => {
+  it('keeps draft previews registered when their session scope is disposed and re-adopts them on return', async () => {
     const b = await bench()
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft-1')
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
@@ -150,8 +150,11 @@ describe('ConversationController', () => {
       b.root.input.for(b.runtime.sessions.scope('s1')!).addAttachments([attachment.id])
       b.reference.release()
       await b.runtime.flush()
-      expect(b.root.resolveDraftAttachments([attachment.id])).toEqual([])
-      expect(revoked).toHaveBeenCalledWith('blob:draft-1')
+      expect(b.root.resolveDraftAttachments([attachment.id])).toEqual([attachment])
+      expect(revoked).not.toHaveBeenCalled()
+      const again = b.runtime.sessions.retain('s1' as SessionId)
+      await again.ready
+      expect(b.hub.shellFor(b.runtime.sessions.binding('s1')!).snapshot.attachmentIds).toEqual([attachment.id])
     } finally {
       created.mockRestore()
       revoked.mockRestore()

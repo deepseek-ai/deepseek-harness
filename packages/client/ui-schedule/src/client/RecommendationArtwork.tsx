@@ -39,6 +39,23 @@ export function SunriseGlyph(props: TileGlyphProps): ReactNode {
 }
 
 /**
+ * Calendar page with a check: a week in review.
+ * @param props - class of the root SVG.
+ * @returns the glyph.
+ */
+export function CalendarCheckGlyph(props: TileGlyphProps): ReactNode {
+  return (
+    <Glyph {...props}>
+      <path data-fill="" d="M5 4.5H15A2 2 0 0 1 17 6.5V15A2 2 0 0 1 15 17H5A2 2 0 0 1 3 15V6.5A2 2 0 0 1 5 4.5Z" />
+      <path d="M3 8.5H17" />
+      <path d="M7 2.75V6" />
+      <path d="M13 2.75V6" />
+      <path d="M7.5 12.75L9.25 14.5L12.75 11" />
+    </Glyph>
+  )
+}
+
+/**
  * Open-issue mark: a ring with a center dot.
  * @param props - class of the root SVG.
  * @returns the glyph.

@@ -147,7 +147,8 @@ function hasAssistantText(events: readonly SessionEvent[], text: string): boolea
 /** Caller-supplied user message texts in log order (runtime-context snapshots excluded). */
 function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
-    ? event.data.content.flatMap(block => block.type === 'text'
+    ? event.data.content.flatMap((block, index) => block.type === 'text'
+      && !(event.data.source.kind === 'agent-message' && index === 0)
       && !block.text.startsWith('Your final answer is delivered automatically ')
       ? [block.text]
       : [])
@@ -1256,6 +1257,53 @@ describe('target-only Queue residency routing', () => {
 })
 
 describe('continuable human steering delivery', () => {
+  it.each(['queue', 'steer'] as const)('distinguishes delegated tasks from cold %s input without RPC metadata', async (delivery) => {
+    const { ctx, parent, adapter } = await setup([
+      textResponse('root answer'), textResponse('child answer'), textResponse('human answer'), textResponse('agent answer'),
+    ])
+    try {
+      parent.followup(createUserMessage({ content: message('root question'), source: { kind: 'user' } }))
+      await parent.whenIdle()
+      parkParent(ctx, parent)
+      const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await expect(started.result).resolves.toMatchObject({ stopReason: 'completed' })
+      let ended = Promise.withResolvers<undefined>()
+      ctx.on('subagent/end', (info) => { if (info.id === started.childId) ended.resolve(undefined) })
+      const id = await subagentManager(ctx).deliverPrompt(started.childId, message('human question'), {
+        delivery, source: { kind: 'user' }, signal: testSignal,
+      })
+      await ended.promise
+      ended = Promise.withResolvers<undefined>()
+      await ctx.subagents.sendMessage(parent, started.childId, message('agent question'), { signal: testSignal })
+      await ended.promise
+
+      expect(adapter.requests).toHaveLength(4)
+      expect(adapter.requests[0]!.messages.find(item => item.source?.kind === 'user')?.content)
+        .toEqual(message('root question'))
+      const task = adapter.requests[1]!.messages.find(item => item.source?.kind === 'agent-message')!
+      expect(task.source).toEqual({
+        kind: 'agent-message', form: 'relay', senderSessionId: parent.id,
+      })
+      expect(task.content).toHaveLength(3)
+      expect(task.content.slice(0, 2)).toEqual([
+        { type: 'text', text: 'Agent lead sent a message: ' },
+        { type: 'text', text: 'child task' },
+      ])
+      const guidance = task.content[2]!
+      expect(guidance.type === 'text' && guidance.text).toMatch(/^Your final answer is delivered automatically /)
+      const received = adapter.requests[2]!.messages.find(item => item.id === id)
+      expect(received).toMatchObject({
+        role: 'user', source: { kind: 'user' }, content: message('human question'),
+      })
+      expect(adapter.requests[3]!.messages.findLast(item => item.source?.kind === 'agent-message')?.content)
+        .toEqual([{ type: 'text', text: 'Agent lead sent a message: ' }, ...message('agent question')])
+      const stored = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(stored.events.find(event => event.type === 'user/message' && event.data.id === id)?.data).toEqual(received)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('places resident steering in nextStep with its durable identity and source', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([

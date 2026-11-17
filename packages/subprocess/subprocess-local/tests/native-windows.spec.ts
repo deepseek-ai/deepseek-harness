@@ -29,12 +29,13 @@ function spec(argv: string[], graceMs = 100, env?: NodeJS.ProcessEnv): Subproces
 async function waitForPid(path: string): Promise<number> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
+    let pid = Number.NaN
     try {
-      const pid = Number(readFileSync(path, 'utf8').trim())
-      if (Number.isSafeInteger(pid) && pid > 0) return pid
-    } catch {
+      pid = Number(readFileSync(path, 'utf8').trim())
+    } catch (_pidFileMissing) {
       // Target has not written its descendant pid yet.
     }
+    if (Number.isSafeInteger(pid) && pid > 0) return pid
     await new Promise(resolve => setTimeout(resolve, 20))
   }
   throw new Error(`pid file ${path} was not written`)

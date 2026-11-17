@@ -1247,12 +1247,12 @@ describe('processOutcome', () => {
 
   it('maps a completed process to its exit code', () => {
     expect(processOutcome(settled({ exitCode: 3 })))
-      .toEqual({ status: 'completed', detail: 'exit code: 3' })
+      .toEqual({ status: 'completed', detail: 'exit code: 3', exitCode: 3 })
   })
 
   it('defensively reads a null exit code as 0 (handle shapes from other executors)', () => {
     expect(processOutcome(settled({ exitCode: null })))
-      .toEqual({ status: 'completed', detail: 'exit code: 0' })
+      .toEqual({ status: 'completed', detail: 'exit code: 0', exitCode: 0 })
   })
 
   it('appends sandbox facts to the terminal detail', () => {

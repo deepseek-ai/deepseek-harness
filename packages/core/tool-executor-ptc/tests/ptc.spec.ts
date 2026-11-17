@@ -1991,6 +1991,40 @@ describe('the run_code dispatch bridge', () => {
     expect(text).toBe(`Error: code run failed (timeout): execution timed out ${phase} (300ms); retained variables were cleared${logs.length > 0 ? '\nCaptured output:\ngot this far' : ''}`)
   })
 
+  it.each([
+    ['output-limit', 'CODE_RUN_FAILED'],
+    ['invalid-output', 'CODE_RUN_FAILED'],
+    ['exception', 'CODE_RUN_FAILED'],
+    ['timeout', 'CODE_RUN_FAILED'],
+    ['worker-exit', 'CODE_RUN_FAILED'],
+    ['protocol', 'CODE_RUN_FAILED'],
+    ['sandbox-unavailable', 'CODE_RUN_FAILED'],
+    ['abort', 'CODE_RUN_FAILED'],
+  ] as const)('preserves completed subcalls when the runtime reports %s', async (kind, code) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const { agent, events } = fakeAgent()
+    const calls = registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions.echo!({ value: 'action dispatched' })
+      return { output: [{ type: 'text', text: 'before failure' }], outputTruncated: true, error: { kind, message: 'fixture failure' } }
+    }
+
+    const result = await runCode(ctx, 'program', { agent })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'CodeRunFailedError', code } })
+    const first = result.content[0]
+    if (first?.type !== 'text') throw new Error('Missing failure diagnostic')
+    expect(first.text).toContain('Captured output:\nbefore failure')
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(1)
+    expect(events.find(event => event.type === 'tool/ptc-dispatch')?.data).toMatchObject({
+      isError: false, content: [{ type: 'text', text: 'echo:action dispatched' }],
+    })
+    expect(calls).toEqual([{ value: 'action dispatched' }])
+    expect(first.text).toBe(`Error: code run failed (${kind}): fixture failure\nCaptured output:\nbefore failure\nOutput was truncated.`)
+  })
+
   it('CodeRunFailedError is a HarnessError with the CODE_RUN_FAILED code', () => {
     const error = new CodeRunFailedError('boom')
     expect(error.code).toBe('CODE_RUN_FAILED')
@@ -2433,18 +2467,18 @@ describe('the run_code dispatch bridge', () => {
     expect(calls).toEqual([])
   })
 
-  it.each(['preserved', 'cleared'])('reports retained variables were %s after caller cancellation', async (state) => {
+  it.each(['preserved', 'cleared'])('reports retained variables were %s after caller cancellation with truncated output', async (state) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(true)
     const controller = new AbortController()
     const message = `execution canceled; retained variables were ${state}`
     runtime.behavior = async () => {
       controller.abort({ kind: 'user' })
-      return { output: [], error: { kind: 'abort', message } }
+      return { output: [], outputTruncated: true, error: { kind: 'abort', message } }
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.error).toEqual({
-      message: `tool call aborted: ${message}`,
+      message: `tool call aborted: ${message}\nOutput was truncated.`,
       info: { name: 'AbortError', code: TOOL_ABORTED },
     })
   })
