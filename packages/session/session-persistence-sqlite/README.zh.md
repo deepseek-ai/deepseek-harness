@@ -37,6 +37,8 @@ kind: "package-reference"
     root: './.sessions'
 ```
 
+fork 创建先排空本进程中的父写者，再在一个事务内引用已持久化的父前缀，并把 `endSeq` 之后的事件写入新的 Segment。读取打开与 fork 创建会等待本进程中正在关闭的父会话排空；排空或 flush 失败会停止创建。父会话后续写入仍属于父历史。前缀超过父会话已持久化事件数量时会拒绝创建；事务失败会回滚子会话并释放其写租约。若提交后路由发布失败，错误会说明历史仍已存储，可以重新打开 Session。
+
 数据库位于 `<root>/.segments/sessions.sqlite`。应用调用方继续使用 `ctx.sessionPersistence` 及其 Session 句柄。
 
 | 字段 | 默认值 | 含义 |

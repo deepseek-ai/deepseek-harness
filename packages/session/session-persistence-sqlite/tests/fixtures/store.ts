@@ -7,7 +7,7 @@ import type { StatementSync } from 'node:sqlite'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { onTestFinished, vi } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { SqliteStore } from '../../src/sqlite.ts'
 import type { SqliteStoreOptions } from '../../src/sqlite.ts'
@@ -126,4 +126,20 @@ export function importedRows(root: string, id: SessionId): unknown[] {
         return value
       })]
   } finally { db.close() }
+}
+
+/**
+ * Create a fork through the explicit persistence source.
+ * @param logs - store holding the durable source.
+ * @param source - parent Session identity.
+ * @param target - child Session identity.
+ * @param prefix - selected parent history.
+ */
+export async function forkTrace(logs: SqliteStore, source: SessionId, target: SessionId,
+  prefix: readonly SessionEvent[]): Promise<void> {
+  const endSeq = SessionLogOffset(prefix.length)
+  const marker: SessionEvent<'session/end-seed'> = { type: 'session/end-seed', seq: SessionSeq(endSeq), time: 0, data: { inherited: true } }
+  const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: target, createdAt: 0, isSeeded: true },
+    { inheritedEventCount: endSeq, parentSource: { sessionId: source, endSeq, events: [...prefix, marker] } })
+  await writer.close()
 }

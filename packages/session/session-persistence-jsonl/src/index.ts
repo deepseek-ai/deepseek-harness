@@ -430,15 +430,17 @@ export class JsonlSessionPersistence extends SessionPersistence {
   /**
    * Create a new stored session and take its write ownership. The session is
    * visible to this process immediately; the physical artifact appears on the
-   * first append or flush.
+   * first append or flush. A fork source copies its complete history into
+   * the child artifact before creation resolves.
    * @param header - the immutable header to store; must be losslessly
    *   JSON-serializable with a non-negative safe-integer `createdAt`.
-   * @param options - optional cancellation.
+   * @param options - optional cancellation, inherited prefix length, and fork source.
    * @returns the owned write handle.
    */
   async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle> {
     options?.signal?.throwIfAborted()
     const snapshot = materializeCreateHeader(header)
+    const seed = options?.parentSource?.events
     // Fail fast on a seeded/cut mismatch with the exact refusal the header
     // line encoder enforces at materialization.
     toHeaderLine(snapshot, options?.inheritedEventCount)
@@ -454,7 +456,17 @@ export class JsonlSessionPersistence extends SessionPersistence {
     // before its first log bytes publish (ensureLease); an unmaterialized
     // session leaves no filesystem footprint at all.
     this.tracker.registerCreated(snapshot, inheritedEventCount)
-    return this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
+    const handle = this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
+    if (seed === undefined) return handle
+    try {
+      if (seed.length === 0) await handle.flush(options)
+      else await handle.append(seed, options)
+      return handle
+    } catch (error: unknown) {
+      try { await handle.close() }
+      catch (closeError: unknown) { throw new AggregateError([error, closeError], 'Fork creation and handle cleanup failed') }
+      throw error
+    }
   }
 
   /**
@@ -467,6 +479,8 @@ export class JsonlSessionPersistence extends SessionPersistence {
   async open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle> {
     options?.signal?.throwIfAborted()
     await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    if (access === 'read') await this.tracker.closeCompletion(id)
     options?.signal?.throwIfAborted()
     const pending = this.tracker.pendingOf(id)
     if (access === 'read') {
@@ -634,6 +648,8 @@ export class JsonlSessionPersistence extends SessionPersistence {
 
   /** Resolve and read one stored log, refusing loudly when the artifact is absent. */
   private async requireStoredLog(id: SessionId, signal?: AbortSignal): Promise<StoredLog> {
+    await this.tracker.closeCompletion(id)
+    signal?.throwIfAborted()
     const selected = await this.findLog(id, signal)
     if (selected === undefined) throw new SessionPersistenceNotFoundError(id)
     if (selected.sourceVersion < SESSION_FORMAT_VERSION) {

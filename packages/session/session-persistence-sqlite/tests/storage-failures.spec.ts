@@ -6,13 +6,14 @@ import { DatabaseSync } from 'node:sqlite'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId, SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { SessionAlreadyExistsError, SessionFormatUnsupportedError, SessionHandleClosedError,
+import { SessionAlreadyExistsError, SessionAlreadyOwnedError, SessionFormatUnsupportedError, SessionHandleClosedError,
   SessionPersistenceCorruptionError, SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { SessionWriteLease } from '../src/lease.ts'
 import { SqliteSessionPersistence } from '../src/persistence.ts'
-import { sharedHistory, sqliteLogs } from './fixtures/store.ts'
+import * as plugin from '../src/index.ts'
+import { sharedHistory, forkTrace, routeOf, sqliteLogs } from './fixtures/store.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 
 /** A coded refusal or an error class from a durable read. */
@@ -44,6 +45,32 @@ async function raw(publish: () => Promise<void> = async () => {}, failedClose = 
   return { logs, path, root, report }
 }
 
+it('preserves seeded history and SQLite storage across provider replacement', async () => {
+  const { storage, root } = await fixture()
+  const source = await storage.create(header())
+  await source.append([event(0), event(1)])
+  await source.close()
+  expect(await routeOf(root, header().id)).toBe('sqlite')
+  const child = SessionId('child')
+  const request = { sourceId: header().id, endSeq: SessionLogOffset(1) }
+  const createChild = async () => {
+    const writer = await storage.create({ ...header('child'), isSeeded: true }, { inheritedEventCount: request.endSeq,
+      parentSource: { sessionId: request.sourceId, endSeq: request.endSeq,
+        events: [event(0), { type: 'session/end-seed', seq: SessionSeq(1), time: 0, data: { inherited: true } }] } })
+    await writer.close()
+  }
+  await createChild()
+  await expect(createChild()).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+  const other = new Context()
+  onTestFinished(() => other.fiber.dispose())
+  await other.plugin(plugin, { root, compression: 'none' })
+  const reader = await other.sessionPersistence.open(child, 'read')
+  expect((await reader.read()).events.map(item => item.seq)).toEqual([0, 1])
+  await reader.close()
+  const old = await other.sessionPersistence.create(header('legacy'))
+  await old.flush(); await old.close()
+  expect(await routeOf(root, SessionId('legacy'))).toBe('sqlite')
+})
 it.each([
   { fault: 'identity', open: { code: 'SESSION_STORAGE_IDENTITY' }, list: { code: 'SESSION_STORAGE_IDENTITY' } },
   { fault: 'missing-row', open: SessionPersistenceNotFoundError, list: { code: 'SESSION_STORAGE_MISSING' } },
@@ -131,6 +158,117 @@ it('fails on invalid selected event data while unrelated Session bodies remain r
   expect(await storage.stat(SessionId('healthy'))).toMatchObject({ eventCount: 0 })
 })
 
+it('discards events from a read cancelled while the SQLite query runs', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
+  const reader = await logs.open(header().id, 'read')
+  const controller = new AbortController()
+  const read = logs.read.bind(logs)
+  const spy = vi.spyOn(logs, 'read').mockImplementationOnce(async (...args) => {
+    const events = await read(...args)
+    controller.abort(new Error('cancelled during query'))
+    return events
+  })
+  onTestFinished(() => { spy.mockRestore() })
+  await expect(reader.read(0, undefined, { signal: controller.signal })).rejects.toThrow('cancelled during query')
+  expect((await reader.read()).events.map(item => item.seq)).toEqual([0])
+  await reader.close()
+})
+
+it('flushes at the count threshold and drains a following batch at close', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header())
+  await writer.receive(event(0)); await writer.receive(event(1))
+  await vi.waitFor(async () => { expect((await logs.stat(header().id))?.eventCount).toBe(2) })
+  await writer.receive(event(2))
+  await writer.close()
+  expect((await logs.stat(header().id))?.eventCount).toBe(3)
+})
+
+it('keeps a fixed batching deadline and removes the timer on close', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header())
+  vi.useFakeTimers(); onTestFinished(() => { vi.useRealTimers() })
+  await writer.receive(event(0))
+  expect(vi.getTimerCount()).toBe(1)
+  await vi.advanceTimersByTimeAsync(150)
+  expect((await logs.stat(header().id))?.eventCount).toBeUndefined()
+  await vi.advanceTimersByTimeAsync(50)
+  await vi.waitFor(async () => { expect((await logs.stat(header().id))?.eventCount).toBe(1) })
+  expect(vi.getTimerCount()).toBe(0)
+  await writer.receive(event(1)); await writer.close()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('retains a rolled-back live batch and retries it in sequence at the next checkpoint', async () => {
+  const { logs, path } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  const db = new DatabaseSync(path)
+  try {
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'injected write failure'); END")
+    await writer.receive(event(0))
+    await expect(writer.flush()).rejects.toThrow('injected write failure')
+    expect((await logs.stat(header().id))?.eventCount).toBe(0)
+    db.exec('DROP TRIGGER fail_append')
+    await writer.receive(event(1)); await writer.flush()
+    expect((await writer.read()).events.map(item => item.seq)).toEqual([0, 1])
+  } finally { db.close() }
+  await writer.close()
+})
+
+it.each(['append', 'flush'] as const)('refuses further writes when %s commits but routing publication fails', async (operation) => {
+  let reject = true
+  const { logs } = await raw(async () => { if (reject) throw new Error('publication unavailable') })
+  const writer = await logs.create(header())
+  const failure = await (operation === 'append' ? writer.append([event(0)]) : writer.flush()).then(() => undefined, (error: unknown) => error)
+  expect(failure).toMatchObject({ code: 'SESSION_STORAGE_PUBLICATION', cause: { message: 'publication unavailable' } })
+  reject = false
+  // The retained publication failure refuses later writes and is reported again at close.
+  await expect(writer.append([event(operation === 'append' ? 1 : 0)])).rejects.toBe(failure)
+  await expect(writer.close()).rejects.toBe(failure)
+})
+
+it.each([false, true])('retains a committed fork when routing publication fails (lease release also fails: %s)', async (cleanupFails) => {
+  let rejectPublication = false
+  const publicationError = new Error('routing record write failed')
+  const releaseError = new Error('write-lock handle close failed')
+  const { logs } = await raw(async () => { if (rejectPublication) throw publicationError })
+  const source = await logs.create(header())
+  await source.append([event(0), event(1)]); await source.close()
+  // oxlint-disable-next-line typescript/unbound-method -- The intercepted release is called on the acquired lease.
+  const release = SessionWriteLease.prototype.release
+  const releasing = vi.spyOn(SessionWriteLease.prototype, 'release')
+  onTestFinished(() => { releasing.mockRestore() })
+  if (cleanupFails) releasing.mockImplementationOnce(async function (this: SessionWriteLease) {
+    await release.call(this)
+    throw releaseError
+  })
+  rejectPublication = true
+  const failure = await forkTrace(logs, header().id, SessionId('child'), [event(0), event(1)])
+    .then(() => undefined, (error: unknown) => error)
+  const publicationRefusal = { code: 'SESSION_STORAGE_PUBLICATION', cause: publicationError }
+  if (cleanupFails) {
+    expect(failure).toBeInstanceOf(AggregateError)
+    if (!(failure instanceof AggregateError)) throw new Error('expected fork and release failures')
+    expect(failure.errors).toEqual([expect.objectContaining(publicationRefusal), releaseError])
+  } else expect(failure).toMatchObject(publicationRefusal)
+  rejectPublication = false
+  releasing.mockRestore()
+  expect((await logs.stat(SessionId('child')))?.eventCount).toBe(3)
+  await expect(forkTrace(logs, header().id, SessionId('child'), [event(0), event(1)]))
+    .rejects.toBeInstanceOf(SessionAlreadyExistsError)
+  const child = await logs.open(SessionId('child'), 'write')
+  try {
+    expect((await child.read()).events).toMatchObject([
+      event(0), event(1), { type: 'session/end-seed', seq: 2, data: { inherited: true } },
+    ])
+    await child.append([{ type: 'session/title', seq: SessionSeq(3), time: 0,
+      data: { title: 'continued child', messageSeqs: [], source: { kind: 'user' } } }])
+  } finally { await child.close() }
+  const parent = await logs.open(header().id, 'read')
+  try { expect((await parent.read()).events).toEqual([event(0), event(1)]) } finally { await parent.close() }
+})
+
 it('preserves complete Session metadata without exposing Segment identifiers', async () => {
   const { logs } = await raw()
   const meta: SessionHeader = { ...header(), cwd: tmpdir(), parentSession: SessionId('parent'), origin: 'subagent', delegationDepth: 2, agentPreset: 'test' }
@@ -138,6 +276,14 @@ it('preserves complete Session metadata without exposing Segment identifiers', a
   const reader = await logs.open(meta.id, 'read')
   expect(reader.header).toEqual(meta)
   await reader[Symbol.asyncDispose]()
+})
+
+it('reads persisted root history using its original header', async () => {
+  const { logs } = await raw()
+  const meta = header()
+  const writer = await logs.create(meta)
+  await writer.append([event(0), event(1)]); await writer.close()
+  expect(await logs.read(meta, 0, 2)).toEqual([event(0), event(1)])
 })
 
 it.each([
@@ -169,6 +315,156 @@ it.each([
     } finally { db.close(); await reader.close() }
   })
 
+it('forks zero shared events from an existing source and refuses an existing target', async () => {
+  const { logs } = await raw()
+  const source = await logs.create(header()); await source.append([event(0)]); await source.close()
+  await forkTrace(logs, header().id, SessionId('empty'), [])
+  const child = await logs.open(SessionId('empty'), 'read')
+  expect((await child.read()).events.map(item => item.type)).toEqual(['session/end-seed'])
+  await child.close()
+  await expect(forkTrace(logs, SessionId('absent'), SessionId('new'), [])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+  await expect(forkTrace(logs, header().id, SessionId('empty'), [])).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+})
+
+it('refuses a fork when another creator commits the child after its initial metadata read', async () => {
+  const { logs, path, root } = await raw()
+  const parent = await logs.create(header())
+  await parent.append([event(0), event(1)]); await parent.close()
+  const other = sqliteLogs(path, root)
+  onTestFinished(() => other.close())
+  const observed = Promise.withResolvers<undefined>(), proceed = Promise.withResolvers<undefined>()
+  onTestFinished(() => { proceed.resolve(undefined) })
+  const stat = logs.stat.bind(logs)
+  const observing = vi.spyOn(logs, 'stat').mockImplementationOnce(async (...args) => {
+    const result = await stat(...args)
+    observed.resolve(undefined)
+    await proceed.promise
+    return result
+  })
+  const options = { inheritedEventCount: SessionLogOffset(2), parentSource: {
+    sessionId: parent.id, endSeq: SessionLogOffset(2),
+    events: [event(0), event(1), { type: 'session/end-seed', seq: SessionSeq(2), time: 0, data: { inherited: true } } satisfies SessionEvent],
+  } }
+  const creation = logs.create({ ...header('child'), isSeeded: true }, options)
+  const settled = creation.then(() => undefined, (error: unknown) => error)
+  try {
+    await observed.promise
+    const winner = await other.create({ ...header('child'), isSeeded: true }, options)
+    await winner.close()
+    proceed.resolve(undefined)
+    expect(await settled).toBeInstanceOf(SessionAlreadyExistsError)
+    const child = await logs.open(SessionId('child'), 'write')
+    try { expect((await child.read()).events).toHaveLength(3) } finally { await child.close() }
+  } finally {
+    proceed.resolve(undefined)
+    await settled
+    observing.mockRestore()
+  }
+})
+
+it('rejects a second provider writer and permits it after the owning writer closes', async () => {
+  const { logs, path, root } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  const other = sqliteLogs(path, root)
+  try {
+    await expect(other.create(header())).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+    await expect(other.open(header().id, 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await writer.close()
+    const next = await other.open(header().id, 'write'); await next.close()
+  } finally { await other.close() }
+})
+
+it('releases admission claims when durable metadata disappears during write-lease acquisition', async () => {
+  const { logs, path } = await raw()
+  const writer = await logs.create(header()); await writer.flush(); await writer.close()
+  const db = new DatabaseSync(path)
+  try {
+    db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run(header().id)
+    await expect(logs.open(header().id, 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+    expect(await logs.stat(header().id)).toBeUndefined()
+  } finally { db.close() }
+})
+
+it('does not recreate a missing database while durable routing records remain', async () => {
+  const { logs, root } = await raw()
+  const directory = join(root, '.segments')
+  const { mkdir } = await import('node:fs/promises')
+  await mkdir(directory)
+  await writeFile(join(directory, 'retained.json'), '{}')
+  await expect(logs.create(header())).rejects.toThrow('database is missing')
+})
+
+it('refuses an unrelated existing SQLite database without adding Session tables', async () => {
+  const { logs, path } = await raw()
+  const db = new DatabaseSync(path)
+  try { db.exec('CREATE TABLE unrelated (id INTEGER)') } finally { db.close() }
+  await expect(logs.create(header())).rejects.toMatchObject({ code: 'SESSION_STORAGE_FORMAT', message: 'Refusing an unrelated SQLite database' })
+  await expect(logs.close()).resolves.toBeUndefined()
+})
+
+it('preserves admitted live events when the drain before an explicit append fails', async () => {
+  const { logs, path } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  const db = new DatabaseSync(path)
+  try {
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'rollback'); END")
+    await writer.receive(event(0))
+    await expect(writer.append([event(1)])).rejects.toThrow('rollback')
+    db.exec('DROP TRIGGER fail_append')
+    await writer.flush()
+    expect((await writer.read()).events.map(item => item.seq)).toEqual([0])
+    await writer.append([event(1)])
+  } finally { db.close(); await writer.close() }
+})
+
+it('drains admitted live events before writing an explicit batch', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  await writer.receive(event(0)); await writer.receive(event(1))
+  await writer.append([event(2)])
+  expect((await writer.read()).events.map(item => item.seq)).toEqual([0, 1, 2])
+  await writer.close()
+})
+
+it('keeps admitted live events when an explicit append is aborted', async () => {
+  const { logs } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  await writer.receive(event(0))
+  const controller = new AbortController(); controller.abort()
+  await expect(writer.append([event(1)], { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+  await writer.flush()
+  expect((await writer.read()).events.map(item => item.seq)).toEqual([0])
+  await writer.append([event(1)])
+  expect((await writer.read()).events.map(item => item.seq)).toEqual([0, 1])
+  await writer.close()
+})
+
+it('reports background failure once, pauses the timer and retries through the explicit checkpoint', async () => {
+  const { logs, path, report: warning } = await raw()
+  const writer = await logs.create(header()); await writer.flush()
+  const db = new DatabaseSync(path)
+  vi.useFakeTimers(); onTestFinished(() => { vi.useRealTimers() })
+  try {
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
+    await writer.receive(event(0)); await vi.advanceTimersByTimeAsync(200)
+    expect(warning).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    db.exec('DROP TRIGGER fail_append')
+    await writer.flush()
+    expect((await writer.read()).events).toHaveLength(1)
+  } finally { db.close(); await writer.close() }
+})
+
+it('marks live writes unusable after a commit whose routing publication failed', async () => {
+  let reject = false
+  const { logs } = await raw(async () => { if (reject) throw new Error('publication failed') })
+  const writer = await logs.create(header()); await writer.flush()
+  reject = true
+  await writer.receive(event(0))
+  const failure = await writer.flush().then(() => undefined, (error: unknown) => error)
+  expect(failure).toMatchObject({ code: 'SESSION_STORAGE_PUBLICATION', cause: { message: 'publication failed' } })
+  await expect(writer.close()).rejects.toBe(failure)
+})
 it('refuses live events on a closed handle and keeps close idempotent', async () => {
   const { logs } = await raw()
   const writer = await logs.create(header()); await writer.close()

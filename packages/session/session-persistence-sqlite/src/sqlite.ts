@@ -379,6 +379,13 @@ export class SqliteStore {
     this.statement(db, 'INSERT INTO segments VALUES (?, ?, ?, ?)').run(id, parent?.segment_uuid ?? null, parent === undefined ? null : end, base)
   }
 
+  private insertTrace(db: DatabaseSync, header: SessionHeader, head: SegmentId,
+    inheritedCount: number, payloads: readonly string[]): void {
+    this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(header), head, inheritedCount)
+    const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
+    for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
+  }
+
   /**
    * Locate the Segment a fork of `source` at `end` attaches to, through the ancestor index rather than the parent chain.
    * Fork creation is the consumer; `end` never exceeds the source event count.
@@ -408,15 +415,15 @@ export class SqliteStore {
   }
 
   /**
-   * Reserve a pending Trace; its rows commit with the first append or flush.
+   * Reserve a fresh Trace, or commit fork history and its shared prefix in one transaction.
    * @param header - loop-owned metadata.
-   * @param options - optional cancellation and inherited count.
+   * @param options - optional cancellation, logical inherited count, and selected fork history.
    * @returns exclusive in-process write handle.
    */
   async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SqliteSessionHandle> {
     this.check()
     options?.signal?.throwIfAborted()
-    // Preserve the existing seeded/cut refusal before reserving a Session.
+
     const meta = materializeHeader(header, options?.inheritedEventCount)
     const inheritedCount = options?.inheritedEventCount ?? 0
     if (this.creating.has(meta.id) || this.pendingCreates.has(meta.id) || this.writers.has(meta.id)) {
@@ -428,13 +435,56 @@ export class SqliteStore {
       await this.assertRoutingDatabase()
       this.check()
       options?.signal?.throwIfAborted()
-      this.pendingCreates.set(meta.id, { header: meta, inheritedCount, head: segmentId(randomUUID()) })
+      if (options?.parentSource !== undefined) {
+        return await this.createFork(meta, inheritedCount, options.parentSource, options.signal)
+      }
+      this.pendingCreates.set(meta.id, {
+        header: meta,
+        inheritedCount,
+        head: segmentId(randomUUID()),
+      })
       return await this.admit(meta, 'write', inheritedCount, true)
     } catch (error: unknown) {
       this.pendingCreates.delete(meta.id)
       throw error
     } finally {
       this.creating.delete(meta.id)
+    }
+  }
+
+  /** Share the parent's persisted prefix and commit the child's remaining events under one creation lease. */
+  private async createFork(header: SessionHeader, inheritedCount: number,
+    source: NonNullable<SessionPersistenceCreateOptions['parentSource']>, signal?: AbortSignal): Promise<SqliteSessionHandle> {
+    // A live parent writer drains its admitted events first so the shared prefix is durable.
+    const writer = this.writers.get(source.sessionId)
+    if (writer !== undefined) await (writer.closeCompletion ?? writer.flush())
+    signal?.throwIfAborted()
+    const events = materializeAppendBatch(source.events.slice(source.endSeq))
+    assertContiguous(header.id, events, source.endSeq)
+    const payloads = events.map(event => JSON.stringify(event))
+    const handle = await this.admit(header, 'write', inheritedCount, false,
+      await this.acquireWriteLease(header, true))
+    try {
+      const db = await this.database()
+      this.check(); signal?.throwIfAborted()
+      this.transaction(db, () => {
+        if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
+        const parent = this.row(db, source.sessionId)
+        if (parent === undefined) throw new SessionPersistenceNotFoundError(source.sessionId)
+        if (source.endSeq > parent.event_count) {
+          throw new HarnessError(`Parent Session "${source.sessionId}" is not persisted through ${source.endSeq} events`, 'SESSION_FORK_PREFIX_NOT_PERSISTED')
+        }
+        const cut = this.cut(db, parent, source.endSeq)
+        const head = segmentId(randomUUID())
+        this.newSegment(db, head, cut.parent, cut.end)
+        this.insertTrace(db, header, head, inheritedCount, payloads)
+      })
+      await this.route(header.id)
+      return handle
+    } catch (error: unknown) {
+      try { await handle.close() }
+      catch (closeError: unknown) { throw new AggregateError([error, closeError], 'Fork creation and handle cleanup failed') }
+      throw error
     }
   }
 
@@ -448,6 +498,8 @@ export class SqliteStore {
    */
   async open(id: SessionId, access: SessionAccess, signal?: AbortSignal,
     ownership?: { release(): Promise<void> }): Promise<SqliteSessionHandle> {
+    this.check(); signal?.throwIfAborted()
+    if (access === 'read') await this.writers.get(id)?.closeCompletion
     this.check(); signal?.throwIfAborted()
     const pending = this.pendingCreates.get(id)
     if (pending !== undefined) return this.admit(pending.header, access, pending.inheritedCount)
@@ -502,9 +554,7 @@ export class SqliteStore {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = segmentId(randomUUID())
       this.newSegment(db, head, undefined, 0)
-      this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(storedHeader), head, inheritedCount)
-      const insert = this.statement(db, 'INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
-      for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
+      this.insertTrace(db, storedHeader, head, inheritedCount, payloads)
     })
     await this.route(header.id)
   }
@@ -890,6 +940,9 @@ export class SqliteSessionHandle implements SessionHandle {
     })
   }
   get id() { return this.header.id }
+
+  /** Completion of an already-started close, including its final durability drain. */
+  get closeCompletion(): Promise<void> | undefined { return this.closing }
 
   private check(): void {
     if (this.closing !== undefined) throw new SessionHandleClosedError(this.id, 'access')

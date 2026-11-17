@@ -227,7 +227,7 @@ interface CreateSessionOptions {
 }
 ```
 
-因此，回放/fork 的调用方式为 `ctx.agents.create({ sessionId, seed, meta })`——fork 还会随 `meta.isSeeded: true` 提供 `inheritedEventCount`，且只有经 agent-loop 发布的会话才会持久化，且循环会在发布之前通过新会话的写句柄存储 seed；将一个*持久化*会话恢复为活跃 agent 的调用方式为 `ctx.agents.resume({ resumeSessionId })`。
+直接回放使用 `ctx.agents.create({ sessionId, seed, meta })`。fork 则提供 `parentSource: { sessionId, endSeq, events }`、`inheritedEventCount` 和 `meta.isSeeded: true`：父来源指定父会话、不包含末端位置的前缀长度，以及从该长度继续的子会话事件。工厂在子会话存储之前加载并持久保存父前缀；`SessionPersistence.create()` 存储该前缀和子会话后缀后才返回写句柄。只有经 agent-loop 发布的 Session 才遵循实时持久化路径。将持久化 Session 恢复为实时 Agent 使用 `ctx.agents.resume({ resumeSessionId })`。
 
 ## 准备与恢复所有权
 
@@ -383,10 +383,15 @@ Freshness: once an `append` or `flush` resolves, reads started afterwards on thi
 ```ts cordis-catalog
 /**
  * Create a new stored session and take its write ownership.
+ * With `parentSource`, store the complete fork history before resolving; a
+ * backend may share the parent's stored prefix or copy it. A failed creation
+ * releases acquired write ownership; already committed history remains stored.
  * @param header - the immutable header (id, version, cwd, lineage) to store.
- * @param options - optional cancellation.
+ * @param options - cancellation, inherited-prefix count, and optional fork source.
  * @returns a `write` handle owned by the caller; close it to release ownership.
  * @throws {SessionAlreadyExistsError} when the id already exists.
+ * @throws {SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.
+ * @throws {HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.
  */
 abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>
 
