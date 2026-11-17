@@ -620,6 +620,40 @@ describe('reset', () => {
     expect(second.host.pendingDeliveries()).toBe(1)
     expect(second.ctx.agents.get(b.sessionId)).toBeDefined()
   })
+
+  it('never prunes an uncommitted reset receipt past retentionMs so stale deliveries stay blocked', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+    first.failFormat()
+
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-aged', expectedGeneration: 0 })).rejects.toThrow()
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-stale', 2)]))).rejects.toThrow(/format offline/)
+
+    const resetsTable = first.pool.media.get('im_sessions')?.tables.get('resets')
+    for (const [id, stored] of resetsTable ?? []) {
+      resetsTable?.set(id, { ...(stored as Record<string, unknown>), createdAt: 0 })
+    }
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool, withoutStart: true })
+    vi.spyOn(second.host, 'reset').mockRejectedValue(new Error('still failing'))
+    await second.host.start()
+    await second.host.whenRecovered()
+
+    // A second recovery pass must still see the aged uncommitted receipt and keep the old generation's delivery blocked.
+    second.host.retry()
+    await second.host.whenRecovered()
+    expect(second.pool.media.get('im_sessions')?.tables.get('resets')?.size).toBe(1)
+    expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
+    expect(second.host.pendingDeliveries()).toBe(1)
+  })
 })
 
 describe('ephemeral sessions', () => {

@@ -461,7 +461,10 @@ export class ImSessionHost implements ImSessions {
     }
     const expiredResets: string[] = []
     for (const [id, stored] of this.resets) {
-      if (stored.createdAt < cutoff) expiredResets.push(id)
+      // Never prune an uncommitted reset receipt: its replaced generation is still hosted, so dropping the receipt
+      // before advance completes would allow stale deliveries of that generation to be admitted on the next pass.
+      if (this.hosted(stored.replaced) !== undefined || stored.createdAt >= cutoff) continue
+      expiredResets.push(id)
     }
     if (expiredDeliveries.length > 0 || expiredResets.length > 0) {
       await this.write(async () => {
