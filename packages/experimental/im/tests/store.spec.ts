@@ -273,6 +273,19 @@ describe('ImStore stored-record validation', () => {
     expect(second.store.state(reasoned.key)?.outcome).toEqual({ kind: 'ignored', reason: 'no listener claimed it' })
   })
 
+  it('indexes message aliases across reopen and removes them on sweep', async () => {
+    const pool = new MemoryMediaPool()
+    const first = await boot(pool)
+    const stored = await first.store.put({ ...draft('m-canon', CHAT, 'hello'), aliases: ['REFIDX_1'] }, 'none')
+    expect(first.store.get(ImMessageKey('fake:bot', 'REFIDX_1'))?.key).toBe(stored.key)
+    await first.store.dispose()
+
+    const second = await boot(pool)
+    expect(second.store.get(ImMessageKey('fake:bot', 'REFIDX_1'))?.key).toBe(stored.key)
+    await second.store.sweep(Date.now() + 2 * second.store.config.retentionMs)
+    expect(second.store.get(ImMessageKey('fake:bot', 'REFIDX_1'))).toBeUndefined()
+  })
+
   it('refuses a stored row that is not an IM message', async () => {
     const pool = new MemoryMediaPool()
     const first = await boot(pool)

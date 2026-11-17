@@ -76,6 +76,8 @@ export interface ImChat {
  */
 export interface ImMessage {
   key: ImMessageKey
+  /** Alternative platform message ids for the same message (e.g. QQ `msg_idx`), indexed for quote/read lookup. */
+  aliases?: readonly string[]
   /** Per chat, monotonic, assigned at store time (inbound and own outbound). */
   seq: number
   chat: ImChat

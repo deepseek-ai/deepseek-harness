@@ -7812,7 +7812,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMessage',
-    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
+    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    aliases?: readonly string[];\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
   },
   {
     name: 'ImMessageDraft',

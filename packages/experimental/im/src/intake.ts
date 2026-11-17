@@ -632,6 +632,7 @@ export function draftOf(bot: Bot, message: InboundMessage, source: ImSourceConfi
   const referrer = message.referrer
   return {
     key: ImMessageKey(bot.id, message.id),
+    ...message.aliases?.length ? { aliases: [...message.aliases] } : {},
     chat: chatOf(bot.id, message.chat, source),
     ...message.thread === undefined ? {} : { thread: message.thread },
     sender: { ...message.sender, self: message.sender.id === bot.selfId },

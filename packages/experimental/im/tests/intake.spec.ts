@@ -248,6 +248,17 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-remote'))?.quote?.text).toBe('remote original')
     expect(store.get(ImMessageKey('fake:bot', 'm-err'))?.quote?.text).toBeUndefined()
     expect(store.get(ImMessageKey('fake:bot', 'm-raw'))?.quote?.text).toBeUndefined()
+
+    // A platform with dual ids (e.g. QQ `msg_id` + `msg_idx` alias) resolves quotes against the local store.
+    await deliver(bot, 'evt-aliased', inbound({
+      id: 'm-aliased',
+      aliases: ['REFIDX_orig'],
+      content: h('message', h.text('aliased original')),
+    }))
+    bot.getMessage = async () => { throw new Error('should not reread stored aliased message') }
+    await deliver(bot, 'evt-reply-alias', inbound({ id: 'm-reply-alias', quote: { id: 'REFIDX_orig' } }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-reply-alias'))?.quote?.text).toBe('aliased original')
   })
 
   it('stops waiting for a platform read that never answers', async () => {
