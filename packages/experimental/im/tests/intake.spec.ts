@@ -984,6 +984,10 @@ describe('admission and drafts', () => {
     expect(command(h('message', h.text('/ pass')))).toBeUndefined()
     expect(command(h('message', at('bot-user')))).toBeUndefined()
     expect(command(h('message', at('bot-user'), h.markdown('/stop')))).toBeUndefined()
+    // Paths and calls without a whitespace/end boundary after the token are plain text, not commands.
+    expect(command(h('message', h.text('/new/project')))).toBeUndefined()
+    expect(command(h('message', h.text('/clear()')))).toBeUndefined()
+    expect(command(h('message', h.text('/stop()')))).toBeUndefined()
     // A command's arguments keep further mentions and text after the first run.
     expect(command(h('message', h.text('/ai'), at('user-9'), h.text('rest'))))
       .toEqual({ name: 'ai', rawInput: '@user-9rest' })

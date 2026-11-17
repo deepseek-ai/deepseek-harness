@@ -677,16 +677,13 @@ function isLeadingDecoration(child: Element, selfId: string): boolean {
   return child.type === 'text' && child.attrs.content.trim() === ''
 }
 
-/** The name of a `/name` token (letters, digits, `_`, `.`, `-`); undefined when `text` is not one. */
+/**
+ * The name of a `/name` token (letters, digits, `_`, `.`, `-`) followed by whitespace or end-of-text; undefined when
+ * `text` is plain text (such as `/new/project` or `/clear()`).
+ */
 function commandName(text: string): string | undefined {
-  if (!text.startsWith('/')) return undefined
-  let name = ''
-  for (const character of text.slice(1)) {
-    if (!/[A-Za-z0-9_.-]/.test(character)) break
-    name += character
-  }
-  // `/` alone, `/ stop` and `/.hidden` are plain text, not commands.
-  return /^[A-Za-z0-9]/.test(name) ? name : undefined
+  const match = /^\/([A-Za-z0-9][A-Za-z0-9_.-]*)(?=$|\s)/.exec(text)
+  return match?.[1]
 }
 
 /** The chat identity of one bot+chat pair under an admitting source. */
