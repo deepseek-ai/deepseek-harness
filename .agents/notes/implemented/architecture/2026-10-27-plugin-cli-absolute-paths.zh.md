@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-每个应用插件用 CLI 的绝对路径调用 [`@deepseek-ai/dsh-cli-account`](../../../../packages/connector/cli-account/README.zh.md) 的 `registerCliPathContext`。这个函数在 `PLUGIN_CLIS` 上下文顺序处注册一条必需、不做变量插值的运行时上下文，让模型按这个路径运行 CLI。skill 里的脚本按名称调用 CLI 时（钉钉和企业微信属于这种情况），这条上下文还让模型只在运行这些脚本的命令前加上 `PATH="<目录>:$PATH"`，并且不要导出 PATH，也不要按名称运行 CLI。在 Windows 上，内置组合挂载 `tool-pwsh` 而不是 `tool-bash`，文本改用 PowerShell 语法：调用运算符 `& '<路径>'`，以及前缀 `$env:PATH = '<目录>;' + $env:PATH`。skill 让模型使用当前运行时上下文给出的路径。插件自己的登录、状态和登出命令通过 `CliCommandExecutor` 启动同一路径。
+每个应用插件把 CLI 的绝对路径注册到 [`@deepseek-ai/dsh-cli-account`](../../../../packages/connector/cli-account/README.zh.md) 的 Service `ctx.cliAccounts`。这个 Service 在 `PLUGIN_CLIS` 上下文顺序处注册一条必需、不做变量插值的运行时上下文，让模型按这个路径运行 CLI。skill 里的脚本按名称调用 CLI 时（钉钉和企业微信属于这种情况），这条上下文还让模型只在运行这些脚本的命令前加上 `PATH="<目录>:$PATH"`，并且不要导出 PATH，也不要按名称运行 CLI。在 Windows 上，内置组合挂载 `tool-pwsh` 而不是 `tool-bash`，文本改用 PowerShell 语法：调用运算符 `& '<路径>'`，以及前缀 `$env:PATH = '<目录>;' + $env:PATH`。skill 让模型使用当前运行时上下文给出的路径。插件自己的登录、状态和登出命令通过这个 Service 的命令执行器启动同一路径。
 
 harness 不改变任何命令的环境：Bash、PowerShell、沙箱、持久终端和 hook 的运行方式与没有这些插件时相同。腾讯会议直接注册各平台的可执行文件 `dist/tmeet-<平台>`。钉钉的上下文在 dws 和钉钉 skill 安装完成前不贡献任何内容。加载时不检查命令是否在 Host 上运行；组合把命令放到 SSH 远端运行时，命令在访问不存在的路径时失败。
 
