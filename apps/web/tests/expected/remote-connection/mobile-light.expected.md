@@ -11,7 +11,6 @@
     - button "取消"
     - img "一次性登录二维码"
     - paragraph:
-      - text: 扫码后直接登录
       - timer: {{seconds}} 秒后过期
     - paragraph: 请勿分享登录二维码
     - paragraph: 二维码使用或过期前，持有它的人都可以登录，请勿传播

@@ -19,10 +19,8 @@ export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
   const loading = useRemoteConnection(state => state.phase === 'loading' && state.deployment === null)
   if (loading) return <div className={css.loading} role="status" aria-label={t('loading')}><StateDot state="ongoing" size={20} /></div>
   return <section className={css.section} aria-label={t('title')}>
-    <header className={css.header}>
-      <h2 className={css.title}>{t('title')}</h2>
-      <ConnectionNotice {...props} />
-    </header>
+    <h2 className={css.title}>{t('title')}</h2>
+    <ConnectionNotice {...props} />
     <AccessAddressCard {...props} />
     {available && <QrLoginCard {...props} />}
   </section>
@@ -31,7 +29,7 @@ export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
 function ConnectionNotice({ t, useRemoteConnection }: Pick<RemoteConnectionSectionProps, 't' | 'useRemoteConnection'>) {
   const deployment = useRemoteConnection(state => state.deployment)
   if (deployment === null) return null
-  if (deployment.availability === 'available') return <p className={css.description}>{t('addressDescription')}</p>
+  if (deployment.availability === 'available') return <p className={css.intro}>{t('addressDescription')}</p>
   return <div className={css.caution} role="status">
     <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
     <div className={css.cautionBody}><p className={css.warning}>{t(deployment.availability)}</p></div>
@@ -65,7 +63,6 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
       <div className={css.field}>
         {showQrPreview && <div className={showDetails ? css.field : `${css.field} ${css.placeholder}`} aria-hidden={!showDetails || undefined}>
           <p className={css.qrDetails}>
-            <span>{t('scan')}</span>
             <span className={css.countdown} role="timer" aria-live="off">{t('expires', { seconds: String(remainingSeconds) })}</span>
           </p>
           <CredentialWarning t={t} http={http} method="qr" />

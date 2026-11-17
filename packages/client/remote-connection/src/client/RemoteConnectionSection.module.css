@@ -10,7 +10,9 @@
 }
 
 .section {
+  --remote-connection-control-height: 32px;
   container-type: inline-size;
+  gap: 12px;
 }
 
 .header {
@@ -38,8 +40,20 @@
 .title {
   margin: 0;
   font-size: 16px;
-  font-weight: 500;
   line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.intro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.section > .intro + .card {
+  margin-block-start: 12px;
 }
 
 .description,
@@ -116,9 +130,17 @@
   margin-inline-start: auto;
 }
 
-.qrActions > button {
+.qrActions > button,
+.linkRow > button,
+.actions > button {
   flex: none;
   white-space: nowrap;
+}
+
+.cardHeader > .qrActions > button,
+.linkRow > button,
+.actions > button {
+  height: var(--remote-connection-control-height);
 }
 
 .linkRow {
@@ -129,18 +151,22 @@
 }
 
 .linkPreview {
+  display: flex;
+  align-items: center;
   flex: 1;
   box-sizing: border-box;
-  height: 28px;
+  height: var(--remote-connection-control-height);
   min-width: 0;
   overflow: hidden;
-  padding: 3px 10px;
+  padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm);
 }
 
 .linkUrl {
   display: block;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   font-size: 13px;
@@ -148,19 +174,11 @@
   mask-image: linear-gradient(to right, var(--dsw-alias-label-primary) 55%, transparent 98%);
 }
 
-.linkRow > button {
-  flex: none;
-  white-space: nowrap;
-}
-
 .qrDetails {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  column-gap: 12px;
-  row-gap: 4px;
+  justify-content: center;
   width: 100%;
+  margin-block-end: 16px;
 }
 
 .countdown {
@@ -263,5 +281,9 @@
 
   .linkPreview {
     flex: auto;
+  }
+
+  .linkRow > button {
+    align-self: flex-start;
   }
 }

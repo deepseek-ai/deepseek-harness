@@ -24,7 +24,94 @@ async function remoteSettings(page: Page): Promise<Locator> {
   await section.waitFor()
   const link = section.getByRole('region', { name: '访问地址', exact: true })
   await expect.poll(() => link.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
+  await assertAddressLayout(section, true)
   return section
+}
+
+async function assertAddressLayout(section: Locator, available: boolean): Promise<void> {
+  const title = section.getByRole('heading', { level: 2 })
+  expect(await title.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }
+  })).toEqual({ fontSize: '16px', lineHeight: '24px', fontWeight: '500' })
+  const address = section.getByRole('region', { name: '访问地址', exact: true })
+  if (available) {
+    const intro = section.getByText('通过以下方式，在其他设备上登录并使用 DeepSeek Harness。', { exact: true })
+    expect(await intro.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return { fontSize: style.fontSize, lineHeight: style.lineHeight }
+    })).toEqual({ fontSize: '14px', lineHeight: '22px' })
+    const titleBox = await title.boundingBox()
+    const introBox = await intro.boundingBox()
+    const addressBox = await address.boundingBox()
+    expect(titleBox).not.toBeNull()
+    expect(introBox).not.toBeNull()
+    expect(addressBox).not.toBeNull()
+    expect(introBox!.y - titleBox!.y - titleBox!.height).toBeCloseTo(12)
+    expect(addressBox!.y - introBox!.y - introBox!.height).toBeCloseTo(24)
+  }
+  const code = address.locator('code')
+  const fieldBox = await code.locator('..').boundingBox()
+  const codeBox = await code.boundingBox()
+  expect(fieldBox).not.toBeNull()
+  expect(codeBox).not.toBeNull()
+  expect(fieldBox!.height).toBe(32)
+  expect(Math.abs(codeBox!.y + codeBox!.height / 2 - fieldBox!.y - fieldBox!.height / 2)).toBeLessThanOrEqual(1)
+  const copyBox = await address.getByRole('button', { name: '复制链接', exact: true }).boundingBox()
+  expect(copyBox).not.toBeNull()
+  if (copyBox!.y > fieldBox!.y + fieldBox!.height) {
+    expect(copyBox!.x).toBe(fieldBox!.x)
+    expect(copyBox!.width).toBeLessThan(fieldBox!.width)
+  } else {
+    expect(copyBox!.y).toBe(fieldBox!.y)
+  }
+  const qr = section.getByRole('region', { name: '二维码登录', exact: true })
+  const buttons = [...await address.getByRole('button').all(), ...await qr.getByRole('button').all()]
+  for (const button of buttons) {
+    const geometry = await button.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      const text = range.getBoundingClientRect()
+      return { height: box.height, textOffset: Math.abs(text.y + text.height / 2 - box.y - box.height / 2) }
+    })
+    expect(geometry.height).toBe(32)
+    expect(geometry.textOffset).toBeLessThanOrEqual(1)
+  }
+}
+
+async function assertQrDetails(section: Locator): Promise<void> {
+  const qr = section.getByRole('region', { name: '二维码登录', exact: true })
+  const code = await qr.getByRole('img', { name: '一次性登录二维码' }).boundingBox()
+  const timer = qr.getByRole('timer')
+  const timerBox = await timer.boundingBox()
+  const detailsBox = await timer.locator('..').boundingBox()
+  const bannerBox = await qr.getByText('请勿分享登录二维码', { exact: true }).locator('..').locator('..').boundingBox()
+  expect(code).not.toBeNull()
+  expect(timerBox).not.toBeNull()
+  expect(detailsBox).not.toBeNull()
+  expect(bannerBox).not.toBeNull()
+  expect(await qr.getByText('扫码后直接登录', { exact: true }).count()).toBe(0)
+  expect(timerBox!.y).toBeGreaterThan(code!.y + code!.height)
+  expect(Math.abs(timerBox!.x + timerBox!.width / 2 - code!.x - code!.width / 2)).toBeLessThanOrEqual(1)
+  expect(await timer.locator('..').evaluate(element => getComputedStyle(element).marginBottom)).toBe('16px')
+  expect(bannerBox!.y - detailsBox!.y - detailsBox!.height).toBeCloseTo(28)
+}
+
+async function headingTypography(heading: Locator) {
+  const intro = heading.locator('..').locator(':scope > p').first()
+  await intro.waitFor()
+  const headingBox = await heading.boundingBox()
+  const introBox = await intro.boundingBox()
+  expect(headingBox).not.toBeNull()
+  expect(introBox).not.toBeNull()
+  expect(introBox!.y - headingBox!.y - headingBox!.height).toBeCloseTo(12)
+  expect(introBox!.x).toBe(headingBox!.x)
+  const typography = (element: HTMLElement | SVGElement) => {
+    const style = getComputedStyle(element)
+    return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight, color: style.color }
+  }
+  return { title: await heading.evaluate(typography), intro: await intro.evaluate(typography) }
 }
 
 async function createCode(page: Page, section: Locator): Promise<string> {
@@ -45,6 +132,9 @@ async function createCode(page: Page, section: Locator): Promise<string> {
 
 async function snapshot(page: Page, fixture: RemoteConnectionFixture, name: string, addressUrl = fixture.authenticatedUrl): Promise<void> {
   await expect.poll(() => page.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()).toBe(addressUrl)
+  const section = page.getByRole('region', { name: '远程连接', exact: true })
+  await assertAddressLayout(section, true)
+  if (await section.getByRole('img', { name: '一次性登录二维码' }).count() > 0) await assertQrDetails(section)
   const aria = await captureStableAria(page, 'section[aria-label="远程连接"]', fixture.root, {
     replacements: [[fixture.authenticatedUrl, '{{access-address}}?token={{login-token}}'], [fixture.url, '{{access-address}}']],
   })
@@ -203,8 +293,9 @@ describe('web e2e: one-use QR browser login', () => {
         expect(titleBox).not.toBeNull()
         expect(noticeBox).not.toBeNull()
         expect(addressBox).not.toBeNull()
-        expect(noticeBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height)
-        expect(addressBox!.y).toBeGreaterThan(noticeBox!.y + noticeBox!.height)
+        expect(noticeBox!.y - titleBox!.y - titleBox!.height).toBeCloseTo(12)
+        expect(addressBox!.y - noticeBox!.y - noticeBox!.height).toBeCloseTo(12)
+        await assertAddressLayout(section, false)
         expect(noticeBox!.x).toBeCloseTo(addressBox!.x)
         expect(noticeBox!.x).toBeGreaterThanOrEqual(0)
         expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(viewport.width)
@@ -228,6 +319,7 @@ describe('web e2e: one-use QR browser login', () => {
           expect(await failure.textContent()).toBe('无法加载远程连接设置，请重试')
           const retry = address.getByRole('button', { name: '重试', exact: true })
           expect(await retry.isEnabled()).toBe(true)
+          expect((await retry.boundingBox())!.height).toBe(32)
           expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
           await compareOrRefreshGolden(join(EXPECTED, 'unreachable-load-failed.expected.md'),
             await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd), MODE)
@@ -243,6 +335,50 @@ describe('web e2e: one-use QR browser login', () => {
       } finally {
         await context.close()
       }
+    }
+  })
+
+  it('matches Models heading typography across Remote connection and Agent presets', async () => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE })
+    try {
+      const page = await context.newPage()
+      const console = watchConsole(page)
+      await page.goto(secure.authenticatedUrl)
+      await openSettings(page, 'zh')
+      const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+      for (const [viewport, colorScheme, suffix] of [
+        [{ width: 1200, height: 1000 }, 'light', 'desktop-light'],
+        [{ width: 1200, height: 1000 }, 'dark', 'desktop-dark'],
+        [MOBILE, 'light', 'mobile-light'],
+        [MOBILE, 'dark', 'mobile-dark'],
+      ] as const) {
+        await page.setViewportSize(viewport)
+        await page.emulateMedia({ colorScheme })
+        await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme)
+        await dialog.getByRole('button', { name: '模型', exact: true }).click()
+        const models = await headingTypography(dialog.getByRole('heading', { name: '模型', level: 2, exact: true }))
+        expect(models.title).toMatchObject({ fontSize: '16px', lineHeight: '24px', fontWeight: '500' })
+        expect(models.intro).toMatchObject({ fontSize: '14px', lineHeight: '22px' })
+        const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+        if (screenshots !== undefined) {
+          await mkdir(screenshots, { recursive: true })
+          await page.screenshot({ path: join(screenshots, `typography-models-${suffix}.png`) })
+        }
+        await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).click()
+        await dialog.locator('[data-agent-preset-id]').first().waitFor()
+        expect(await headingTypography(dialog.getByRole('heading', { name: 'Agent 预设', level: 2, exact: true }))).toEqual(models)
+        if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, `typography-presets-${suffix}.png`) })
+        await dialog.getByRole('button', { name: '远程连接', exact: true }).click()
+        const section = dialog.getByRole('region', { name: '远程连接', exact: true })
+        await section.getByText('通过以下方式，在其他设备上登录并使用 DeepSeek Harness。', { exact: true }).waitFor()
+        expect(await headingTypography(section.getByRole('heading', { name: '远程连接', level: 2, exact: true }))).toEqual(models)
+        await assertAddressLayout(section, true)
+        if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, `typography-remote-${suffix}.png`) })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+      }
+      expect(console.pageErrors).toEqual([])
+    } finally {
+      await context.close()
     }
   })
 
@@ -561,21 +697,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(desktopAction!.x).toBeGreaterThan(desktopTitle!.x + desktopTitle!.width)
       expect(desktopAction!.y + desktopAction!.height).toBeLessThan(desktopCode!.y)
       expect(Math.abs(desktopTitle!.y + desktopTitle!.height / 2 - desktopAction!.y - desktopAction!.height / 2)).toBeLessThanOrEqual(1)
-      const desktopScan = await desktopSection.getByText('扫码后直接登录', { exact: true }).boundingBox()
-      const desktopTimer = await desktopSection.getByRole('timer').boundingBox()
-      const desktopWarning = await desktopSection.getByText('请勿分享登录二维码', { exact: true }).boundingBox()
-      const desktopDetails = await desktopSection.getByRole('timer').locator('..').boundingBox()
-      const desktopBanner = await desktopSection.getByText('请勿分享登录二维码', { exact: true }).locator('..').locator('..').boundingBox()
-      expect(desktopScan).not.toBeNull()
-      expect(desktopTimer).not.toBeNull()
-      expect(desktopWarning).not.toBeNull()
-      expect(desktopDetails).not.toBeNull()
-      expect(desktopBanner).not.toBeNull()
-      expect(desktopDetails!.x).toBe(desktopBanner!.x)
-      expect(desktopDetails!.width).toBe(desktopBanner!.width)
-      expect(Math.abs(desktopScan!.y - desktopTimer!.y)).toBeLessThanOrEqual(1)
-      expect(desktopTimer!.y).toBeGreaterThan(desktopCode!.y + desktopCode!.height)
-      expect(desktopWarning!.y).toBeGreaterThan(desktopTimer!.y + desktopTimer!.height)
+      await assertQrDetails(desktopSection)
 
       const phonePage = await phone.newPage()
       const pageErrors: string[] = []
@@ -631,21 +753,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(mobileCancel!.y).toBeGreaterThan(mobileAction!.y + mobileAction!.height)
       expect(mobileCancel!.x).toBe(mobileAction!.x)
       expect(mobileCancel!.width).toBe(mobileAction!.width)
-      const mobileScan = await mobileSection.getByText('扫码后直接登录', { exact: true }).boundingBox()
-      const mobileTimer = await mobileSection.getByRole('timer').boundingBox()
-      const mobileWarning = await mobileSection.getByText('请勿分享登录二维码', { exact: true }).boundingBox()
-      const mobileDetails = await mobileSection.getByRole('timer').locator('..').boundingBox()
-      const mobileBanner = await mobileSection.getByText('请勿分享登录二维码', { exact: true }).locator('..').locator('..').boundingBox()
-      expect(mobileScan).not.toBeNull()
-      expect(mobileTimer).not.toBeNull()
-      expect(mobileWarning).not.toBeNull()
-      expect(mobileDetails).not.toBeNull()
-      expect(mobileBanner).not.toBeNull()
-      expect(mobileDetails!.x).toBe(mobileBanner!.x)
-      expect(mobileDetails!.width).toBe(mobileBanner!.width)
-      expect(Math.abs(mobileScan!.y - mobileTimer!.y)).toBeLessThanOrEqual(1)
-      expect(mobileTimer!.y).toBeGreaterThan(qrBox!.y + qrBox!.height)
-      expect(mobileWarning!.y).toBeGreaterThan(mobileTimer!.y + mobileTimer!.height)
+      await assertQrDetails(mobileSection)
       const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
       if (screenshots !== undefined) {
         await mkdir(screenshots, { recursive: true })

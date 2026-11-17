@@ -81,7 +81,6 @@ describe('Remote connection section', () => {
     expect(screen.getByRole('timer').textContent).toBe('Expires in 120s')
     expect(screen.getByText(en.warning)).toBeTruthy()
     expect(screen.queryByText(en.linkWarning)).toBeNull()
-    expect(screen.getByText(en.scan)).toBeTruthy()
     expect(document.body.textContent).not.toContain(ticket.url)
     expect(document.querySelector('a[href*="token="]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.regenerate }))
@@ -166,16 +165,14 @@ describe('Remote connection section', () => {
     expect(within(qr).getByRole('timer').textContent).toBe('Expires in 90s')
   })
 
-  it('retains the scan line, countdown, and warning while only the QR is replaced', () => {
+  it('retains the countdown and warning while only the QR is replaced', () => {
     const { state } = panel({ phase: 'pending', ticket })
     const qr = screen.getByRole('region', { name: en.qrTitle })
-    const scan = within(qr).getByText(en.scan)
     const timer = within(qr).getByRole('timer')
     const warning = within(qr).getByText(en.warning)
     act(() => { state.update((value) => { value.phase = 'creating'; value.ticket = null; value.retainDetails = true }) })
     expect(within(qr).queryByRole('img')).toBeNull()
     expect(within(qr).getByRole('status', { name: en.creating })).toBeTruthy()
-    expect(within(qr).getByText(en.scan)).toBe(scan)
     expect(within(qr).getByRole('timer')).toBe(timer)
     expect(within(qr).getByText(en.warning)).toBe(warning)
     expect(timer.textContent).toBe('Expires in 120s')
@@ -235,12 +232,17 @@ describe('Remote connection section', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('localizes the panel and its countdown', () => {
-    panel({ phase: 'pending', ticket, remainingSeconds: 0 }, 'zh')
-    expect(screen.getByRole('region', { name: zh.title })).toBeTruthy()
-    expect(screen.getByRole('img', { name: zh.qr })).toBeTruthy()
-    expect(screen.getByRole('timer').textContent).toBe('0 秒后过期')
-    expect(screen.getByText(zh.warningTitle)).toBeTruthy()
+  it.each([
+    ['en', 'Expires in 0s', 'Scan to sign in directly.'],
+    ['zh', '0 秒后过期', '扫码后直接登录'],
+  ] as const)('shows the localized countdown without a separate scan instruction in %s', (language, countdown, scanInstruction) => {
+    const copy = language === 'en' ? en : zh
+    panel({ phase: 'pending', ticket, remainingSeconds: 0 }, language)
+    expect(screen.getByRole('region', { name: copy.title })).toBeTruthy()
+    expect(screen.getByRole('img', { name: copy.qr })).toBeTruthy()
+    expect(screen.getByRole('timer').textContent).toBe(countdown)
+    expect(screen.getByText(copy.warningTitle)).toBeTruthy()
+    expect(screen.queryByText(scanInstruction)).toBeNull()
   })
 
   it.each(['en', 'zh'] as const)('keeps the copy label while showing credential warnings only after success in %s', (language) => {

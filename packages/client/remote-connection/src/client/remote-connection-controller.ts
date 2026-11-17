@@ -19,7 +19,7 @@ export interface RemoteConnectionState {
   error: 'loadFailed' | 'createFailed' | 'cancelFailed' | 'statusFailed' | null
   /** Remaining invitation lifetime in whole seconds, measured against the browser's monotonic clock. */
   remainingSeconds: number
-  /** Keep the scan line and warning visible during a QR operation; never permits displaying the retained credential. */
+  /** Keep the countdown and warning visible during a QR operation; never permits displaying the retained credential. */
   retainDetails: boolean
 }
 
