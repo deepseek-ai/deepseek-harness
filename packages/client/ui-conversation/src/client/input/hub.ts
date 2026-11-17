@@ -25,6 +25,7 @@ import type { ComposerBlocks } from '../contract/composer-blocks.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
+import { sessionDraftEditable } from './draft-editability.ts'
 import { reportMessageSubmission } from './submission-analytics.ts'
 import { readConversationDraft } from '../stores.ts'
 
@@ -157,12 +158,7 @@ export class InputHub implements SessionInputResolver {
       inbox: session.projections.faceOf('inbox') as ObservableSnapshot<InboxState | undefined>,
       defaultSink: (text, attachmentIds, mode, signal, accept) => this.sink(session, text, attachmentIds, mode, signal, accept),
       quoteRemoveLabel: () => this.t('quote.remove'),
-      quoteInsertionAllowed: () => {
-        const state = session.getSnapshot()
-        return !state.removed && (state.subagent === null
-          || state.subagent.address.mode === 'continuable')
-          && this.conversation().blocks.storeFor(session.sessionId).getSnapshot() === undefined
-      },
+      sessionEditable: sessionDraftEditable(session, () => this.conversation().blocks.storeFor(session.sessionId)),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandAttachments: {
         serialize: async (ids) => {

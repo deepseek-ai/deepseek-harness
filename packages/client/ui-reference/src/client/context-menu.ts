@@ -20,21 +20,15 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
     const binding = ctx.sessions.binding(sessionId)
     if (binding === undefined) return undefined
     const input = ctx.conversation.input.for(binding.ctx)
-    const blocks = ctx.conversation.blocks.storeFor(sessionId)
-    const editable = (): boolean => {
-      if (ctx.sessions.binding(sessionId) !== binding) return false
-      const state = binding.session.getSnapshot()
-      const phase = input.state.getSnapshot().phase
-      return !state.removed && (state.subagent === null || state.subagent.address.mode === 'continuable')
-        && blocks.getSnapshot() === undefined && (phase === 'plain' || phase === 'claimed')
-    }
-    return { binding, input, blocks, editable }
+    // A released or replaced binding must not receive the reference captured for its predecessor.
+    const editable = (): boolean => ctx.sessions.binding(sessionId) === binding && input.referenceInsertionAllowed.getSnapshot()
+    return { input, editable }
   }
   ctx.effect(() => ctx.contextMenus.register({
     id: 'reference.file', target: 'file', order: 300,
     observe: (target) => {
       const current = targetInput(target)
-      return current === undefined ? [ctx.locale] : [ctx.locale, current.binding.session, current.input.state, current.blocks]
+      return current === undefined ? [ctx.locale] : [ctx.locale, current.input.referenceInsertionAllowed]
     },
     resolve: (target) => {
       const current = targetInput(target)
@@ -46,10 +40,10 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
         failureLabel: t('menu.addToChatFailed'),
         run: () => {
           if (mention === undefined || current === undefined || !current.editable()
-            || !current.input.addFiles([{
+            || !current.input.addReferences([{
               source: 'reference', ref: mention, label: workspaceTitleOf(path),
               appearance: 'file', clipboardText: mention,
-            }], [])) throw new Error('File reference insertion unavailable')
+            }])) throw new Error('File reference insertion unavailable')
           current.input.focus()
         },
       }]

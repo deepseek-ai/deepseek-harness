@@ -5,6 +5,7 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { SessionInputShell } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/facade.ts'
 import { ComposerBlockRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/blocks.ts'
+import { sessionDraftEditable } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/draft-editability.ts'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -27,15 +28,16 @@ async function bench() {
   onTestFinished(() => { owner.release() })
   const binding = runtime.sessions.binding(id)!
   const sink = vi.fn(async () => ({ kind: 'success' as const }))
+  const blocks = new ComposerBlockRegistry()
   const shell = new SessionInputShell({
     actx: binding.ctx, defaultSink: sink,
     commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
+    sessionEditable: sessionDraftEditable(binding.session, () => blocks.storeFor(id)),
   })
   onTestFinished(() => { shell.dispose() })
   const focus = vi.spyOn(shell, 'focus').mockImplementation(() => {})
-  const blocks = new ComposerBlockRegistry()
   const resolveInput = vi.fn(() => shell)
-  runtime.ctx.provide('conversation', { input: { for: resolveInput }, blocks })
+  runtime.ctx.provide('conversation', { input: { for: resolveInput } })
   const failed = vi.fn()
   const menus = new MenuRegistry(failed)
   onTestFinished(() => { menus.dispose() })
@@ -143,7 +145,7 @@ it('tracks submission locks without treating a running turn as an editing lock',
 
 it('reports insertion refusal without focusing or sending', async () => {
   const b = await bench()
-  vi.spyOn(b.shell, 'addFiles').mockReturnValue(false)
+  vi.spyOn(b.shell, 'addReferences').mockReturnValue(false)
   const menu = await b.menu()
   menu.select(actionId)
   expect(b.failed).toHaveBeenCalledWith(en['menu.addToChatFailed'])
@@ -172,7 +174,7 @@ it('refreshes open labels and failure feedback when the locale changes', async (
   b.locale.setLocale('zh')
   expect(menu.source.getSnapshot()[0]?.label).toBe(zh['menu.addToChat'])
   expect(unavailable.source.getSnapshot()[0]?.label).toBe(zh['menu.addToChat'])
-  vi.spyOn(b.shell, 'addFiles').mockReturnValue(false)
+  vi.spyOn(b.shell, 'addReferences').mockReturnValue(false)
   menu.select(actionId)
   expect(b.failed).toHaveBeenCalledWith(zh['menu.addToChatFailed'])
   await b.fiber.dispose()
@@ -189,10 +191,12 @@ it.each(['/work/a b.md', 'C:\\work\\a b.md', '\\\\server\\share\\a b.md', '/work
   },
 )
 
-it('refuses direct file insertion after the draft editor is disposed', async () => {
+it('disables the action and refuses direct insertion after the draft editor is disposed', async () => {
   const b = await bench()
+  const menu = await b.menu()
   b.shell.setDraft('Keep this')
   b.shell.dispose()
-  expect(b.shell.addFiles([{ source: 'reference', ref: '@file.txt', label: 'file.txt', clipboardText: '@file.txt' }], [])).toBe(false)
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect(b.shell.addReferences([{ source: 'reference', ref: '@file.txt', label: 'file.txt', clipboardText: '@file.txt' }])).toBe(false)
   expect(b.shell.snapshot.draft).toBe('Keep this')
 })

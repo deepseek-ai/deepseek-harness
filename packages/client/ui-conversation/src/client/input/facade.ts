@@ -71,8 +71,8 @@ export interface SessionInputDeps {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome>
-  /** Live Session and composer-block policy for transcript insertion. */
-  quoteInsertionAllowed?: () => boolean
+  /** Live Session and composer-block policy for quote and reference insertion; absent permits both. */
+  sessionEditable?: ObservableSnapshot<boolean> | undefined
   /** Current localized quote removal copy. */
   quoteRemoveLabel?: () => string
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
@@ -138,6 +138,18 @@ const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
 export class SessionInputShell implements SessionInput {
   /** Published editor projection + submit-plane state + queue overlay (the InputZone currency source). */
   readonly state: SnapshotStore<InputState>
+  /** @inheritdoc */
+  readonly referenceInsertionAllowed: ObservableSnapshot<boolean> = {
+    getSnapshot: () => !this.disposed && !frozen(this.snapshot.phase) && this.deps.sessionEditable?.getSnapshot() !== false,
+    subscribe: (fn) => {
+      const offState = this.state.subscribe(fn)
+      const offSession = this.deps.sessionEditable?.subscribe(fn)
+      return () => {
+        offState()
+        offSession?.()
+      }
+    },
+  }
   /** Latest surfaced notice (null after clear); the bar renders errors as banners and information inline. */
   readonly notices: SnapshotStore<InputNotice | null> = createSnapshotStore<InputNotice | null>(null)
   /** The shell-owned editor (text + chip truth); the composer binds its contenteditable to it. */
@@ -242,7 +254,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the editable draft accepted the quote.
    */
   insertQuote(text: string, summary?: QuoteSummary): boolean {
-    if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.quoteInsertionAllowed?.() === false || text.trim() === '') return false
+    if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.sessionEditable?.getSnapshot() === false || text.trim() === '') return false
     const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' }, summary)
     if (inserted) this.focus()
     return inserted
@@ -342,6 +354,7 @@ export class SessionInputShell implements SessionInput {
 
   /**
    * Add validated file references and attachment ids while admission is editable.
+   * Drop and paste use this wiring-layer method; other packages use {@link addReferences}.
    * @param references - reference chips in source order.
    * @param ids - newly allocated attachment ids.
    * @returns false after disposal, when admission is locked, or when the editor refuses insertion.
@@ -352,6 +365,15 @@ export class SessionInputShell implements SessionInput {
     this.attachmentIds = [...this.attachmentIds, ...ids]
     this.publish()
     return true
+  }
+
+  /**
+   * @param references - validated reference chips in source order.
+   * @returns whether the draft accepted the references.
+   */
+  addReferences(references: readonly ReferenceInsert[]): boolean {
+    if (!this.referenceInsertionAllowed.getSnapshot()) return false
+    return this.addFiles(references, [])
   }
 
   /**

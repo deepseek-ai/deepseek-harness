@@ -2,7 +2,7 @@
  * Input-machine types and Session-addressed draft operations. Business packages
  * read InputState through InputZone and use scoped input events for guarded
  * mutations. Conversation wiring and direct draft consumers resolve SessionInput
- * through conversation.input.for(), including file insertion through addFiles.
+ * through conversation.input.for(), including reference insertion through addReferences.
  * Draft text and reference chips live in the shell's Lexical editor; the machine
  * here owns submission state (phase, claim, attempt).
  */
@@ -196,12 +196,16 @@ export interface SessionInput extends InputTarget {
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
   addAttachments(ids: readonly DraftAttachmentId[]): boolean
   /**
-   * Insert file references after the retained selection without replacing text, and append attachment ids.
+   * Insert file references after the retained selection in one undo step without replacing text.
    * @param references - validated reference chips in source order.
-   * @param ids - browser-owned attachment ids; empty for reference-only insertion.
-   * @returns false after disposal, while submission is locked, or when insertion is refused.
+   * @returns false while {@link referenceInsertionAllowed} is false or when the editor refuses insertion.
    */
-  addFiles(references: readonly ReferenceInsert[], ids: readonly DraftAttachmentId[]): boolean
+  addReferences(references: readonly ReferenceInsert[]): boolean
+  /**
+   * Whether {@link addReferences} can edit the draft: false after disposal, during submission,
+   * for removed or non-continuable subagent Sessions, and while a composer block is set.
+   */
+  readonly referenceInsertionAllowed: ObservableSnapshot<boolean>
   /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
   removeAttachment(id: DraftAttachmentId): boolean
   /** Drop ids whose browser-owned objects no longer exist. */

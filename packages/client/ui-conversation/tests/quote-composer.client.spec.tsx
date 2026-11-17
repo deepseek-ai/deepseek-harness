@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
+import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import {
   KEY_BACKSPACE_COMMAND, KEY_DELETE_COMMAND, REDO_COMMAND, UNDO_COMMAND,
   $getRoot, $getSelection, $isRangeSelection, $nodesOfType,
@@ -16,7 +17,7 @@ import { $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 
 const quote = 'selected source text'
 
-function bench(quoteInsertionAllowed?: () => boolean) {
+function bench(sessionEditable?: ObservableSnapshot<boolean>) {
   const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
   const shell = new SessionInputShell({
     actx: {} as Context,
@@ -27,7 +28,7 @@ function bench(quoteInsertionAllowed?: () => boolean) {
       unsupportedNotice: () => 'unsupported',
     },
     quoteRemoveLabel: () => 'Remove quote',
-    ...(quoteInsertionAllowed === undefined ? {} : { quoteInsertionAllowed }),
+    ...(sessionEditable === undefined ? {} : { sessionEditable }),
   })
   return { shell, sink }
 }
@@ -38,13 +39,13 @@ function quoteKeys(shell: SessionInputShell): string[] {
 
 describe('QuoteNode composer lifecycle', () => {
   it('preserves the draft when its Session cannot accept an inserted quote', () => {
-    let allowed = false
-    const { shell } = bench(() => allowed)
+    const allowed = createSnapshotStore(false)
+    const { shell } = bench(allowed)
     shell.setDraft('base ')
     const before = shell.draftSnapshot
     expect(shell.insertQuote(quote)).toBe(false)
     expect(shell.draftSnapshot).toBe(before)
-    allowed = true
+    allowed.set(true)
     expect(shell.insertQuote(quote)).toBe(true)
   })
 
