@@ -300,7 +300,12 @@ export class ImSessionHost implements ImSessions {
     const id = `${record.sessionId}|${delivery.id}`
     const known = this.deliveries.get(id)
     if (known) {
-      if (!known.admitted) await this.admit(known.session, id)
+      if (!known.admitted) {
+        await this.admit(known.session, id)
+        if (!this.deliveries.has(id)) {
+          throw new ImError('unavailable', `IM delivery ${delivery.id} was discarded by a session reset.`)
+        }
+      }
       return
     }
     const stored: StoredDelivery = { session: record.sessionId, delivery, createdAt: Date.now(), admitted: false }

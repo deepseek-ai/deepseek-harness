@@ -1057,4 +1057,23 @@ describe('stored delivery validation', () => {
     expect(finalRecord?.generation).toBe(2)
     expect(finalRecord?.sessionId).not.toBe(replaced2)
   })
+
+  it('throws unavailable when a pending delivery retry is discarded by a concurrent reset', async () => {
+    const harness = await booted()
+    const initial = await harness.host.ensure(spec())
+    const stuck = messagesDelivery('followup', [message('retry me')])
+    harness.failFormat()
+    await expect(harness.host.deliver(initial.key, stuck)).rejects.toThrow(/format offline/)
+    expect(harness.host.pendingDeliveries()).toBe(1)
+
+    // `stuck` is now in `deliveries` with `admitted: false`. Run `reset` concurrently with the retry:
+    // `reset` removes the pending intent and `deliver` must reject with `unavailable` instead of returning silently.
+    harness.healFormat()
+    const resetting = harness.host.reset(initial.key, 'concurrent reset')
+    const retrying = harness.host.deliver(initial.key, stuck)
+    const [resetResult, retryResult] = await Promise.allSettled([resetting, retrying])
+    expect(resetResult.status).toBe('fulfilled')
+    expect(retryResult.status).toBe('rejected')
+    expect((retryResult as PromiseRejectedResult).reason).toMatchObject({ code: 'unavailable' })
+  })
 })
