@@ -7780,7 +7780,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImIntake',
-    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
+    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    async drainAnnouncements(): Promise<void>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
   },
   {
     name: 'ImIntakeHost',
@@ -7848,7 +7848,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSenderDeps',
-    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
+    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n    onResult?: (bot: Bot, result: SendResult) => void;\n}',
   },
   {
     name: 'ImSendOptions',
