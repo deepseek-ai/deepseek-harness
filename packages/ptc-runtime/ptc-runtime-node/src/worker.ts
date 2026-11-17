@@ -146,7 +146,13 @@ export class ProgramWorker {
       invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
       truncateOutput: () => {
         ledger.truncated = true
-        void this.channel?.discardOutput()
+        const channel = this.channel
+        if (evaluation.settled || this.closed || !channel || channel.$closed) return
+        void channel.discardOutput().catch((error: unknown) => {
+          // Ended evaluations need no notification; channel closure already owns failure reporting.
+          if (this.active !== evaluation || evaluation.settled || this.closed || channel.$closed) return
+          this.fail('protocol', `failed to send output-discard notification: ${messageOf(error)}`)
+        })
       },
       admit: (entry) => {
         if (ledger.truncated) return

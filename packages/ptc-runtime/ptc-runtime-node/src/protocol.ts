@@ -3,7 +3,7 @@ import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Wire revision required before the host dispatches program code. */
-export const PROGRAM_PROTOCOL_VERSION = 4
+export const PROGRAM_PROTOCOL_VERSION = 5
 
 /** One binding's JSON value and optional host-authored inspection text. */
 export interface BindingResult {

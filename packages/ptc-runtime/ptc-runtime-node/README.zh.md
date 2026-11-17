@@ -134,7 +134,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 ### 失败
 
-程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。捕获完成值时，有损值为 `invalid-output`，即使不保留捕获输出也无法容纳的完成值为 `output-limit`。这两种失败都不会清空保留变量。诊断截断保留原来的失败类型。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
+程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。若求值和控制通道仍然有效，发送输出抑制通知被拒绝会使本次运行以 `protocol` 失败。终止期间排空的输出仍在本地受预算限制，不再发送输出抑制通知。进程提供方保留与执行基底无关的失败名 `worker-exit`。捕获完成值时，有损值为 `invalid-output`，即使不保留捕获输出也无法容纳的完成值为 `output-limit`。这两种失败都不会清空保留变量。诊断截断保留原来的失败类型。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
 -----
 
@@ -164,7 +164,7 @@ Host 通过有序控制管道上的 birpc 调用子进程的 `run()`。同一时
 
 源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn 与 birpc 依赖。构建后脚本对所有模式使用 `process.js`；`persistent-process.js` 委托同一个循环，并为未指定程序语法的宿主提供 REPL 默认值。内嵌载体通过 `launch.executable` 启动私有 worker，并在每次执行中携带程序格式和保留标志。远端脚本部署提供对应的 `launch.bootstrapPath`。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
-自定义 `launch.bootstrapPath` 部署必须使用 bootstrap 协议 4。`HostMethods.invoke` 的回复包含 `{ value: flatWire, inspection?: string }`；可选文本与解码后的对象或数组关联，供直接展示使用。请与宿主一起部署匹配的 bootstrap；[升级指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-tool-result-inspection/guide.zh.md)说明了从协议 3 迁移的步骤。
+自定义 `launch.bootstrapPath` 部署必须使用 bootstrap 协议 5。`HostMethods.invoke` 的回复包含 `{ value: flatWire, inspection?: string }`；可选文本与解码后的对象或数组关联，供直接展示使用。请与宿主一起部署匹配的 bootstrap；[展示指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-tool-result-inspection/guide.zh.md)说明绑定回复，[输出截断指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-output-limit/guide.zh.md)说明输出抑制。声明协议 3 或 4 的 bootstrap 会在程序分发前被拒绝。
 
 包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk 和 birpc；源码执行导入已安装的包。
 
