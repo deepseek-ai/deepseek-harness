@@ -611,6 +611,34 @@ describe('lifecycle', () => {
     })
   })
 
+  it('prunes expired pending receipts on reopen so they are not settled as interrupted', async () => {
+    const first = await bootCommands()
+    const shared = await ensureShared(first)
+    const stopFrame = inbound('/stop')
+    const stopKey = ImMessageKey('fake:bot', stopFrame.id)
+
+    vi.spyOn(first.store, 'settle').mockRejectedValueOnce(new Error('crash before settle'))
+    await first.receive(stopFrame)
+    await first.intake.idle()
+    first.base.pool.media.get('im_session_commands')?.tables.get('commands')?.set(stopKey, {
+      status: 'pending',
+      reply: '',
+      sessions: [shared.sessionId],
+      createdAt: 0,
+    })
+    await first.close()
+
+    const second = await bootCommands({
+      pool: first.base.pool,
+      root: first.base.root,
+      commands: { retentionMs: 60_000 },
+    })
+    // Reopening pruned the expired `pending` row; re-running `/stop` executes cleanly instead of replying interrupted.
+    second.intake.pump()
+    await second.intake.idle()
+    expect(text(second)).toBe('没有正在运行的会话。')
+  })
+
   it('rolls back the pending receipt when passthrough execute() returns undefined so retries pass through', async () => {
     const harness = await bootCommands({
       commands: { passthrough: ['compact'] },

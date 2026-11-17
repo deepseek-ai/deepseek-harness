@@ -2033,7 +2033,7 @@ export interface TlsConfig {
 ## `@deepseek-ai/dsh-im`
 
 - `inject`: `satori` · `agents` · `sessions` · `sessionPersistence` · `storageDomain` · `attachments`
-- `source`: [`packages/experimental/im/src/api.ts:279`](../packages/experimental/im/src/api.ts)
+- `source`: [`packages/experimental/im/src/api.ts:281`](../packages/experimental/im/src/api.ts)
 
 ```ts config-catalog
 /**
@@ -2199,7 +2199,7 @@ export interface SessionCommandsConfig {
   resettable: string[]
   /** Reply language; `zh` by default. */
   locale: SessionCommandsLocale
-  /** How long completed command receipts are kept for idempotent redelivery replay (ms). */
+  /** How long recorded command receipts (`done` and `pending`) are kept before pruning (ms). */
   retentionMs: number
 }
 
