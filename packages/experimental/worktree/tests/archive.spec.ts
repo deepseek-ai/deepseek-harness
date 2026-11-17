@@ -23,6 +23,7 @@ import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import type {} from '../src/archive.ts'
 import WorktreeService, { CREATED_RECORD, worktreeProjection } from '../src/index.ts'
+import { ENTERED_RECORD } from '../src/projection.ts'
 import type { WorktreeCleanup } from '../src/index.ts'
 import * as removal from '../src/removal.ts'
 import { git, repository, UnusedSandbox } from './harness.ts'
@@ -454,6 +455,23 @@ describe('archive-triggered worktree cleanup', () => {
     const before = handle.stateOf(f.session).created
     appendPluginRecord(f.session, CREATED_RECORD, { path: '', branch: 'x', baseCommit: 'y', repositoryRoot: 'z' })
     expect(handle.stateOf(f.session).created).toEqual(before)
+  })
+
+  it('keeps one entry per entered directory, skips an entry record whose payload fails validation, and reclaims only creations', async () => {
+    const f = await fixture()
+    const handle = await f.ctx.sessionProjections.register(worktreeProjection)
+    const visitor = f.ctx.sessions.create(brandString<SessionId>('visitor'), { meta: { cwd: f.root } })
+    appendPluginRecord(visitor, ENTERED_RECORD, { path: f.worktree.path, branch: 'first', repositoryRoot: f.root })
+    appendPluginRecord(visitor, ENTERED_RECORD, { path: f.worktree.path, repositoryRoot: f.root })
+    const state = handle.stateOf(visitor)
+    expect(state).toMatchObject({ created: [], entered: [{ path: f.worktree.path, repositoryRoot: f.root }] })
+    appendPluginRecord(visitor, ENTERED_RECORD, { path: '', repositoryRoot: f.root })
+    expect(handle.stateOf(visitor)).toBe(state)
+    expect(f.ctx.sessionProjections.snapshot(visitor).values.worktree).toEqual([])
+
+    await f.ctx.workspaceRegistry.archiveSession(visitor.id)
+    expect(await f.ctx.worktrees.cleanupOf(visitor, null)).toBeNull()
+    await access(f.worktree.path)
   })
 
   it('registers no attempt while retainOnArchive is set, and resumes once it is cleared', async () => {

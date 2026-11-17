@@ -63,19 +63,19 @@ describe('forgeWorktree projection', () => {
     ctx.sessionProjections.onChanged((_session, key, value) => { if (key === 'forgeWorktree') published.push(value) })
 
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
     startTurn(session, 1)
     startStep(session, 1)
-    session.append('working-directory/change', { cwd: join(WORKTREE.path, 'packages') })
+    session.append('workspace-root/change', { cwd: join(WORKTREE.path, 'packages') })
     const inside = [...published]
-    session.append('working-directory/change', { cwd: WORKTREE.repositoryRoot })
+    session.append('workspace-root/change', { cwd: WORKTREE.repositoryRoot })
     // Shares the worktree's path as a string prefix without lying below it.
-    session.append('working-directory/change', { cwd: `${WORKTREE.path}-sibling` })
+    session.append('workspace-root/change', { cwd: `${WORKTREE.path}-sibling` })
     const outside = [...published]
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
     const returned = state()
-    session.append('working-directory/change', { cwd: WORKTREE.path })
+    session.append('workspace-root/change', { cwd: WORKTREE.path })
 
     expect(state()).toBe(returned)
     expect(inside.at(-1)).toEqual(WORKTREE)
@@ -87,6 +87,12 @@ describe('forgeWorktree projection', () => {
 
   it('starts from the directory the Session header records', () => {
     expect(forgeWorktreeProjection.init(plainSession('/work/repo').header)).toEqual({ ...EMPTY, cwd: '/work/repo' })
+  })
+
+  it('ignores a directory change an earlier release recorded, as the working-directory service does', () => {
+    const session = plainSession('/work/repo')
+    const state = forgeWorktreeProjection.init(session.header)
+    expect(forgeWorktreeProjection.apply(state, session.append('working-directory/change', { cwd: WORKTREE.path }))).toBe(state)
   })
 
   it('replays incomplete restoration until an explicit successful completion', async () => {

@@ -186,9 +186,6 @@
   "packages/api/session-controller/src/client/sessions/assistant-stream.ts": {
     "8a6d86a1925458d196d5a03716c20003a0347d08125c1e8461ed83001b6a1ac2": 1
   },
-  "packages/api/session-controller/src/client/sessions/history-records.ts": {
-    "8cd779a2bf2a4c61fb2963fbfbfe761c89a211e607ab1e064c3f9380331310d2": 1
-  },
   "packages/api/session-controller/src/client/transport.ts": {
     "6a6302072b3044d1366f925d2ccea779370ea82e46555e897fe556b5c0d23ff1": 1
   },

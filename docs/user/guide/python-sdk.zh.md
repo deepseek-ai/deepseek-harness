@@ -183,7 +183,7 @@ dsh plugin --profile sdk-minimal add file:C:/work/my-plugin-bundle
 |---|---|
 | 系统提示词 | `DSH_SYSTEM_PROMPT`，未设置时为 `You are a helpful software engineer assistant.` |
 | `minimal.py` 的模型 | `--model`，然后是 `DSH_MODEL`，最后是 `deepseek-v4-flash` |
-| 面向模型的工具 | Linux／macOS 上的持久 `bash` 或 Windows 上的 `pwsh`、`read_image` 和 `working_directory` |
+| 面向模型的工具 | Linux／macOS 上的持久 `bash` 或 Windows 上的 `pwsh`，以及 `read_image` |
 | Shell 超时 | 300 秒 |
 | 可选运行时上下文 | 不存在 |
 | 上下文压缩 | 自动执行；通过额外模型请求生成较早历史的摘要 |

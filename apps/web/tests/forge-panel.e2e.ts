@@ -800,7 +800,7 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   const sessionId = await settled
   const events = await readPersistedEvents(launch.scaffold, sessionId)
   const request = events.find(event => event.type === 'request/header')
-  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
+  expect(request?.data.header.tools?.filter(tool => tool.name === 'enter_worktree')).toHaveLength(1)
   const toolOutput = events.flatMap(event => event.type === 'tool/result'
     ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
   expect(toolOutput).toContain('Add the pull request panel')

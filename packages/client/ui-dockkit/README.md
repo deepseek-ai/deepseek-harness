@@ -48,6 +48,8 @@ Tab context menus show the close action name without a shortcut hint: they act o
 <a id="embedding-it"></a>
 ## Embedding it
 
+Strip chrome continues the adjacent control spacing, so embedder actions and the split action form one consistent trailing group.
+
 Everything host-specific arrives through props:
 
 | Contract | Carries |
@@ -100,6 +102,8 @@ None, as the package is a browser-side docking layout engine and component set t
 None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
+
+Dock-zone menu glyphs retain a 16px layout box with an inset painted frame, matching the neighboring split action.
 
 <a id="known-limitations-and-deferred-work"></a>
 

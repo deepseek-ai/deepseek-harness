@@ -1,4 +1,8 @@
-/** Creates a new Git branch and checkout, then changes the calling Session's working directory; restores a removed checkout. */
+/**
+ * Creates a new Git branch and checkout, then changes the calling Session's working directory; moves the
+ * Session into an existing checkout of the pool; returns the Session to the source checkout; restores a
+ * removed checkout.
+ */
 
 import { Context, Service, type Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -13,22 +17,24 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { WorktreeReclamation } from './archive.ts'
+import { within, WorktreeReclamation } from './archive.ts'
 import { WorktreeError } from './error.ts'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { generatedWorktreeName } from './name.ts'
 import { runCommand, scanCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
-import { CREATED_RECORD, worktreeProjection } from './projection.ts'
+import { CREATED_RECORD, ENTERED_RECORD, worktreeProjection } from './projection.ts'
 import type { WorktreeProjectionState } from './projection.ts'
 import { checkoutIdentity, registration, removeCheckout } from './removal.ts'
 import type { GitScan } from './removal.ts'
 import type {
-  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup,
+  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, EnteredWorktree, EnterWorktreeRequest, RestoredWorktree,
+  RestoreWorktreeRequest, WorktreeCleanup,
 } from './types.ts'
 
 export type {
-  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup, WorktreeCreation,
+  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, EnteredWorktree, EnterWorktreeRequest, RestoredWorktree,
+  RestoreWorktreeRequest, WorktreeCleanup, WorktreeCreation,
 } from './types.ts'
 export { generatedWorktreeName } from './name.ts'
 export { CREATED_RECORD, createdWorktreeSchema, worktreeProjection } from './projection.ts'
@@ -88,8 +94,9 @@ function relativePath(value: string): boolean {
 
 /**
  * Creates retained Git worktrees under the mounted filesystem and sandbox
- * providers, records each creation in the Session log, and reclaims a clean,
- * unreferenced checkout when the Session that created it is archived.
+ * providers, moves Sessions into and out of them, records each creation and
+ * entry in the Session log, and reclaims a clean, unreferenced checkout when
+ * the Session that created it is archived.
  */
 export class WorktreeService extends Service {
   static inject = ['workingDirectory', 'fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'sessionProjections']
@@ -219,6 +226,61 @@ export class WorktreeService extends Service {
   }
 
   /**
+   * Move the calling Session into an existing worktree in the pool of the checkout it works in. The
+   * directory `name` selects must lie inside that pool and be a registered worktree of the repository;
+   * neither Git state nor files change. The Session's log records the entry, so {@link exit} returns it to
+   * the checkout it entered from. Archiving the Session never removes a checkout it only entered.
+   * @param agent - caller whose current directory selects the checkout and its pool.
+   * @param request - name of the worktree inside the pool.
+   * @param signal - cancellation of lookup and of the working-directory change.
+   * @returns the entered checkout, its branch, and the checkout the Session entered from.
+   * @throws {WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool,
+   *   `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and
+   *   `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service's error when the
+   *   registered directory no longer exists.
+   */
+  async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree> {
+    const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    operationSignal.throwIfAborted()
+    const operation = this.enterCheckout(agent, request, operationSignal)
+    this.pending.add(operation)
+    try {
+      return await operation
+    } finally {
+      this.pending.delete(operation)
+    }
+  }
+
+  /**
+   * Return the calling Session from the worktree it works in to the checkout it entered that worktree
+   * from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The
+   * worktree is the recorded creation or entry, the Session's own or fork-inherited, with the longest
+   * directory containing the Session's current directory. Its checkout and branch remain.
+   * @param agent - caller whose current directory lies in a recorded worktree.
+   * @param signal - cancellation of directory validation and of the working-directory change.
+   * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
+   * @throws {WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and
+   *   `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service's error when the source
+   *   checkout no longer exists.
+   */
+  async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree> {
+    const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    operationSignal.throwIfAborted()
+    const cwd = await this.ctx.workingDirectory.ensure(agent, operationSignal)
+    const state = this.projection.stateOf(agent.session)
+    let left: CreatedWorktree | EnteredWorktree | undefined
+    // Among records of one directory the last wins: a creation, which carries the base commit, over an entry.
+    for (const worktree of [...state.entered, ...state.created.map(creation => creation.worktree)]) {
+      if (within(worktree.path, cwd) && (left === undefined || worktree.path.length >= left.path.length)) left = worktree
+    }
+    if (left === undefined) {
+      throw new WorktreeError(`cannot exit a worktree: no recorded worktree contains the working directory ${JSON.stringify(cwd)}`, 'WORKTREE_NOT_ENTERED')
+    }
+    await this.ctx.workingDirectory.set(agent, left.repositoryRoot, operationSignal)
+    return left
+  }
+
+  /**
    * Read the archive cleanup of a Session's created checkout; waiting never
    * starts one. Absent without the Workspace and query providers.
    * @param session - archived Session whose cleanup is read.
@@ -308,6 +370,30 @@ export class WorktreeService extends Service {
     }
   }
 
+  private async enterCheckout(agent: Agent, { name }: EnterWorktreeRequest, signal: AbortSignal): Promise<EnteredWorktree> {
+    if (!relativePath(name)) throw new WorktreeError('worktree name must be a relative path inside the worktree pool', 'WORKTREE_INVALID_ARGUMENT')
+    const cwd = await this.ctx.workingDirectory.ensure(agent, signal)
+    const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
+    const rootOutput = await this.gitRunner(policy, signal)(cwd, ['rev-parse', '--show-toplevel'])
+    const rootTarget = await this.ctx.fs.resolve(rootOutput.stdout.replace(/\r?\n$/, ''), { cwd, signal })
+    const repositoryRoot = this.ctx.fs.processPath(rootTarget)
+    const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
+    const poolPath = this.ctx.fs.processPath(pool)
+    const target = await this.ctx.fs.resolve(name, { cwd: poolPath, signal })
+    // A link that leaves the pool resolves outside it; only a directory inside the pool may become the workspace.
+    const fields = this.ctx.fs.contains(pool, target)
+      ? await registration(this.ctx, repositoryRoot, target, this.gitScanner(policy, signal), signal)
+      : undefined
+    if (fields === undefined) {
+      throw new WorktreeError(`cannot enter worktree ${JSON.stringify(name)}: ${poolPath} holds no registered worktree of that name`, 'WORKTREE_NOT_FOUND')
+    }
+    const branch = fields.find(field => field.startsWith('branch refs/heads/'))?.slice('branch refs/heads/'.length)
+    const path = await this.ctx.workingDirectory.set(agent, this.ctx.fs.processPath(target), signal)
+    const entered: EnteredWorktree = { path, ...branch === undefined ? {} : { branch }, repositoryRoot }
+    appendPluginRecord(agent.session, ENTERED_RECORD, entered)
+    return entered
+  }
+
   private async restoreCheckout(
     agent: Agent,
     { path, branch, baseCommit, repositoryRoot }: RestoreWorktreeRequest,
@@ -327,7 +413,7 @@ export class WorktreeService extends Service {
     await assertBranchName(run, repositoryRoot, branch, 'worktree branch')
     await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
     const scan = this.gitScanner(policy, signal)
-    const fields = await registration(this.ctx, { path, branch, baseCommit, repositoryRoot }, identity.target, scan, signal)
+    const fields = await registration(this.ctx, repositoryRoot, identity.target, scan, signal)
     if (fields !== undefined) {
       if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new WorktreeError(`worktree is locked: ${path}`, 'WORKTREE_LOCKED')
       if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')

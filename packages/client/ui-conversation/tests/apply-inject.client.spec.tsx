@@ -80,7 +80,7 @@ async function bench(renderQuote = false) {
   const opened = vi.fn<(id: SessionId) => void>()
   let mainReference: SessionReference | undefined
   const replaceMain = (id: SessionId, beforeOpen?: (id: SessionId) => void): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     try {
       beforeOpen?.(id)
     } catch (error: unknown) {
@@ -476,7 +476,7 @@ describe('Conversation inject API', () => {
       expect(activate).toHaveBeenLastCalledWith('custom')
       activate.mockClear()
 
-      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView' })
+      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView', facets: { conversation: true } })
       await b.runtime.flush()
       expect(mainReference.sessionId).toBe(ROOT)
       expect(activate).not.toHaveBeenCalled()

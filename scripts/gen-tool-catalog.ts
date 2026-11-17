@@ -32,7 +32,6 @@ import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -707,29 +706,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-working-directory',
-    dir: 'tool-working-directory',
-    source: 'packages/session/tool-working-directory/src/index.ts',
-    requires: ['ctx.tools', 'ctx.workingDirectory'],
-    writes: ['tool/call', 'working-directory/change', 'user context for directory changes', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(ToolWorkingDirectory)
-    },
-    note: 'Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-experimental-tool-worktree',
     dir: 'tool-worktree',
     source: 'packages/experimental/tool-worktree/src/index.ts',
     requires: ['ctx.tools', 'ctx.worktrees', 'a calling Agent'],
-    writes: ['tool/call', 'Git branch and checkout', 'working-directory/change', 'tool/result'],
+    writes: ['tool/call', 'Git branch and checkout', 'workspace-root/change', 'tool/result'],
     async mount(ctx) {
       ctx.provide('worktrees', {
         create: () => Promise.reject(new Error('gen-tool-catalog: worktree creation is unavailable during schema harvest')),
+        enter: () => Promise.reject(new Error('gen-tool-catalog: entering a worktree is unavailable during schema harvest')),
+        exit: () => Promise.reject(new Error('gen-tool-catalog: leaving a worktree is unavailable during schema harvest')),
       })
       await ctx.plugin(ToolWorktree)
     },
-    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
+    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',
