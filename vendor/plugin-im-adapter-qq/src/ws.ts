@@ -246,10 +246,7 @@ export class WsClient extends WsClientBase<QQBot> {
         socket.close(1000, 'invalid session')
         return
       case Opcode.DISPATCH:
- // The sequence number is transport bookkeeping, so it advances on arrival: a reconnect during a slow
- // intake must resume from the newest frame, and the store deduplicates anything replayed.
-        if (typeof payload.s === 'number') this.seq = payload.s
-        return await this.enqueueDispatch(payload)
+        return await this.enqueueDispatch(socket, payload, signal)
       default:
         return this.bot.ctx.logger.warn('QQ gateway opcode %d is not supported', payload.op)
     }
@@ -280,14 +277,18 @@ export class WsClient extends WsClientBase<QQBot> {
  * starve the heartbeat and turn the socket into a zombie — so only dispatches are serialized. Serializing them
  * keeps the order the platform sent them in, which is the order the intake store assigns its per-chat `seq` in.
  */
-  private async enqueueDispatch(payload: GatewayPayload) {
-    const run = this.dispatches.then(() => this.dispatch(payload))
+  private async enqueueDispatch(socket: WebSocket, payload: GatewayPayload, signal: AbortSignal) {
+    const run = this.dispatches.then(async () => {
+      if (signal.aborted) return
+      await this.dispatch(socket, payload, signal)
+      if (!signal.aborted && typeof payload.s === 'number') this.seq = payload.s
+    })
     this.dispatches = run.then(() => {}, () => {})
     return await run
   }
 
   /** One `DISPATCH`: `READY`/`RESUMED` are transport-level, everything else is decoded and received. */
-  private async dispatch(payload: GatewayPayload) {
+  private async dispatch(socket: WebSocket, payload: GatewayPayload, signal: AbortSignal) {
     const type = payload.t
     if (!type) return
     if (type === 'READY') {
@@ -305,8 +306,24 @@ export class WsClient extends WsClientBase<QQBot> {
     const frame: GatewayDispatch = { op: 0, t: type, d: payload.d }
     if (payload.s !== undefined) frame.s = payload.s
     if (payload.id !== undefined) frame.id = payload.id
-    const sessions = await this.bot.decodeDispatch(frame)
-    for (const session of sessions) await this.bot.receive(session)
+    let sessions: Awaited<ReturnType<QQBot['decodeDispatch']>>
+    try {
+      sessions = await this.bot.decodeDispatch(frame)
+    } catch (error) {
+      this.bot.ctx.logger.error('QQ gateway frame failed: %s', error)
+      return
+    }
+    try {
+      for (const session of sessions) {
+        if (signal.aborted) return
+        await this.bot.receive(session)
+      }
+    } catch (error) {
+      // Persistence failed: keep `this.seq` at the last persisted frame and reconnect so `RESUME` replays this frame.
+      this.stopHeartbeat()
+      socket.close(1011, 'receive failed')
+      throw error
+    }
   }
 
   /** `READY` publishes the bot's own identity: a REST-only bot has none until then. */

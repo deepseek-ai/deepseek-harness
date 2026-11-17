@@ -191,11 +191,12 @@ describe('QQ gateway session', () => {
     await vi.waitFor(() => { expect(received).toEqual(['event-1']) })
     // The second dispatch waits for the first intake to accept, so nothing can overtake it.
     expect(decoded).toHaveLength(1)
-    // The sequence number is transport bookkeeping: it advances on arrival, even while intake is busy, so a
-    // reconnect resumes from the newest frame.
-    expect(mounted.adapter.seq).toBe(2)
+    // The resume cursor only advances once intake persists the frame, so a reconnect while intake is busy or failing
+    // replays the unpersisted frame instead of skipping it.
+    expect(mounted.adapter.seq).toBeUndefined()
     gate.resolve()
     await vi.waitFor(() => { expect(received).toEqual(['event-1', 'event-2']) })
+    await vi.waitFor(() => { expect(mounted.adapter.seq).toBe(2) })
     expect(decoded.map(frame => frame.t)).toEqual(['GROUP_AT_MESSAGE_CREATE', 'C2C_MESSAGE_CREATE'])
     expect(decoded[1]).toMatchObject({ op: 0, s: 2, id: 'event-2', d: { id: 'm2' } })
   })
@@ -331,6 +332,20 @@ describe('QQ gateway reconnect', () => {
     // The platform cannot re-request a dispatch, so a decode/intake failure is reported and the socket stays up.
     expect(socket.closed).toBe(false)
     expect(mounted.requests.filter(path => path.endsWith('/gateway'))).toHaveLength(1)
+  })
+
+  it('does not advance seq and reconnects to resume from the last persisted seq when bot.receive fails', async () => {
+    const mounted = await mount()
+    const first = await dial(mounted)
+    first.receive(ready('session-persist', 7))
+    await vi.waitFor(() => { expect(mounted.adapter.seq).toBe(7) })
+    vi.spyOn(mounted.bot, 'decodeDispatch').mockResolvedValue([{ id: 'msg-8' } as never])
+    vi.spyOn(mounted.bot, 'receive').mockRejectedValueOnce(new Error('disk full'))
+    first.receive({ op: Opcode.DISPATCH, s: 8, t: 'GROUP_AT_MESSAGE_CREATE', d: {} })
+    await vi.waitFor(() => { expect(first.closed).toBe(true) })
+    expect(mounted.adapter.seq).toBe(7)
+    const second = await dial(mounted, 1)
+    expect(second.sent[0]).toMatchObject({ op: Opcode.RESUME, d: { session_id: 'session-persist', seq: 7 } })
   })
 })
 
