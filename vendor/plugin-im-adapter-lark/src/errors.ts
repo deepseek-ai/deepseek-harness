@@ -167,13 +167,13 @@ function retryAfterOf(response: ResponseLike | undefined): number | undefined {
   return Number.isFinite(value) && value > 0 ? value * SECOND : undefined
 }
 
-/** The HTTP answer a transport failure carried, if any. */
+/** Minimal `Response` shape (including `undici.Response`) read by {@link responseOf} and {@link retryAfterOf}. */
 interface ResponseLike {
   readonly status: number
   readonly headers: { get(name: string): string | null }
 }
 
-/** `Response` (including `undici.Response`) attached by `ctx.http` when an error carries an HTTP answer. */
+/** The HTTP answer a transport failure carried, if any. */
 function responseOf(error: unknown): ResponseLike | undefined {
   const response = (error as { response?: unknown } | undefined)?.response
   if (typeof response !== 'object' || response === null) return undefined

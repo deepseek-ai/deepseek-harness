@@ -132,13 +132,13 @@ function ruleForStatus(status: number): QqErrorRule {
   return { kind: 'invalid', message: 'the platform rejected the request' }
 }
 
-/** Whether a failure carried an HTTP answer at all. */
+/** Minimal `Response` shape (including `undici.Response`) read by {@link responseOf} and {@link retryAfterOf}. */
 interface ResponseLike {
   readonly status: number
   readonly headers: { get(name: string): string | null }
 }
 
-/** `Response` (including `undici.Response`) attached by `ctx.http` when an error carries an HTTP answer. */
+/** Whether a failure carried an HTTP answer at all. */
 function responseOf(error: unknown): ResponseLike | undefined {
   const response = (error as { response?: unknown } | undefined)?.response
   if (typeof response !== 'object' || response === null) return undefined
