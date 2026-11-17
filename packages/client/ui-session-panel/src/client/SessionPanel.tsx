@@ -1,6 +1,6 @@
 /** Floating Session panel in the Chat View's aside: section titles drawn from the section roster, bodies from the section slot. */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent, type ReactNode } from 'react'
-import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPinFillRegular, IconPinOutlineRegular, isBehindModal, observeComposition, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
 import { presentationOf } from './visibility.ts'
@@ -74,24 +74,31 @@ function useFocusReturn(hidden: boolean, toggleId: string): {
 }
 
 /**
- * Render the panel while it docks or shows as an overlay, and always its
- * dock probe. Each section keeps its title row and body; CSS hides a section
+ * Render the panel while it docks or shows as an overlay, and always its two
+ * probes. Each section keeps its title row and body; CSS hides a section
  * whose body rendered nothing. The overlay closes on Escape and on an
  * outside pointerdown. CSS sizes the docked panel from the Chat View's end
- * gutter and makes the probe 1px wide while that gutter holds the panel; the
- * plugin observes the probe, so the panel renders again only when the
- * docking decision flips.
- * @param props - Session values, shared visibility, sections, the dock probes and their ref factory, and copy.
- * @returns the dock probe and, unless hidden, the panel.
+ * gutter and makes each probe 1px wide while its condition holds: the gutter
+ * holds the panel, or the transcript can make that room. The plugin observes
+ * the probes, so the panel renders again only when a decision flips. While
+ * the pin and the docking preference are both on, the gutter probe carries
+ * the mark that has the Conversation body keep the panel's room free. The
+ * pin button shows where pressing it has an effect: on a docked panel, on an
+ * overlay whose transcript can make room, and wherever the pin is on.
+ * @param props - Session values, shared visibility, sections, the probes' room and their ref factory, the pin action, and copy.
+ * @returns the probes and, unless hidden, the panel.
  */
 export function SessionPanel({
-  sessionId, useVisibility, useSections, useProbes, createProbeRef, closeOverlay, renderSlot, t,
+  sessionId, useVisibility, useSections, useProbes, createProbeRef, setPinned, closeOverlay, renderSlot, t,
 }: SessionPanelProps): ReactNode {
   const probe = useId()
-  // One ref lifecycle for this mounted panel: the entry remounts with its Session, so the Session is fixed.
-  const [probeRef] = useState(() => createProbeRef(sessionId, probe))
-  const fits = useProbes(probes => probes.get(probe) === true)
-  const presentation = useVisibility(visibility => presentationOf(fits, visibility, sessionId))
+  // One ref lifecycle per probe of this mounted panel: the entry remounts with its Session, so the Session is fixed.
+  const [gutterRef] = useState(() => createProbeRef(sessionId, probe, 'gutter'))
+  const [reserveRef] = useState(() => createProbeRef(sessionId, probe, 'reserve'))
+  const room = useProbes(probes => probes.get(probe))
+  const presentation = useVisibility(visibility => presentationOf(room, visibility, sessionId))
+  const pinned = useVisibility(visibility => visibility.pinned)
+  const reserves = useVisibility(visibility => visibility.pinned && visibility.docks)
   const sections = useSections(entries => entries)
   const panel = useRef<HTMLElement>(null)
   const dismissOverlay = useCallback(() => { closeOverlay(sessionId) }, [closeOverlay, sessionId])
@@ -103,7 +110,13 @@ export function SessionPanel({
   const focus = useFocusReturn(owner === undefined, toggleElementId(sessionId))
   return (
     <>
-      <span ref={probeRef} className={css.dockProbe} data-session-panel-probe="" />
+      <span
+        ref={gutterRef}
+        className={css.dockProbe}
+        data-session-panel-probe="gutter"
+        data-session-panel-reserve={reserves ? '' : undefined}
+      />
+      <span ref={reserveRef} className={css.reserveProbe} data-session-panel-probe="reserve" />
       {owner !== undefined && (
         <aside
           id={panelElementId(sessionId)}
@@ -114,6 +127,20 @@ export function SessionPanel({
           onBlur={focus.onBlur}
           data-session-panel={owner.presentation}
         >
+          {(pinned || owner.presentation === 'docked' || room?.reserve === true) && (
+            <Tooltip label={t(pinned ? 'pin.unpin' : 'pin.pin')} side="bottom" align="end" delayMs={500} portal>
+              <button
+                type="button"
+                className={css.pin}
+                aria-label={t('pin.name')}
+                aria-pressed={pinned}
+                data-session-panel-pin=""
+                onClick={() => { setPinned(sessionId, !pinned) }}
+              >
+                {pinned ? <IconPinFillRegular size={14} /> : <IconPinOutlineRegular size={14} />}
+              </button>
+            </Tooltip>
+          )}
           {sections.map((section) => {
             const titleId = `${panelElementId(sessionId)}-${section.id}`
             return (

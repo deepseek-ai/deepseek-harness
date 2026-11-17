@@ -74,15 +74,20 @@ describe('ui-session-panel browser half', () => {
     const toggle = faceOf(ctx, 'conversation.session.header.utilities', 'session-panel') as SessionPanelToggleInjected
     const panel = faceOf(ctx, 'conversation.chat.aside', undefined) as SessionPanelInjected
     expect(toggle.hooks.visibility).toBe(panel.hooks.visibility)
-    const attach = panel.createProbeRef(SID, 'main')
+    const attach = panel.createProbeRef(SID, 'main', 'gutter')
     // The node suite has no DOM or ResizeObserver; the probe enters without room and stays unobserved.
     attach({} as HTMLElement)
-    expect(panel.hooks.probes.getSnapshot().get('main')).toBe(false)
-    expect(toggle.hooks.dockable.getSnapshot().get(SID)).toBe(false)
+    expect(panel.hooks.probes.getSnapshot().get('main')).toEqual({ gutter: false, reserve: false })
+    expect(toggle.hooks.dockable.getSnapshot().get(SID)).toEqual({ gutter: false, reserve: false })
     toggle.toggle(SID)
-    expect(panel.hooks.visibility.getSnapshot()).toEqual({ pinned: true, overlay: SID })
+    expect(panel.hooks.visibility.getSnapshot()).toEqual({ docks: true, pinned: false, overlay: SID })
     panel.closeOverlay(SID)
     expect(panel.hooks.visibility.getSnapshot().overlay).toBeNull()
+    // The panel's pin reaches the same shared visibility.
+    panel.setPinned(SID, true)
+    expect(toggle.hooks.visibility.getSnapshot()).toEqual({ docks: true, pinned: true, overlay: null })
+    panel.setPinned(SID, false)
+    expect(toggle.hooks.visibility.getSnapshot().pinned).toBe(false)
     toggle.toggle(SID)
     // Disposing the plugin withdraws the probe and stops the open overlay from following the room to dock.
     await fiber.dispose()
