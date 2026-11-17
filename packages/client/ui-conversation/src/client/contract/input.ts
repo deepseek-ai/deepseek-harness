@@ -198,14 +198,16 @@ export interface SessionInput extends InputTarget {
   /**
    * Insert file references after the retained selection in one undo step without replacing text.
    * @param references - validated reference chips in source order.
-   * @returns false while {@link referenceInsertionAllowed} is false or when the editor refuses insertion.
+   * @returns false while {@link canInsertReferences} is false or when the editor refuses insertion.
    */
   addReferences(references: readonly ReferenceInsert[]): boolean
   /**
-   * Whether {@link addReferences} can edit the draft: false after disposal, during submission,
-   * for removed or non-continuable subagent Sessions, and while a composer block is set.
+   * Read whether {@link addReferences} can currently edit the draft. Callers read it when they
+   * present the operation; the answer does not notify changes, and addReferences rechecks it.
+   * @returns false after disposal, during submission, for removed or non-continuable subagent Sessions,
+   * and while a composer block is set.
    */
-  readonly referenceInsertionAllowed: ObservableSnapshot<boolean>
+  canInsertReferences(): boolean
   /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
   removeAttachment(id: DraftAttachmentId): boolean
   /** Drop ids whose browser-owned objects no longer exist. */

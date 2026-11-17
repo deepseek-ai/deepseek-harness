@@ -31,8 +31,8 @@ async function bench() {
   const shell = new SessionInputShell({
     actx: binding.ctx, defaultSink: sink,
     commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
-    session: binding.session,
-    composerBlock: () => blocks.storeFor(id),
+    session: () => binding.session.getSnapshot(),
+    composerBlock: () => blocks.storeFor(id).getSnapshot(),
   })
   onTestFinished(() => { shell.dispose() })
   const focus = vi.spyOn(shell, 'focus').mockImplementation(() => {})
@@ -100,13 +100,25 @@ it('disables an unretained Session and never opens it or targets another draft',
   expect(b.shell.snapshot.draft).toBe('')
 })
 
-it('tracks composer blocks and rejects a stale Session binding at execution', async () => {
+it('reads composer blocks when the menu opens and rechecks them at execution', async () => {
+  const b = await bench()
+  b.blocks.set(id, { reason: 'Unavailable' })
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(true)
+  b.blocks.set(id, undefined)
+  const menu = await b.menu()
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  b.blocks.set(id, { reason: 'Unavailable' })
+  // An open menu keeps the state read when it opened; execution refuses the stale action.
+  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  menu.select(actionId)
+  expect(b.failed).toHaveBeenCalledWith(en['menu.addToChatFailed'])
+  expect(b.shell.snapshot.draft).toBe('')
+  expect(b.focus).not.toHaveBeenCalled()
+})
+
+it('rejects a stale Session binding at execution', async () => {
   const b = await bench()
   const menu = await b.menu()
-  b.blocks.set(id, { reason: 'Unavailable' })
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
-  b.blocks.set(id, undefined)
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
   b.owner.release()
   menu.select(actionId)
   expect(b.failed).toHaveBeenCalledWith(en['menu.addToChatFailed'])
@@ -115,32 +127,31 @@ it('tracks composer blocks and rejects a stale Session binding at execution', as
 
 it('disables removed and one-shot Sessions but permits continuable Sessions', async () => {
   const b = await bench()
-  const menu = await b.menu()
   await b.runtime.sessions.updateSessionSnapshot(id, (state) => { state.removed = true })
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(true)
   await b.runtime.sessions.updateSessionSnapshot(id, (state) => {
     state.removed = false
     state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'one-shot' } }
   })
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(true)
   await b.runtime.sessions.updateSessionSnapshot(id, (state) => {
     state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'continuable' } }
   })
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(false)
 })
 
-it('tracks submission locks without treating a running turn as an editing lock', async () => {
+it('disables the action while a submission owns the draft but not while a turn runs', async () => {
   const b = await bench()
   const pending = Promise.withResolvers<{ kind: 'success' }>()
   b.sink.mockImplementation(() => pending.promise)
-  const menu = await b.menu()
   await b.runtime.sessions.updateSessionSnapshot(id, (state) => { state.running = true })
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(false)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(false)
   b.shell.setDraft('Sending')
   b.shell.submit()
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(true)
   pending.resolve({ kind: 'success' })
-  await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]?.disabled).toBe(false) })
+  await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(false)
 })
 
 it('reports insertion refusal without focusing or sending', async () => {
@@ -193,10 +204,9 @@ it.each(['/work/a b.md', 'C:\\work\\a b.md', '\\\\server\\share\\a b.md', '/work
 
 it('disables the action and refuses direct insertion after the draft editor is disposed', async () => {
   const b = await bench()
-  const menu = await b.menu()
   b.shell.setDraft('Keep this')
   b.shell.dispose()
-  expect(menu.source.getSnapshot()[0]?.disabled).toBe(true)
+  expect((await b.menu()).source.getSnapshot()[0]?.disabled).toBe(true)
   expect(b.shell.addReferences([{ source: 'reference', ref: '@file.txt', label: 'file.txt', clipboardText: '@file.txt' }])).toBe(false)
   expect(b.shell.snapshot.draft).toBe('Keep this')
 })

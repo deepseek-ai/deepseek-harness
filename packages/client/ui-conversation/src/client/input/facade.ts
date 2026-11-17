@@ -73,10 +73,10 @@ export interface SessionInputDeps {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome>
-  /** Live Session whose removal and subagent mode gate quote and reference insertion; absent permits both. */
-  session?: ObservableSnapshot<Pick<SessionSnapshot, 'removed' | 'subagent'>> | undefined
-  /** The Session's composer block, resolved at each read and subscription; absent means never blocked. */
-  composerBlock?: (() => ObservableSnapshot<ComposerBlock | undefined>) | undefined
+  /** Read the Session facts whose removal and subagent mode gate quote and reference insertion; absent permits both. */
+  session?: (() => Pick<SessionSnapshot, 'removed' | 'subagent'>) | undefined
+  /** Read the Session's current composer block; absent means never blocked. */
+  composerBlock?: (() => ComposerBlock | undefined) | undefined
   /** Current localized quote removal copy. */
   quoteRemoveLabel?: () => string
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
@@ -142,20 +142,6 @@ const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
 export class SessionInputShell implements SessionInput {
   /** Published editor projection + submit-plane state + queue overlay (the InputZone currency source). */
   readonly state: SnapshotStore<InputState>
-  /** @inheritdoc */
-  readonly referenceInsertionAllowed: ObservableSnapshot<boolean> = {
-    getSnapshot: () => !this.disposed && !frozen(this.snapshot.phase) && this.sessionAcceptsInsertion(),
-    subscribe: (fn) => {
-      const offState = this.state.subscribe(fn)
-      const offSession = this.deps.session?.subscribe(fn)
-      const offBlock = this.deps.composerBlock?.().subscribe(fn)
-      return () => {
-        offState()
-        offSession?.()
-        offBlock?.()
-      }
-    },
-  }
   /** Latest surfaced notice (null after clear); the bar renders errors as banners and information inline. */
   readonly notices: SnapshotStore<InputNotice | null> = createSnapshotStore<InputNotice | null>(null)
   /** The shell-owned editor (text + chip truth); the composer binds its contenteditable to it. */
@@ -351,10 +337,10 @@ export class SessionInputShell implements SessionInput {
 
   /** Whether the Session lets features outside the composer insert quotes or references. */
   private sessionAcceptsInsertion(): boolean {
-    const session = this.deps.session?.getSnapshot()
+    const session = this.deps.session?.()
     if (session !== undefined && (session.removed
       || (session.subagent !== null && session.subagent.address.mode !== 'continuable'))) return false
-    return this.deps.composerBlock?.().getSnapshot() === undefined
+    return this.deps.composerBlock?.() === undefined
   }
 
   /** Append ordered attachment ids unless an admission transaction is locked. */
@@ -386,8 +372,13 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the draft accepted the references.
    */
   addReferences(references: readonly ReferenceInsert[]): boolean {
-    if (!this.referenceInsertionAllowed.getSnapshot()) return false
+    if (!this.canInsertReferences()) return false
     return this.addFiles(references, [])
+  }
+
+  /** @inheritdoc */
+  canInsertReferences(): boolean {
+    return !this.disposed && !frozen(this.snapshot.phase) && this.sessionAcceptsInsertion()
   }
 
   /**

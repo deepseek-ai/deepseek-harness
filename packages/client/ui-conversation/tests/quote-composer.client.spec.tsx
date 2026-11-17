@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
-import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ComposerBlock } from '../src/client/contract/composer-blocks.ts'
 import {
   KEY_BACKSPACE_COMMAND, KEY_DELETE_COMMAND, REDO_COMMAND, UNDO_COMMAND,
@@ -18,7 +17,7 @@ import { $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 
 const quote = 'selected source text'
 
-function bench(composerBlock?: () => ObservableSnapshot<ComposerBlock | undefined>) {
+function bench(composerBlock?: () => ComposerBlock | undefined) {
   const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
   const shell = new SessionInputShell({
     actx: {} as Context,
@@ -40,13 +39,13 @@ function quoteKeys(shell: SessionInputShell): string[] {
 
 describe('QuoteNode composer lifecycle', () => {
   it('preserves the draft when its Session cannot accept an inserted quote', () => {
-    const block = createSnapshotStore<ComposerBlock | undefined>({ reason: 'Unavailable' })
+    let block: ComposerBlock | undefined = { reason: 'Unavailable' }
     const { shell } = bench(() => block)
     shell.setDraft('base ')
     const before = shell.draftSnapshot
     expect(shell.insertQuote(quote)).toBe(false)
     expect(shell.draftSnapshot).toBe(before)
-    block.set(undefined)
+    block = undefined
     expect(shell.insertQuote(quote)).toBe(true)
   })
 

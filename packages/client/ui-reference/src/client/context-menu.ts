@@ -21,15 +21,13 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
     if (binding === undefined) return undefined
     const input = ctx.conversation.input.for(binding.ctx)
     // A released or replaced binding must not receive the reference captured for its predecessor.
-    const editable = (): boolean => ctx.sessions.binding(sessionId) === binding && input.referenceInsertionAllowed.getSnapshot()
+    const editable = (): boolean => ctx.sessions.binding(sessionId) === binding && input.canInsertReferences()
     return { input, editable }
   }
   ctx.effect(() => ctx.contextMenus.register({
     id: 'reference.file', target: 'file', order: 300,
-    observe: (target) => {
-      const current = targetInput(target)
-      return current === undefined ? [ctx.locale] : [ctx.locale, current.input.referenceInsertionAllowed]
-    },
+    // Draft editability is read when the menu opens; run rechecks it before inserting.
+    observe: () => [ctx.locale],
     resolve: (target) => {
       const current = targetInput(target)
       const path = resolveWorkspacePath(ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd, target.path)
