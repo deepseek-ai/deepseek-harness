@@ -61,11 +61,12 @@ function LocationPicker({ value, disabled, onChange, t }: {
 }
 
 /**
- * Display creation, persistent installation, reversible removal and restoration below the frame's summary.
+ * Display creation, persistent installation, reversible removal and restoration below the frame's summary; a card whose
+ * fields fail the page schema shows the frame's fallback.
  * @param props - card, state, actions, folded-text component and notice preference.
  * @returns the card body.
  */
-export function PageCardBody({ proposal, decision, summary, Folded, act, infoDismissed, t }: PageCardProps) {
+export function PageCardBody({ proposal, decision, summary, fallback, Folded, act, infoDismissed, t }: PageCardProps) {
   const details = detailsSchema.safeParse(proposal.details)
   const parsed = decision === undefined ? undefined : dataSchema.safeParse(decision.data)
   const data = parsed?.success === true ? parsed.data : undefined
@@ -79,7 +80,7 @@ export function PageCardBody({ proposal, decision, summary, Folded, act, infoDis
   const customId = useId()
   const [pending, setPending] = useState<CardVerb>()
   const [error, setError] = useState<RecommendationKey>()
-  if (!details.success) return <div className={css.body}>{summary}</div>
+  if (!details.success) return fallback
   const busy = pending !== undefined
   const slot = selected !== undefined && selected !== 'custom' ? selected : data?.slot ?? details.data.slot
   const location = selected ?? (data?.customLocation === undefined ? slot : 'custom')

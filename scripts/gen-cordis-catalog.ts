@@ -1073,6 +1073,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   ConnectorOperationId: 'account operation id is owned by packages/client/ui-connector-account/README.md',
   SyncedConfig: 'packages/client/config/README.md',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
+  ActionCardId: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',
   ActionCardView: 'packages/experimental/action-cards/README.md',

@@ -15,6 +15,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
+import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import {
   assertAllowedModelRoutes,
   assertAllowedModelSelection,
@@ -42,15 +43,77 @@ function parentWithRoute(
 }
 
 describe('dsh-tool-subagent model selection', () => {
-  it('rejects empty route ids at the configuration boundary', () => {
-    expect(() => { assertAllowedModelRoutes([{ provider: '', model: 'model' }]) })
-      .toThrow('requires non-empty provider and model ids')
-    expect(() => { assertAllowedModelRoutes([{ provider: 'provider', model: '' }]) })
-      .toThrow('requires non-empty provider and model ids')
-    expect(() => { assertAllowedModelRoutes({ provider: 'provider', model: 'model' }) })
-      .toThrow('requires an array of routes')
-    expect(() => { assertAllowedModelRoutes([{ provider: 1, model: 'model' }]) })
-      .toThrow('requires non-empty provider and model ids')
+  it.each([
+    { routes: [{ provider: '', model: 'model' }] },
+    { routes: [{ provider: 'provider', model: '' }] },
+    { routes: { provider: 'provider', model: 'model' } },
+    { routes: [{ provider: 1, model: 'model' }] },
+  ])('classifies malformed route settings (%j)', ({ routes }) => {
+    expect(() => { assertAllowedModelRoutes(routes) }).toThrow(expect.objectContaining({
+      name: 'SubagentError', code: 'INVALID_MODEL_SELECTION_SETTINGS',
+    }))
+  })
+
+  it.each([true, false])('isolates invalid Host settings from ordinary delegation (modelSelection=%s)', async (modelSelection) => {
+    for (const allowedModels of [[], [
+      { provider: 'alpha', model: 'parent-model' },
+      { provider: 'alpha', model: 'parent-model' },
+    ]]) {
+      let starts = 0
+      const ctx = await setup({ provider: 'mock', modelSelection, modelDiscovery: true }, {
+        onStart: () => { starts += 1 },
+      })
+      await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels })
+
+      const ordinary = await callSubagent(ctx, { description: 'default route', prompt: 'do it' })
+      expect(ordinary.isError).toBe(false)
+      expect(starts).toBe(1)
+
+      const selected = await callSubagent(ctx, {
+        description: 'selected route', prompt: 'do it', provider: 'alpha', model: 'parent-model',
+      })
+      expect(selected.isError).toBe(true)
+      expect(selected.error?.info).toEqual({
+        name: 'SubagentError',
+        code: modelSelection ? 'INVALID_MODEL_SELECTION_SETTINGS' : 'MODEL_SELECTION_DISABLED',
+      })
+      const discovered = await executeToolFixture(ctx, {
+        signal: new AbortController().signal,
+        callId: brandString<ToolCallId>('invalid-settings-discovery'),
+        name: 'list_subagent_models',
+        arguments: {},
+        agent: modelSelectionSetupAgent(ctx),
+      })
+      expect(discovered.isError).toBe(true)
+      expect(discovered.error?.info).toEqual({ name: 'SubagentError', code: 'INVALID_MODEL_SELECTION_SETTINGS' })
+      expect(starts).toBe(1)
+    }
+  })
+
+  it('uses the parent route when disabled Host settings retain duplicate routes', async () => {
+    let starts = 0
+    const parentRoute = { provider: 'alpha', model: 'parent-model' }
+    const ctx = await setup({
+      provider: 'mock', modelSelection: true, modelDiscovery: true, parentAgentOptions: parentRoute,
+    }, { onStart: () => { starts += 1 } })
+    await ctx.plugin(SubagentModelSelectionConfig, {
+      enabled: false,
+      allowedModels: [parentRoute, parentRoute],
+    })
+    ctx.llm.registerAdapter(['alpha'], new MockAdapter([]))
+
+    const selected = await callSubagent(ctx, { description: 'parent route', prompt: 'do it', ...parentRoute })
+    expect(selected.isError).toBe(false)
+    expect(starts).toBe(1)
+    const discovered = await executeToolFixture(ctx, {
+      signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('disabled-settings-discovery'),
+      name: 'list_subagent_models',
+      arguments: parentRoute,
+      agent: modelSelectionSetupAgent(ctx),
+    })
+    expect(discovered.isError).toBe(false)
+    expect(text(discovered)).toContain('parent-model')
   })
 
   it('checks complete explicit routes against Session authorization or the current parent route', () => {
@@ -223,7 +286,7 @@ describe('dsh-tool-subagent model selection', () => {
       model: 'fast-model',
     })
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('is not allowed for this Session')
+    expect(text(result)).toContain('is not allowed by the current subagent model selection setting')
     expect(text(result)).toContain('Call `list_subagent_models` to see the routes you may select.')
     expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
   })
@@ -614,7 +677,7 @@ describe('dsh-tool-subagent model selection', () => {
       description: 'unauthorized route', prompt: 'do it', provider: 'alpha', model: 'denied-model',
     })
     expect(denied.isError).toBe(true)
-    expect(text(denied)).toContain('is not allowed for this Session')
+    expect(text(denied)).toContain('is not allowed by the current subagent model selection setting')
     expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
 
     const invalidEffort = await callSubagent(ctx, {
@@ -625,16 +688,16 @@ describe('dsh-tool-subagent model selection', () => {
     expect(requests).toHaveLength(1)
   })
 
-  it('keeps fork model selection unavailable without instance opt-in even with Session authorization', async () => {
+  it('keeps fork model selection unavailable without instance opt-in even with Host authorization', async () => {
     const started = vi.fn()
     const ctx = await setup({ provider: 'mock' }, {
       inheritsParentContext: true,
       onStart: started,
     })
-    const agent = modelSelectionSetupAgent(ctx)
-    agent.session.append('subagent/model-selection-policy', {
-      allowedModels: [{ provider: 'alpha', model: 'fast-model' }],
+    await ctx.plugin(SubagentModelSelectionConfig, {
+      enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast-model' }],
     })
+    const agent = modelSelectionSetupAgent(ctx)
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'name', 'prompt'])

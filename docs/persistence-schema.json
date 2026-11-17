@@ -98,7 +98,7 @@
     {"digest":"0bdaf9cb63594be4ef034b68901fffe792fe09d6d5f6bac42d7f56f6e7834fb9","names":[],"sources":[]},
     {"digest":"0c4205180f75b9ee1e0d878bd9a9851628b5dc18448486389d9c5fdc3f1ccda3","names":[],"sources":[]},
     {"digest":"0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52","names":[],"sources":[]},
-    {"digest":"0d47a8f3d847243c4488e755ad4cab7a04ac5d4621b9c81865524cf3f4d8536f","names":[],"sources":["packages/subagent/tool-subagent/src/model-selection-state.ts:17"]},
+    {"digest":"0d47a8f3d847243c4488e755ad4cab7a04ac5d4621b9c81865524cf3f4d8536f","names":[],"sources":["packages/subagent/tool-subagent/src/model-selection-state.ts:12"]},
     {"digest":"0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd","names":[],"sources":[]},
     {"digest":"0e7b2a97f54f1afdb8cdfad1635abe9145327db539bfb69b4045c19d8c17755d","names":[],"sources":[]},
     {"digest":"0ed8d1108fe7a5e1c3078ef1faea12199a56b6b1216ccaceb0f6103b0c9a7691","names":[],"sources":[]},

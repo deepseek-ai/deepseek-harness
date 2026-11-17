@@ -1,17 +1,17 @@
-/** Real Agent, Tools, card service and projections with controlled Creator and profile operations. */
+/** Real Agent, card service and projections with controlled Creator and profile operations. */
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { expect, onTestFinished, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
-import ActionCards from '@deepseek-ai/dsh-action-cards'
+import ActionCards, { type ActionCardId } from '@deepseek-ai/dsh-action-cards'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-subagent'
@@ -19,20 +19,16 @@ import * as CreationRecommendations from '../src/index.ts'
 import type { PageData } from '../src/types.ts'
 
 export const ACTION = 'create_personalized_page'
-/** Text of an accepted `create_personalized_page` call's result. */
-export const RESULT_TEXT = 'Card shown below your answer. Do not restate it. End with at most one short invitation in the user’s language, in the first '
-  + 'person: after they click Create below, you will build it in the background as a plugin page that stays available, without blocking the chat; '
-  + 'the build takes minutes and many tokens.'
-export const callId = brandString<ToolCallId>('call-creation-1')
+export const cardId = brandString<ActionCardId>('card-creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', details: { slot: 'sidebar-right' as const } }
 
 /** A page card's recorded phase with its data flattened, as the tests compare it. */
-export type PageCardState = PageData & { readonly callId: ToolCallId; readonly phase: string }
+export type PageCardState = PageData & { readonly cardId: ActionCardId; readonly phase: string }
 
 /** Record a page decision the way the plugin does. */
-export function recordCard(session: Agent['session'], { callId: id, phase, ...data }: PageCardState): void {
+export function recordCard(session: Agent['session'], { cardId: id, phase, ...data }: PageCardState): void {
   const fields = Object.fromEntries(Object.entries(data).flatMap(([key, value]) => value === undefined ? [] : [[key, value] as const]))
-  appendPluginRecord(session, 'plugin:action-cards/decision', { callId: id, action: ACTION, phase, data: fields })
+  appendPluginRecord(session, 'plugin:action-cards/decision', { cardId: id, action: ACTION, phase, data: fields })
 }
 
 export function installedBundle(name: string): BundleInfo {
@@ -87,24 +83,23 @@ export async function fixture(initial?: PageCardState) {
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
   if (initial !== undefined) recordCard(agent.session, initial)
   const fiber = await ctx.plugin(CreationRecommendations)
-  const cardOf = (id: ToolCallId, caller: Agent = agent): PageCardState | undefined => {
+  const cardOf = (id: ActionCardId, caller: Agent = agent): PageCardState | undefined => {
     const decision = ctx.actionCards.view(caller.session).decisions[id]
-    return decision === undefined ? undefined : { callId: decision.callId, phase: decision.phase, ...decision.data } as PageCardState
+    return decision === undefined ? undefined : { cardId: decision.cardId, phase: decision.phase, ...decision.data } as PageCardState
   }
-  const current = (): PageCardState | undefined => cardOf(callId)
-  /** Log a successful propose_action call, as the card tool would after the skill load. */
+  const current = (): PageCardState | undefined => cardOf(cardId)
+  /** Log an answer that ends with a card block, named by the answer message id, as the loop does after the model responds. */
   let step = 0
-  const propose = async (id = 'call-creation-1', args: object = proposal, caller = agent) => {
+  const propose = async (id = 'card-creation-1', args: object = proposal, caller = agent) => {
     const turn = Math.max(1, ctx.agents.turnBoundaryOf(caller.session).lastTurn)
-    const toolCallId = brandString<ToolCallId>(id)
-    caller.session.append('tool/call', { turn, step: ++step, callId: toolCallId, name: 'propose_action', arguments: JSON.stringify({ action: ACTION, ...args }) })
-    caller.session.append('tool/result', { turn, step, message: createToolResultMessage({ callId: toolCallId,
-      content: [{ type: 'text', text: RESULT_TEXT }], isError: false }) }, { surfaceOp: 'append' })
+    const text = `I can build it.\n\n\`\`\`action-card\n${JSON.stringify({ action: ACTION, ...args })}\n\`\`\`\n`
+    caller.session.append('assistant/message', { turn, step: ++step, stream: [], message: { id: brandString<MessageId>(id), role: 'assistant',
+      content: [{ type: 'text', text }], source: { kind: 'model', provider: 'test', model: 'test' } } }, { surfaceOp: 'append' })
     await Promise.resolve()
-    return toolCallId
+    return brandString<ActionCardId>(id)
   }
   /** Send one card action the way the page body does: Create and Not now carry the chosen location. */
-  const act = (verb: string, slot = 'page', customLocation?: string, caller = agent, id = callId) =>
+  const act = (verb: string, slot = 'page', customLocation?: string, caller = agent, id = cardId) =>
     ctx.actionCards.act(caller, id, verb, verb === 'create' || verb === 'dismiss'
       ? { slot, ...customLocation === undefined ? {} : { customLocation } } : undefined)
   const complete = async () => {
