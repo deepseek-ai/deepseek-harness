@@ -69,9 +69,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-client-ui-settings-models": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "big.js": "^7.0.1",
-    "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
-    "@deepseek-ai/dsh-client-config": "workspace:*"
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
   },
   "files": [
     "locale/*.json",

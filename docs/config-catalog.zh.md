@@ -671,10 +671,10 @@ export interface Config {
 ## `@deepseek-ai/dsh-client-ui-settings-account`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-settings-account/src/index.ts:8`](../packages/client/ui-settings-account/src/index.ts)
+- `source`: [`packages/client/ui-settings-account/src/index.ts:9`](../packages/client/ui-settings-account/src/index.ts)
 
 ```ts config-catalog
-/** Live public contact options and device-local onboarding progress. */
+/** Public contact options and live device-local onboarding progress. */
 export interface Config extends ContactConfig {
   /** Onboarding progress format version. */
   version: Volatile<1>
@@ -692,12 +692,12 @@ export interface Config extends ContactConfig {
   developerTools: Volatile<boolean>
 }
 
-/** Questionnaire destination shared by Host and Client; the browser reads it when the user opens the form. */
+/** Questionnaire destination shared by Host and Client. */
 export interface ContactConfig {
   /** HTTPS questionnaire URL; override for a test form. */
-  contactFormUrl: Volatile<string>
+  contactFormUrl: string
   /** Questionnaire source option; empty until Harness is supported by the form. */
-  contactSource: Volatile<string>
+  contactSource: string
 }
 
 /** Persisted steps; a native top-up page leaves the durable step at credit. */

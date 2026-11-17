@@ -42,7 +42,7 @@
       "path": "../ui-settings-models"
     },
     {
-      "path": "../config"
+      "path": "../../host/webserver"
     },
     {
       "path": "../../../vendor/schemastery"

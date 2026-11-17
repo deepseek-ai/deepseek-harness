@@ -1,10 +1,11 @@
 /** Host configuration for the account settings client. */
 import type { Context, Volatile } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-settings'
-import { type ContactConfig, ContactConfigFields } from './contact-config.ts'
+import { type ContactConfig, ContactConfigFields, CONTACT_CONFIG_GLOBAL } from './contact-config.ts'
 import z from '@deepseek-ai/schemastery'
 import { OnboardingSettingsFields, type OnboardingStep, type OnboardingPurpose, type OnboardingProcess } from './onboarding-settings.ts'
-/** Live public contact options and device-local onboarding progress. */
+/** Public contact options and live device-local onboarding progress. */
 export interface Config extends ContactConfig {
   /** Onboarding progress format version. */
   version: Volatile<1>
@@ -36,12 +37,17 @@ export const Config = z.object({
 })
 
 /**
- * Hide the generated settings form; the browser owns every field through its synced Config.
- * @param ctx - Host context of the account plugin.
- * @param _config - validated Config; unused on the Host.
+ * Publish public questionnaire options before browser plugins activate.
+ * @param ctx - Host context collecting page initialization data.
+ * @param config - validated deployment options.
  */
-export function apply(ctx: Context, _config: Config): void {
+export function apply(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (scope) => {
     scope.effect(() => scope.settings.configure({ auto: false }, ctx.fiber))
+  })
+  ctx.on('webserver/index-inject', (table) => {
+    table.push({ kind: 'global', name: CONTACT_CONFIG_GLOBAL, value: {
+      contactFormUrl: config.contactFormUrl, contactSource: config.contactSource,
+    } satisfies ContactConfig })
   })
 }
