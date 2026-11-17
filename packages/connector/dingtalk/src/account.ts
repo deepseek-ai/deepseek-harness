@@ -1,11 +1,10 @@
-/** Host-owned check, sign-in, and sign-out of the dws account that the user's terminal shares. */
+/** Check, sign-in, and sign-out of the dws account that the user's terminal shares, as the operations `ctx.cliAccounts` runs. */
 
-import type { Context } from '@deepseek-ai/cordis'
 import z from 'zod'
-import { CliAccountRuntime, exitFailure, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import type { CliOperationControl } from '@deepseek-ai/dsh-cli-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { DwsRelease } from './release.ts'
-import type { DingtalkAccountState, DingtalkOperationFailure, DingtalkOperationKind, DingtalkPhase } from './types.ts'
+import type { DingtalkAccountState, DingtalkCommand, DingtalkOperationKind, DingtalkPhase } from './types.ts'
 
 /** `auth login --no-browser` prints the authorization link alone on an indented stderr line. */
 const AUTHORIZATION_LINK = /^\s*(https:\/\/\S+)\s*$/u
@@ -20,7 +19,7 @@ const Status = z.object({
   user_id: z.string().optional(),
 })
 
-type Control = CliOperationControl<DingtalkPhase, DingtalkOperationFailure['command']>
+type Control = CliOperationControl<DingtalkAccountState, DingtalkPhase, DingtalkCommand>
 type Status = z.infer<typeof Status>
 
 function parseStatus(stdout: string): Status | undefined {
@@ -44,47 +43,22 @@ function readProfile(status: Status): string | undefined {
   return `${status.corp_id}:${status.user_id}`
 }
 
-/** Runs at most one account operation at a time; subscribers observe it without owning it. */
-export class DingtalkAccount extends CliAccountRuntime<
-  DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkOperationFailure
-> {
+/** The dws and skill installation each check prepares before its first command. */
+type Release = Pick<DwsRelease, 'installed' | 'install'>
+
+/**
+ * Bind the DingTalk account operations to the dws installation.
+ * @param release - the dws and skill installation.
+ * @returns the function that carries out one operation with dws and publishes the account each check observes; it
+ *   throws when the installation or a command fails, `auth status` prints an unknown status, a sign-in leaves no
+ *   signed-in account, or a sign-out finds none to sign out.
+ */
+export function performWith(release: Release): (kind: DingtalkOperationKind, control: Control, signal: AbortSignal) => Promise<void> {
   /** The account the latest check found signed in, kept on the Host because the view carries no account ids. */
-  private profile: string | undefined
-
-  /**
-   * @param cli - the dws executor the account runs commands with and disposes.
-   * @param logger - receives classified operation failures.
-   * @param release - the dws and skill installation each check prepares before its first command.
-   */
-  constructor(cli: CliCommandExecutor, logger: Context['logger'], private readonly release: Pick<DwsRelease, 'installed' | 'install'>) {
-    super({
-      name: 'dingtalk',
-      cli,
-      logger,
-      account: { state: 'unchecked' },
-      check: 'check',
-      cancellable: ['downloading', 'authorizing'],
-      authorizationHosts: ['login.dingtalk.com'],
-      classify: exitFailure,
-    })
-  }
-
-  /* jscpd:ignore-start -- CLI app plugins dispatch the same operation kinds, each to its own commands. */
-  protected async perform(kind: DingtalkOperationKind, control: Control, signal: AbortSignal): Promise<void> {
-    switch (kind) {
-      case 'check':
-        await this.check(control, signal)
-        return
-      case 'sign-in': return this.signIn(control, signal)
-      case 'sign-out': return this.signOut(control, signal)
-      /* v8 ignore next -- closed operation kind union */
-      default: return assertNever(kind)
-    }
-  }
-  /* jscpd:ignore-end */
+  let profile: string | undefined
 
   /** Sign in through the browser authorization page, then confirm that dws reports the account signed in. */
-  private async signIn(control: Control, signal: AbortSignal): Promise<void> {
+  async function signIn(control: Control, signal: AbortSignal): Promise<void> {
     control.stage('authorizing')
     const login = await control.run('auth-login', ['auth', 'login', '--no-browser', '--format', 'json'], signal, {
       awaitsUser: true,
@@ -95,30 +69,29 @@ export class DingtalkAccount extends CliAccountRuntime<
     })
     if (login.exitCode !== 0) throw new Error(`dingtalk: auth login exited with ${String(login.exitCode)}`)
     control.stage('checking')
-    if ((await this.check(control, signal)).state !== 'connected') throw new Error('dingtalk: auth login left no signed-in account')
+    if ((await check(control, signal)).state !== 'connected') throw new Error('dingtalk: auth login left no signed-in account')
   }
 
   /** Sign the current account out, which also signs it out of the user's own terminal, then check again. */
-  private async signOut(control: Control, signal: AbortSignal): Promise<void> {
-    const profile = this.profile
+  async function signOut(control: Control, signal: AbortSignal): Promise<void> {
     if (profile === undefined) throw new Error('dingtalk: no signed-in account to sign out')
     control.stage('signing-out')
     const logout = await control.run('auth-logout', ['auth', 'logout', '--profile', profile], signal)
     if (logout.exitCode !== 0) throw new Error(`dingtalk: auth logout exited with ${String(logout.exitCode)}`)
-    await this.check(control, signal)
+    await check(control, signal)
   }
 
   /**
    * Install dws and its skills while either is missing, a step the page may cancel, then read the current account,
    * publish it, and return it.
    */
-  private async check(control: Control, signal: AbortSignal): Promise<DingtalkAccountState> {
-    if (!this.release.installed()) {
+  async function check(control: Control, signal: AbortSignal): Promise<DingtalkAccountState> {
+    if (!release.installed()) {
       control.stage('downloading')
       try {
-        await this.release.install(signal)
+        await release.install(signal)
       } catch (error) {
-        this.publish({ state: 'not-installed' })
+        control.publish({ state: 'not-installed' })
         throw error
       }
       control.stage('checking')
@@ -127,8 +100,22 @@ export class DingtalkAccount extends CliAccountRuntime<
     const status = result.exitCode === 0 ? parseStatus(result.stdout) : undefined
     if (status === undefined) throw new Error(`dingtalk: auth status exited with ${String(result.exitCode)} or printed an unknown status`)
     const account = readAccount(status)
-    this.profile = readProfile(status)
-    this.publish(account)
+    profile = readProfile(status)
+    control.publish(account)
     return account
   }
+
+  /* jscpd:ignore-start -- CLI app plugins dispatch the same operation kinds, each to its own commands. */
+  return async (kind, control, signal) => {
+    switch (kind) {
+      case 'check':
+        await check(control, signal)
+        return
+      case 'sign-in': return signIn(control, signal)
+      case 'sign-out': return signOut(control, signal)
+      /* v8 ignore next -- closed operation kind union */
+      default: return assertNever(kind)
+    }
+  }
+  /* jscpd:ignore-end */
 }

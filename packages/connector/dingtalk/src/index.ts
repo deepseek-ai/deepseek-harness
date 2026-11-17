@@ -1,24 +1,24 @@
 /**
- * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, tells the model
- * dws's absolute path once both are installed, registers the `dingtalk` skill once its root is published, and shows the
- * account on the Plugins page through the connector account registry. The CLI's sign-in is shared with the user's own terminal.
+ * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, registers dws and
+ * its account with `ctx.cliAccounts`, which tells the model dws's absolute path once both are installed and shows the
+ * account on the Plugins page, and registers the `dingtalk` skill once its root is published. The CLI's sign-in is
+ * shared with the user's own terminal.
  * @module @deepseek-ai/dsh-dingtalk
  */
 
-/* jscpd:ignore-start -- CLI app plugins compose the same kit, registry, and skill-loading imports. */
+/* jscpd:ignore-start -- CLI app plugins compose the same Service, registry, and skill-loading imports. */
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
+import type {} from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-skill'
-import type {} from '@deepseek-ai/dsh-subprocess'
-import type {} from '@deepseek-ai/dsh-system-prompt'
-import { DingtalkAccount } from './account.ts'
-import { COPY, DINGTALK_PACKAGE, OPERATIONS, presentAccount } from './presentation.ts'
-import { DwsRelease, PROGRAM } from './release.ts'
+import { performWith } from './account.ts'
+import { dictionaries, type DingtalkTextKey } from './locales.ts'
+import { copy, DINGTALK_PACKAGE, operations, presentAccount } from './presentation.ts'
+import { DwsRelease, executableFileName, PROGRAM } from './release.ts'
+import type { DingtalkAccountState, DingtalkCommand, DingtalkOperationKind, DingtalkPhase } from './types.ts'
 /* jscpd:ignore-end */
 
 export type * from './types.ts'
@@ -26,11 +26,13 @@ export type * from './types.ts'
 /** Plugin name. */
 export const name = 'dingtalk'
 
-/** Services the CLI, its skill, and its runtime context need. */
-export const inject = ['skills', 'subprocess', 'systemPrompt']
+/** Services the CLI's account and its skill register with. */
+export const inject = ['cliAccounts', 'skills']
 
-/** Where dws and its skills come from, how long one download may take, and how long a command that does not wait for the user may run. */
-export interface Config extends CliAccountConfig {
+/** Where dws and its skills come from, and how long one download may take. */
+export interface Config {
+  /** Absolute directory holding the `dws` executable; when set, dws is not downloaded. */
+  binDir?: string
   /** Directory holding the upstream skills laid out as `multi/` in the release's `dws-skills.zip`; when set, they are not downloaded. */
   skillsDir?: string
   /** Release download prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>`. */
@@ -40,34 +42,42 @@ export interface Config extends CliAccountConfig {
 }
 
 /** Validates {@link Config}. */
-export const Config: z<Config> = z.intersect([
-  CliAccountConfig,
-  z.object({
-    skillsDir: z.string().min(1),
-    releaseUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default([
-      'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
-      'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
-    ]),
-    releaseTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(300_000),
-  }),
-])
+export const Config: z<Config> = z.object({
+  binDir: z.string().min(1),
+  skillsDir: z.string().min(1),
+  releaseUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default([
+    'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
+    'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
+  ]),
+  releaseTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(300_000),
+})
 
 /**
- * Prepare dws and its skill, and show the account on the Plugins page while the connector account registry runs.
- * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
- * @param config - dws and skills locations, download prefixes, and command deadline.
+ * Register dws with its account, and its skill, and start preparing both.
+ * @param ctx - Context carrying the CLI account Service and the skill registry.
+ * @param config - dws and skills locations, and download prefixes.
  * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the pinned release has no archive for
  *   this platform, or the skill root cannot be written.
  */
 export function apply(ctx: Context, config: Config): void {
   const release = new DwsRelease(config, ctx.logger)
-  const executable = join(release.directory, executableFileName(PROGRAM))
-  registerCliPathContext(ctx, {
-    name: 'dingtalk:cli', product: 'DingTalk', program: PROGRAM, executable, scripts: true, ready: () => release.installed(),
+  const account = ctx.cliAccounts.register<DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkCommand, DingtalkTextKey>({
+    name,
+    packageName: DINGTALK_PACKAGE,
+    cli: {
+      product: 'DingTalk', program: PROGRAM, executable: join(release.directory, executableFileName(process.platform)),
+      scripts: true, ready: () => release.installed(),
+    },
+    account: { state: 'unchecked' },
+    check: 'check',
+    cancellable: ['downloading', 'authorizing'],
+    authorizationHosts: ['login.dingtalk.com'],
+    perform: performWith(release),
+    dictionaries,
+    operations,
+    copy,
+    present: presentAccount,
   })
-  const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
-  const account = new DingtalkAccount(cli, ctx.logger, release)
-  ctx.effect(() => () => account.dispose(), 'dingtalk: account')
   // Watched: the first download publishes the root after the catalog may have been listed.
   ctx.plugin(SkillFilesystem, {
     providerName: 'dingtalk',
@@ -77,9 +87,4 @@ export function apply(ctx: Context, config: Config): void {
   })
   // Prepare dws and its skills without waiting for the Plugins page, so a session without a browser finds them.
   account.refresh()
-  ctx.inject(['connectorAccounts'], (scope) => {
-    scope.effect(() => scope.connectorAccounts.register({
-      key: DINGTALK_PACKAGE, packageName: DINGTALK_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
-    }), 'dingtalk: Plugins page account')
-  })
 }

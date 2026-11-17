@@ -66,9 +66,8 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 | `skillsDir` | 保存已下载技能的缓存目录 | 布局与 release 的 `dws-skills.zip` 中 `multi/` 目录相同的目录；设置后不下载技能 |
 | `releaseUrls` | `DingTalk-Real-AI/dingtalk-workspace-cli` 在 GitHub Releases 和 Gitee 镜像的下载前缀 | 按顺序尝试的 HTTPS 前缀，用于下载 `binDir` 和 `skillsDir` 未提供的内容；每个都在 `v<版本>/<资产名>` 下提供资产，且 `Content-Length` 等于资产大小 |
 | `releaseTimeoutMs` | `300000` | 一个前缀送达一个资产的时限，整数毫秒；超时后尝试下一个 |
-| `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
 
-登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。dws 自身在 6 分钟后停止等待授权。
+账号检查和退出登录使用 [`cli-account` 行](../cli-account/README.zh.md#use-this-package)的 `commandTimeoutMs`，默认 30 秒。登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 CLI 账号 Service 固定。dws 自身在 6 分钟后停止等待授权。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-dingtalk)是支持字段的完整来源。
 
@@ -80,11 +79,11 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `dingtalk` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。`dws` 和技能都已安装时，它在运行时上下文中把 `dws` 的路径告诉模型，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `dingtalk` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它把 `dws` 的路径和账号注册到 `ctx.cliAccounts`，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
 
 [`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压 `.tar.gz` 平台归档，用 `fflate` 只取出 Windows `.zip` 归档根目录下的 `dws.exe`，并用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。失败或在 `releaseTimeoutMs` 内没有送达的下载源各记录一条警告；取消操作会停止下载。skill 根目录 `$DSH_HOME/cache/dingtalk/skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`；在 Windows 上它是目录联接（junction），不需要创建符号链接的权限。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。
 
-[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 dws 的命令，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
+`dws` 和技能都已安装时，[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型；它按同一路径运行每条命令，一次执行一个账号操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用 dws 的命令完成每个操作，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
 
 [`skills/dingtalk/SKILL.md`](skills/dingtalk/SKILL.md) 是唯一的 skill：DSH 指引、16 个子指南的索引，以及打开方式。子指南是 release `v1.0.64` 的 `dws-skills.zip` 中的 `multi/` 目录树，上游安装程序默认使用它；另一种 `mono/` 是重复同样内容的单一入口。文件系统提供方只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。子指南之间用 `../dingtalk-shared/SKILL.md` 这样的相对路径互相引用，由于子指南保持同级布局，这些路径可以解析；它们的辅助脚本也从各自的 `scripts/` 目录运行。DSH 指引与子指南不一致时，总入口要求 Agent 以 DSH 指引为准：使用插件提供的 `dws`，不另装或升级，不运行 `dws skill setup`，并把登录交给插件页面。
 
@@ -96,7 +95,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 ## 进一步探索
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
-- [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
+- [CLI 账号 Service](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [连接器账号界面](../../client/ui-connector-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
 
@@ -137,7 +136,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 #### 模型看到的内容
 
-该行加载、且 `dws` 和技能都已安装时，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出 `binDir` 中 `dws` 的路径；`binDir` 默认是 `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`。第二行针对按名称调用 `dws` 的子指南脚本。
+该行加载、且 `dws` 和技能都已安装时，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `dws` 的路径；`binDir` 默认是 `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`。第二行针对按名称调用 `dws` 的子指南脚本。
 
 ##### 运行时上下文条目
 

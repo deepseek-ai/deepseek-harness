@@ -1,24 +1,20 @@
 /** The DingTalk Host row: one entry skill, the dws path in runtime context once installed, and disposal of both. */
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
-import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
+import type { Context } from '@deepseek-ai/cordis'
+import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import * as Dingtalk from '../src/index.ts'
-import { COPY, DINGTALK_PACKAGE, OPERATIONS, presentAccount } from '../src/presentation.ts'
-import type { DingtalkState } from '../src/types.ts'
-import { DWS_RELEASE } from '../src/release.ts'
-import { createBinDir, createSkillsDir, ScriptedSubprocess } from './harness.ts'
+import { DINGTALK_PACKAGE } from '../src/presentation.ts'
+import { DWS_RELEASE, executableFileName } from '../src/release.ts'
+import { closeHost, createHost, type DingtalkHost, type ScriptedSubprocess } from './harness.ts'
 
 /** `binDir` and `skillsDir` download nothing, so the release prefix is never requested. */
-const CONFIG = { commandTimeoutMs: 5_000, releaseUrls: ['https://releases.invalid/download'], releaseTimeoutMs: 5_000 }
+const CONFIG = { releaseUrls: ['https://releases.invalid/download'], releaseTimeoutMs: 5_000 }
 
 describe('DingTalk plugin', () => {
+  let host: DingtalkHost
   let ctx: Context
   let subprocess: ScriptedSubprocess
   let home: string
@@ -26,40 +22,13 @@ describe('DingTalk plugin', () => {
   let skillsDir: string
 
   beforeEach(async () => {
-    ctx = new Context()
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(SystemPrompt)
-    subprocess = ctx.subprocess as ScriptedSubprocess
-    subprocess.respond = (process) => { process.reply({ stdout: '{"success": true, "authenticated": false, "message": "未登录"}\n' }) }
-    home = await mkdtemp(join(tmpdir(), 'dsh-dingtalk-home-'))
-    vi.stubEnv('DSH_HOME', home)
-    binDir = await createBinDir()
-    skillsDir = await createSkillsDir()
+    host = await createHost()
+    ;({ ctx, subprocess, home, binDir, skillsDir } = host)
   })
 
-  afterEach(async () => {
-    await ctx.fiber.dispose()
-    vi.unstubAllEnvs()
-    await rm(home, { recursive: true, force: true })
-    await rm(binDir, { recursive: true, force: true })
-    await rm(skillsDir, { recursive: true, force: true })
-  })
+  afterEach(() => closeHost(host))
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
-
-  /** Stand in for the connector account registry the Web app provides, and keep what the plugin registers with it. */
-  function provideRegistry() {
-    const registered: ConnectorAccountRegistration<DingtalkState>[] = []
-    const withdrawn = vi.fn()
-    ctx.provide('connectorAccounts', {
-      register: (registration: ConnectorAccountRegistration<DingtalkState>) => {
-        registered.push(registration)
-        return withdrawn
-      },
-    })
-    return { registered, withdrawn }
-  }
 
   it('publishes one dingtalk entry skill whose guides resolve from its base directory', async () => {
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
@@ -79,13 +48,12 @@ describe('DingTalk plugin', () => {
 
   it('lists the skill and gives the dws path once a check publishes the skill root after the catalog was read', async () => {
     // The load-time check fails at once: nothing listens on this loopback port.
-    const registry = provideRegistry()
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, releaseUrls: ['https://127.0.0.1:1/download'] })
     expect(await ctx.skills.list()).toEqual([])
     expect(await runtimeContext()).toEqual([])
 
     await mkdir(join(home, 'cache', 'dingtalk', `dws-skills-${DWS_RELEASE.version}`, 'dingtalk-shared'), { recursive: true })
-    await vi.waitFor(() => { void registry.registered[0]!.source.start('check') })
+    await vi.waitFor(() => { void host.pages[0]!.source.start('check') })
 
     await vi.waitFor(async () => {
       expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['dingtalk'])
@@ -100,7 +68,9 @@ describe('DingTalk plugin', () => {
     const fiber = await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'dingtalk:cli',
-      text: cliPathContextText({ name: 'dingtalk:cli', product: 'DingTalk', program: 'dws', executable: join(binDir, executableFileName('dws')), scripts: true }, process.platform),
+      text: cliPathContextText(
+        { product: 'DingTalk', program: 'dws', executable: join(binDir, executableFileName(process.platform)), scripts: true }, process.platform,
+      ),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 
@@ -111,20 +81,17 @@ describe('DingTalk plugin', () => {
   })
 
   it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
-    const registry = provideRegistry()
     const fiber = await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
-    expect(registry.registered).toHaveLength(1)
-    expect(registry.registered[0]).toMatchObject({
-      packageName: DINGTALK_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount,
-    })
+    expect(host.pages).toHaveLength(1)
+    expect(host.pages[0]).toMatchObject({ key: DINGTALK_PACKAGE, packageName: DINGTALK_PACKAGE })
 
     await fiber.dispose()
 
-    expect(registry.withdrawn).toHaveBeenCalledOnce()
+    expect(host.withdrawn).toBe(1)
   })
 
-  it('defaults to the official release sources with a five-minute limit per source, and accepts only whole positive limits', () => {
-    expect(Dingtalk.Config()).toMatchObject({
+  it('defaults to the official release sources with a five-minute limit per source, and accepts only whole positive limits and named directories', () => {
+    expect(Dingtalk.Config()).toEqual({
       releaseUrls: [
         'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
         'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
@@ -134,5 +101,7 @@ describe('DingTalk plugin', () => {
     expect(Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1 }).releaseTimeoutMs).toBe(1)
     expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 0 })).toThrow()
     expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1500.5 })).toThrow()
+    expect(() => Dingtalk.Config({ ...CONFIG, binDir: '' })).toThrow()
+    expect(() => Dingtalk.Config({ ...CONFIG, skillsDir: '' })).toThrow()
   })
 })

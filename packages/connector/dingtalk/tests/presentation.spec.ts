@@ -4,10 +4,11 @@
  */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
-import { expect, it } from 'vitest'
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import * as Dingtalk from '../src/index.ts'
 import { en, zh, type DingtalkTextKey } from '../src/locales.ts'
-import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { DingtalkState } from '../src/types.ts'
+import { closeHost, createHost, type DingtalkHost, type DingtalkPage } from './harness.ts'
 
 const OP = 'op' as ConnectorOperationId
 const LINK = 'https://login.dingtalk.com/oauth2/auth'
@@ -19,6 +20,23 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 const say = (key: DingtalkTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
 const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+
+let host: DingtalkHost
+/** What the plugin registered for the Plugins page, with the failure details the CLI account Service adds. */
+let page: DingtalkPage
+
+beforeAll(async () => {
+  host = await createHost()
+  // `binDir` and `skillsDir` download nothing, so the release prefix is never requested.
+  await host.ctx.plugin(Dingtalk, {
+    binDir: host.binDir, skillsDir: host.skillsDir, releaseUrls: ['https://releases.invalid/download'], releaseTimeoutMs: 5_000,
+  })
+  page = host.pages[0]!
+})
+
+afterAll(() => closeHost(host))
+
+const presentAccount = (view: DingtalkState): ConnectorAccountDisplay => page.present(view)
 
 const SIGNED_OUT: DingtalkState = { account: { state: 'signed-out' } }
 const CONNECTED: DingtalkState = { account: { state: 'connected', userName: '测试用户', corpName: '测试组织' } }
@@ -98,12 +116,12 @@ it('reports a failed check with the generic guidance and a failed sign-out witho
 })
 
 it('names the section, its activation prompt, and the notices of signing in and out', () => {
-  expect(COPY).toMatchObject({
+  expect(page.copy).toMatchObject({
     title: say('section.title'), hint: say('hint'),
     activation: { title: say('activation.title'), body: say('activation.body'), connect: say('action.connect') },
   })
-  expect(OPERATIONS).toMatchObject([
+  expect(page.operations).toMatchObject([
     { kind: 'check' }, { kind: 'sign-in', notice: say('notice.connected') }, { kind: 'sign-out', notice: say('notice.signed-out') },
   ])
-  expect(OPERATIONS[0]).not.toHaveProperty('notice')
+  expect(page.operations[0]).not.toHaveProperty('notice')
 })

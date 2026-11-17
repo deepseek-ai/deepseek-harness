@@ -10,9 +10,8 @@ import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { strToU8, zipSync, type Zippable } from 'fflate'
 import { create } from 'tar'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { DWS_RELEASE, DwsRelease, type DwsArchive, type DwsReleaseManifest } from '../src/release.ts'
+import { DWS_RELEASE, DwsRelease, executableFileName, type DwsArchive, type DwsReleaseManifest } from '../src/release.ts'
 import { createBinDir, createSkillsDir } from './harness.ts'
 
 const renameHook = vi.hoisted(() => ({
@@ -46,7 +45,7 @@ vi.mock('node:fs', async (importOriginal) => {
 
 const PLATFORM = `${process.platform}-${process.arch}`
 /** The executable's file name in archives and directories: `dws`, or `dws.exe` on Windows. */
-const DWS = executableFileName('dws')
+const DWS = executableFileName(process.platform)
 const VERSION = '9.9.9'
 /** Long enough for every fixture download; the timeout case sets its own. */
 const TIMEOUT_MS = 5_000
@@ -139,6 +138,11 @@ const skillsRelease = (skills: Buffer, releaseUrls: string[]) =>
   new DwsRelease({ binDir, releaseUrls, releaseTimeoutMs: TIMEOUT_MS }, logger(), manifest(Buffer.alloc(0), skills))
 
 describe('the dws and skill locations', () => {
+  it('names the executable file dws, and dws.exe on Windows', () => {
+    expect(executableFileName('win32')).toBe('dws.exe')
+    expect(executableFileName('darwin')).toBe('dws')
+  })
+
   it('accepts a configured executable and names its missing executable with the remedy', async () => {
     const configured = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(configured.directory).toBe(binDir)

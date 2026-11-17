@@ -1,6 +1,6 @@
 /** Credential-free DingTalk account and operation views the Plugins page presenter reads. */
 
-import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
+import type { CliAccountView } from '@deepseek-ai/dsh-cli-account/types'
 
 /**
  * The current dws account as the latest check observed it. `not-installed` means the managed dws was missing and the
@@ -19,11 +19,11 @@ export type DingtalkAccountState =
 /** The account operations the Plugins page starts. */
 export type DingtalkOperationKind = 'check' | 'sign-in' | 'sign-out'
 
-/** DingTalk steps of an operation, besides the runtime's `checking` and `cancelling`. */
+/** DingTalk steps of an operation, besides the Service's `checking` and `cancelling`. */
 export type DingtalkPhase = 'downloading' | 'authorizing' | 'signing-out'
 
-/** The command and exit code of a failed operation's last command. */
-export type DingtalkOperationFailure = CliCommandFailure<'auth-status' | 'auth-login' | 'auth-logout'>
+/** The dws commands an operation runs; a failed operation reports its last one with that command's exit code. */
+export type DingtalkCommand = 'auth-status' | 'auth-login' | 'auth-logout'
 
 /** The complete DingTalk view the presenter reads after each change. */
-export type DingtalkState = CliAccountView<DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkOperationFailure>
+export type DingtalkState = CliAccountView<DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkCommand>

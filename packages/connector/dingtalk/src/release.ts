@@ -6,7 +6,6 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { unzipSync } from 'fflate'
 import { x as extract } from 'tar'
@@ -19,8 +18,17 @@ const ENTRY = fileURLToPath(new URL('../skills/dingtalk/SKILL.md', import.meta.u
 /** `dws-skills.zip` entries the upstream skills directory keeps: the multi-mode skills and the root license files. */
 const SKILL_FILES = /^(?:multi\/.+|LICENSE|NOTICE)$/u
 
-/** The executable's file name: `dws`, or `dws.exe` on Windows. */
-const FILE = executableFileName(PROGRAM)
+/**
+ * Name the executable file as the release archives carry it.
+ * @param platform - the Host platform.
+ * @returns `dws`, or `dws.exe` on Windows.
+ */
+export function executableFileName(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? `${PROGRAM}.exe` : PROGRAM
+}
+
+/** The executable's file name on this Host. */
+const FILE = executableFileName(process.platform)
 
 const notExecutable = (binDir: string) =>
   new Error(`dingtalk: ${join(binDir, FILE)} is not executable; set binDir to a directory containing an executable ${FILE}`)
