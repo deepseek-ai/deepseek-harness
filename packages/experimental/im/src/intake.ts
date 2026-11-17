@@ -231,6 +231,11 @@ export class ImIntake {
     return running === undefined ? undefined : await running
   }
 
+  /** Wait for every in-flight `outbound` announcement to finish storing its own message. */
+  async drainAnnouncements(): Promise<void> {
+    await Promise.allSettled([...this.announcing.values()])
+  }
+
   /**
    * Store one own publication (`via: 'self'`) in the chat it went to. Own messages are stored even for a source with
    * `store: 'addressed'` (that rule filters what the chat hears), so a session reading its own history sees what it

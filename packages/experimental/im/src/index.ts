@@ -209,7 +209,7 @@ export class ImService extends Service implements ImApi {
             offSend?.()
             return Promise.resolve()
           }],
-          ['the outbound announcements', () => this.intake.dispose()],
+          ['the outbound announcements', () => this.intake.drainAnnouncements()],
           ['the message store', () => this.store.dispose()],
         ]
         for (const [what, release] of releases) {

@@ -815,4 +815,30 @@ describe('ImService facade', () => {
     await remounted.dispose()
     await ctx.fiber.dispose()
   })
+
+  it('drains in-flight outbound announcements before closing the message store during teardown', async () => {
+    const { base, bot, service } = await mount()
+    await deliver(bot, inbound('m-admit'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    let enteredPut!: () => void
+    const putEntered = new Promise<void>((resolve) => { enteredPut = resolve })
+    let releasePut!: () => void
+    const putGate = new Promise<void>((resolve) => { releasePut = resolve })
+    const originalPut = service.store.put.bind(service.store)
+    vi.spyOn(service.store, 'put').mockImplementationOnce(async (...args) => {
+      enteredPut()
+      await putGate
+      return await originalPut(...args)
+    })
+
+    const sending = service.send(CHAT, h.text('unreceipted-own'))
+    await putEntered
+    const disposing = base.ctx.fiber.dispose()
+    releasePut()
+    const [result] = await Promise.all([sending, disposing])
+
+    expect(result.status).toBe('confirmed')
+    expect(base.pool.media.get('im_messages')?.tables.get('messages')?.size).toBe(2)
+  })
 })
