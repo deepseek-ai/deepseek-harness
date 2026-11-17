@@ -87,7 +87,7 @@ kind: "package-reference"
 | `reset(key, reason, options?)` | 取消并释放当前 agent，删除未入箱的投递记录，递增 `generation` 并返回被替换的 `SessionId`（传入 `options.operationId` 时记录持久化重置回执，`options.expectedGeneration` 已不匹配时跳过） |
 | `bind(target, bindings)` | 替换会话的聊天绑定列表 |
 | `stop(target)` | 取消会话当前正在运行的轮次；若无运行中轮次则返回 `false` |
-| `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent` |
+| `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent`（按稳定 `key` 排在在途 `reset()`/`admit()` 之后；对已退役 `SessionId` 或存在未提交重置回执的代次抛出 `ImError('unavailable')`，按 `key` 调用则打开新代次，未托管时抛出 `ImError('access')`） |
 | `of(sessionId)` | 沿 `parent` 链向上查找最近的托管会话记录 |
 | `trigger(sessionId)` | 返回启动当前轮次的那条触发消息 `ImMessage` |
 

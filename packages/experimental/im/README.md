@@ -87,7 +87,7 @@ The dispatch loop runs the `im/message` waterfall for each pending message: diff
 | `reset(key, reason, options?)` | Cancel and dispose the active agent, delete unadmitted deliveries, advance `generation`, and return the replaced `SessionId` (recording a durable receipt when `options.operationId` is set, and skipping when `options.expectedGeneration` no longer matches) |
 | `bind(target, bindings)` | Replace the chat bindings of a session |
 | `stop(target)` | Cancel the running turn of a session; returns `false` if the session is not running |
-| `agent(target)` | Open or resume the live `Agent` for a session using its stored composition |
+| `agent(target)` | Open or resume the live `Agent` for a session using its stored composition (serializes behind in-flight `reset()`/`admit()` on the stable `key`; throws `ImError('unavailable')` for a retired `SessionId` or uncommitted reset receipt, opens the new generation by `key`, and throws `ImError('access')` if unhosted) |
 | `of(sessionId)` | Walk the `parent` chain from `sessionId` to find the nearest hosted session record |
 | `trigger(sessionId)` | Return the `ImMessage` whose delivery started the session's current turn |
 

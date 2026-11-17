@@ -513,7 +513,12 @@ export interface ImSessions {
    */
   reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>
   bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>
-  /** Live agent (created/resumed with the stored composition). */
+  /**
+   * Live agent (created/resumed with the stored composition). Serializes on the session's stable `key` behind any
+   * in-flight `reset()` / `admit()`, then re-resolves: rejects with `ImError('unavailable')` (retryable) if
+   * `target` is a `SessionId` retired by `reset()` or the current generation has an uncommitted reset receipt;
+   * opens the new generation when called by stable `key`; rejects with `ImError('access')` if `target` is unhosted.
+   */
   agent(target: SessionId | string): Promise<Agent>
   /** Session for a calling agent (tools): walks the parent chain to the nearest hosted record. */
   of(sessionId: SessionId): ImSessionRecord | undefined
