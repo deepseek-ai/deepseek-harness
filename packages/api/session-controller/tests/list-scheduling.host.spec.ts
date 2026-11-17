@@ -85,7 +85,8 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
     return { header: session.header, live: row.phase === 'live', persisted: true }
   })
   const listSessions = vi.fn(async (_signal?: AbortSignal) => records)
-  ctx.provide('sessionQuery', { listSessions } as never)
+  const getListMetadata = () => ({ blank: true, lastPromptAt: null })
+  ctx.provide('sessionQuery', { listSessions, getListMetadata } as never)
   ctx.provide('sessionProjectionCache', {
     cachedSnapshot: (header: SessionRecord['header']) => {
       recordSummary('cold', header.id)

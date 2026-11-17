@@ -3,15 +3,23 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from deepseek_harness import DeepSeekHarness
+from deepseek_harness import DeepSeekHarness, HarnessClient, ResumeSessionOptions
 from deepseek_harness.errors import JsonRpcError
 
 
-@pytest.mark.parametrize("outcome", ["restored", "missing"])
-def test_resume_preserves_identity_and_propagates_failure(tmp_path: Path, outcome: str) -> None:
+@pytest.mark.parametrize(("outcome", "options", "expected_params"), [
+    ("restored", None, {"sessionId": "saved"}),
+    ("restored", {}, {"sessionId": "saved"}),
+    ("restored", {"permission_mode": "danger-full-access"}, {"sessionId": "saved", "permissionMode": "danger-full-access"}),
+    ("missing", None, {"sessionId": "saved"}),
+])
+def test_resume_preserves_identity_and_propagates_failure(
+    tmp_path: Path, outcome: str, options: ResumeSessionOptions | None, expected_params: dict[str, str],
+) -> None:
     script = tmp_path / "runtime.py"
     requests = tmp_path / "requests.jsonl"
     script.write_text(
@@ -47,7 +55,7 @@ for line in sys.stdin:
         env={"OUTCOME": outcome, "REQUESTS": str(requests)},
     ) as harness:
         if outcome == "restored":
-            session = harness.resume_session("saved")
+            session = harness.resume_session("saved") if options is None else harness.resume_session("saved", options)
             assert session.id == "saved"
             assert session.harness is harness
         else:
@@ -55,4 +63,17 @@ for line in sys.stdin:
                 harness.resume_session("saved")
     frames = [json.loads(line) for line in requests.read_text(encoding="utf-8").splitlines()]
     assert [frame["method"] for frame in frames] == ["initialize", "session/resume", "shutdown"]
-    assert frames[1]["params"] == {"sessionId": "saved"}
+    assert frames[1]["params"] == expected_params
+
+
+@pytest.mark.parametrize(("options", "error"), [
+    ({"permissionMode": "read-only"}, "permissionMode"),
+    ({"permission_mode": "read-only", "permision_mode": "read-only"}, "permision_mode"),
+    ("read-only", "dict"),
+])
+def test_invalid_resume_options_do_not_send_a_request(options: object, error: str) -> None:
+    client = HarnessClient()
+    with patch.object(client, "request") as request:
+        with pytest.raises(TypeError, match=error):
+            client.resume_session("saved", options)
+        request.assert_not_called()

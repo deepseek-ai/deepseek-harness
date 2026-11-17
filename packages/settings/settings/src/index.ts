@@ -232,7 +232,7 @@ export class SettingsForms extends Service {
     const ctx = ownerContext
     ctx.effect(() => () => { this.closed = true })
     ctx.on('app-boot/config-reload', () => { this.invalidate() })
-    void ctx.root.loader.await().then(() => this.importLegacyDocument()).catch((error: unknown) => { ctx.logger.error(error) })
+    void ctx[Context.root].loader.await().then(() => this.importLegacyDocument()).catch((error: unknown) => { ctx.logger.error(error) })
   }
 
   /** Move the sections of the removed `settings.yaml` into the active profile once the Loader has settled every entry.

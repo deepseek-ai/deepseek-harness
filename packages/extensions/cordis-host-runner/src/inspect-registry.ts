@@ -80,7 +80,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Registry and cross-page router behind the two model-facing inspect tools. */
+/** Registry and cross-page router behind the model-facing inspection tool. */
 export class CordisInspectRegistryService extends Service {
   private readonly providers = new Map<string, HostCordisInspectProviderRegistration>()
   private readonly pending = new Map<CordisInspectRequestId, PendingClientQuery>()

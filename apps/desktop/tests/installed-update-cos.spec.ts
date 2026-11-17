@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import type COS from 'cos-nodejs-sdk-v5'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createInstalledUpdateCos } from '../scripts/installed-update-cos.ts'
-import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackResponder } from './cos-loopback.ts'
+// Repository-only fixture: deliberately excluded from the publisher runtime exports.
+import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackResponder } from '../../desktop-publisher/tests/cos-loopback.ts'
 
 const state = vi.hoisted(() => ({
   settings: 'test',
@@ -18,8 +19,8 @@ vi.mock('../scripts/desktop-package-environment.mjs', () => ({ loadDesktopPackag
   DOWNLOAD_TEST_COS_SECRET_KEY: 'fixture-key', DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'fixture-pin-not-for-sdk',
 }) }))
 
-vi.mock('../scripts/desktop-cos.ts', async (original) => {
-  const actual = await original<typeof import('../scripts/desktop-cos.ts')>()
+vi.mock('@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts', async (original) => {
+  const actual = await original<typeof import('@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts')>()
   return { ...actual, createDesktopCos: (credentials: Parameters<typeof actual.createDesktopCos>[0]) => {
     const cos = actual.createDesktopCos(credentials)
     state.redirect?.(cos)

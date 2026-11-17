@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-05-client-module-metadata.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-client-module-metadata.md
+/agent-note-client-metadata-and-renderer-owned-stylesheet-installation:
+  en: 4f12a147e4cbe9a6
+  zh: 8021e4c1c8fd2d4b
+/agent-note-client-metadata-and-renderer-owned-stylesheet-installation/problem:
+  en: 590dbd303b44e903
+  zh: b536f88e6fcdbce2
+/agent-note-client-metadata-and-renderer-owned-stylesheet-installation/decision:
+  en: a52f47f300542068
+  zh: 261fdf1cdc37e95d
+/agent-note-client-metadata-and-renderer-owned-stylesheet-installation/alternatives-considered:
+  en: 7e410e5f19c4ded2
+  zh: f09d8d8ae2e7ac93
+/agent-note-client-metadata-and-renderer-owned-stylesheet-installation/consequences:
+  en: 2db1d05ddc19891c
+  zh: b5affd079824a7cd

@@ -316,14 +316,15 @@ function packageNameOf(scanRoot: string, rel: string, cache: Map<string, string>
   while (dir.length > scanRoot.length) {
     const cached = cache.get(dir)
     if (cached !== undefined) return cached
+    let manifest: { name?: unknown } | null | undefined
     try {
-      const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name?: unknown }
-      if (typeof manifest.name === 'string') {
-        cache.set(dir, manifest.name)
-        return manifest.name
-      }
-    } catch {
-      // No manifest at this level: keep walking up to the owning package root.
+      manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name?: unknown } | null
+    } catch (_noManifest) {
+      // No readable manifest at this level: keep walking up to the owning package root.
+    }
+    if (typeof manifest?.name === 'string') {
+      cache.set(dir, manifest.name)
+      return manifest.name
     }
     dir = dirname(dir)
   }

@@ -92,13 +92,16 @@ export async function apply(ctx: Context, config: HostPluginConfig): Promise<voi
         setHeaders: (res) => { res.setHeader('X-Content-Type-Options', 'nosniff') },
       })
       disposers.push(ctx.webServer.register({
-        kind: 'prefix', path: DEVTOOLS_PATH,
-        handler: (req, res) => {
+        kind: 'prefix', path: DEVTOOLS_PATH, auth: 'required',
+        handler: (req, res, peer) => {
+          if (peer?.principal.kind !== 'owner') {
+            res.writeHead(403, { 'cache-control': 'no-store' }).end('forbidden')
+            return
+          }
           if (req.method !== 'GET' && req.method !== 'HEAD') {
             res.writeHead(405, { allow: 'GET, HEAD' }).end()
             return
           }
-          if (!ctx.connection.authorizeIndex(req, res)) return
           const url = new URL(req.url ?? '/', 'http://inspector.invalid')
           if (url.pathname === DEVTOOLS_PATH || url.pathname === `${DEVTOOLS_PATH}/`) {
             const location = `${url.pathname === DEVTOOLS_PATH ? 'devtools/' : ''}devtools_app.html${url.search}`
@@ -128,12 +131,10 @@ export async function apply(ctx: Context, config: HostPluginConfig): Promise<voi
       })
       const target = new URL(handle.endpoint.webSocketDebuggerUrl)
       disposers.push(ctx.webServer.registerUpgrade({
-        path: `${DEVTOOLS_PATH}/cdp`,
-        handler: (req, socket, head) => {
-          const rejection = ctx.connection.requestRejection(req)
-          if (rejection !== undefined) {
-            const reason = rejection === 401 ? 'Unauthorized' : 'Forbidden'
-            socket.end(`HTTP/1.1 ${rejection} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
+        path: `${DEVTOOLS_PATH}/cdp`, auth: 'required',
+        handler: (req, socket, head, peer) => {
+          if (peer?.principal.kind !== 'owner') {
+            socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nCache-Control: no-store\r\nContent-Length: 0\r\n\r\n')
             return
           }
           const endpoint = new URL(target)

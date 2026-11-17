@@ -12,16 +12,6 @@ const TERMINATE_GRACE_MS = 2_000
 const DRAIN_AFTER_EXIT_MS = 2_000
 const TIMEOUT_CODE = 'CLI_ACCOUNT_TIMEOUT'
 
-/**
- * Name a CLI's executable file as its packages install it on `platform`: with the `.exe` extension on Windows.
- * @param program - the name the CLI's guides run it by, such as `lark-cli`.
- * @param platform - the Host platform.
- * @returns `program`, or `program.exe` on Windows.
- */
-export function executableFileName(program: string, platform: NodeJS.Platform = process.platform): string {
-  return platform === 'win32' ? `${program}.exe` : program
-}
-
 /** The program a plugin runs and its deadline for commands that do not wait for the user. */
 export interface CliCommandExecutorOptions {
   /** Name the CLI's guides run it by, used in diagnostics. */

@@ -58,6 +58,7 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   identity/             anonymous identity
   settings/             user settings
   credentials/          credentials/authorization
+  account/              DeepSeek
   acp/                  automation-only ACP
   interaction/          human interaction
   boot/                 application boot

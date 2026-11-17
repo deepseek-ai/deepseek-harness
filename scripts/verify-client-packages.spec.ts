@@ -192,6 +192,34 @@ describe('package modes', () => {
 })
 
 describe('module requests', () => {
+  it('accepts the iframe provider registry edge without allowing other client feature edges', () => {
+    const registry = declaration('script-realm')
+    const specifier = registry.name + '/client'
+    const provider = declaration('script-realm-iframe', {
+      external: [specifier],
+      runtimeSourceSpecifiers: { [specifier]: ['packages/client/script-realm-iframe/src/client/iframe.ts'] },
+    })
+    expect(collectClientPackageViolations(facts([], { declarations: [provider, registry] }))).toEqual([])
+    const feature = declaration('feature', {
+      external: [specifier],
+      runtimeSourceSpecifiers: { [specifier]: ['packages/client/feature/src/client/index.ts'] },
+    })
+    expect(collectClientPackageViolations(facts([], { declarations: [feature, registry] })))
+      .toContain(feature.manifest + ': client feature package requests runtime external '
+        + JSON.stringify(specifier) + '; request only rows under packages/api/'
+        + ', import shared types only, or call an injected Cordis service')
+    const stale = { ...provider, runtimeSourceSpecifiers: {} }
+    expect(collectClientPackageViolations(facts([], { declarations: [stale, registry] })))
+      .toContain(provider.manifest + ': dsh.client.external ' + JSON.stringify(specifier)
+        + ' has no runtime import or re-export in production source; remove the stale declaration')
+    const other = declaration('other')
+    const unrelated = { ...provider, external: [other.name + '/client'] }
+    expect(collectClientPackageViolations(facts([], { declarations: [unrelated, registry, other] })))
+      .toContain(provider.manifest + ': client feature package requests runtime external '
+        + JSON.stringify(other.name + '/client') + '; request only rows under packages/api/'
+        + ', import shared types only, or call an injected Cordis service')
+  })
+
   it('rejects runtime requests from one client feature package to another dynamic row', () => {
     const ui = declaration('ui', {
       external: ['@deepseek-ai/dsh-client-slots/client'],
@@ -202,7 +230,28 @@ describe('module requests', () => {
     const slots = declaration('slots')
     expect(collectClientPackageViolations(facts([], { declarations: [ui, slots] }))).toEqual([
       ui.manifest + ': client feature package requests runtime external '
-      + '"@deepseek-ai/dsh-client-slots/client"; import shared types only or call an injected Cordis service',
+      + '"@deepseek-ai/dsh-client-slots/client"; request only rows under packages/api/, import shared types only,'
+      + ' or call an injected Cordis service',
+    ])
+  })
+
+  it('accepts a client feature runtime request to an infrastructure row and still rejects a stale one', () => {
+    const gateway = {
+      ...declaration('@deepseek-ai/dsh-api-gateway'), manifest: 'packages/api/gateway/package.json',
+    }
+    const live = declaration('live', {
+      external: ['@deepseek-ai/dsh-api-gateway/client'],
+      runtimeSourceUses: {
+        '@deepseek-ai/dsh-api-gateway': ['packages/client/live/src/client/index.ts'],
+      },
+      runtimeSourceSpecifiers: {
+        '@deepseek-ai/dsh-api-gateway/client': ['packages/client/live/src/client/index.ts'],
+      },
+    })
+    const stale = declaration('stale', { external: ['@deepseek-ai/dsh-api-gateway/client'] })
+    expect(collectClientPackageViolations(facts([], { declarations: [gateway, live, stale] }))).toEqual([
+      stale.manifest + ': dsh.client.external "@deepseek-ai/dsh-api-gateway/client"'
+      + ' has no runtime import or re-export in production source; remove the stale declaration',
     ])
   })
 

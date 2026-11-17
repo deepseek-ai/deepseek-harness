@@ -30,6 +30,8 @@ import {
 import { ForkRegistry } from '../src/host/fork-registry.ts'
 import { SHARED_TOOL_PROFILES } from '../src/host/shared-tools.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
+import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 const child = 'child-1'
 /** The viewer identity the registry recorded for this child. */
@@ -55,14 +57,14 @@ const readDefinition: ToolDefinition = {
 /** One child context capturing what the wiring registers on it. */
 function childContext() {
   const captured: {
-    guard?: (execution: ForkToolExecution) => string | undefined
+    guard?: (execution: ForkToolExecution) => ForkToolDenial | undefined
     preExecute?: (execution: ForkToolExecution, next: () => Promise<PreToolDecision>) => Promise<PreToolDecision>
     result?: (execution: ForkToolExecution) => void
     readonly definitions: Map<string, ToolDefinition>
   } = { definitions: new Map() }
   const ctx = Object.assign(new Context(), {
     tools: {
-      guard: (guard: (execution: ForkToolExecution) => string | undefined) => {
+      guard: (guard: (execution: ForkToolExecution) => ForkToolDenial | undefined) => {
         captured.guard = guard
         return () => { delete captured.guard }
       },
@@ -337,12 +339,12 @@ describe('fork enforcement wiring', () => {
       agent: { id: child },
       token: Symbol('another-execution'),
     }
-    expect(captured.guard?.(other)).toMatch(/workspace/u)
+    expect(captured.guard?.(other)).toEqual(outsideDenial(/workspace/u))
 
     // A path the resolution did not confirm is refused for that same execution.
     const outside: ForkToolExecution = { ...inside, arguments: { file_path: '/etc/passwd' } }
     await captured.preExecute?.(outside, () => Promise.resolve({ kind: 'allow' }))
-    expect(captured.guard?.(outside)).toMatch(/workspace/u)
+    expect(captured.guard?.(outside)).toEqual(outsideDenial(/workspace/u))
   })
 
   it('refuses a child whose scope cannot register the confined read, and keeps the prompt gate closed', async () => {
@@ -434,8 +436,8 @@ describe('fork enforcement wiring', () => {
     // definitions...
     const call = (name: string) =>
       ({ name, arguments: {}, agent: { id: child }, token: Symbol(name) }) as never
-    expect(captured.guard?.(call('read'))).toMatch(/may not use/u)
-    expect(captured.guard?.(call('bash'))).toMatch(/may not use/u)
+    expect(captured.guard?.(call('read'))).toEqual(denial(/may not use/u, 'FORK_TOOL_NOT_PERMITTED'))
+    expect(captured.guard?.(call('bash'))).toEqual(denial(/may not use/u, 'FORK_TOOL_NOT_PERMITTED'))
     // ...and a released layer stops refusing anything.
     installation.dispose()
     expect(captured.guard).toBeUndefined()
@@ -547,7 +549,7 @@ describe('fork enforcement wiring', () => {
     // the child running with no limit at all.
     expect(captured.guard).toBeDefined()
     expect(captured.guard?.({ name: 'read', arguments: {}, agent: { id: child } }))
-      .toMatch(/limits are not installed/u)
+      .toEqual(denial(/limits are not installed/u, 'FORK_LIMITS_UNINSTALLED'))
     expect(captured.preExecute).toBeUndefined()
     expect(captured.result).toBeUndefined()
     expect(forks.enforcementInstalled(child)).toBe(false)

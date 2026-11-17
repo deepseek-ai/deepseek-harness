@@ -23,9 +23,6 @@ export interface SelectOptionGroup {
   readonly label: string
 }
 
-/** Search behavior selected by the popup owner. */
-export type PopupSearchMode = 'substring' | 'fuzzy-label'
-
 /** One option row of a popupSelect shell. */
 export interface SelectOption {
   readonly id: string
@@ -63,8 +60,6 @@ export interface PopupSearchLabels {
  */
 export interface PopupSelectSpec {
   readonly kind: 'popupSelect'
-  /** Defaults to substring search; fuzzy-label ranks names within each group. */
-  readonly searchMode?: PopupSearchMode
   /**
    * Supply localized search copy for this opening; omitted uses the shell's generic copy.
    * @returns search placeholder and empty-state labels.

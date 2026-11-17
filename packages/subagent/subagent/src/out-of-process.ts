@@ -162,7 +162,7 @@ export async function settleRunResult(parts: RunResultSettlement): Promise<Subag
     // Flatten post-publication transport failures while preserving diagnostics.
     try {
       parts.onError?.(toError(error), 'error')
-    } catch {
+    } catch (_diagnosticSinkFailed) {
       // The diagnostic sink cannot reject the run result.
     }
     const collected = parts.collectDiagnostic?.()

@@ -1,4 +1,4 @@
-import { Context, FiberState, Inject, Service } from '@deepseek-ai/cordis'
+import { Context, FiberState, Inject, Service, ValidationError, type Fiber } from '@deepseek-ai/cordis'
 import { defineProperty, isNullable, type Awaitable, type Dict } from '@deepseek-ai/cosmokit'
 import { ModuleLoader } from './internal.ts'
 import { Entry, type EntryOptions } from './config/entry.ts'
@@ -75,7 +75,7 @@ export namespace Loader {
  * Subclasses provide persistence by implementing `commit(change)` on `EntryTree`.
  */
 export class Loader extends EntryTree {
-  declare [Service.config]: Loader.Intercept
+  declare [Service.metadata]: Loader.Intercept
 
   public envData = process.env.CORDIS_SHARED
     ? JSON.parse(process.env.CORDIS_SHARED)
@@ -101,9 +101,30 @@ export class Loader extends EntryTree {
 
     ctx.reflect.provide('loader', this, this[Service.check])
 
+    // the source config each entry fiber last resolved
+    const sources = new WeakMap<Fiber, any>()
+
+    // Registered before the built-in validation listener, so validation
+    // failures can be traced to the config source. A config passed in at
+    // runtime is not written anywhere yet, so its failures are left as is.
+    ctx.on('internal/config', (fiber, next) => {
+      if (!fiber.entry || fiber.parent.fiber?.entry === fiber.entry) return next()
+      try {
+        return next()
+      } catch (error) {
+        if (ValidationError.is(error) && sources.get(fiber) === fiber.entry.options.config) {
+          fiber.entry.traceValidation(error)
+        }
+        throw error
+      }
+    }, { prepend: true })
+
+    // Registered after the built-in validation listener, so interpolation runs
+    // on the source config and validation sees the interpolated result.
     ctx.on('internal/config', (fiber, next) => {
       const config = next()
       if (!fiber.entry || fiber.parent.fiber?.entry === fiber.entry) return config
+      sources.set(fiber, config)
       // Tree carriers preserve the expressions owned by their child entries.
       if (fiber.runtime?.callback[EntryGroup.key]) return config
       return interpolate(fiber.ctx, config)
@@ -181,14 +202,14 @@ export class Loader extends EntryTree {
   }
 
   [Service.check]() {
-    const config: Loader.Intercept = Service.prototype[Service.resolveConfig].call(this)
+    const config: Loader.Intercept = Service.prototype[Service.resolveIntercept].call(this)
     if (config.await && this.getTasks().length) return false
     return true
   }
 
   showLog(entry: Entry, type: string) {
     if (entry.options.group || !entry.parent.tree.enableLogs) return
-    this.ctx.root.logger?.('loader').info('%s plugin %C', type, entry.options.name)
+    this.ctx[Context.root].logger?.('loader').info('%s plugin %C', type, entry.options.name)
   }
 
   /** Return the loader entry id that owns `fiber`, if any. */

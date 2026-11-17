@@ -79,7 +79,7 @@ function adapterOf(
   const { apiKey, ...rest } = config
   return new DeepSeekAdapter({
     options: () => resolveAdapterOptions({ ...rest }),
-    resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': apiKey ?? 'k' } }),
+    resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': apiKey ?? 'k' }, value: apiKey ?? 'k' }),
     resolveUserId: () => TEST_USER_ID,
     resolveAttachments: () => attachments,
     ...files === undefined ? {} : { resolveFiles: () => files },
@@ -139,6 +139,22 @@ function fileStoreOf(
   }
 }
 
+/** Opaque file ids reflect provider arrival order. Unrejected positions keep their original ids. */
+function expectFileReplacements(requests: readonly unknown[], count: number, rejected: readonly string[]): void {
+  expect(requests).toHaveLength(2)
+  const attempts = requests as Array<{ messages: Array<{ content: Array<{ type: string; source: { file_id: string } }> }> }>
+  const [first, second] = attempts.map(attempt => attempt.messages[0]!.content.filter(block => block.type === 'image').map(block => block.source.file_id))
+  const ids = (start: number, size: number) => Array.from({ length: size }, (_, index) => `file-api-${start + index}`)
+  expect(first!.toSorted()).toEqual(ids(1, count).toSorted())
+  expect(second).toHaveLength(count)
+  const replacements = []
+  for (const [position, id] of first!.entries()) {
+    if (rejected.includes(id)) replacements.push(second![position])
+    else expect(second![position]).toBe(id)
+  }
+  expect(replacements.toSorted()).toEqual(ids(count + 1, rejected.length).toSorted())
+}
+
 function fileReference(fileId: string): Awaited<ReturnType<Protocol.DeepSeekFileStore['ensureUploaded']>> {
   return {
     record: { fileId: brandString<Protocol.DeepSeekFileId>(fileId) },
@@ -193,7 +209,7 @@ describe('request image target', () => {
     const attachments = {} as AttachmentStore
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({ models: [{ id: 'vision', inputModalities: ['text', 'image'] }] }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
       resolveAttachments: () => attachments,
       resolveImageAccess: (store, ref) => (store === attachments && ref === imageRef
@@ -216,7 +232,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({ baseURL: server.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: prepareExtensions as never,
     })
@@ -231,7 +247,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const server = await mockServer([])
     const base = {
       options: () => resolveAdapterOptions({ baseURL: server.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
     }
     const failed = new DeepSeekAdapter({
@@ -260,7 +276,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     let signalSeen: AbortSignal | undefined
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({ baseURL: server.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: ((request: { signal: AbortSignal }) => {
         signalSeen = request.signal
@@ -325,7 +341,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const accept = vi.fn()
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({ baseURL: server.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: () => Promise.resolve({ fields: { dsh_test: 1 }, accept: async () => { accept() } }) as never,
     })
@@ -343,7 +359,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const unaccepted = vi.fn()
     const base = {
       options: () => resolveAdapterOptions({ baseURL: server.url }),
-      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
+      resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: () => Promise.resolve({
         fields: { dsh_test: 1 },
@@ -479,7 +495,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const body = server.requests[0] as { messages: Array<{ content: unknown }> }
     expect(JSON.stringify(body.messages[0]?.content).match(/"type":"image"/g)).toHaveLength(2)
     expect(JSON.stringify(body)).not.toContain('file_id')
-    expect(files.ensureUploaded).toHaveBeenCalledTimes(1)
+    expect(files.ensureUploaded).toHaveBeenCalledTimes(2)
   })
 
   it('fails a base64 fallback whose retained images exceed the inline bound with the count to offload', async () => {
@@ -536,39 +552,72 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(JSON.stringify(body)).not.toContain('file-api-partial')
   })
 
-  it('falls back after the configured Files API deadline without aborting the model request', async () => {
+  it('counts each ten-image request once after upload timeouts and retries only after HTTP 429', async () => {
     vi.useFakeTimers()
-    const started = Promise.withResolvers<undefined>()
-    const files = fileStoreOf((_version, _connection, _policy, signal) => new Promise((_resolve, reject) => {
-      started.resolve(undefined)
-      signal?.addEventListener('abort', () => {
-        const reason: unknown = signal.reason
-        reject(reason instanceof Error ? reason : new Error('files operation aborted'))
-      }, { once: true })
+    const started = Array.from({ length: 2 }, () => Promise.withResolvers<undefined>())
+    const throttled = Array.from({ length: 2 }, () => Promise.withResolvers<undefined>())
+    const upload = vi.fn<typeof fetch>(async () => Response.json({
+      id: 'file-probe', type: 'file', size_bytes: 3, created_at: new Date().toISOString(), filename: 'probe.png', mime_type: 'image/png',
     }))
-    const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(successfulSseResponse())
-    const adapter = adapterOf({
-      baseURL: 'https://deepseek.invalid',
-      filesApiTimeoutMs: 50,
-      models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
-    }, attachments, files.store)
-
-    const pending = drain(adapter.stream({
-      provider: 'deepseek-official',
-      model: 'deepseek-v4-flash-vision-exp',
-      messages: [createUserMessage({
-        content: [{ type: 'image', attachment: imageRef }],
-        source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-      })],
+    for (const [round, gate] of started.entries()) {
+      upload.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        gate.resolve(undefined)
+        init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+      })).mockImplementationOnce(async () => {
+        throttled[round]!.resolve(undefined)
+        return new Response(null, { status: 429 })
+      })
+    }
+    const index = new Protocol.DeepSeekUploadIndex()
+    vi.spyOn(index, 'get').mockResolvedValue(undefined)
+    const files = new Protocol.DeepSeekFileStore({ fetch: upload, index })
+    const attachments = attachmentStoreOf(ref => Promise.resolve({
+      ...requestImage(ref), variantId: brandString<ImageVariantId>(ref.attachmentId),
+    })).store
+    const messages = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => successfulSseResponse())
+    const adapter = adapterOf({ baseURL: 'https://deepseek.invalid' }, attachments, files)
+    const ten = Array.from({ length: 10 }, (_, i) => ({
+      ...imageRef, attachmentId: brandString<AttachmentId>(`sha256:${i.toString(16).repeat(64)}`),
     }))
-    await started.promise
-    await vi.advanceTimersByTimeAsync(50)
-    await pending
+    const request = (images = [imageRef]) => drain(adapter.stream({
+      provider: 'deepseek-official', model: 'deepseek-flash',
+      messages: [createUserMessage({ content: images.map(attachment => ({ type: 'image', attachment })), source: { kind: 'user' } })],
+    }))
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
-    expect(fetchSpy.mock.calls[0]?.[1]?.body).toEqual(expect.stringContaining('base64'))
-    fetchSpy.mockRestore()
+    try {
+      for (const [round, gate] of started.entries()) {
+        const timedOut = request()
+        const priorMessages = messages.mock.calls.length
+        if (round > 0) {
+          await throttled[round - 1]!.promise
+          await vi.advanceTimersByTimeAsync(500)
+        }
+        await gate.promise
+        await vi.advanceTimersByTimeAsync(round === 0 ? 19_999 : 19_499)
+        expect(messages).toHaveBeenCalledTimes(priorMessages)
+        await vi.advanceTimersByTimeAsync(1)
+        await timedOut
+        const expectedPosts = round === 0 ? 1 : 3
+        expect(upload).toHaveBeenCalledTimes(expectedPosts)
+        expect(messages.mock.lastCall?.[1]?.body).toEqual(expect.stringContaining('base64'))
+        await vi.advanceTimersByTimeAsync(3_600_000)
+        await drain(adapter.stream({ provider: 'deepseek-official', model: 'deepseek-flash', messages: [] }))
+        for (let skip = 0; skip < 2 ** round; skip++) {
+          await request(ten)
+          const inline = messages.mock.lastCall?.[1]?.body
+          expect(typeof inline === 'string' && inline.match(/"type":"base64"/gu)).toHaveLength(10)
+          expect(upload).toHaveBeenCalledTimes(expectedPosts)
+        }
+      }
+      const recovered = request()
+      await throttled[1]!.promise
+      await vi.advanceTimersByTimeAsync(500)
+      await recovered
+      expect(upload).toHaveBeenCalledTimes(5)
+      expect(messages.mock.lastCall?.[1]?.body).toEqual(expect.stringContaining('file-probe'))
+    } finally {
+      messages.mockRestore()
+    }
   })
 
   it('does not turn caller cancellation during file resolution into base64 fallback', async () => {
@@ -952,11 +1001,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(3)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[0]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-1' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-2' } }])
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-1' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-3' } }])
+    expectFileReplacements(server.requests, 2, ['file-api-2'])
   })
 
   it('invalidates every listed missing file id and preserves unlisted mappings', async () => {
@@ -1009,19 +1054,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(5)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[0]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([
-        { type: 'image', source: { type: 'file', file_id: 'file-api-1' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-2' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-3' } },
-      ])
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([
-        { type: 'image', source: { type: 'file', file_id: 'file-api-4' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-2' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-5' } },
-      ])
+    expectFileReplacements(server.requests, 3, ['file-api-1', 'file-api-3'])
   })
 
   it('recovers in one replacement request when the provider lists dozens of missing file ids', async () => {
@@ -1064,15 +1097,7 @@ describe('DeepSeekAdapter against a mock server', () => {
 
     expect(server.requests).toHaveLength(2)
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(70)
-    const attempts = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; source?: { file_id?: string } }> }> }>
-    const fileIds = (attempt: number) => attempts[attempt]?.messages[0]?.content
-      .filter(block => block.type === 'image')
-      .map(block => block.source?.file_id)
-    expect(fileIds(0)).toEqual(refs.map((_, index) => `file-api-${index + 1}`))
-    expect(fileIds(1)).toEqual([
-      ...missing.map((_, index) => `file-api-${41 + index}`),
-      ...refs.slice(30).map((_, index) => `file-api-${31 + index}`),
-    ])
+    expectFileReplacements(server.requests, 40, missing)
   })
 
   it('invalidates every used mapping when a stale-file response does not identify one file id', async () => {
@@ -1110,9 +1135,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(4)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-3' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-4' } }])
+    expectFileReplacements(server.requests, 2, ['file-api-1', 'file-api-2'])
   })
 
   it('returns the second stale-file rejection without a third model attempt', async () => {
@@ -1143,7 +1166,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     'rejects image input for text-only model %s before credentials, image reads, or fetch',
     async (model) => {
       const server = await mockServer([])
-      const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'k' } }))
+      const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }))
       const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref)))
       const resolveAttachments = vi.fn(() => attachments.store)
       const adapter = new DeepSeekAdapter({
@@ -1170,7 +1193,7 @@ describe('DeepSeekAdapter against a mock server', () => {
 
   it('rejects vision input without an attachment provider before credentials or fetch', async () => {
     const server = await mockServer([])
-    const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'k' } }))
+    const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'k' }, value: 'k' }))
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({
         baseURL: server.url,
@@ -2175,6 +2198,15 @@ describe('plugin registration and config', () => {
     ['fileExpiresAfterSeconds', 2_592_001, /fileExpiresAfterSeconds must be an integer from 3600 through 2592000/],
     ['fileRefreshMarginSeconds', -1, /fileRefreshMarginSeconds must be a non-negative integer/],
     ['fileRefreshMarginSeconds', 604_800, /fileRefreshMarginSeconds must be a non-negative integer/],
+    ['fileUploadConcurrency', 0, /fileUploadConcurrency/],
+    ['fileUploadConcurrency', 4, /fileUploadConcurrency/],
+    ['fileUploadConcurrency', 1.5, /fileUploadConcurrency/],
+    ['fileUploadMaxRetries', -1, /fileUploadMaxRetries/],
+    ['fileUploadMaxRetries', 3, /fileUploadMaxRetries/],
+    ['fileUploadMaxRetries', 1.5, /fileUploadMaxRetries/],
+    ['fileUploadRetryDelayMs', 0, /fileUploadRetryDelayMs/],
+    ['fileUploadRetryDelayMs', MAX_TIMER_DELAY_MS + 1, /fileUploadRetryDelayMs/],
+    ['fileUploadRetryDelayMs', 1.5, /fileUploadRetryDelayMs/],
     ['fileQuotaCleanupBatch', 0, /fileQuotaCleanupBatch must be an integer from 1 through 1000/],
     ['fileQuotaCleanupBatch', 1_001, /fileQuotaCleanupBatch must be an integer from 1 through 1000/],
   ] as const)('rejects %s=%s', (field, value, message) => {
@@ -2321,7 +2353,7 @@ describe('plugin registration and config', () => {
   it('resolves connection facts and the credential exactly once per stream call', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const options = vi.fn(() => resolveAdapterOptions({ baseURL: server.url }))
-    const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'per-request-key' } }))
+    const resolveAuth = vi.fn(() => Promise.resolve({ headers: { 'x-api-key': 'per-request-key' }, value: 'per-request-key' }))
     const resolveUserId = vi.fn(() => TEST_USER_ID)
     const adapter = new DeepSeekAdapter({ options, resolveAuth, resolveUserId, prepareExtensions: noExtensions })
 

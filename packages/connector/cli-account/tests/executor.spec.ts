@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CliCommandExecutor, executableFileName } from '../src/executor.ts'
+import { CliCommandExecutor } from '../src/executor.ts'
 import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 const MAX_OUTPUT_BYTES = 1_048_576
@@ -16,14 +16,6 @@ async function writeStderr(process: ScriptedProcess, chunks: readonly string[]):
   }
   process.reply({ stderr: chunks.at(-1) as string })
 }
-
-describe('executableFileName', () => {
-  it('adds the .exe extension on Windows only', () => {
-    expect(executableFileName('fixture-cli', 'win32')).toBe('fixture-cli.exe')
-    expect(executableFileName('fixture-cli', 'darwin')).toBe('fixture-cli')
-    expect(executableFileName('fixture-cli')).toBe(process.platform === 'win32' ? 'fixture-cli.exe' : 'fixture-cli')
-  })
-})
 
 describe('CliCommandExecutor', () => {
   let ctx: Context

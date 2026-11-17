@@ -1,6 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
@@ -89,7 +88,8 @@ async function mounted(
   ctx.provide('commands', { register: () => () => {} } as never)
   if (sessionQuery !== undefined) ctx.provide('sessionQuery', sessionQuery as never)
   if (persistence !== undefined) ctx.provide('sessionPersistence', persistence as SessionPersistence)
-  const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
+  new ConnectionAuthentication(ctx)
+  const connection = new HostConnectionService(ctx, [])
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber
   return {

@@ -4,18 +4,21 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import {
   ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
 } from '../src/client/components.tsx'
 import { zh } from '../src/client/locales.ts'
-import type { ConnectorAccountsState } from '../src/client/types.ts'
+import type { ConnectorAccountFace, ConnectorAccountsState } from '../src/client/types.ts'
 import type { ConnectorAccountDisplay, ConnectorAccountEntry, ConnectorOperationId } from '../src/types.ts'
 
 afterEach(cleanup)
 
 const KEY = '@acme/fixture'
 const OP = 'op-1' as ConnectorOperationId
+const STARTED: RemoteResult<ConnectorOperationId> = { ok: true, value: OP }
+const REFUSED: RemoteResult<never> = { ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }
 const t = makeTranslate(zh)
 const resolveText = (text: LocalizedText): string => typeof text === 'string' ? text : text.zh ?? text.en
 const button = (name: string) => screen.getByRole('button', { name })
@@ -41,8 +44,8 @@ function face(change: Partial<ConnectorAccountsState> = {}, accounts: readonly C
   }
   return {
     useConnectorAccounts: <R,>(selector: (value: ConnectorAccountsState) => R): R => selector(current),
-    start: vi.fn(async (_key: string, _operation: string) => OP),
-    cancel: vi.fn(async (_key: string, _id: ConnectorOperationId) => {}),
+    start: vi.fn<ConnectorAccountFace['start']>(async () => STARTED),
+    cancel: vi.fn<ConnectorAccountFace['cancel']>(async () => ({ ok: true, value: undefined })),
     account: KEY, resolveText, follow: vi.fn(), failed: vi.fn(), dismissNotice: vi.fn(), t,
   }
 }
@@ -67,12 +70,12 @@ it('shows the registrant title, status, detail, notes, and hint, and starts each
 
 it('disables the buttons while a call is pending or the Host stream is down', async () => {
   const props = face()
-  const answer = Promise.withResolvers<ConnectorOperationId>()
+  const answer = Promise.withResolvers<RemoteResult<ConnectorOperationId>>()
   props.start.mockReturnValueOnce(answer.promise)
   render(<ConnectorAccountSectionEntry {...props} />)
   fireEvent.click(button('连接演示'))
   expect(disabled()).toEqual([true])
-  await act(async () => { answer.resolve(OP) })
+  await act(async () => { answer.resolve(STARTED) })
   expect(disabled()).toEqual([false])
   expect(props.failed).not.toHaveBeenCalled()
   cleanup()
@@ -127,11 +130,13 @@ it.each<[string, ConnectorAccountDisplay['failure'], string]>([
   expect(screen.getByRole('alert').textContent).toBe(expected)
 })
 
-it('reports a start that the Host refused or that never answered, without following it', async () => {
+it('reports a start whose result is a failure or whose call rejected, without following it', async () => {
   const props = face()
-  props.start.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('carrier lost'))
+  props.start.mockResolvedValueOnce(REFUSED).mockRejectedValueOnce(new Error('Remote method is no longer mounted'))
   render(<ConnectorAccountSectionEntry {...props} />)
   await click('连接演示')
+  expect(props.failed).toHaveBeenCalledOnce()
+  expect(disabled()).toEqual([false])
   await click('连接演示')
   expect(props.failed).toHaveBeenCalledTimes(2)
   expect(props.follow).not.toHaveBeenCalled()
@@ -150,6 +155,10 @@ it('cancels the operation in progress and opens its authorization page again on 
   expect(windowOpen).toHaveBeenCalledWith('https://example.com/a', '_blank', 'noopener,noreferrer')
   await click('取消')
   expect(props.cancel).toHaveBeenCalledWith(KEY, OP)
+  expect(props.failed).not.toHaveBeenCalled()
+  props.cancel.mockResolvedValueOnce(REFUSED)
+  await click('取消')
+  expect(props.failed).toHaveBeenCalledOnce()
   // A cancel button with no operation in progress calls nothing.
   cleanup()
   const idle = sectionOf(display)
@@ -216,12 +225,12 @@ it('connects from the prompt through the operation the display names, or only op
 
 it('starts once for a second click before the first call answers', async () => {
   const props = sectionOf({ ...DISCONNECTED, connect: { kind: 'start', operation: 'connect' } })
-  const answer = Promise.withResolvers<ConnectorOperationId>()
+  const answer = Promise.withResolvers<RemoteResult<ConnectorOperationId>>()
   props.start.mockReturnValueOnce(answer.promise)
   render(prompt(props))
   fireEvent.click(button('连接演示'))
   fireEvent.click(button('连接演示'))
-  await act(async () => { answer.resolve(OP) })
+  await act(async () => { answer.resolve(STARTED) })
   expect(props.start).toHaveBeenCalledOnce()
   expect(props.follow).toHaveBeenCalledOnce()
 })

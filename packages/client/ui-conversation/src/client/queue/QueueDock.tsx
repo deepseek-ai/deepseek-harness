@@ -1,3 +1,4 @@
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Context } from '@deepseek-ai/cordis'
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -23,7 +24,7 @@ const QUEUE_TEXT_FACTS: Readonly<Partial<UserTextFacts>> = {
 
 function textOf(content: InboxState['next-turn'][number]['content']): string | null {
   if (!content.every(block => block.type === 'text')) return null
-  return content.map(block => block.text).join('')
+  return extractTextContent(content)
 }
 
 /** Queue operations injected by the session-scoped registration. */
@@ -228,7 +229,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                         </span>
                       )}
                       <span className={css.preview}>{renderFactorySlot('conversation.user.text', {
-                        text: row.content.filter(block => block.type === 'text').map(block => block.text).join(''),
+                        text: extractTextContent(row.content),
                         facts: QUEUE_TEXT_FACTS,
                         interactive: false, ellipsis: true,
                       })}</span>

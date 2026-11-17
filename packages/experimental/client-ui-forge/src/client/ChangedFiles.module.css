@@ -4,10 +4,14 @@
 .rows { overflow: auto; min-height: 0; padding: 0 4px 6px; }
 .row { box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 30px; padding: 4px 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .row svg { flex: none; }
-.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { flex: 1; }
 /* Unresolved host review threads of a file, in the thread count chip treatment of the file header. */
 .threads { flex: none; min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: var(--dsw-radius-xs); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent); color: var(--dsw-alias-state-business-primary); font-size: 11px; line-height: 16px; text-align: center; }
 .selected { background: var(--dsw-alias-interactive-bg-hover); }
+/* A viewed file, or a directory whose files are all viewed, recedes so the files left to review stand out; the
+   disclosure chevron and the unresolved thread count keep their weight. */
+.viewed .name { color: var(--dsw-alias-label-tertiary); }
+.viewed > :not(.chevron):not(.name):not(.threads) { opacity: 0.5; }
 .chevron { display: inline-flex; flex: 0 0 12px; }
 .collapsed { transform: rotate(-90deg); }
 .empty { padding: 12px 8px; color: var(--dsw-alias-label-secondary); }

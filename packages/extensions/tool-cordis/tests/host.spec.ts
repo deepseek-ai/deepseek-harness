@@ -42,8 +42,8 @@ describe('the cordis-inspect-providers host entry', () => {
     await ctx.plugin(CordisInspectProviders)
     await ctx.plugin(CordisInspectTools)
     const signal = new AbortController().signal
-    const query = ctx.tools.get('cordis_inspect_query')
-    await expect(query?.execute({ platform: 'host', provider: 'Tool', method: 'listTools' }, { signal } as never)).rejects.toMatchObject({
+    const query = ctx.tools.get('cordis_inspect')
+    await expect(query?.execute({ query: { platform: 'host', provider: 'Tool', method: 'listTools' } }, { signal } as never)).rejects.toMatchObject({
       name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE', message: 'Cordis inspection requires an Agent-backed session',
     })
     for (const provider of hostInspectProviders(ctx).filter(candidate => ['Service', 'Tool'].includes(candidate.manifest.id))) {
@@ -54,13 +54,17 @@ describe('the cordis-inspect-providers host entry', () => {
   })
 })
 
-describe('the cordis inspect tools', () => {
-  it('declares both read-only tools parallel-safe', async () => {
+describe('the cordis inspect tool', () => {
+  it('declares discovery and valid queries parallel-safe', async () => {
     const ctx = await host()
     const fiber = ctx.plugin(CordisInspectTools)
     await fiber
-    expect(ctx.tools.get('cordis_inspect_list')?.isConcurrencySafe?.({})).toBe(true)
-    expect(ctx.tools.get('cordis_inspect_query')?.isConcurrencySafe?.({ platform: 'host', provider: 'Service', method: 'get' })).toBe(true)
+    const tool = ctx.tools.get('cordis_inspect')
+    expect(tool?.isConcurrencySafe?.({})).toBe(true)
+    for (const platform of ['host', 'client']) {
+      expect(tool?.isConcurrencySafe?.({ query: { platform, provider: 'Service', method: 'listService' } })).toBe(true)
+    }
+    expect(tool?.isConcurrencySafe?.({ query: {} })).toBe(false)
     await fiber.dispose()
   })
 })

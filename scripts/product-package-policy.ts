@@ -16,7 +16,11 @@ export interface ProductPackagePolicy {
  * Optional integrations may be reached by an optional bundle without becoming default capabilities.
  */
 export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolicy>> = {
+  'packages/session-query/tool-session-list': { category: 'optional', reason: 'Explicitly grants model callers read access to runtime Workspace and Session metadata.' },
+  'packages/host/authentication-desktop': { category: 'optional', reason: 'Mounted by the private Desktop Host with its parent-process credential, outside default Web profiles.' },
   'packages/core/agent-tool-presentation': { category: 'optional', reason: 'Deprecated selector retained for existing executor configurations.' },
+  'packages/client/script-realm': { category: 'optional', reason: 'Script environment provider registry for explicitly selected Client integrations.' },
+  'packages/client/script-realm-iframe': { category: 'optional', reason: 'Iframe execution provider registered only by an explicitly selected Client plugin.' },
   'packages/browser-use/browser-use': { category: 'optional', reason: 'Service definition used by explicitly selected browser providers.' },
   'packages/computer-use/computer-use': { category: 'optional', reason: 'Service definition used by explicitly selected computer providers.' },
   'packages/lsp/lsp': { category: 'optional', reason: 'Service definition for deployment-configured language servers.' },
@@ -32,7 +36,6 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/subagent/subagent-claude-code': { category: 'optional', reason: 'Separately installed native Claude Code agent integration.' },
   'packages/subagent/subagent-codex': { category: 'optional', reason: 'Separately installed native Codex agent integration.' },
   'packages/subagent/subagent-dsh-sdk': { category: 'optional', reason: 'Requires an explicitly configured external DSH home.' },
-  'packages/connector/cli-account': { category: 'optional', reason: 'Host library imported by separately installed CLI app plugins.' },
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },
   'packages/fs/tool-str-replace-editor': { category: 'optional', reason: 'Explicit alternative to the default filesystem editing tools.' },
   'packages/connector/feishu': { category: 'optional', reason: 'Separately installed app plugin: the Feishu CLI, its skills, and the account operations of a user-authorized Feishu account.' },

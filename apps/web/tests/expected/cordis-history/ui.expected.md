@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Use only Cordis tools. First
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Utilisation de l'ordinateur",
-    "description": "Contrôlez des applications sur macOS et Windows. Si vous installez DSH avec npm sous Windows, configurez séparément le programme auxiliaire.",
+    "description": "Permet à l’agent de contrôler directement les applications de votre ordinateur.",
     "detail": "docs/DETAIL.md"
   }
 }

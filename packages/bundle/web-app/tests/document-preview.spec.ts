@@ -52,7 +52,7 @@ it('loads the shipped Office rows with separately patched settings and authorize
   const configured = applyEntryPatches(rows, [
     { id: 'office-kit', config: providerConfig },
     { id: 'ui-sidebar-documentpreview', config: clientConfig },
-  ], (message) => { throw new Error(message) })
+  ], (message) => { throw new Error(message) }).data
   expect(configured.find(row => row.id === 'ui-sidebar-documentpreview')!.config).toEqual(clientConfig)
   await writeFile(configPath, JSON.stringify([
     { name: '@deepseek-ai/dsh-session' },
