@@ -34,7 +34,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V97.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V98.
 
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
@@ -133,6 +133,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V94 · `plugin-im-core` guards `Scheduler.retry` on initial `open` with `published === 'no' || idempotentSend`**: `StreamHost.idempotentSend?(ctx)` delegates to `Adapter.idempotentSend`, and `Scheduler.retry` skips retrying `published !== 'no'` on `driver.open` unless `idempotentSend` returns `true` (while preserving any earlier `published: 'unknown'` across retries). Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
 - **V95 · `plugin-im-core` accumulates `published: 'unknown'` across `Bot.withRetry` attempts**: if any retry attempt throws `published: 'unknown'`, `Bot.withRetry` preserves `published: 'unknown'` on the final thrown `PlatformError` even if a subsequent attempt fails with `published: 'no'`, so callers never treat an uncertain send as definitely unpublished. Covered by `vendor/plugin-im-core/tests/bot.spec.ts`.
 - **V96 · `plugin-im-core` includes `ResourceMeta` in `resourceCacheKey`**: `resourceCacheKey` and `prepare()` include `meta.name`, `meta.mime`, `meta.duration`, `meta.width`, and `meta.height` in the cache and in-flight deduplication key, so identical-byte `data:` URLs with different filenames or metadata do not reuse another file's platform `file_key`. Covered by `vendor/plugin-im-core/tests/resource.spec.ts`.
+- **V97 · `plugin-im-core` clears `Scheduler._handle` after a confirmed recall and records `StreamAbortError.recalled`**: `Scheduler.recall` clears `this._handle` to `undefined` when `host.recall` returns `true` (while `StreamLimitError.handle` keeps the recalled handle for diagnostics), and `StreamAbortError` carries `recalled: boolean` so `ImSender` distinguishes a recalled stream (`failed`) from one whose message remains in the chat (`partial`). Covered by `vendor/plugin-im-core/tests/stream.spec.ts` and `packages/experimental/im/tests/send.spec.ts`.
 
 ### Resolver adaptations
 

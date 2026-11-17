@@ -145,7 +145,7 @@ export interface StreamHost<T extends ModeTypes = ModeTypes> {
 /** `done` of an aborted stream rejects with this error (`name === 'AbortError'`). */
 export class StreamAbortError extends Error {
   override name = 'AbortError'
-  constructor(readonly reason?: string) {
+  constructor(readonly reason?: string, readonly recalled = false) {
     super(reason ? `stream aborted: ${reason}` : 'stream aborted')
   }
 }
@@ -403,7 +403,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     }
     this.settled = true
     this._state = 'closed'
-    this.rejectDone(new StreamAbortError(options.reason))
+    this.rejectDone(new StreamAbortError(options.reason, recalled))
     return recalled
   }
 
@@ -762,7 +762,9 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
 
   private async recall(handle: MessageHandle): Promise<boolean> {
     try {
-      return await this.host.recall(handle)
+      const recalled = await this.host.recall(handle)
+      if (recalled && this._handle === handle) this._handle = undefined
+      return recalled
     } catch {
       return false
     }
