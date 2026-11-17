@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: pulls the `agentPreset` Session projection value into this program.
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type {
@@ -186,7 +186,8 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param sessions - pure Session Controller.
    * @param view - the browser's viewing-store write set (one instance shared with its registration).
    * @param notify - show one notice through the Workspace notice channel.
-   * @param recentViewLimit - recently viewed Sessions needing no attention kept besides the main-view Session.
+   * @param recentViewLimit - Host-synced count of recently viewed Sessions needing no attention kept
+   * besides the main-view Session; absent until a value arrives, and followed while it changes.
    */
   constructor(
     ctx: Context,
@@ -195,7 +196,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly sessions: ISessions,
     private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
     private readonly notify: (toast: RowToast) => void,
-    recentViewLimit: number,
+    recentViewLimit: ObservableSnapshot<number | undefined>,
   ) {
     super(ctx, 'uiWorkspace')
     this.recentViews = new RecentSessionViews(sessions, workspaces, ctx.uiSession.sessionStatus, recentViewLimit)

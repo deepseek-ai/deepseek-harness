@@ -20,7 +20,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { WorkspaceNavigationConfig } from '../types.ts'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
@@ -144,25 +145,14 @@ export const inject = ['contextMenus',
   'uiSession', 'uiSession.sessionStatus',
 ]
 
-/** Workspace navigation configuration. */
-export interface Config {
-  /** Recently viewed Sessions that need no attention kept loaded besides the main-view Session. */
-  recentViewLimit?: number
-}
-
-/** Validated Workspace navigation configuration. */
-export const Config: z<Config> = z.object({
-  recentViewLimit: z.natural().default(10),
-})
-
 /**
  * Register the browser and picker once their slot declarations are on the
  * ledger. Inject factories return plain callbacks; data reads use the
  * framework's global hooks.
  * @param ctx - client root context.
- * @param config - validated navigation configuration.
+ * @param config - Host-synced navigation configuration.
  */
-export function apply(ctx: Context, config: Config = Config({})): void {
+export function apply(ctx: Context, config: SyncedConfig<WorkspaceNavigationConfig>): void {
   const sessions = ctx.get('sessions') as ISessions
   const workspaces = ctx.get('workspaces') as IWorkspaces
   // One viewing-store instance, created here as ui-layout does for its layout
@@ -175,9 +165,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   let toastSeq = 0
   const notify = (toast: RowToast): void => { rowToast.set({ ...toast, seq: ++toastSeq }) }
   const uiWorkspace = new UiWorkspaceService(
-    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify,
-    // Schemastery's field default is materialized before Cordis calls apply.
-    config.recentViewLimit as number,
+    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify, config.recentViewLimit,
   )
   ctx.slots.provideRoot({
     hooks: { workspaces: workspaces.list },

@@ -88,7 +88,7 @@ ui-workspace 的 [navigation](../../../../packages/client/ui-workspace/src/clien
 | 失败 | retain 失败时报告到控制台一次，该 Session 离开顺序列表，随其 `mainView` 引用一起释放；导航继续 |
 | 出队 | 被移除、归档或淘汰的 Session 离开顺序列表，只有主视图再次离开它时才会回来 |
 | 关注 | 统一 Session UI 状态显示为运行中、等待用户或完成未读的 Session 既不计数也不淘汰；读过且空闲后重新计数 |
-| 上限 | 由 ui-workspace 配置 `recentViewLimit` 决定，默认 10，计数的 Session 不含主视图 Session |
+| 上限 | 由 ui-workspace 配置 `recentViewLimit` 决定，默认 10，计数的 Session 不含主视图 Session；它是 Host `Config` 的 volatile 字段，浏览器经[前端插件配置同步](2026-11-15-client-config-sync.zh.md)接收，修改后无需刷新即生效，已淘汰的 Session 不会回来 |
 | 淘汰 | 超出上限时先淘汰最早离开的未置顶 Session，再淘汰最早离开的置顶 Session；Session 列表、Workspace 列表或 Session UI 状态变化时都会重新检查 |
 | 卸载 | 插件卸载时退订两个列表与状态，清空顺序列表，并释放全部引用 |
 

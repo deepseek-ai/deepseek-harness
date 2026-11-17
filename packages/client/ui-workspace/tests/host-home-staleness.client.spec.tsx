@@ -53,7 +53,7 @@ async function bench() {
     { 'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SECTION_INJECT } } as never,
     SidebarFrame as never,
   )
-  await runtime.mount({ inject: [...inject], apply })
+  await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
   return { runtime, remote }
 }
 

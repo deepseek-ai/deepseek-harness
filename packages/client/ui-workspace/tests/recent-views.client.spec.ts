@@ -8,7 +8,6 @@ import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-clie
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { Config } from '../src/client/index.ts'
 import { RecentSessionViews } from '../src/client/recent-views.ts'
 
 const sid = (id: string): SessionId => brandString<SessionId>(id)
@@ -17,7 +16,7 @@ function row(id: SessionId, overrides: Partial<SessionSummary> = {}): SessionSum
   return { id, displayTitle: id, running: false, blank: false, updatedAt: 0, retainedBy: {}, ...overrides }
 }
 
-function bench(ids: readonly SessionId[]) {
+function bench(ids: readonly SessionId[], limit = 10) {
   const list = createSnapshotStore<SessionListState>({
     ids: [...ids], byId: Object.fromEntries(ids.map(id => [id, row(id)])), phase: 'ready', projectionsBySession: {},
   })
@@ -44,7 +43,8 @@ function bench(ids: readonly SessionId[]) {
   const sessions: Pick<ISessions, 'list' | 'retain' | 'subagentAddress'> = { list, retain, subagentAddress }
   const workspaceController: Pick<IWorkspaces, 'list'> = { list: workspaces }
   const status = createSnapshotStore<SessionStatusSnapshot>(new Map())
-  const recent = new RecentSessionViews(sessions, workspaceController, status, 10)
+  const recentViewLimit = createSnapshotStore<number | undefined>(limit)
+  const recent = new RecentSessionViews(sessions, workspaceController, status, recentViewLimit)
   const stop = recent.start()
   const update = (id: SessionId, patch: Partial<SessionSummary>): void => {
     const state = list.getSnapshot()
@@ -62,7 +62,10 @@ function bench(ids: readonly SessionId[]) {
     for (const id of ids) recent.show(id)
     recent.show(last)
   }
-  return { recent, stop, list, workspaces, retain, subagentAddress, update, retained, setOnRetain, setStatus, visit }
+  return {
+    recent, stop, list, workspaces, retain, subagentAddress, update, retained, setOnRetain, setStatus, visit,
+    recentViewLimit,
+  }
 }
 
 describe('recently viewed Sessions', () => {
@@ -205,9 +208,27 @@ describe('recently viewed Sessions', () => {
 })
 
 describe('recent view configuration', () => {
-  it('keeps ten recent views by default and rejects a negative limit', () => {
-    expect(Config({}).recentViewLimit).toBe(10)
-    expect(Config({ recentViewLimit: 3 }).recentViewLimit).toBe(3)
-    expect(() => Config({ recentViewLimit: -1 })).toThrow()
+  it('follows a changed limit, evicting and retaining as it moves', () => {
+    const ids = Array.from({ length: 5 }, (_, index) => sid(`l${index}`))
+    const b = bench(ids, 2)
+    b.visit(ids.slice(0, 4), sid('l4'))
+    expect(b.retained()).toEqual([sid('l2'), sid('l3')])
+    // Raising the limit does not bring back evicted Sessions; the next Sessions left fill the room.
+    b.recentViewLimit.set(4)
+    expect(b.retained()).toEqual([sid('l2'), sid('l3')])
+    b.visit([sid('l2')], sid('l1'))
+    expect(b.retained().toSorted()).toEqual([sid('l2'), sid('l3'), sid('l4')])
+    b.recentViewLimit.set(1)
+    expect(b.retained()).toEqual([sid('l2')])
+  })
+
+  it('keeps every counted Session while the Host sends no limit', () => {
+    const ids = Array.from({ length: 12 }, (_, index) => sid(`n${index}`))
+    const b = bench(ids)
+    b.recentViewLimit.set(undefined)
+    b.visit(ids.slice(0, 11), sid('n11'))
+    expect(b.retained()).toHaveLength(11)
+    b.recentViewLimit.set(3)
+    expect(b.retained()).toHaveLength(3)
   })
 })

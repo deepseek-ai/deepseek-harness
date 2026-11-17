@@ -33,13 +33,14 @@ export class RecentSessionViews {
    * @param sessions - Session Controller that owns the references.
    * @param workspaces - Workspace Controller whose archived Sessions leave the list and whose pins order eviction.
    * @param status - unified Session UI status deciding which Sessions need attention.
-   * @param limit - Sessions needing no attention kept besides the main-view Session.
+   * @param limit - Host-synced count of Sessions needing no attention kept besides the main-view Session;
+   * absent until a value arrives.
    */
   constructor(
     private readonly sessions: Pick<ISessions, 'list' | 'retain' | 'subagentAddress'>,
     private readonly workspaces: Pick<IWorkspaces, 'list'>,
     private readonly status: ObservableSnapshot<SessionStatusSnapshot>,
-    private readonly limit: number,
+    private readonly limit: ObservableSnapshot<number | undefined>,
   ) {}
 
   /**
@@ -58,7 +59,7 @@ export class RecentSessionViews {
   }
 
   /**
-   * Sync whenever the Session list, Workspace list, or Session UI status changes.
+   * Sync whenever the Session list, Workspace list, Session UI status, or recent-view limit changes.
    * @returns disposer that stops syncing and releases every held Session.
    */
   start(): () => void {
@@ -67,6 +68,7 @@ export class RecentSessionViews {
       this.sessions.list.subscribe(sync),
       this.workspaces.list.subscribe(sync),
       this.status.subscribe(sync),
+      this.limit.subscribe(sync),
     ]
     return () => {
       for (const stop of stops) stop()
@@ -104,7 +106,11 @@ export class RecentSessionViews {
     }
   }
 
-  /** The candidates to keep, in order: every eligible Session needing attention plus the first `limit` others. */
+  /**
+   * The candidates to keep, in order: every eligible Session needing attention plus the first `limit` others.
+   * No limit keeps every counted Session, which reaches the same result as the main view alone being loaded before
+   * the Host sends one.
+   */
   private selected(): SessionId[] {
     const { byId } = this.sessions.list.getSnapshot()
     const workspaces = this.workspaces.list.getSnapshot()
@@ -118,7 +124,7 @@ export class RecentSessionViews {
     const kept = new Set([
       ...counted.filter(id => pinned.has(id)),
       ...counted.filter(id => !pinned.has(id)),
-    ].slice(0, this.limit))
+    ].slice(0, this.limit.getSnapshot() ?? Number.POSITIVE_INFINITY))
     return eligible.filter(id => kept.has(id) || !countedIds.has(id))
   }
 

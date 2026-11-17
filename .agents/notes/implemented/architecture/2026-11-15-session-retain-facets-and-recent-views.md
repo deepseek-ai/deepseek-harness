@@ -88,7 +88,7 @@ Its state records only what the user did: the order in which Sessions left the m
 | Failure | A failed retention is reported to the console once and the Session leaves the order, so it is released with its `mainView` reference; navigation continues |
 | Exit | A removed, archived, or evicted Session leaves the order and returns only when the main view leaves it again |
 | Attention | A Session that is running, awaits the user, or has an unread completion, as the unified Session UI status reports, is neither counted nor evicted; once it is read and idle it counts again |
-| Limit | The ui-workspace `recentViewLimit` configuration, 10 by default, counted Sessions besides the main-view Session |
+| Limit | The ui-workspace `recentViewLimit` configuration, 10 by default, counted Sessions besides the main-view Session; a volatile Host `Config` field the browser receives through [synced plugin configuration](2026-11-15-client-config-sync.md), so a change applies without a reload and Sessions already evicted do not return |
 | Eviction | Beyond the limit, the least recently left unpinned Session is evicted first, then the least recently left pinned one; the list is checked again whenever the Session list, Workspace list, or Session UI status changes |
 | Disposal | Plugin disposal unsubscribes from both lists and the status, clears the order, and releases every reference |
 
