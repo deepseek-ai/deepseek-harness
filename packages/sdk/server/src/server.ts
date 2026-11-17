@@ -237,7 +237,15 @@ export class HarnessSdkJsonRpcServer {
       if (provider !== 'deepseek-official') throw new Error(`no adapter registered for provider "${provider}"`)
       // The route requires the DeepSeek authentication service; a composition without one gets it with the fallback route.
       if (this.ctx.get('deepseekAuth') === undefined) this.authFiber = await this.ctx.plugin(DeepSeekAuth)
-      this.llmFiber = await this.ctx.plugin(LlmDeepSeek)
+      try {
+        this.llmFiber = await this.ctx.plugin(LlmDeepSeek)
+      } catch (error: unknown) {
+        // Without the route nothing here uses the authentication service this call mounted.
+        const mounted = this.authFiber
+        this.authFiber = undefined
+        await mounted?.dispose()
+        throw error
+      }
     }
     // Adapter presence was read from this service above; a successful fallback mount also requires it.
     const llm = this.ctx.get('llm') as LlmRuntime
@@ -489,8 +497,8 @@ export class HarnessSdkJsonRpcServer {
       this.goalLifetime.dispose(),
       ...records.map(rec => Promise.resolve().then(() => rec.handle.dispose())),
       ...(this.llmFiber === undefined ? [] : [Promise.resolve().then(async () => {
-        await this.llmFiber?.dispose()
-        await this.authFiber?.dispose()
+        // The route requires the authentication service, so the route goes first; its failure does not keep the service.
+        try { await this.llmFiber?.dispose() } finally { await this.authFiber?.dispose() }
       })]),
     ])
     this.llmFiber = undefined
