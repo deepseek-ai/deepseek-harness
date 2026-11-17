@@ -675,12 +675,11 @@ export abstract class Bot<C = unknown> {
           options,
           previous: [...parts],
         }
-        const idempotent = this.adapterHooks.idempotentSend?.(target, ctx) ?? false
         const part = await this.withRetry(
           () => this.adapterHooks.sendPayload(frame.payloads[index], target, ctx),
           target,
           options.signal,
-          idempotent,
+          () => this.adapterHooks.idempotentSend?.(target, ctx) ?? false,
         )
         parts.push(part)
       }
@@ -816,9 +815,10 @@ export abstract class Bot<C = unknown> {
     operation: () => Promise<R>,
     target: Target,
     signal?: AbortSignal,
-    idempotent = true,
+    idempotent: boolean | (() => boolean) = true,
   ): Promise<R> {
     let sawUnknown = false
+    const isIdempotent = () => typeof idempotent === 'function' ? idempotent() : idempotent
     for (let attempt = 1; ; attempt++) {
       try {
         return await operation()
@@ -826,7 +826,7 @@ export abstract class Bot<C = unknown> {
         const classified = this.classifyError(error)
         if (classified.published === 'unknown') sawUnknown = true
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit')
-          && (classified.published === 'no' || idempotent)
+          && (classified.published === 'no' || isIdempotent())
           && attempt < PIPELINE_ATTEMPTS
         if (!again) {
           throw sawUnknown && classified.published !== 'unknown'
@@ -838,6 +838,9 @@ export abstract class Bot<C = unknown> {
             : classified
         }
         await this.sleep(streamBackoff(attempt, classified.retryAfterMs), signal)
+        if (classified.published !== 'no' && !isIdempotent()) {
+          throw classified
+        }
       }
     }
   }
