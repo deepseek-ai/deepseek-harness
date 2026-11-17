@@ -575,6 +575,41 @@ describe('lifecycle', () => {
     expect(text(second)).toBe('已停止 1 个会话。')
   })
 
+  it('settles a pending command receipt as unknown on replay without re-running /stop on a newer turn', async () => {
+    const first = await bootCommands()
+    const shared = await ensureShared(first)
+    const stopFrame = inbound('/stop')
+    const stopKey = ImMessageKey('fake:bot', stopFrame.id)
+
+    // Fail `store.settle` so the message stays pending in `im_messages`, and leave the command receipt `pending`
+    // (as if the process crashed after persisting intent and running `/stop`, before `done` could be written).
+    vi.spyOn(first.store, 'settle').mockRejectedValueOnce(new Error('crash before settle'))
+    await first.receive(stopFrame)
+    first.base.pool.media.get('im_session_commands')?.tables.get('commands')?.set(stopKey, {
+      status: 'pending',
+      reply: '',
+      sessions: [shared.sessionId],
+      createdAt: 0,
+    })
+    await first.close()
+
+    const second = await bootCommands({
+      pool: first.base.pool,
+      root: first.base.root,
+      commands: { retentionMs: 60_000 },
+    })
+    const stopSpy = vi.spyOn(second.base.ctx.im.sessions, 'stop')
+    second.intake.pump()
+    await second.intake.idle()
+
+    expect(stopSpy).not.toHaveBeenCalled()
+    expect(second.outcome(stopFrame.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+    expect(text(second)).toContain('结果未知')
+    expect(second.base.pool.media.get('im_session_commands')?.tables.get('commands')?.get(stopKey)).toMatchObject({
+      status: 'done',
+    })
+  })
+
   it('serializes concurrent dispatches of one message key and recovers after a reply failure', async () => {
     const harness = await bootCommands()
     await ensureShared(harness)

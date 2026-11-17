@@ -24,6 +24,8 @@ export interface SessionCommandStrings {
   denied: string
   /** A passthrough command succeeded without text. */
   done: string
+  /** A side-effecting command was interrupted before its result was recorded. */
+  interrupted: string
   /** Header line of `/help`. */
   helpTitle: string
   /** Label separator (full-width colon in Chinese). */
@@ -52,6 +54,7 @@ const zh: SessionCommandStrings = {
   noSession: '当前聊天还没有会话。',
   denied: '你没有权限执行这个命令。',
   done: '已完成。',
+  interrupted: '该命令此前已开始执行，但结果未能落盘（结果未知，未重复执行）。',
   helpTitle: '可用命令：',
   colon: '：',
   describe: {
@@ -81,6 +84,7 @@ const en: SessionCommandStrings = {
   noSession: 'This chat has no session yet.',
   denied: 'You are not allowed to run this command.',
   done: 'Done.',
+  interrupted: 'This command was already started before its result could be recorded (outcome unknown; not re-run).',
   helpTitle: 'Commands:',
   colon: ': ',
   describe: {
