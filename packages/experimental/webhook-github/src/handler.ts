@@ -101,7 +101,7 @@ export function createGitHubWebhookHandler(
       let verified = false
       try {
         verified = await new Webhooks({ secret: credential.value }).verify(body, signature)
-      } catch {
+      } catch (_verificationFailed) {
         // Octokit verification errors carry no response detail safe or useful to the sender.
       }
       if (!verified) throw new WebhookHttpError(401, 'invalid webhook signature')

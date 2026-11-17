@@ -895,6 +895,47 @@ describe('late replies', () => {
     await ctx.fiber.dispose()
   })
 
+  it('leaves a blocking approval ask unanswerable, however that ask settles', async () => {
+    const ctx = await timedContext()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const agent = liveAgent('approval-blocking')
+    ctx.agents.enter(agent)
+    const answers = [{ id: 'scope', selected: ['Tool only'] }]
+    // The plan-review and CUA approvals reach `ctx.userQuestions.ask` with no wait
+    // and no timeout; the timed schema in this header must not pull them in.
+    askInLog(agent, timedCallId)
+    const answerer = registerAnswerer(ctx, provider('Tool only'))
+    expect(await ctx.userQuestions.ask({ agent, questions: timedQuestions }))
+      .toEqual({ answers })
+    // The call is recorded, but a blocking ask writes no tool result of its own, so
+    // the projection keeps it `open` and never makes it a continued, answerable one.
+    expect(ctx.sessionProjections.checkpoint(agent.session).userQuestions?.val)
+      .toMatchObject({ questions: { active: [{ callId: timedCallId, state: 'open' }], settled: [] } })
+    expect(ctx.userQuestions.answer(agent, timedCallId, { answers })).toBe(false)
+    expect(agent.steer).not.toHaveBeenCalled()
+
+    // A cancelled blocking ask is a settled abort, never the pending result a timed wait returns.
+    answerer()
+    const callId = brandString<ToolCallId>('approval-cancelled')
+    askInLog(agent, callId)
+    const controller = new AbortController()
+    registerAnswerer(ctx, {
+      ask: () => {
+        controller.abort(new Error('turn ended'))
+        return Promise.reject(new Error('the answer UI closed'))
+      },
+    })
+    await expect(ctx.userQuestions.ask({ agent, questions: timedQuestions, signal: controller.signal }))
+      .rejects.toMatchObject({ code: 'ASK_ABORTED' })
+    // The cancelled approval's own result, when the turn records one, is an error result
+    // or an abort before dispatch, neither of which the fold reads as continued.
+    expect(ctx.sessionProjections.checkpoint(agent.session).userQuestions?.val).toMatchObject({
+      questions: { active: [{}, { callId, state: 'open' }], settled: [] },
+    })
+    expect(ctx.userQuestions.answer(agent, callId, { answers })).toBe(false)
+    expect(agent.steer).not.toHaveBeenCalled()
+  })
+
   it('never lists a call the blocking legacy tool made, even one the process never finished', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('legacy-interrupted')

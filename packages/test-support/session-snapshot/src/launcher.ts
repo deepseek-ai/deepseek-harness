@@ -13,7 +13,6 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
-import * as yaml from 'js-yaml'
 import {
   client as createAcpClientApp,
   methods,
@@ -37,7 +36,7 @@ import {
   type SetSessionConfigOptionResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
 
 const EXIT_MARKER_GRACE_MS = 250
@@ -417,7 +416,7 @@ function linkProfilePackage(source: string, cwd: string, profile: string, packag
 export function materializeProfilePatch(
   source: string, cwd: string, profile: string, targetDir: string, index: number,
 ): string {
-  const parsed = yaml.load(readFileSync(source, 'utf8'), { schema: entryListSchema })
+  const parsed = parseEntryYaml(readFileSync(source, 'utf8'))
   if (!Array.isArray(parsed)) throw new Error(`snapshot profile patch must be a top-level array: ${source}`)
   const patches = parsed as PatchOptions[]
   const baseDir = dirname(source)
@@ -439,7 +438,7 @@ export function materializeProfilePatch(
     for (const entry of patch.insert ?? []) visitEntry(entry)
   }
   const target = join(targetDir, `${String(index)}-${basename(source)}`)
-  writeFileSync(target, yaml.dump(patches, { schema: entryListSchema, lineWidth: -1, noRefs: true }))
+  writeFileSync(target, stringifyEntryYaml(patches, { lineWidth: -1 }))
   return target
 }
 

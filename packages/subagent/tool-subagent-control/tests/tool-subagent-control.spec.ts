@@ -16,6 +16,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime, { SubagentError } from '@deepseek-ai/dsh-subagent'
+import TeamService from '@deepseek-ai/dsh-agent-team'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -203,9 +204,10 @@ describe('dsh-tool-subagent-control', () => {
   })
 
   it.each([
+    { name: 'send_message', instruction: 'use send_message to send a self-contained result to the agent that delegated you', other: 'Use list_agents' },
     { name: 'send_message', instruction: 'To message other agents', other: 'Use list_agents' },
     { name: 'list_agents', instruction: 'Use list_agents', other: 'To message other agents' },
-  ])('gates $name guidance independently in an agent scope', async ({ name, instruction, other }) => {
+  ])('gates $name guidance "$instruction" independently in an agent scope', async ({ name, instruction, other }) => {
     const { ctx, parent } = await setup([])
     const { agent: child } = await ctx.agents.create({
       sessionId: brandString<SessionId>('communication-child'),
@@ -231,6 +233,26 @@ describe('dsh-tool-subagent-control', () => {
     expect(filtered).not.toContain(instruction)
     expect(filtered).toContain(other)
     toolSet.dispose()
+  })
+
+  it('asks a delegated agent to report with send_message only while Team mode is off', async () => {
+    const { ctx, parent } = await setup([])
+    await ctx.plugin(TeamService)
+    const { agent: child } = await ctx.agents.create({
+      sessionId: brandString<SessionId>('team-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const report = 'When you finish, use send_message to send a self-contained result to the agent that delegated you.'
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    await ctx.agentTeams.setEnabled(parent, false)
+    expect(await communication()).toContain(report)
+    await ctx.agentTeams.setEnabled(parent, true)
+    const team = await communication()
+    expect(team).not.toContain(report)
+    expect(team).toContain('To message other agents')
+    await ctx.agentTeams.setEnabled(parent, false)
+    expect(await communication()).toContain(report)
   })
 
   it('keeps collaboration instructions when controls are mounted in an agent scope', async () => {

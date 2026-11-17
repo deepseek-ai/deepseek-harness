@@ -67,7 +67,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### 失败与恢复
 
-失败会抛出 `WebError`，其中包含可供程序路由的错误码：`WEB_INVALID_URL`、`WEB_BLOCKED_URL`、`WEB_FETCH_TOO_LARGE`、`WEB_FETCH_TIMEOUT`、`WEB_REDIRECT_BLOCKED`、`WEB_UNSUPPORTED_CONTENT_TYPE`、`WEB_ABORTED` 或 `WEB_PROVIDER_ERROR`。`WEB_UNSUPPORTED_CONTENT_TYPE` 涵盖不支持的媒体类型、不支持的 charset 声明，以及畸形声明恢复过程中遇到的非法 UTF-8。直接调用方可以按错误码路由；面向模型的 `web_fetch` 工具会在自己的错误包装层内把失败文本呈现给模型。
+失败会抛出 `WebError`，其中包含可供程序路由的错误码：`WEB_INVALID_URL`、`WEB_BLOCKED_URL`、`WEB_FETCH_TOO_LARGE`、`WEB_FETCH_TIMEOUT`、`WEB_REDIRECT_BLOCKED`、`WEB_UNSUPPORTED_CONTENT_TYPE`、`WEB_ABORTED`、某个传输故障错误码，或 `WEB_PROVIDER_ERROR`。`WEB_UNSUPPORTED_CONTENT_TYPE` 涵盖不支持的媒体类型、不支持的 charset 声明，以及畸形声明恢复过程中遇到的非法 UTF-8。响应之前或响应期间发生的网络故障会按其系统错误码归类为 `WEB_FETCH_DNS_FAILED`、`WEB_FETCH_CONNECTION_REFUSED`、`WEB_FETCH_CONNECTION_TIMEOUT`、`WEB_FETCH_CERTIFICATE_INVALID`、`WEB_FETCH_CONNECTION_INTERRUPTED` 或 `WEB_FETCH_NETWORK_UNREACHABLE`；系统错误码缺失、无法识别或相互混杂时，结果为 `WEB_FETCH_NETWORK_ERROR`。错误消息会写明故障类别、已知时的系统错误码以及底层错误，例如 `web fetch failed: could not resolve the host name (ENOTFOUND): getaddrinfo ENOTFOUND host`。详情最多列出四次连接尝试，其余尝试只计数，且最多保留 500 个字符。直接调用方可以按错误码路由；面向模型的 `web_fetch` 工具会在自己的错误包装层内把失败文本呈现给模型。
 
 -----
 
@@ -92,6 +92,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、上限验证、提供方注册 |
 | [`src/provider.ts`](src/provider.ts) | `HttpFetchProvider`：传输、重定向跟随、有界读取、charset 解码 |
+| [`src/transport-failure.ts`](src/transport-failure.ts) | 传输故障类别：系统错误码到 `WEB_FETCH_*` 错误码的映射、摘要和有界详情 |
 | [`src/policy.ts`](src/policy.ts) | URL 校验、同源检查、内容类型分类、charset 解析 |
 
 ### 读取路径
@@ -119,7 +120,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 `dsh-tool-web`：该工具把本提供方经 `maxBodyChars` 限制的解码文本或由 HTML 转换得到的 markdown 置于抓取结果包装层内，而重定向、标头与传输上限保持隐藏。
+间接地，通过 `dsh-tool-web`：该工具把本提供方经 `maxBodyChars` 限制的解码文本或由 HTML 转换得到的 markdown 置于抓取结果包装层内，而重定向、标头与传输上限保持隐藏。网络故障会以其分类后的消息呈现给模型。
 
 #### KV Cache 影响
 

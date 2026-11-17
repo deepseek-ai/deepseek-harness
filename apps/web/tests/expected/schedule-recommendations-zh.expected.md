@@ -1,0 +1,19 @@
+- region "推荐":
+  - heading "推荐" [level=2]
+  - list:
+    - listitem:
+      - button "每日简报": 每日简报 汇总工作区最近的变化和待跟进的事，列出今天先做什么。 工作日 9:00
+    - listitem:
+      - button "每周回顾": 每周回顾 回顾自己这周在工作区做的事，列出没收尾的事和下周先做什么。 周五 {{clock}}
+    - listitem:
+      - button "Issue 扫描": Issue 扫描 把新开的 issue 分成 bug、需求、提问，标出重复的和需要回复的。 工作日 {{clock}}
+    - listitem:
+      - button "插件兼容检查": 插件兼容检查 DSH 出新版本时，检查已装的插件和自己做的插件要不要改。 每天 {{clock}}
+    - listitem:
+      - button "主题和论文追踪": 主题和论文追踪 搜索关注主题的新消息和 arXiv 新论文，各列几条要点。 每天 9:00
+    - listitem:
+      - button "分支和 worktree 清理": 分支和 worktree 清理 列出 PR 已合并或关闭的本地分支和 worktree，确认后再删。 周五 {{clock}}
+    - listitem:
+      - button "天气和出行": 天气和出行 今天和接下来三天的天气，要带伞或加衣时提一句。 每天 7:30
+    - listitem:
+      - button "一周运动计划": 一周运动计划 按目标和每周能练的日子排好下周的运动计划。 周日 {{clock}}

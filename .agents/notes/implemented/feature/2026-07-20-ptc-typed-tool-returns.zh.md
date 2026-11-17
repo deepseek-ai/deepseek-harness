@@ -14,7 +14,7 @@ PTC mode 过去会把每个嵌套工具的结果从 `ContentBlock[]` 重新投�
 
 ## 决策
 
-PTC mode 是可见工具注册表的类型化投影。普通成功绑定调用解析为 post-execute 策略处理后的最终规范 `JsonValue`，失败的绑定调用则以真正的 `ToolCallError` 拒绝 Promise。中间值保留在运行中，并完整跨越进程边界。[显式输出决策](../architecture/2026-11-09-explicit-ptc-output.zh.md)负责 TypeScript Image 绑定、完成值抑制及可见文本和图片的选择。其他语言消费方保留完成值渲染和含图片内容的延后转发。
+PTC mode 是可见工具注册表的类型化投影。普通成功绑定调用解析为 post-execute 策略处理后的最终规范 `JsonValue`，失败的绑定调用则以真正的 `ToolCallError` 拒绝 Promise。中间值保留在运行中，并完整跨越进程边界。[显式输出决策](../architecture/2026-11-09-explicit-ptc-output.zh.md)负责 TypeScript Image 绑定、完成值抑制及可见文本和图片的选择。[仅支持 TypeScript 的执行器决定](../simplification/2026-11-12-typescript-only-ptc.zh.md)拥有受支持语言。
 
 本文档定义叠加在原始 [PTC mode 基础](2026-06-15-ptc.zh.md)之上的返回值与失败约定。统一 schema 词汇由 [JSON 值 schema DSL reference](../../../../packages/core/tools/README.zh.md)负责定义；Native 渲染与策略投影仍由规范输出 Agent Note 负责定义。
 
@@ -57,7 +57,7 @@ PTC mode 通过运行时请求中的 `{ name: "ToolCallError", memberNamePropert
 
 ### 外层结果与输出账本
 
-保留完成值的运行时消费方接收精确无损 JSON：`undefined` 省略完成值，`null` 是显式结果。TypeScript `run_code` 请求丢弃完成值，将捕获日志和可选沙箱信息作为规范值返回；所选图片单独进入渲染内容。其他语言消费方还提供 `result?: JsonValue`。其渲染器先输出日志，字符串结果保持原文，其他 JSON 根值使用迭代式美化渲染器。总缩进长度上限为十个字符，更深子树保持紧凑格式，使遍历不受调用栈深度限制，且格式化大小与规范 JSON 大小呈线性关系。
+保留完成值的运行时消费方接收精确无损 JSON：`undefined` 省略完成值，`null` 是显式结果。TypeScript `run_code` 请求丢弃完成值，将捕获日志和可选沙箱信息作为规范值返回；所选图片单独进入渲染内容。
 
 `NodePtcRuntime` 以可配置的 `maxOutputBytes` 取代彼此独立的日志与值上限，默认值为 `67_108_864` 字节。worker 会将已捕获日志序列化为 JSON 字符串后的精确字节数计入账本，并在发送终态消息前，根据组合账本的剩余额度预检分离后的完成值或程序异常。因此，即使抛出的字符串或堆栈极大，通过 worker 端口的也只会是固定的 `output-limit` 诊断。宿主侧会针对伪造流量以及 worker 无法观察的原生管道写入，重复执行这套面向不可信对端的账本校验。固定的 `PtcRunResult` 字段名、花括号、有界的错误类型标签及后续展示空白有意不计入这份可变负载账本。这两个阶段都不会实际生成超出上限的完成值序列化结果。结果不超过上限时会保持精确。完成值无法通过无损 JSON 快照时，以 `invalid-output` 失败；值、诊断或包含日志的组合结果超过上限时，以 `output-limit` 失败，而不会变成检查格式化后或截断的文本。
 
@@ -73,7 +73,7 @@ PTC mode 通过运行时请求中的 `{ name: "ToolCallError", memberNamePropert
 
 ### 持久化、元数据与 spill
 
-嵌套分发在 `tool/ptc-dispatch` 上记录子调用完整渲染后的 `content`/`isError`，但不会持久化规范值。TypeScript 程序通过显式展示为外层 `tool/result.content` 选择图片。其他语言消费方将成功的含图片内容作为带来源归属的用户消息，延后到外层结果之后。普通 Session 事件使这些模型可见输入可以重建。[PTC mode note](2026-06-15-ptc.zh.md)负责持久事件名称与历史标识保留规则；回放无法重建程序的规范中间值。
+嵌套分发在 `tool/ptc-dispatch` 上记录子调用完整渲染后的 `content`/`isError`，但不会持久化规范值。TypeScript 程序通过显式展示为外层 `tool/result.content` 选择图片。普通 Session 事件使这些模型可见输入可以重建。[PTC mode note](2026-06-15-ptc.zh.md)负责持久事件名称与历史标识保留规则；回放无法重建程序的规范中间值。
 
 不透明的 `exec.parent` token 用于标识嵌套调用。展示元数据以及通用或工具自有的 spill 投影都会跳过这些调用；它们的规范值永远不会进入上下文。Client 可以从原始分发事件派生[嵌套 terminal 卡片](../../../../packages/client/ui-tool/README.zh.md)，无需元数据。外层 `run_code` 调用产生面向模型的结果，并且可能对 post-policy 处理后的最终展示执行 spill；`run_code` 有意既不声明结果展示器，也不声明展示元数据，因此 UI 适配器会通过通用的原始内容回退机制，使用持久化的 `tool/result.content` 补全该卡片。
 

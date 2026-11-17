@@ -3,12 +3,15 @@
  *
  * The durable `user/message` source records the share-viewer principal for a
  * caller other than the owner. Chat's `conversation.chat.user.before` chain seat
- * elects that source above the official user bubble; this entry supplies only
- * the label and leaves the bubble, actions, and text interaction to Chat. The
- * seat is dispatched for `user` rows alone, so steering keeps its untouched
- * official DOM. Chat's seat owner props carry the durable source unparsed; this
- * module is the only place that recognizes the share-viewer principal and owns
- * the copy.
+ * elects that source above the official bubble; this entry supplies only the
+ * label and leaves the bubble, actions, and text interaction to Chat. The seat
+ * covers the rows a reader can write — user and steering alike — so a reader's
+ * interjection states its author once the Host records the input in the Inbox,
+ * during that pending window and after admission. A local submission echo
+ * carries no source, so the sender sees no author line until the pending row
+ * replaces it. The seat receives the durable source unparsed as its `row`
+ * props; this module is the only place that recognizes the share-viewer
+ * principal and owns the copy.
  *
  * @module @deepseek-ai/dsh-experimental-liveshare/src/client/user-origin
  */

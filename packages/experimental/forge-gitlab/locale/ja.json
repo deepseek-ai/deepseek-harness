@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitLab の変更リクエスト",
+    "description": "ホストの GitLab CLI を通じて、forge レジストリ用に GitLab のマージリクエストを読み書きします。"
+  }
+}

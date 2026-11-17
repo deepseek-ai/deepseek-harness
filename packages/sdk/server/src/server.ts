@@ -19,6 +19,7 @@ import { createUserMessage, type ReasoningEffortId, type ContentBlock, type LlmR
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-permission-presets'
 
 import type {} from '@deepseek-ai/dsh-schedule'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
@@ -334,6 +335,8 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Restore a persisted session and repair its interrupted final turn without sending input.
    * Uses the initialized model route while preserving the stored session identity and directory.
+   * An explicit permission preset is persisted during setup before execution; omission preserves saved permissions.
+   * Already scheduled restorations reject permission overrides because execution may have started.
    * Rejects subagent, missing, unreadable, or already owned sessions; never creates a replacement.
    * @param params - persisted session identity in the configured persistence store.
    * @returns an empty result after the Agent is ready for prompts.
@@ -344,6 +347,9 @@ export class HarnessSdkJsonRpcServer {
     const sessionId = params.sessionId
     const restoration = this.scheduledSessions.get(sessionId)
     if (restoration !== undefined) {
+      if (params.permissionMode !== undefined) {
+        throw new Error('cannot override permissions of a session already restored by a reminder; use /permission')
+      }
       this.scheduledSessions.delete(sessionId)
       const record = await restoration
       this.assertLiveAgent(record, sessionId)
@@ -352,7 +358,7 @@ export class HarnessSdkJsonRpcServer {
     if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) {
       throw new Error(`SDK session is already open or opening: ${sessionId}`)
     }
-    await this.openSession(sessionId, true)
+    await this.openSession(sessionId, true, params.permissionMode)
     return {}
   }
 
@@ -512,11 +518,18 @@ export class HarnessSdkJsonRpcServer {
         })
       }
       case 'session/resume': {
-        const sessionId = params?.sessionId
-        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+        if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0) {
           throw new TypeError('session/resume requires a non-empty sessionId string')
         }
-        return this.resume({ sessionId })
+        const unknownKey = Object.keys(params).find(key => key !== 'sessionId' && key !== 'permissionMode')
+        if (unknownKey !== undefined) {
+          throw new TypeError(`unknown session/resume parameter ${JSON.stringify(unknownKey)}; expected sessionId and optional permissionMode`)
+        }
+        const { sessionId, permissionMode } = params
+        if (permissionMode !== undefined && (typeof permissionMode !== 'string' || permissionMode.length === 0)) {
+          throw new TypeError('session/resume permissionMode must be a non-empty string')
+        }
+        return this.resume({ sessionId, ...permissionMode === undefined ? {} : { permissionMode } })
       }
       case 'session/wait': {
         const sessionId = params?.sessionId
@@ -551,8 +564,8 @@ export class HarnessSdkJsonRpcServer {
     return this.openSession(sessionId, false)
   }
 
-  private openSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
-    const creation = this.createSession(sessionId, resume)
+  private openSession(sessionId: string, resume: boolean, permissionMode?: string): Promise<SessionRecord> {
+    const creation = this.createSession(sessionId, resume, permissionMode)
     this.sessionCreations.set(sessionId, creation)
     void creation.then(
       () => { this.sessionCreations.delete(sessionId) },
@@ -561,7 +574,12 @@ export class HarnessSdkJsonRpcServer {
     return creation
   }
 
-  private async createSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
+  private async createSession(sessionId: string, resume: boolean, permissionMode?: string): Promise<SessionRecord> {
+    const permissions = permissionMode === undefined ? undefined : this.ctx.get('permissionPresets')
+    if (permissionMode !== undefined) {
+      if (permissions === undefined) throw new Error('session/resume permissionMode requires the permission-presets service')
+      permissions.resolve(permissionMode)
+    }
     if (resume && (await this.ctx.get('sessionPersistence')?.stat(brandString<SessionId>(sessionId)))?.header.origin === 'subagent') {
       throw new Error(`subagent session "${sessionId}" cannot be resumed directly; resume its root session instead`)
     }
@@ -580,6 +598,9 @@ export class HarnessSdkJsonRpcServer {
       agentOptions,
       // The initialized route replaces the restored Session's model selection.
       setup: (_agentCtx, agent) => {
+        if (permissionMode !== undefined && permissions !== undefined) {
+          permissions.set(agent.session, permissionMode)
+        }
         const previous = agent.model.current()
         const selection = { ...agentOptions }
         if (selection.reasoningEffort === undefined && previous !== undefined

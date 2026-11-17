@@ -49,6 +49,8 @@ The sidebar and conversation-header toggles show the effective shortcut from the
 
 The top expand button hosts the optional, non-interactive `sidebar.toggle.badge` slot while collapsed. Its occupant supplies status and tooltip content without adding another action or changing the button's navigation behavior.
 
+The root-scoped `sidebar.session.action` HOC layer wraps the New Session row's content: an occupant receives the row's Tooltip and button as `children` and returns them, possibly wrapped, together with its own controls, so it decorates the row without adding a wrapper element. It receives only `wide`, and an occupant that adds nothing must return `children`. Expanded, the controls share the New Session row and the button takes the remaining width; in the rail they stack below its icon. The row renders only while New Session renders, and each occupant still checks its own access.
+
 Expanded content follows the frame's column width, including its transitions. During a live collapse, the content fades out at its frozen expanded width, the upper controls share one fade and leftward translation into the 56px rail, and the layout's column slide ends the motion. A page that starts collapsed renders the rail statically, and reduced-motion mode disables both transitions. The bottom-pinned `sidebar.settings` control shares the fade timing but has no horizontal translation.
 
 On Windows Electron, `html[data-windows-titlebar]` fixes the sidebar toggle in the caption's top-left corner in both states, aligned with New Session's left edge only when expanded. The expanded brand sits below the caption and above New Session, with 8px of extra space above that button. Collapsing hides the brand and sidebar content and places New Session between the sidebar toggle and the Desktop-owned menus. The sidebar sets the root `--dsh-windows-menu-start` to 84px when collapsed; the Desktop preload uses it to position its menu after New Session and defaults to 48px when expanded. Caption icon buttons use centered 16px glyphs in 28px controls with the compact control radius and exclude themselves from the window drag region. The sidebar toggle and New Session bubbles open below the caption, where the Desktop-owned menu text cannot cover them; an occupying `sidebar.toggle.badge` chooses its own bubble side.
@@ -127,7 +129,6 @@ These limits define what the shell owns versus what its occupants own; they are 
 
 - **Session state-dot rendering is owned by ui-workspace** — no done/error notification sources are available to this shell.
 - **Workspace browser behavior is composition-owned** — grouping, ordering, search, and row state belong to ui-workspace, not this shell.
-- **"New task completed" unread marking is local viewing state** — completion-time > last-seen never reaches the host.
 - **Copying the local-build version is mouse-only** — keyboard activation of the brand starts a session.
 - **Only wheel and trackpad input crosses the navigation boundary in one gesture** — touch drags keep native nested scrolling and stop where the viewport reaches its end; browsers without scroll-state container queries scroll the section first. Wheel steps split in JavaScript run on the main thread without smooth-scrolling animation or overscroll bounce.
 

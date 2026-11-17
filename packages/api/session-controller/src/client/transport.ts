@@ -7,6 +7,7 @@ import {
   RemoteSnapshotStream,
   RemoteStreamCarrierError,
   type ClientRemote,
+  type RemoteStreamCarrierFailure,
   type RemoteJournalChange,
   type RemoteJournalFrame,
 } from '@deepseek-ai/dsh-api-gateway/client'
@@ -91,7 +92,7 @@ export interface SessionControlStreamOptions {
   /** Apply a complete baseline or one later update. */
   readonly accept: (frame: SessionControlFrame) => void
   /** Observe a retryable carrier loss before reconnection. */
-  readonly carrierFailed?: (error: RemoteStreamCarrierError) => void
+  readonly carrierFailed?: (error: RemoteStreamCarrierFailure) => void
   /** Publish a terminal business or protocol failure. */
   readonly failed: (error: unknown) => void
 }
@@ -101,7 +102,7 @@ export interface SessionEventStreamOptions {
   /** Apply one complete event-window change. */
   readonly publish: (change: SessionJournalChange) => void
   /** Observe a retryable carrier loss before reconnection. */
-  readonly carrierFailed?: (error: RemoteStreamCarrierError) => void
+  readonly carrierFailed?: (error: RemoteStreamCarrierFailure) => void
   /** Publish a terminal stream, page, or protocol failure after opening. */
   readonly failed: (error: unknown) => void
 }

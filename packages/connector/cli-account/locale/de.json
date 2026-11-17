@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "CLI-App-Konten",
+    "description": "Nennt dem Modell den CLI-Pfad jedes CLI-App-Plugins, führt die Kontovorgänge des Plugins aus und zeigt dessen Konto auf der Seite „Plugins“ an."
+  }
+}

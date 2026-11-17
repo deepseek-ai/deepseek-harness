@@ -11,12 +11,13 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import { en } from '../src/client/locales.ts'
-import css from '../src/client/ForgeTab.module.css'
+import css from '../src/client/Forge.module.css'
 import overview from '../src/client/ChangeRequestOverview.module.css'
 import { check, entry, snapshot } from './client-fixtures.client.ts'
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -346,6 +347,17 @@ describe('linked issues', () => {
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/tracker/issues/2')
     expect(links[0]?.className).toBe(overview.issue)
     expect(row.querySelector(`.${css.visuallyHidden}`)).toBeNull()
+  })
+
+  it('names an issue in a tooltip after 500ms of hover', () => {
+    const b = card(snapshot(7, { closingIssues: [issue(6, 'Octo', 'Demo')] }))
+    const link = within(b.item.querySelector('[data-forge-closing-issues]') as HTMLElement).getByRole('link')
+    vi.useFakeTimers()
+    fireEvent.pointerEnter(link)
+    act(() => { vi.advanceTimersByTime(499) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(screen.getByRole('tooltip').textContent).toBe('Issue 6')
   })
 
   it('shows no row without linked issues', () => {

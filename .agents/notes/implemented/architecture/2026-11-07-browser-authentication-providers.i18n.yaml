@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-07-browser-authentication-providers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-07-browser-authentication-providers.md
+/agent-note-peer-based-authentication-providers:
+  en: dc115ba91f14e5b5
+  zh: f1a833e5cc9b5de4
+/agent-note-peer-based-authentication-providers/problem:
+  en: f4a95ed5454d059d
+  zh: 20c3ffeac8ec2b6f
+/agent-note-peer-based-authentication-providers/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-peer-based-authentication-providers/decision/independent-authentication-and-equal-providers:
+  en: 3bc63d9822e90803
+  zh: 0763d1106b8e36ea
+/agent-note-peer-based-authentication-providers/decision/identity-authorization-and-lifetime-remain-separate:
+  en: ec74d7af014cd9e5
+  zh: 04495d74691073a8
+/agent-note-peer-based-authentication-providers/decision/effects-on-http-events-and-startup:
+  en: 6b2742912d440682
+  zh: ec3c7fd3993f1367
+/agent-note-peer-based-authentication-providers/decision/preserved-protocols-and-explicit-limits:
+  en: d5fb7d9f70ccb9a8
+  zh: 5e78c868370deffd
+/agent-note-peer-based-authentication-providers/testing:
+  en: 1ae7c77c7388883a
+  zh: eb2145ec79691f81
+/agent-note-peer-based-authentication-providers/alternatives-considered:
+  en: aa5de8e27414700b
+  zh: 35604d226908afc2
+/agent-note-peer-based-authentication-providers/consequences:
+  en: 61065aecfda88a3c
+  zh: 518f3f76ef167a31

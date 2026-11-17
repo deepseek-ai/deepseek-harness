@@ -1,0 +1,110 @@
+/* The changes view while it reads: one status line, then file cards drawn as skeletons. The cards copy `.file` and
+   `.fileHeader` of ChangesTab.module.css; the fill and pulse copy the Plugins page skeleton. */
+
+.status {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  margin: 0 0 10px;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 20px;
+}
+
+.fill {
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-skeleton);
+  animation: forge-skeleton-pulse 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+}
+
+@keyframes forge-skeleton-pulse {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill { animation: none; }
+}
+
+.file {
+  overflow: clip;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--forge-changes-bg);
+}
+
+.file + .file {
+  margin-top: 12px;
+}
+
+@container forge-changes (max-width: 380px) {
+  .file + .file {
+    margin-top: 8px;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 10px 0 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--forge-changes-bg);
+}
+
+.folded .header {
+  border-bottom: 0;
+}
+
+.icon,
+.box {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.path {
+  height: 10px;
+}
+
+.counts {
+  flex: none;
+  width: 52px;
+  height: 10px;
+  margin-left: auto;
+}
+
+.lines {
+  display: grid;
+  padding: 5px 0;
+}
+
+.split {
+  grid-template-columns: 1fr 1fr;
+}
+
+.column + .column {
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 18px;
+  padding: 0 12px;
+}
+
+.number {
+  flex: none;
+  width: 20px;
+  height: 8px;
+}
+
+.code {
+  height: 8px;
+}
