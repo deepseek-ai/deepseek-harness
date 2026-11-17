@@ -125,7 +125,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'contextMenu.content\', () => ctx.slots.register(\n      { name: \'contextMenu.content\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-context-menu/src/client/index.ts:42',
+    source: 'packages/client/ui-context-menu/src/client/index.ts:43',
   },
   {
     key: 'contextMenu.icon',
@@ -171,7 +171,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'contextMenu.icon\', () => ctx.slots.register(\n      { name: \'contextMenu.icon\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-context-menu/src/client/index.ts:40',
+    source: 'packages/client/ui-context-menu/src/client/index.ts:41',
   },
   {
     key: 'conversation.approval.detail',

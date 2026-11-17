@@ -121,12 +121,12 @@
 | --- | --- | --- |
 | `agent/request` | [`agent-loop`](../packages/core/agent-loop) (`waterfall`) | [`compaction-basic`](../packages/compaction/compaction-basic), [`timeline`](../packages/experimental/timeline) |
 | `connection/reset` | `gateway` (`emit`) | `terminal-controller`, `ui-settings` |
-| `internal/config` | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager) |
+| `internal/config` | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager), `modules` |
 | `internal/dispatch` | - | [`terminal-bash`](../packages/terminal/terminal-bash) |
 | `internal/plugin` | - | `computer-use-cua-driver-native`, `inspector`, `loader`, [`lsp-stdio`](../packages/lsp/lsp-stdio), [`mcp-client`](../packages/mcp/mcp-client), [`mcp-manager`](../packages/mcp/mcp-manager), `modules` |
 | `internal/service` | - | `client-ui-forge`, `gateway` |
-| `internal/status` | - | [`agent`](../packages/core/agent), `claude-code-mods`, `inspector`, `translator`, [`web`](../packages/web/web) |
-| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text`, [`timeline`](../packages/experimental/timeline) |
+| `internal/status` | - | [`agent`](../packages/core/agent), `claude-code-mods`, `inspector`, `modules`, `translator`, [`web`](../packages/web/web) |
+| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager), `modules`, [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text`, [`timeline`](../packages/experimental/timeline) |
 | `locale/change` | `locale` (`emit`) | `locale` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |
 | `theme/change` | `ui-theme` (`emit`) | `ui-layout`, `ui-theme` |

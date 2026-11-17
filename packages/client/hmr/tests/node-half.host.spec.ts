@@ -1,18 +1,15 @@
 /**
  * Node half of the HMR plugin: bundle watches follow the graph, stat changes
- * report through clientModuleHost.rebuilt, and everything dies with the fiber.
+ * report through clientModuleHost.rebuilt, and everything dies with the fiber,
+ * including the plugin-events Remote service.
  */
-import { EventEmitter } from 'node:events'
-import type { ServerResponse, IncomingMessage } from 'node:http'
 import { mkdtempSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientArtifactBaseline, ClientModuleRegistry, WebBootGraph } from '@deepseek-ai/dsh-client-modules'
-import type { WebRoute, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import { apply, Config, EVENTS_ENDPOINT, inject } from '../src/index.ts'
+import { apply, Config, inject } from '../src/index.ts'
 
 const POLL_MS = 20
 
@@ -75,24 +72,9 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
   return fake as FakeHost
 }
 
-// Structural fake: the plugin only touches register(); the service class
-// carries private state a literal cannot (and need not) reproduce.
-function fakeHttpServer(routes: WebRoute[]): WebServer {
-  const fake: Pick<WebServer, 'register' | 'tapIndex' | 'port'> = {
-    register(route: WebRoute) {
-      routes.push(route)
-      return () => { routes.splice(routes.indexOf(route), 1) }
-    },
-    tapIndex: () => () => {},
-    port: 0,
-  }
-  return fake as WebServer
-}
-
-async function mount(clientModuleHost: FakeHost, webServer: WebServer) {
+async function mount(clientModuleHost: FakeHost) {
   const ctx = new Context()
   ctx.provide('clientModules', clientModuleHost)
-  ctx.provide('webServer', webServer)
   const fiber = ctx.plugin(
     { inject: [...inject], Config, apply },
     { pollIntervalMs: POLL_MS },
@@ -106,11 +88,9 @@ describe('hmr node half', () => {
     const bundle = join(dir, 'a.js')
     writeFileSync(bundle, 'v1')
     const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
-    const routes: WebRoute[] = []
-    const fiber = await mount(clientModuleHost, fakeHttpServer(routes))
+    const fiber = await mount(clientModuleHost)
 
-    expect(routes).toHaveLength(1)
-    expect(routes[0]).toMatchObject({ kind: 'exact', path: EVENTS_ENDPOINT })
+    expect(fiber.ctx.get('pluginEvents')).toBeDefined()
     expect(clientModuleHost.rebuiltCalls).toEqual([])
 
     // Nudge mtime past stat granularity so the poller sees a content signal.
@@ -128,7 +108,7 @@ describe('hmr node half', () => {
     await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toContain('pkg-a') }, { timeout: 3_000 })
 
     await fiber.dispose()
-    expect(routes).toHaveLength(0)
+    expect(fiber.ctx.get('pluginEvents')).toBeUndefined()
     // Watcher gone: further file changes report nothing.
     clientModuleHost.rebuiltCalls.length = 0
     writeFileSync(bundle, 'v4-after-dispose')
@@ -142,7 +122,7 @@ describe('hmr node half', () => {
     writeFileSync(early, 'v1')
     const rows = new Map([['pkg-early', early]])
     const clientModuleHost = fakeClientModuleHost(rows)
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const fiber = await mount(clientModuleHost)
     clientModuleHost.rebuiltCalls.length = 0
 
     writeFileSync(late, 'v1')
@@ -175,7 +155,7 @@ describe('hmr node half', () => {
       },
     })
 
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const fiber = await mount(clientModuleHost)
 
     expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
     clientModuleHost.rebuiltCalls.length = 0
@@ -191,7 +171,7 @@ describe('hmr node half', () => {
     utimesSync(bundle, fixedTime, fixedTime)
     const baseline = statSync(bundle)
     const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const fiber = await mount(clientModuleHost)
     try {
       expect(clientModuleHost.rebuiltCalls).toEqual([])
       // Filesystem ctime can advance more coarsely than Date.now(); the fixture needs a distinct value.
@@ -214,7 +194,7 @@ describe('hmr node half', () => {
     utimesSync(bundle, fixedTime, fixedTime)
     const baseline = statSync(bundle)
     const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const fiber = await mount(clientModuleHost)
     clientModuleHost.rebuiltCalls.length = 0
 
     unlinkSync(bundle)
@@ -246,94 +226,9 @@ describe('hmr node half', () => {
       },
     })
 
-    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    const fiber = await mount(clientModuleHost)
 
     await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a']) }, { timeout: 3_000 })
     await fiber.dispose()
   })
-})
-
-
-it('broadcasts the desired graph without waiting for Host activation or cleanup', async () => {
-  const ctx = new Context()
-  await ctx.plugin(Loader)
-  const bundle = join(dir, 'a.js')
-  writeFileSync(bundle, 'a')
-  const rows = new Map([['a', bundle]])
-  const host = fakeClientModuleHost(rows)
-  const routes: WebRoute[] = []
-  ctx.provide('clientModules', host)
-  ctx.provide('webServer', fakeHttpServer(routes))
-  let release!: () => void
-  let cleaned!: () => void
-  let started!: () => void
-  const starting = new Promise<void>((resolve) => { started = resolve })
-  const activation = new Promise<void>((resolve) => { release = resolve })
-  const cleanup = new Promise<void>((resolve) => { cleaned = resolve })
-  let disposed = false
-  ctx.loader.internal = { version: 'client', import: async () => ({
-    apply: async (pluginCtx: Context) => {
-      pluginCtx.effect(() => async () => { await cleanup; disposed = true })
-      started()
-      await activation
-    },
-  }) } as never
-  const entryId = await ctx.loader.create({ name: 'owned' })
-  await starting
-  const fiber = ctx.plugin({ inject, Config, apply }, { pollIntervalMs: POLL_MS })
-  await fiber.await()
-  const route = routes[0]!
-  const connect = async () => {
-    const lines: string[] = []
-    const response = Object.assign(new EventEmitter(), {
-      writeHead: vi.fn(), write: (line: string) => { lines.push(line) },
-      destroy: vi.fn(), end: vi.fn(),
-    })
-    await route.handler({ method: 'GET' } as IncomingMessage, response as unknown as ServerResponse)
-    return { lines, response }
-  }
-  try {
-    const first = await connect()
-    expect(first.lines).toHaveLength(2)
-    const frame = JSON.parse(first.lines[1]!.slice(6)) as { graph: WebBootGraph }
-    expect(frame.graph.entries.map(row => row.id)).toEqual(['a'])
-    const second = await connect()
-    expect(second.lines[1]).toBe(first.lines[1])
-    expect(first.lines).toHaveLength(2)
-    release()
-    const owned = ctx.loader.resolve(entryId).fiber!
-    await owned.await()
-    const child = owned.ctx.plugin({ apply() {} })
-    await child.await()
-    expect(child.entry).toBe(owned.entry)
-    await child.dispose()
-    await child.await()
-    await ctx.loader.await()
-    await new Promise<void>(resolve => setImmediate(resolve))
-    expect(second.lines).toHaveLength(2)
-    first.response.emit('close')
-    ctx.loader.remove(entryId)
-    rows.clear()
-    host.fireGraphChanged()
-    expect(second.lines).toHaveLength(3)
-    expect(disposed).toBe(false)
-    expect((JSON.parse(second.lines[2]!.slice(6)) as { graph: WebBootGraph }).graph.entries).toEqual([])
-    const third = await connect()
-    expect(third.lines[1]).toBe(second.lines[2])
-    expect(second.lines).toHaveLength(3)
-    cleaned()
-    while (owned.inertia !== undefined) await owned.inertia
-    expect(disposed).toBe(true)
-    expect(second.lines).toHaveLength(3)
-    await fiber.dispose()
-    host.fireGraphChanged()
-    expect(second.lines).toHaveLength(3)
-    expect(second.response.destroy).toHaveBeenCalledOnce()
-    expect(third.response.destroy).toHaveBeenCalledOnce()
-  } finally {
-    release()
-    cleaned()
-    await fiber.dispose()
-    await ctx.fiber.dispose()
-  }
 })
