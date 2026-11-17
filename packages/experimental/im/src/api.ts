@@ -517,8 +517,10 @@ export interface ImSessions {
    * Live agent (created/resumed with the stored composition). Serializes on the session's stable `key` behind any
    * in-flight `reset()` / `admit()`, then re-resolves: rejects with `ImError('unavailable')` if `target` is a
    * `SessionId` retired by `reset()` (re-resolve by `key` or `forChat()` — retrying the retired id keeps failing)
-   * or if the current generation has an uncommitted reset receipt (retryable with the same `target` after recovery);
-   * opens the new generation when called by stable `key`; rejects with `ImError('access')` if `target` is unhosted.
+   * or if the current generation has an uncommitted reset receipt (retryable with the same `target` after recovery
+   * when `target` is the stable `key`; a `SessionId` is retired by that advance, so re-resolve by `key` /
+   * `forChat()`); opens the new generation when called by stable `key`; rejects with `ImError('access')` if
+   * `target` is unhosted.
    */
   agent(target: SessionId | string): Promise<Agent>
   /** Session for a calling agent (tools): walks the parent chain to the nearest hosted record. */
