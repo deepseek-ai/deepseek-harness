@@ -95,23 +95,6 @@ export function convertedPdfFiles(events: readonly SessionEvent[]): ConvertedPdf
 }
 
 /**
- * Select the reported conversions whose byte count matches the deliverable.
- *
- * The conversion's temporary file is released when the conversation ends, so its reported size is the only
- * post-exit signal that ties the deliverable to that conversion; the recorded commands stay in the failure
- * diagnostic instead of being matched, because a copy expressed with a variable or a changed directory is
- * still the same deliverable.
- * @param deliveredBytes - Byte count of the delivered file.
- * @param conversions - PDF conversions reported by the Office tool.
- * @returns Conversions whose report matches the deliverable; empty when none does.
- */
-export function deliveredConversions(
-  deliveredBytes: number, conversions: readonly ConvertedPdfFile[],
-): ConvertedPdfFile[] {
-  return conversions.filter(conversion => conversion.bytes === deliveredBytes)
-}
-
-/**
  * Reject recorded Office render calls and the "Render the saved deliverable" instruction.
  * @param events - Recorded task events, including nested skill and shell results.
  */

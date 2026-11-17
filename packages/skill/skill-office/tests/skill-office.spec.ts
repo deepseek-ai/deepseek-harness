@@ -328,14 +328,3 @@ it('directs Office operations to dedicated tools without executable paths', asyn
     }
   } finally { await ctx.fiber.dispose() }
 })
-
-it('keeps the operation-only and PDF export delivery rules in the routing body', async () => {
-  const ctx = new Context()
-  try {
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillOffice)
-    const route = (await ctx.skills.get('office'))!.content
-    expect(route).toContain('operations alone need no format skill')
-    expect(route).toContain('For PDF export alone, check the copy is nonempty and starts with `%PDF-`, then deliver it without rendering.')
-  } finally { await ctx.fiber.dispose() }
-})

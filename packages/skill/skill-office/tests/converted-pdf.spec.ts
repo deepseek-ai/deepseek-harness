@@ -3,7 +3,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { expect, it } from 'vitest'
-import { convertedPdfFiles, deliveredConversions } from './fixtures/real-office.ts'
+import { convertedPdfFiles } from './fixtures/real-office.ts'
 
 const temporary = '/h/.dsh/office-kit/outputs/session-0123456789abcdef01234567/2f0f8c3e-7d1b-4c1e-9b0a-0d5e6f7a8b9c/input.pdf'
 
@@ -29,12 +29,4 @@ it('ignores failed results, other formats, and render summaries', () => {
   expect(convertedPdfFiles(results([`Converted input.docx to pdf (2048 bytes): ${temporary}`], true))).toEqual([])
   expect(convertedPdfFiles(results(['Converted input.docx to docx (1024 bytes): /h/outputs/input.docx']))).toEqual([])
   expect(convertedPdfFiles(results(['Rendered 2 images of input.docx (3 in the document) at 144 DPI.']))).toEqual([])
-})
-
-it('accepts a deliverable only when its byte count matches the reported conversion', () => {
-  const conversions = [{ bytes: 2048, file: temporary }, { bytes: 4096, file: `${temporary}.second` }]
-  expect(deliveredConversions(2048, conversions)).toEqual(conversions.slice(0, 1))
-  // A deliverable with a different byte count is not a reported conversion output.
-  expect(deliveredConversions(1024, conversions)).toEqual([])
-  expect(deliveredConversions(2048, [])).toEqual([])
 })

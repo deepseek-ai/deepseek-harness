@@ -6,7 +6,7 @@ import { execa } from 'execa'
 import { expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { convertedPdfFiles, deliveredConversions, expectNoRenderContext, officeCalls, officeImages,
+import { convertedPdfFiles, expectNoRenderContext, officeCalls, officeImages,
   officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -115,7 +115,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with office_co
       // ends, so a matching size is what ties result.pdf to office_convert. Extra steps such as pdfinfo, a format
       // skill, or a render of the result are model choices and do not change the deliverable.
       const delivered = await readFile(join(cwd, 'result.pdf'))
-      expect(deliveredConversions(delivered.length, converted).length, diagnostic).toBeGreaterThan(0)
+      expect(converted.some(conversion => conversion.bytes === delivered.length), diagnostic).toBe(true)
       expect(delivered.subarray(0, 5).toString(), diagnostic).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)
     },
