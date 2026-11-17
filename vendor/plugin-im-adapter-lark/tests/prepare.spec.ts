@@ -138,6 +138,10 @@ describe('uploadFileType', () => {
       .toEqual({ route: 'file', fileType: 'ppt', downgraded: false })
     expect(uploadFileType(new ResourceRef('file', 'https://example.com/archive.zip')))
       .toEqual({ route: 'file', fileType: 'stream', downgraded: false })
+    expect(uploadFileType(new ResourceRef('file', 'https://example.com/a.constructor')))
+      .toEqual({ route: 'file', fileType: 'stream', downgraded: false })
+    expect(uploadFileType(new ResourceRef('file', 'base64:AAAA', { mime: '__proto__' })))
+      .toEqual({ route: 'file', fileType: 'stream', downgraded: false })
   })
 
   it('uses the MIME type of the bytes when the source carries no extension', () => {
