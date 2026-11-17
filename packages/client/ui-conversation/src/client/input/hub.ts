@@ -157,12 +157,8 @@ export class InputHub implements SessionInputResolver {
       inbox: session.projections.faceOf('inbox') as ObservableSnapshot<InboxState | undefined>,
       defaultSink: (text, attachmentIds, mode, signal, accept) => this.sink(session, text, attachmentIds, mode, signal, accept),
       quoteRemoveLabel: () => this.t('quote.remove'),
-      quoteInsertionAllowed: () => {
-        const state = session.getSnapshot()
-        return !state.removed && (state.subagent === null
-          || state.subagent.address.mode === 'continuable')
-          && this.conversation().blocks.storeFor(session.sessionId).getSnapshot() === undefined
-      },
+      session: () => session.getSnapshot(),
+      composerBlock: () => this.conversation().blocks.storeFor(session.sessionId).getSnapshot(),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandAttachments: {
         serialize: async (ids) => {
