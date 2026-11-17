@@ -47,7 +47,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部说明 — 点击展开</summary>
 
-插件准备签发器，通过 Connection 创建共享 Peer，并通过 `ctx.connection.authentication` 注册验证器：v1 Cookie 返回共享 Peer，v2 ID 验签后通过插件自己的 API Peer 映射表解析。页面与 API 调用使用相同验证。WebServer 请求监听器拥有根 Token 交换，匿名精确路由拥有 `/connect`。
+插件准备签发器，通过 Connection 创建共享 Peer，并通过 `ctx.connection.authentication` 注册验证器：v1 Cookie 返回共享 Peer，v2 ID 验签后通过插件自己的 API Peer 映射表解析。同一处注册还会公布 `authenticatedUrl(baseUrl)`，让本进程在自己监听器上提供的界面用启动 URL 换取浏览器 Cookie，而不是自己持有 Cookie。页面与 API 调用使用相同验证。WebServer 请求监听器拥有根 Token 交换，匿名精确路由拥有 `/connect`。
 
 该路由旁的 `webserver/upgrade` 监听器委派非 mux 路径，并在 `/api/remote.mux` 上按 `apiPeers.get(peer.id) === peer` 识别自己拥有的 API Peer；浏览器共享 Peer 与其他 Provider 调用 `next()` 委派。此监听器位于路由准入后、协议处理前。Socket 关闭、错误及 upgrade 失败时，在异步释放前撤销 API 凭据。Peer 释放也会关闭其 Socket。清理幂等；Web 接线作用域移除监听器、撤销自己的 API 凭据、仅销毁自己拥有的 API Socket，并等待 Socket 关闭与 Peer 清理。迟到的中间件不能恢复已撤销的 Peer。同步 `webserver/entry-url` 监听器贡献带签名的 URL；事件和入口类型由 WebServer 声明，无需依赖 WebApp bundle。
 

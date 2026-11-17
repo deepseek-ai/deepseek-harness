@@ -39,6 +39,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const id = auth.authenticateApi(request, secure)
       return id === undefined ? undefined : apiPeers.get(id)
     },
+    // The same launch URL this provider contributes to the entry list: a
+    // same-process surface in front of the listener trades it for the browser
+    // cookie its socket needs.
+    authenticatedUrl: baseUrl => auth.authenticatedUrl(baseUrl),
   })
   ctx.inject(['webServer'], (webCtx) => {
     let active = true

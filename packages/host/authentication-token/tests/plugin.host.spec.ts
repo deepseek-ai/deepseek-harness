@@ -40,6 +40,7 @@ async function mounted(secure = false, before?: (ctx: Context) => void) {
     createSharedFetchHandler() { throw new Error('Fetch dispatch is outside this fixture') },
     admit() { throw new Error('Combined admission is outside this fixture') },
     createPeer,
+    authenticatedUrl: baseUrl => authentication.authenticatedUrl(baseUrl) ?? baseUrl,
   }
   ctx.provide('credentials', new RecordCredentials())
   ctx.provide('connection', connection)
@@ -85,6 +86,12 @@ it('keeps login URL construction internal and registers only the standard plugin
   expect(providers).toHaveLength(1)
   expect(providers[0]!.authenticate({ headers: { host: 'localhost:3080' } })).toBeUndefined()
   expect(createPeer).toHaveBeenCalledExactlyOnceWith({ principal: { kind: 'owner' } })
+})
+
+it('announces the launch URL from the provider it registers, for a surface with no browser credential', async () => {
+  const { providers, auth } = await mounted()
+  const announced = new URL(providers[0]!.authenticatedUrl?.('http://localhost:3080/') ?? '')
+  expect(announced.searchParams.get('token')).toBe(new URL(auth.authenticatedUrl('http://localhost:3080/')).searchParams.get('token'))
 })
 
 it('exchanges a root token, passes other routes on, and keeps browser authentication shared', async () => {
