@@ -57,6 +57,8 @@ export interface ImSenderDeps {
    * not await the listener that stores it, so without this the receipt raced the store and lost `message` and `seq`.
    */
   announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>
+  /** Fallback announcement hook used during teardown once Cordis has unregistered the plugin-scoped `send` listener. */
+  onResult?: (bot: Bot, result: SendResult) => void
 }
 
 /** One durable receipt, keyed by the operation id of one publication. */
@@ -201,7 +203,7 @@ export class ImSender {
     if (id === undefined) {
       const stream = bot.stream(target, options)
       this.openStreams.add(stream)
-      return this.watched(this.quoted(stream, quoteId), chat, options.session, stream)
+      return this.watched(this.quoted(stream, quoteId), bot, chat, options.session, stream)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
@@ -240,7 +242,7 @@ export class ImSender {
         this.settlements.delete(settlement)
       })
       this.settlements.add(settlement)
-      return this.watched(this.quoted(stream, quoteId), chat)
+      return this.watched(this.quoted(stream, quoteId), bot, chat)
     })
   }
 
@@ -248,13 +250,19 @@ export class ImSender {
    * Attribute a completed (or partially opened) stream to its session and log a warning when `stream.done` rejects so
    * an unobserved stream failure remains visible in diagnostics.
    * @param stream - the stream handed to the caller.
+   * @param bot - bot that opened the stream.
    * @param chat - the admitted chat, for the message.
    * @param session - publishing session, for un-receipted streams whose attribution is not handled by `settlement`.
    * @returns that stream.
    */
-  private watched(stream: MessageStream, chat: ImChatKey, session?: SessionId, rawStream?: MessageStream): MessageStream {
+  private watched(
+    stream: MessageStream, bot: Bot, chat: ImChatKey, session?: SessionId, rawStream?: MessageStream,
+  ): MessageStream {
     const done = stream.done.then(
-      (result) => { this.attribute(result.handle, session) },
+      (result) => {
+        this.deps.onResult?.(bot, result)
+        this.attribute(result.handle, session)
+      },
       (error: unknown) => {
         if (stream.handle !== undefined) this.attribute(stream.handle, session)
         this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
@@ -395,6 +403,7 @@ export class ImSender {
       const result = await bot.send(target, content, {
         ...options, ...key === undefined ? {} : { idempotencyKey: key }, signal: deadline.signal,
       })
+      this.deps.onResult?.(bot, result)
       this.attribute(result.handle, options.session)
       return await this.confirmed(result)
     } catch (error) {
