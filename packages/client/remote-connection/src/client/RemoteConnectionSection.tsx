@@ -1,4 +1,4 @@
-/** Separate QR and tokenized-link controls for signing another browser in. */
+/** Access address and QR login controls for browser sign-in. */
 import { QRCodeSVG } from 'qrcode.react'
 import { Button, IconWarningOutlineMedium, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -9,7 +9,7 @@ import css from './RemoteConnectionSection.module.css'
 export type RemoteConnectionSectionProps = RemoteConnectionContentProps & PropsLocale<'remoteConnection'>
 
 /**
- * Present independent QR and tokenized-link cards with loading confined to the QR preview.
+ * Present shared sign-in guidance followed by access address and QR login cards.
  * @param props - Section injection and standard slot props.
  * @returns Remote connection settings content.
  */
@@ -20,9 +20,10 @@ export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
   return <section className={css.section} aria-label={t('title')}>
     <header className={css.header}>
       <h2 className={css.title}>{t('title')}</h2>
+      <p className={css.description}>{t('addressDescription')}</p>
     </header>
+    <AccessAddressCard {...props} />
     <QrLoginCard {...props} />
-    <LinkLoginCard {...props} />
   </section>
 }
 
@@ -75,17 +76,16 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
   </section>
 }
 
-function LinkLoginCard({ t, useRemoteConnection, useLoginLink, copyLink, reloadLink }: Pick<RemoteConnectionSectionProps,
+function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, reloadLink }: Pick<RemoteConnectionSectionProps,
   't' | 'useRemoteConnection' | 'useLoginLink' | 'copyLink' | 'reloadLink'>) {
   const deployment = useRemoteConnection(state => state.deployment)
   const link = useLoginLink(state => state)
   const available = deployment?.availability === 'available'
   const http = deployment?.url.startsWith('http:') === true
   const retryLink = link.phase === 'error'
-  return <section className={css.card} aria-label={t('linkTitle')}>
+  return <section className={css.card} aria-label={t('addressTitle')}>
     <header className={css.header}>
-      <h3 className={css.methodTitle}>{t('linkTitle')}</h3>
-      <p className={css.description}>{t('linkDescription')}</p>
+      <h3 className={css.methodTitle}>{t('addressTitle')}</h3>
     </header>
     {deployment !== null && <div className={css.linkRow}>
       <div className={css.linkPreview}>

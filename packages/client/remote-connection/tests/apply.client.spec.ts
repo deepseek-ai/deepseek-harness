@@ -186,7 +186,7 @@ describe('remote connection settings registration', () => {
     await act(async () => { await earlier.await() })
     const earlierRegion = screen.getByRole('region', { name: 'Earlier options' })
     expect(screen.getAllByRole('region').map(region => region.getAttribute('aria-label')))
-      .toEqual([zh.title, zh.qrTitle, zh.linkTitle, 'Earlier options', 'Later options'])
+      .toEqual([zh.title, zh.addressTitle, zh.qrTitle, 'Earlier options', 'Later options'])
     expect(screen.getByRole('img', { name: zh.qr })).toBe(qr)
     expect(earlierRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })
     expect(laterRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })

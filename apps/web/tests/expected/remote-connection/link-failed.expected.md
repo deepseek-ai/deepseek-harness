@@ -1,11 +1,11 @@
 - region "远程连接":
   - heading "远程连接" [level=2]
-  - region "二维码登录":
-    - heading "二维码登录" [level=3]
-    - button "生成二维码"
-  - region "链接登录":
-    - heading "链接登录" [level=3]
-    - paragraph: 复制登录链接，在另一台设备的浏览器中打开
+  - paragraph: 通过以下方式，在其他设备上登录并使用 DeepSeek Harness。
+  - region "访问地址":
+    - heading "访问地址" [level=3]
     - code: {{access-address}}
     - button "重试"
     - alert: 无法获取登录链接，请重试
+  - region "二维码登录":
+    - heading "二维码登录" [level=3]
+    - button "生成二维码"

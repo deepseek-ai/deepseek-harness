@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The settings panel separates QR code login and link login. A signed-in owner can generate a one-use QR code or copy a tokenized URL to sign another browser into the same Host. QR redemption issues a Remote browser cookie; copied links continue to use the independent Token login. The QR code, countdown, and credential warning stack vertically; expiry appears as a warning banner. Credential warnings appear only after generation or successful copying. The login link displays its token and fades at the right edge. Clipboard outcomes use a shell toast that survives closing settings.
+Settings shows shared sign-in guidance, then access-address and QR login cards. A signed-in owner can generate a one-use QR code or copy a tokenized URL to sign another browser into the same Host. QR redemption issues a Remote browser cookie; copied links continue to use the independent Token login. The QR code, countdown, and credential warning stack vertically; expiry appears as a warning banner. Credential warnings appear only after generation or successful copying. The login link displays its token and fades at the right edge. Clipboard outcomes use a shell toast that survives closing settings.
 
 ## Table of Contents
 

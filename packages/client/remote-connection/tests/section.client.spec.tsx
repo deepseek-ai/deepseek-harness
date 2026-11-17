@@ -39,6 +39,20 @@ function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 
 }
 
 describe('Remote connection section', () => {
+  it.each(['en', 'zh'] as const)('introduces the access address before QR login in %s', (language) => {
+    const copy = language === 'en' ? en : zh
+    panel({}, language)
+    const section = screen.getByRole('region', { name: copy.title })
+    expect(within(section).getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
+      .toEqual([copy.addressTitle, copy.qrTitle])
+    expect(within(section).getAllByRole('region')).toHaveLength(2)
+    const description = within(section).getByText(copy.addressDescription)
+    for (const card of within(section).getAllByRole('region')) {
+      expect(within(card).queryByText(copy.addressDescription)).toBeNull()
+      expect(description.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+  })
+
   it('separates QR and link login and shows no credential warnings before either action', () => {
     const { create, copyLink } = panel()
     expect(screen.getByRole('region', { name: en.title })).toBeTruthy()
@@ -47,7 +61,7 @@ describe('Remote connection section', () => {
     expect(screen.queryByText(en.httpWarning)).toBeNull()
     expect(screen.queryByRole('img')).toBeNull()
     const qr = screen.getByRole('region', { name: en.qrTitle })
-    const link = screen.getByRole('region', { name: en.linkTitle })
+    const link = screen.getByRole('region', { name: en.addressTitle })
     expect(within(qr).queryByRole('button', { name: en.copyLink })).toBeNull()
     expect(within(link).queryByRole('button', { name: en.generate })).toBeNull()
     expect(within(qr).queryByText('https://host.example/app/')).toBeNull()
@@ -110,7 +124,7 @@ describe('Remote connection section', () => {
   it('keeps the link card and its focus while the QR is generated or refreshed', () => {
     const { state, copyLink } = panel({ phase: 'pending', ticket }, 'en', { copied: true })
     const qr = screen.getByRole('region', { name: en.qrTitle })
-    const link = screen.getByRole('region', { name: en.linkTitle })
+    const link = screen.getByRole('region', { name: en.addressTitle })
     const copy = within(link).getByRole('button', { name: en.copied })
     copy.focus()
     for (const phase of ['creating', 'loading'] as const) {
@@ -119,7 +133,7 @@ describe('Remote connection section', () => {
       expect(within(qr).getByRole('status', { name: en[phase] })).toBeTruthy()
       expect(within(qr).queryByRole('img')).toBeNull()
       expect(within(qr).queryByRole('timer')).toBeNull()
-      expect(screen.getByRole('region', { name: en.linkTitle })).toBe(link)
+      expect(screen.getByRole('region', { name: en.addressTitle })).toBe(link)
       expect(within(link).getByRole('button', { name: en.copied })).toBe(copy)
       expect(copy).toHaveProperty('disabled', false)
       expect(document.activeElement).toBe(copy)
@@ -215,7 +229,7 @@ describe('Remote connection section', () => {
 
   it('reuses the copy button to retry a failed link read while QR creation remains available', () => {
     const { reloadLink, copyLink, linkState } = panel({}, 'en', { phase: 'error', url: null })
-    const link = screen.getByRole('region', { name: en.linkTitle })
+    const link = screen.getByRole('region', { name: en.addressTitle })
     expect(within(link).getByRole('alert').textContent).toBe(en.linkFailed)
     expect(within(link).getAllByRole('button')).toHaveLength(1)
     const action = within(link).getByRole('button', { name: en.retry })

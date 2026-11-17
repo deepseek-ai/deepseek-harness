@@ -21,7 +21,7 @@ async function remoteSettings(page: Page): Promise<Locator> {
     .getByRole('button', { name: '远程连接', exact: true }).click()
   const section = page.getByRole('region', { name: '远程连接', exact: true })
   await section.waitFor()
-  const link = section.getByRole('region', { name: '链接登录', exact: true })
+  const link = section.getByRole('region', { name: '访问地址', exact: true })
   await expect.poll(() => link.getByRole('button', { name: /^(复制链接|重试)$/ }).isEnabled()).toBe(true)
   return section
 }
@@ -166,7 +166,7 @@ describe('web e2e: one-use QR browser login', () => {
       await page.goto(secure.authenticatedUrl)
       const section = await remoteSettings(page)
       const qrSection = section.getByRole('region', { name: '二维码登录', exact: true })
-      const linkSection = section.getByRole('region', { name: '链接登录', exact: true })
+      const linkSection = section.getByRole('region', { name: '访问地址', exact: true })
       expect(await qrSection.count()).toBe(1)
       expect(await linkSection.count()).toBe(1)
       for (const card of [qrSection, linkSection]) {
@@ -270,13 +270,14 @@ describe('web e2e: one-use QR browser login', () => {
       const section = await remoteSettings(page)
       await createCode(page, section)
       const qr = section.getByRole('region', { name: '二维码登录', exact: true })
-      const link = section.getByRole('region', { name: '链接登录', exact: true })
+      const link = section.getByRole('region', { name: '访问地址', exact: true })
       const copy = link.getByRole('button', { name: '复制链接', exact: true })
       const beforeSection = await section.boundingBox()
       const beforeQr = await qr.boundingBox()
       const beforeField = await link.locator('code').locator('..').boundingBox()
       const beforeCopy = await copy.boundingBox()
       const scrollport = page.getByRole('dialog', { name: '设置', exact: true }).locator('[data-slot="settings.section"]').locator('..')
+      const beforeLink = await link.boundingBox()
       const beforeGutter = await scrollport.evaluate(element => element.getBoundingClientRect().width - element.clientWidth)
       const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
       if (screenshots !== undefined) {
@@ -292,8 +293,16 @@ describe('web e2e: one-use QR browser login', () => {
       expect(beforeField).not.toBeNull()
       expect(beforeCopy).not.toBeNull()
       const gutterChange = await scrollport.evaluate(element => element.getBoundingClientRect().width - element.clientWidth) - beforeGutter
+      expect(beforeLink).not.toBeNull()
       expect((await section.boundingBox())!.width).toBe(beforeSection!.width - gutterChange)
-      expect(await qr.boundingBox()).toEqual({ ...beforeQr!, width: beforeQr!.width - gutterChange })
+      const afterQr = await qr.boundingBox()
+      const afterLink = await link.boundingBox()
+      expect(afterQr).not.toBeNull()
+      expect(afterLink).not.toBeNull()
+      expect(afterLink!.height).toBeGreaterThan(beforeLink!.height)
+      expect(afterQr).toEqual({
+        ...beforeQr!, y: beforeQr!.y + afterLink!.height - beforeLink!.height, width: beforeQr!.width - gutterChange,
+      })
       expect(await link.locator('code').locator('..').boundingBox()).toEqual({ ...beforeField!, width: beforeField!.width - gutterChange })
       expect(await link.getByRole('button', { name: '已复制', exact: true }).boundingBox()).toEqual({ ...beforeCopy!, x: beforeCopy!.x - gutterChange })
       expect(await qr.getByRole('img').count()).toBe(1)
@@ -547,7 +556,7 @@ describe('web e2e: one-use QR browser login', () => {
         const section = await remoteSettings(page)
         await createCode(page, section)
         const qr = section.getByRole('region', { name: '二维码登录', exact: true })
-        const link = section.getByRole('region', { name: '链接登录', exact: true })
+        const link = section.getByRole('region', { name: '访问地址', exact: true })
         const qrBox = await qr.boundingBox()
         const linkBox = await link.boundingBox()
         const symbol = await qr.getByRole('img').boundingBox()
@@ -706,7 +715,7 @@ describe('web e2e: one-use QR browser login', () => {
       const nav = page.getByRole('dialog', { name: '设置', exact: true })
         .getByRole('button', { name: '远程连接', exact: true })
       const custom = page.getByRole('region', { name: '自定义远程连接', exact: true })
-      const linkCard = section.getByRole('region', { name: '链接登录', exact: true })
+      const linkCard = section.getByRole('region', { name: '访问地址', exact: true })
       expect(await nav.count()).toBe(1)
       expect(await svg.innerHTML()).toBe(initialSvg)
       expect(await section.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
@@ -723,7 +732,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect((await refreshed).status()).toBe(200)
       await extension.getByRole('status').filter({ hasText: '等待扫码' }).waitFor()
       expect(await svg.innerHTML()).toBe(initialSvg)
-      const loginUrl = await section.getByRole('region', { name: '链接登录', exact: true }).locator('code').textContent()
+      const loginUrl = await section.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()
       expect(loginUrl).not.toBeNull()
       const extendedAria = await captureStableAria(page, '[data-slot="settings.section"]', scaffold.workspaceCwd, {
         replacements: [[loginUrl!, '{{access-address}}?token={{login-token}}'], [invitationId, '{{invitation-id}}']],
