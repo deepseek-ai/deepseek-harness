@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context } from '@deepseek-ai/cordis'
 import { CordisInspectRegistryService } from '@deepseek-ai/dsh-cordis-host-runner'
@@ -31,10 +32,19 @@ describe('the cordis-inspect-providers host entry', () => {
     const fiber = ctx.plugin(CordisInspectProviders)
     await fiber
 
-    expect(ctx.cordisInspect.list().map(provider => provider.id)).toEqual(['Service', 'Event', 'Config', 'Tool'])
+    expect(ctx.cordisInspect.list().map(provider => provider.id)).toEqual(['Service', 'Event', 'Config', 'Runtime', 'Tool'])
 
     await fiber.dispose()
     expect(ctx.cordisInspect.list()).toEqual([])
+  })
+
+  it('answers the Runtime version query with the running DSH version', async () => {
+    const ctx = await host()
+    await ctx.plugin(CordisInspectProviders)
+    const agent = { ctx } as never
+    const signal = new AbortController().signal
+    expect(await ctx.cordisInspect.query('host', 'Runtime', 'getVersion', undefined, agent, signal)).toEqual({ version: (createRequire(import.meta.url)('@deepseek-ai/dsh-app-boot/package.json') as { version: string }).version })
+    await ctx.fiber.dispose()
   })
 
   it('reports a missing Agent and an undeclared provider method with error codes', async () => {
@@ -46,7 +56,7 @@ describe('the cordis-inspect-providers host entry', () => {
     await expect(query?.execute({ query: { platform: 'host', provider: 'Tool', method: 'listTools' } }, { signal } as never)).rejects.toMatchObject({
       name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE', message: 'Cordis inspection requires an Agent-backed session',
     })
-    for (const provider of hostInspectProviders(ctx).filter(candidate => ['Service', 'Tool'].includes(candidate.manifest.id))) {
+    for (const provider of hostInspectProviders(ctx).filter(candidate => ['Service', 'Runtime', 'Tool'].includes(candidate.manifest.id))) {
       await expect(Promise.resolve().then(() => provider.query('undeclared', undefined, { agent: undefined as never, signal })))
         .rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_METHOD_NOT_FOUND' })
     }
