@@ -186,6 +186,7 @@ describe('in-process policy inheritance', () => {
       expect(contextText).toContain('Approval prompts are disabled')
       // The statement rides runtime context; the system node (surface node 0) stays uniform.
       expect(contextText).toContain('You are a delegated subagent')
+      expect(contextText).toContain('Other user messages come from the human user')
       const systemHead = child.session.deriveMessages()[0]
       if (systemHead?.role !== 'system') throw new Error('child surface node 0 is not a system message')
       expect(child.session.surface.nodes[0]).toBe(systemNode.seq)
