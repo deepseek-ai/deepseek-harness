@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -6,7 +6,7 @@ import { readOperationHistory } from '../src/operation-history.ts'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, open: vi.fn(actual.open) }
+  return { ...actual, open: vi.fn(actual.open), stat: vi.fn(actual.stat) }
 })
 
 const limits = { bytes: 64 * 1024, recordBytes: 2048, records: 100 }
@@ -25,11 +25,158 @@ async function fixture() {
 
 it('collects recent complete records and reports malformed and incomplete entries', async () => {
   const path = await fixture()
-  await writeFile(join(path, 'operations.jsonl'), line(1) + '{broken}\n' + line(2) + '{"incomplete":')
+  const current = line(1) + '{broken}\n' + line(2) + '{"incomplete":'
+  await writeFile(join(path, 'operations.jsonl'), current)
   await writeFile(join(path, 'operations.previous.jsonl'), line(0))
   const result = await readOperationHistory(path, limits, new AbortController().signal)
-  expect(result.records).toEqual([record(2), record(1), record(0)])
-  expect(result).toMatchObject({ invalidRecords: 1, truncated: true, cancelled: false, unavailableFiles: 0 })
+  // The whole result is asserted so a missing record also names the collection facts that caused it.
+  expect(result).toEqual({
+    records: [record(2), record(1), record(0)],
+    bytesRead: Buffer.byteLength(current) + Buffer.byteLength(line(0)),
+    filesRead: 2,
+    truncated: true,
+    invalidRecords: 1,
+    unavailableFiles: 0,
+    cancelled: false,
+  })
+})
+
+it('keeps a predecessor whose reported identity equals the current segment without a rotation', async () => {
+  const path = await fixture()
+  const current = join(path, 'operations.jsonl')
+  const previous = join(path, 'operations.previous.jsonl')
+  const currentText = line(2)
+  const previousText = line(1)
+  await writeFile(current, currentText)
+  await writeFile(previous, previousText)
+  const currentHandle = await open(current, 'r')
+  const previousHandle = await open(previous, 'r')
+  onTestFinished(async () => { await currentHandle.close(); await previousHandle.close() })
+  const currentStat = await currentHandle.stat()
+  const previousStat = await previousHandle.stat()
+  // Windows does not guarantee its 64-bit file ID is unique; one ID can name two segments.
+  currentStat.dev = 0
+  currentStat.ino = 7
+  previousStat.dev = 0
+  previousStat.ino = 7
+  const currentStats = vi.spyOn(currentHandle, 'stat').mockResolvedValueOnce(currentStat)
+  const previousStats = vi.spyOn(previousHandle, 'stat').mockResolvedValueOnce(previousStat)
+  const opener = vi.mocked(open).mockClear().mockResolvedValueOnce(currentHandle).mockResolvedValueOnce(previousHandle)
+  const pathStat = vi.mocked(stat).mockClear().mockResolvedValueOnce(currentStat)
+  try {
+    const result = await readOperationHistory(path, limits, new AbortController().signal)
+    expect(result).toEqual({
+      records: [record(2), record(1)],
+      bytesRead: Buffer.byteLength(currentText) + Buffer.byteLength(previousText),
+      filesRead: 1,
+      truncated: false,
+      invalidRecords: 0,
+      unavailableFiles: 0,
+      cancelled: false,
+    })
+    expect(pathStat).toHaveBeenCalledTimes(1)
+  } finally {
+    currentStats.mockRestore()
+    previousStats.mockRestore()
+    opener.mockClear()
+    pathStat.mockClear()
+  }
+})
+
+it('retries transient Windows sharing failures while opening a segment', async () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const opener = vi.mocked(open)
+  onTestFinished(async () => {
+    platform.mockRestore()
+    opener.mockReset().mockImplementation(actualFs.open)
+  })
+  const path = await fixture()
+  await writeFile(join(path, 'operations.jsonl'), line(2))
+  await writeFile(join(path, 'operations.previous.jsonl'), line(1))
+  opener.mockRejectedValueOnce(Object.assign(new Error('sharing violation'), { code: 'EBUSY' }))
+  const result = await readOperationHistory(path, limits, new AbortController().signal)
+  expect(result.records).toEqual([record(2), record(1)])
+  expect(result.unavailableFiles).toBe(0)
+  expect(opener).toHaveBeenCalledTimes(3)
+})
+
+it('counts a segment unavailable after bounded Windows open retries expire', async () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const opener = vi.mocked(open)
+  onTestFinished(async () => {
+    platform.mockRestore()
+    opener.mockReset().mockImplementation(actualFs.open)
+  })
+  const path = await fixture()
+  await writeFile(join(path, 'operations.jsonl'), line(2))
+  await writeFile(join(path, 'operations.previous.jsonl'), line(1))
+  for (let attempt = 0; attempt <= 4; attempt++) {
+    opener.mockRejectedValueOnce(Object.assign(new Error('access denied'), { code: 'EPERM' }))
+  }
+  const result = await readOperationHistory(path, limits, new AbortController().signal)
+  expect(result.records).toEqual([record(1)])
+  expect(result.unavailableFiles).toBe(1)
+  expect(opener).toHaveBeenCalledTimes(6)
+})
+
+it('does not retry a Windows transient code outside Windows', async () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const opener = vi.mocked(open)
+  onTestFinished(async () => {
+    platform.mockRestore()
+    opener.mockReset().mockImplementation(actualFs.open)
+  })
+  const path = await fixture()
+  await writeFile(join(path, 'operations.jsonl'), line(2))
+  await writeFile(join(path, 'operations.previous.jsonl'), line(1))
+  opener.mockRejectedValueOnce(Object.assign(new Error('access denied'), { code: 'EPERM' }))
+  const result = await readOperationHistory(path, limits, new AbortController().signal)
+  expect(result.records).toEqual([record(1)])
+  expect(result.unavailableFiles).toBe(1)
+  expect(opener).toHaveBeenCalledTimes(2)
+})
+
+it('stops Windows open retries when the collection is already cancelled', async () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const opener = vi.mocked(open)
+  onTestFinished(async () => {
+    platform.mockRestore()
+    opener.mockReset().mockImplementation(actualFs.open)
+  })
+  const path = await fixture()
+  await writeFile(join(path, 'operations.jsonl'), line(2))
+  const controller = new AbortController()
+  opener.mockImplementationOnce(async () => {
+    controller.abort()
+    throw Object.assign(new Error('sharing violation'), { code: 'EBUSY' })
+  })
+  const result = await readOperationHistory(path, limits, controller.signal)
+  expect(result).toMatchObject({ records: [], cancelled: true, unavailableFiles: 1 })
+  expect(opener).toHaveBeenCalledTimes(1)
+})
+
+it('stops Windows open retries when cancellation lands during the retry wait', async () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const opener = vi.mocked(open)
+  onTestFinished(async () => {
+    platform.mockRestore()
+    opener.mockReset().mockImplementation(actualFs.open)
+  })
+  const path = await fixture()
+  await writeFile(join(path, 'operations.jsonl'), line(2))
+  const controller = new AbortController()
+  opener.mockImplementationOnce(async () => {
+    setImmediate(() => controller.abort())
+    throw Object.assign(new Error('sharing violation'), { code: 'EBUSY' })
+  })
+  const result = await readOperationHistory(path, limits, controller.signal)
+  expect(result).toMatchObject({ records: [], cancelled: true, unavailableFiles: 1 })
+  expect(opener).toHaveBeenCalledTimes(1)
 })
 
 it('reads no more than its byte budget from a two GiB file and ignores unrelated history', async () => {
@@ -146,6 +293,27 @@ it('does not collect the same open segment twice when it rotates during collecti
   const opener = vi.mocked(open).mockImplementationOnce(async () => {
     await rename(current, join(path, 'operations.previous.jsonl'))
     await writeFile(current, line(2))
+    return handle
+  })
+  try {
+    const result = await readOperationHistory(path, limits, new AbortController().signal)
+    expect(result.records).toEqual([record(1)])
+    expect(result).toMatchObject({ filesRead: 1, truncated: true })
+    expect(handle.fd).toBe(-1)
+  } finally {
+    opener.mockClear()
+    await handle.close()
+  }
+})
+
+it('does not re-collect a rotated segment while the current path is briefly absent', async () => {
+  const path = await fixture()
+  const current = join(path, 'operations.jsonl')
+  await writeFile(current, line(1))
+  const handle = await open(current, 'r')
+  onTestFinished(async () => { await handle.close() })
+  const opener = vi.mocked(open).mockClear().mockImplementationOnce(async () => {
+    await rename(current, join(path, 'operations.previous.jsonl'))
     return handle
   })
   try {

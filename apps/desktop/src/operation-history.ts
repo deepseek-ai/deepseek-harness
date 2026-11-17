@@ -1,8 +1,16 @@
 /** Bounded, cancellable reads of Desktop-owned plugin operation history. */
-import { open } from 'node:fs/promises'
+import { open, stat, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { setImmediate } from 'node:timers/promises'
+import { setImmediate, setTimeout as wait } from 'node:timers/promises'
 import { parsePluginOperationRecord, type PluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+
+/** The segment this collector reads first; the other owned segment is its rotation predecessor. */
+const CURRENT_SEGMENT = 'operations.jsonl'
+/** Windows reports these while another handle temporarily owns an otherwise readable file. */
+const WINDOWS_TRANSIENT_OPEN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EBUSY', 'EPERM'])
+const WINDOWS_OPEN_RETRY_INITIAL_MS = 10
+const WINDOWS_OPEN_RETRY_MAX_MS = 40
+const WINDOWS_OPEN_RETRY_LIMIT = 4
 
 /** Resource budgets for auxiliary history collection, independent of basic crash report writing. */
 export interface OperationHistoryReadLimits {
@@ -24,8 +32,66 @@ export interface OperationHistoryReadResult {
 }
 
 /**
+ * Exact two-name key for one file; both stats are BigInt so a Windows 64-bit file ID
+ * round-trips without the precision loss of its Number form.
+ * @param info - Stats of the opened segment or of the current segment path.
+ * @returns Device and inode as one comparable string.
+ */
+function fileIdentity(info: { readonly dev: number | bigint; readonly ino: number | bigint }): string {
+  return `${String(info.dev)}:${String(info.ino)}`
+}
+
+/** Whether Windows reported temporary interference with opening a history segment. */
+function isTransientWindowsOpenError(error: unknown): boolean {
+  if (process.platform !== 'win32') return false
+  return WINDOWS_TRANSIENT_OPEN_ERRORS.has((error as NodeJS.ErrnoException | null)?.code ?? '')
+}
+
+/**
+ * Open one segment, retrying the temporary Windows sharing and permission failures a scanner
+ * causes on a freshly written file. One persistent failure would otherwise drop the whole
+ * segment from the report. A signal aborted during the bounded wait ends the retries without
+ * another open.
+ * @param filename - Absolute path of the owned segment.
+ * @param signal - Caller-owned collection deadline or shutdown cancellation.
+ * @returns The opened read handle.
+ */
+async function openSegment(filename: string, signal: AbortSignal): Promise<FileHandle> {
+  let delay = WINDOWS_OPEN_RETRY_INITIAL_MS
+  for (let retries = 0;; retries += 1) {
+    try {
+      return await open(filename, 'r')
+    } catch (error) {
+      if (!isTransientWindowsOpenError(error) || retries >= WINDOWS_OPEN_RETRY_LIMIT || signal.aborted) throw error
+      await wait(delay)
+      if (signal.aborted) throw error
+      delay = Math.min(delay * 2, WINDOWS_OPEN_RETRY_MAX_MS)
+    }
+  }
+}
+
+/**
+ * Whether the current segment path stopped naming the file this collection already read.
+ * Identity equality alone cannot decide: Windows does not guarantee that its 64-bit file ID
+ * is unique, so two distinct segments can report one identity; a rotation is only deduplicated
+ * once the current path itself moved on.
+ * @param directory - Desktop's operation history directory.
+ * @param identity - Identity of the segment already read from the current path.
+ * @returns Whether the predecessor is the segment already read.
+ */
+async function currentSegmentRotated(directory: string, identity: string): Promise<boolean> {
+  try {
+    return fileIdentity(await stat(join(directory, CURRENT_SEGMENT), { bigint: true })) !== identity
+  } catch {
+    // A path that no longer resolves cannot still name the segment already read.
+    return true
+  }
+}
+
+/**
  * Read only the bounded tails of the two owned history files, newest segment first.
  * Cancellation is observed between bounded records after yielding to Worker messages and stops subsequent I/O and parsing.
+ * A segment is deduplicated as already read only when the current path stopped naming it.
  * An already-issued OS read must settle before its handle closes.
  * @param directory - Desktop's operation history directory; unrelated files are never enumerated.
  * @param limits - Positive byte, record-size and record-count budgets.
@@ -48,29 +114,30 @@ export async function readOperationHistory(
   let truncated = false
   let invalidRecords = 0
   let unavailableFiles = 0
-  for (const name of ['operations.jsonl', 'operations.previous.jsonl']) {
+  for (const name of [CURRENT_SEGMENT, 'operations.previous.jsonl']) {
     if (cancelled()) break
     try {
-      await using handle = await open(join(directory, name), 'r')
+      await using handle = await openSegment(join(directory, name), signal)
       if (cancelled()) break
-      const fileStat = await handle.stat()
+      const fileStat = await handle.stat({ bigint: true })
       if (cancelled()) break
       if (!fileStat.isFile()) {
         unavailableFiles++
         continue
       }
-      const identity = `${String(fileStat.dev)}:${String(fileStat.ino)}`
-      if (seenFiles.has(identity)) {
+      const identity = fileIdentity(fileStat)
+      const size = Number(fileStat.size)
+      if (seenFiles.has(identity) && await currentSegmentRotated(directory, identity)) {
         truncated = true
         continue
       }
-      if (fileStat.size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) {
+      if (size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) {
         truncated = true
         break
       }
 
-      const readLength = Math.min(fileStat.size, limits.bytes - bytesRead)
-      const readStart = fileStat.size - readLength
+      const readLength = Math.min(size, limits.bytes - bytesRead)
+      const readStart = size - readLength
       const buffer = Buffer.alloc(readLength)
       let readOffset = 0
       while (readOffset < readLength && !cancelled()) {
