@@ -20,7 +20,7 @@ const GEOMETRY_EXPECTED = fileURLToPath(new URL('./expected/sidebar-alignment/ge
 const MODE = webSnapshotMode()
 const ACTION_TARGET_SIZE = 24
 const ACTION_LAYOUT_SIZE = 16
-const ACTION_CENTER_SPACING = 29
+const ACTION_CENTER_SPACING = 28
 const ACTION_TRAILING_INSET = 7
 const SEARCH_HEIGHT = 32
 const SEARCH_TRANSITION_MS = 180
@@ -75,6 +75,8 @@ async function measureRowActions(row: Locator) {
           center,
           rowCenterOffset: center.y - (rowRect.y + rowRect.height / 2),
           trailingInset: rowRect.right - rect.right,
+          glyphLeft: glyphRect.left,
+          glyphRight: glyphRect.right,
           glyphWidth: glyphRect.width,
           glyphHeight: glyphRect.height,
           glyphCenterOffset: {
@@ -596,8 +598,8 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
       expect(action.margins).toEqual(['-4px', '-4px', '-4px', '-4px'])
       expect(action.pseudoContent).toBe('none')
       expect(action.rowCenterOffset).toBe(0)
-      expect(action.glyphWidth).toBe(index === 0 ? 16 : 14)
-      expect(action.glyphHeight).toBe(index === 0 ? 16 : 14)
+      expect(action.glyphWidth).toBe(14)
+      expect(action.glyphHeight).toBe(14)
       expect(action.glyphCenterOffset).toEqual({ x: 0, y: 0 })
       expect(action.insideRow).toBe(true)
       expect(action.edgeHits).toEqual(Array<boolean>(8).fill(true))
@@ -605,9 +607,11 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
       const previous = metrics.actions[index - 1]
       if (previous !== undefined) {
         expect(action.center.x - previous.center.x).toBe(ACTION_CENTER_SPACING)
+        expect(action.glyphLeft - previous.glyphRight).toBe(14)
         expect(previous.center.x + 12).toBeLessThan(action.center.x - 12)
       } else {
         expect(metrics.titleRight).toBeLessThanOrEqual(action.center.x - 12)
+        if (kind === 'session') expect(action.glyphLeft - metrics.titleRight).toBe(14)
       }
     }
     expect(metrics.actions.at(-1)?.trailingInset).toBe(ACTION_TRAILING_INSET)

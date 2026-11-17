@@ -9,7 +9,7 @@ import type { PlanProjection } from '@deepseek-ai/dsh-plan-mode/types'
 import type { GoalProjection } from '@deepseek-ai/dsh-goal/types'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ISessions, SessionBinding, SessionFace,
+  ISessions, SessionBinding, SessionFace, SessionReference, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
@@ -17,8 +17,8 @@ import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {
-  DraftAttachmentId, DraftAttachmentSerializationResult, DraftInitializationOptions, DraftInitializationResult, InputTriggerController,
-  SessionInputResolver, SessionInput, SubmitOutcome,
+  DraftAttachmentId, DraftAttachmentSerializationResult, DraftInitializationOptions, DraftInitializationResult, InputState,
+  InputTriggerController, SessionInputResolver, SessionInput, SubmitOutcome,
 } from '../contract/input.ts'
 import type { ComposerKeyboard } from '../contract/draft-editor.ts'
 import type { ComposerBlocks } from '../contract/composer-blocks.ts'
@@ -52,9 +52,18 @@ interface ConversationAttachmentFace {
   ): Promise<SubmitOutcome>
   serializeDraftAttachments(attachmentIds: readonly DraftAttachmentId[]): Promise<DraftAttachmentSerializationResult>
   releaseDraftAttachment(id: DraftAttachmentId): void
-  draftAttachmentIds(sessionId: SessionId): readonly DraftAttachmentId[]
-  draftAttachmentSessions(): readonly SessionId[]
-  releaseDraftSession(sessionId: SessionId): void
+}
+
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionReferenceSourceMap {
+    /** A Session whose composer draft holds attachments, kept without its event connection. */
+    draft: unknown
+  }
+}
+
+/** Whether a draft must keep its Session: it holds browser-owned attachments that nothing can restore. */
+function draftNeedsHold(input: InputState, session: SessionSnapshot): boolean {
+  return input.attachmentIds.length > 0 && !session.removed
 }
 
 /** Per-Session marker that a page unload discarded the draft's browser-owned attachments. */
@@ -85,8 +94,6 @@ function takeUnloadMark(sessionId: SessionId): boolean {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new WeakMap<SessionBinding, SessionInputShell>()
-  private knownSessionIds: Set<SessionId> | undefined
-  private lifecycleWatchInstalled = false
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -95,7 +102,23 @@ export class InputHub implements SessionInputResolver {
   constructor(
     private readonly rootCtx: Context,
     private readonly t: TranslateNS<'conversation'>,
-  ) {}
+  ) {
+    // An unloading page discards the attachments of every draft that holds its Session.
+    rootCtx.effect(() => {
+      const onHide = (): void => { writeUnloadMarks(this.draftHeldSessions()) }
+      // A back-forward cache restore keeps the drafts, so the marks just written are stale.
+      const onShow = (event: PageTransitionEvent): void => {
+        if (!event.persisted) return
+        for (const sessionId of this.draftHeldSessions()) takeUnloadMark(sessionId)
+      }
+      window.addEventListener('pagehide', onHide)
+      window.addEventListener('pageshow', onShow)
+      return () => {
+        window.removeEventListener('pagehide', onHide)
+        window.removeEventListener('pageshow', onShow)
+      }
+    }, 'conversation.input: draft attachment unload marks')
+  }
 
   /**
    * Resolve the facade for one session-scope ctx (SessionInputResolver face).
@@ -157,12 +180,8 @@ export class InputHub implements SessionInputResolver {
       inbox: session.projections.faceOf('inbox') as ObservableSnapshot<InboxState | undefined>,
       defaultSink: (text, attachmentIds, mode, signal, accept) => this.sink(session, text, attachmentIds, mode, signal, accept),
       quoteRemoveLabel: () => this.t('quote.remove'),
-      quoteInsertionAllowed: () => {
-        const state = session.getSnapshot()
-        return !state.removed && (state.subagent === null
-          || state.subagent.address.mode === 'continuable')
-          && this.conversation().blocks.storeFor(session.sessionId).getSnapshot() === undefined
-      },
+      session: () => session.getSnapshot(),
+      composerBlock: () => this.conversation().blocks.storeFor(session.sessionId).getSnapshot(),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandAttachments: {
         serialize: async (ids) => {
@@ -198,26 +217,14 @@ export class InputHub implements SessionInputResolver {
       ]
       return () => {
         for (const off of offs) off()
-        // Snapshot the phase before dispose resets the machine.
-        const phaseAtTeardown = shell.snapshot.phase
         const drafts = shell.dispose()
         this.shells.delete(binding)
+        // The draft hold keeps this scope while the draft has attachments, so teardown releases them for good.
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-        if (conversation === undefined) return
-        if (binding.session.getSnapshot().removed) {
-          conversation.releaseDraftSession(binding.sessionId)
-          return
-        }
-        // Teardown aborts adjudication before any message leaves, so those attachments stay with the draft.
-        // A message or command already submitted cannot settle through its retirement path after teardown,
-        // and the Client cannot tell whether a submitted command consumed its attachments, so both release
-        // here rather than risk a duplicate submission; every other draft attachment stays registered for
-        // the Session's next composer.
-        if (phaseAtTeardown === 'sending' || phaseAtTeardown === 'submitting') {
-          for (const attachmentId of drafts) conversation.releaseDraftAttachment(attachmentId)
-        }
+        for (const attachmentId of drafts) conversation?.releaseDraftAttachment(attachmentId)
       }
     }, 'conversation.input: session shell')
+    actx.effect(() => this.holdDraft(binding, shell), 'conversation.input: draft hold')
     actx.inject(['inputTriggers'], (scope) => {
       scope.effect(() => {
         shell.refreshLexiconSubscription()
@@ -225,62 +232,48 @@ export class InputHub implements SessionInputResolver {
       }, 'conversation.input: reference catalogs')
     })
     shell.setDraft(readConversationDraft(binding.sessionId))
-    this.ensureLifecycleWatch()
-    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-    const retained = conversation?.draftAttachmentIds(binding.sessionId) ?? []
-    // A Session switch keeps the draft's attachments registered; this composer re-adopts them.
-    if (retained.length > 0) shell.addAttachments(retained)
     // A reload discarded the browser-owned attachments; say so instead of dropping them silently.
-    if (takeUnloadMark(binding.sessionId) && retained.length === 0) shell.notify('error', this.t('attachments.unavailable'))
+    if (takeUnloadMark(binding.sessionId)) shell.notify('error', this.t('attachments.unavailable'))
     return shell
   }
 
   /**
-   * Install the root-lifetime watchers once: a Session removed while no composer
-   * is mounted releases its draft attachments, and an unloading page marks the
-   * Sessions whose attachments it discards.
+   * Hold the Session without its event connection while its draft has attachments, so leaving the recent views
+   * keeps the scope, and with it the shell and its attachments.
+   * @returns disposer releasing the hold.
    */
-  private ensureLifecycleWatch(): void {
-    if (this.lifecycleWatchInstalled) return
-    this.lifecycleWatchInstalled = true
+  private holdDraft(binding: SessionBinding, shell: SessionInputShell): () => void {
     const sessions = this.sessions()
-    this.knownSessionIds = new Set(sessions.list.getSnapshot().ids)
-    this.rootCtx.effect(() => {
-      const stop = sessions.list.subscribe(() => { this.cleanupRemovedSessions() })
-      const conversation = (): ConversationAttachmentFace | undefined =>
-        this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-      const onHide = (): void => { writeUnloadMarks(conversation()?.draftAttachmentSessions() ?? []) }
-      // A back-forward cache restore keeps the registry, so the marks just written are stale.
-      const onShow = (event: PageTransitionEvent): void => {
-        if (!event.persisted) return
-        for (const sessionId of conversation()?.draftAttachmentSessions() ?? []) takeUnloadMark(sessionId)
+    let reference: SessionReference | undefined
+    const release = (): void => {
+      const held = reference
+      reference = undefined
+      held?.release()
+    }
+    const sync = (): void => {
+      const needed = draftNeedsHold(shell.snapshot, binding.session.getSnapshot())
+      if (needed === (reference !== undefined)) return
+      if (!needed) {
+        release()
+        return
       }
-      window.addEventListener('pagehide', onHide)
-      window.addEventListener('pageshow', onShow)
-      return () => {
-        stop()
-        window.removeEventListener('pagehide', onHide)
-        window.removeEventListener('pageshow', onShow)
-        this.knownSessionIds = undefined
-        this.lifecycleWatchInstalled = false
-      }
-    }, 'conversation.input: draft attachment lifecycle')
+      const target = sessions.subagentAddress(binding.sessionId) ?? binding.sessionId
+      reference = sessions.retain(target, { source: 'draft', connection: false })
+    }
+    const stops = [shell.state.subscribe(sync), binding.session.subscribe(sync)]
+    sync()
+    return () => {
+      for (const stop of stops) stop()
+      release()
+    }
   }
 
-  /** Release draft attachments and unload marks for every Session removed from the catalog. */
-  private cleanupRemovedSessions(): void {
-    const known = this.knownSessionIds
-    /* v8 ignore next -- the catalog subscription is stopped before the known set is cleared. */
-    if (known === undefined) return
-    const liveIds = new Set(this.sessions().list.getSnapshot().ids)
-    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-    for (const id of [...known]) {
-      if (liveIds.has(id)) continue
-      known.delete(id)
-      conversation?.releaseDraftSession(id)
-      takeUnloadMark(id)
-    }
-    for (const id of liveIds) known.add(id)
+  /** Sessions a draft reference currently holds. */
+  private draftHeldSessions(): SessionId[] {
+    const sessions = this.sessions()
+    // byId also lists retained subagent Sessions outside the Host list.
+    return (Object.keys(sessions.list.getSnapshot().byId) as SessionId[])
+      .filter(id => (sessions.retainInfo(id).getSnapshot().retainedBy.draft ?? 0) > 0)
   }
 
   /**

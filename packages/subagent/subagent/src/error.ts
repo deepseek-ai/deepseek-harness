@@ -27,7 +27,9 @@ export type SubagentErrorCode =
   | 'PRESET_NOT_ALLOWED'
   /** The tool instance does not accept child model selection. */
   | 'MODEL_SELECTION_DISABLED'
-  /** The Session's model-selection policy does not authorize the requested child provider or route. */
+  /** The enabled Host model-selection setting has invalid routes; correct the setting before retrying. */
+  | 'INVALID_MODEL_SELECTION_SETTINGS'
+  /** The current Host model-selection setting does not authorize the requested child provider or route. */
   | 'MODEL_ROUTE_NOT_ALLOWED'
   /** The requested LLM provider is not registered with the LLM runtime. */
   | 'LLM_PROVIDER_NOT_FOUND'

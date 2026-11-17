@@ -129,7 +129,7 @@ describe('WorkspaceBrowser.module.css list', () => {
     // own box, so the title's one shared margin below needs no per-view override.
     expect(rowDeclarations('.slot')?.get('width')).toBe('16px')
     expect(rowDeclarations('.slot')?.get('height')).toBe('20px')
-    expect(rowDeclarations('.sessionRow .title')?.get('margin')).toBe('0 6px 0 var(--dsh-sidebar-label-gap)')
+    expect(rowDeclarations('.sessionRow .title')?.get('margin')).toBe('0 12px 0 var(--dsh-sidebar-label-gap)')
     expect(rowDeclarations('.searchResultRow')?.get('min-height')).toBe('48px')
     expect(rowDeclarations('.searchResultTitle')?.get('margin')).toBe('0 var(--dsh-sidebar-label-gap)')
     expect(rowDeclarations('.sessionRow.selected')?.get('background-color'))
@@ -142,7 +142,7 @@ describe('WorkspaceBrowser.module.css list', () => {
       expect(rowDeclarations(selector)?.get('background-clip')).toBe('padding-box')
       expect(rowDeclarations(selector)?.get('border-inline')).toBe('var(--dsh-sidebar-paint-inset) solid transparent')
     }
-    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('13px')
+    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('12px')
     expect(rowDeclarations('.iconButton')?.get('width')).toBe('24px')
     expect(rowDeclarations('.time')?.get('margin-inline-end')).toBe('-1px')
     expect(declarations('.sectionLabel')?.get('left')).toBe('-1px')

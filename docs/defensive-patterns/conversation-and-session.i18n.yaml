@@ -14,6 +14,9 @@
 /conversation-and-session-rules/retention-follows-one-lifecycle-rule:
   en: fcb40a31d0881e84
   zh: 779bc49cce81651e
+/conversation-and-session-rules/retained-excerpts-do-not-keep-their-source-string-alive:
+  en: 6834b8020ee324b5
+  zh: 10e76904d1470cec
 /conversation-and-session-rules/node-computation-is-incremental-and-streaming-publication-is-batched:
   en: 315c7ac2186d0721
   zh: 06bb4e072b242fe1

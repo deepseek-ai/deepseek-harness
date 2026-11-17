@@ -87,8 +87,26 @@ jobs:
           if ! git merge-base "$HEAD_SHA" "$BASE_SHA" >/dev/null; then
             stop "the pull request shares no commit with $BASE_SHA within 150 commits of history, so nothing was merged or compiled; merge master into it and push, then this check runs again"
           fi
-          git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com merge --no-ff --no-edit -m "Merge $BASE_SHA into $HEAD_SHA" "$BASE_SHA" ||
-            stop "the pull request cannot merge $BASE_SHA; merge master into it and push, then this check runs again"
+          # The blobless history makes Git fetch missing blobs from origin on demand. Within one process, Git's cache of
+          # loose-object directories does not see the merged blobs it writes, so a single `git merge` asks origin for
+          # them while it checks out the result, and origin, which has never seen them, refuses the whole fetch.
+          # The merge is computed by `git merge-tree` and checked out by a separate process, which rereads the
+          # directories.
+          set +e
+          merge_output=$(git merge-tree --write-tree "$HEAD_SHA" "$BASE_SHA")
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -eq 1 ]; then
+            echo "$merge_output"
+            stop "the pull request conflicts with $BASE_SHA; merge master into it and push, then this check runs again"
+          fi
+          if [ "$merge_status" -ne 0 ]; then
+            stop "git merge-tree could not merge $BASE_SHA (exit $merge_status), so nothing was compiled"
+          fi
+          merge_commit=$(git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com commit-tree "${merge_output%%$'\n'*}" -p "$HEAD_SHA" -p "$BASE_SHA" -m "Merge $BASE_SHA into $HEAD_SHA") ||
+            stop "the merged tree of $BASE_SHA could not be committed, so nothing was compiled"
+          git checkout --quiet --detach "$merge_commit" ||
+            stop "the merged tree of $BASE_SHA could not be checked out, so nothing was compiled"
           echo "merged=true" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v5.0.0

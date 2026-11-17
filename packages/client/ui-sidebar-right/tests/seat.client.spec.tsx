@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Sidebar presentation and tab subscriptions through the production slot renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -81,7 +82,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
   const catalog = createSnapshotStore<readonly ShortcutCatalogEntry[]>([])
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog } as never)
   runtime.slots.installLocale(locale)
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.declare({
     'sidebar-right.test.opener': { kind: 'single', scope: 'session' },
     'rightbar': { kind: 'single', scope: 'root' },
@@ -89,7 +90,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await runtime.sessions.add({ id: SESSION })
-  let reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView' })
+  let reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView', facets: { conversation: true } })
   const feature = await runtime.mount({ inject: [...inject], apply })
   // The frame mounts the Conversation column before the right column, so a
   // Conversation component's mount effect runs before the seat's. The opener
@@ -160,7 +161,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     return controller.active()!
   }
   const selectSession = (id: SessionId): void => {
-    const next = runtime.sessions.retainFor(runtime.ctx, id, { source: 'mainView' })
+    const next = runtime.sessions.retainFor(runtime.ctx, id, { source: 'mainView', facets: { conversation: true } })
     reference.release()
     reference = next
   }

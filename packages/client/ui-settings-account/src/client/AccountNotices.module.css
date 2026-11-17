@@ -1,0 +1,2 @@
+/* Matches the signed-in launcher inset so the card edges align with the account row. */
+.root { margin-inline: 2px; }

@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-mcp-manager/types
  */
 
-import type { McpCloseResult, McpConnectionStatus } from '@deepseek-ai/dsh-mcp-client/types'
+import type { McpCloseResult, McpConnectionStatus, McpOAuthAttemptView } from '@deepseek-ai/dsh-mcp-client/types'
 
 /**
  * Status of one managed server. Extends the mcp-client connection status with
@@ -22,6 +22,8 @@ export type McpManagedServerStatus =
 
 /** One managed server as a management surface lists it. */
 export interface McpManagedServerView {
+  /** The latest explicit authorization attempt for an OAuth entry, until its owner is retired. */
+  authorization?: McpOAuthAttemptView
   /** The configured `servers` key or registered name; also the instance's `serverName` tool namespace. */
   name: string
   /** Whether a configured or registered entry still exists; false for retained cleanup failures after removal. */
@@ -33,9 +35,10 @@ export interface McpManagedServerView {
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * One managed server's status transitioned. Emitted for every published
-     * change while the manager is live and either the entry is configured or
-     * registered, or a runtime record remains. Removed entries may emit cleanup
+     * A managed server's connection status or authorization view changed;
+     * read `list()` for the current authorization view. Emitted while the
+     * manager is live and either the entry is configured or registered, or a
+     * runtime record remains. Removed entries may emit cleanup
      * failures; `watch` and `list()` report removals.
      * Lifecycle operations do not wait for listeners. Synchronous throws and
      * returned promise rejections are logged without skipping other listeners.

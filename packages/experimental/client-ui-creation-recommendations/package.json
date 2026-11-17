@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },
@@ -53,7 +53,6 @@
     "@deepseek-ai/dsh-action-cards": "workspace:*",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*"
   },
   "files": [

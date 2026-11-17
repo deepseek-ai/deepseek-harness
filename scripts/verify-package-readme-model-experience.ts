@@ -50,6 +50,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/client/config': { kind: 'none', reason: 'Browser configuration types register nothing and add no model input.' },
   'packages/client/script-realm': { kind: 'none', reason: 'Optional browser execution-provider registration contributes no model input.' },
   'packages/client/script-realm-iframe': { kind: 'none', reason: 'Same-origin browser script environments contribute no model input.' },
   'packages/client/ui-context-menu': { kind: 'none', reason: 'Client menu presentation and contributed callbacks add no model input.' },
@@ -93,12 +94,14 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/computer-use/computer-use': { kind: 'none', reason: 'The registry only reserves provider names; providers own all model-facing tools and guidance.' },
   'packages/document/office-kit': { kind: 'indirect', reason: 'The provider returns rendered and converted bytes; the Office tools own their model-visible results.' },
 
+  'packages/account/deepseek-auth': { kind: 'none', reason: 'Request authentication releases HTTP headers to Host plugins and registers no model context or tools.' },
   'packages/account/deepseek-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
   'packages/client/ui-settings-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
   'packages/client/ui-account-notifications': { kind: 'none', reason: 'Account notification presentation and polling add no model input or Session events.' },
 
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
+  'packages/mcp/mcp-account': { kind: 'none', reason: 'Plugins page account presentation and operations over the MCP manager; the connector and the MCP client document the tools a grant exposes.' },
   'packages/mcp/mcp-manager': { kind: 'indirect', reason: 'The manager only mounts and disposes dsh-mcp-client instances; those instances own every model-facing tool and schema.' },
   'packages/client/ui-jobs': { kind: 'none', reason: 'Browser-side presentation of host-observed output; touches no prompt, message, schema, stream, or tool result.' },
   'packages/client/ui-session-panel': { kind: 'none', reason: 'Browser-side summary of Session facts the Client already holds; touches no prompt, message, schema, stream, or tool result.' },
