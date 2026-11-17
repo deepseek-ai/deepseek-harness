@@ -48,7 +48,7 @@ const LABEL = 'event-sourcing researcher'
 const CHILD_NAME = 'agent-1'
 const ONE_SHOT_LABEL = 'event-sourcing reviewer'
 const NESTED_LABEL = 'example editor'
-const CHILD_TITLE = 'Explain event sourcing in one'
+const CHILD_TITLE = 'Now give the same explanation'
 const PARENT_PROMPT = 'Ask a research subagent to explain event sourcing.'
 const INITIAL_PROMPT = 'Explain event sourcing in one sentence.'
 /** The grandchild's own first message; its arrival is what says its history finished loading. */
@@ -693,7 +693,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
       .getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
     const sidebarChat = page.locator('[data-sidebar-chat]')
-    await sidebarChat.getByText(/^Explain event sourcing in one sentence\./).waitFor({ timeout: 15_000 })
+    await sidebarChat.getByRole('button', { name: /^Task message received/ }).waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
       SIDEBAR_CHAT_EXPECTED,
       await captureStableAria(page, '[data-sidebar-chat]', scaffold.workspaceCwd),
@@ -715,7 +715,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-open'))
     await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
     await expect.poll(
-      () => page.getByText(/^Explain event sourcing in one sentence\./).count(),
+      () => page.getByRole('button', { name: /^Task message received/ }).count(),
       { timeout: 15_000 },
     ).toBe(1)
     if (scaffold.ctx.agents.get(childId) !== undefined) {
@@ -773,7 +773,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await expect.poll(() => requested, { timeout: 15_000 }).toBe(true)
       expect(await page.getByText('This subagent is read-only for now', { exact: true }).count()).toBe(0)
       expect(await page.getByRole('navigation', { name: 'Session hierarchy' }).count()).toBe(0)
-      expect(await page.getByText(/^Explain event sourcing in one sentence\./).count()).toBe(0)
+      expect(await page.getByRole('button', { name: /^Task message received/ }).count()).toBe(0)
       releaseCatalog()
       await page.getByRole('button', { name: `Switch subagent: ${LABEL}` }).waitFor({ timeout: 15_000 })
       const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })

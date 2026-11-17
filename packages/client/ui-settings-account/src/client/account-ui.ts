@@ -20,9 +20,9 @@ export interface AccountUi {
   clientMetadata(locale: string): AccountClientMetadata
 }
 
-/** Account-menu presentation facts supplied to its notification extension. */
+/** Account presentation facts supplied to its notification extension. */
 export interface AccountNotificationsOwnerProps {
-  /** Whether the account menu can display notifications outside onboarding. */
+  /** Whether a signed-in account can display notifications outside onboarding. */
   active: boolean
   /** Open the account section in the existing settings shell. */
   openAccount: () => void
@@ -43,7 +43,7 @@ declare module '@deepseek-ai/cordis' {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
-    /** Notifications anchored at the account menu; the contribution owns its markup and lifecycle. */
+    /** Notifications in the row above the account launcher; the contribution owns its markup and lifecycle. */
     'settings.launcher.notifications': { kind: 'single'; scope: 'root'; owner: AccountNotificationsOwnerProps }
   }
 }

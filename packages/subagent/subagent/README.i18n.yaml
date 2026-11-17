@@ -68,6 +68,18 @@
 /deepseek-ai-dsh-subagent/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-subagent/model-experience/message-authorship:
+  en: 4350a9a08e35641b
+  zh: 75cd6deac5f7430a
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/what-the-model-sees:
+  en: 572bb322919ae1cb
+  zh: 5c49bbd85cf0fd31
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/token-effect:
+  en: 8611aab0a4bcb5b4
+  zh: c2286d8a73b818ac
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/kv-cache-effect:
+  en: 55d5610dcc9049e3
+  zh: 382e85de9c81cb11
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice:
   en: f7cec22ba9d3fb4f
   zh: 67b1d40f9b136f71

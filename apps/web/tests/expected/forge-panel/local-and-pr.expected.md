@@ -12,10 +12,10 @@
     - button "调整「变更请求」的顺序"
     - list:
       - listitem:
-        - img "变更请求状态：需要处理"
-        - link "Add the pull request panel":
-          - /url: https://github.com/octo/demo/pull/7
-        - text: "#7 feat → main"
+        - button "变更请求状态：需要处理 Add the pull request panel":
+          - img "变更请求状态：需要处理"
+          - text: Add the pull request panel
+        - text: "#7"
         - button "#7 的操作"
         - 'button "收起 #7" [expanded]'
         - button "检查 已加载 1 项检查，仍有更多"
