@@ -3,10 +3,18 @@
 import { accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name lark-cli's guides run it by. */
 export const PROGRAM = 'lark-cli'
+
+/**
+ * Name the executable file as `@larksuite/cli` installs it.
+ * @param platform - the Host platform.
+ * @returns `lark-cli`, or `lark-cli.exe` on Windows.
+ */
+export function executableFileName(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? `${PROGRAM}.exe` : PROGRAM
+}
 
 /**
  * Locate the managed executable.
@@ -15,7 +23,7 @@ export const PROGRAM = 'lark-cli'
  * @throws when the executable is missing.
  */
 export function resolveCliExecutable(binDir: string | undefined): string {
-  const program = join(binDir ?? join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin'), executableFileName(PROGRAM))
+  const program = join(binDir ?? join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin'), executableFileName(process.platform))
   try {
     accessSync(program, constants.X_OK)
   } catch (error) {

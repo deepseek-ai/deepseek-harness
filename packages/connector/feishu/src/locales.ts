@@ -1,5 +1,4 @@
 /** The Feishu text the Plugins page shows; the browser resolves it in its active language. */
-import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -364,5 +363,5 @@ export const pt: Record<FeishuTextKey, string> = {
   'notice.signed-out': 'Você saiu do Feishu',
 }
 
-/** Render one key of the Feishu text in every shipped language. */
-export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })
+/** The dictionary of every shipped language. */
+export const dictionaries = { zh, en, ja, es, fr, de, ru, pt }

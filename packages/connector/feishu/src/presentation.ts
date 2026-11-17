@@ -1,30 +1,44 @@
 /** The Feishu account section the Plugins page shows for each Host view. */
-import { failureDetails } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountText } from '@deepseek-ai/dsh-cli-account/types'
 import type {
   ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountNote,
   ConnectorAccountOperation,
 } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { text } from './locales.ts'
+import type { FeishuTextKey } from './locales.ts'
 import type { FeishuAppId, FeishuOperationKind, FeishuState } from './types.ts'
+
+type Text = CliAccountText<FeishuTextKey>
 
 /** The npm package whose bundle page carries the account section. */
 export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 
 /* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
-/** The operations the section's buttons start; each but a check reports a notice in the browser that started it. */
-export const OPERATIONS: readonly ConnectorAccountOperation<FeishuOperationKind>[] = [
-  { kind: 'check' },
-  { kind: 'link-app', notice: text('notice.app-linked') },
-  { kind: 'sign-in', notice: text('notice.connected') },
-  { kind: 'sign-out', notice: text('notice.signed-out') },
-]
+/**
+ * List the operations the section's buttons start; each but a check reports a notice in the browser that started it.
+ * @param text - writes a key of the Feishu text in every shipped language.
+ * @returns the operations with their notices.
+ */
+export function operations(text: Text): readonly ConnectorAccountOperation<FeishuOperationKind>[] {
+  return [
+    { kind: 'check' },
+    { kind: 'link-app', notice: text('notice.app-linked') },
+    { kind: 'sign-in', notice: text('notice.connected') },
+    { kind: 'sign-out', notice: text('notice.signed-out') },
+  ]
+}
 
-/** The section's title and hint, and the prompt after the bundle is switched on while disconnected. */
-export const COPY: ConnectorAccountCopy = {
-  title: text('section.title'),
-  hint: text('hint'),
-  activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
+/**
+ * Write the section's title and hint, and the prompt after the bundle is switched on while disconnected.
+ * @param text - writes a key of the Feishu text in every shipped language.
+ * @returns the section's fixed text.
+ */
+export function copy(text: Text): ConnectorAccountCopy {
+  return {
+    title: text('section.title'),
+    hint: text('hint'),
+    activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
+  }
 }
 
 const CHECK = { kind: 'start', operation: 'check' } as const
@@ -51,7 +65,7 @@ function step(operation: Operation): Step {
 }
 
 /** The section while an operation runs: its step, the Feishu page and its guidance while waiting there, and cancel. */
-function presentOperation(operation: Operation): ConnectorAccountDisplay {
+function presentOperation(operation: Operation, text: Text): ConnectorAccountDisplay {
   const current = step(operation)
   const buttons: ConnectorAccountButton[] = []
   if (operation.authorizationUrl !== undefined) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
@@ -66,7 +80,7 @@ function presentOperation(operation: Operation): ConnectorAccountDisplay {
 }
 
 /** The row that names the linked app and replaces it after a confirmation. */
-function appNotes(appId: FeishuAppId): ConnectorAccountNote[] {
+function appNotes(appId: FeishuAppId, text: Text): ConnectorAccountNote[] {
   return [{
     text: text('app.linked', { id: appId }),
     button: {
@@ -76,23 +90,23 @@ function appNotes(appId: FeishuAppId): ConnectorAccountNote[] {
   }]
 }
 
-/** The last failed operation's guidance, with its command and exit code. */
-function failureOf(result: FeishuState['result']): { failure?: ConnectorAccountFailure } {
+/** The last failed operation's guidance; the Service adds the command and exit code. */
+function failureOf(result: FeishuState['result'], text: Text): { failure?: ConnectorAccountFailure } {
   if (result?.outcome !== 'failed') return {}
-  const details = result.failure === undefined ? [] : failureDetails(result.failure)
-  return { failure: { text: text(result.kind === 'link-app' ? 'failed.linkApp' : 'failed'), ...details.length === 0 ? {} : { details } } }
+  return { failure: { text: text(result.kind === 'link-app' ? 'failed.linkApp' : 'failed') } }
 }
 
 /**
  * The account section for one Host view.
  * @param view - the CLI's default account, the operation in progress, and the last result.
- * @returns the phase, status, tag, buttons, detail, linked-app row, and failure.
+ * @param text - writes a key of the Feishu text in every shipped language.
+ * @returns the phase, status, tag, buttons, detail, linked-app row, and failure guidance.
  */
-export function presentAccount(view: FeishuState): ConnectorAccountDisplay {
+export function presentAccount(view: FeishuState, text: Text): ConnectorAccountDisplay {
   const { account, operation } = view
   if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
-  if (operation !== undefined) return presentOperation(operation)
-  const failure = failureOf(view.result)
+  if (operation !== undefined) return presentOperation(operation, text)
+  const failure = failureOf(view.result, text)
   switch (account.state) {
     case 'unchecked': return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
     case 'unconfigured':
@@ -105,12 +119,12 @@ export function presentAccount(view: FeishuState): ConnectorAccountDisplay {
       return {
         phase: 'disconnected', status: text('status.disconnected'), badge: text('badge.disconnected'),
         buttons: [{ label: text('action.signIn'), command: SIGN_IN, variant: 'primary' }], connect: SIGN_IN,
-        detail: text('detail.signed-out'), notes: appNotes(account.appId), ...failure,
+        detail: text('detail.signed-out'), notes: appNotes(account.appId, text), ...failure,
       }
     case 'unverified':
       return {
         phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
-        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes: appNotes(account.appId), ...failure,
+        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes: appNotes(account.appId, text), ...failure,
       }
     /* jscpd:ignore-start -- CLI app plugins that sign out offer the same confirmed sign-out button. */
     case 'connected':
@@ -121,7 +135,7 @@ export function presentAccount(view: FeishuState): ConnectorAccountDisplay {
           confirm: { title: text('signOut.title'), body: text('signOut.body'), label: text('action.signOut') },
         }],
         detail: account.userName === undefined ? text('detail.connected') : text('detail.connectedAs', { name: account.userName }),
-        notes: appNotes(account.appId), ...failure,
+        notes: appNotes(account.appId, text), ...failure,
       }
     /* jscpd:ignore-end */
     /* v8 ignore next -- closed account state union */

@@ -24,13 +24,7 @@
       "path": "../../skill/skill"
     },
     {
-      "path": "../../subprocess/subprocess"
-    },
-    {
       "path": "../cli-account"
-    },
-    {
-      "path": "../../core/system-prompt"
     },
     {
       "path": "../../client/ui-connector-account/tsconfig.host.json"

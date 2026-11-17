@@ -62,9 +62,8 @@ A check runs `auth status --verify --json`. The account reads `connected` only w
 | Field | Default | Meaning |
 |---|---|---|
 | `binDir` | the installed `@larksuite/cli` package's `bin` | Absolute directory containing an executable `lark-cli`, `lark-cli.exe` on Windows |
-| `commandTimeoutMs` | `30000` | Deadline for one skill command, account check, or sign-out, including executable lookup |
 
-App setup and sign-in wait up to 10 minutes for the user in the browser, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits.
+An account check or sign-out gets the `commandTimeoutMs` of the [`cli-account` row](../cli-account/README.md#use-this-package), 30 seconds by default. App setup and sign-in wait up to 10 minutes for the user in the browser, and each command keeps at most 1 MiB of stdout; the CLI account Service fixes both limits.
 
 The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-feishu) is the exhaustive source of supported fields.
 
@@ -76,7 +75,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `feishu` row after the profile's other layers, and the Plugins page keys the account section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/lark-cli` (`lark-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its account commands. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and reports a failed command by its exit code. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `feishu` row after the profile's other layers, and the Plugins page keys the account section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/lark-cli` (`lark-cli.exe` on Windows) is executable, registers that path and the account with `ctx.cliAccounts`, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its account commands. The [CLI account Service](../cli-account/README.md) gives the model that path in runtime context, runs each command by the same path, runs one account operation at a time, and reports a failed command by its exit code. [`src/account.ts`](src/account.ts) carries out each operation with the Feishu commands and reads setup and sign-in links from their output lines. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the 28 guides that `lark-cli` 1.0.97 embeds, and how to open them. [`src/skills.ts`](src/skills.ts) reads the entry once when the plugin loads and lists it as the `feishu` provider's one skill with an opaque resource base, so the catalog lists the entry and a load returns the file without running the CLI. The guides stay in the binary, and the agent reads them with `lark-cli skills read`.
 
@@ -88,7 +87,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
-- [CLI account library](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
+- [CLI account Service](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry and the Plugins page section that drive the account operations.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
@@ -136,7 +135,7 @@ Loading appends a tool result and does not rewrite earlier context.
 
 #### What the model sees
 
-While the row is loaded, the [CLI account library](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of `lark-cli` in `binDir`, which defaults to the installed `@larksuite/cli` package's `bin` directory.
+While the row is loaded, the [CLI account Service](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of `lark-cli` in `binDir`, which defaults to the installed `@larksuite/cli` package's `bin` directory.
 
 ##### Runtime-context entry
 

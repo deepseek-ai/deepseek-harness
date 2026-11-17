@@ -1,10 +1,13 @@
-/** Scripted lark-cli processes and a temporary bin directory for Feishu plugin specs. */
+/** A Host for Feishu plugin specs: scripted lark-cli processes, a temporary bin directory, and a recording Plugins page registry. */
 
 import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { Context } from '@deepseek-ai/cordis'
+import CliAccounts from '@deepseek-ai/dsh-cli-account'
+import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessCollectedOutputs,
@@ -13,6 +16,9 @@ import type {
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { executableFileName } from '../src/cli.ts'
+import type { FeishuState } from '../src/types.ts'
 
 /** Output and exit facts one scripted command reports. */
 export interface CliReply {
@@ -104,7 +110,43 @@ export class ScriptedSubprocess extends SubprocessRuntime {
  */
 export async function createBinDir(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-feishu-bin-'))
-  await writeFile(join(directory, executableFileName('lark-cli')), '')
-  await chmod(join(directory, executableFileName('lark-cli')), 0o755)
+  await writeFile(join(directory, executableFileName(process.platform)), '')
+  await chmod(join(directory, executableFileName(process.platform)), 0o755)
   return directory
+}
+
+/** What the Feishu plugin registers for the Plugins page. */
+export type FeishuPage = ConnectorAccountRegistration<FeishuState>
+
+/** The services the Feishu plugin runs on, before the plugin itself loads. */
+export interface FeishuHost {
+  readonly ctx: Context
+  readonly subprocess: ScriptedSubprocess
+  /** The `binDir` to load the plugin with. */
+  readonly binDir: string
+  /** Every account registered for the Plugins page, in order; the registry keeps them after withdrawal. */
+  readonly pages: FeishuPage[]
+  /** How many of those accounts were withdrawn. */
+  withdrawn: number
+}
+
+/**
+ * Start a Host with the skill registry, a scripted subprocess runtime, the system prompt, a Plugins page registry that
+ * records registrations, and the CLI account Service with a 5-second command deadline.
+ * @returns the Host; the caller loads the Feishu plugin with `binDir`, disposes `ctx.fiber`, and removes `binDir`.
+ */
+export async function createHost(): Promise<FeishuHost> {
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SystemPrompt)
+  const host: FeishuHost = { ctx, subprocess: ctx.subprocess as ScriptedSubprocess, binDir: await createBinDir(), pages: [], withdrawn: 0 }
+  ctx.provide('connectorAccounts', {
+    register: (page: FeishuPage) => {
+      host.pages.push(page)
+      return () => { host.withdrawn += 1 }
+    },
+  })
+  await ctx.plugin(CliAccounts, { commandTimeoutMs: 5_000 })
+  return host
 }

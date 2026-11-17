@@ -62,9 +62,8 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `binDir` | 已安装 `@larksuite/cli` 包的 `bin` | 包含可执行 `lark-cli`（Windows 上为 `lark-cli.exe`）的绝对目录 |
-| `commandTimeoutMs` | `30000` | 单条 skill 命令、账号检查或退出登录的期限，包含可执行文件查找 |
 
-应用配置和登录最多等待用户在浏览器中操作 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。
+账号检查和退出登录使用 [`cli-account` 行](../cli-account/README.zh.md#use-this-package)的 `commandTimeoutMs`，默认 30 秒。应用配置和登录最多等待用户在浏览器中操作 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 CLI 账号 Service 固定。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-feishu)是受支持字段的完整来源。
 
@@ -76,7 +75,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析账号命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并以退出码报告失败的命令。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，把这个路径和账号注册到 `ctx.cliAccounts`，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析账号命令的 JSON 输出。[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，一次执行一个账号操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用飞书的命令完成每个操作，并从命令输出行中读取配置与登录链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。[`src/skills.ts`](src/skills.ts) 在插件加载时读取一次入口，并把它作为 `feishu` 提供方的唯一 skill 列出，资源基址为 opaque 类型，因此目录列出入口、加载返回该文件时都不运行 CLI。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
 
@@ -88,7 +87,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 ## 进一步探索
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
-- [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
+- [CLI 账号 Service](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [连接器账号界面](../../client/ui-connector-account/README.zh.md)——发起账号操作的注册表和插件页区块。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装、构建脚本审批与启用。
@@ -136,7 +135,7 @@ Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base,
 
 #### 模型看到什么
 
-该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出 `binDir` 中 `lark-cli` 的路径；`binDir` 默认是已安装的 `@larksuite/cli` 包的 `bin` 目录。
+该行加载期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `lark-cli` 的路径；`binDir` 默认是已安装的 `@larksuite/cli` 包的 `bin` 目录。
 
 ##### 运行时上下文条目
 

@@ -25,7 +25,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | Package | Role | ctx key |
 |---|---|---|
 | [`cli-account/`](cli-account/README.md) | Holds the vendor CLIs and accounts CLI app plugins register: gives the model each CLI's absolute path in runtime context, runs each plugin's account operations one at a time, and shows the account on the Plugins page | `ctx.cliAccounts` |
-| [`feishu/`](feishu/README.md) | The Feishu plugin: installs the official `lark-cli`, gives the model its absolute path, registers its embedded skills, and runs the account operations the Plugins page drives | registers on `ctx.skills`, `ctx.systemPrompt`, and `ctx.connectorAccounts` |
+| [`feishu/`](feishu/README.md) | The Feishu plugin: installs the official `lark-cli`, gives the model its absolute path, registers its embedded skills, and runs the account operations the Plugins page drives | registers on `ctx.cliAccounts` and `ctx.skills` |
 
 -----
 

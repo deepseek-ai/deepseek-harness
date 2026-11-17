@@ -1632,13 +1632,15 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-feishu`
 
-- `inject`: `skills` · `subprocess` · `systemPrompt`
-- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
-- `source`: [`packages/connector/feishu/src/index.ts:33`](../packages/connector/feishu/src/index.ts)
+- `inject`: `cliAccounts` · `skills`
+- `source`: [`packages/connector/feishu/src/index.ts:32`](../packages/connector/feishu/src/index.ts)
 
 ```ts config-catalog
-/** Where lark-cli is and how long a command that does not wait for the user may run. */
-export type Config = CliAccountConfig
+/** Where lark-cli is. */
+export interface Config {
+  /** Absolute directory holding the `lark-cli` executable; defaults to the installed `@larksuite/cli` package. */
+  binDir?: string
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
 

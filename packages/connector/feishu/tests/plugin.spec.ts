@@ -1,34 +1,35 @@
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Context } from '@deepseek-ai/cordis'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
-import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import type { Context } from '@deepseek-ai/cordis'
+import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
+import { executableFileName } from '../src/cli.ts'
 import * as Feishu from '../src/index.ts'
-import { COPY, FEISHU_PACKAGE, OPERATIONS, presentAccount } from '../src/presentation.ts'
-import type { FeishuState } from '../src/types.ts'
-import { createBinDir, ScriptedSubprocess } from './harness.ts'
+import { FEISHU_PACKAGE } from '../src/presentation.ts'
+import { createHost, type FeishuHost, type ScriptedSubprocess } from './harness.ts'
 
-const CONFIG = { commandTimeoutMs: 5_000 }
 const ENTRY = fileURLToPath(new URL('../skills/feishu/SKILL.md', import.meta.url))
 
+describe('Config', () => {
+  it('takes the CLI directory, which is optional and never empty', () => {
+    expect(Feishu.Config({})).toEqual({})
+    expect(Feishu.Config({ binDir: '/opt/lark/bin' })).toEqual({ binDir: '/opt/lark/bin' })
+    expect(() => Feishu.Config({ binDir: '' })).toThrow()
+  })
+})
+
 describe('Feishu plugin', () => {
+  let host: FeishuHost
   let ctx: Context
   let subprocess: ScriptedSubprocess
   let binDir: string
   let warnings: string[]
 
   beforeEach(async () => {
-    ctx = new Context()
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(SystemPrompt)
-    subprocess = ctx.subprocess as ScriptedSubprocess
-    binDir = await createBinDir()
+    host = await createHost()
+    ;({ ctx, subprocess, binDir } = host)
     warnings = []
     ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
   })
@@ -41,7 +42,7 @@ describe('Feishu plugin', () => {
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
   it('lists the packaged feishu skill and loads its entry without running lark-cli', async () => {
-    await ctx.plugin(Feishu, { ...CONFIG, binDir })
+    await ctx.plugin(Feishu, { binDir })
 
     expect(await ctx.skills.list()).toEqual([{
       name: 'feishu',
@@ -63,10 +64,10 @@ describe('Feishu plugin', () => {
   })
 
   it('withdraws the runtime context and the skill on disposal', async () => {
-    const fiber = await ctx.plugin(Feishu, { ...CONFIG, binDir })
+    const fiber = await ctx.plugin(Feishu, { binDir })
     expect(await runtimeContext()).toEqual([{
       name: 'feishu:cli',
-      text: cliPathContextText({ name: 'feishu:cli', product: 'Feishu', program: 'lark-cli', executable: join(binDir, executableFileName('lark-cli')) }, process.platform),
+      text: cliPathContextText({ product: 'Feishu', program: 'lark-cli', executable: join(binDir, executableFileName(process.platform)) }, process.platform),
     }])
     expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['feishu'])
 
@@ -78,21 +79,13 @@ describe('Feishu plugin', () => {
   })
 
   it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
-    const registered: ConnectorAccountRegistration<FeishuState>[] = []
-    const withdrawn = vi.fn()
-    ctx.provide('connectorAccounts', {
-      register: (registration: ConnectorAccountRegistration<FeishuState>) => {
-        registered.push(registration)
-        return withdrawn
-      },
-    })
-    const fiber = await ctx.plugin(Feishu, { ...CONFIG, binDir })
-    expect(registered).toHaveLength(1)
-    expect(registered[0]).toMatchObject({ packageName: FEISHU_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount })
-    expect(registered[0]!.source.snapshot().account.state).toBe('unchecked')
+    const fiber = await ctx.plugin(Feishu, { binDir })
+    expect(host.pages).toHaveLength(1)
+    expect(host.pages[0]).toMatchObject({ key: FEISHU_PACKAGE, packageName: FEISHU_PACKAGE })
+    expect(host.pages[0]!.source.snapshot().account.state).toBe('unchecked')
 
     await fiber.dispose()
 
-    expect(withdrawn).toHaveBeenCalledOnce()
+    expect(host.withdrawn).toBe(1)
   })
 })

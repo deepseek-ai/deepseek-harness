@@ -1,10 +1,12 @@
 /** The Feishu section offers each state's next step, the linked app, confirmations, and failure guidance, in every shipped language. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
-import { expect, it } from 'vitest'
+import { rm } from 'node:fs/promises'
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import * as Feishu from '../src/index.ts'
 import { en, zh, type FeishuTextKey } from '../src/locales.ts'
-import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { FeishuAppId, FeishuState } from '../src/types.ts'
+import { createHost, type FeishuHost, type FeishuPage } from './harness.ts'
 
 const OP = 'op' as ConnectorOperationId
 const APP = 'cli_a' as FeishuAppId
@@ -18,6 +20,23 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 const say = (key: FeishuTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
 const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+
+let host: FeishuHost
+/** What the plugin registered for the Plugins page, with the failure details the CLI account Service adds. */
+let page: FeishuPage
+
+beforeAll(async () => {
+  host = await createHost()
+  await host.ctx.plugin(Feishu, { binDir: host.binDir })
+  page = host.pages[0]!
+})
+
+afterAll(async () => {
+  await host.ctx.fiber.dispose()
+  await rm(host.binDir, { recursive: true, force: true })
+})
+
+const presentAccount = (view: FeishuState): ConnectorAccountDisplay => page.present(view)
 
 const UNCONFIGURED: FeishuState = { account: { state: 'unconfigured' } }
 const SIGNED_OUT: FeishuState = { account: { state: 'signed-out', appId: APP } }
@@ -116,15 +135,15 @@ it('shows the linked app and asks before changing it', () => {
 })
 
 it('names the section, its activation prompt, and the notice of each page operation', () => {
-  expect(COPY).toMatchObject({
+  expect(page.copy).toMatchObject({
     title: say('section.title'), hint: say('hint'),
     activation: { title: say('activation.title'), body: say('activation.body'), connect: say('action.connect') },
   })
-  expect(OPERATIONS).toMatchObject([
+  expect(page.operations).toMatchObject([
     { kind: 'check' },
     { kind: 'link-app', notice: say('notice.app-linked') },
     { kind: 'sign-in', notice: say('notice.connected') },
     { kind: 'sign-out', notice: say('notice.signed-out') },
   ])
-  expect(OPERATIONS[0]).not.toHaveProperty('notice')
+  expect(page.operations[0]).not.toHaveProperty('notice')
 })

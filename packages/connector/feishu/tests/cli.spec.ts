@@ -2,17 +2,21 @@ import { constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import { parseJson, resolveCliExecutable } from '../src/cli.ts'
+import { executableFileName, parseJson, resolveCliExecutable } from '../src/cli.ts'
 
 const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
 vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
 
 const PACKAGE_BIN = join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin')
-const FILE = executableFileName('lark-cli')
+const FILE = process.platform === 'win32' ? 'lark-cli.exe' : 'lark-cli'
 
 beforeEach(() => {
   fs.accessSync.mockReset()
+})
+
+it('names the executable file with the .exe extension on Windows only', () => {
+  expect(executableFileName('win32')).toBe('lark-cli.exe')
+  expect(executableFileName('darwin')).toBe('lark-cli')
 })
 
 it('defaults to the executable in the installed @larksuite/cli bin directory', () => {

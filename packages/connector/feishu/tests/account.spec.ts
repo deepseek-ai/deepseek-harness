@@ -1,17 +1,11 @@
 /** Account operations over a scripted lark-cli: checks, app linking, sign-in, sign-out, cancellation, and the Plugins page wiring. */
 import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
-import type { ConnectorAccountRegistration, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FeishuAccount } from '../src/account.ts'
-import { PROGRAM } from '../src/cli.ts'
 import * as Feishu from '../src/index.ts'
-import type { FeishuAppId, FeishuState } from '../src/types.ts'
-import { createBinDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
+import type { FeishuAppId, FeishuOperationKind, FeishuState } from '../src/types.ts'
+import { createHost, type CliReply, type FeishuPage, type ScriptedProcess, type ScriptedSubprocess } from './harness.ts'
 
 const APP = 'cli_a' as FeishuAppId
 const STATUS = 'auth status --verify --json'
@@ -27,15 +21,15 @@ type Script = (process: ScriptedProcess) => void
 let ctx: Context
 let subprocess: ScriptedSubprocess
 let binDir: string
+/** The account the plugin registered, as the Plugins page registry drives it. */
+let account: FeishuPage['source']
 let script: Record<string, Script | CliReply[]>
 
 beforeEach(async () => {
-  ctx = new Context()
-  await ctx.plugin(SkillRegistry)
-  await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(SystemPrompt)
-  subprocess = ctx.subprocess as ScriptedSubprocess
-  binDir = await createBinDir()
+  const host = await createHost()
+  ;({ ctx, subprocess, binDir } = host)
+  await ctx.plugin(Feishu, { binDir })
+  account = host.pages[0]!.source
   script = {}
   subprocess.respond = (process) => {
     const handler = script[process.spec.argv.slice(1).join(' ')]
@@ -50,19 +44,16 @@ afterEach(async () => {
   await rm(binDir, { recursive: true, force: true })
 })
 
+/** Start an operation as a page button does; the CLI account Service starts it before returning. */
+const start = (kind: FeishuOperationKind): ConnectorOperationId => {
+  const id = account.start(kind)
+  if (typeof id !== 'string') throw new Error('the operation did not start at once')
+  return id
+}
 const commands = () => subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))
 const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'error').map((message): unknown => message.args)
 
-describe('FeishuAccount', () => {
-  let account: FeishuAccount
-
-  beforeEach(() => {
-    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
-    account = new FeishuAccount(cli, ctx.logger)
-  })
-
-  afterEach(() => account.dispose())
-
+describe('Feishu account operations', () => {
   const settled = async (id: ConnectorOperationId): Promise<FeishuState> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot()
@@ -77,7 +68,7 @@ describe('FeishuAccount', () => {
     ['a failed verification', status({ status: 'verify_failed', available: true, verified: false }), { state: 'unverified', appId: APP }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
-    const id = account.start('check')
+    const id = start('check')
     expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'checking', cancellable: false })
     expect(await settled(id)).toEqual({ account: expected, result: { id, kind: 'check', outcome: 'succeeded' } })
   })
@@ -87,7 +78,7 @@ describe('FeishuAccount', () => {
     ['a status failure without JSON', { exitCode: 1, stderr: 'boom' }],
   ])('keeps the previous account and fails on %s', async (_name, reply) => {
     script[STATUS] = [reply]
-    expect(await settled(account.start('check'))).toMatchObject({ account: { state: 'unchecked' }, result: { outcome: 'failed' } })
+    expect(await settled(start('check'))).toMatchObject({ account: { state: 'unchecked' }, result: { outcome: 'failed' } })
   })
 
   it('links an app through its setup page, offers only the first trusted link, and stops before sign-in', async () => {
@@ -95,7 +86,7 @@ describe('FeishuAccount', () => {
     const setup = Promise.withResolvers<ScriptedProcess>()
     script['config init --new'] = (process) => { setup.resolve(process) }
 
-    const id = account.start('link-app')
+    const id = start('link-app')
     const configuring = await setup.promise
     expect(account.snapshot().operation).toEqual({ id, kind: 'link-app', phase: 'configuring', cancellable: true })
     configuring.write('stderr', 'Open this link:\n  http://open.feishu.cn/page/cli?x=1\n  https://evil.example/page\n')
@@ -110,13 +101,13 @@ describe('FeishuAccount', () => {
 
   it('reports safe setup diagnostics to the page and Host without retrying or exposing native output', async () => {
     script[STATUS] = [NOT_CONFIGURED]
-    await settled(account.start('check'))
+    await settled(start('check'))
     const sensitive = 'secret-in-native-output'
     script['config init --new'] = [{ exitCode: 5, stdout: sensitive, stderr: `QR\nhttps://open.feishu.cn/?user_code=${sensitive}\nApp created\n${JSON.stringify({
       ok: false, error: { type: 'internal', subtype: 'sdk_error', message: sensitive, hint: sensitive },
     }, null, 2)}\n` }]
 
-    const result = await settled(account.start('link-app'))
+    const result = await settled(start('link-app'))
     expect(result).toMatchObject({ account: { state: 'unconfigured' }, result: {
       outcome: 'failed', failure: { command: 'config-init', exitCode: 5 },
     } })
@@ -132,14 +123,14 @@ describe('FeishuAccount', () => {
     script['config init --new'] = [{}]
     script[STATUS] = [{ exitCode: 5, stderr: '{"ok":false,"error":{"type":"internal","subtype":"storage"}}' }]
 
-    expect(await settled(account.start('link-app'))).toMatchObject({ result: {
+    expect(await settled(start('link-app'))).toMatchObject({ result: {
       outcome: 'failed', failure: { command: 'auth-status', exitCode: 5 },
     } })
   })
 
   it('retains the observed exit code when the command response is invalid', async () => {
     script[STATUS] = [{ stdout: 'invalid-json-secret' }]
-    const result = await settled(account.start('check'))
+    const result = await settled(start('check'))
     expect(result).toMatchObject({ result: { outcome: 'failed', failure: { command: 'auth-status', exitCode: 0 } } })
     expect(JSON.stringify({ result, errors: errors() })).not.toContain('invalid-json-secret')
   })
@@ -149,7 +140,7 @@ describe('FeishuAccount', () => {
     const signIn = Promise.withResolvers<ScriptedProcess>()
     script['auth login --json'] = (process) => { signIn.resolve(process) }
 
-    const id = account.start('sign-in')
+    const id = start('sign-in')
     expect(account.snapshot().operation).toEqual({ id, kind: 'sign-in', phase: 'authorizing', cancellable: true })
     const authorizing = await signIn.promise
     const invalid = JSON.stringify({ event: 'device_authorization', verification_uri_complete: 'not a url' })
@@ -174,35 +165,22 @@ describe('FeishuAccount', () => {
     ['an unverified sign-in', 'sign-in', { [STATUS]: [SIGNED_OUT], 'auth login --json': [{ stdout: login() + '\n' }] }],
   ])('fails on %s', async (_name, kind, replies) => {
     Object.assign(script, replies)
-    expect((await settled(account.start(kind))).result).toMatchObject({ kind, outcome: 'failed' })
+    expect((await settled(start(kind))).result).toMatchObject({ kind, outcome: 'failed' })
   })
 
   it('signs out without offering cancellation and reports a rejected sign-out', async () => {
     script[STATUS] = [SIGNED_OUT]
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }, { exitCode: 1 }]
-    const id = account.start('sign-out')
+    const id = start('sign-out')
     expect(account.snapshot().operation).toEqual({ id, kind: 'sign-out', phase: 'signing-out', cancellable: false })
     expect(await settled(id)).toEqual({ account: { state: 'signed-out', appId: APP }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
-    expect((await settled(account.start('sign-out'))).result).toMatchObject({
+    expect((await settled(start('sign-out'))).result).toMatchObject({
       kind: 'sign-out', outcome: 'failed', failure: { command: 'auth-logout', exitCode: 1 },
     })
   })
 })
 
 describe('Feishu on the Plugins page', () => {
-  let account!: FeishuAccount
-
-  beforeEach(async () => {
-    ctx.provide('connectorAccounts', {
-      register: (registration: ConnectorAccountRegistration<FeishuState>) => {
-        if (!(registration.source instanceof FeishuAccount)) throw new Error('the plugin registers its account runtime')
-        account = registration.source
-        return () => {}
-      },
-    })
-    await ctx.plugin(Feishu, { commandTimeoutMs: 5_000, binDir })
-  })
-
   const finished = async (id: ConnectorOperationId): Promise<FeishuState['result']> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot().result
@@ -217,19 +195,19 @@ describe('Feishu on the Plugins page', () => {
     expect(account.snapshot().account).toEqual({ state: 'signed-out', appId: APP })
 
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }]
-    const signingOut = account.start('sign-out')
-    expect(() => account.start('sign-in')).toThrow('another account operation is in progress')
+    const signingOut = start('sign-out')
+    expect(() => start('sign-in')).toThrow('another account operation is in progress')
     await account.cancel(signingOut)
     expect(await finished(signingOut)).toMatchObject({ kind: 'sign-out', outcome: 'succeeded' })
-    expect(await finished(account.start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    expect(await finished(start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script['config init --new'] = () => {}
-    const linking = account.start('link-app')
+    const linking = start('link-app')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe('config init --new') })
     await account.cancel(linking)
     expect(await finished(linking)).toMatchObject({ kind: 'link-app', outcome: 'cancelled' })
     script['auth login --json'] = () => {}
-    const signingIn = account.start('sign-in')
+    const signingIn = start('sign-in')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe('auth login --json') })
     await account.cancel(signingIn)
     expect(await finished(signingIn)).toMatchObject({ kind: 'sign-in', outcome: 'cancelled' })
