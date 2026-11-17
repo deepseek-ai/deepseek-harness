@@ -180,9 +180,13 @@ export class WsClient extends WsClientBase<QQBot> {
  * @param signal - aborted when this socket is done; the heartbeat and the listeners die with it.
  */
   protected async accept(socket: WebSocket, signal: AbortSignal) {
+    const connection = new AbortController()
+    const abort = () => connection.abort(signal.reason)
+    if (signal.aborted) abort()
+    else signal.addEventListener('abort', abort, { once: true })
     const receive = (event: WebSocket.MessageEvent) => {
-      if (signal.aborted) return
-      this.track(this.receiveFrame(socket, event.data, signal).catch((error) => {
+      if (connection.signal.aborted) return
+      this.track(this.receiveFrame(socket, event.data, connection).catch((error) => {
  // The gateway has no per-event acknowledgement: a decode/intake failure cannot be re-requested, so it is
  // reported and the connection stays up (the durable consumer owns deduplication).
         this.bot.ctx.logger.error('QQ gateway frame failed: %s', error)
@@ -198,8 +202,9 @@ export class WsClient extends WsClientBase<QQBot> {
     const cleanup = () => {
       this.stopHeartbeat()
       socket.removeEventListener('message', receive)
+      signal.removeEventListener('abort', abort)
     }
-    signal.addEventListener('abort', cleanup, { once: true })
+    connection.signal.addEventListener('abort', cleanup, { once: true })
     socket.addEventListener('message', receive)
     socket.addEventListener('close', close)
   }
@@ -224,11 +229,11 @@ export class WsClient extends WsClientBase<QQBot> {
     this.acked = false
   }
 
-  private async receiveFrame(socket: WebSocket, data: unknown, signal: AbortSignal) {
+  private async receiveFrame(socket: WebSocket, data: unknown, connection: AbortController) {
     const payload = parsePayload(textOf(data))
     switch (payload.op) {
       case Opcode.HELLO:
-        return await this.hello(socket, payload, signal)
+        return await this.hello(socket, payload, connection.signal)
       case Opcode.HEARTBEAT_ACK:
         this.acked = true
         return
@@ -247,7 +252,7 @@ export class WsClient extends WsClientBase<QQBot> {
         socket.close(1000, 'invalid session')
         return
       case Opcode.DISPATCH:
-        return await this.enqueueDispatch(socket, payload, signal)
+        return await this.enqueueDispatch(socket, payload, connection)
       default:
         return this.bot.ctx.logger.warn('QQ gateway opcode %d is not supported', payload.op)
     }
@@ -278,18 +283,18 @@ export class WsClient extends WsClientBase<QQBot> {
  * starve the heartbeat and turn the socket into a zombie — so only dispatches are serialized. Serializing them
  * keeps the order the platform sent them in, which is the order the intake store assigns its per-chat `seq` in.
  */
-  private async enqueueDispatch(socket: WebSocket, payload: GatewayPayload, signal: AbortSignal) {
+  private async enqueueDispatch(socket: WebSocket, payload: GatewayPayload, connection: AbortController) {
     const run = this.dispatches.then(async () => {
-      if (signal.aborted) return
-      await this.dispatch(socket, payload, signal)
-      if (!signal.aborted && typeof payload.s === 'number') this.seq = payload.s
+      if (connection.signal.aborted) return
+      await this.dispatch(socket, payload, connection)
+      if (!connection.signal.aborted && typeof payload.s === 'number') this.seq = payload.s
     })
     this.dispatches = run.then(() => {}, () => {})
     return await run
   }
 
   /** One `DISPATCH`: `READY`/`RESUMED` are transport-level, everything else is decoded and received. */
-  private async dispatch(socket: WebSocket, payload: GatewayPayload, signal: AbortSignal) {
+  private async dispatch(socket: WebSocket, payload: GatewayPayload, connection: AbortController) {
     const type = payload.t
     if (!type) return
     if (type === 'READY') {
@@ -316,12 +321,13 @@ export class WsClient extends WsClientBase<QQBot> {
     }
     try {
       for (const session of sessions) {
-        if (signal.aborted) return
+        if (connection.signal.aborted) return
         await this.bot.receive(session)
       }
     } catch (error) {
-      // Persistence failed: keep `this.seq` at the last persisted frame and reconnect so `RESUME` replays this frame.
-      this.stopHeartbeat()
+      // Persistence failed: abort this connection synchronously so queued frames cannot advance `this.seq`,
+      // then close so `WsClientBase` reconnects and `RESUME` replays from the last persisted frame.
+      connection.abort(error)
       socket.close(3000, 'receive failed')
       throw error
     }
