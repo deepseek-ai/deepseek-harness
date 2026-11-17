@@ -71,7 +71,7 @@ A profile’s `cordis.patch.yml` replaces the entry’s complete `servers` map. 
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `enabled` | `true` | Durable intent: `false` unmounts the instance and keeps the entry |
 | `startupTimeoutMs` | `30,000` | Budget for template resolution, negotiation, connection, and initial tool discovery |
-| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` | mcp-client defaults | Per-server overrides |
+| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` / `toolLoading` | mcp-client defaults | Per-server overrides; `toolLoading: on-demand` lets agents [load the server's tools when they need them](../mcp-client/README.md#on-demand-tool-loading) |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 
