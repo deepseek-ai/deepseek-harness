@@ -840,8 +840,8 @@ describe('Task manager catalog', () => {
     expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
   })
 
-  const RECOMMENDATION_IDS = ['dailyBrief', 'issueScan', 'pluginCompat', 'topicTracking', 'branchCleanup',
-    'weather', 'workout'] as const
+  const RECOMMENDATION_IDS = ['dailyBrief', 'weeklyReview', 'issueScan', 'pluginCompat', 'topicTracking',
+    'branchCleanup', 'weather', 'workout'] as const
 
   function recommendations(dictionary: Dictionary = en): HTMLElement | null {
     return screen.queryByRole('region', { name: dictionary['recommend.heading'] })

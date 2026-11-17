@@ -162,6 +162,18 @@ internal static class Input
         return new { dispatched = true, hoverRoute = "system-pointer", systemPointerMoved = before.X != point.X || before.Y != point.Y };
     }
 
+    internal static void ToggleMouse(AppState app, WindowState window, string button, string direction, RequestContext context)
+    {
+        var flags = Button(button);
+        if (direction == "down")
+        {
+            if (!Win32.GetCursorPos(out var point)) throw new NativeFailure("INPUT_UNAVAILABLE", "The current pointer position is unavailable");
+            Hit(app, window, point, context);
+        }
+        else Windows.RequireForeground(app, window, context);
+        Send(Mouse(direction == "down" ? flags.Down : flags.Up));
+    }
+
     internal static void Click(AppState app, WindowState window, double x, double y, string button, int count, string[] modifiers, RequestContext context)
     {
         if (button != "left" && count != 1) throw new NativeFailure("UNSUPPORTED", "Only left clicks support double-click");

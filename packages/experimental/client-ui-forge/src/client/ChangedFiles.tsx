@@ -160,15 +160,19 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
 
 /**
  * Open directory navigation through the existing files toolbar entry.
- * @param props - navigator data and whether its owning tab is visible.
+ * @param props - navigator data, whether its owning tab is visible, and whether the files are still being read, when
+ * the entry names no count.
  * @returns the toolbar entry and its portalled menu.
  */
-export function ChangedFilesMenu({ visible, ...props }: ChangedFilesProps & { readonly visible: boolean }): ReactNode {
+export function ChangedFilesMenu({ visible, loading = false, ...props }: ChangedFilesProps & {
+  readonly visible: boolean
+  readonly loading?: boolean
+}): ReactNode {
   const [open, setOpen] = useState(false)
   return <Menu open={visible && open} portal dense align="start" className={css.anchor} listClassName={css.menu} onClose={() => { setOpen(false) }}
     anchor={<button type="button" className={css.trigger} aria-haspopup="menu" aria-expanded={visible && open} disabled={props.files.length === 0}
       onClick={() => { setOpen(value => !value) }}>
-      <span className={css.triggerLabel}>{props.t('diff.allFiles', { count: props.files.length })}</span>
+      <span className={css.triggerLabel}>{loading ? props.t('diff.allFilesLoading') : props.t('diff.allFiles', { count: props.files.length })}</span>
       <IconChevronDownOutlineRegular size={12} className={css.triggerChevron} />
     </button>}>
     <ChangedFiles {...props} menu jump={(path) => { setOpen(false); props.jump(path) }} />

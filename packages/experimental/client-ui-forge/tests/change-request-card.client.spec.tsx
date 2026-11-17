@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** One change request card: state glyph, title link, collapsed summary, read notices, and expanded details and actions. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeFailure, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
@@ -10,6 +10,7 @@ import css from '../src/client/Forge.module.css'
 import overview from '../src/client/ChangeRequestOverview.module.css'
 import type { ForgePanelChangeRequest } from '../src/types.ts'
 import { check, entry, snapshot, unserved } from './client-fixtures.client.ts'
+import './fonts-dom.client.ts'
 
 afterEach(cleanup)
 
@@ -19,7 +20,7 @@ const NOW = Date.parse('2026-10-09T12:00:00Z')
 const MINUS = '−'
 
 /** Render one card inside its list, with every action recorded unless `actions` replaces it. */
-function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; actions?: Partial<ChangeRequestActions> } = {}) {
+function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; actions?: Partial<ChangeRequestActions>; t?: typeof t } = {}) {
   const openLink = vi.fn<(url: string) => void>()
   const copyLink = vi.fn<(url: string) => void>()
   const retry = vi.fn<() => void>()
@@ -28,7 +29,8 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   const actions: ChangeRequestActions = { openLink, copyLink, retry, remove, ...options.actions }
   const view = render(
     <ul>
-      <ChangeRequestCard locale="en" entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions} t={t} />
+      <ChangeRequestCard locale="en" entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions}
+        t={options.t ?? t} />
     </ul>,
   )
   const item = view.container.querySelector('[data-forge-change]')
@@ -134,6 +136,19 @@ describe('ChangeRequestCard head', () => {
     }
   })
 
+  it('crawls the collapsed number and status line with the title while the pointer rests on the head', () => {
+    const b = card(entry(7, snapshot(7)))
+    const line = metaOf(b).firstElementChild
+    if (!(line instanceof HTMLElement)) throw new Error('no status line')
+    expect(line.className).toContain(css.statusLine)
+    Object.defineProperty(line, 'scrollWidth', { value: 200, configurable: true })
+    Object.defineProperty(line, 'clientWidth', { value: 150, configurable: true })
+    fireEvent.pointerEnter(b.head)
+    expect([line.hasAttribute('data-marquee'), line.style.getPropertyValue('--dsh-marquee-range')]).toEqual([true, '50px'])
+    fireEvent.pointerLeave(b.head)
+    expect([line.hasAttribute('data-marquee'), line.style.getPropertyValue('--dsh-marquee-range')]).toEqual([false, ''])
+  })
+
   it('toggles from the chevron, while the number line stays plain text', () => {
     const b = card(entry(7, snapshot(7)))
     expect(b.item.hasAttribute('data-expanded')).toBe(false)
@@ -187,6 +202,59 @@ describe('collapsed ChangeRequestCard', () => {
     const meta = metaOf(card(entry(1, snapshot(1, overrides))))
     expect(meta.querySelector('[data-flag]')?.getAttribute('data-flag')).toBe(flag)
     expect(within(meta).getByText(text)).toBeTruthy()
+  })
+
+  /**
+   * Give status lines the given width and their content a width by wording, 200px with the full failed-checks wording and
+   * 150px with the short one, and capture the resize observer. Returns the setter of the width and the resize trigger.
+   */
+  function fitting(initial: number) {
+    let available = initial
+    let resized: () => void = () => {}
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resized = callback }
+      observe = vi.fn()
+      disconnect = vi.fn()
+    })
+    const isLine = (element: Element): boolean => element.matches(`.${css.statusLine}`)
+    const client = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (this: Element) {
+      return isLine(this) ? available : 0
+    })
+    const scroll = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+      return isLine(this) ? (this.textContent ?? '').includes('2 checks failed') ? 200 : 150 : 0
+    })
+    onTestFinished(() => {
+      vi.unstubAllGlobals()
+      client.mockRestore()
+      scroll.mockRestore()
+    })
+    return {
+      resize: (width: number): void => { available = width; act(() => { resized() }) },
+      set: (width: number): void => { available = width },
+    }
+  }
+
+  const FAILING = {
+    checksRollup: 'failure', mergeability: 'conflicting',
+    checks: [check('lint', { state: 'failure' }), check('test'), check('types', { state: 'failure' })],
+  } as const
+
+  it('takes the short wording of failed checks while the full line does not fit, and measures again on width and font changes', () => {
+    const fit = fitting(160)
+    const b = card(entry(1, snapshot(1, FAILING)))
+    const short = `#1·${en['change.ci.failedUnlisted']}${en['change.flag.conflicting']}`
+    expect(metaOf(b).textContent).toBe(short)
+    fit.resize(250)
+    expect(metaOf(b).textContent).toBe(`#1·2 checks failed${en['change.flag.conflicting']}`)
+    fit.set(160)
+    act(() => { document.fonts.dispatchEvent(new Event('loadingdone')) })
+    expect(metaOf(b).textContent).toBe(short)
+  })
+
+  it('keeps the full wording of failed checks where the language has no shorter one', () => {
+    fitting(100)
+    const long = makeTranslate({ ...en, 'change.ci.failedUnlisted': 'Every check that ran has failed' })
+    expect(metaOf(card(entry(1, snapshot(1, FAILING)), { t: long })).textContent).toBe(`#1·2 checks failed${en['change.flag.conflicting']}`)
   })
 
   it.each([

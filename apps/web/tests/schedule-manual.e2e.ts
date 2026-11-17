@@ -71,7 +71,7 @@ it.each([
       const recommendations = manager.getByRole('region', { name: copy.heading, exact: true })
       const recommendation = recommendations.getByRole('button', { name: copy.title, exact: true })
       await recommendation.waitFor()
-      expect(await recommendations.getByRole('button').count()).toBe(7)
+      expect(await recommendations.getByRole('button').count()).toBe(8)
       if (draft === '') {
         expect(await recommendationColumns(recommendations)).toBe(2)
         await compareOrRefreshGolden(

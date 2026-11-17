@@ -191,6 +191,9 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         const [x, y] = targetPoint
         return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
       },
+      async toggleMouse(mouseButton, direction) {
+        return base.action('toggleMouse', { mouseButton, direction })
+      },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
         const clickCount = options?.clickCount ?? 1
