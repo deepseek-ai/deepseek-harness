@@ -105,11 +105,11 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无，插件只用一条聊天回复回答命令，并在任何路由策略能把该消息交给 agent 之前就返回。
+间接影响，通过 `ctx.commands` 执行配置的 `passthrough` 命令（默认 `/compact` 委托给 `dsh-compaction` 发起摘要模型请求），而内建命令只直接在聊天中回复、不调用模型。
 
 #### KV Cache 影响
 
-独立：命令不发起任何模型请求；它执行的重置只会让该会话的下一轮构建全新前缀。
+内建命令为独立影响：不发起任何模型请求，执行重置只会让该会话的下一轮构建全新前缀。`passthrough` 命令的 KV Cache 行为由目标命令插件决定。
 
 ## 已知限制与后续工作
 

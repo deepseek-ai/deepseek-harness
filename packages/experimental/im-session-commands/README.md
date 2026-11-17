@@ -105,11 +105,11 @@ Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the messag
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the plugin answers a command with one chat reply and returns before any routing strategy can hand that message to an agent.
+Indirectly, through `ctx.commands` when executing configured `passthrough` commands (by default `/compact`, which delegates to `dsh-compaction` and runs a summarize model request), while built-in commands answer in the chat without calling a model.
 
 #### KV Cache effect
 
-Independent: a command starts no model request, and a reset it performs only makes the next turn of that session build a fresh prefix.
+Independent for built-in commands: they start no model request, and a reset only makes the next turn of that session build a fresh prefix. Passthrough commands delegate their KV-cache behaviour to the target command plugin.
 
 ## Known Limitations and Deferred Work
 
