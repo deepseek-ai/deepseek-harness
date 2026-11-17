@@ -1,15 +1,16 @@
-import { mkdtemp, mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, open, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { readOperationHistory } from '../src/operation-history.ts'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, open: vi.fn(actual.open), stat: vi.fn(actual.stat) }
+  return { ...actual, open: vi.fn(actual.open) }
 })
 
 const limits = { bytes: 64 * 1024, recordBytes: 2048, records: 100 }
+beforeEach(() => { vi.mocked(open).mockClear() })
 function record(id: string | number) {
   return { runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
     operation: { id: 'c254ab28-97c9-4382-95e6-2db9c66f98c9', time: '2026-10-19T00:00:00.000Z',
@@ -45,41 +46,75 @@ it('keeps a predecessor whose reported identity equals the current segment witho
   const path = await fixture()
   const current = join(path, 'operations.jsonl')
   const previous = join(path, 'operations.previous.jsonl')
-  const currentText = line(2)
-  const previousText = line(1)
+  const currentText = line('current')
+  const previousText = line('old')
+  expect(Buffer.byteLength(currentText)).not.toBe(Buffer.byteLength(previousText))
   await writeFile(current, currentText)
   await writeFile(previous, previousText)
   const currentHandle = await open(current, 'r')
   const previousHandle = await open(previous, 'r')
   onTestFinished(async () => { await currentHandle.close(); await previousHandle.close() })
-  const currentStat = await currentHandle.stat()
-  const previousStat = await previousHandle.stat()
+  const currentStat = await currentHandle.stat({ bigint: true })
+  const previousStat = await previousHandle.stat({ bigint: true })
   // Windows does not guarantee its 64-bit file ID is unique; one ID can name two segments.
-  currentStat.dev = 0
-  currentStat.ino = 7
-  previousStat.dev = 0
-  previousStat.ino = 7
+  currentStat.dev = 0n
+  currentStat.ino = 7n
+  previousStat.dev = 0n
+  previousStat.ino = 7n
   const currentStats = vi.spyOn(currentHandle, 'stat').mockResolvedValueOnce(currentStat)
   const previousStats = vi.spyOn(previousHandle, 'stat').mockResolvedValueOnce(previousStat)
   const opener = vi.mocked(open).mockClear().mockResolvedValueOnce(currentHandle).mockResolvedValueOnce(previousHandle)
-  const pathStat = vi.mocked(stat).mockClear().mockResolvedValueOnce(currentStat)
   try {
     const result = await readOperationHistory(path, limits, new AbortController().signal)
     expect(result).toEqual({
-      records: [record(2), record(1)],
+      records: [record('current'), record('old')],
       bytesRead: Buffer.byteLength(currentText) + Buffer.byteLength(previousText),
-      filesRead: 1,
+      filesRead: 2,
       truncated: false,
       invalidRecords: 0,
       unavailableFiles: 0,
       cancelled: false,
     })
-    expect(pathStat).toHaveBeenCalledTimes(1)
   } finally {
     currentStats.mockRestore()
     previousStats.mockRestore()
     opener.mockClear()
-    pathStat.mockClear()
+  }
+})
+
+it('keeps a predecessor whose identity and size match but whose modification time differs', async () => {
+  const path = await fixture()
+  const current = join(path, 'operations.jsonl')
+  const previous = join(path, 'operations.previous.jsonl')
+  const currentText = line('a')
+  const previousText = line('b')
+  expect(Buffer.byteLength(currentText)).toBe(Buffer.byteLength(previousText))
+  await writeFile(current, currentText)
+  await writeFile(previous, previousText)
+  await utimes(current, 1_700_000_000, 1_700_000_000)
+  await utimes(previous, 1_700_000_100, 1_700_000_100)
+  const currentHandle = await open(current, 'r')
+  const previousHandle = await open(previous, 'r')
+  onTestFinished(async () => { await currentHandle.close(); await previousHandle.close() })
+  const currentStat = await currentHandle.stat({ bigint: true })
+  const previousStat = await previousHandle.stat({ bigint: true })
+  expect(currentStat.size).toBe(previousStat.size)
+  expect(currentStat.mtimeNs).not.toBe(previousStat.mtimeNs)
+  currentStat.dev = 0n
+  currentStat.ino = 7n
+  previousStat.dev = 0n
+  previousStat.ino = 7n
+  const currentStats = vi.spyOn(currentHandle, 'stat').mockResolvedValueOnce(currentStat)
+  const previousStats = vi.spyOn(previousHandle, 'stat').mockResolvedValueOnce(previousStat)
+  const opener = vi.mocked(open).mockClear().mockResolvedValueOnce(currentHandle).mockResolvedValueOnce(previousHandle)
+  try {
+    const result = await readOperationHistory(path, limits, new AbortController().signal)
+    expect(result.records).toEqual([record('a'), record('b')])
+    expect(result).toMatchObject({ filesRead: 2, unavailableFiles: 0, truncated: false })
+  } finally {
+    currentStats.mockRestore()
+    previousStats.mockRestore()
+    opener.mockClear()
   }
 })
 
@@ -171,7 +206,7 @@ it('stops Windows open retries when cancellation lands during the retry wait', a
   await writeFile(join(path, 'operations.jsonl'), line(2))
   const controller = new AbortController()
   opener.mockImplementationOnce(async () => {
-    setImmediate(() => controller.abort())
+    setImmediate(() => { controller.abort() })
     throw Object.assign(new Error('sharing violation'), { code: 'EBUSY' })
   })
   const result = await readOperationHistory(path, limits, controller.signal)

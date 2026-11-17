@@ -1,5 +1,5 @@
 /** Bounded, cancellable reads of Desktop-owned plugin operation history. */
-import { open, stat, type FileHandle } from 'node:fs/promises'
+import { open, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setImmediate, setTimeout as wait } from 'node:timers/promises'
 import { parsePluginOperationRecord, type PluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
@@ -23,7 +23,7 @@ export interface OperationHistoryReadLimits {
 export interface OperationHistoryReadResult {
   readonly records: readonly PluginOperationRecord[]
   readonly bytesRead: number
-  /** Distinct files from which at least one byte was read. */
+  /** Owned history segments from which at least one byte was read. */
   readonly filesRead: number
   readonly truncated: boolean
   readonly invalidRecords: number
@@ -57,41 +57,26 @@ function isTransientWindowsOpenError(error: unknown): boolean {
  * @returns The opened read handle.
  */
 async function openSegment(filename: string, signal: AbortSignal): Promise<FileHandle> {
+  // A call keeps the post-wait check outside the catch's narrowing to the pre-wait value.
+  const aborted = (): boolean => signal.aborted
   let delay = WINDOWS_OPEN_RETRY_INITIAL_MS
   for (let retries = 0;; retries += 1) {
     try {
       return await open(filename, 'r')
     } catch (error) {
-      if (!isTransientWindowsOpenError(error) || retries >= WINDOWS_OPEN_RETRY_LIMIT || signal.aborted) throw error
+      if (!isTransientWindowsOpenError(error) || retries >= WINDOWS_OPEN_RETRY_LIMIT || aborted()) throw error
       await wait(delay)
-      if (signal.aborted) throw error
+      if (aborted()) throw error
       delay = Math.min(delay * 2, WINDOWS_OPEN_RETRY_MAX_MS)
     }
   }
 }
 
 /**
- * Whether the current segment path stopped naming the file this collection already read.
- * Identity equality alone cannot decide: Windows does not guarantee that its 64-bit file ID
- * is unique, so two distinct segments can report one identity; a rotation is only deduplicated
- * once the current path itself moved on.
- * @param directory - Desktop's operation history directory.
- * @param identity - Identity of the segment already read from the current path.
- * @returns Whether the predecessor is the segment already read.
- */
-async function currentSegmentRotated(directory: string, identity: string): Promise<boolean> {
-  try {
-    return fileIdentity(await stat(join(directory, CURRENT_SEGMENT), { bigint: true })) !== identity
-  } catch {
-    // A path that no longer resolves cannot still name the segment already read.
-    return true
-  }
-}
-
-/**
  * Read only the bounded tails of the two owned history files, newest segment first.
  * Cancellation is observed between bounded records after yielding to Worker messages and stops subsequent I/O and parsing.
- * A segment is deduplicated as already read only when the current path stopped naming it.
+ * A segment is deduplicated as already read only when its handle reports the identity, size and
+ * nanosecond modification time of the segment already read, so an identity collision alone keeps it.
  * An already-issued OS read must settle before its handle closes.
  * @param directory - Desktop's operation history directory; unrelated files are never enumerated.
  * @param limits - Positive byte, record-size and record-count budgets.
@@ -110,7 +95,8 @@ export async function readOperationHistory(
   const cancelled = (): boolean => signal.aborted
   const records: PluginOperationRecord[] = []
   let bytesRead = 0
-  const seenFiles = new Set<string>()
+  let filesRead = 0
+  let lastRead: { readonly identity: string; readonly size: bigint; readonly mtimeNs: bigint } | undefined
   let truncated = false
   let invalidRecords = 0
   let unavailableFiles = 0
@@ -127,7 +113,8 @@ export async function readOperationHistory(
       }
       const identity = fileIdentity(fileStat)
       const size = Number(fileStat.size)
-      if (seenFiles.has(identity) && await currentSegmentRotated(directory, identity)) {
+      if (lastRead !== undefined && identity === lastRead.identity
+        && fileStat.size === lastRead.size && fileStat.mtimeNs === lastRead.mtimeNs) {
         truncated = true
         continue
       }
@@ -146,7 +133,10 @@ export async function readOperationHistory(
         if (read.bytesRead === 0) break
         readOffset += read.bytesRead
       }
-      if (readOffset > 0) seenFiles.add(identity)
+      if (readOffset > 0) {
+        filesRead++
+        lastRead = { identity, size: fileStat.size, mtimeNs: fileStat.mtimeNs }
+      }
       if (cancelled()) break
       truncated ||= readStart > 0 || readOffset < readLength
 
@@ -183,5 +173,5 @@ export async function readOperationHistory(
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') unavailableFiles++
     }
   }
-  return { records, bytesRead, filesRead: seenFiles.size, truncated, invalidRecords, unavailableFiles, cancelled: cancelled() }
+  return { records, bytesRead, filesRead, truncated, invalidRecords, unavailableFiles, cancelled: cancelled() }
 }
