@@ -209,7 +209,14 @@ export function createEditDriver<T extends ModeTypes = ModeTypes>(adapter: EditD
     const part = handle.parts[0]
     if (!part) throw new PlatformError('invalid', 'edit stream: handle has no part')
     handle.edits += 1
-    await adapter.editPayload(part, payload, handle)
+    try {
+      await adapter.editPayload(part, payload, handle)
+    } catch (error) {
+      // The platform may have applied the edit before the error (or left the message in an unknown state):
+      // drop the cached last-published key so `close` does not skip writing back an earlier payload.
+      published.delete(handle)
+      throw error
+    }
     published.set(handle, payloadKey(payload))
   }
   return {

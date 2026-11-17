@@ -34,7 +34,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V101.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V102.
 
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
@@ -137,6 +137,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V98 · `plugin-im-core` and `plugin-im-adapter-lark` report platform `thread` and `referrer` on `SentPart`**: `SentPart` gains optional `thread` and `referrer` fields, and Lark's `sendMessagePayload` populates them from `answer.thread_id`, `answer.root_id`, `target.chat.type` (`direct` / `group`), and the sent `message_id` so `dsh-im` persists newly created threads and their reply context on own messages. Covered by `vendor/plugin-im-adapter-lark/tests/send.spec.ts` and `packages/experimental/im/tests/intake.spec.ts`.
 - **V99 · `plugin-im-adapter-qq` keeps its gateway `close` listener across `WsClientBase` abort**: `QQWsClient.accept` registers `close` with `{ once: true }` and does not remove it inside `cleanup`, so non-resumable close codes (4006/4007) still run `dropSession()` after `WsClientBase`'s earlier `close` handler aborts `connection.signal`. Covered by `vendor/plugin-im-adapter-qq/tests/ws.spec.ts`.
 - **V100 · `plugin-im-adapter-qq` advances the resume `seq` cursor only after `bot.receive` persists**: `QQWsClient` advances `this.seq` only after `dispatch()` completes without error, and if `bot.receive()` rejects it closes the socket (`1011`) so `WsClientBase` reconnects and `RESUME`s from the last persisted sequence number instead of skipping the unpersisted frame. Covered by `vendor/plugin-im-adapter-qq/tests/ws.spec.ts`.
+- **V101 · `plugin-im-core` invalidates `createEditDriver`'s published cache when `editPayload` fails**: `createEditDriver`'s `edit()` helper deletes `handle` from `published` in its `catch` block so a subsequent `close()` with the earlier payload still writes back to the platform instead of skipping on a stale cache hit. Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
 
 ### Resolver adaptations
 

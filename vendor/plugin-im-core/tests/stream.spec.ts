@@ -949,4 +949,30 @@ describe('abort', () => {
     expect(seenSignal?.aborted).toBe(true)
     await expect(stream.done).rejects.toBeInstanceOf(StreamAbortError)
   })
+
+  it('invalidates the published cache on a failed edit so close still writes back the earlier payload', async () => {
+    const edits: unknown[] = []
+    let failNext = true
+    const adapter: EditDriverAdapter = {
+      id: 'b',
+      sendPayload: async () => ({ id: 'm1', kind: 'card', time: 1 }),
+      editPayload: async (_part, payload) => {
+        edits.push(payload)
+        if (failNext) {
+          failNext = false
+          throw new PlatformError('invalid', 'rejected after unknown state')
+        }
+      },
+    }
+    const stream = createMessageStream(fakeHost(createEditDriver<FakeTypes>(adapter, { limit: 5 })), {
+      firstDelayMs: 0,
+      intervalMs: 100,
+    })
+    stream.update('A')
+    await flush()
+    stream.update('B')
+    await advance(100)
+    await closeAll(stream, 'A')
+    expect(edits).toEqual([{ text: 'B' }, { text: 'A' }])
+  })
 })
