@@ -539,6 +539,21 @@ describe('retry', () => {
     await advance(500)
     expect(d2.calls).toMatchObject([{ op: 'open', attempt: 2 }])
     await closeAll(s2)
+
+    // If an earlier open attempt had published:unknown and the retry hits StreamLimitError (e.g. exhausted passive
+    // budget), the stream must fail as published:unknown rather than falling back to plain host.send().
+    const d3 = fakeDriver('patch')
+    d3.failures.open.push(
+      new PlatformError('retryable', 'lost response', { published: 'unknown' }),
+      new StreamLimitError({ kind: 'budget', message: 'no passive reply left' }),
+    )
+    const h3 = { ...fakeHost(d3), idempotentSend: () => true }
+    const s3 = createMessageStream(h3, { attempts: 2, firstDelayMs: 0, idempotencyKey: 'k-2' })
+    s3.update('a')
+    await advance(500)
+    await expect(s3.done).rejects.toMatchObject({ published: 'unknown' })
+    await expect(s3.close('final')).rejects.toMatchObject({ published: 'unknown' })
+    expect(h3.sends).toEqual([])
   })
 
   it('close failure fails done', async () => {

@@ -538,7 +538,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
           },
         )
       } catch (error) {
-        if (this.isLimit(error)) {
+        if (this.isLimit(error) && !(PlatformError.is(error) && error.published === 'unknown')) {
           this.paused = 'open: ' + this.limitOf(error).message
           this.warn('could not open its message: %s', this.paused)
           return // nothing published; close sends the final state as a plain message
@@ -848,26 +848,33 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     idempotent: boolean | ((attempt: number) => boolean) = true,
   ): Promise<R> {
     let sawUnknown = false
+    const isIdempotent = (attempt: number) => typeof idempotent === 'function' ? idempotent(attempt) : idempotent
+    const preserveUnknown = (classified: PlatformError): PlatformError =>
+      sawUnknown && classified.published !== 'unknown'
+        ? new PlatformError(classified.kind, classified.message, {
+            cause: classified,
+            published: 'unknown',
+            ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
+          })
+        : classified
     for (let attempt = 1; ; attempt++) {
       try {
         return await op(attempt)
       } catch (error) {
-        if (error instanceof StreamLimitError) throw error
+        if (error instanceof StreamLimitError) {
+          if (sawUnknown) throw new PlatformError('fatal', error.message, { cause: error, published: 'unknown' })
+          throw error
+        }
         if (this.aborted) throw error
         const classified = this.classify(error)
         if (classified.published === 'unknown') sawUnknown = true
-        const safe = classified.published === 'no' || (typeof idempotent === 'function' ? idempotent(attempt) : idempotent)
+        const safe = (!sawUnknown && classified.published === 'no') || isIdempotent(attempt)
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit') && safe && attempt < this.attempts
-        if (!again) {
-          throw sawUnknown && classified.published !== 'unknown'
-            ? new PlatformError(classified.kind, classified.message, {
-                cause: classified,
-                published: 'unknown',
-                ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
-              })
-            : classified
-        }
+        if (!again) throw preserveUnknown(classified)
         if (!await this.sleep(streamBackoff(attempt, classified.retryAfterMs), interruptible)) throw new Interrupted(classified.message)
+        if ((sawUnknown || classified.published !== 'no') && !isIdempotent(attempt + 1)) {
+          throw preserveUnknown(classified)
+        }
       }
     }
   }
