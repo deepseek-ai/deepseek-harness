@@ -248,7 +248,7 @@ export class SessionCommands {
         line(labels.state, state),
         line(labels.queued, String(queued)),
         line(labels.activity, describeAge(Date.now() - home.lastActiveAt, this.strings)),
-      ],
+      ].join('\n'),
       sessions: [home.sessionId],
     }
   }
@@ -261,13 +261,13 @@ export class SessionCommands {
     if (home === undefined) {
       // Without a session the registry cannot be consulted, so advertise the configured names alone.
       for (const name of this.passthrough) if (!BUILTINS.has(name)) lines.push(`/${name}`)
-      return { reply: lines }
+      return { reply: lines.join('\n') }
     }
     const agent = await this.ctx.im.sessions.agent(home.sessionId)
     for (const descriptor of this.ctx.commands.list(agent)) {
       if (this.passthrough.has(descriptor.name)) lines.push(`/${descriptor.name} — ${descriptor.description}`)
     }
-    return { reply: lines, sessions: [home.sessionId] }
+    return { reply: lines.join('\n'), sessions: [home.sessionId] }
   }
 
   /** A passthrough name: run the registered dsh command against the chat's home session. */

@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { h } from '@deepseek-ai/cordis-plugin-im-core'
+import { h, normalize } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ImMessageEvent, ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-im/src/api.ts'
 import { ImChatKey, ImMessageKey, ImSourceId } from '@deepseek-ai/dsh-im/src/api.ts'
@@ -49,7 +49,11 @@ async function running(harness: CommandsHarness, record: ImSessionRecord): Promi
 function lines(harness: CommandsHarness): string[] {
   const content = harness.replies.at(-1)?.content
   if (content === undefined) throw new Error('the plugin did not reply')
-  return Array.isArray(content) ? content.map(String) : [String(content)]
+  return typeof content === 'string'
+    ? content.split('\n')
+    : Array.isArray(content)
+      ? content.map(String)
+      : [String(content)]
 }
 
 /** The text of the last reply when it is one string. */
@@ -78,6 +82,7 @@ describe('routing', () => {
     await harness.receive(direct)
     expect(harness.outcome(direct.id)).toMatchObject({ kind: 'handled', by: BY })
     expect(lines(harness)[0]).toBe('可用命令：')
+    expect(normalize(harness.replies.at(-1)!.content).children.map(String).join('')).toContain('可用命令：\n/')
   })
 
   it('passes unknown and unconfigured commands to the next listener', async () => {
