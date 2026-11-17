@@ -258,7 +258,7 @@ describe('ImSender.send', () => {
 
   it('applies the quote envelope and the thread wish', async () => {
     const { bot, sender, store } = await boot()
-    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9')), 'none')
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), undefined), 'none')
     await sender.send(CHAT, h.text('hello'), { quote: ImMessageKey('fake:bot', 'm9') })
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
     expect(bot.operations[0]?.target?.thread).toBeUndefined()
@@ -640,7 +640,7 @@ describe('ImSender receipts', () => {
 describe('ImSender.stream', () => {
   it('applies the quote to every published state', async () => {
     const { bot, sender, sessions, store } = await boot()
-    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9')), 'none')
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), undefined), 'none')
     const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
     const stream = await sender.stream(CHAT, {
       quote: ImMessageKey('fake:bot', 'm9'), operationId: 'op-quoted', session: session.sessionId,
@@ -669,7 +669,7 @@ describe('ImSender.stream', () => {
   it('closes a quoted stream without a final state and aborts another one', async () => {
     const { sender, store } = await boot()
     const quote = ImMessageKey('fake:bot', 'm9')
-    await store.put(inboundDraft(quote), 'none')
+    await store.put(inboundDraft(quote, undefined), 'none')
     const closed = await sender.stream(CHAT, { quote })
     closed.update(h.text('last'))
     expect((await closed.close()).handle.parts).toHaveLength(1)
