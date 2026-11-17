@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compétences amont des applications CLI",
+    "description": "Télécharge depuis le dépôt GitHub du fournisseur les fichiers de compétences amont que chaque plugin d’application CLI épingle, puis liste la compétence d’entrée du plugin une fois qu’ils sont en place."
+  }
+}
