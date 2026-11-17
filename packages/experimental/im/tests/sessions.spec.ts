@@ -672,6 +672,7 @@ describe('reset', () => {
 
     await expect(harness.host.deliver(a.key, messagesDelivery('followup', [message('d-blocked', 1)])))
       .rejects.toMatchObject({ code: 'unavailable' })
+    await expect(harness.host.agent(a.key)).rejects.toMatchObject({ code: 'unavailable' })
     expect(harness.ctx.agents.get(a.sessionId)).toBeUndefined()
     await expect(harness.host.deliver(b.key, messagesDelivery('followup', [message('d-ok', 1)]))).resolves.toBeUndefined()
   })
@@ -1062,5 +1063,23 @@ describe('stored delivery validation', () => {
     const finalRecord = harness.host.get(initial.key)
     expect(finalRecord?.generation).toBe(2)
     expect(finalRecord?.sessionId).not.toBe(afterFirst.sessionId)
+  })
+
+  it('serializes agent() behind reset() so a retired sessionId rejects and a key opens the new generation', async () => {
+    const harness = await booted()
+    const initial = await harness.host.ensure(spec())
+    const resetting = harness.host.reset(initial.key, 'clear')
+    const byId = harness.host.agent(initial.sessionId)
+    const byKey = harness.host.agent(initial.key)
+    const [replaced, idResult, keyResult] = await Promise.allSettled([resetting, byId, byKey])
+
+    expect(replaced).toEqual({ status: 'fulfilled', value: initial.sessionId })
+    expect(idResult.status).toBe('rejected')
+    expect((idResult as PromiseRejectedResult).reason).toMatchObject({ code: 'unavailable' })
+    expect(keyResult.status).toBe('fulfilled')
+    const opened = (keyResult as PromiseFulfilledResult<Awaited<ReturnType<typeof harness.host.agent>>>).value
+    expect(opened.session.id).toBe(harness.host.get(initial.key)?.sessionId)
+    expect(opened.session.id).not.toBe(initial.sessionId)
+    expect(harness.ctx.agents.get(initial.sessionId)).toBeUndefined()
   })
 })

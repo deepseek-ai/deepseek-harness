@@ -392,8 +392,20 @@ export class ImSessionHost implements ImSessions {
     })
   }
 
-  agent(target: SessionId | string): Promise<Agent> {
-    return this.deps.agents.open(this.resolve(target))
+  async agent(target: SessionId | string): Promise<Agent> {
+    const initial = this.resolve(target)
+    return this.serial(initial.key, async () => {
+      // Re-resolve inside `serial(key)` after any in-flight `reset()` finishes so a retired `SessionId` or a
+      // generation with an uncommitted reset receipt is never reopened after disposal.
+      const current = this.resolve(initial.key)
+      if (target !== initial.key && current.sessionId !== target) {
+        throw new ImError('unavailable', `IM session ${target} was replaced by a reset.`)
+      }
+      if (this.hasPendingReset(current.sessionId)) {
+        throw new ImError('unavailable', `IM session ${current.sessionId} has an uncommitted reset; retry after recovery.`)
+      }
+      return this.deps.agents.open(current)
+    })
   }
 
   of(sessionId: SessionId): ImSessionRecord | undefined {
