@@ -142,9 +142,8 @@ export interface CuaSurface {
   /**
    * Paste text or HTML at the target's current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
    * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @param options - Clipboard format.
    * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
