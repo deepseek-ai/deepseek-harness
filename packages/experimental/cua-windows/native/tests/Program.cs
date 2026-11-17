@@ -56,6 +56,28 @@ foreach (var method in new[] { "listActions", "performAction", "invoke", "mouseM
     })));
     Check(operation.Params.GetProperty("elementId").GetString() == "42/-7/9", "Element operations preserve slash-separated RuntimeIds: " + method);
 }
+foreach (var mouseButton in new[] { "left", "right", "middle" })
+foreach (var direction in new[] { "down", "up" })
+{
+    var toggle = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        id = "mouse", method = "toggleMouse", @params = new { appHandle = "app", windowId = "1", mouseButton, direction },
+    })));
+    Check(toggle.Params.GetProperty("mouseButton").GetString() == mouseButton
+        && toggle.Params.GetProperty("direction").GetString() == direction,
+        "Mouse-button events retain the explicit button and direction");
+}
+foreach (var invalid in new[]
+{
+    """{"appHandle":"app","windowId":"1","mouseButton":"left"}""",
+    """{"appHandle":"app","windowId":"1","direction":"down"}""",
+    """{"appHandle":"app","mouseButton":"left","direction":"down"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"back","direction":"down"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"press"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","x":1,"y":2}""",
+})
+    Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"mouse\",\"method\":\"toggleMouse\",\"params\":" + invalid + "}")), "INVALID_ARGUMENT");
+
 var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
 Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
     "Host launch continuation retains the selected application handle");

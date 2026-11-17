@@ -27,6 +27,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+fork 保留包含截点的 `atSeq` 请求字段，并默认选择已完成轮次的截点。命令把观察到的历史作为 fork 来源传递：截至 `persistedEventCount` 的已存储父前缀，其后是子会话的标记和冷读取修复事件。工厂用实时父会话的 log 替换该前缀，共享前缀的后端在引用前先排空父写者；父会话已存储历史短于截点时不会创建子会话。创建参数见 [fork 升级指南](../../../docs/upgrade-guide/v0.2.2-rc.3/session-fork-source/guide.zh.md)。
+
 提示重试按首次已提交入队记录中的请求标识去重，消息被领取或删除后仍然有效。异步附件准备结束后再次检查，因此并发重试只接受一条输入。接受确认入队，不代表执行或完成。
 
 控制器通过可选服务方法 `agentPresets.presetForSession(session)` 读取 Session 已记录的预设。null 结果表示未记录预设；服务缺席表示控制器无法获知预设身份。
@@ -43,7 +45,7 @@ Client journal 在发布 follow 快照、live entry 或历史页之前验证当�
 
 列表行在状态可用时携带 `formatStatus`，Client 无需请求其投影即可识别需要迁移的 Session。
 
-Host 仅在配置的工作时间片耗尽时，于完整条目之间让出事件循环；剩余工作较少时直接返回，不强制让出。每行及每次让出之后检查请求取消，取消时拒绝返回部分结果。每行同步计算；列表不承诺跨 Session 的统一快照。已经进入冷态队列的 Session 若在让出期间接入，仍返回缓存行：Client 对进行中请求的变更重放会纠正其可用性，带序号的投影会覆盖缓存提示。已接入 Session 的摘要通过 `sessionListMetadata` 投影句柄读取是否为空和最后一次提示词的最近活动时间，其投影提示携带通过 `snapshot` 计算的每个摘要 key。已接入 Session 的首次摘要在其完整内存日志上计算这些投影，之后的摘要增量推进；这次计算在单行的同步工作内进行，`listWorkSliceMs` 无法切分它。
+Host 仅在配置的工作时间片耗尽时，于完整条目之间让出事件循环；剩余工作较少时直接返回，不强制让出。每行及每次让出之后检查请求取消，取消时拒绝返回部分结果。每行同步计算；列表不承诺跨 Session 的统一快照。已经进入冷态队列的 Session 若在让出期间接入，仍返回缓存行：Client 对进行中请求的变更重放会纠正其可用性，带序号的投影会覆盖缓存提示。已接入 Session 的摘要通过[`sessionQuery.getListMetadata`](../../session-query/session-query/README.zh.md#session-list-metadata)读取是否为空和最后一次提示词的最近活动时间，其投影提示携带通过 `snapshot` 计算的每个摘要 key。已接入 Session 的首次摘要在其完整内存日志上计算这些投影，之后的摘要增量推进；这次计算在单行的同步工作内进行，`listWorkSliceMs` 无法切分它。
 
 Client 列表行和驻留 Session 使用当前 `sessionListMetadata` 投影纠正过期的空白会话提示；最近活动时间取摘要时间戳与投影中最后一次用户提示词时间的较晚值。当 SessionManager 在列表行到达前创建实例时，会使用已保留的该 Session 元数据对账空白状态。因此，即使旧列表响应仍将已有对话标为空白，新会话操作也不会复用已经打开过的对话。
 

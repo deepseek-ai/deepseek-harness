@@ -1,0 +1,10 @@
+version: 1
+scenario: computer-use-cua-driver-mcp-ptc
+profile: headless
+composition: computer-use-cua-driver-mcp-ptc
+recording: authored
+header:
+  class: computer-use-cua-driver-mcp-ptc
+  pin: true
+replay:
+  override: true

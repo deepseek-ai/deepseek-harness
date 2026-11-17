@@ -72,6 +72,7 @@ function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag:
     operation('listActions', snapshot),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
     operation('invoke', snapshot),
+    operation('toggleMouse', { ...window, mouseButton: pointer.mouseButton.unwrap(), direction: z.enum(['down', 'up']) }),
     z.object({ method: z.literal('mouseMove'), params: hover }).strict(),
     z.object({ method: z.literal('click'), params: z.union([
       z.object({ ...snapshot, ...click }).strict(),

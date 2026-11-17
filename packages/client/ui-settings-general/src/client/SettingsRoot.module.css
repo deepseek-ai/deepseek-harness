@@ -8,6 +8,20 @@
   margin: 4px 0;
 }
 
+/* The notice row takes no height: its content floats above the sidebar list at
+   the row's full width, so status indicators in the trigger row do not narrow it. */
+.noticeRow {
+  position: relative;
+  height: 0;
+}
+
+.notice {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
 .triggerRow.railRow {
   width: 36px;
   margin: 8px 0 10px;

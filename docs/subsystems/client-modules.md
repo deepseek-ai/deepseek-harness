@@ -35,6 +35,8 @@ interface WebBootEntry {
   immediately?: boolean
   /** Non-baseline module specifiers this row requests; omitted when it requests none. */
   external?: string[]
+  /** Browser-synced values of the plugin's top-level volatile Config fields, secrets removed; omitted when it has none. */
+  config?: SyncedConfigValues
 }
 ```
 
@@ -139,10 +141,18 @@ The web plugin table service: incremental `dsh.client` scan + wire composition +
 
 ```ts cordis-catalog
 /**
- * Current composed entry graph (stable object between changes).
- * @returns the graph served as `window.__DSH_BOOT__`.
+ * Current composed entry graph (stable object between changes), carrying the configured synced values.
+ * @returns the graph served as the owner's `window.__DSH_BOOT__`.
  */
 graph(): WebBootGraph
+
+/**
+ * The current graph as one Peer may see it: the owner receives the configured synced values, and every other Peer
+ * receives each row's schema defaults in their place.
+ * @param principal - the Peer's principal; undefined for the owner or an in-process caller.
+ * @returns the graph served to that Peer at first render and in plugin-events frames.
+ */
+graphFor(principal: Principal | undefined): WebBootGraph
 
 /**
  * Absolute path of an entry's client bundle.
@@ -194,13 +204,36 @@ rebuilt(id: string): string | undefined
 onRebuilt(listener: (id: string, rev: string) => void): () => void
 
 /**
- * Fires after any flush that recomposed the graph (row added/removed, or a
- * rebuilt rev change). Pull model: listeners re-read {@link graph}.
+ * Fires after the graph's rows or rev change: a flush that recomposed the
+ * graph (row added/removed, or a rebuilt rev change), or a republication of
+ * synced configuration alone, which leaves the batch artifacts unchanged.
+ * Pull model: listeners re-read {@link graph}.
  * @param listener - notified with no payload.
  * @returns the unsubscriber.
  */
 onGraphChanged(listener: () => void): () => void
 ```
 
+Types: [Principal](typert.md)
+
 Source: [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)
+
+<a id="ctxconfig--syncedconfigservice"></a>
+
+### `ctx.config` — `SyncedConfigService`
+
+Read-only access to other packages' synced Config; a plugin receives its own through `apply`.
+
+```ts cordis-catalog
+/**
+ * The synced Config object of a package's current plugin activation, as that activation's `apply` received it. Each
+ * activation receives a new object, so the result changes when the plugin is replaced. The caller states the
+ * package's shared Config type.
+ * @param packageName - package name of the graph row.
+ * @returns the object, or undefined while no activation of the package is running.
+ */
+resolveConfigByPackage<C>(packageName: string): SyncedConfig<C> | undefined
+```
+
+Source: [`packages/client/config/src/types.ts`](../../packages/client/config/src/types.ts)
 <!-- END GENERATED cordis-surface -->

@@ -28,6 +28,9 @@
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../account/deepseek-auth"
     }
   ]
 }

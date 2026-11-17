@@ -102,7 +102,8 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "zod": "4.6.6",
-    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
+    "@deepseek-ai/dsh-client-config": "workspace:*"
   },
   "files": [
     "locale/*.json",

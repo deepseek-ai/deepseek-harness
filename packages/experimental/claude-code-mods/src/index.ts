@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { AssistantMessage, ContentBlock, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -78,10 +79,6 @@ function assertPositive(field: string, value: number): void {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`claude-code-mods: ${field} must be a positive number of milliseconds`)
 }
 
-function textOf(blocks: readonly ContentBlock[]): string {
-  return blocks.filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join('')
-}
-
 /** The human's own messages among a claim: the prompt a `prompt.submit` hook sees and may rewrite. */
 function promptMessages(claimed: readonly UserMessage[]): UserMessage[] {
   return claimed.filter(message => message.source.kind === 'user')
@@ -141,7 +138,7 @@ interface TurnRecord {
 
 /** Fold one committed assistant message into the turn's answer and usage. */
 function foldAssistantMessage(turnRecord: TurnRecord, data: { message: AssistantMessage; usage?: TokenUsage }): void {
-  turnRecord.answer = textOf(data.message.content)
+  turnRecord.answer = extractTextContent(data.message.content)
   if (data.usage === undefined) return
   const { model } = data.message.source
   const usage = turnRecord.usage ?? { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, model }
@@ -349,7 +346,7 @@ export class ClaudeCodeMods extends TypertRemoteService {
       const first = !started.has(turn)
       started.add(turn)
       const prompt = promptMessages(messages)
-      const text = textOf(prompt.flatMap(message => message.content))
+      const text = extractTextContent(prompt.flatMap(message => message.content))
       let submitted: PromptSubmitResult = { text }
       // A batch of injected context alone is not a prompt: Claude Code raises prompt.submit for typed prompts.
       if (prompt.length > 0) {

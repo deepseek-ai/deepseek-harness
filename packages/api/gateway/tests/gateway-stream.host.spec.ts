@@ -146,7 +146,7 @@ class FeedService extends TypertRemoteService {
   async *swallow(signal: AbortSignal): RemoteStream<string, string> {
     try {
       for await (const item of this.invocation().uplink<string>()) yield item
-    } catch {
+    } catch (_uplinkFailed) {
       // The fixture keeps yielding after the rejected item on purpose.
     }
     yield 'swallowed'
@@ -416,21 +416,27 @@ describe('Typert Remote streams', () => {
     expect(() => { startup.commit() }).not.toThrow()
   })
 
-  it('validates the WebSocket heartbeat timer range, the stream inbox bound, and the compression mode', () => {
+  it('validates the WebSocket heartbeat timer range, the stream inbox and outbox bounds, and the compression mode', () => {
     expect(TypertGatewayService.Config({})).toEqual({
       websocketHeartbeatIntervalMs: 2_000,
       streamInboxBytes: 262_144,
+      streamOutboxBytes: 1_048_576,
       websocketCompression: 'deflate',
     })
     expect(TypertGatewayService.Config({
       websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
       streamInboxBytes: 1,
+      streamOutboxBytes: 1,
       websocketCompression: 'none',
     })).toEqual({
       websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
       streamInboxBytes: 1,
+      streamOutboxBytes: 1,
       websocketCompression: 'none',
     })
+    for (const streamOutboxBytes of [0, 1.5]) {
+      expect(() => TypertGatewayService.Config({ streamOutboxBytes })).toThrow()
+    }
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }

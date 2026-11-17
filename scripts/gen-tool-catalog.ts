@@ -8,7 +8,7 @@
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -39,14 +39,13 @@ import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, St
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as WebDeepSeekApi from '@deepseek-ai/dsh-web-deepseek-api'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import ActionCards from '@deepseek-ai/dsh-action-cards'
-import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
@@ -71,6 +70,8 @@ import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
+import * as ToolSessionList from '@deepseek-ai/dsh-tool-session-list'
+import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
 import * as StagehandBrowserTools from '@deepseek-ai/dsh-experimental-browser-use-stagehand-native'
@@ -135,6 +136,13 @@ class CatalogSessionPersistence extends SessionPersistence {
   flush = unavailableCatalogPersistence
   stat = unavailableCatalogPersistence
   list = unavailableCatalogPersistence
+}
+
+/** Schema collection does not read Workspace records or open their durable domain. */
+class CatalogWorkspaceRegistry extends WorkspaceRegistry {
+  static override inject = []
+
+  protected override async [Service.init](): Promise<void> {}
 }
 
 /** Storage operations are unreachable during schema collection. */
@@ -261,19 +269,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
   },
   {
-    pkg: '@deepseek-ai/dsh-action-cards',
-    dir: 'action-cards',
-    source: 'packages/experimental/action-cards/src/index.ts',
-    requires: ['ctx.tools', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
-    writes: ['tool/call', 'tool/result', 'plugin:action-cards/decision', 'user/message'],
-    async mount(ctx) {
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(RemoteAccess)
-      await ctx.plugin(ActionCards)
-    },
-    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized recommendations bundle supplies the shipped kinds.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
     source: 'packages/interaction/tool-ask-user/src/index.ts',
@@ -390,7 +385,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolCordis)
     },
     note:
-      'Creator mode provides two read-only runtime inspection tools. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.',
+      'Standard and Creator modes provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',
@@ -572,6 +567,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
   },
   {
+    pkg: '@deepseek-ai/dsh-tool-session-list',
+    dir: 'tool-session-list',
+    source: 'packages/session-query/tool-session-list/src/index.ts',
+    requires: ['ctx.tools', 'ctx.sessions', 'ctx.sessionQuery', 'ctx.workspaceRegistry', 'ctx.sessionProjections'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
+      await ctx.plugin(CatalogWorkspaceRegistry)
+      await ctx.plugin(ToolSessionList)
+    },
+    note: 'Opt-in access to all Workspace and Session list metadata in the mounted runtime. Cold titles and activity use the optional projection cache; absent values become null titles and creation-time recency. No Agent is activated.',
+  },
+  {
     pkg: '@deepseek-ai/dsh-tool-session-query',
     dir: 'tool-session-query',
     source: 'packages/experimental/tool-session-query/src/index.ts',
@@ -683,7 +692,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     scope: ctx => catalogChildScopes.get(ctx) as Agent,
     note:
-      'Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance alongside standard subagent delegation and control tools. Standard subagent controls provide required identity independently of Team mode.',
+      'Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance alongside standard subagent delegation and control tools. Standard subagent controls provide required identity independently of Team mode; their result report instruction appears only while Team mode is off.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-todo',
@@ -754,8 +763,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       // Mount search and fetch providers so both tools register. Their schemas
-      // do not depend on provider identity or availability.
+      // do not depend on provider identity or availability. The DeepSeek
+      // provider starts only beside the authentication service.
       await ctx.plugin(WebRuntime)
+      await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(WebDeepSeekApi)
       await ctx.plugin(WebFetchLocal)
       await ctx.plugin(ToolWeb)

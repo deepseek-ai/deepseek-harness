@@ -4,8 +4,8 @@ import { inspect } from 'node:util'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
-import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
-import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
+import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
+import type { BindingErrorConstructor, BindingInspection, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment, filterRuntimeWarnings } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
@@ -79,6 +79,7 @@ export async function runNodeMain(
     },
   }
   const images = new WeakMap<object, string>()
+  const inspections = new WeakMap<object, BindingInspection>()
   class Image {
     readonly [key: string]: PtcJsonValue
     declare readonly attachmentId: string
@@ -105,13 +106,16 @@ export async function runNodeMain(
   }
   const imageSink = (id: string): void => {
     const evaluation = context.getStore()
-    if (evaluation && acceptsCalls(evaluation)) void connection.image(id)
+    if (evaluation && acceptsCalls(evaluation) && !evaluation.logs.overflowed) void connection.image(id)
   }
-  const logSink = { push(text: string): void {
-    const evaluation = context.getStore()
-    if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
-  } }
-  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink)
+  const logSink = {
+    get overflowed(): boolean { return context.getStore()?.logs.overflowed ?? true },
+    push(text: string): void {
+      const evaluation = context.getStore()
+      if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
+    },
+  }
+  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink, inspections)
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
@@ -144,7 +148,7 @@ export async function runNodeMain(
           if (evaluator === undefined) {
             evaluator = createProgramEvaluator(format, (error) => {
               const active = context.getStore()
-              if (active?.active && error) active.finish(prepareException(error, active.logs.remainingOutputBytes(), active.maxOutputBytes))
+              if (active?.active && error) active.finish(prepareException(error, active.maxOutputBytes - 2))
             }, importHandler === undefined ? undefined : (request) => {
               const active = context.getStore()
               if (!active?.active) throw new ImportEvaluationEndedError(active?.reusable ?? true)
@@ -176,7 +180,7 @@ export async function runNodeMain(
             const constructor = makeBindingErrorClass(descriptor)
             errors.set(namespace.global, { name: descriptor.name, memberNameProperty: descriptor.memberNameProperty, constructor })
           }
-          const namespaces = makeNamespaces(data, host, errorLookup, decodeImage)
+          const namespaces = makeNamespaces(data, host, errorLookup, inspections, decodeImage, image => images.has(image))
           for (const [index, namespace] of data.namespaces.entries()) {
             Object.defineProperty(evaluator.globals, namespace.global, { configurable: true, enumerable: true, value: namespaces[index] })
             if (namespace.errorClass) {
@@ -196,25 +200,22 @@ export async function runNodeMain(
               })
             })
             if (!canContinue()) return
-            if (logs.overflowed) {
-              evaluation.finish(outputLimit(data.maxOutputBytes))
-              return
-            }
             await connection.initialized()
           }
           if (!canContinue()) return
           programEvaluator.evaluate(data.code, (result) => {
             if (!canContinue()) return
             evaluation.finish(result.ok
-              ? data.discardCompletion ? {} : prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
-              : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
+              ? data.discardCompletion ? {} : prepareCompletion(result.value, data.maxOutputBytes - 2, data.maxOutputBytes)
+              : prepareException(result.error, data.maxOutputBytes - 2))
           })
         } catch (error: unknown) {
-          if (canContinue()) evaluation.finish(prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes))
+          if (canContinue()) evaluation.finish(prepareException(error, data.maxOutputBytes - 2))
         }
       })
       return await completion.promise
     },
+    discardOutput() { current?.logs.discard() },
     revoke() {
       const evaluation = current
       if (!evaluation?.active) return

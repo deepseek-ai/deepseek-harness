@@ -82,7 +82,7 @@
   justify-content: space-between;
   gap: 16px;
   flex-shrink: 0;
-  padding: 20px 16px 0 24px;
+  padding: 20px 20px 0 24px;
 }
 
 .headingBlock {
@@ -203,8 +203,7 @@
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 999px;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
@@ -298,7 +297,7 @@
      the first text line under the row's flex-start alignment. */
   margin-top: 2px;
   border-radius: var(--dsw-radius-xs);
-  background: var(--dsw-alias-bg-overlay);
+  background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -427,7 +426,7 @@
   animation: none;
 }
 
-/* Shares .iconButton's 24px round control; hidden until its copy overflows or expands. */
+/* Shares .iconButton's 24px compact control; hidden until its copy overflows or expands. */
 .copyToggle {
   visibility: hidden;
 }
@@ -588,7 +587,7 @@
   gap: 12px;
   flex-shrink: 0;
   margin-top: 12px;
-  padding: 0 10px 0 18px;
+  padding: 0 24px 0 19px;
 }
 
 .feedback {

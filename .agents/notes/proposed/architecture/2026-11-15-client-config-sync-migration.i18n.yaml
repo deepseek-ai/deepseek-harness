@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-15-client-config-sync-migration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-11-15-client-config-sync-migration.md
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync:
+  en: 5f71cf603f0c5013
+  zh: 3976607b283e68dc
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/problem:
+  en: 38add9dc3b90ad7e
+  zh: 867e351401f537bc
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/proposal:
+  en: 986dd8097aac4d3d
+  zh: 986dd8097aac4d3d
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/proposal/inventory:
+  en: 08dae763d773f24a
+  zh: 15b4bd80b4973dff
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/proposal/migration-rules:
+  en: 72202ccc050d7e35
+  zh: a809ee548e005fcb
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/proposal/order:
+  en: 8b8ded15f43056c0
+  zh: 3ea6067ed0c3310c
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/proposal/open-questions:
+  en: 103a6b7dca054eb4
+  zh: 55b0881eca3e08ac
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/alternatives-considered:
+  en: a00b894cbcff0c34
+  zh: 7f2a83f36df109ec
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/acceptance-criteria:
+  en: 15597a6f656e7268
+  zh: f17a1cfcbef0fcbd
+/agent-note-migrate-existing-browser-configuration-reads-to-configuration-sync/risks:
+  en: 8f5e523d526b2026
+  zh: 34a61d7c19df8650

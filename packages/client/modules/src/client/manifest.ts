@@ -28,6 +28,7 @@
  * composes the wire.
  */
 
+import type { SyncedConfigValues } from '@deepseek-ai/dsh-client-config/types'
 import type {} from '@deepseek-ai/cordis'
 import type {
   DshClientManifest, ClientModuleMetaFactory,
@@ -69,6 +70,8 @@ export interface WebBootEntry {
   immediately?: boolean
   /** Non-baseline module specifiers this row requests; omitted when it requests none. */
   external?: string[]
+  /** Browser-synced values of the plugin's top-level volatile Config fields, secrets removed; omitted when it has none. */
+  config?: SyncedConfigValues
 }
 
 /** Initial scheduling phase for one revisioned combo script. */
@@ -134,6 +137,8 @@ export interface BootPluginRow {
   inject: string[]
   /** Stage-one prefetch tier (false when the wire omits it). */
   immediately: boolean
+  /** Synced Config values; undefined when the row has none. */
+  config?: SyncedConfigValues
 }
 
 /** The parsed boot manifest: one wire, two consumer views. */
@@ -275,10 +280,14 @@ export function parseBootManifest(wire: unknown): BootManifest {
       inject: inject === undefined ? [] : [...inject],
       external: external === undefined ? [] : [...external],
     })
+    if (row.config !== undefined && (typeof row.config !== 'object' || row.config === null || Array.isArray(row.config))) {
+      throw new Error(`client-modules: boot manifest entry ${where} config must be an object`)
+    }
     plugins.push({
       id: row.id,
       inject: inject === undefined ? [] : [...inject],
       immediately: row.immediately === true,
+      ...(row.config === undefined ? {} : { config: row.config as SyncedConfigValues }),
     })
   }
 

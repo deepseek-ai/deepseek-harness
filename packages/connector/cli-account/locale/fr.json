@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comptes d’applications CLI",
+    "description": "Indique au modèle le chemin de la CLI de chaque plugin d’application CLI, exécute les opérations de compte du plugin et affiche son compte sur la page Plugins."
+  }
+}

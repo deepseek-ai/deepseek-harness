@@ -8,6 +8,7 @@ import { getOrCreateAnonymousUserId, type AnonymousUserId } from '@deepseek-ai/d
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { DeepSeekAdapter } from './adapter.ts'
 import type { DeepSeekAdapterOptions, DeepSeekConnectionOptions } from './types.ts'
+import { requestModelListing } from './listing.ts'
 import { ModelListingCache, type ListingCacheDependencies } from './listing-cache.ts'
 
 /**
@@ -15,16 +16,17 @@ import { ModelListingCache, type ListingCacheDependencies } from './listing-cach
  * @param ctx - provider plugin lifetime.
  * @param owner - plugin name used in diagnostics.
  * @param provider - route whose catalog changes.
- * @param dependencies - current configuration, credentials, and listing transport.
+ * @param dependencies - current configuration and credential headers; `load` defaults to the official `/models` request.
  * @returns the cache, disposed with the provider after its active work settles.
  */
 export function createModelListingCache(
   ctx: Context, owner: string, provider: string,
-  dependencies: Pick<ListingCacheDependencies, 'settings' | 'credential' | 'load'>,
+  dependencies: Pick<ListingCacheDependencies, 'settings' | 'credential'> & Partial<Pick<ListingCacheDependencies, 'load'>>,
 ): ModelListingCache {
   const tag = `[${owner}]`
   const cache = new ModelListingCache({
     ...dependencies,
+    load: dependencies.load ?? requestModelListing,
     now: () => Date.now(),
     // ACP reserves stdout for protocol messages, including during successful catalog loads.
     info: (message) => { console.error(tag, message) },
@@ -43,7 +45,7 @@ export function createModelListingCache(
  */
 export function registerDeepSeekProvider<C extends DeepSeekConnectionOptions>(
   ctx: Context, provider: string, dependencies: Pick<DeepSeekAdapterOptions<C>,
-  'options' | 'resolveAuth' | 'providerName' | 'discoverModels' | 'connect' | 'admit'>): void {
+  'options' | 'resolveAuth' | 'missingCredential' | 'providerName' | 'discoverModels' | 'connect' | 'admit'>): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   let userId: AnonymousUserId | undefined
   // These conditions repeat on every request of a route; log each first occurrence only.

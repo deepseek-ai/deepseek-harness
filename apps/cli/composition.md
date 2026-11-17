@@ -56,6 +56,8 @@ flowchart LR
   cfg --> plugin_dsh_base_authorization
   plugin_dsh_base_deepseek_account["deepseek-account<br/>@deepseek-ai/dsh-deepseek-account"]
   cfg --> plugin_dsh_base_deepseek_account
+  plugin_dsh_base_deepseek_auth["deepseek-auth<br/>@deepseek-ai/dsh-deepseek-auth"]
+  cfg --> plugin_dsh_base_deepseek_auth
   plugin_dsh_base_credentials["credentials<br/>@deepseek-ai/dsh-credentials-local"]
   cfg --> plugin_dsh_base_credentials
   plugin_dsh_base_llm_pi_ai["llm-pi-ai<br/>@deepseek-ai/dsh-llm-pi-ai"]
@@ -86,6 +88,8 @@ flowchart LR
   cfg --> plugin_dsh_base_session_telemetry_otel
   plugin_dsh_base_subprocess["subprocess<br/>@deepseek-ai/dsh-subprocess-local"]
   cfg --> plugin_dsh_base_subprocess
+  plugin_dsh_base_cli_account["cli-account<br/>@deepseek-ai/dsh-cli-account"]
+  cfg --> plugin_dsh_base_cli_account
   plugin_dsh_base_sandbox["sandbox<br/>@deepseek-ai/dsh-sandbox-local"]
   cfg --> plugin_dsh_base_sandbox
   plugin_dsh_base_sandbox_policy["sandbox-policy<br/>@deepseek-ai/dsh-sandbox-policy"]
@@ -234,6 +238,7 @@ flowchart LR
 | `settings` | `@deepseek-ai/dsh-settings` |
 | `authorization` | `@deepseek-ai/dsh-authorization` |
 | `deepseek-account` | `@deepseek-ai/dsh-deepseek-account` |
+| `deepseek-auth` | `@deepseek-ai/dsh-deepseek-auth` |
 | `credentials` | `@deepseek-ai/dsh-credentials-local` |
 | `llm-pi-ai` | `@deepseek-ai/dsh-llm-pi-ai` |
 | `session-persistence-jsonl` | `@deepseek-ai/dsh-session-persistence-jsonl` |
@@ -249,6 +254,7 @@ flowchart LR
 | `otel` | `@deepseek-ai/dsh-otel` |
 | `session-telemetry-otel` | `@deepseek-ai/dsh-session-telemetry-otel` |
 | `subprocess` | `@deepseek-ai/dsh-subprocess-local` |
+| `cli-account` | `@deepseek-ai/dsh-cli-account` |
 | `sandbox` | `@deepseek-ai/dsh-sandbox-local` |
 | `sandbox-policy` | `@deepseek-ai/dsh-sandbox-policy` |
 | `bash-sandbox` | `@deepseek-ai/dsh-bash-sandbox` |

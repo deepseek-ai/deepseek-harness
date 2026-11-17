@@ -1,127 +1,140 @@
-/** Web transport delegates module and entry changes to the page-owned controller. */
+/** The Web transport follows the plugin-events Remote stream into the page's entry controller. */
 import { Context } from '@deepseek-ai/cordis'
-import type { ClientModuleLoader } from '@deepseek-ai/dsh-client-modules/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
+import type { PluginsEventFrame } from '../src/types.ts'
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks() })
 
-/** Provide the module system face this transport drives: its entry controller's sync and reload. */
-function provideModules(ctx: Context, sync: (...args: never[]) => unknown, reload: (...args: never[]) => unknown): void {
-  ctx.provide('modules', { entries: { sync, reload } } as unknown as ClientModuleLoader)
+async function collect(items: AsyncIterable<unknown>): Promise<unknown[]> {
+  const out: unknown[] = []
+  for await (const item of items) out.push(item)
+  return out
 }
 
-it('forwards full graphs and rebuilt frames, contains wire errors and closes its EventSource', async () => {
-  const ctx = new Context()
-  const sync = vi.fn(async () => {})
-  const reload = vi.fn(async () => {})
-  provideModules(ctx, sync, reload)
-  const warnings = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-  const errors = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
-  let receive!: (event: { data: string }) => void
-  const close = vi.fn()
-  vi.stubGlobal('EventSource', class {
-    close = close
-    addEventListener(_name: string, listener: typeof receive) { receive = listener }
-  })
-  const fiber = ctx.plugin({ apply, inject })
-  try {
-    await fiber.await()
-    const graph = { rev: 'r', entries: [], batches: [] }
-    receive({ data: JSON.stringify({ type: 'graph', graph }) })
-    receive({ data: JSON.stringify({ type: 'rebuilt', id: 'a', rev: 'r1' }) })
-    await vi.waitFor(() => { expect(sync).toHaveBeenCalledWith(graph) })
-    expect(reload).toHaveBeenCalledWith('a', 'r1')
-    receive({ data: '{' })
-    receive({ data: JSON.stringify({ type: 'graph', graph: null }) })
-    receive({ data: JSON.stringify({ type: 'future' }) })
-    expect(warnings).toHaveBeenCalledTimes(2)
-    sync.mockRejectedValueOnce(new Error('invalid graph'))
-    receive({ data: JSON.stringify({ type: 'graph', graph: {} }) })
-    await vi.waitFor(() => { expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: 'invalid graph' })) })
-  } finally {
-    await fiber.dispose()
-    await ctx.fiber.dispose()
+/** A pushable stand-in for one logical Remote stream: items carry a generation number and an accept callback. */
+function fakeStream() {
+  const queue: { generation: number; value: PluginsEventFrame }[] = []
+  let wake: (() => void) | undefined
+  let ended = false
+  const disposed = vi.fn()
+  const stream = {
+    async *[Symbol.asyncIterator]() {
+      while (!ended) {
+        const item = queue.shift()
+        if (item === undefined) {
+          await new Promise<void>((resolve) => { wake = resolve })
+          continue
+        }
+        yield { ...item, signal: new AbortController().signal, accept: () => {} }
+      }
+    },
+    restart: () => {},
+    dispose: async () => { disposed(); ended = true; wake?.() },
   }
-  expect(close).toHaveBeenCalledOnce()
-})
-
-it('reads the event stream through the page transport when the shell provides one', async () => {
-  const ctx = new Context()
-  const sync = vi.fn(async () => {})
-  const reload = vi.fn(async () => {})
-  provideModules(ctx, sync, reload)
-  const graph = { rev: 'r', entries: [], batches: [] }
-  const encoder = new TextEncoder()
-  let signal: AbortSignal | undefined
-  const fetch = vi.fn((_input: string, init: RequestInit) => {
-    signal = init.signal ?? undefined
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(': connected\n\n'))
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'graph', graph })}\n\n`))
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'rebuilt', id: 'a', rev: 'r1' })}\n\n`))
-        // The tunnel ends the body when the caller aborts.
-        init.signal?.addEventListener('abort', () => { controller.close() })
-      },
-    })
-    return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }))
-  })
-  vi.stubGlobal('__DSH_TRANSPORT__', { fetch })
-  const eventSource = vi.fn()
-  vi.stubGlobal('EventSource', eventSource)
-  const errors = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
-  const fiber = ctx.plugin({ apply, inject })
-  try {
-    await fiber.await()
-    await vi.waitFor(() => { expect(sync).toHaveBeenCalledWith(graph) })
-    await vi.waitFor(() => { expect(reload).toHaveBeenCalledWith('a', 'r1') })
-    expect(fetch).toHaveBeenCalledWith('plugins/events', expect.objectContaining({ method: 'GET' }))
-    expect(eventSource).not.toHaveBeenCalled()
-    expect(signal?.aborted).toBe(false)
-  } finally {
-    await fiber.dispose()
-    await ctx.fiber.dispose()
+  return {
+    stream,
+    disposed,
+    push(generation: number, value: PluginsEventFrame) { queue.push({ generation, value }); wake?.() },
   }
-  expect(signal?.aborted).toBe(true)
-  await Promise.resolve()
-  expect(errors).not.toHaveBeenCalled()
-})
+}
 
-it.each([
-  ['a refused stream', () => new Response('missing', { status: 404 }), 'plugins/events answered 404'],
-  ['a stream without a body', () => new Response(null, { status: 200 }), 'plugins/events answered 200'],
-  ['a stream that ends while the plugin runs', () => new Response(': connected\n\n', { status: 200 }), 'plugins/events closed'],
-])('reports %s on the page transport', async (_label, respond, message) => {
+function harness() {
   const ctx = new Context()
-  provideModules(ctx, vi.fn(), vi.fn())
-  const errors = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
-  vi.stubGlobal('__DSH_TRANSPORT__', { fetch: () => Promise.resolve(respond()) })
-  const fiber = ctx.plugin({ apply, inject })
-  try {
-    await fiber.await()
-    await vi.waitFor(() => {
-      expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining(message) as string }))
-    })
-  } finally {
-    await fiber.dispose()
-    await ctx.fiber.dispose()
-  }
-})
+  const sync = vi.fn(async (_graph: unknown) => {})
+  const reload = vi.fn(async (_id: string, _rev: string) => {})
+  ctx.provide('modules', { entries: { sync, reload } } as never)
+  const stream = fakeStream()
+  const unmount = vi.fn(async () => {})
+  const opened: { name: string; open: (signal: AbortSignal) => AsyncIterable<unknown>; ended: () => Error & { code?: string } }[] = []
+  const follow = vi.fn(async function *(_signal: AbortSignal): AsyncIterable<unknown> { yield 'frame' })
+  const pluginEvents = { follow }
+  ctx.provide('remote', {
+    $mount: vi.fn(async () => unmount),
+    $stream: (streamOptions: (typeof opened)[number]) => { opened.push(streamOptions); return stream.stream },
+    pluginEvents,
+  } as never)
+  const revoke: (() => unknown)[] = []
+  ctx.provide('remoteAccess', {
+    whenAccess: (_action: string, callback: () => () => unknown) => { revoke.push(callback()); return () => {} },
+  } as never)
+  // `$mount` provides the generated namespace as its own service under `remote.pluginEvents`.
+  const provideNamespace = (): void => { ctx.provide('remote.pluginEvents', pluginEvents as never) }
+  return { ctx, sync, reload, stream, unmount, opened, follow, revoke, provideNamespace }
+}
 
-it('stays silent when disposal aborts a page-transport request in flight', async () => {
-  const ctx = new Context()
-  provideModules(ctx, vi.fn(), vi.fn())
-  const errors = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
-  const fetch = vi.fn((_input: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
-    init.signal?.addEventListener('abort', () => { reject(new DOMException('aborted', 'AbortError')) })
-  }))
-  vi.stubGlobal('__DSH_TRANSPORT__', { fetch })
-  const fiber = ctx.plugin({ apply, inject })
+const baseline: PluginsEventFrame = { type: 'baseline', graph: { rev: 'g1', entries: [], batches: [] } }
+
+it('forwards the baseline and increments to the entry controller while access allows the stream, and unmounts its namespace', async () => {
+  const h = harness()
+  h.provideNamespace()
+  const fiber = h.ctx.plugin({ apply, inject })
   await fiber.await()
-  await vi.waitFor(() => { expect(fetch).toHaveBeenCalledOnce() })
+  const options = h.opened[0]!
+  expect(options.name).toBe('Plugin events')
+  const signal = new AbortController().signal
+  expect(await collect(options.open(signal))).toEqual(['frame'])
+  expect(h.follow).toHaveBeenCalledWith(signal)
+  // An endpoint the Host withdrew while reloading reconnects; any other failure stays as it is.
+  for (const code of ['gateway/invocation-unavailable', 'gateway/service-unavailable']) {
+    h.follow.mockImplementationOnce(() => { throw Object.assign(new Error('withdrawn'), { code }) })
+    await expect(collect(options.open(signal))).rejects.toMatchObject({ code: 'gateway/carrier-lost' })
+  }
+  const denied = Object.assign(new Error('denied'), { code: 'gateway/forbidden' })
+  h.follow.mockImplementationOnce(() => { throw denied })
+  await expect(collect(options.open(signal))).rejects.toBe(denied)
+  const plain = new Error('plain')
+  h.follow.mockImplementationOnce(() => { throw plain })
+  await expect(collect(options.open(signal))).rejects.toBe(plain)
+  // A normal generation end reconnects rather than ending the logical stream.
+  expect(options.ended().code).toBe('gateway/carrier-lost')
+  h.stream.push(1, baseline)
+  h.stream.push(1, { type: 'graph', graph: { rev: 'g2', entries: [], batches: [] } })
+  h.stream.push(1, { type: 'rebuilt', id: 'a', rev: 'r2' })
+  await vi.waitFor(() => { expect(h.reload).toHaveBeenCalledWith('a', 'r2') })
+  expect(h.sync.mock.calls.map(([graph]) => (graph as { rev: string }).rev)).toEqual(['g1', 'g2'])
+  await h.revoke[0]!()
+  expect(h.stream.disposed).toHaveBeenCalledOnce()
   await fiber.dispose()
-  await ctx.fiber.dispose()
-  await Promise.resolve()
-  expect(errors).not.toHaveBeenCalled()
+  expect(h.unmount).toHaveBeenCalledOnce()
+  await h.ctx.fiber.dispose()
+})
+
+it('reports controller failures, including a synchronous parse failure, and ignores unknown increments', async () => {
+  const h = harness()
+  const errors = vi.spyOn(h.ctx.logger, 'error').mockImplementation(() => {})
+  h.sync.mockImplementationOnce(() => { throw new Error('bad graph') })
+  h.reload.mockRejectedValueOnce(new Error('bad reload'))
+  h.provideNamespace()
+  const fiber = h.ctx.plugin({ apply, inject })
+  await fiber.await()
+  h.stream.push(1, baseline)
+  h.stream.push(1, { type: 'future' } as never)
+  h.stream.push(1, { type: 'rebuilt', id: 'a', rev: 'r2' })
+  await vi.waitFor(() => { expect(errors).toHaveBeenCalledTimes(2) })
+  expect(errors.mock.calls.map(([error]) => (error as Error).message)).toEqual(['bad graph', 'bad reload'])
+  await fiber.dispose()
+  await h.ctx.fiber.dispose()
+})
+
+it('fails loudly when the mounted namespace service is missing', async () => {
+  const h = harness()
+  const errors = vi.spyOn(h.ctx.logger, 'error').mockImplementation(() => {})
+  const fiber = h.ctx.plugin({ apply, inject })
+  await expect(fiber.await()).rejects.toThrow('the mounted pluginEvents namespace is not registered')
+  errors.mockRestore()
+  await h.ctx.fiber.dispose()
+})
+
+it('logs a terminal stream failure', async () => {
+  const h = harness()
+  h.provideNamespace()
+  const errors = vi.spyOn(h.ctx.logger, 'error').mockImplementation(() => {})
+  const fiber = h.ctx.plugin({ apply, inject })
+  await fiber.await()
+  h.stream.push(1, { type: 'graph', graph: { rev: 'g', entries: [], batches: [] } })
+  await vi.waitFor(() => { expect(errors).toHaveBeenCalledOnce() })
+  expect(errors.mock.calls[0]![0]).toContain('plugin events stopped')
+  await fiber.dispose()
+  await h.ctx.fiber.dispose()
 })

@@ -13,6 +13,10 @@
     {"path": "../../host/webserver"},
     {"path": "../../util/package-manifest"},
     {"path": "../script-realm"},
-    {"path": "../store"}
+    {"path": "../store"},
+    {"path": "../../../vendor/schemastery"},
+    {"path": "../../util/values"},
+    {"path": "../config"},
+    {"path": "../../typert/protocol"}
   ]
 }

@@ -143,9 +143,7 @@ function createProfileLifecycleFixture(): ProfileLifecycleFixture {
   writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n')
   const linkTarget = join(profileDir, 'node_modules', 'dsh-lifecycle-bundle')
   mkdirSync(join(profileDir, 'node_modules'), { recursive: true })
-  try {
-    rmSync(linkTarget, { recursive: true, force: true })
-  } catch { /* fresh dir */ }
+  rmSync(linkTarget, { recursive: true, force: true })
   // Copy-free: a package.json redirecting via a relative main is enough for require.resolve.
   mkdirSync(linkTarget, { recursive: true })
   for (const file of ['package.json', 'cordis.patch.yml', 'plugin.mjs']) {
@@ -1265,6 +1263,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         ['deepseek-llm-api-extensions', '@deepseek-ai/dsh-deepseek-llm-api-extensions'],
         ['session-log-deepseek', '@deepseek-ai/dsh-session-log-deepseek'],
         ['plugin-package-inventory-deepseek', '@deepseek-ai/dsh-plugin-package-inventory-deepseek'],
+        ['deepseek-auth', '@deepseek-ai/dsh-deepseek-auth'],
         ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek-api-key'],
         ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
         ['filesystem', '@deepseek-ai/dsh-fs-local'],

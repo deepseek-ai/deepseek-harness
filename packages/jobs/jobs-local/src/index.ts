@@ -94,6 +94,8 @@ interface TrackedJob {
   state: ProducerState
   /** Terminal reason; a recorded kill reason is merged in at settlement. */
   detail: string | undefined
+  /** Exit code the producer reported at settlement. */
+  exitCode: number | undefined
   result: string | undefined
   startedAt: number
   finishedAt: number | undefined
@@ -268,6 +270,7 @@ export class LocalJobRegistry extends JobRegistry {
       resultDelivered: false,
       state,
       detail: undefined,
+      exitCode: undefined,
       result: undefined,
       startedAt: Date.now(),
       finishedAt: undefined,
@@ -438,6 +441,7 @@ export class LocalJobRegistry extends JobRegistry {
       status: job.status,
       ...job.state.progress !== undefined ? { progress: job.state.progress } : {},
       ...job.detail !== undefined ? { detail: job.detail } : {},
+      ...job.exitCode !== undefined ? { exitCode: job.exitCode } : {},
       startedAt: job.startedAt,
       ...job.finishedAt !== undefined ? { finishedAt: job.finishedAt } : {},
       output: {
@@ -627,6 +631,7 @@ export class LocalJobRegistry extends JobRegistry {
       job.detail = outcome.detail
     }
     job.state.progress = undefined
+    job.exitCode = outcome.exitCode
     job.result = outcome.result
     job.finishedAt = Date.now()
     this.recordSessionEvent(job, {
