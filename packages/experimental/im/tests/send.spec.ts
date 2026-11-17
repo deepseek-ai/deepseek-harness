@@ -654,6 +654,16 @@ describe('ImSender.stream', () => {
     expect(bot.operations.at(-1)?.payload).toMatchObject({ quote: 'm9', text: 'final' })
   })
 
+  it('attributes an un-receipted stream to its publishing session on completion', async () => {
+    const { sender, sessions } = await boot()
+    const session = sessions.add('im-stream-no-op', [{ chat: CHAT, writable: true, home: true }])
+    const stream = await sender.stream(CHAT, { session: session.sessionId })
+    stream.update(h.text('streaming'))
+    const result = await stream.close(h.text('done'))
+    const partId = result.handle.parts[0]!.id
+    expect(sender.sessionOf(ImMessageKey('fake:bot', partId))).toBe(session.sessionId)
+  })
+
   it('closes a quoted stream without a final state and aborts another one', async () => {
     const { sender } = await boot()
     const quote = ImMessageKey('fake:bot', 'm9')

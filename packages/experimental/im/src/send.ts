@@ -196,7 +196,7 @@ export class ImSender {
     const quoteId = this.quoteId(chat, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      return this.watched(this.quoted(bot.stream(target, options), quoteId), chat)
+      return this.watched(this.quoted(bot.stream(target, options), quoteId), chat, options.session)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
@@ -240,15 +240,21 @@ export class ImSender {
   }
 
   /**
-   * Log a warning when `stream.done` rejects so an unobserved stream failure remains visible in diagnostics.
+   * Attribute a completed (or partially opened) stream to its session and log a warning when `stream.done` rejects so
+   * an unobserved stream failure remains visible in diagnostics.
    * @param stream - the stream handed to the caller.
    * @param chat - the admitted chat, for the message.
+   * @param session - publishing session, for un-receipted streams whose attribution is not handled by `settlement`.
    * @returns that stream.
    */
-  private watched(stream: MessageStream, chat: ImChatKey): MessageStream {
-    void stream.done.catch((error: unknown) => {
-      this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
-    })
+  private watched(stream: MessageStream, chat: ImChatKey, session?: SessionId): MessageStream {
+    void stream.done.then(
+      (result) => { this.attribute(result.handle, session) },
+      (error: unknown) => {
+        if (stream.handle !== undefined) this.attribute(stream.handle, session)
+        this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
+      },
+    )
     return stream
   }
 
