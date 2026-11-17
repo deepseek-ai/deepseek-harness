@@ -279,7 +279,6 @@ describe('ImIntake admission', () => {
 
     // Own outbound parts carrying platform aliases (e.g. QQ ext_info.ref_idx) are indexed so replies can quote them.
     await intake.outbound(bot, {
-      status: 'sent',
       handle: {
         bot: bot.id,
         target: { chat: { id: 'chat', type: 'group' } },
