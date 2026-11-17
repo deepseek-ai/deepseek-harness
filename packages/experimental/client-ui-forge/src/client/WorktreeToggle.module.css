@@ -46,6 +46,27 @@
   padding-right: 4px;
 }
 
+/* A chosen name leads; the base after it gives way first. */
+.named {
+  max-width: 280px;
+}
+
+.nameLabel {
+  flex: 0 1 auto;
+  min-width: 4em;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+}
+
+.fromLabel {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+}
+
 .current {
   box-sizing: content-box;
   max-width: 200px;
@@ -96,9 +117,75 @@
   transform: rotate(180deg);
 }
 
-.option {
-  display: inline-flex;
+/* The base menu: the changes view's BaseMenu search, rows, and labels, with a footer row that names the branch. */
+.anchor {
+  flex: none;
+  min-width: 0;
+}
+
+.menu {
+  width: min(360px, calc(100vw - 24px));
+}
+
+.menuRoot {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+}
+
+.search {
+  padding: 8px;
+}
+
+.searchInput {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+.searchInput input::placeholder {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rows {
+  max-height: 300px;
+  overflow: auto;
+  padding: 0 0 2px;
+}
+
+.groupLabel {
+  display: flex;
   align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.groupName {
+  flex: none;
+}
+
+.groupRepository {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.option {
+  display: flex;
+  flex: 1;
+  align-items: center;
   gap: 8px;
   min-width: 0;
 }
@@ -107,15 +194,67 @@
   min-width: 0;
   overflow: hidden;
   font-family: var(--ds-font-family-code);
-  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.optionNote {
-  flex: none;
+.remotePrefix {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+}
+
+.tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.check {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.footerLabel {
+  flex: none;
+}
+
+.footerValue {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footerName {
+  font-family: var(--ds-font-family-code);
+}
+
+@media (pointer: coarse) {
+  .search input {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -126,7 +265,12 @@
   }
 
   .base,
+  .named,
   .current {
     max-width: 120px;
+  }
+
+  .fromLabel {
+    display: none;
   }
 }

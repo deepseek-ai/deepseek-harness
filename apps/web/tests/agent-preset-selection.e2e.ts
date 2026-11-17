@@ -428,9 +428,10 @@ describe('web e2e: agent-preset selection', () => {
 
     await compareOrRefreshGolden(HEADER_EXPECTED, snapshot, MODE)
     expect(snapshot).toContain('Minimal mode')
-    expect(snapshot).toContain('button "1 subagent"')
-    expect(snapshot.indexOf('Minimal mode')).toBeLessThan(snapshot.indexOf('button "1 subagent"'))
-    expect(snapshot.indexOf('button "1 subagent"')).toBeLessThan(snapshot.indexOf('button "More actions"'))
+    // The Session's subagents live in the Session panel, whose toggle follows the preset label.
+    expect(snapshot).not.toContain('button "1 subagent"')
+    expect(snapshot.indexOf('Minimal mode')).toBeLessThan(snapshot.indexOf('button "Session panel"'))
+    expect(snapshot.indexOf('button "Session panel"')).toBeLessThan(snapshot.indexOf('button "More actions"'))
     // Static chrome, not a control: the header can only report a composition
     // the host would refuse to change.
     expect(snapshot).not.toContain('button "Minimal mode"')
@@ -486,7 +487,7 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
     expect(scaffold.ctx.sessionProjections.checkpoint(creator.session).agentPreset?.val).toBe('cordis')
     expect(scaffold.ctx.agentPresets.composedPreset(creator.ctx)).toBe('cordis')
     expect(scaffold.ctx.tools.schemas(creator).map(tool => tool.name))
-      .toEqual(expect.arrayContaining(['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']))
+      .toEqual(expect.arrayContaining(['cordis_inspect', 'plugin_manager']))
     // The Session starts under Creator; a chip selection after the list updates records no switch.
     expect(creator.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected')).toEqual([])
     expect(creator.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)

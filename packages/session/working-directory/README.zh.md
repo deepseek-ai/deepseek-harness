@@ -33,6 +33,8 @@ kind: "package-reference"
 
 -----
 
+读取 `workingDirectory` 投影的 Client 程序从 `@deepseek-ai/dsh-working-directory/types` 导入其类型声明，该入口不加载运行时代码。
+
 目录验证与发布通过 `working-directory/access` 委派，使正在删除某目录的所有者可以阻塞进入该目录的 `ensure` 与 `set`，直到其操作结束。监听器只为请求路径或当前路径上的操作等待，等待时遵守请求的 `signal`，其余情况立即调用 `next()`；拒绝会使本次访问失败并保持记录的目录不变，不做回退。已有子进程保留各自的目录。
 
 <a id="understand-the-implementation"></a>

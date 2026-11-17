@@ -201,7 +201,7 @@ interface CursorPayload {
 
 /** Concrete SQLite owner of the combined `ctx.sessionQuery` service. */
 export class SqliteSessionQueryEngine extends SessionQueryEngine {
-  static override inject = ['sessions']
+  static override inject = ['sessions', 'sessionProjections']
 
   static Config: z<Config> = z.object({
     path: z.string().required(),
@@ -261,7 +261,8 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
   }
 
   /** Open eagerly only when activation owns the configured readiness boundary. */
-  protected async [Service.init](): Promise<void> {
+  protected override async [Service.init](): Promise<void> {
+    await super[Service.init]()
     if (this.config.openAt === 'startup') await this._ensureReady(undefined)
   }
 
@@ -349,7 +350,7 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
     if (this._ready !== undefined) {
       try {
         await this._ready
-      } catch {
+      } catch (_openFailed) {
         // Opening already closed a partially-created handle; disposal only waits.
       }
     }
@@ -473,7 +474,7 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
           /* v8 ignore next 5 -- ROLLBACK failure requires a SQLite double fault; the original failure remains actionable. */
           try {
             db.exec('ROLLBACK')
-          } catch {
+          } catch (_rollbackFailed) {
             // The original SQLite failure remains the actionable cause.
           }
         }

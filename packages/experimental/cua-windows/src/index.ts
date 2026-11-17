@@ -14,8 +14,8 @@ const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'windows',
   methods: [
     'getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState',
-    'listActions', 'performAction', 'invoke', 'mouseMove', 'click', 'setValue', 'selectText',
-    'typeText', 'paste', 'pressKey', 'scroll', 'drag', 'screenshot',
+    'listActions', 'performAction', 'invoke', 'mouseMove', 'toggleMouse', 'click', 'setValue', 'selectText',
+    'typeText', 'paste', 'pressKey', 'sendKeyEvent', 'scroll', 'drag', 'screenshot',
   ],
   appLevelAccessibility: false,
   keyboard: ['window'],

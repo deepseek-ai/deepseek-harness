@@ -126,13 +126,14 @@ it('shows one tag and one notice entry for the page and each bundle\'s section a
   expect(faceOf(toast).hooks.connectorAccounts).toBe(face.hooks.connectorAccounts)
   expect([...face.hooks.connectorAccounts.getSnapshot().accounts.keys()]).toEqual([FIXTURE, OTHER, 'mcp:custom'])
   expect(face.resolveText({ en: 'Connected', zh: '已连接' })).toBe('Connected')
-  expect(await face.start(FIXTURE, 'connect')).toBe(OP)
+  expect(await face.start(FIXTURE, 'connect')).toEqual({ ok: true, value: OP })
   expect(b.start).toHaveBeenCalledWith(FIXTURE, 'connect')
-  await face.cancel(FIXTURE, OP)
+  expect(await face.cancel(FIXTURE, OP)).toEqual({ ok: true, value: undefined })
   expect(b.cancel).toHaveBeenCalledWith(FIXTURE, OP)
-  // A refusal reaches the buttons as a rejection with the Host's message.
-  b.start.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) } as never)
-  await expect(face.start(FIXTURE, 'connect')).rejects.toThrow('offline')
+  // A refusal reaches the buttons as the Remote's result.
+  const refused: RemoteResult<ConnectorOperationId> = { ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }
+  b.start.mockResolvedValueOnce(refused)
+  expect(await face.start(FIXTURE, 'connect')).toBe(refused)
   face.follow(FIXTURE, OP)
   face.failed()
   expect(face.hooks.connectorAccounts.getSnapshot().notice).toEqual({ seq: 1, kind: 'action-failed' })

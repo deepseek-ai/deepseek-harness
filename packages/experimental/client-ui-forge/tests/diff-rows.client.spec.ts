@@ -1,7 +1,9 @@
 /** Rows of a file diff: numbering, side-by-side pairing, and unchanged lines between hunks. */
 import { describe, expect, it } from 'vitest'
 import type { ForgeDiffFile, ForgeDiffHunk } from '../src/types.ts'
-import { drawnLines, hunkRows, matchesHunks, segmentsOf, splitRows, textLines } from '../src/client/diff-rows.ts'
+import {
+  drawnLines, EXPAND_STEP, hidesLine, hunkRows, matchesHunks, revealGap, segmentsOf, splitRows, textLines, type DiffSegment, type GapReveal,
+} from '../src/client/diff-rows.ts'
 
 /** Modified file whose hunks change lines 3–6 and 11 of its 13 new lines. */
 const NEW_SIDE = ['a1', 'a2', 'a3', 'y', 'z', 'a5', 'a6', 'a7', 'a8', 'a9', 'a10', 't12', 't13']
@@ -9,6 +11,18 @@ const HUNKS: readonly ForgeDiffHunk[] = [
   { oldStart: 3, oldLines: 3, newStart: 3, newLines: 4, lines: [' a3', '-x', '+y', '+z', ' a5'] },
   { oldStart: 10, oldLines: 2, newStart: 11, newLines: 1, lines: [' a10', '-w'] },
 ]
+
+const NONE: ReadonlyMap<number, GapReveal> = new Map()
+
+/** Gaps shown wholly. */
+function opened(...indexes: number[]): ReadonlyMap<number, GapReveal> {
+  return new Map(indexes.map(index => [index, { top: Number.POSITIVE_INFINITY, bottom: 0 }]))
+}
+
+/** A segment as its row count, its gap's index and count, or itself. */
+function brief(segment: DiffSegment): unknown {
+  return segment.kind === 'rows' ? segment.rows.length : segment.kind === 'gap' ? { kind: 'gap', index: segment.index, count: segment.count } : segment
+}
 
 function file(overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
@@ -82,7 +96,7 @@ describe('matchesHunks', () => {
 
 describe('segmentsOf', () => {
   it('collapses the lines before, between, and after the hunks, the last of unknown length', () => {
-    expect(segmentsOf(file(), undefined, new Set([0, 1])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+    expect(segmentsOf(file(), undefined, opened(0, 1)).map(brief)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       5,
       { kind: 'gap', index: 1, count: 4 },
@@ -92,7 +106,7 @@ describe('segmentsOf', () => {
   })
 
   it('draws the expanded gaps from the new side with the old numbers they had', () => {
-    const [rows, ...rest] = segmentsOf(file(), NEW_SIDE, new Set([0, 1, 2]))
+    const [rows, ...rest] = segmentsOf(file(), NEW_SIDE, opened(0, 1, 2))
     expect(rest).toEqual([])
     if (rows?.kind !== 'rows') throw new Error('expected one run of rows')
     expect(rows.rows.map(row => [row.old, row.new, row.text])).toEqual([
@@ -105,17 +119,17 @@ describe('segmentsOf', () => {
   })
 
   it('keeps unexpanded gaps collapsed once the new side is known, and counts the lines after the last hunk', () => {
-    expect(segmentsOf(file(), NEW_SIDE, new Set([1])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+    expect(segmentsOf(file(), NEW_SIDE, opened(1)).map(brief)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       11,
       { kind: 'gap', index: 2, count: 2 },
     ])
-    expect(segmentsOf(file(), NEW_SIDE.slice(0, 11), new Set()).at(-1)).toMatchObject({ kind: 'rows' })
+    expect(segmentsOf(file(), NEW_SIDE.slice(0, 11), NONE).at(-1)).toMatchObject({ kind: 'rows' })
   })
 
   it('maps lines around a hunk that only deletes to the old lines after the deletion', () => {
     const deletion = file({ hunks: [{ oldStart: 5, oldLines: 2, newStart: 5, newLines: 0, lines: ['-d5', '-d6'] }] })
-    const [rows] = segmentsOf(deletion, ['b1', 'b2', 'b3', 'b4', 'b7'], new Set([0, 1]))
+    const [rows] = segmentsOf(deletion, ['b1', 'b2', 'b3', 'b4', 'b7'], opened(0, 1))
     if (rows?.kind !== 'rows') throw new Error('expected one run of rows')
     expect(rows.rows.map(row => [row.old, row.new, row.text])).toEqual([
       [1, 1, 'b1'], [2, 2, 'b2'], [3, 3, 'b3'], [4, 4, 'b4'], [5, null, 'd5'], [6, null, 'd6'], [7, 5, 'b7'],
@@ -124,25 +138,25 @@ describe('segmentsOf', () => {
 
   it('has nothing after the last hunk of a new or deleted file or of a hunk that reaches the end of the new side', () => {
     const added = file({ status: 'added', hunks: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 2, lines: ['+x', '+y'] }] })
-    expect(segmentsOf(added, undefined, new Set()).map(segment => segment.kind)).toEqual(['rows'])
+    expect(segmentsOf(added, undefined, NONE).map(segment => segment.kind)).toEqual(['rows'])
     const deleted = file({ status: 'deleted', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 0, lines: ['-x'] }] })
-    expect(segmentsOf(deleted, undefined, new Set()).map(segment => segment.kind)).toEqual(['rows'])
+    expect(segmentsOf(deleted, undefined, NONE).map(segment => segment.kind)).toEqual(['rows'])
     const ending = file({ hunks: [{ oldStart: 4, oldLines: 1, newStart: 4, newLines: 1, lines: ['-a', '+b', '\\ No newline at end of file'] }] })
-    expect(segmentsOf(ending, undefined, new Set()).map(segment => segment.kind)).toEqual(['gap', 'rows'])
+    expect(segmentsOf(ending, undefined, NONE).map(segment => segment.kind)).toEqual(['gap', 'rows'])
     const oldEnding = file({ hunks: [{ oldStart: 4, oldLines: 1, newStart: 4, newLines: 1, lines: ['-a', '\\ No newline at end of file', '+b'] }] })
-    expect(segmentsOf(oldEnding, undefined, new Set()).map(segment => segment.kind)).toEqual(['gap', 'rows', 'gap'])
+    expect(segmentsOf(oldEnding, undefined, NONE).map(segment => segment.kind)).toEqual(['gap', 'rows', 'gap'])
   })
 
   it('draws consecutive folded hunks as one row that takes the lines between them, and the gap before a folded run', () => {
     const three = file({ hunks: [...HUNKS, { oldStart: 13, oldLines: 1, newStart: 13, newLines: 1, lines: ['-u', '+t13'] }] })
-    expect(segmentsOf(three, undefined, new Set(), new Set([1, 2])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+    expect(segmentsOf(three, undefined, NONE, new Set([1, 2])).map(brief)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       5,
       { kind: 'gap', index: 1, count: 4 },
       { kind: 'folded', hunks: [1, 2] },
       { kind: 'gap', index: 3, count: null },
     ])
-    expect(segmentsOf(three, undefined, new Set(), new Set([0, 2])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+    expect(segmentsOf(three, undefined, NONE, new Set([0, 2])).map(brief)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       { kind: 'folded', hunks: [0] },
       { kind: 'gap', index: 1, count: 4 },
@@ -153,8 +167,37 @@ describe('segmentsOf', () => {
     ])
   })
 
+  it('names where each gap sits and the new-side lines it hides, whose old numbers are its offset higher', () => {
+    expect(segmentsOf(file(), NEW_SIDE, NONE).filter(segment => segment.kind === 'gap')).toEqual([
+      { kind: 'gap', index: 0, count: 2, edge: 'leading', from: 1, to: 2, offset: 0 },
+      { kind: 'gap', index: 1, count: 4, edge: 'middle', from: 7, to: 10, offset: -1 },
+      { kind: 'gap', index: 2, count: 2, edge: 'trailing', from: 12, to: 13, offset: 0 },
+    ])
+    expect(segmentsOf(file(), undefined, NONE).at(-1)).toEqual({ kind: 'gap', index: 2, count: null, edge: 'trailing', from: 12, to: null, offset: 0 })
+  })
+
+  it('draws the lines a reveal shows at the top and bottom of a gap and keeps the rest collapsed', () => {
+    const segments = segmentsOf(file(), NEW_SIDE, new Map([[1, { top: 1, bottom: 2 }]]))
+    expect(segments.map(brief)).toEqual([{ kind: 'gap', index: 0, count: 2 }, 6, { kind: 'gap', index: 1, count: 1 }, 4, { kind: 'gap', index: 2, count: 2 }])
+    const [, above, gap, below] = segments
+    if (above?.kind !== 'rows' || below?.kind !== 'rows') throw new Error('expected rows around the gap')
+    expect(above.rows.at(-1)).toEqual({ kind: 'context', old: 6, new: 7, text: 'a6' })
+    expect(gap).toMatchObject({ kind: 'gap', index: 1, from: 8, to: 8 })
+    expect(below.rows.slice(0, 2)).toEqual([{ kind: 'context', old: 8, new: 9, text: 'a8' }, { kind: 'context', old: 9, new: 10, text: 'a9' }])
+  })
+
+  it('joins the rows around a gap that its reveal covers, however the steps add up', () => {
+    expect(segmentsOf(file(), NEW_SIDE, new Map([[1, { top: 3, bottom: 1 }]])).map(brief)).toEqual([{ kind: 'gap', index: 0, count: 2 }, 11, { kind: 'gap', index: 2, count: 2 }])
+    expect(segmentsOf(file(), NEW_SIDE, new Map([[1, { top: 40, bottom: 40 }]])).map(brief)).toEqual([{ kind: 'gap', index: 0, count: 2 }, 11, { kind: 'gap', index: 2, count: 2 }])
+  })
+
+  it('keeps a revealed gap collapsed until the new side is read', () => {
+    expect(segmentsOf(file(), undefined, new Map([[2, { top: EXPAND_STEP, bottom: 0 }]])).at(-1)).toMatchObject({ kind: 'gap', index: 2, count: null })
+    expect(segmentsOf(file(), NEW_SIDE, new Map([[2, { top: EXPAND_STEP, bottom: 0 }]])).map(brief)).toEqual([{ kind: 'gap', index: 0, count: 2 }, 5, { kind: 'gap', index: 1, count: 4 }, 4])
+  })
+
   it('draws nothing for a file without hunks', () => {
-    expect(segmentsOf(file({ status: 'renamed', previousPath: 'old.ts', hunks: [] }), undefined, new Set())).toEqual([])
+    expect(segmentsOf(file({ status: 'renamed', previousPath: 'old.ts', hunks: [] }), undefined, NONE)).toEqual([])
   })
 })
 
@@ -162,5 +205,29 @@ describe('drawnLines', () => {
   it('counts the lines of every hunk except missing-newline markers', () => {
     expect(drawnLines(file())).toBe(7)
     expect(drawnLines(file({ hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '\\ No newline at end of file', '+b'] }] }))).toBe(2)
+  })
+})
+
+describe('revealGap', () => {
+  it('shows one step more down from the hunk above or up from the hunk below, or the whole gap', () => {
+    const down = revealGap(undefined, 1, 'down')
+    expect(down.get(1)).toEqual({ top: EXPAND_STEP, bottom: 0 })
+    const both = revealGap(down, 1, 'up')
+    expect(both.get(1)).toEqual({ top: EXPAND_STEP, bottom: EXPAND_STEP })
+    expect(revealGap(both, 1, 'down').get(1)).toEqual({ top: 2 * EXPAND_STEP, bottom: EXPAND_STEP })
+    expect(revealGap(both, 0, 'all')).toEqual(new Map([[1, { top: EXPAND_STEP, bottom: EXPAND_STEP }], [0, { top: Number.POSITIVE_INFINITY, bottom: 0 }]]))
+    expect(down.get(1)).toEqual({ top: EXPAND_STEP, bottom: 0 })
+  })
+})
+
+describe('hidesLine', () => {
+  it('finds the lines a gap still hides on either side', () => {
+    const middle = segmentsOf(file(), NEW_SIDE, new Map([[1, { top: 1, bottom: 2 }]]))[2]
+    if (middle?.kind !== 'gap') throw new Error('expected the middle gap')
+    expect([hidesLine(middle, 'R', 7), hidesLine(middle, 'R', 8), hidesLine(middle, 'R', 9)]).toEqual([false, true, false])
+    expect([hidesLine(middle, 'L', 6), hidesLine(middle, 'L', 7), hidesLine(middle, 'L', 8)]).toEqual([false, true, false])
+    const rest = segmentsOf(file(), undefined, NONE).at(-1)
+    if (rest?.kind !== 'gap') throw new Error('expected the gap after the last hunk')
+    expect([hidesLine(rest, 'R', 11), hidesLine(rest, 'R', 400), hidesLine(rest, 'L', 12)]).toEqual([false, true, true])
   })
 })

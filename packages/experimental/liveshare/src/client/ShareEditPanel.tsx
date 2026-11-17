@@ -204,29 +204,33 @@ export function useShareEdit({
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
+      let listed
       try {
-        const listed = await shares.list()
-        if (cancelled || !listed.ok) return
-        const existing = listed.value.shares.find(share =>
-          share.sessionId === sessionId || share.sessionIds.includes(sessionId))
-        if (existing !== undefined) {
-          onLink(existing.link)
-          setConfirmedAccess(readAccess(existing.access))
-          // The editable record belongs to one share: the first sight of that share adopts it, and
-          // every later poll leaves the owner's own unsaved picks alone.
-          if (permissionShare.current !== existing.shareId) {
-            setSaveNotice('')
-            setSaveError('')
-            adoptShare(existing)
-          /* v8 ignore start -- polling adoption is covered by the first-adoption path. */
-          } else if (!unsaved.current) {
-            // The owner holds nothing unconfirmed, so this panel follows the host's record: a change
-            // made in Share management shows here instead of two panels stating different values.
-            adoptShare(existing)
-          }
-          /* v8 ignore stop */
+        listed = await shares.list()
+      } catch (_pollFailed) {
+        // The dialog keeps the last known list when polling fails.
+        return
+      }
+      if (cancelled || !listed.ok) return
+      const existing = listed.value.shares.find(share =>
+        share.sessionId === sessionId || share.sessionIds.includes(sessionId))
+      if (existing !== undefined) {
+        onLink(existing.link)
+        setConfirmedAccess(readAccess(existing.access))
+        // The editable record belongs to one share: the first sight of that share adopts it, and
+        // every later poll leaves the owner's own unsaved picks alone.
+        if (permissionShare.current !== existing.shareId) {
+          setSaveNotice('')
+          setSaveError('')
+          adoptShare(existing)
+        /* v8 ignore start -- polling adoption is covered by the first-adoption path. */
+        } else if (!unsaved.current) {
+          // The owner holds nothing unconfirmed, so this panel follows the host's record: a change
+          // made in Share management shows here instead of two panels stating different values.
+          adoptShare(existing)
         }
-      } catch { /* The dialog keeps the last known list when polling fails. */ }
+        /* v8 ignore stop */
+      }
     }
     void load()
     const timer = setInterval(() => { void load() }, 3000)
@@ -241,10 +245,14 @@ export function useShareEdit({
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
+      let offeredNow
       try {
-        const offeredNow = await shares.capabilities()
-        if (!cancelled && offeredNow.ok) setOffered(readOfferedPlugins(offeredNow.value.capabilities))
-      } catch { /* A host that cannot answer offers nothing; the section stays hidden. */ }
+        offeredNow = await shares.capabilities()
+      } catch (_hostUnanswered) {
+        // A host that cannot answer offers nothing; the section stays hidden.
+        return
+      }
+      if (!cancelled && offeredNow.ok) setOffered(readOfferedPlugins(offeredNow.value.capabilities))
     }
     void load()
     return () => { cancelled = true }

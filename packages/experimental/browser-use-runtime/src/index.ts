@@ -6,6 +6,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { BrowserSessionError } from './error.ts'
+
+export { BROWSER_SESSION_ERROR_CODES, BrowserSessionError, type BrowserSessionErrorCode } from './error.ts'
 
 /** One provider-owned browser or connection and its quiescent cleanup. */
 export interface OwnedSessionResource<T> {
@@ -37,10 +40,17 @@ interface Entry<T> {
   closing?: Promise<void>
 }
 
+/** The cancellation thrown for a non-`Error` abort reason; the tool registry records it as `ABORTED`. */
+function operationCanceled(reason: unknown): Error {
+  const error = new Error('browser operation canceled', { cause: reason })
+  error.name = 'AbortError'
+  return error
+}
+
 /** Stop a caller's wait while retaining handlers on the resource owner's work. */
 function awaitOperation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const aborted = (): void => { reject(signal.reason instanceof Error ? signal.reason : new Error('browser operation canceled', { cause: signal.reason })) }
+    const aborted = (): void => { reject(signal.reason instanceof Error ? signal.reason : operationCanceled(signal.reason)) }
     signal.addEventListener('abort', aborted, { once: true })
     void operation.then((value) => {
       signal.removeEventListener('abort', aborted)
@@ -140,19 +150,23 @@ export class SessionResources<T> {
     return this.disposing ??= Promise.resolve().then(async () => {
       const settled = await Promise.allSettled([...this.entries].map(([agent, entry]) => this.closeEntry(agent, entry)))
       const errors = settled.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
-      if (errors.length > 0) throw new AggregateError(errors, `${this.options.label}: browser cleanup failed`)
+      if (errors.length > 0) {
+        throw new BrowserSessionError(`${this.options.label}: browser cleanup failed`, 'BROWSER_CLEANUP_FAILED', {
+          cause: new AggregateError(errors, `${this.options.label}: browser cleanup failed`),
+        })
+      }
       await Promise.all([...this.ownerCleanups.values()].map(close => close()))
     })
   }
 
   private entry(agent: Agent): Entry<T> {
     if (this.disposing !== undefined || this.disposedOwners.has(agent) || this.ctx.get('agents')?.get(agent.id) !== agent) {
-      throw new Error(`${this.options.label}: Session is not a live browser owner`)
+      throw new BrowserSessionError(`${this.options.label}: Session is not a live browser owner`, 'BROWSER_OWNER_NOT_LIVE')
     }
     const current = this.entries.get(agent)
     if (current !== undefined) return current
     if (this.options.exclusive && this.entries.size > 0) {
-      throw new Error(`${this.options.label}: attached browser is already reserved by another Session`)
+      throw new BrowserSessionError(`${this.options.label}: attached browser is already reserved by another Session`, 'BROWSER_LOCKED')
     }
     if (!this.ownerCleanups.has(agent)) {
       const cleanup = agent.ctx.effect(() => async () => {
@@ -184,7 +198,7 @@ export class SessionResources<T> {
 
   private closeEntry(agent: Agent, entry: Entry<T>): Promise<void> {
     return entry.closing ??= Promise.resolve().then(async () => {
-      entry.controller.abort(new Error(`${this.options.label}: Session browser is closing`))
+      entry.controller.abort(new BrowserSessionError(`${this.options.label}: Session browser is closing`, 'BROWSER_CLOSED'))
       const resource = await entry.ready.catch(() => undefined)
       try {
         await resource?.close()

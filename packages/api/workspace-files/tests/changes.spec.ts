@@ -1,6 +1,7 @@
 /** Target-scoped Host changes, fresh filesystem metadata, and watcher ownership. */
 import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import type { Mock, MockInstance } from 'vitest'
+import { watch as nativeWatch } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -67,6 +68,25 @@ function open(
 
 async function ready(stream: ReturnType<typeof open>): Promise<void> {
   await expect(stream.next()).resolves.toEqual({ done: false, value: { kind: 'ready' } })
+}
+
+/**
+ * Block until this process's native directory watches deliver events. Chokidar
+ * reports `ready` once `fs.watch()` returns, but libuv on darwin builds the
+ * per-process FSEvents stream later on its CoreFoundation thread
+ * (`uv__fsevents_init` only signals that thread), so a mutation that lands
+ * before then is never reported. Closing a second directory handle runs
+ * `uv__fsevents_close`, whose `uv_sem_wait` returns only after
+ * `uv__fsevents_reschedule` rebuilt and started the stream with the remaining
+ * handles, so a watch registered before this call observes the next mutation.
+ * Any existing directory works because the stream is per process; Linux inotify
+ * and Windows `ReadDirectoryChangesW` are armed inside `fs.watch()`, so there
+ * this is an immediate open and close. The HMR config-watch spec waits the same
+ * way; should a libuv release drop the close-time wait, these cases regain the
+ * darwin loss rate rather than failing deterministically.
+ */
+function ensureNativeWatchLive(directory: string): void {
+  nativeWatch(directory).close()
 }
 
 /** Give disposal cases an independently unloadable service owner. */
@@ -448,6 +468,10 @@ describe('workspaceFiles.changes — backends and access', () => {
     const stream = open(service, path)
     mark('waiting-ready')
     await ready(stream)
+    // The rename below is this directory's only native event, so wait until the
+    // FSEvents stream can report it.
+    ensureNativeWatchLive(harness.outside)
+    mark('native-watch-armed')
     const pending = stream.next()
     mark('renaming')
     await rename(staging, path)
@@ -479,6 +503,7 @@ describe('workspaceFiles.changes — backends and access', () => {
       cleanups.push(async () => { detach() })
       const stream = open(service, harness.workspace)
       await ready(stream)
+      ensureNativeWatchLive(harness.workspace)
       const pending = stream.next()
       if (operation === 'remove') await rm(path)
       else await writeFile(path, 'after external mutation')

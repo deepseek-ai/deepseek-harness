@@ -269,8 +269,9 @@ describe('dsh-tool-subagent', () => {
       provider: 'alpha',
       model: 'child-model',
     })
-    expect(ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(schema => schema.name === 'subagent')?.description)
-      .toContain('this backend\'s route defaults')
+    const schema = ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(entry => entry.name === 'subagent')!
+    expect((schema.parameters as { properties: Record<string, { description: string }> }).properties['provider']!.description)
+      .toContain('to run the subagent on the default model configured for this tool.')
     expect(seen?.agentOptions).toEqual({
       provider: 'alpha',
       model: 'child-model',

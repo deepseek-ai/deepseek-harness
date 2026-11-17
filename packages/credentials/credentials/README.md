@@ -60,6 +60,8 @@ await ctx.credentials.unset(ref)                       // no-op when absent; an 
 
 Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value. Providers may disclose a masked stored-value preview through the optional `masked` field; the full value stays on the Host.
 
+Consumers that must also work in compositions without a credentials service, such as the DeepSeek model and web providers, read references through `resolveCredentialRef(ctx, ref)` and `credentialRefConfigured(ctx, ref)`: a mounted service is authoritative, including when it holds no value, and only its absence makes them read the launch environment, where an empty value is absent. Store failures propagate, and callers validate the value's format.
+
 ### Storing, updating, and removing records
 
 A plugin addresses each record by `<scope>/<id>` — its own registered name plus an id it chooses, such as a provider route key — and reads, modifies, or removes what it holds:

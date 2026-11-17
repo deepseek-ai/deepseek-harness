@@ -15,20 +15,20 @@
   en: 6af228b03e5e533f
   zh: 276a522af6be5d7a
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/one-module-system-one-plugin-governor:
-  en: 575aad62490f32e9
-  zh: a6c18eb63965fc1e
+  en: 5f5daec51b20db77
+  zh: e4d6f78fc1b4b835
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/combo-external-script-arrival-and-source-maps:
   en: 0a4240d88cca240a
   zh: 8f5f1527caf571cd
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/the-loading-flow-end-to-end:
-  en: dd05aa1ee608c414
-  zh: 2863ced0086e3122
+  en: 1f7db6ecfc0b0831
+  zh: f6bf37dc921a7d40
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/live-graph-reconciliation:
-  en: 37e2fa1fe5cb2b95
-  zh: 80e513db87709cb4
+  en: ab9577214d7b2f2b
+  zh: fc8f10fd8c90b34b
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/hot-reload-one-driver-plugin-self-watched-bundles:
-  en: c1fdcb3e6f074a7a
-  zh: b08c7b1ff25acb09
+  en: e6a0bee3d31cd2c6
+  zh: 7f7384c5d1a74751
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/package-ownership:
   en: 94ca0d09e6fd1e3a
   zh: d5949a2bdec795ba

@@ -1,5 +1,5 @@
-import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -152,6 +152,50 @@ async function backgroundPtcModeHarness(cwd: string): Promise<Context> {
 }
 
 describe('PTC mode typed values: keyless real-process contracts', () => {
+  it('returns formatted read content from inspect through the real outer run_code result', async () => {
+    workdir = await realpath(await mkdtemp(join(tmpdir(), 'dsh-ptc-inspect-read-')))
+    const path = join(workdir, 'a.txt')
+    await writeFile(path, 'alpha\nbeta\n')
+    ctx = await typedPtcModeHarness()
+    await ctx.plugin(ToolFs)
+
+    const formatted = `<path>${path}</path>\n<type>file</type>\n<content>\n1: alpha\n2: beta\n\n(End of file - total 2 lines)\n</content>`
+    const native = await executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('inspect-read-reference'), name: 'read',
+      arguments: { file_path: path }, signal: testToolSignal,
+    })
+    expect(native.isError).toBe(false)
+    expect(native.content).toEqual([{ type: 'text', text: formatted }])
+
+    const result = await runCode(ctx, `inspect(await tools.read({ file_path: ${JSON.stringify(path)} }));`)
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: formatted + '\n' }])
+    expect(result.value).toEqual({
+      logs: [formatted + '\n'], sandbox: { mode: 'danger-full-access', denied: false },
+    })
+  })
+
+  it.each(['renderer', 'policy'])('keeps an empty %s output silent while preserving program data', async (source) => {
+    ctx = await typedPtcModeHarness()
+    ctx.tools.register(defineTool({
+      name: 'silent_result', description: 'Return data without display text.', parameters: {},
+      output: {
+        schema: { type: 'object', properties: { answer: { type: 'number', required: true } }, additionalProperties: false },
+        render: () => source === 'renderer' ? [] : [{ type: 'text', text: 'original rendering' }],
+      },
+      execute: async () => ({ answer: 42 }),
+      ...source === 'policy' ? { finalizeContent: () => [] } : {},
+    }))
+    const result = await runCode(ctx, `
+      const value = await tools.silent_result({});
+      if (value.answer !== 42) throw new Error('program data changed');
+      inspect(value);
+    `)
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: '(run_code completed with no output)' }])
+    expect(result.value).toEqual({ logs: [], sandbox: { mode: 'danger-full-access', denied: false } })
+  })
+
   it('crosses a large intermediate value intact and exposes only typed tool failure fields', async () => {
     ctx = await typedPtcModeHarness()
     ctx.tools.register(defineTool({
@@ -305,15 +349,15 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     } as Agent
 
     const value = completion(await runCode(ctx, `
-      const listed = await tools.cordis_inspect_list({});
+      const listed = await tools.cordis_inspect({});
       const provider = listed.providers.find(item => item.id === 'Tool');
-      const inspected = await tools.cordis_inspect_query({
+      const inspected = await tools.cordis_inspect({ query: {
         platform: provider.platform, provider: provider.id, method: provider.methods[0].name,
-      });
+      } });
       inspect(JSON.stringify({ provider: provider.id, names: inspected.data.tools.map(tool => tool.name) }));
     `, testToolSignal, agent))
 
-    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect_list', 'cordis_inspect_query'] })
+    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect'] })
   })
 })
 

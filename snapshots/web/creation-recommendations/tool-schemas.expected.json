@@ -137,6 +137,45 @@
       }
     },
     {
+      "name": "cordis_inspect",
+      "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "platform": {
+                "type": "string",
+                "description": "Provider platform.",
+                "enum": [
+                  "host",
+                  "client"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "description": "Provider ID from the directory."
+              },
+              "method": {
+                "type": "string",
+                "description": "Method name from the directory."
+              },
+              "input": {
+                "description": "Arguments matching the method's input schema."
+              }
+            },
+            "required": [
+              "platform",
+              "provider",
+              "method"
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "create_goal",
       "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
       "parameters": {
@@ -312,13 +351,13 @@
     },
     {
       "name": "list_subagent_models",
-      "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.",
+      "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts.",
       "parameters": {
         "type": "object",
         "properties": {
           "provider": {
             "type": "string",
-            "description": "Registered LLM provider id."
+            "description": "Provider id from the no-argument listing."
           },
           "model": {
             "type": "string",
@@ -627,7 +666,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -649,7 +688,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Child LLM provider id; requires `model`."
+            "description": "LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. Use a provider id listed by `list_subagent_models`."
           },
           "model": {
             "type": "string",
@@ -657,7 +696,7 @@
           },
           "reasoning_effort": {
             "type": "string",
-            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use the selected model's default, even when it matches the parent or configured route."
+            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use that model's default effort."
           }
         },
         "required": [
@@ -1091,6 +1130,45 @@
         }
       },
       {
+        "name": "cordis_inspect",
+        "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "platform": {
+                  "type": "string",
+                  "description": "Provider platform.",
+                  "enum": [
+                    "host",
+                    "client"
+                  ]
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Provider ID from the directory."
+                },
+                "method": {
+                  "type": "string",
+                  "description": "Method name from the directory."
+                },
+                "input": {
+                  "description": "Arguments matching the method's input schema."
+                }
+              },
+              "required": [
+                "platform",
+                "provider",
+                "method"
+              ]
+            }
+          }
+        }
+      },
+      {
         "name": "create_goal",
         "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
         "parameters": {
@@ -1266,13 +1344,13 @@
       },
       {
         "name": "list_subagent_models",
-        "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.",
+        "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts.",
         "parameters": {
           "type": "object",
           "properties": {
             "provider": {
               "type": "string",
-              "description": "Registered LLM provider id."
+              "description": "Provider id from the no-argument listing."
             },
             "model": {
               "type": "string",
@@ -1613,7 +1691,7 @@
       },
       {
         "name": "subagent",
-        "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.",
+        "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -1635,7 +1713,7 @@
             },
             "provider": {
               "type": "string",
-              "description": "Child LLM provider id; requires `model`."
+              "description": "LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. Use a provider id listed by `list_subagent_models`."
             },
             "model": {
               "type": "string",
@@ -1643,7 +1721,7 @@
             },
             "reasoning_effort": {
               "type": "string",
-              "description": "Reasoning effort id; requires `provider` and `model`. Omit to use the selected model's default, even when it matches the parent or configured route."
+              "description": "Reasoning effort id; requires `provider` and `model`. Omit to use that model's default effort."
             }
           },
           "required": [

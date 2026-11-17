@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { DeepSeekFetchApiProvider, DeepSeekSearchApiProvider } from '@deepseek-ai/dsh-web-deepseek-api'
 import { customGuidance } from './guidance.ts'
 
 /** Real Search and Fetch API probes; the base names the deployment the key authenticates. */
 const apiKey = process.env.DEEPSEEK_API_KEY
 const baseURL = process.env.DEEPSEEK_SEARCH_API_TEST_BASE_URL ?? ''
-const auth = { sources: [{ kind: 'api-key', baseURL, key: apiKey ?? '' }] } as const
+const auth = { sources: [{
+  kind: 'api-key', baseURL,
+  key: { ref: credentialRef('DEEPSEEK_API_KEY'), configured: async () => apiKey !== undefined, resolve: async () => apiKey },
+}] } as const
 const maybe = apiKey !== undefined && apiKey.length > 0 && baseURL.length > 0 ? describe : describe.skip
 
 maybe('DeepSeek Search and Fetch real API', () => {

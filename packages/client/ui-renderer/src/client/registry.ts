@@ -97,6 +97,7 @@ interface ErasedRegisterOptions {
   /** Declared dictionary namespace (the renderer synthesizes the `t` seat from it). */
   locale?: string
   registrant?: string
+  module?: string
 }
 
 interface ErasedFactoryOptions {
@@ -115,6 +116,29 @@ interface ErasedFactoryCore { registerFactory(options: object, component: unknow
 
 /** One synchronous effect installed while an injected slot declaration is live. */
 type SlotInjectionEffect = (() => void) | Iterable<() => void, void, void>
+
+/**
+ * Name the Loader entry that owns a calling Context: the nearest fiber, walking
+ * up through nested plugins, that the Loader attached an entry to.
+ * @param ctx - the caller's Context.
+ * @returns the entry's module name, which the client module system sets to the package name.
+ */
+function entryName(ctx: Context): string | undefined {
+  // The Loader augments fibers with `entry`; this package does not depend on the Loader's types.
+  let fiber = ctx.fiber as EntryFiber
+  for (;;) {
+    if (fiber.entry !== undefined) return fiber.entry.options.name
+    const parent = fiber.parent.fiber
+    if (parent === fiber) return undefined
+    fiber = parent
+  }
+}
+
+/** The fiber members {@link entryName} reads: the Loader's entry and the parent chain ending at the root fiber. */
+interface EntryFiber {
+  readonly entry?: { readonly options: { readonly name: string } } | undefined
+  readonly parent: { readonly fiber: EntryFiber }
+}
 
 /** cordis Service layer of the slot system; see the module doc for the split with SlotCore. */
 export class SlotRegistry extends Service {
@@ -479,10 +503,12 @@ export class SlotRegistry extends Service {
     // core's shared-handle scope pinning applies to it harmlessly).
     const store = typeof options.store === 'function' ? options.store() : options.store
     const registrant = options.registrant ?? (this.ctx.fiber as { name?: string } | undefined)?.name
+    const module = entryName(this.ctx)
     const erased: ErasedRegisterOptions = {
       ...options,
       ...(store !== undefined ? { store } : {}),
       ...(registrant !== undefined ? { registrant } : {}),
+      ...(module !== undefined ? { module } : {}),
     }
     // Core write first: all load-time validation (undeclared target,
     // duplicate declaration, kind conflicts, cross-scope handle) throws

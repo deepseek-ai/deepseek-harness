@@ -58,11 +58,11 @@ kind: "package-reference"
 <a id="authentication"></a>
 ### 鉴权
 
-当发起会话最近的 `request/context` 事件指明 `deepseek-account` 提供方路由，且 `ctx.deepseekAccount` 为搜索端点解析出 token 时，搜索使用 DeepSeek 账号鉴权。账号服务仅在已登录时、且仅对部署配置的推理 origin（默认 `https://api.deepseek.com`）解析 token。这类搜索只发送 `x-dsh-auth-token`，即使配置了 API 密钥也是如此。其余所有搜索，包括没有发起会话的调用以及端点属于其他 origin 的搜索，都把 API 密钥同时作为 `x-api-key` 与 `Authorization: Bearer` 发送。账号鉴权的搜索收到 HTTP 401 时以 `WEB_PROVIDER_ERROR` 失败，附带登录指引而非端点指引，并只作废该搜索实际发送的 token：更新的登录不受影响，凭据删除失败或错误正文读取被取消既不会跳过作废，也不会替换所报告的失败。API 密钥请求的 401 与所有 HTTP 403 不影响账号登录状态。
+当发起会话最近的 `request/context` 事件指明的模型路由通过 `ctx.llm.providerCredential` 发布账号凭据（即 `deepseek-account` 路由），搜索端点与该路由的基础地址同源，且该凭据为搜索端点解析成功时，搜索使用 DeepSeek 账号鉴权。提供方只在同源时向路由索取凭据，因此为其他部署发布的账号凭据不会发往搜索端点。账号服务仅在已登录时、且仅对部署配置的推理 origin（默认 `https://api.deepseek.com`）释放凭据。这类搜索只发送该凭据的请求头 `x-dsh-auth-token`，即使配置了 API 密钥也是如此。其余所有搜索，包括没有发起会话的调用以及端点属于其他 origin 的搜索，都把 API 密钥同时作为 `x-api-key` 与 `Authorization: Bearer` 发送。账号鉴权的搜索收到 HTTP 401 时以 `WEB_PROVIDER_ERROR` 失败，附带登录指引而非端点指引，并通过凭据自身的失效操作只作废该搜索实际发送的凭据：更新的登录不受影响，凭据删除失败或错误正文读取被取消既不会跳过作废，也不会替换所报告的失败。API 密钥请求的 401 与所有 HTTP 403 不影响账号登录状态。账号退登时仍在途的账号鉴权搜索会通过凭据的 `revoked` 信号结束，并以 `WEB_PROVIDER_ERROR` 失败，附带登录指引。
 
-提供方的 `ready()` 回答模型请求将发起的搜索是否有凭据，不论模型路由：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为配置的搜索端点解析出 token，或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。它按搜索解析凭据的顺序检查，读取账号 token 或凭据存储失败时回答 false，因为搜索会在该次读取上失败，而不会尝试下一种凭据。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
+提供方的 `ready()` 回答模型请求将发起的搜索是否有凭据，不论模型路由：该请求的路由为配置的搜索端点所在 origin 发布了账号凭据且该凭据报告自身已为该端点配置，或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。它按搜索解析凭据的顺序检查；路由设置无法解析或其发布的基础地址无法解析，或读取账号凭据或凭据存储失败时回答 false，因为搜索会在那里失败，而不会尝试下一种凭据。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
 
-引用密钥使用[共享 DeepSeek 凭据函数](../../llm/llm-deepseek/README.zh.md#account-credentials)，接受与模型请求相同的首尾空白规范化和格式校验。引用密钥格式错误会在发送请求前失败；就绪判断仍只检查是否存在。
+引用密钥通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取，接受与模型请求相同的首尾空白规范化和格式校验。引用密钥格式错误会在发送请求前失败；就绪判断仍只检查是否存在。
 
 ### 搜索返回什么
 
@@ -91,7 +91,7 @@ kind: "package-reference"
 本提供方建立在两项承诺之上：
 
 - **只取结构化块。** DeepSeek 在服务端执行搜索并返回结构化的 `web_search_tool_result` 块；提供方解析这些块，绝不从模型文本中抓取 URL。严格模式下，没有此类块的响应会抛出 `WEB_PROVIDER_ERROR`，而非降级。
-- **会话凭据，逐次解析。** 提供方不新增密钥：来自账号路由会话的搜索使用该账号的 token，其余搜索复用 `DEEPSEEK_API_KEY` 引用。辅助请求端点通过 `$DEEPSEEK_SEARCH_BASE_URL` 保持独立。已挂载的凭据服务具有权威性；没有该服务时回退到启动进程的环境。按次解析意味着在 Web 的 Models 页中存储或轮换的密钥，或一次账号登录，无需重启即可用于下一次搜索。
+- **会话凭据，逐次解析。** 提供方不新增密钥：发起会话的路由为搜索端点所在 origin 发布账号凭据时，搜索使用该凭据，其余搜索复用 `DEEPSEEK_API_KEY` 引用。辅助请求端点通过 `$DEEPSEEK_SEARCH_BASE_URL` 保持独立。已挂载的凭据服务具有权威性；没有该服务时回退到启动进程的环境。按次解析意味着在 Web 的 Models 页中存储或轮换的密钥，或一次账号登录，无需重启即可用于下一次搜索。
 
 ### 源码地图
 
@@ -103,9 +103,9 @@ kind: "package-reference"
 
 ### 请求流程
 
-每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后在发起会话使用账号路由时向 `ctx.deepseekAccount` 请求 token，否则通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
+每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后在发起会话的模型路由通过 `ctx.llm.providerCredential` 为搜索端点所在 origin 发布账号凭据时向其索取该凭据，否则通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
-就绪判断捕获相同的选项，但不读取 API 密钥的值：账号路由先向 `ctx.deepseekAccount` 请求 token，再检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
+就绪判断捕获相同的选项，但不读取 API 密钥的值：路由为搜索端点所在 origin 发布账号凭据时，先询问该凭据是否已为搜索端点配置，再检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
 
 </details>
 
@@ -147,7 +147,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-通过 `dsh-tool-web`，会话模型会看到结构化搜索块中去重后的 URL、标题、日期与引用 snippet；提供方文本不会作为答案受到信任。该提供方的具体失败消息包括带有处理指引的凭据缺失消息（其中也提到 DeepSeek 账号登录）、`DeepSeek search credential resolution failed: <error>` 和 `DeepSeek search aborted`。账号鉴权的搜索收到 HTTP 401 时，会追加引导用户重新登录 DeepSeek 的指引。其他请求、HTTP、原生搜索和响应正文失败会追加已解析端点及前述条件式配置指引。错误包装属于消费方。
+通过 `dsh-tool-web`，会话模型会看到结构化搜索块中去重后的 URL、标题、日期与引用 snippet；提供方文本不会作为答案受到信任。该提供方的具体失败消息包括带有处理指引的凭据缺失消息（其中也提到 DeepSeek 账号登录）、`DeepSeek search credential resolution failed: <error>` 和 `DeepSeek search aborted`。账号鉴权的搜索收到 HTTP 401 时，会追加引导用户重新登录 DeepSeek 的指引。被账号退登结束的搜索报告 `The DeepSeek account signed out before this web search finished. Guide the user to sign in to DeepSeek again; the search endpoint does not need changing.`其他请求、HTTP、原生搜索和响应正文失败会追加已解析端点及前述条件式配置指引。错误包装属于消费方。
 
 #### Token 影响
 

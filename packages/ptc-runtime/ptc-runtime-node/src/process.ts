@@ -5,7 +5,7 @@ import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
-import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
+import type { BindingErrorConstructor, BindingInspection, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment, filterRuntimeWarnings } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
@@ -79,6 +79,7 @@ export async function runNodeMain(
     },
   }
   const images = new WeakMap<object, string>()
+  const inspections = new WeakMap<object, BindingInspection>()
   class Image {
     readonly [key: string]: PtcJsonValue
     declare readonly attachmentId: string
@@ -111,7 +112,7 @@ export async function runNodeMain(
     const evaluation = context.getStore()
     if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
   } }
-  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink)
+  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink, inspections)
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
@@ -176,7 +177,7 @@ export async function runNodeMain(
             const constructor = makeBindingErrorClass(descriptor)
             errors.set(namespace.global, { name: descriptor.name, memberNameProperty: descriptor.memberNameProperty, constructor })
           }
-          const namespaces = makeNamespaces(data, host, errorLookup, decodeImage)
+          const namespaces = makeNamespaces(data, host, errorLookup, inspections, decodeImage, image => images.has(image))
           for (const [index, namespace] of data.namespaces.entries()) {
             Object.defineProperty(evaluator.globals, namespace.global, { configurable: true, enumerable: true, value: namespaces[index] })
             if (namespace.errorClass) {

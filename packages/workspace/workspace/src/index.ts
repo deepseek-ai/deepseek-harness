@@ -201,6 +201,14 @@ export class WorkspaceRegistry extends Service {
     table: () => this.requireTable(),
     candidateMatches: (id, path) => this.sessionPaths.get(id) === path || this.missingSessionPaths.has(id),
     readSessionHeader: id => this.readSessionHeader(id),
+    sessionHeader: (id) => {
+      const header = this.headers.get(id)
+      /* v8 ignore next 3 -- every path that admits a candidate indexes its header first. */
+      if (header === undefined) {
+        throw new Error(`workspace member '${id}' has no indexed session header`)
+      }
+      return header
+    },
     rememberSessionPath: (id, path) => {
       this.sessionPaths.set(id, path)
       this.missingSessionPaths.delete(id)

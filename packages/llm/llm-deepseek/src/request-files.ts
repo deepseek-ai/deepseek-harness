@@ -1,8 +1,9 @@
 /** Shared Files resolution, bounded stale-id recovery, and normalized-image diagnostics. */
 
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type { DeepSeekFileStore, DeepSeekFileConnection, DeepSeekFilePolicy } from './file-store.ts'
+import { FILES_API_TIMEOUT, type DeepSeekFileStore, type DeepSeekFileConnection, type DeepSeekFilePolicy, type FileRequestBackoff } from './file-store.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 
 /** Position of an image occurrence in the request's conversation messages. */
@@ -94,12 +95,12 @@ function normalizedImageDiagnostic(
 export class RequestFiles {
   private used: UsedRequestFile[] = []
   private retried = false
+  private readonly backoff: FileRequestBackoff = {}
 
   constructor(
     private readonly files: DeepSeekFileStore,
     private readonly connection: DeepSeekFileConnection,
     private readonly policy: DeepSeekFilePolicy,
-    private readonly timeoutMs: number,
     private readonly signal: AbortSignal,
     private readonly activity: () => void,
   ) {}
@@ -107,24 +108,44 @@ export class RequestFiles {
   /** Reset occurrence tracking before serializing the next HTTP attempt. */
   beginAttempt(): void { this.used = [] }
 
-  /**
-   * Resolve a retained image under its own upload deadline.
-   * @param version - prepared request image.
-   * @param location - occurrence used by provider-rejection diagnostics.
-   * @returns the reusable provider id.
+  /** Resolve each distinct attachment once. A failed resolution cancels its sibling waits.
+   * @param versions - retained request images keyed by attachment id.
+   * @returns provider ids for every retained attachment.
    */
-  async resolve(version: RequestImageAttachment, location: ImageWireLocation): Promise<DeepSeekFileId> {
-    using limit = deadline(this.signal, this.timeoutMs, 'DEEPSEEK_FILES_API_TIMEOUT')
-    let resolved: Awaited<ReturnType<DeepSeekFileStore['ensureUploaded']>>
-    try {
-      resolved = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal)
-    } catch (error) {
-      if (this.signal.aborted) throw error
-      throw new FileResolutionFailure(error)
+  async resolveAll(
+    versions: ReadonlyMap<AttachmentId, RequestImageAttachment>,
+  ): Promise<Map<AttachmentId, DeepSeekFileId>> {
+    const ids = new Map<AttachmentId, DeepSeekFileId>()
+    const pending = versions.entries()
+    const batch = new AbortController()
+    const signal = AbortSignal.any([this.signal, batch.signal])
+    const worker = async () => {
+      for (const [id, version] of pending) {
+        if (signal.aborted) return
+        using limit = deadline(signal, this.policy.uploadTimeoutMs, FILES_API_TIMEOUT)
+        try {
+          const result = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal, this.backoff)
+          ids.set(id, result.record.fileId)
+        } catch (error) {
+          batch.abort(new FileResolutionFailure(error))
+          return
+        }
+        this.activity()
+      }
     }
-    this.activity()
-    this.used.push({ version, fileId: resolved.record.fileId, location })
-    return resolved.record.fileId
+    await Promise.all(Array.from({ length: Math.min(versions.size, this.policy.uploadConcurrency) }, worker))
+    this.signal.throwIfAborted()
+    batch.signal.throwIfAborted()
+    return ids
+  }
+
+  /** Record one image occurrence in wire order for provider diagnostics.
+   * @param version - prepared request image.
+   * @param fileId - resolved provider id.
+   * @param location - position in the request.
+   */
+  record(version: RequestImageAttachment, fileId: DeepSeekFileId, location: ImageWireLocation): void {
+    this.used.push({ version, fileId, location })
   }
 
   /**

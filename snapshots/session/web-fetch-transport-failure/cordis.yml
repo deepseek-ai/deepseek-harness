@@ -1,0 +1,18 @@
+# Web-fetch composition for the web-fetch-transport-failure snapshot scenario. The base bundle
+# supplies the web seam and public HTTP provider; this overlay inserts a
+# deterministic failing provider and exposes only fetch.
+- insert:
+    - id: web-fetch-transport-failure-fixture
+      name: './web-fetch-transport-failure-fixture.mjs'
+
+- id: web
+  name: '@deepseek-ai/dsh-web'
+
+- id: web-fetch-http
+  name: '@deepseek-ai/dsh-web-fetch-http'
+  disabled: true
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    search: false
