@@ -18,8 +18,8 @@ description: "workspace-write 边界跟随 Session 的工作目录而不是原�
 
 ## 迁移
 
-1. 要让 worktree Session 在 `workspace-write` 下提交，请在 `cordis.yml` 中把仓库的 Git 目录（例如 `/repo/.git`）加入 `@deepseek-ai/dsh-sandbox-policy` 的 `additionalWritableRoots`，或在 Host 插件中用 `ctx.sandboxPolicy.registerWritableRoot(session, directory)` 为单个 Session 注册。该授权也覆盖 `.git/hooks` 与 `.git/config`，只用于可信任务。没有授权时，在启用审批的环境里模型会为每条这类命令请求提权。
+1. 要让 worktree Session 在 `workspace-write` 下提交，请在 `cordis.yml` 中把仓库的 Git 目录（例如 `/repo/.git`）加入 `@deepseek-ai/dsh-sandbox-policy` 的 `additionalWritableRoots`，或在 Host 插件中用 `ctx.sandboxPolicy.registerWritableRoot(session, directory)` 为单个 Session 注册。该授权也覆盖 `.git/hooks` 与 `.git/config`，只用于可信任务。Windows 的进程忽略额外可写目录，因此该授权在 Windows 上对 `git` 不生效。没有生效的授权时，在启用审批的环境里模型会为每条这类命令请求提权。
 2. 任务在进入 worktree 后仍需写入原始项目时，用 `exit_worktree()` 或 forge 面板的“在项目中继续”离开，或让 Session 留在原始项目中；边界跟随该变更。SDK 客户端若只是为了改变相对路径的解析位置而移动目录，请改传绝对路径或 shell 的 `workdir`。
 3. 在消费 `ctx.workspaceChanges.summary` 的 Host 插件中，从 Session header 的 `cwd` 读取原始项目；`WorkspaceChangesSummary.cwd` 是所列 `path` 值相对的目录。
 4. `cordis.yml` 若用沙箱策略的 `workspaceRoot` 限定 header 没有目录的 Session，请把 `@deepseek-ai/dsh-working-directory` 的 `defaultDirectory` 设为同一目录；现在由该目录限定这些 Session。
-5. 确认：`enter_worktree` 之后，对 worktree 之外原始项目的写入被拒绝；完成第 1 步的授权后，worktree 内的 `git commit` 成功。
+5. 确认：`enter_worktree` 之后，对 worktree 之外原始项目的写入被拒绝；在 macOS 或 Linux 上完成第 1 步的授权后，worktree 内的 `git commit` 成功。
