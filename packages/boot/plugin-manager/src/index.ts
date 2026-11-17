@@ -36,7 +36,7 @@ import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan }
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { PluginManagerError, readProfileState } from './error.ts'
-import { approveBuilds, readPendingBuilds, recordPendingBuilds } from './build-approval.ts'
+import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
@@ -739,7 +739,7 @@ export class PluginManager extends TypertRemoteService {
    * @param version Exact version newer than the installed one.
    * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
    * only by a bundle `listBundles` lists with `update: 'git'`; the request id naming the progress and the target
-   * installation's logs and cancellation; and the pending build scripts the target's installation allows first.
+   * installation's logs and cancellation; and the pending build scripts to allow, saved before anything is removed.
    * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
    */
   @Remote
@@ -766,23 +766,27 @@ export class PluginManager extends TypertRemoteService {
     if ('code' in planned) return refusedBefore(planned)
     const { spec, registry, saveExact } = planned
     const { enabled } = bundle
-    // An approval no longer pending is refused before the installed version is removed.
     const approved = options?.approvedBuilds
-    if (approved !== undefined) {
-      let pending: string[]
-      try { pending = await readPendingBuilds(this.profile.dir) }
-      catch (error) { return refusedBefore({ code: 'operation-error', diagnostic: messageOf(error) }) }
-      if (approved.some(name => !pending.includes(name))) return refusedBefore({ code: 'stale-approval' })
+    // The approval is saved before anything is removed: `pnpm remove` drops the undecided entries it would decide.
+    const approve = async (): Promise<ManagementError | undefined> => {
+      if (approved === undefined) return undefined
+      try { await withFileLock(join(this.profile.dir, 'package.json'), () => approveBuilds(this.profile.dir, approved), { waitMs: this.lockWaitMs }) }
+      catch (error) { return managementError(error) }
+      return undefined
     }
     // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
     const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
       operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
-    const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
-      saveExact, enabled, expected: { name, version },
-      ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
-      ...approved === undefined ? {} : { approvedBuilds: approved },
-    }))
+    const installTarget = async (): Promise<ChangeResult> => {
+      const result = await settled('install', spec, this.installBundle(spec, {
+        saveExact, enabled, expected: { name, version },
+        ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
+      }))
+      return approved === undefined ? result : { ...result, approvedBuilds: approved }
+    }
     if (this.ownerContext.get('hmr') === undefined) {
+      const refusal = await approve()
+      if (refusal !== undefined) return refusedBefore(refusal)
       announce('installing')
       return { from, to: version, step: 'install', result: await installTarget() }
     }
@@ -797,6 +801,8 @@ export class PluginManager extends TypertRemoteService {
         },
       }
     }
+    const refusal = await approve()
+    if (refusal !== undefined) return refusedBefore(refusal)
     // The removed version is installed again where it came from, else over the configured plan, as its removal asks.
     const previousRegistry = this.installedFrom.get(name)
     announce('removing')

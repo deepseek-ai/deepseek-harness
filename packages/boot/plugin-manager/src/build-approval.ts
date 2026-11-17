@@ -82,15 +82,6 @@ export function blockedBuildNames(output: string): string[] {
     .map(name => name.trim()).filter(name => name !== '' && !/[*?]/.test(name) && !carriesCredential(name))
 }
 
-/**
- * List the `allowBuilds` keys awaiting a decision without changing the settings.
- * @param dir Current profile directory.
- * @returns Exact pending keys; wildcard rules are excluded.
- */
-export async function readPendingBuilds(dir: string): Promise<string[]> {
-  return (await readPolicy(dir)).pending
-}
-
 /** Persist approval without running scripts; the caller holds the profile manifest lock.
  * @param dir Current profile directory.
  * @param names Explicit package names from the pending build list.

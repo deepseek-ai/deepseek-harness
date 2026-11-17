@@ -360,7 +360,7 @@ Manage profile files and apply their declared reload lifecycle.
  * @param version Exact version newer than the installed one.
  * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
  * only by a bundle `listBundles` lists with `update: 'git'`; the request id naming the progress and the target
- * installation's logs and cancellation; and the pending build scripts the target's installation allows first.
+ * installation's logs and cancellation; and the pending build scripts to allow, saved before anything is removed.
  * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
  */
 @Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>

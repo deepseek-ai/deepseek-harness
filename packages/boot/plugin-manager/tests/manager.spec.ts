@@ -2458,6 +2458,8 @@ it('reports the build scripts pnpm blocked for a Git target and allows them on a
   const install = pnpm.getMockImplementation()!
   let blocked = true
   pnpm.mockImplementation(async (context, args, options) => {
+    // As pnpm does, a removal drops the entries still awaiting a decision.
+    if (args[0] === 'remove') writeFileSync(policy, readFileSync(policy, 'utf8').replace(/^ {2}\S+: set this to true or false\n/gm, ''))
     if (args[0] !== 'add' || args[1] !== GIT_B || !blocked) return install(context, args, options)
     blocked = false
     writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
@@ -2482,6 +2484,22 @@ it('reports the build scripts pnpm blocked for a Git target and allows them on a
   expect(pnpm).not.toHaveBeenCalled()
   expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
     step: 'install', result: { application: 'applied', version: '1.1.0', approvedBuilds: ['native'] },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
+})
+
+it('allows pending build scripts before installing a Git target over the running version without HMR', async () => {
+  const { manager, dir, bundle } = await fixture('startup')
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+  installedFromGit(dir)
+  const pnpm = gitPnpm(dir, bundle, { [GIT_B]: { name: 'extra', version: '1.1.0' } })
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['other'] })).toMatchObject({
+    step: 'check', result: { error: { code: 'stale-approval' } },
+  })
+  expect(pnpm).not.toHaveBeenCalled()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'install', result: { application: 'restart-required', approvedBuilds: ['native'] },
   })
   expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
 })
