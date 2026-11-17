@@ -813,6 +813,19 @@ describe('ImIntake outbound', () => {
     )
     const ownExplicit = await intake.outbound(bot, explicitReply)
     expect(ownExplicit?.thread).toEqual({ id: 'omt_1', root: 'om_root' })
+
+    // When replying with `thread: true` to an unthreaded root message creates a new platform thread,
+    // `SentPart.thread` and `SentPart.referrer` override the unthreaded quote/target defaults.
+    const createdThreadResult = await bot.send({ ...target, thread: true, referrer: { messageId: 'om_root' } }, content)
+    createdThreadResult.handle.parts[0]!.thread = { id: 'omt_created', root: 'om_root' }
+    createdThreadResult.handle.parts[0]!.referrer = { messageId: createdThreadResult.handle.parts[0]!.id, threadId: 'omt_created', rootId: 'om_root' }
+    const ownCreated = await intake.outbound(bot, createdThreadResult)
+    expect(ownCreated?.thread).toEqual({ id: 'omt_created', root: 'om_root' })
+    expect(ownCreated?.referrer).toEqual({
+      messageId: createdThreadResult.handle.parts[0]!.id,
+      threadId: 'omt_created',
+      rootId: 'om_root',
+    })
   })
 
   it('falls back to the local clock when the platform does not stamp the part', async () => {

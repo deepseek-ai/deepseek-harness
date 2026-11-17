@@ -250,12 +250,14 @@ export class ImIntake {
     const quoted = quoteNode === undefined
       ? undefined
       : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id))
-    const resolvedThread = typeof target.thread === 'string'
-      ? { id: target.thread, ...quoted?.thread?.root === undefined ? {} : { root: quoted.thread.root } }
-      : quoted?.thread === undefined
-        ? undefined
-        : { ...quoted.thread }
-    const referrer = target.referrer ?? quoted?.referrer
+    const resolvedThread = part.thread !== undefined
+      ? { id: part.thread.id, ...part.thread.root === undefined ? {} : { root: part.thread.root } }
+      : typeof target.thread === 'string'
+        ? { id: target.thread, ...quoted?.thread?.root === undefined ? {} : { root: quoted.thread.root } }
+        : quoted?.thread === undefined
+          ? undefined
+          : { ...quoted.thread }
+    const referrer = part.referrer ?? target.referrer ?? quoted?.referrer
     const time = part.time || Date.now()
     const draft: ImMessageDraft = {
       key: ImMessageKey(bot.id, part.id),
