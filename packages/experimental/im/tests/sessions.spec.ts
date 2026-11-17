@@ -1039,23 +1039,28 @@ describe('stored delivery validation', () => {
     const harness = await booted()
     const initial = await harness.host.ensure(spec())
     const reset1 = harness.host.reset(initial.key, 'first')
-    const reset2 = harness.host.reset(initial.key, 'second')
-
     const replaced1 = await reset1
     expect(replaced1).toBe(initial.sessionId)
     const afterFirst = harness.host.get(initial.key)!
     expect(afterFirst.sessionId).not.toBe(initial.sessionId)
 
-    // `admit` targets `afterFirst.sessionId` while `reset2` (started before `reset1` settled) is still pending:
-    // both must serialize on the stable `key` so `reset2` finishes advancing before `admit` inspects `hosted()`.
-    const [replaced2] = await Promise.all([
-      reset2,
-      harness.host.admit(afterFirst.sessionId, 'missing-delivery'),
-    ])
-    expect(replaced2).toBe(afterFirst.sessionId)
+    // Record a real unadmitted delivery for `afterFirst.sessionId`, then race `admit()` (via retry) with `reset2`:
+    // both serialize on the stable `key` so `reset2` discards the intent and nothing is inserted into `afterFirst`.
+    const stuck = messagesDelivery('followup', [message('race-after-first')])
+    harness.failFormat()
+    await expect(harness.host.deliver(initial.key, stuck)).rejects.toThrow(/format offline/)
+    harness.healFormat()
+
+    const reset2 = harness.host.reset(initial.key, 'second')
+    const retry = harness.host.deliver(initial.key, stuck)
+    const [reset2Result, retryResult] = await Promise.allSettled([reset2, retry])
+    expect(reset2Result).toEqual({ status: 'fulfilled', value: afterFirst.sessionId })
+    expect(retryResult.status).toBe('rejected')
+    expect((retryResult as PromiseRejectedResult).reason).toMatchObject({ code: 'unavailable' })
+    expect(await insertions(harness, afterFirst.sessionId)).toEqual([])
     const finalRecord = harness.host.get(initial.key)
     expect(finalRecord?.generation).toBe(2)
-    expect(finalRecord?.sessionId).not.toBe(replaced2)
+    expect(finalRecord?.sessionId).not.toBe(afterFirst.sessionId)
   })
 
   it('throws unavailable when a pending delivery retry is discarded by a concurrent reset', async () => {
