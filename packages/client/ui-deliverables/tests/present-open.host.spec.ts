@@ -33,7 +33,9 @@ async function fixture() {
   cleanups.push(() => ctx.fiber.dispose())
   const session: { cwd?: string } = { cwd }
   await ctx.plugin(LocalFileSystem, { cwd })
-  ctx.provide('sandboxPolicy', { workspaceRoot: cwd } as never)
+  // The workspace scope asks the policy for a live Session's root; this one applies the header directory, then the deployment root.
+  const resolvePolicy = ({ session: live }: { session: { header: { cwd?: string } } }) => ({ mode: 'read-only', workspaceRoot: live.header.cwd ?? cwd })
+  ctx.provide('sandboxPolicy', { workspaceRoot: cwd, resolve: resolvePolicy } as never)
   await ctx.plugin({
     inject: ['fs', 'sandboxPolicy'],
     apply: (scope) => {

@@ -445,13 +445,15 @@ export class WorktreeService extends Service {
   }
 
   /**
-   * The Session's policy bounded by the source checkout of a recorded worktree, with that checkout's
-   * shared Git directory derived. Removal and restoration run in the source checkout, which contains
-   * the worktree directory; the Session's own root may be that directory, removed or being removed.
+   * The policy removal and restoration run under: the Session's mode and grants, bounded by the source
+   * checkout of the recorded worktree instead of the Session's own root, which may be the worktree
+   * directory, removed or being removed. A linked source checkout's shared Git directory is granted too.
    */
   private async sourcePolicy(session: Session, repositoryRoot: string, signal: AbortSignal): Promise<SandboxExecutionPolicy> {
-    await this.ctx.sandboxPolicy.prepare({ session, root: repositoryRoot }, signal)
-    return this.ctx.sandboxPolicy.resolve({ session, root: repositoryRoot })
+    const shared = await this.ctx.sandboxPolicy.prepare({ directory: repositoryRoot }, signal)
+    const policy = this.ctx.sandboxPolicy.resolve({ session })
+    const additional = [...new Set([...policy.additionalWritableRoots ?? [], ...shared])]
+    return { ...policy, workspaceRoot: repositoryRoot, ...additional.length === 0 ? {} : { additionalWritableRoots: additional } }
   }
 
   /** Confine Git commands to the caller's sandbox policy, collecting bounded stdout. */

@@ -112,7 +112,7 @@ describe('workspace root as the write boundary', () => {
     expect(ctx.sandboxPolicy.resolve({ session })).toEqual({ mode: 'workspace-write', workspaceRoot: repo, sessionId: session.id })
   })
 
-  it('bounds a Host operation to another checkout on request and derives that checkout\'s Git administration', async () => {
+  it('derives the Git administration of a named checkout for a Host operation and leaves Session policies as they are', async () => {
     const { base, repo } = await scratch()
     const extra = join(base, 'extra')
     await mkdir(extra)
@@ -124,15 +124,12 @@ describe('workspace root as the write boundary', () => {
     const session = ctx.sessions.create(brandString<SessionId>('maintenance'), { meta: { cwd: worktree } })
     expect(await ctx.sandboxPolicy.prepare({ session })).toEqual([join(repo, '.git')])
     // The source checkout keeps its Git directory inside itself, so nothing is derived for it.
-    expect(await ctx.sandboxPolicy.prepare({ session, root: repo })).toEqual([])
-    expect(ctx.sandboxPolicy.resolve({ session, root: repo })).toEqual({
-      mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [extra], sessionId: session.id,
+    expect(await ctx.sandboxPolicy.prepare({ directory: repo })).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ directory: other })).toEqual([join(repo, '.git')])
+    expect(ctx.sandboxPolicy.resolve({ session })).toEqual({
+      mode: 'workspace-write', workspaceRoot: worktree, additionalWritableRoots: [extra, join(repo, '.git')], sessionId: session.id,
     })
-    expect(await ctx.sandboxPolicy.prepare({ session, root: other })).toEqual([join(repo, '.git')])
-    expect(ctx.sandboxPolicy.resolve({ session, root: other }).additionalWritableRoots).toEqual([extra, join(repo, '.git')])
-    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(worktree)
-    expect(() => ctx.sandboxPolicy.resolve({ session, root: 'relative' })).toThrow('absolute execution-world path')
-    await expect(ctx.sandboxPolicy.prepare({ session, root: 'relative' })).rejects.toThrow('absolute execution-world path')
+    await expect(ctx.sandboxPolicy.prepare({ directory: 'relative' })).rejects.toThrow('absolute execution-world path')
   })
 
   it('bounds a Session without a recorded directory by the directory service\'s default directory', async () => {

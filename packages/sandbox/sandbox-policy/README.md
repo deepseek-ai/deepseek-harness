@@ -78,7 +78,7 @@ This section explains policy resolution, the per-session store, and the model-vi
 
 ### Resolution precedence
 
-`resolve({ session, mode, root })` returns one complete per-call policy: an approved explicit mode outranks the session's last `sandbox/mode` event, which outranks the deployment default. The session's directory from the working-directory service supplies the boundary; without that service its header directory and then the configured root do; the derived Git administration directories of that root join the configured extra directories. A requested `root` replaces the session's root for that call, with the derivation `prepare({ session, root })` made for it: Host maintenance of a checkout the session does not work in, such as removing or restoring the session's worktree from its source repository, uses it with the session's mode and grants, and no model input reaches it. Absolute execution-world spelling is preserved. Enforcing providers canonicalize the root on their own filesystem, so remote `symlink/..` paths are never resolved on the Harness host.
+`resolve({ session, mode })` returns one complete per-call policy: an approved explicit mode outranks the session's last `sandbox/mode` event, which outranks the deployment default. The session's directory from the working-directory service supplies the boundary; without that service its header directory and then the configured root do; the derived Git administration directories of that root join the configured extra directories. `prepare({ directory })` derives the same directories for a checkout no session works in and changes no resolved policy: a Host operation that runs in that checkout, such as the worktree service removing or restoring a session's worktree from its source repository, adds the result to the policy it builds itself. Absolute execution-world spelling is preserved. Enforcing providers canonicalize the root on their own filesystem, so remote `symlink/..` paths are never resolved on the Harness host.
 
 ### The per-session store
 
@@ -94,6 +94,7 @@ The `sandbox:policy` contribution states the mode's capability-neutral file-effe
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxPolicyService`, `Config` schema, policy resolution and context contribution |
 | [`src/session-mode.ts`](src/session-mode.ts) | The `sandbox/mode` event, its fold, and the write path |
+| [`src/linked-checkout.ts`](src/linked-checkout.ts) | Reads of a linked checkout's Git administration layout through the filesystem; no service state |
 
 </details>
 

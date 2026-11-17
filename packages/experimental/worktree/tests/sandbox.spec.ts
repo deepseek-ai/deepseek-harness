@@ -137,6 +137,32 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(fetches[0]![1]).toMatchObject({ mode: 'workspace-write', workspaceRoot: linked, additionalWritableRoots: [join(clone, '.git')] })
   })
 
+  it('restores a missing worktree of a linked source checkout in a process that never worked in it', async () => {
+    root = await repository(process.cwd())
+    const linked = join(root, 'linked')
+    await git(root, 'worktree', 'add', '-b', 'linked', linked)
+    const first = await harness(linked, {}, 'workspace-write')
+    let created
+    try {
+      created = await first.worktrees.create(testAgent(first, linked), { name: 'cold' })
+    } finally {
+      await first.fiber.dispose()
+    }
+    await rm(created.path, { recursive: true, force: true })
+    // A new process: nothing is derived yet, and the Session's own root no longer exists.
+    ctx = await harness(linked, {}, 'workspace-write')
+    const agent = testAgent(ctx, linked, 'cold-resumed')
+    agent.session.append('workspace-root/change', { cwd: created.path })
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+
+    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: created.path, branchRecreated: false })
+
+    // The source checkout's shared Git directory lies outside it; the worktree service adds the derived grant.
+    expect(await git(created.path, 'branch', '--show-current')).toBe('cold')
+    expect(confine.mock.calls.every(call => call[1].workspaceRoot === linked && call[1].additionalWritableRoots?.includes(join(root!, '.git')))).toBe(true)
+  })
+
   it('restores a removed worktree under the source checkout boundary while the Session root is the removed directory', async () => {
     root = await repository(process.cwd())
     ctx = await harness(root, {}, 'workspace-write')

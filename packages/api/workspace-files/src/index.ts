@@ -62,10 +62,9 @@ export interface WorkspaceFileScope {
   /** Session identity received on the wire. */
   readonly sessionId: SessionId
   /**
-   * Session workspace root: the directory the Session works in, read from the
-   * working-directory service for a live Session and from the projection cache
-   * for a stored one; its header directory when neither is available, and
-   * the deployment fallback when the header has no directory.
+   * Session workspace root: for a live Session the root the sandbox policy
+   * bounds it by; for a stored one its directory in the projection cache, else
+   * its header directory, else the deployment fallback.
    */
   readonly workspaceRoot: string
 }
@@ -73,8 +72,8 @@ export interface WorkspaceFileScope {
 /**
  * Resolve the workspace root a Session's file views and directory listings
  * use, without loading its event body or activating an Agent.
- * @param ctx - Host context carrying the Session store and the sandbox policy fallback, and optionally persistence,
- *   the projection cache, and the working-directory service.
+ * @param ctx - Host context carrying the Session store and the sandbox policy, and optionally persistence
+ *   and the projection cache.
  * @param sessionId - Session identity received on the wire.
  * @param signal - cancellation for the persistence read of a stored Session.
  * @returns the scope, or undefined when no live or stored Session has that identity.
@@ -83,10 +82,7 @@ async function workspaceFileScopeOf(
   ctx: Context, sessionId: SessionId, signal?: AbortSignal,
 ): Promise<WorkspaceFileScope | undefined> {
   const live = ctx.get('sessions')?.get(sessionId)
-  if (live !== undefined) {
-    const root = ctx.get('workingDirectory')?.get(live) ?? live.header.cwd
-    return { sessionId, workspaceRoot: root ?? ctx.sandboxPolicy.workspaceRoot }
-  }
+  if (live !== undefined) return { sessionId, workspaceRoot: ctx.sandboxPolicy.resolve({ session: live }).workspaceRoot }
   const stored = await ctx.get('sessionPersistence')?.stat(sessionId, signal === undefined ? undefined : { signal })
   if (stored === undefined) return undefined
   const cached = ctx.get('sessionProjectionCache')?.cachedSnapshot(stored.header, ['workingDirectory'])?.values.workingDirectory
@@ -256,7 +252,7 @@ export class WorkspaceFiles extends TypertRemoteService {
 
   /**
    * Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses:
-   * a live Session's directory, else a stored Session's cached directory, else its header directory.
+   * a live Session's sandbox workspace root, else a stored Session's cached directory, else its header directory.
    * @param sessionId - Session identity received on the wire.
    * @param signal - cancellation for the persistence read of a stored Session.
    * @returns the scope, or undefined when no live or stored Session has that identity.

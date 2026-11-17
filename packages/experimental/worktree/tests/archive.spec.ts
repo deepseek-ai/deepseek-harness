@@ -131,7 +131,7 @@ describe('archive-triggered worktree cleanup', () => {
     const head = await git(f.worktree.path, 'rev-parse', 'HEAD')
     const statuses: WorktreeCleanup['status'][] = []
     f.ctx.on('worktree/cleanup', ({ cleanup }) => { statuses.push(cleanup.status) })
-    const resolve = vi.spyOn(f.ctx.sandboxPolicy, 'resolve')
+    const prepare = vi.spyOn(f.ctx.sandboxPolicy, 'prepare')
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toMatchObject({ status: 'scheduled' })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
@@ -141,8 +141,7 @@ describe('archive-triggered worktree cleanup', () => {
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
     // The creator's root is the checkout being removed; its commands are bounded by the source checkout instead.
     expect(f.ctx.workingDirectory.get(f.session)).toBe(f.worktree.path)
-    const roots = resolve.mock.calls.filter(([request]) => request?.session === f.session).map(([request]) => request?.root)
-    expect(roots).toEqual([undefined, f.root])
+    expect(prepare).toHaveBeenCalledWith({ directory: f.root }, expect.any(AbortSignal))
   })
 
   it('removes a clean checkout whose file listing exceeds maxOutputBytes', async () => {

@@ -63,11 +63,6 @@ function eligible(session: Session): string | undefined {
   return origin === 'subagent' || (delegationDepth ?? 0) > 0 ? undefined : cwd
 }
 
-/** The directory a turn starts in: the Session's directory, or the original project without the working-directory service. */
-function directoryOf(ctx: Context, session: Session, original: string): string {
-  return ctx.get('workingDirectory')?.get(session) ?? original
-}
-
 /**
  * Resolve the git executable once. On macOS the Xcode stub at `/usr/bin/git`
  * opens an installer dialog instead of running, so it counts as absent until
@@ -139,7 +134,8 @@ export function apply(ctx: Context, config: Config): void {
   const recorderFor = (session: Session, original: string): TurnRecorder => {
     let recorder = recorders.get(session)
     if (recorder === undefined) {
-      recorder = new TurnRecorder(session, () => directoryOf(ctx, session, original), {
+      // The Session's directory now; `workspace-root/change` events report later moves.
+      recorder = new TurnRecorder(session, ctx.get('workingDirectory')?.get(session) ?? original, {
         git: gitRunner(), tempRoot: tmpdir(), maxFiles: config.maxFiles,
         maxFileBytes: config.maxFileBytes, diffTimeoutMs: config.diffTimeoutMs,
         warn: (message) => { ctx.logger.warn(message) },
@@ -155,7 +151,8 @@ export function apply(ctx: Context, config: Config): void {
       if (original !== undefined) recorderFor(session, original).start(event.data.turn)
       return
     }
-    if (event.type === 'tool/result') recorders.get(session)?.observe(event)
+    if (event.type === 'workspace-root/change') recorders.get(session)?.moveTo(event.data.cwd)
+    else if (event.type === 'tool/result') recorders.get(session)?.observe(event)
     else if (event.type === 'turn/end') recorders.get(session)?.end(event.data.turn)
   })
   ctx.on('session/disposed', (session) => { void forget(session) })

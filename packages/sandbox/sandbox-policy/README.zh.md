@@ -78,7 +78,7 @@ kind: "package-reference"
 
 ### 解析优先级
 
-`resolve({ session, mode, root })` 返回一份完整的逐调用策略：已批准的显式模式优先于会话最后一条 `sandbox/mode` 事件，后者又优先于部署默认值。工作目录服务给出的会话目录提供边界；没有该服务时依次使用 header 目录和配置的根；该根推导出的 Git 管理目录与配置的额外目录合并。请求中的 `root` 在该次调用里替代会话的根，并配合为它做的推导 `prepare({ session, root })`：Host 对会话并不在其中工作的检出目录做维护时使用它，例如从源仓库移除或恢复会话的 worktree，沿用会话的模式与授权，模型输入无法触及。执行环境中的绝对路径写法保持不变。执行限制的提供方在自己的文件系统上规范化根目录，因此远端 `symlink/..` 路径绝不会在 Harness 主机上解析。
+`resolve({ session, mode })` 返回一份完整的逐调用策略：已批准的显式模式优先于会话最后一条 `sandbox/mode` 事件，后者又优先于部署默认值。工作目录服务给出的会话目录提供边界；没有该服务时依次使用 header 目录和配置的根；该根推导出的 Git 管理目录与配置的额外目录合并。`prepare({ directory })` 为没有会话在其中工作的检出目录推导同样的目录，不改变任何已解析的策略：在该检出目录中运行的 Host 操作（例如 worktree 服务从源仓库移除或恢复会话的 worktree）把结果加入它自己构造的策略。执行环境中的绝对路径写法保持不变。执行限制的提供方在自己的文件系统上规范化根目录，因此远端 `symlink/..` 路径绝不会在 Harness 主机上解析。
 
 ### 逐会话存储
 
@@ -94,6 +94,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPolicyService`、`Config` schema、策略解析与上下文贡献 |
 | [`src/session-mode.ts`](src/session-mode.ts) | `sandbox/mode` 事件、其 fold 与写入路径 |
+| [`src/linked-checkout.ts`](src/linked-checkout.ts) | 通过文件系统读取链接检出目录的 Git 管理目录布局；不含服务状态 |
 
 </details>
 

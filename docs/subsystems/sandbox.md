@@ -81,13 +81,6 @@ interface SandboxPolicyRequest {
   session?: Session
   /** Explicit approved mode override, which outranks session policy. */
   mode?: SandboxMode
-  /**
-   * Checkout that bounds this call instead of the session's workspace root: Host maintenance of a
-   * checkout the session does not work in, such as removing or restoring the session's worktree from
-   * its source repository while the session's own root is that worktree. The session's mode and
-   * registered grants still apply. Never reachable from model input.
-   */
-  root?: string
 }
 ```
 
@@ -220,12 +213,11 @@ A session's workspace root comes from the working-directory service when it is m
  * boundary, and the Git administration directories {@link prepare} derived
  * for that root join the configured extra writable directories; the
  * configured root is the fallback for agentless calls and, without the
- * working-directory service, sessions without a header directory, and a
- * requested `root` replaces the session's root for the call. Configured extra
- * roots, this Session's active registrations, and the derived Git directories
- * are snapshotted together; existing operations and processes keep their
- * policy.
- * @param request - optional session, approved mode override, and root override.
+ * working-directory service, sessions without a header directory. Configured
+ * extra roots, this Session's active registrations, and the derived Git
+ * directories are snapshotted together; existing operations and processes
+ * keep their policy.
+ * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
  * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the selected root is relative or
  *   contains a NUL byte.
@@ -254,24 +246,21 @@ registerWritableRoot(session: Session, directory: string): () => void
 overrideOf(session: Session): SandboxMode | undefined
 
 /**
- * Derive the Git administration directories of the session's workspace root
- * so the next {@link resolve} grants them: a linked checkout's `.git` file
- * names `<common>/worktrees/<name>`, whose `commondir` names the repository's
- * common directory and whose `gitdir` names the checkout's `.git` again; only
- * that layout grants the common directory, since the checkout's own `.git`
- * pointer is writable under workspace-write. Any other layout, a root without
- * `.git`, and a common directory containing the root add nothing. One
- * derivation runs per root and its result is kept once the layout was read,
- * so a pointer written later does not widen the policy until a Host operation
- * moves a Session's workspace to that root again; a derived directory that disappears is
- * derived again, and a failed read is logged once per root and retried on
- * the next call.
- * @param request - session whose workspace root is inspected, or the root {@link resolve} would select
- * for the same request.
+ * Derive the Git administration directories a linked checkout writes outside itself, as
+ * `./linked-checkout.ts` reads them. For a Session the checkout is its workspace root, and the next
+ * {@link resolve} for that Session grants the result. For a named `directory`, a Host operation that
+ * runs in a checkout no Session works in adds the result to the policy it builds; `resolve` is
+ * unaffected. One derivation runs per directory and its result is kept once the layout was read, so a
+ * pointer written later does not widen a policy until a Host operation moves a Session's workspace to
+ * that directory again; a derived directory that disappears is derived again, and a failed read is
+ * logged once per directory and retried on the next call.
+ * @param target - Session whose workspace root is inspected, or the checkout directory itself.
  * @param signal - caller cancellation, checked before and after the shared derivation.
- * @returns the derived directories outside the root, canonical in the execution world.
+ * @returns the derived directories outside the checkout, canonical in the execution world.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the directory is relative or
+ *   contains a NUL byte.
  */
-async prepare(request: Pick<SandboxPolicyRequest, 'session' | 'root'>, signal?: AbortSignal): Promise<readonly string[]>
+async prepare(target: { session: Session } | { directory: string }, signal?: AbortSignal): Promise<readonly string[]>
 ```
 
 Types: [Session](session.md)
