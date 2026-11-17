@@ -41,6 +41,7 @@ import {
   type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
+import { admitsChat } from './intake.ts'
 import { runKeyed, WriteQueue } from './serial.ts'
 import { storedChatKey, storedMessageKey, storedSessionId } from './state.ts'
 import type { ImStore } from './store.ts'
@@ -262,6 +263,10 @@ export class ImSender {
   target(chat: ImChatKey, options: Pick<ImSendOptions, 'thread' | 'quote'> = {}): Target {
     const known = this.deps.store.chat(chat)
     if (known === undefined) throw new ImError('access', `Chat ${chat} is not admitted to IM.`)
+    const source = this.config.sources.find(candidate => candidate.id === known.source)
+    if (source === undefined || !admitsChat(source, known.bot, known.ref)) {
+      throw new ImError('access', `Chat ${chat} is no longer admitted to IM.`)
+    }
     const thread = options.thread
     const referrer = this.referrerOf(chat, options.quote, thread)
     return {

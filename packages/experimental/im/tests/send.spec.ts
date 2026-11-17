@@ -130,13 +130,19 @@ async function boot(
   const stub = new StubBot(ctx)
   ctx.bots.push(stub)
   const config = Config({
-    sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], retryIntervalMs: 60_000, ...options.config,
+    sources: [
+      { id: 'team', bot: 'fake:bot', writable: true, store: 'all' },
+      { id: 'stub-team', bot: 'stub:bot', writable: true, store: 'all' },
+      { id: 'qq-team', bot: 'qq:404', writable: true, store: 'all' },
+    ],
+    retryIntervalMs: 60_000,
+    ...options.config,
   })
   const store = new ImStore(ctx, config)
   await store.start()
   await store.touchChat({ key: CHAT, bot: 'fake:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
   await store.touchChat({
-    key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team'),
+    key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('stub-team'),
   })
   const sessions = new FakeSessions()
   const sender = new ImSender(ctx, config, {
@@ -166,7 +172,10 @@ function ownDraft(key: ImMessageKey, chat: ImChatKey = CHAT): ImMessageDraft {
   return {
     key,
     chat: {
-      key: chat, bot: splitKey(chat).bot, ref: { id: splitKey(chat).id, type: 'group' }, source: ImSourceId('team'),
+      key: chat,
+      bot: splitKey(chat).bot,
+      ref: { id: splitKey(chat).id, type: 'group' },
+      source: ImSourceId(chat === STUB_CHAT ? 'stub-team' : 'team'),
     },
     sender: { id: 'bot-user', isBot: true, self: true },
     content: normalize(h.text('hello')),
@@ -459,7 +468,7 @@ describe('ImSender.send', () => {
   it('refuses a chat whose bot is not mounted', async () => {
     const { sender, store } = await boot()
     const chat = ImChatKey('qq:404', 'chat')
-    await store.touchChat({ key: chat, bot: 'qq:404', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
+    await store.touchChat({ key: chat, bot: 'qq:404', ref: { id: 'chat', type: 'group' }, source: ImSourceId('qq-team') })
     await expect(sender.send(chat, h.text('hello'))).rejects.toThrow(/No bot qq:404 is mounted/)
   })
 })
@@ -810,6 +819,24 @@ describe('ImSender referrers', () => {
     expect(result.status).toBe('confirmed')
     expect(bot.operations[0]?.target?.referrer).toEqual(REFERRER)
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'REFIDX_9' })
+  })
+
+  it('refuses to publish into a previously admitted chat after its source rule is removed or narrowed', async () => {
+    const { bot, sender, sessions } = await boot()
+    const session = sessions.add('s-revoked', [{ chat: CHAT, writable: true }])
+    await expect(sender.send(CHAT, h.text('still admitted'), { session: session.sessionId })).resolves.toMatchObject({ status: 'confirmed' })
+
+    // Narrow the source rule so CHAT is no longer admitted, then remove the source entirely.
+    sender.config.sources = Config({
+      sources: [{ id: 'team', bot: 'fake:bot', chats: ['other'], writable: true, store: 'all' }],
+    }).sources
+    await expect(sender.send(CHAT, h.text('narrowed out'), { session: session.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
+
+    sender.config.sources = []
+    await expect(sender.send(CHAT, h.text('source gone'), { session: session.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
+    expect(bot.operations).toHaveLength(1)
   })
 
   it('leaves the target without a referrer for an unknown quote, another chat, or a message without one', async () => {
