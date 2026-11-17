@@ -125,9 +125,11 @@ export class ImSender {
   private readonly attribution = new Map<ImMessageKey, SessionId>()
   /** Per-operation dispatch chain (see {@link serial}). */
   private readonly chains = new Map<string, Promise<unknown>>()
+  /** In-flight un-receipted sends awaited by {@link dispose}. */
+  private readonly inflight = new Set<Promise<unknown>>()
   /** In-flight stream receipt settlement tasks awaited by {@link dispose}. */
   private readonly settlements = new Set<Promise<void>>()
-  /** Open streams with a durable receipt; aborted on {@link dispose} so settlements cannot hang forever. */
+  /** Open streams; aborted on {@link dispose} so settlements cannot hang forever. */
   private readonly openStreams = new Set<MessageStream>()
   /** The receipt write chain. */
   private readonly writes = new WriteQueue()
@@ -143,7 +145,7 @@ export class ImSender {
 
   /** Finish the dispatches in flight and close the domain. */
   async dispose(): Promise<void> {
-    await Promise.allSettled([...this.chains.values()])
+    await Promise.allSettled([...this.chains.values(), ...this.inflight])
     await Promise.allSettled([...this.openStreams].map(stream => stream.abort({ reason: 'IM sender disposed' })))
     await Promise.allSettled([...this.settlements])
     await this.writes.drain()
@@ -172,7 +174,7 @@ export class ImSender {
     const quoted = withQuote(content, this.quoteId(chat, options.quote))
     const id = options.operationId
     if (id === undefined) {
-      const result = await this.dispatch(this.botOf(chat), target, quoted, options)
+      const result = await this.track(this.dispatch(this.botOf(chat), target, quoted, options))
       if (result.status !== 'confirmed') {
         this.ctx.logger.warn('IM publication to %s of session %s was not confirmed (%s): %s',
           chat, options.session ?? '-', result.status, result.error)
@@ -197,7 +199,9 @@ export class ImSender {
     const quoteId = this.quoteId(chat, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      return this.watched(this.quoted(bot.stream(target, options), quoteId), chat, options.session)
+      const stream = bot.stream(target, options)
+      this.openStreams.add(stream)
+      return this.watched(this.quoted(stream, quoteId), chat, options.session, stream)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
@@ -248,15 +252,26 @@ export class ImSender {
    * @param session - publishing session, for un-receipted streams whose attribution is not handled by `settlement`.
    * @returns that stream.
    */
-  private watched(stream: MessageStream, chat: ImChatKey, session?: SessionId): MessageStream {
-    void stream.done.then(
+  private watched(stream: MessageStream, chat: ImChatKey, session?: SessionId, rawStream?: MessageStream): MessageStream {
+    const done = stream.done.then(
       (result) => { this.attribute(result.handle, session) },
       (error: unknown) => {
         if (stream.handle !== undefined) this.attribute(stream.handle, session)
         this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
       },
-    )
+    ).finally(() => {
+      if (rawStream !== undefined) this.openStreams.delete(rawStream)
+      this.settlements.delete(done)
+    })
+    if (rawStream !== undefined) this.settlements.add(done)
     return stream
+  }
+
+  /** Track an un-receipted dispatch so {@link dispose} drains it before tearing down. */
+  private track<T>(work: Promise<T>): Promise<T> {
+    this.inflight.add(work)
+    void work.then(() => undefined, () => undefined).then(() => { this.inflight.delete(work) })
+    return work
   }
 
   /**

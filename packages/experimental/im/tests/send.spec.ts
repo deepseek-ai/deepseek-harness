@@ -980,6 +980,32 @@ describe('concurrent receipt capacity reservation', () => {
     await sender.dispose()
     expect(receiptsOf(pool).get('op-stream-unclosed')).toMatchObject({ status: 'uncertain' })
   })
+
+  it('drains in-flight un-receipted send() and aborts/drains un-receipted stream() on dispose', async () => {
+    const { sender, stub } = await boot()
+    let releaseSend!: () => void
+    const sendGate = new Promise<void>((resolve) => { releaseSend = resolve })
+    let sendFinished = false
+    stub.answer = async ({ target, content }) => {
+      await sendGate
+      sendFinished = true
+      return stubResult(target, content, ['m-unreceipted'])
+    }
+
+    const pendingSend = sender.send(STUB_CHAT, h.text('in flight'))
+    const openStream = await sender.stream(CHAT)
+    let disposingResolved = false
+    const disposing = sender.dispose().then(() => { disposingResolved = true })
+
+    await Promise.resolve()
+    expect(disposingResolved).toBe(false)
+
+    releaseSend()
+    await disposing
+    expect(sendFinished).toBe(true)
+    await expect(pendingSend).resolves.toMatchObject({ status: 'confirmed' })
+    await expect(openStream.done).rejects.toThrow()
+  })
 })
 
 describe('operationId', () => {
