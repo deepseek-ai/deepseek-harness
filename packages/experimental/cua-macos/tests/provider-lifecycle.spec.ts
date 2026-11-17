@@ -1290,6 +1290,33 @@ it.each([true, false])('shares the mouse control decision for a system button wi
   expect(f.ask).toHaveBeenCalledOnce()
 })
 
+it('reports a failed turn-end button release once and forgets the hold', async () => {
+  const f = await hoverFixture()
+  const failure = new Error('The release was not acknowledged')
+  native.cleanup.mockRejectedValueOnce(failure)
+  const warn = vi.spyOn(f.provider.ctx.logger, 'warn').mockImplementation(() => {})
+  onTestFinished(() => { warn.mockRestore() })
+  expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
+    direction: 'down', useSystemPointer: true })).isError).toBe(false)
+  const session = f.handle.agent.session
+  session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+  await vi.waitFor(() => {
+    expect(warn).toHaveBeenCalledWith('Could not release system mouse input at turn end: %s', failure)
+  })
+  session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+  expect(native.cleanup).toHaveBeenCalledExactlyOnceWith('releaseSystemButton', {})
+})
+
+it('leaves button release to disconnect when application access was revoked before turn end', async () => {
+  const f = await hoverFixture()
+  expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
+    direction: 'down', useSystemPointer: true })).isError).toBe(false)
+  await f.ctx.cuaAccess.revoke('a'.repeat(64) as Parameters<typeof f.ctx.cuaAccess.revoke>[0])
+  expect(native.dispose).toHaveBeenCalled()
+  f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  expect(native.cleanup).not.toHaveBeenCalled()
+})
+
 it.each([true, false])('asks before a system drag and shares the session decision with hover (allow=%s)', async (allow) => {
   const f = await hoverFixture()
   const target = { appHandle: 'app-one', windowId: '7', relative: true, fromX: 100, fromY: 200, toX: 300, toY: 400 }
