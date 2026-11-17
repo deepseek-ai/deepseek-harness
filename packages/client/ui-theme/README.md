@@ -57,7 +57,7 @@ Shared menus use `--dsw-menu-surface-fill` and blur through `MenuSurface`; platf
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Font-size controls reserve the same disclosure column for every role, so expanded code and terminal values align with the text value.
+Font-size controls align their actual content to the row’s right edge. Code and terminal rows end at the px unit without reserving space for the text row’s disclosure button.
 
 The service owns theme, font-size, and font-family state and publishes snapshots. The ui-layout presenter applies those snapshots, and the token sheets own the color and conversation text scales.
 

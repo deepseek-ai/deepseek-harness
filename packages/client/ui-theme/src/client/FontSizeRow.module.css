@@ -52,8 +52,7 @@
 
 /* Standard-size stepper with an always-visible arrow column and an external unit label. */
 .control {
-  display: inline-grid;
-  grid-template-columns: 72px max-content 24px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
