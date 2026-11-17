@@ -76,37 +76,46 @@ export interface LarkUploadExtra {
 }
 
 /** MIME types of the file route that have their own `file_type`. */
-const DOCUMENT_MIME: Readonly<Record<string, LarkFileType>> = {
-  'application/pdf': 'pdf',
-  'application/msword': 'doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'doc',
-  'application/vnd.ms-excel': 'xls',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xls',
-  'application/vnd.ms-powerpoint': 'ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'ppt',
-}
+const DOCUMENT_MIME: Readonly<Record<string, LarkFileType>> = Object.assign(
+  Object.create(null) as Record<string, LarkFileType>,
+  {
+    'application/pdf': 'pdf' as const,
+    'application/msword': 'doc' as const,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'doc' as const,
+    'application/vnd.ms-excel': 'xls' as const,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xls' as const,
+    'application/vnd.ms-powerpoint': 'ppt' as const,
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'ppt' as const,
+  },
+)
 
 /** Extensions of the file route that have their own `file_type`. */
-const DOCUMENT_EXTENSION: Readonly<Record<string, LarkFileType>> = {
-  pdf: 'pdf',
-  doc: 'doc',
-  docx: 'doc',
-  xls: 'xls',
-  xlsx: 'xls',
-  ppt: 'ppt',
-  pptx: 'ppt',
-}
+const DOCUMENT_EXTENSION: Readonly<Record<string, LarkFileType>> = Object.assign(
+  Object.create(null) as Record<string, LarkFileType>,
+  {
+    pdf: 'pdf' as const,
+    doc: 'doc' as const,
+    docx: 'doc' as const,
+    xls: 'xls' as const,
+    xlsx: 'xls' as const,
+    ppt: 'ppt' as const,
+    pptx: 'ppt' as const,
+  },
+)
 
 /** File name an image without any name hint goes up as, per MIME type (the platform shows the name in a preview). */
-const IMAGE_NAME: Readonly<Record<string, string>> = {
-  'image/png': 'image.png',
-  'image/jpeg': 'image.jpg',
-  'image/gif': 'image.gif',
-  'image/webp': 'image.webp',
-  'image/bmp': 'image.bmp',
-  'image/tiff': 'image.tiff',
-  'image/heic': 'image.heic',
-}
+const IMAGE_NAME: Readonly<Record<string, string>> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  {
+    'image/png': 'image.png',
+    'image/jpeg': 'image.jpg',
+    'image/gif': 'image.gif',
+    'image/webp': 'image.webp',
+    'image/bmp': 'image.bmp',
+    'image/tiff': 'image.tiff',
+    'image/heic': 'image.heic',
+  },
+)
 
 /**
  * The extension of a resource, from its name hint or its source path.
