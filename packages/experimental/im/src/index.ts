@@ -5,7 +5,7 @@
  * renderers are separate plugins; the optional default dispatcher (`config.defaultDispatch`) only receives what every
  * routing listener passed on.
  */
-import { Service } from '@deepseek-ai/cordis'
+import { Service, type Context } from '@deepseek-ai/cordis'
 import { PlatformError, toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, Fragment, MembersPage, MessageStream, SendResult, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
