@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { SessionWriteLease } from '../src/lease.ts'
 import { SqliteSessionPersistence } from '../src/persistence.ts'
 import * as plugin from '../src/index.ts'
-import { sharedHistory, forkTrace, routeOf, sqliteLogs } from './fixtures/store.ts'
+import { sharedHistory, forkTrace, insertFrame, routeOf, sqliteLogs, tailSegment } from './fixtures/store.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 
 /** A coded refusal or an error class from a durable read. */
@@ -150,8 +150,8 @@ it('fails on invalid selected event data while unrelated Session bodies remain r
   const writer = await storage.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    db.exec('DROP TRIGGER events_no_update')
-    db.prepare('UPDATE events SET payload = ?').run('invalid')
+    db.exec('DROP TRIGGER frames_no_update')
+    db.prepare('UPDATE frames SET codec = 0, payload = ?').run(Buffer.from('invalid'))
   } finally { db.close() }
   await expect(storage.open(header().id, 'write')).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
   const replacement = await storage.create(header('healthy')); await replacement.flush(); await replacement.close()
@@ -205,7 +205,7 @@ it('retains a rolled-back live batch and retries it in sequence at the next chec
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'injected write failure'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'injected write failure'); END")
     await writer.receive(event(0))
     await expect(writer.flush()).rejects.toThrow('injected write failure')
     expect((await logs.stat(header().id))?.eventCount).toBe(0)
@@ -302,14 +302,14 @@ it.each([
     const reader = await logs.open(SessionId('child'), 'read')
     const db = new DatabaseSync(path)
     try {
-      db.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent; DROP TRIGGER events_no_delete;')
+      db.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent; DROP TRIGGER frames_no_delete;')
       const head = "(SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')"
       if (fault === 'missing-segment') db.exec(`DELETE FROM segments WHERE segment_uuid = ${head}`)
       if (fault === 'missing-parent') db.exec(`UPDATE segments SET parent_segment_uuid = 'absent' WHERE segment_uuid = ${head}`)
       if (fault === 'cycle') db.exec(`UPDATE segments SET parent_segment_uuid = segment_uuid, parent_end_seq = 0 WHERE segment_uuid = ${head}`)
       if (fault === 'missing-prefix') db.exec(`UPDATE segments SET parent_segment_uuid = NULL, parent_end_seq = NULL WHERE segment_uuid = ${head}`)
       if (fault === 'offset') db.exec(`UPDATE segments SET parent_end_seq = 0 WHERE segment_uuid = ${head}`)
-      if (fault === 'event-hole') db.exec(`INSERT INTO events SELECT segment_uuid, 1, payload FROM events WHERE segment_uuid = ${head}; DELETE FROM events WHERE segment_uuid = ${head} AND seq = 0`)
+      if (fault === 'event-hole') db.exec(`INSERT INTO frames SELECT segment_uuid, 1, 2, codec, payload FROM frames WHERE segment_uuid = ${head}; DELETE FROM frames WHERE segment_uuid = ${head} AND start_seq = 0`)
       if (fault === 'identity') db.prepare("UPDATE traces SET header = ? WHERE trace_uuid = 'child'").run(JSON.stringify(header('other')))
       await expectRefusal(fault === 'identity' ? logs.open(SessionId('child'), 'read') : reader.read(), error)
     } finally { db.close(); await reader.close() }
@@ -407,7 +407,7 @@ it('preserves admitted live events when the drain before an explicit append fail
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'rollback'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'rollback'); END")
     await writer.receive(event(0))
     await expect(writer.append([event(1)])).rejects.toThrow('rollback')
     db.exec('DROP TRIGGER fail_append')
@@ -445,7 +445,7 @@ it('reports background failure once, pauses the timer and retries through the ex
   const db = new DatabaseSync(path)
   vi.useFakeTimers(); onTestFinished(() => { vi.useRealTimers() })
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
     await writer.receive(event(0)); await vi.advanceTimersByTimeAsync(200)
     expect(warning).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
@@ -513,7 +513,7 @@ it('aggregates drain and release failures on close', async () => {
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_close BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'drain failed'); END")
+    db.exec("CREATE TRIGGER fail_close BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'drain failed'); END")
     await writer.receive(event(0))
     // oxlint-disable-next-line typescript/unbound-method -- Called with the lease instance as receiver.
     const original = SessionWriteLease.prototype.release
@@ -536,7 +536,7 @@ it('marks unknown when an operation failure and its rollback both fail', async (
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_operation BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'operation failed'); END")
+    db.exec("CREATE TRIGGER fail_operation BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'operation failed'); END")
     // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
     const exec = DatabaseSync.prototype.exec
     const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
@@ -555,7 +555,7 @@ it('aggregates failed writer barriers and disposal failures without losing their
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'persistent failure'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'persistent failure'); END")
     await writer.receive(event(0))
     await expect(logs.flush()).rejects.toMatchObject({ message: 'SQLite flush failed', errors: [expect.any(Error)] })
     await expect(logs.close()).rejects.toMatchObject({ message: 'SQLite disposal failed', errors: [expect.any(Error)] })
@@ -638,7 +638,7 @@ it('refuses a stale append position after the durable tail grows', async () => {
   const writer = await logs.create(header()); await writer.append([event(0)])
   const db = new DatabaseSync(path)
   try {
-    db.prepare('INSERT INTO events SELECT segment_uuid, 1, ? FROM segments').run(JSON.stringify(event(1)))
+    insertFrame(db, tailSegment(db, header().id), 1, [JSON.stringify(event(1))])
     await expect(writer.append([event(1)])).rejects.toThrow('append seq mismatch for "source": expected 2 at index 0, got 1')
   } finally { db.close(); await writer.close() }
 })
@@ -771,15 +771,14 @@ it('reports an absent Session in an existing database', async () => {
   await expect(logs.open(SessionId('absent'), 'read')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
 })
 
-it('refuses a non-text payload in a damaged durable event table', async () => {
+it('refuses a non-blob payload in a damaged durable frame table', async () => {
   const { logs, path } = await raw()
   const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(path)
   try {
-    const head = db.prepare('SELECT tail_segment_uuid FROM traces').get()?.['tail_segment_uuid']
-    if (typeof head !== 'string') throw new Error('Missing Session segment')
-    db.exec('DROP TABLE events; CREATE TABLE events (segment_uuid TEXT, seq INTEGER, payload ANY) STRICT')
-    db.prepare('INSERT INTO events VALUES (?, 0, ?)').run(head, null)
+    const head = tailSegment(db, header().id)
+    db.exec('DROP TABLE frames; CREATE TABLE frames (segment_uuid TEXT, start_seq INTEGER, end_seq INTEGER, codec INTEGER, payload ANY) STRICT')
+    db.prepare('INSERT INTO frames VALUES (?, 0, 1, 0, ?)').run(head, JSON.stringify(event(0)))
   } finally { db.close() }
   const reader = await logs.open(header().id, 'read')
   try { await expect(reader.read()).rejects.toBeInstanceOf(SessionPersistenceCorruptionError) }
@@ -791,8 +790,8 @@ it('classifies retired V4 events as unsupported when reading durable rows', asyn
   const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(path)
   try {
-    db.exec('DROP TRIGGER events_no_update')
-    db.prepare('UPDATE events SET payload = ?').run(JSON.stringify({ type: 'tool/code-dispatch', seq: 0, time: 0, data: {} }))
+    db.exec('DROP TRIGGER frames_no_update')
+    db.prepare('UPDATE frames SET codec = 0, payload = ?').run(Buffer.from(JSON.stringify({ type: 'tool/code-dispatch', seq: 0, time: 0, data: {} })))
   } finally { db.close() }
   const reader = await logs.open(header().id, 'read')
   try { await expect(reader.read()).rejects.toBeInstanceOf(SessionFormatUnsupportedError) }

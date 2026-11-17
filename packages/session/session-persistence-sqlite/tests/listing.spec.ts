@@ -87,12 +87,12 @@ it('lists 201 durable SQLite sessions with one metadata query and no event paylo
     db.exec('BEGIN IMMEDIATE')
     const segment = db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)')
     const trace = db.prepare('INSERT INTO traces VALUES (?, ?, ?, 0)')
-    const event = db.prepare('INSERT INTO events VALUES (?, 0, ?)')
+    const frame = db.prepare('INSERT INTO frames VALUES (?, 0, 1, 0, ?)')
     for (const id of ids.slice(1)) {
       const head = `fixture-${id}`
       segment.run(head)
       trace.run(id, JSON.stringify({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }), head)
-      event.run(head, 'invalid payload must remain unread')
+      frame.run(head, Buffer.from('invalid payload must remain unread'))
     }
     db.exec('COMMIT')
   } finally { db.close() }
