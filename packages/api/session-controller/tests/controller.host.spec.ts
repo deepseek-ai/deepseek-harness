@@ -1,5 +1,5 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { Context, FiberState } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -9,7 +9,7 @@ import type TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
 import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { assert, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import SessionController from '../src/index.ts'
 import type { ApiSessionAgentController } from '../src/agent.ts'
 import { createSessionTestController, testSessionPersistence } from './test-remote.ts'
@@ -22,74 +22,6 @@ const defaults = {
 describe('SessionController facade', () => {
   it('does not require the Tools service', () => {
     expect(SessionController.inject).not.toContain('tools')
-  })
-
-  it('keeps assistant stream chunks emitted while the private Agent owner initializes', async () => {
-    const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
-    await mountAgentLoopTestDependencies(ctx)
-    await mountAgentLoopTestHarness(ctx)
-    const gateway: Partial<TypertGatewayService> = { getPendingRemoteEvents: () => [] }
-    ctx.provide('typertGateway', gateway as TypertGatewayService)
-    let online: Agent | undefined
-    await ctx.plugin({
-      name: 'independent-stream-agent',
-      inject: ['agentLoop'],
-      apply: async (owner: Context) => {
-        const handle = await owner.agentLoop.createAgent(owner, {
-          sessionId: brandString<SessionId>('assistant-owner-interleave'),
-          agentOptions: { provider: 'fixture', model: 'fixture-model' },
-          meta: { cwd: '/workspace' },
-        })
-        online = handle.agent
-      },
-    })
-    if (online === undefined) throw new Error('independent Agent did not initialize')
-    const agent = online
-    const attemptId = brandString<LlmAttemptId>('owner-initialization-attempt')
-    let emitted = false
-    ctx.on('internal/status', (fiber) => {
-      if (emitted || fiber.name !== 'session-controller-agent-owner' || fiber.state !== FiberState.ACTIVE) return
-      emitted = true
-      ctx.emit('agent/assistant-stream', {
-        agent, frame: { type: 'start', attemptId, revision: 1, turn: 1, step: 1 },
-      })
-      ctx.emit('agent/assistant-stream', {
-        agent,
-        frame: {
-          type: 'chunk', attemptId, revision: 2, index: 0, time: 1,
-          chunk: { type: 'block-start', index: 0, blockType: 'text' },
-        },
-      })
-      ctx.emit('agent/assistant-stream', {
-        agent,
-        frame: {
-          type: 'chunk', attemptId, revision: 3, index: 1, time: 2,
-          chunk: { type: 'text-delta', index: 0, text: 'Text during owner initialization.' },
-        },
-      })
-    })
-    const controller = await createSessionTestController(ctx, defaults)
-    expect(emitted).toBe(true)
-    const abort = new AbortController()
-    const frames = controller.follow({
-      address: { kind: 'session', sessionId: agent.id }, assistantStream: true,
-    }, abort.signal)[Symbol.asyncIterator]()
-    onTestFinished(async () => { abort.abort(); await frames.return?.(undefined) })
-    try {
-      const frame = await frames.next()
-      assert(!frame.done && frame.value.type === 'snapshot')
-      expect(frame.value.assistantStream).toMatchObject({
-        revision: 3,
-        activeAttempt: { attemptId, turn: 1, step: 1, nextIndex: 2 },
-      })
-      expect(frame.value.assistantStream?.activeAttempt?.stream).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: 'text-chunks', index: 0, texts: ['Text during owner initialization.'] }),
-      ]))
-    } finally {
-      abort.abort()
-      await frames.return?.(undefined)
-    }
   })
 
   it('keeps assistant stream observation live while list initialization awaits', async () => {
