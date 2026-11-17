@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: d4cdae26fd91c82f
-  zh: 48e8900c12195af4
+  en: ddb1e263463e9ecd
+  zh: 1eb008f18b500dc3
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -318,20 +318,17 @@
   en: dea62d26fb18ff68
   zh: dea62d26fb18ff68
 /tool-schema-catalog/deepseek-ai-dsh-tool-todo/todo-write:
-  en: f252137b940b38d1
-  zh: 25bd9c6b1ce783d8
-/tool-schema-catalog/deepseek-ai-dsh-tool-working-directory:
-  en: 1bdc4627ca4fff29
-  zh: 1bdc4627ca4fff29
-/tool-schema-catalog/deepseek-ai-dsh-tool-working-directory/working-directory:
-  en: ac1944f6035b8b50
-  zh: f5fc005c13185211
+  en: 5cc19600afcd3e98
+  zh: 3740c4a584cde8a5
 /tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree:
   en: d5f5679abe86e316
   zh: d5f5679abe86e316
-/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/create-worktree:
-  en: 41950f76db71e7f7
-  zh: 654d2e5505ff3d3c
+/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/enter-worktree:
+  en: fb9a393b6fe3523f
+  zh: 02de205e99537ef2
+/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/exit-worktree:
+  en: d0e4d70d5b5f607e
+  zh: 17000fe015d8d76a
 /tool-schema-catalog/deepseek-ai-dsh-tool-workflow:
   en: bb38a9d29f46563c
   zh: bb38a9d29f46563c

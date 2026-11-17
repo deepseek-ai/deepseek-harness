@@ -4979,8 +4979,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s effective directory and its model-visible changes.',
-    description: 'One owner for each Session\'s effective directory and its model-visible changes.',
+    summary: 'One owner for each Session\'s directory and its model-visible changes.',
+    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4989,9 +4989,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'get(session: Session): string',
-        description: 'Read the committed directory without filesystem I/O.',
+        description: 'Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace root of everything that follows the Session\'s checkout.',
         parameters: [{ name: 'session', description: 'Session whose directory is requested.' }],
-        returns: 'its effective absolute directory.',
+        returns: 'the directory of the last Host move, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
@@ -5002,7 +5002,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Change one Session\'s directory without changing existing processes or permissions.',
+        description: 'Move one Session\'s directory to `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],
@@ -5222,8 +5222,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -5238,6 +5238,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins, never `fetch`; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
+      },
+      {
+        signature: 'async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree>',
+        description: 'Move the calling Session into an existing worktree in the pool of the checkout it works in. The directory `name` selects must lie inside that pool and be a registered worktree of the repository; neither Git state nor files change. The Session\'s log records the entry, so exit returns it to the checkout it entered from. Archiving the Session never removes a checkout it only entered.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the checkout and its pool.' }, { name: 'request', description: 'name of the worktree inside the pool.' }, { name: 'signal', description: 'cancellation of lookup and of the working-directory change.' }],
+        returns: 'the entered checkout, its branch, and the checkout the Session entered from.',
+        throws: ['{WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool, `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service\'s error when the registered directory no longer exists.'],
+      },
+      {
+        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree>',
+        description: 'Return the calling Session from the worktree it works in to the checkout it entered that worktree from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The worktree is the recorded creation or entry, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory lies in a recorded worktree.' }, { name: 'signal', description: 'cancellation of directory validation and of the working-directory change.' }],
+        returns: 'the worktree the Session left; the Session now works in its `repositoryRoot`.',
+        throws: ['{WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service\'s error when the source checkout no longer exists.'],
       },
       {
         signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
@@ -7182,6 +7196,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EnteredWorktree',
+    declaration: 'export interface EnteredWorktree {\n    path: string;\n    branch?: string;\n    repositoryRoot: string;\n}',
+  },
+  {
+    name: 'EnterWorktreeRequest',
+    declaration: 'export interface EnterWorktreeRequest {\n    name: string;\n}',
   },
   {
     name: 'EpochHeader',

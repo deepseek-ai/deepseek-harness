@@ -61,10 +61,6 @@ export function apply(ctx: Context, config: Config): void {
         required: true,
         description: 'The complete, self-contained task. Include all context the external agent needs.',
       },
-      cwd: {
-        type: 'string',
-        description: 'Initial child working directory. Relative paths use your current directory; omission inherits it.',
-      },
     },
     /* jscpd:ignore-start -- External and local delegation share the canonical
      * activation acknowledgement; their provider-selection policies remain separate. */
@@ -97,7 +93,6 @@ export function apply(ctx: Context, config: Config): void {
         ...args.name === undefined ? {} : { name: args.name },
         parent,
         prompt: [{ type: 'text', text: args.prompt }],
-        ...args.cwd === undefined ? {} : { cwd: args.cwd },
         signal: exec.signal,
         delivery: 'parent',
       })

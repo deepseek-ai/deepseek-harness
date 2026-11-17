@@ -60,7 +60,7 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 6,
+  stateVersion: 8,
   stateSchema,
   init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
@@ -96,7 +96,7 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
       return state.locked ? state : { ...state, locked: true }
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
-    case 'working-directory/change':
+    case 'workspace-root/change':
       return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:

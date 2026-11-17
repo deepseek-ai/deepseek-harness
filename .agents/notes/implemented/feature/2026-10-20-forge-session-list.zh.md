@@ -12,7 +12,7 @@ Status: implemented
 
 Session 标题旁的标签已移除，由标签页顶部一行写出分支。Session 在面板为它创建的 worktree 中工作时，会话行在时间之后显示分支图标；另有一个图标显示它最需要关注的变更请求，依次为需要处理、打开、草稿、尚未轮询、已合并、已关闭。打开中的变更请求图标保持会话行的浅色，并用圆点标出检查；已合并与已关闭的保留各自的状态颜色。会话行悬浮卡片中的部分写出 worktree 分支及其起点，再列出最多三个变更请求的状态与检查，并说明还有多少个。
 
-日志事实经投影的客户端视图进入列表，由 Session 摘要携带。`forgeWorktree` 投影还从 Session 头部与每个 `working-directory/change` 记录 Session 的目录；该目录就是所创建的 worktree 或位于其下时，视图为该 worktree，否则为 null。`forgeChangeRequests` 视图列出绑定但不含状态，与[绑定决策](2026-10-09-session-change-request-bindings.zh.md)的设想一致。投影缓存为未加载的 Session 保留这两项。
+日志事实经投影的客户端视图进入列表，由 Session 摘要携带。`forgeWorktree` 投影还从 Session 头部与每个 `workspace-root/change` 或 `working-directory/change` 记录 Session 的目录；该目录就是所创建的 worktree 或位于其下时，视图为该 worktree，否则为 null。`forgeChangeRequests` 视图列出绑定但不含状态，与[绑定决策](2026-10-09-session-change-request-bindings.zh.md)的设想一致。投影缓存为未加载的 Session 保留这两项。
 
 轮询到的状态经 `forgePanel.changeRequestStates` 流进入列表。宿主用一次运行服务所有流，最后一条流结束时运行停止。它经 `sessionQuery` 列出 Session 而不加载它们，已加载 Session 的可见绑定取自 `ctx.forgeSession`，其他 Session 的取自缓存的摘要；它跟随已加载 Session 的绑定变化，并经共享的 `ctx.forge.watch` 订阅每个已绑定的变更请求；已关闭的按空闲间隔轮询，已合并的保留订阅以接收显式刷新结果。每个变化了的状态以其 URL 的 SHA-256 摘要为键存入 `forge_panel_change_requests` 存储域，因此重启后在下次轮询之前就能显示最近已知的状态；仅在所有已列出 Session 的绑定均已知时删除无人绑定的已存状态。每条流先发送调用方可读状态的 `baseline`，之后发送 `changed` 帧，均经 Remote 访问控制过滤。
 

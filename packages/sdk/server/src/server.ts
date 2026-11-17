@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-sdk-jsonrpc-server/server
  */
 
+import type {} from '@deepseek-ai/dsh-fs'
 import type { Context } from '@deepseek-ai/cordis'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { resolve } from 'node:path'
@@ -609,6 +610,9 @@ export class HarnessSdkJsonRpcServer {
       ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
       ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
     }
+    // The header records the canonical spelling of the configured directory; see SessionHeader.cwd.
+    const fs = this.ctx.get('fs')
+    const cwd = fs === undefined ? this.cwd : fs.processPath(await fs.resolve(this.cwd))
     const handle = await (resume ? this.ctx.agents.resume({
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
@@ -628,7 +632,7 @@ export class HarnessSdkJsonRpcServer {
       },
     }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
-      meta: { cwd: this.cwd },
+      meta: { cwd },
       agentOptions,
     }))
     const rec: SessionRecord = { handle, failure: undefined }

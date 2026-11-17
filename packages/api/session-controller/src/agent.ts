@@ -1,5 +1,6 @@
 /** Agent activation, composition, and initial model route owned by API Session. */
 
+import type {} from '@deepseek-ai/dsh-fs'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
@@ -336,7 +337,7 @@ export class ApiSessionAgentController {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     if (live !== undefined) {
-      if (live.session.header.cwd !== request.cwd) {
+      if (!await this.namesDirectory(live.session.header.cwd, request.cwd)) {
         throw new ApiSessionCwdConflict(live.id, request.cwd, live.session.header.cwd)
       }
       const composition = await this.composeAgent(request.agentPreset)
@@ -355,7 +356,7 @@ export class ApiSessionAgentController {
       if (hasApiSessionSubagentOwner({ header: observed.header })) {
         throw new ApiSessionSubagentOwnership(sessionId)
       }
-      if (observed.header.cwd !== request.cwd) {
+      if (!await this.namesDirectory(observed.header.cwd, request.cwd)) {
         throw new ApiSessionCwdConflict(sessionId, request.cwd, observed.header.cwd)
       }
       reusable = request.reusable(sessionId) && !observed.events.some(event => event.type === 'turn/start')
@@ -443,11 +444,25 @@ export class ApiSessionAgentController {
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
-        cwd,
+        cwd: await this.canonical(cwd),
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       setup: composition.setup,
     })).agent
+  }
+
+  /** The canonical spelling of a project directory, which new headers record; see SessionHeader.cwd. */
+  private async canonical(cwd: string): Promise<string> {
+    const fs = this.ctx.get('fs')
+    return fs === undefined ? cwd : fs.processPath(await fs.resolve(cwd))
+  }
+
+  /**
+   * Whether a request names the directory a Session header records: by the recorded spelling, or by a
+   * spelling such as a symlink whose canonical form the header records.
+   */
+  private async namesDirectory(recorded: string | undefined, requested: string): Promise<boolean> {
+    return recorded === requested || (recorded !== undefined && recorded === await this.canonical(requested))
   }
 
   private agentOptions(): AgentOptions {

@@ -428,6 +428,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   CreateWorktreeRequest: 'worktrees.md',
   CreatedWorktree: 'worktrees.md',
   CreateWorktreePhase: 'worktrees.md',
+  EnterWorktreeRequest: 'worktrees.md',
+  EnteredWorktree: 'worktrees.md',
   RestoreWorktreeRequest: 'worktrees.md',
   WorktreeCleanup: 'worktrees.md',
   WorktreeCreation: 'worktrees.md',
