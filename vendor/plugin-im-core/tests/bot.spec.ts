@@ -334,6 +334,17 @@ describe('bot.send', () => {
     expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(3)
   })
 
+  it('preserves published:unknown when an earlier idempotent attempt was uncertain and a later attempt fails with published:no', async () => {
+    const { adapter, bot } = await setup(TestAdapter, { idempotentSend: () => true })
+    adapter.fail('sendPayload', new PlatformError('retryable', 'lost response', { published: 'unknown', retryAfterMs: 0 }), 1)
+    adapter.fail('sendPayload', new PlatformError('permission', 'rejected later', { published: 'no' }), 1)
+    await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({
+      kind: 'permission',
+      published: 'unknown',
+    })
+    expect(adapter.attempts.filter(attempt => attempt === 'sendPayload').length).toBe(2)
+  })
+
   it('rejects with PartialSendError when a later part fails', async () => {
     const { adapter, bot } = await setup()
     adapter.fail('sendPayload', new PlatformError('invalid', 'second part rejected'), 1,

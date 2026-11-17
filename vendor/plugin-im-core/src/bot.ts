@@ -814,15 +814,25 @@ export abstract class Bot<C = unknown> {
     signal?: AbortSignal,
     idempotent = true,
   ): Promise<R> {
+    let sawUnknown = false
     for (let attempt = 1; ; attempt++) {
       try {
         return await operation()
       } catch (error) {
         const classified = this.classifyError(error)
+        if (classified.published === 'unknown') sawUnknown = true
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit')
           && (classified.published === 'no' || idempotent)
           && attempt < PIPELINE_ATTEMPTS
-        if (!again) throw classified
+        if (!again) {
+          throw sawUnknown && classified.published !== 'unknown'
+            ? new PlatformError(classified.kind, classified.message, {
+                cause: classified,
+                published: 'unknown',
+                ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
+              })
+            : classified
+        }
         await this.sleep(streamBackoff(attempt, classified.retryAfterMs), signal)
       }
     }

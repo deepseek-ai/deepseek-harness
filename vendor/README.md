@@ -34,7 +34,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V95.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V96.
 
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
@@ -131,6 +131,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V92 · `plugin-im-core` observes pending body reads when `abortable` sees an already-aborted signal**: `resource.ts#abortable` attaches `void pending.catch(() => {})` before returning `Promise.reject(signal.reason)` when `signal.aborted` is already true, so an in-flight `reader.read()` or `response.arrayBuffer()` rejected by the abort cannot escape as an `unhandledRejection` (which triggers `app-boot` fail-loud exit). Covered by `vendor/plugin-im-core/tests/resource.spec.ts`.
 - **V93 · `plugin-im-core` forwards the scheduler lifecycle signal in `StreamTickContext.options`**: `Scheduler.context` merges `{ ...this.options, signal }` into `options` so `createEditDriver.open` (which passes `ctx.options` to `adapter.sendPayload`) receives the scheduler's `AbortSignal` and `stream.abort()` / `dispose()` cancels an in-flight initial publish. Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
 - **V94 · `plugin-im-core` guards `Scheduler.retry` on initial `open` with `published === 'no' || idempotentSend`**: `StreamHost.idempotentSend?(ctx)` delegates to `Adapter.idempotentSend`, and `Scheduler.retry` skips retrying `published !== 'no'` on `driver.open` unless `idempotentSend` returns `true` (while preserving any earlier `published: 'unknown'` across retries). Covered by `vendor/plugin-im-core/tests/stream.spec.ts`.
+- **V95 · `plugin-im-core` accumulates `published: 'unknown'` across `Bot.withRetry` attempts**: if any retry attempt throws `published: 'unknown'`, `Bot.withRetry` preserves `published: 'unknown'` on the final thrown `PlatformError` even if a subsequent attempt fails with `published: 'no'`, so callers never treat an uncertain send as definitely unpublished. Covered by `vendor/plugin-im-core/tests/bot.spec.ts`.
 
 ### Resolver adaptations
 
