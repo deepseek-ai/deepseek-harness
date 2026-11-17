@@ -2386,6 +2386,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'mcpAccounts',
+    summary: 'Shows each connector\'s MCP server account in the connector account registry.',
+    description: 'Shows each connector\'s MCP server account in the connector account registry.',
+    methods: [
+      {
+        signature: 'register(registration: McpAccountRegistration): () => void',
+        description: 'Show one connector\'s server account on its bundle page for as long as the returned disposer has not run. The account\'s key is `mcp:<server>`.',
+        parameters: [{ name: 'registration', description: 'the server name, the bundle package, and the connector\'s text.' }],
+        returns: 'the registry\'s idempotent disposer, which withdraws the account.',
+        throws: ['when another account already uses the server or the package.'],
+      },
+    ],
+  },
+  {
+    key: 'mcpClientHost',
+    summary: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    description: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    methods: [
+      {
+        signature: 'validate(input: ConfigInput, path: readonly string[]): Config',
+        description: 'Resolve a server configuration and refuse what an instance would refuse when it starts.',
+        parameters: [{ name: 'input', description: 'server configuration before defaults.' }, { name: 'path', description: 'configuration path naming the server; every failure message starts with it.' }],
+        returns: 'the resolved configuration.',
+        throws: ['when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization header is invalid.'],
+      },
+      {
+        signature: 'mount(config: Config): McpServerInstance',
+        description: 'Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.',
+        parameters: [{ name: 'config', description: 'resolved server configuration, usually from {@link McpClientHost.validate}.' }],
+        returns: 'the instance\'s activation and disposal.',
+      },
+      {
+        signature: 'probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>',
+        description: 'Probe a server without mounting it: resolve its templates, connect, list its tools, and close.',
+        parameters: [{ name: 'config', description: 'resolved server configuration; its startup budget does not bound the probe.' }, { name: 'options', description: 'whole-probe budget, listing caps, and cancellation signal.' }],
+        returns: 'the connect and list outcome with the cleanup result.',
+        throws: ['for invalid options, malformed templates, or a missing required credentials provider.'],
+      },
+      {
+        signature: 'authorization(config: StreamableHttpConfig & { oauth: McpOAuthConfig }, changed: () => void): McpOAuthAuthorization',
+        description: 'Create the explicit OAuth authorization owner of one server.',
+        parameters: [{ name: 'config', description: 'resolved Streamable HTTP configuration with OAuth.' }, { name: 'changed', description: 'called after each change of the owner\'s attempt view.' }],
+        returns: 'the owner; its caller retires and disposes it.',
+      },
+    ],
+  },
+  {
     key: 'mcpManager',
     summary: 'The manager service.',
     description: 'The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.',
@@ -2427,6 +2474,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'name', description: 'the configured or registered server key.' }, { name: 'options', description: 'probe budget, listing caps, and abort signal.' }],
         returns: 'the stage-classified probe outcome and independent cleanup result.',
         throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
+      },
+      {
+        signature: 'async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
+        description: 'Start explicit OAuth authorization, retaining the active grant until a successful commit.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry, including disabled entries.' }],
+        returns: 'current attempt progress; absent services, changing entries, or failed cleanup reject.',
+      },
+      {
+        signature: 'async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
+        description: 'Cancel the selected attempt and drain its work; an admitted credential commit completes.',
+        parameters: [{ name: 'name', description: 'managed entry.' }, { name: 'id', description: 'selected attempt; stale or absent attempts are ignored.' }],
+      },
+      {
+        signature: 'async signOut(name: string): Promise<void>',
+        description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
       },
     ],
   },
@@ -5614,8 +5677,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'mcp-manager/status',
     mode: 'parallel',
     signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void | Promise<void>',
-    summary: 'One managed server\'s status transitioned.',
-    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
+    summary: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view.',
+    description: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view. Emitted while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
     parameters: [{ name: 'name', description: 'the configured `servers` key or registered name.' }, { name: 'status', description: 'the status now current for that server.' }],
   },
   {
@@ -6617,6 +6680,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ComputerUseProviderName',
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
+  },
+  {
+    name: 'ConfigInput',
+    declaration: 'export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
   },
   {
     name: 'ConfigureCall',
@@ -8127,12 +8194,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type MatcherValue = string | number | boolean | null | RegExp | readonly (string | number | boolean | null)[];',
   },
   {
+    name: 'McpAccountCopy',
+    declaration: 'export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {\n    readonly title: Text;\n    readonly connect: Text;\n    readonly activation: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly detail: {\n        readonly disconnected: Text;\n        readonly waitingBrowser: Text;\n        readonly authorizing: Text;\n        readonly connecting: Text;\n        readonly connected: Text;\n        readonly rejected: Text;\n        readonly scope: Text;\n    };\n    readonly signOut: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly notice: {\n        readonly connected: Text;\n        readonly signedOut: Text;\n    };\n}',
+  },
+  {
+    name: 'McpAccountRegistration',
+    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
+  },
+  {
+    name: 'McpAuthorizationReason',
+    declaration: 'export type McpAuthorizationReason = \'missing\' | \'expired\' | \'binding\' | \'rejected\' | \'scope\';',
+  },
+  {
     name: 'McpCloseResult',
     declaration: 'export interface McpCloseResult {\n    closeConfirmed: boolean;\n    cleanupError?: string;\n}',
   },
   {
     name: 'McpConnectionStatus',
-    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'waiting-authorization\';\n    reason: McpAuthorizationReason;\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+  },
+  {
+    name: 'McpConnectionStatusHandle',
+    declaration: 'export interface McpConnectionStatusHandle {\n    current(): McpConnectionStatus;\n    closure(): McpCloseResult;\n    onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void;\n}',
   },
   {
     name: 'McpManagedServerStatus',
@@ -8140,7 +8223,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpManagedServerView',
-    declaration: 'export interface McpManagedServerView {\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+    declaration: 'export interface McpManagedServerView {\n    authorization?: McpOAuthAttemptView;\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+  },
+  {
+    name: 'McpOAuthAttemptId',
+    declaration: 'export type McpOAuthAttemptId = Branded<\'McpOAuthAttemptId\'>;',
+  },
+  {
+    name: 'McpOAuthAttemptView',
+    declaration: 'export interface McpOAuthAttemptView {\n    id: McpOAuthAttemptId;\n    phase: \'starting\' | \'waiting-browser\' | \'exchanging\' | \'committing\' | \'authorized\' | \'cancelled\' | \'failed\';\n    authorizationUrl?: string;\n    lastError?: string;\n}',
+  },
+  {
+    name: 'McpOAuthAuthorization',
+    declaration: 'export class McpOAuthAuthorization {\n    constructor(private readonly ctx: Context, private readonly config: StreamableHttpConfig & {\n        oauth: McpOAuthConfig;\n    }, private readonly changed: () => void);\n    current(): McpOAuthAttemptView | undefined;\n    async start(): Promise<McpOAuthAttemptView>;\n    retire(): void;\n    async cancel(id: McpOAuthAttemptId): Promise<void>;\n    async dispose(): Promise<McpCloseResult>;\n}',
+  },
+  {
+    name: 'McpOAuthConfig',
+    declaration: 'export interface McpOAuthConfig {\n    credentialKey: string;\n    clientId?: string;\n    scope?: string;\n    requestTimeoutMs: number;\n    authorizationTimeoutMs: number;\n}',
   },
   {
     name: 'McpProbeFailure',
@@ -8169,6 +8268,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'McpResourceRequest',
     declaration: 'export type McpResourceRequest = {\n    method: \'resources/list\' | \'resources/templates/list\';\n    cursor?: string;\n} | {\n    method: \'resources/read\';\n    uri: string;\n};',
+  },
+  {
+    name: 'McpServerInstance',
+    declaration: 'export interface McpServerInstance {\n    readonly ready: Promise<McpConnectionStatusHandle>;\n    dispose(): Promise<McpCloseResult | undefined>;\n}',
   },
   {
     name: 'McpServerRegistration',
@@ -8881,6 +8984,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RecommendationDetails',
     declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
+  },
+  {
+    name: 'ReconnectConfig',
+    declaration: 'export interface ReconnectConfig {\n    enabled?: boolean;\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    maxAttempts?: number;\n}',
   },
   {
     name: 'RecurringScheduleRecord',
@@ -10257,6 +10364,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StoredImageAttachment',
     declaration: 'export interface StoredImageAttachment {\n    ref: ImageAttachmentRef;\n    data: Uint8Array;\n}',
+  },
+  {
+    name: 'StreamableHttpConfig',
+    declaration: 'export interface StreamableHttpConfig {\n    oauth?: McpOAuthConfig;\n    transport: \'streamable-http\';\n    serverName: string;\n    url: string;\n    headers: Record<string, string>;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n}',
   },
   {
     name: 'StreamChunk',

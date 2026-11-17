@@ -525,6 +525,7 @@
       "@deepseek-ai/dsh-loader-smoke": ["./packages/test-support/loader-smoke/src"],
       "@deepseek-ai/dsh-lsp": ["./packages/lsp/lsp/src"],
       "@deepseek-ai/dsh-lsp-stdio": ["./packages/lsp/lsp-stdio/src"],
+      "@deepseek-ai/dsh-mcp-account": ["./packages/mcp/mcp-account/src"],
       "@deepseek-ai/dsh-mcp-client": ["./packages/mcp/mcp-client/src"],
       "@deepseek-ai/dsh-mcp-manager": ["./packages/mcp/mcp-manager/src"],
       "@deepseek-ai/dsh-mcp-resources": ["./packages/mcp/mcp-resources/src"],

@@ -9,6 +9,7 @@ import { SessionId, SessionSeq, SessionLogOffset } from '@deepseek-ai/dsh-sessio
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import * as persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as sqlitePersistence from '@deepseek-ai/dsh-session-persistence-sqlite'
+import { storedEvents, tailSegment } from '../../../session/session-persistence-sqlite/tests/fixtures/store.ts'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 async function fixture(storage: 'sqlite' | 'jsonl' = 'sqlite') {
@@ -115,11 +116,7 @@ it.each([0, 1, 2, 4])('flushes the selected prefix with initial durable count %s
   try {
     const tail = db.prepare('SELECT parent_end_seq, base_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.agent.id)
     expect(tail).toMatchObject({ parent_end_seq: prefix.length, base_seq: prefix.length })
-    const childRows = db.prepare('SELECT payload FROM events WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?) ORDER BY seq').all(child.agent.id)
-    expect(childRows.map((row) => {
-      const event: unknown = JSON.parse(String(row.payload))
-      return event
-    })).toMatchObject([
+    expect(storedEvents(db, tailSegment(db, child.agent.id))).toMatchObject([
       { type: 'session/end-seed', seq: 2, data: { inherited: true } },
     ])
     expect((await ctx.sessionPersistence.stat(parent.id))?.eventCount).toBe(6)

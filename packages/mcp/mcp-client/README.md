@@ -73,6 +73,12 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 After startup, the server's tools appear as `mcp__<serverName>__<tool>` — try a prompt that uses one. If the initial connection fails, the harness still starts but no tools from that server appear, and an error is logged. Setting `failOnStartupError: true` rejects plugin activation; [app-boot's startup policy](../../boot/app-boot/README.md) still permits an optional MCP entry to fail without aborting the harness.
 
+### Host for a server manager
+
+A plugin that manages servers at runtime, such as the [MCP manager](../mcp-manager/README.md), creates its own `McpClientHost` with `new McpClientHost(ctx)`. The host provides `ctx.mcpClientHost`, the only way such a plugin uses this package: it validates a server configuration, mounts server instances, probes servers, and creates explicit OAuth authorization owners. Instances the host mounts run below the managing plugin's fiber and end with it.
+
+`validate` resolves a server configuration through its transport's own schema and also refuses an invalid template token, reconnect policy, or OAuth beside an `Authorization` header, so each refusal names the field after the configuration path the caller passes.
+
 ### Tool naming and coexistence
 
 The model sees each tool under a stable server-qualified name: `mcp__<serverName>__<rawName>`, for example `mcp__github__create_issue` — the same naming shape Claude Code and Codex use. Names stay stable while the server keeps the same tool name, so session history and permission rules survive restarts and reloads. Two servers can both offer a tool named `search` and coexist as `mcp__github__search` and `mcp__web__search`.
@@ -104,6 +110,13 @@ Credential notifications rebuild the connection only when the resolved values ch
 
 With template expansion enabled, failure diagnostics, tool-call failures, and MCP `isError` tool-result text keep upstream messages but replace every value the instance resolved, including earlier rotations and URL-encoded forms, with `[redacted]`; the failure keeps its `name` and `code`. Successful tool results retain their content.
 
+<a id="oauth"></a>
+### OAuth
+
+Set `oauth.credentialKey` to a stable `mcp-client/<id>` record address for a Streamable HTTP entry and load a credentials provider. Declare `inject: [credentials]` on the owning plugin entry so startup waits for that provider. OAuth cannot be combined with an `Authorization` header. Connections and probes only use committed grants and never open a browser or register a client. Missing credentials, rejected tokens, or an explicit insufficient-scope response put connections in `waiting-authorization`; probes return a failed result. Its reason is `missing` without a saved grant, `expired` when the access token expired and no refresh token remains, `binding` when the grant no longer matches the resolved `url` or OAuth options, `rejected` when a server rejects the token, and `scope` when the server requires more scope. A tool call in flight when authorization is lost fails with that reason, for example `MCP OAuth requires authorization: scope`. Probes may refresh and persist expired grants. Ordinary HTTP 403 errors do not change authorization state. Diagnostics, tool-call failures, and `isError` results replace every access token the connection sent with `[redacted]`.
+
+Explicit authorization uses the [manager](../mcp-manager/README.md#oauth-authorization) with Authorization and WebServer services. `oauth.clientId` selects a pre-registered public client; omission permits dynamic registration during explicit authorization. `oauth.scope` overrides the challenge scope; dynamic registration reuse requires the same configured scope. Changing the resolved `url`, `oauth.clientId`, or `oauth.scope` makes the saved grant unusable with reason `binding`, so the entry needs explicit authorization again. `oauth.requestTimeoutMs` defaults to 10,000 ms and `oauth.authorizationTimeoutMs` to 600,000 ms. Cancellation and retries wait up to `closeTimeoutMs` for unfinished authorization cleanup. Authorization-server requests and an OAuth entry's MCP requests require HTTPS, except for loopback HTTP, and reject redirects, so `url` must name the final endpoint. The browser callback is a `webserver/request` listener that exists only during an attempt and answers before route admission, because the authorization server's redirect arrives as a cross-site navigation, which [Connection](../../client/connection/README.md) refuses for every route. The listener handles only requests whose authority and path equal the redirect URI's and passes every other request on. The callback answers with a static Chinese and English page that says whether DSH received the authorization or asks the user to retry in DSH; it never echoes callback parameters. Resource headers are excluded from authorization-server requests. A failed attempt's `lastError` is a fixed or local message, such as `MCP OAuth request failed`; when that message omits the upstream cause, the Host logs the cause as a warning with resolved template values, the authorization code, the PKCE verifier, client secrets, and issued tokens replaced by `[redacted]`. Refreshes serialize through the credential provider, preserve the grant identity, and retain the registered token endpoint authentication method; successful reauthorization replaces the identity and connection without entering `waiting-authorization`.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -126,7 +139,9 @@ This section explains the design decisions behind the bridge and points at the c
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await, host startup |
+| [`src/config.ts`](src/config.ts) | Schemas of the stdio, Streamable HTTP, and host configuration shapes, and the OAuth header rule |
+| [`src/host.ts`](src/host.ts) | The MCP client host: validation, instances below the host, probes, and authorization owners |
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/generation.ts`](src/generation.ts) | Transport ownership, cancellation, pending work, and confirmed closure |
 | [`src/credentials.ts`](src/credentials.ts) | Runtime template binding and redaction of every resolved value |
@@ -136,9 +151,12 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | Status cell keyed by Fiber, retaining its final cleanup result |
 | [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
-| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup and probe budgets |
-| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics and secret-value redaction |
-| [`src/types.ts`](src/types.ts) | Client-safe connection status and probe outcome types (`./types`) |
+| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup, probe, operation, and cleanup budgets |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics, OAuth failure classification, and secret-value redaction |
+| [`src/oauth-options.ts`](src/oauth-options.ts) | OAuth configuration schema |
+| [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | Durable grant and client records, with refresh serialized by the credential provider |
+| [`src/oauth.ts`](src/oauth.ts) | Explicit browser authorization: callback, flow, and in-flight work under one owner |
+| [`src/types.ts`](src/types.ts) | Client-safe connection status, probe outcome, and OAuth attempt types (`./types`) |
 
 The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool schema and raw-result callback to the same canonical values, errors, and durable image projection. Each callback receives the exact `ToolExecution`, including its Agent and cancellation signal; SDK spec-type validation checks its result before projection. Callers own registration, cancellation deadlines, and provider teardown. The native Cua Driver provider uses this adapter without opening an MCP transport.
 
@@ -146,11 +164,11 @@ The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool sch
 
 `apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. Disposal cancels pending reconnects, closes the negotiating transport or attached client, waits for the in-flight attempt and queued syncs to quiesce, and unregisters the current generation.
 
-A manager composing instances (such as `dsh-mcp-manager`) observes one instance through `connectionStatusOf(fiber)`. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. `probeServer(ctx, config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
+The host's `mount` resolves each instance's status handle once activation finishes. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. The host's `probe(config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
 
 The SDK receives tool-list changes through legacy notifications or a modern subscription. The supervisor queues each re-sync and republishes the connected tool count; a fetch failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation and closes the connection before applying the reconnect policy. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
 
-With `expandTemplates` enabled, failure diagnostics name the operation and keep the cause chain with every resolved value replaced by `[redacted]`. With expansion disabled, diagnostics retain the full error text.
+With `expandTemplates` or OAuth enabled, failure diagnostics name the operation and keep the cause chain with every resolved value and OAuth access token replaced by `[redacted]`. With both disabled, diagnostics retain the full error text.
 
 ### Tool execution internals
 
@@ -234,6 +252,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 - **Reconnect handles failed negotiation and transport close** — a failed initial connection or a crashed stdio child uses the configured reconnect budget. Ordinary HTTP request failures use the SDK transport's recovery; credential changes replace the connection.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Invalid protocol results or output schemas fail through the SDK** — the bridge does not accept legacy `toolResult` substitutes or bypass advertised schema validation.
+- **OAuth authorization needs a browser that reaches the Host web server directly** — the callback is that server's own origin: its bind address and port, over HTTPS when it serves TLS. A browser that reaches DSH only through a proxy or the Web app's `publicUrl` cannot finish authorization. A dynamic client registration is keyed by that callback, so a changed bind address or port, or a random port, registers a new client at the next explicit authorization; sign-out keeps the previous registration record.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.
 
 <a id="dev-note"></a>

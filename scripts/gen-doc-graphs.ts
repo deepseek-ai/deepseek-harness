@@ -772,6 +772,21 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
+    key: 'mcpClientHost',
+    pkg: 'mcp-client',
+    title: 'MCP client host for a server manager',
+    mode: 'service',
+    consumers: ['mcp-manager'],
+    note: 'The manager creates it to validate, mount, probe, and authorize servers, and reaches no other mcp-client value; its servers run below the manager.',
+  },
+  {
+    key: 'mcpAccounts',
+    pkg: 'mcp-account',
+    title: 'MCP connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Shows the OAuth server account each MCP connector plugin registers through the connector account registry; the page\'s operations run through the manager.',
+  },
+  {
     key: 'schedule',
     pkg: 'schedule',
     title: 'Host scheduled messages',

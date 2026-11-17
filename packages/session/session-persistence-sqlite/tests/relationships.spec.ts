@@ -6,21 +6,22 @@ import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { SessionId, SessionSeq, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
-import { sqliteLogs } from './fixtures/store.ts'
+import { sqliteLogs, tailSegment } from './fixtures/store.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-v4-'))
-  const path = join(root, 'sessions.sqlite'), logs = sqliteLogs(path, root), id = SessionId('v4')
+  // One event per frame lets a test rewrite a single stored event by its frame.
+  const path = join(root, 'sessions.sqlite'), logs = sqliteLogs(path, root, { frameEvents: 1 }), id = SessionId('v4')
   onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
   const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   await writer.append([0, 1].map(seq => ({ type: 'turn/start' as const, seq: SessionSeq(seq), time: 0, data: { turn: seq + 1 } })))
   await writer.close()
   const db = new DatabaseSync(path)
   onTestFinished(() => { db.close() })
-  db.exec('DROP TRIGGER events_no_update')
+  db.exec('DROP TRIGGER frames_no_update')
   const replace = (seq: number, type: string, data: object) => {
-    db.prepare('UPDATE events SET payload = ? WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?) AND seq = ?')
-      .run(JSON.stringify({ type, seq, time: 0, data }), id, seq)
+    db.prepare('UPDATE frames SET codec = 0, payload = ? WHERE segment_uuid = ? AND start_seq = ?')
+      .run(Buffer.from(JSON.stringify({ type, seq, time: 0, data })), tailSegment(db, id), seq)
   }
   replace(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
   return { logs, db, id, replace }

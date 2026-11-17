@@ -2532,7 +2532,7 @@ export interface LspLocalServerConfig {
 ## `@deepseek-ai/dsh-mcp-client`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/mcp-client/src/index.ts:140`](../packages/mcp/mcp-client/src/index.ts)
+- `source`: [`packages/mcp/mcp-client/src/index.ts:128`](../packages/mcp/mcp-client/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -2574,6 +2574,8 @@ export interface StdioConfig {
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
 export interface StreamableHttpConfig {
+  /** Optional per-entry OAuth identity; passive connections never start browser authorization. */
+  oauth?: McpOAuthConfig
   /** Selects Streamable HTTP transport. */
   transport: 'streamable-http'
   /**
@@ -2613,6 +2615,20 @@ export interface ReconnectConfig {
   /** Consecutive failed attempts per outage before giving up for good (default 10). */
   maxAttempts?: number
 }
+
+/** One server's credential identity and authorization budgets. */
+export interface McpOAuthConfig {
+  /** Stable `mcp-client/<id>` credential-record address, unique per managed entry. */
+  credentialKey: string
+  /** Pre-registered public client; omission enables explicit dynamic registration. */
+  clientId?: string
+  /** Requested scope; omission uses the server's challenge. */
+  scope?: string
+  /** Deadline for each authorization-server request, in milliseconds (default 10000). */
+  requestTimeoutMs: number
+  /** Deadline through the browser callback and token exchange, in milliseconds (default 600000). */
+  authorizationTimeoutMs: number
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-client -->
 
@@ -2622,8 +2638,8 @@ export interface ReconnectConfig {
 ## `@deepseek-ai/dsh-mcp-manager`
 
 - `inject`: `tools`
-- `refs`: [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:71`](../packages/mcp/mcp-manager/src/index.ts)
+- `refs`: [`McpOAuthConfigInput`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:75`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */
@@ -2634,11 +2650,13 @@ export interface Config {
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
- * union: {@link validateEntries} owns the per-transport field rules, and its
- * write-time refusals name the offending field where a union's shape error
+ * union: the manager's write-time validation owns the per-transport field
+ * rules, and its refusals name the offending field where a union's shape error
  * would not.
  */
 export interface McpManagedServerEntry {
+  /** Optional OAuth configuration; each entry owns a distinct stable credential key, and the MCP client host resolves the rest. */
+  oauth?: McpOAuthConfigInput
   /** Which transport the instance uses. */
   transport: 'stdio' | 'streamable-http'
   /** stdio: executable used to start the server; `''` while unset. */
@@ -2661,8 +2679,8 @@ export interface McpManagedServerEntry {
   startupTimeoutMs: number
   /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
   closeTimeoutMs?: number
-  /** Reconnect policy; the schema fills the mcp-client defaults. */
-  reconnect: ReconnectConfig
+  /** Reconnect policy; the MCP client host validates it, and omission uses the mcp-client defaults. */
+  reconnect?: ReconnectConfig
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->
@@ -3312,11 +3330,18 @@ export type JsonlCompression = 'zstd' | 'none'
 ## `@deepseek-ai/dsh-session-persistence-sqlite`
 
 - `refs`: [`JsonlConfigOptions`](#deepseek-aidsh-session-persistence-jsonl)
-- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:11`](../packages/session/session-persistence-sqlite/src/index.ts)
+- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:19`](../packages/session/session-persistence-sqlite/src/index.ts)
 
 ```ts config-catalog
-/** Storage root and JSONL settings used when importing legacy Sessions. */
-export type Config = JsonlConfigOptions
+/** Storage root, JSONL settings used when importing legacy Sessions, and the frame size for new writes. */
+export interface Config extends JsonlConfigOptions {
+  /**
+   * Maximum events stored per frame. One frame is the unit of compression and
+   * of decoding, so this bounds both the compression ratio and the cost of
+   * reading a slice; stored frames keep the size they were written with.
+   */
+  frameEvents?: number
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-sqlite -->
 
@@ -5366,6 +5391,7 @@ export interface Config {
 | `@deepseek-ai/dsh-host-plugin-inventory` | `loader` | [`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts) |
 | `@deepseek-ai/dsh-llm` | — | [`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts) |
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
+| `@deepseek-ai/dsh-mcp-account` | `mcpManager` · `connectorAccounts` | [`packages/mcp/mcp-account/src/index.ts`](../packages/mcp/mcp-account/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
 | `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |

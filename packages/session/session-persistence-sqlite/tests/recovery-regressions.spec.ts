@@ -1,4 +1,5 @@
 /** Initialization retries, automatic rollbacks, and durable parent writes. @module */
+import { randomBytes } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -76,7 +77,7 @@ it('retains retryable state after SQLite automatically rolls back an append', as
   await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER auto_rollback BEFORE INSERT ON events BEGIN SELECT RAISE(ROLLBACK, 'automatic rollback'); END")
+    db.exec("CREATE TRIGGER auto_rollback BEFORE INSERT ON frames BEGIN SELECT RAISE(ROLLBACK, 'automatic rollback'); END")
     await expect(writer.append([event(0)])).rejects.toThrow('automatic rollback')
     expect((await logs.stat(writer.id))?.eventCount).toBe(0)
     db.exec('DROP TRIGGER auto_rollback')
@@ -124,7 +125,8 @@ it('retries the same append after SQLITE_FULL automatically ends its transaction
   await writer.flush()
   const entry: SessionEvent<'user/message'> = {
     type: 'user/message', surfaceOp: 'append', seq: SessionSeq(0), time: 0,
-    data: createUserMessage({ content: [{ type: 'text', text: 'large payload '.repeat(10_000) }], source: { kind: 'user' } }),
+    // Random text stays large after frame compression, so the page cap below rejects the write.
+    data: createUserMessage({ content: [{ type: 'text', text: randomBytes(256 * 1024).toString('base64') }], source: { kind: 'user' } }),
   }
   // oxlint-disable-next-line typescript/unbound-method -- Forwarded with its database receiver.
   const exec = DatabaseSync.prototype.exec
@@ -184,6 +186,6 @@ it('retains unknown outcome when COMMIT ended the transaction before reporting f
   } finally { fault.mockRestore() }
   await expect(logs.stat(writer.id)).rejects.toMatchObject({ code: 'SESSION_STORAGE_UNKNOWN' })
   const db = new DatabaseSync(path)
-  try { expect(db.prepare('SELECT count(*) AS count FROM events').get()?.count).toBe(1) } finally { db.close() }
+  try { expect(db.prepare('SELECT count(*) AS count FROM frames').get()?.count).toBe(1) } finally { db.close() }
   await writer.close()
 })
