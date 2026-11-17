@@ -507,20 +507,25 @@ export class ImSender {
     const answered = explicit === undefined && fromQuote === undefined ? this.answeredMessage(chat, session) : undefined
     // An open chat binds the session to the whole conversation, so any of its threads is allowed.
     if (confined.length < writable.length) return answered?.thread?.id
-    const allowed = explicit !== undefined
-      ? allowedThreads.has(explicit)
-      : fromQuote !== undefined
-        ? messageInThreads(fromQuote, allowedThreads)
-        : answered !== undefined && messageInThreads(answered, allowedThreads)
-    if (!allowed) {
-      throw new ImError(
-        'access',
-        `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
-      )
+    if (explicit !== undefined) {
+      if (!allowedThreads.has(explicit)) throw this.threadAccessError(chat, session, allowedThreads)
+      return undefined
     }
-    if (explicit !== undefined) return undefined
-    if (fromQuote !== undefined) return fromQuote.thread === undefined ? splitKey(fromQuote.key).id : undefined
+    if (fromQuote !== undefined) {
+      if (!messageInThreads(fromQuote, allowedThreads)) throw this.threadAccessError(chat, session, allowedThreads)
+      return fromQuote.thread === undefined ? splitKey(fromQuote.key).id : undefined
+    }
+    if (answered === undefined || !messageInThreads(answered, allowedThreads)) {
+      throw this.threadAccessError(chat, session, allowedThreads)
+    }
     return answered.thread?.id ?? splitKey(answered.key).id
+  }
+
+  private threadAccessError(chat: ImChatKey, session: SessionId, allowedThreads: ReadonlySet<string>): ImError {
+    return new ImError(
+      'access',
+      `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
+    )
   }
 
   /**
