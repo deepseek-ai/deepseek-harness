@@ -1006,6 +1006,28 @@ describe('ConversationRoot resident composer', () => {
     }
   })
 
+  it('publishes the composer height and the scrollport height on the scrollport, and its width on the body', () => {
+    const b = mount(sessionSnapshotOf())
+    const body = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
+    const scrollport = b.view.container.querySelector('[data-conversation-scroll]') as HTMLElement
+    const seat = b.view.container.querySelector('[data-composer-seat]') as HTMLElement
+    Object.defineProperty(seat, 'offsetHeight', { value: 152, configurable: true })
+    Object.defineProperty(scrollport, 'clientHeight', { value: 480, configurable: true })
+    Object.defineProperty(scrollport, 'clientWidth', { value: 1153, configurable: true })
+    fireResize(seat)
+    expect(scrollport.style.getPropertyValue('--dsh-composer-height')).toBe('152px')
+    expect(scrollport.style.getPropertyValue('--dsh-conversation-viewport-height')).toBe('480px')
+    expect(body.style.getPropertyValue('--dsh-conversation-viewport-width')).toBe('1153px')
+    expect(scrollport.style.getPropertyValue('--dsh-conversation-viewport-width')).toBe('')
+    // A report at the same width, as when only the composer grows, leaves the body's property alone.
+    const write = vi.spyOn(body.style, 'setProperty')
+    fireResize(seat)
+    expect(write).not.toHaveBeenCalled()
+    Object.defineProperty(scrollport, 'clientWidth', { value: 993, configurable: true })
+    fireResize(seat)
+    expect(write.mock.calls).toEqual([['--dsh-conversation-viewport-width', '993px']])
+  })
+
   it('forwards wheel scrolling from a width handle to the transcript', () => {
     const b = mount(sessionSnapshotOf())
     const scrollport = b.view.container.querySelector('[data-conversation-scroll]') as HTMLElement
