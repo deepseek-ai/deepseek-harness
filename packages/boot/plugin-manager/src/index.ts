@@ -770,7 +770,13 @@ export class PluginManager extends TypertRemoteService {
     // The approval is saved before anything is removed: `pnpm remove` drops the undecided entries it would decide.
     const approve = async (): Promise<ManagementError | undefined> => {
       if (approved === undefined) return undefined
-      try { await withFileLock(join(this.profile.dir, 'package.json'), () => approveBuilds(this.profile.dir, approved), { waitMs: this.lockWaitMs }) }
+      try {
+        await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+          // A manager disposed while the update was checked writes nothing.
+          this.abort.signal.throwIfAborted()
+          await approveBuilds(this.profile.dir, approved)
+        }, { waitMs: this.lockWaitMs })
+      }
       catch (error) { return managementError(error) }
       return undefined
     }

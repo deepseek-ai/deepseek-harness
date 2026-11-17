@@ -410,6 +410,7 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput,
       title={t('updateTitle', { name: title })}
       closeLabel={t('close')}
       className={css.updateDialog as string}
+      contentClassName={css.updateContent as string}
       footer={update.phase === 'confirm' ? (
         <>
           <Button variant="outline" onClick={onClose}>{t('cancel')}</Button>

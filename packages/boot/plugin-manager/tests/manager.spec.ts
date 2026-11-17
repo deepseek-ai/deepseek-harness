@@ -2504,6 +2504,18 @@ it('allows pending build scripts before installing a Git target over the running
   expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
 })
 
+it('saves no update approval once the manager is disposed', async () => {
+  const { ctx, manager, dir } = await fixture('startup')
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+  installedFromGit(dir)
+  await [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:manager')?.fiber?.dispose()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', changed: false },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: 'set this to true or false' } })
+})
+
 it('updates a copy pnpm saved as a known host\'s shortcut to the HTTPS spec of another commit', async () => {
   const { manager, dir, bundle } = await fixture()
   const target = `git+https://github.com/o/plugins.git#${'b'.repeat(40)}&path:/packages/extra`
