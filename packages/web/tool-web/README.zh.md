@@ -33,10 +33,11 @@ kind: "package-reference"
 
 ### 最小配置
 
-加载 web 服务、至少一个后端与本包；两个工具默认都会注册。
+加载 web 服务、至少一个后端与本包；两个工具默认都会注册。下面的 DeepSeek 后端要求挂载 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md) 以取得凭据。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-web-deepseek-api'
 - name: '@deepseek-ai/dsh-tool-web'
 ```
