@@ -66,8 +66,62 @@ function smokeOptions(
     inspect: async (cwd) => {
       const report: unknown = JSON.parse(await readFile(join(cwd, 'result.json'), 'utf8'))
       console.log(JSON.stringify({ kind, phase, disposition, report }))
-      expect(report, 'the borrowed creation must reach a durable task receipt').toMatchObject({
-        launch: { mode }, outcome: { status: 'fulfilled' }, persisted: true, inboxInsertions: 1, receipt: true,
+      const taskRecord = {
+        kind: 'at', title: 'Inspect build', prompt: 'Inspect the reported build.',
+        scheduledAt: '2099-01-01T00:00:00.000Z',
+      }
+      expect(report).toMatchObject({
+        launch: { mode }, visibleAtGate: phase === 'after',
+        originalProviderUid: expect.any(Number), reservedSessionId: expect.any(String),
+        providerClosed: disposition === 'dispose', creationAttempts: 1,
+        task: { status: 'active', record: taskRecord },
+      })
+      if (disposition === 'keep') {
+        expect(report, 'the borrowed creation must reach a durable task receipt').toMatchObject({
+          launch: { mode }, outcome: { status: 'fulfilled' }, persisted: true, inboxInsertions: 1, receipt: true,
+        })
+        expect(report).toMatchObject({ liveAgent: true, userMessages: 1, receiptCount: 1 })
+        return
+      }
+      const emptyDestination = {
+        persisted: false, liveAgent: false, inboxInsertions: 0, userMessages: 0,
+        receipt: false, receiptCount: 0, logsAfter: [],
+      }
+      expect(report, 'provider withdrawal rejects creation without a successful delivery').toMatchObject({
+        ...emptyDestination,
+        outcome: {
+          status: 'rejected',
+          error: {
+            name: 'SourceError', code: 'SOURCE_DELIVERY_FAILED',
+            cause: {
+              name: 'AggregateError',
+              errors: [expect.objectContaining({
+                name: 'RemoteError', code: 'gateway/internal',
+                message: expect.stringContaining('failed to create session: Error: cannot create effect on inactive context'),
+              })],
+            },
+          },
+        },
+        task: { status: 'active', record: taskRecord, target: { kind } },
+        pendingDelivery: kind === 'new' ? { targetSessionId: expect.any(String) } : null,
+        recovery: {
+          beforeRetry: emptyDestination,
+          outcome: { status: 'fulfilled' },
+          persisted: true, liveAgent: true, inboxInsertions: 1, userMessages: 1,
+          receipt: true, receiptCount: 1, creationAttempts: 2,
+          pendingDelivery: null, replacementProviderUid: expect.any(Number),
+          userTexts: [expect.stringContaining('source_input_json: "Inspect the replacement build."')],
+          task: {
+            status: 'active', record: taskRecord,
+            target: { kind: kind === 'new_once' ? 'session' : 'new' },
+            lastDelivery: { targetSessionId: expect.any(String) },
+          },
+          fifoEdited: { title: 'Edited after failed creation' },
+          fifoDeleted: { deleted: true },
+        },
+      })
+      expect(report).toMatchObject({
+        recovery: { userTexts: [expect.not.stringContaining('Inspect the completed build.')] },
       })
     },
   } satisfies LoaderSmokeOptions
@@ -101,7 +155,7 @@ it.each(['src', 'lib'] as const)('selects %s launch and package resolution for t
 })
 
 it.each(scenarios)(
-  'delivers borrowed %s creation at %s persistence with provider %s',
+  'settles borrowed %s creation at %s persistence with provider %s',
   async (kind, phase, disposition) => {
     await runLoaderSmoke(smokeOptions([kind, phase, disposition], resolveExampleMode()))
   },
