@@ -6,7 +6,7 @@
  * failures, stream drivers); the corpus block checks the shared corpus.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -486,5 +486,21 @@ describe('testkit helpers', () => {
       .toBe('every element of the vocabulary in one message')
     const tag: Tag = 'table'
     expect(toText(normalize(minimalContent(tag, 'align')))).toContain('Header')
+  })
+
+  it('shares PlatformError class identity across built runtime and testing entrypoints', async () => {
+    const runtimeUrl = new URL('../lib/index.js', import.meta.url)
+    const testingUrl = new URL('../lib/testing.js', import.meta.url)
+    if (!existsSync(runtimeUrl) || !existsSync(testingUrl)) return
+    const runtime = await import(runtimeUrl.href) as { PlatformError: typeof PlatformError; Satori: unknown }
+    const testing = await import(testingUrl.href) as { FakeAdapter: typeof FakeAdapter }
+    const { Context } = await import('@deepseek-ai/cordis')
+    const ctx = new Context()
+    await ctx.plugin(runtime.Satori as never)
+    const err = new runtime.PlatformError('permission', 'denied', { published: 'no' })
+    const adapter = new testing.FakeAdapter(ctx, { modes: {} })
+    expect(adapter.classify(err)).toBe(err)
+    expect(adapter.classify(err)).toBeInstanceOf(runtime.PlatformError)
+    await ctx.fiber.dispose()
   })
 })
