@@ -1,10 +1,12 @@
 /** The Tencent Meeting section offers each state's next step, the guide download row, and failure guidance, in every shipped language. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
-import { expect, it } from 'vitest'
+import { rm } from 'node:fs/promises'
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import * as TencentMeeting from '../src/index.ts'
 import { en, zh, type TencentMeetingTextKey } from '../src/locales.ts'
-import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { TencentMeetingState } from '../src/types.ts'
+import { createHost, type TencentMeetingHost, type TencentMeetingPage } from './harness.ts'
 
 const OP = 'op' as ConnectorOperationId
 const LINK = 'https://meeting.tencent.com/authorize'
@@ -16,6 +18,24 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 const say = (key: TencentMeetingTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
 const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+
+let host: TencentMeetingHost
+/** What the plugin registered for the Plugins page, with the failure details the CLI account Service adds. */
+let page: TencentMeetingPage
+
+beforeAll(async () => {
+  host = await createHost()
+  await host.ctx.plugin(TencentMeeting, { binDir: host.binDir, skillsDir: host.skillsDir })
+  page = host.pages[0]!
+})
+
+afterAll(async () => {
+  await host.ctx.fiber.dispose()
+  await rm(host.binDir, { recursive: true, force: true })
+  await rm(host.skillsDir, { recursive: true, force: true })
+})
+
+const presentAccount = (view: TencentMeetingState): ConnectorAccountDisplay => page.present(view)
 
 const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out', skills: 'installed' } }
 const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户', skills: 'installed' } }
@@ -90,12 +110,12 @@ it('reports a guide that is downloading, and retries a failed download by checki
 })
 
 it('names the section, its activation prompt, and the notices of signing in and out', () => {
-  expect(COPY).toMatchObject({
+  expect(page.copy).toMatchObject({
     title: say('section.title'), hint: say('hint'),
     activation: { title: say('activation.title'), body: say('activation.body'), connect: say('action.connect') },
   })
-  expect(OPERATIONS).toMatchObject([
+  expect(page.operations).toMatchObject([
     { kind: 'check' }, { kind: 'sign-in', notice: say('notice.connected') }, { kind: 'sign-out', notice: say('notice.signed-out') },
   ])
-  expect(OPERATIONS[0]).not.toHaveProperty('notice')
+  expect(page.operations[0]).not.toHaveProperty('notice')
 })

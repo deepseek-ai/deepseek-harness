@@ -63,12 +63,9 @@ A check runs `auth status`, which in tmeet 1.0.18 prints plain text and exits wi
 | Field | Default | Meaning |
 |---|---|---|
 | `binDir` | unset, which runs the installed `@tencentcloud/tmeet` executable for this platform | Absolute directory containing an executable `tmeet`, `tmeet.exe` on Windows |
-| `commandTimeoutMs` | `30000` | Deadline for one account check or sign-out, including executable lookup |
 | `skillsDir` | none | Directory holding the files of `skills/tmeet-skill/` at their repository paths; when set, the guide is not downloaded |
-| `skillsUrls` | `['https://codeload.github.com']` | Archive download prefixes tried in order |
-| `skillsTimeoutMs` | `120000` | How long one prefix may take to deliver the whole archive |
 
-Sign-in waits up to 10 minutes for the user, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits. tmeet itself stops waiting for authorization after 5 minutes.
+An account check or sign-out gets the `commandTimeoutMs` of the [`cli-account` row](../cli-account/README.md#use-this-package), 30 seconds by default. Sign-in waits up to 10 minutes for the user, and each command keeps at most 1 MiB of stdout; the CLI account Service fixes both limits. tmeet itself stops waiting for authorization after 5 minutes. The guide is downloaded from the `skillsUrls` of the [`upstream-skills` row](../upstream-skills/README.md#use-this-package), each within its `skillsTimeoutMs`.
 
 The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-tencent-meeting) is the exhaustive source of supported fields.
 
@@ -80,9 +77,9 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-te
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `tencent-meeting` row after the profile's other layers, and the Plugins page keys the account section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It resolves the `tmeet` executable, gives its path to the model in runtime context, and registers the `tencent-meeting` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. `@tencentcloud/tmeet` ships one executable per platform under `dist/`, each named for its platform, and its `bin` is a Node launcher. [`src/directory.ts`](src/directory.ts) therefore picks the executable for `process.platform` and `process.arch` with the same names the launcher uses, and both the runtime context and the plugin's own commands use that path. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the tmeet commands, reads the authorization link from the output lines of `auth login`, and parses the `auth status` text. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `tencent-meeting` row after the profile's other layers, and the Plugins page keys the account section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It resolves the `tmeet` executable, registers the `tencent-meeting` skill with `ctx.upstreamSkills` under the pin in [`src/skills.ts`](src/skills.ts), and registers that path and the account with `ctx.cliAccounts`. The account view carries the download state, and each check restarts a failed download without waiting for it. `@tencentcloud/tmeet` ships one executable per platform under `dist/`, each named for its platform, and its `bin` is a Node launcher. [`src/directory.ts`](src/directory.ts) therefore picks the executable for `process.platform` and `process.arch` with the same names the launcher uses, and both the runtime context and the plugin's own commands use that path. The [CLI account Service](../cli-account/README.md) gives the model that path in runtime context, runs each command by the same path, runs one operation at a time, and reports a failed command by its exit code. [`src/account.ts`](src/account.ts) carries out each operation with the tmeet commands, reads the authorization link from the output lines of `auth login`, and parses the `auth status` text. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
-[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guide, and how to open it. Upstream publishes the guide only in its repository and not in the npm package, so the library downloads it; it is a set of files under the skill's base directory, not a separate skill. The pin excludes `scripts/agent_init.py`, which records the calling agent and model in the CLI configuration for upstream telemetry. Where the DSH guidance and the guide disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `tmeet` instead of installing one, skips `agent_init.py`, and sends sign-in to the plugin page. References are ordinary files in the guide's directory.
+[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guide, and how to open it. Upstream publishes the guide only in its repository and not in the npm package, so the [upstream skills Service](../upstream-skills/README.md) downloads it; it is a set of files under the skill's base directory, not a separate skill. The pin excludes `scripts/agent_init.py`, which records the calling agent and model in the CLI configuration for upstream telemetry. Where the DSH guidance and the guide disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `tmeet` instead of installing one, skips `agent_init.py`, and sends sign-in to the plugin page. References are ordinary files in the guide's directory.
 
 </details>
 
@@ -92,7 +89,8 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-te
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
-- [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
+- [CLI account Service](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
+- [Upstream skills Service](../upstream-skills/README.md) — download, verification, and publication of the guide.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry and the Plugins page section that drive the account operations.
 
@@ -133,7 +131,7 @@ Loading appends a tool result and does not rewrite earlier context.
 
 #### What the model sees
 
-While the row is loaded, the [CLI account library](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of the executable: `tmeet` in `binDir`, or by default the installed `@tencentcloud/tmeet` executable for this platform, such as `dist/tmeet-macOS-AppleSilicon`.
+While the row is loaded, the [CLI account Service](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of the executable: `tmeet` in `binDir`, or by default the installed `@tencentcloud/tmeet` executable for this platform, such as `dist/tmeet-macOS-AppleSilicon`.
 
 ##### Runtime-context entry
 

@@ -1,36 +1,35 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
-import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import type { Context } from '@deepseek-ai/cordis'
+import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
+import { executableFileName } from '../src/directory.ts'
 import * as TencentMeeting from '../src/index.ts'
-import { COPY, OPERATIONS, presentAccount, TENCENT_MEETING_PACKAGE } from '../src/presentation.ts'
-import type { TencentMeetingState } from '../src/types.ts'
-import { createBinDir, ScriptedSubprocess } from './harness.ts'
+import { TENCENT_MEETING_PACKAGE } from '../src/presentation.ts'
+import { createHost, type TencentMeetingHost } from './harness.ts'
 
-const CONFIG = { commandTimeoutMs: 5_000, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 }
+describe('Config', () => {
+  it('takes the CLI directory and the guide directory, which are optional and never empty', () => {
+    expect(TencentMeeting.Config({})).toEqual({})
+    expect(TencentMeeting.Config({ binDir: '/opt/tmeet/bin', skillsDir: '/opt/tmeet/skills' })).toEqual({ binDir: '/opt/tmeet/bin', skillsDir: '/opt/tmeet/skills' })
+    expect(() => TencentMeeting.Config({ binDir: '' })).toThrow()
+    expect(() => TencentMeeting.Config({ skillsDir: '' })).toThrow()
+  })
+})
 
 describe('Tencent Meeting plugin', () => {
+  let host: TencentMeetingHost
   let ctx: Context
-  let subprocess: ScriptedSubprocess
   let binDir: string
   let skillsDir: string
 
-  beforeEach(async () => {
-    ctx = new Context()
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(SystemPrompt)
-    subprocess = ctx.subprocess as ScriptedSubprocess
-    subprocess.respond = (process) => { process.reply({ stdout: 'Not logged in. Please use \'tmeet auth login\' to authenticate.\n' }) }
-    binDir = await createBinDir()
-    skillsDir = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-skills-'))
-  })
+  /** Start the Host the plugin loads on; the upstream skills Service downloads from `skills`. */
+  async function start(skills?: Parameters<typeof createHost>[0]): Promise<void> {
+    host = await createHost(skills)
+    ;({ ctx, binDir, skillsDir } = host)
+  }
 
   afterEach(async () => {
     await ctx.fiber.dispose()
@@ -41,21 +40,9 @@ describe('Tencent Meeting plugin', () => {
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
-  /** Stand in for the connector account registry the Web app provides, and keep what the plugin registers with it. */
-  function provideRegistry() {
-    const registered: ConnectorAccountRegistration<TencentMeetingState>[] = []
-    const withdrawn = vi.fn()
-    ctx.provide('connectorAccounts', {
-      register: (registration: ConnectorAccountRegistration<TencentMeetingState>) => {
-        registered.push(registration)
-        return withdrawn
-      },
-    })
-    return { registered, withdrawn }
-  }
-
-  it('publishes one tencent-meeting entry skill whose body carries the DSH guidance', async () => {
-    await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
+  it('publishes one tencent-meeting entry skill over the configured guide, with a body that carries the DSH guidance', async () => {
+    await start()
+    await ctx.plugin(TencentMeeting, { binDir, skillsDir })
 
     const catalog = await ctx.skills.list()
     expect(catalog.map(skill => `${skill.provider}/${skill.source}/${skill.name}`)).toEqual(['tencent-meeting/bundled/tencent-meeting'])
@@ -71,9 +58,9 @@ describe('Tencent Meeting plugin', () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-home-'))
     vi.stubEnv('DSH_HOME', home)
     try {
-      const registry = provideRegistry()
-      await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
-      const account = registry.registered[0]!.source
+      await start({ skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
+      await ctx.plugin(TencentMeeting, { binDir })
+      const account = host.pages[0]!.source
       expect(account.snapshot().account.skills).toBe('downloading')
       await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') }, { timeout: 10_000 })
       expect(await ctx.skills.list()).toEqual([])
@@ -83,10 +70,13 @@ describe('Tencent Meeting plugin', () => {
   })
 
   it('gives the executable path in runtime context, and withdraws it and the skills on disposal', async () => {
-    const fiber = await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
+    await start()
+    const fiber = await ctx.plugin(TencentMeeting, { binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'tencent-meeting:cli',
-      text: cliPathContextText({ name: 'tencent-meeting:cli', product: 'Tencent Meeting', program: 'tmeet', executable: join(binDir, executableFileName('tmeet')) }, process.platform),
+      text: cliPathContextText({
+        product: 'Tencent Meeting', program: 'tmeet', executable: join(binDir, executableFileName(process.platform)),
+      }, process.platform),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 
@@ -97,16 +87,14 @@ describe('Tencent Meeting plugin', () => {
   })
 
   it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
-    const registry = provideRegistry()
-    const fiber = await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
-    expect(registry.registered).toHaveLength(1)
-    expect(registry.registered[0]).toMatchObject({
-      packageName: TENCENT_MEETING_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount,
-    })
-    expect(registry.registered[0]!.source.snapshot().account.state).toBe('unchecked')
+    await start()
+    const fiber = await ctx.plugin(TencentMeeting, { binDir, skillsDir })
+    expect(host.pages).toHaveLength(1)
+    expect(host.pages[0]).toMatchObject({ key: TENCENT_MEETING_PACKAGE, packageName: TENCENT_MEETING_PACKAGE })
+    expect(host.pages[0]!.source.snapshot().account).toEqual({ state: 'unchecked', skills: 'installed' })
 
     await fiber.dispose()
 
-    expect(registry.withdrawn).toHaveBeenCalledOnce()
+    expect(host.withdrawn).toBe(1)
   })
 })

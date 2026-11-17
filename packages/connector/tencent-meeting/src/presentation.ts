@@ -1,30 +1,44 @@
 /** The Tencent Meeting account section the Plugins page shows for each Host view. */
-import { failureDetails } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountText } from '@deepseek-ai/dsh-cli-account/types'
 import type {
   ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountNote,
   ConnectorAccountOperation,
 } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { text } from './locales.ts'
+import type { TencentMeetingTextKey } from './locales.ts'
 import type { TencentMeetingOperationKind, TencentMeetingState } from './types.ts'
+
+type Text = CliAccountText<TencentMeetingTextKey>
 
 /** The npm package whose bundle page carries the account section. */
 export const TENCENT_MEETING_PACKAGE = '@deepseek-ai/dsh-tencent-meeting'
 
 /* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
-/** The operations the section's buttons start; signing in and out report a notice in the browser that started them. */
-export const OPERATIONS: readonly ConnectorAccountOperation<TencentMeetingOperationKind>[] = [
-  { kind: 'check' },
-  { kind: 'sign-in', notice: text('notice.connected') },
-  { kind: 'sign-out', notice: text('notice.signed-out') },
-]
+/**
+ * List the operations the section's buttons start; signing in and out report a notice in the browser that started them.
+ * @param text - writes a key of the Tencent Meeting text in every shipped language.
+ * @returns the operations with their notices.
+ */
+export function operations(text: Text): readonly ConnectorAccountOperation<TencentMeetingOperationKind>[] {
+  return [
+    { kind: 'check' },
+    { kind: 'sign-in', notice: text('notice.connected') },
+    { kind: 'sign-out', notice: text('notice.signed-out') },
+  ]
+}
 
-/** The section's title and hint, and the prompt after the bundle is switched on while signed out. */
-export const COPY: ConnectorAccountCopy = {
-  title: text('section.title'),
-  hint: text('hint'),
-  activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
+/**
+ * Write the section's title and hint, and the prompt after the bundle is switched on while signed out.
+ * @param text - writes a key of the Tencent Meeting text in every shipped language.
+ * @returns the section's fixed text.
+ */
+export function copy(text: Text): ConnectorAccountCopy {
+  return {
+    title: text('section.title'),
+    hint: text('hint'),
+    activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
+  }
 }
 
 const CHECK = { kind: 'start', operation: 'check' } as const
@@ -34,7 +48,7 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 
 /* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each in its own text. */
 /** The row that reports a guide that is not in place yet; a failed download offers a check, which restarts it. */
-function skillsNotes(skills: UpstreamSkillsState): ConnectorAccountNote[] {
+function skillsNotes(skills: UpstreamSkillsState, text: Text): ConnectorAccountNote[] {
   switch (skills) {
     case 'installed': return []
     case 'downloading': return [{ text: text('skills.downloading') }]
@@ -53,7 +67,7 @@ function step(operation: Operation): 'step.authorizing' | 'step.connecting' | 's
 }
 
 /** The section while a sign-in or sign-out runs: its step, the authorization page while waiting there, and cancel. */
-function presentOperation(operation: Operation, notes: ConnectorAccountNote[]): ConnectorAccountDisplay {
+function presentOperation(operation: Operation, notes: ConnectorAccountNote[], text: Text): ConnectorAccountDisplay {
   const authorizing = step(operation) === 'step.authorizing' && operation.authorizationUrl !== undefined
   const buttons: ConnectorAccountButton[] = []
   if (authorizing) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
@@ -67,23 +81,23 @@ function presentOperation(operation: Operation, notes: ConnectorAccountNote[]): 
 /**
  * The account section for one Host view.
  * @param view - the default tmeet account, the operation in progress, and the last result.
- * @returns the phase, status, tag, buttons, detail, guide download row, and failure.
+ * @param text - writes a key of the Tencent Meeting text in every shipped language.
+ * @returns the phase, status, tag, buttons, detail, guide download row, and failure guidance.
  */
-export function presentAccount(view: TencentMeetingState): ConnectorAccountDisplay {
-  const notes = skillsNotes(view.account.skills)
+export function presentAccount(view: TencentMeetingState, text: Text): ConnectorAccountDisplay {
+  const notes = skillsNotes(view.account.skills, text)
   const { account, operation } = view
   if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes }
-  if (operation !== undefined) return presentOperation(operation, notes)
-  const failed = view.result?.outcome === 'failed' ? view.result : undefined
-  const failure: { failure?: ConnectorAccountFailure } = failed === undefined ? {} : {
-    failure: { text: text('failed'), ...failed.failure === undefined ? {} : { details: failureDetails(failed.failure) } },
-  }
+  if (operation !== undefined) return presentOperation(operation, notes, text)
+  const failed = view.result?.outcome === 'failed'
+  // The Service adds the failed command and its exit code.
+  const failure: { failure?: ConnectorAccountFailure } = failed ? { failure: { text: text('failed') } } : {}
   const unavailable: ConnectorAccountDisplay = {
     phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
     buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes, ...failure,
   }
   switch (account.state) {
-    case 'unchecked': return failed === undefined ? { phase: 'checking', status: text('status.checking'), buttons: [], notes } : unavailable
+    case 'unchecked': return failed ? unavailable : { phase: 'checking', status: text('status.checking'), buttons: [], notes }
     case 'unverified': return unavailable
     case 'signed-out':
       return {

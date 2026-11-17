@@ -1,5 +1,4 @@
 /** The Tencent Meeting text the Plugins page shows; the browser resolves it in its active language. */
-import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -284,5 +283,5 @@ export const pt: Record<TencentMeetingTextKey, string> = {
   'notice.signed-out': 'Você saiu do Tencent Meeting',
 }
 
-/** Render one key of the Tencent Meeting text in every shipped language. */
-export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })
+/** The dictionary of every shipped language. */
+export const dictionaries = { zh, en, ja, es, fr, de, ru, pt }

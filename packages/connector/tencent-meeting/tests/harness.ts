@@ -1,10 +1,16 @@
-/** Scripted tmeet processes and a temporary bin directory for Tencent Meeting plugin specs. */
+/**
+ * A Host for Tencent Meeting plugin specs: scripted tmeet processes, a temporary bin directory and guide directory, and a
+ * recording Plugins page registry.
+ */
 
 import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { Context } from '@deepseek-ai/cordis'
+import CliAccounts from '@deepseek-ai/dsh-cli-account'
+import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessCollectedOutputs,
@@ -13,6 +19,10 @@ import type {
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import UpstreamSkills, { type Config as UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
+import { executableFileName } from '../src/directory.ts'
+import type { TencentMeetingState } from '../src/types.ts'
 
 /** Output and exit facts one scripted command reports. */
 export interface CliReply {
@@ -104,7 +114,51 @@ export class ScriptedSubprocess extends SubprocessRuntime {
  */
 export async function createBinDir(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-bin-'))
-  await writeFile(join(directory, executableFileName('tmeet')), '')
-  await chmod(join(directory, executableFileName('tmeet')), 0o755)
+  await writeFile(join(directory, executableFileName(process.platform)), '')
+  await chmod(join(directory, executableFileName(process.platform)), 0o755)
   return directory
+}
+
+/** What the Tencent Meeting plugin registers for the Plugins page. */
+export type TencentMeetingPage = ConnectorAccountRegistration<TencentMeetingState>
+
+/** The services the Tencent Meeting plugin runs on, before the plugin itself loads. */
+export interface TencentMeetingHost {
+  readonly ctx: Context
+  readonly subprocess: ScriptedSubprocess
+  /** The `binDir` to load the plugin with. */
+  readonly binDir: string
+  /** An empty directory to load the plugin with as `skillsDir`, so that it downloads nothing. */
+  readonly skillsDir: string
+  /** Every account registered for the Plugins page, in order; the registry keeps them after withdrawal. */
+  readonly pages: TencentMeetingPage[]
+  /** How many of those accounts were withdrawn. */
+  withdrawn: number
+}
+
+/**
+ * Start a Host with the skill registry, a scripted subprocess runtime, the system prompt, a Plugins page registry that
+ * records registrations, the CLI account Service with a 5-second command deadline, and the upstream skills Service.
+ * @param skills - where the upstream skills Service downloads from; defaults to the Service's own defaults.
+ * @returns the Host; the caller loads the Tencent Meeting plugin with `binDir`, disposes `ctx.fiber`, and removes
+ *   `binDir` and `skillsDir`.
+ */
+export async function createHost(skills: Partial<UpstreamSkillsConfig> = {}): Promise<TencentMeetingHost> {
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SystemPrompt)
+  const host: TencentMeetingHost = {
+    ctx, subprocess: ctx.subprocess as ScriptedSubprocess, binDir: await createBinDir(),
+    skillsDir: await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-skills-')), pages: [], withdrawn: 0,
+  }
+  ctx.provide('connectorAccounts', {
+    register: (page: TencentMeetingPage) => {
+      host.pages.push(page)
+      return () => { host.withdrawn += 1 }
+    },
+  })
+  await ctx.plugin(CliAccounts, { commandTimeoutMs: 5_000 })
+  await ctx.plugin(UpstreamSkills, skills)
+  return host
 }

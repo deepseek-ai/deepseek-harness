@@ -43,23 +43,22 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-cli-account": "workspace:*",
-    "@deepseek-ai/dsh-upstream-skills": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@tencentcloud/tmeet": "1.0.18"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-skill": "workspace:*",
-    "@deepseek-ai/dsh-subprocess": "workspace:*",
-    "@deepseek-ai/dsh-system-prompt": "workspace:*"
+    "@deepseek-ai/dsh-cli-account": "workspace:*",
+    "@deepseek-ai/dsh-upstream-skills": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-cli-account": "workspace:*",
     "@deepseek-ai/dsh-client-ui-connector-account": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
-    "@deepseek-ai/dsh-system-prompt": "workspace:*"
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-upstream-skills": "workspace:*"
   }
 }

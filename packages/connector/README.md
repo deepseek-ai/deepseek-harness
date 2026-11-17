@@ -25,7 +25,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | Package | Role | ctx key |
 |---|---|---|
 | [`cli-account/`](cli-account/README.md) | Holds the vendor CLIs and accounts CLI app plugins register: gives the model each CLI's absolute path in runtime context, runs each plugin's account operations one at a time, and shows the account on the Plugins page | `ctx.cliAccounts` |
-| [`tencent-meeting/`](tencent-meeting/README.md) | The Tencent Meeting plugin: installs the official `tmeet`, gives the model its absolute path, registers its skill, and runs the account operations the Plugins page drives | registers on `ctx.skills`, `ctx.systemPrompt`, and `ctx.connectorAccounts` |
+| [`tencent-meeting/`](tencent-meeting/README.md) | The Tencent Meeting plugin: installs the official `tmeet`, gives the model its absolute path, registers its skill, and runs the account operations the Plugins page drives | registers on `ctx.cliAccounts` and `ctx.upstreamSkills` |
 | [`upstream-skills/`](upstream-skills/README.md) | Holds the entry skills CLI app plugins register: downloads the upstream files each entry indexes from a pinned commit of the vendor's GitHub repository, verifies and caches them, and lists the entry skill over them | `ctx.upstreamSkills` |
 
 -----

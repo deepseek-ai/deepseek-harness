@@ -63,12 +63,9 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `binDir` | 不设置，此时运行当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet`（Windows 上为 `tmeet.exe`）的绝对目录 |
-| `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
 | `skillsDir` | 无 | 按仓库路径存放 `skills/tmeet-skill/` 文件的目录；设置后不下载子指南 |
-| `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的归档下载前缀 |
-| `skillsTimeoutMs` | `120000` | 一个前缀送达完整归档的时限 |
 
-登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。tmeet 自身在 5 分钟后停止等待授权。
+账号检查和退出登录使用 [`cli-account` 行](../cli-account/README.zh.md#use-this-package)的 `commandTimeoutMs`，默认 30 秒。登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 CLI 账号 Service 固定。tmeet 自身在 5 分钟后停止等待授权。子指南从 [`upstream-skills` 行](../upstream-skills/README.zh.md#use-this-package)的 `skillsUrls` 下载，每个前缀的时限是该行的 `skillsTimeoutMs`。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tencent-meeting)是受支持字段的完整来源。
 
@@ -80,9 +77,9 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `tencent-meeting` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `tencent-meeting` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `tencent-meeting` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它解析 `tmeet` 可执行文件，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `tencent-meeting` skill 注册到 `ctx.upstreamSkills`，并把这个路径和账号注册到 `ctx.cliAccounts`。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，同一时间只运行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用 tmeet 命令完成每个操作，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
 
-[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引，以及打开子指南的方式。上游只在其仓库中发布这个子指南，npm 包里没有，因此由该库下载；它是 skill 基础目录下的一组文件，不是独立的 skill。固定信息排除了 `scripts/agent_init.py`，它用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
+[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引，以及打开子指南的方式。上游只在其仓库中发布这个子指南，npm 包里没有，因此由[上游技能 Service](../upstream-skills/README.zh.md) 下载；它是 skill 基础目录下的一组文件，不是独立的 skill。固定信息排除了 `scripts/agent_init.py`，它用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
 
 </details>
 
@@ -92,7 +89,8 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 ## 进一步探索
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
-- [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
+- [CLI 账号 Service](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
+- [上游技能 Service](../upstream-skills/README.zh.md) — 子指南的下载、校验与发布。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [连接器账号界面](../../client/ui-connector-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
 
@@ -133,7 +131,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 #### 模型看到的内容
 
-该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出可执行文件的路径：`binDir` 中的 `tmeet`，或者默认使用当前平台已安装的 `@tencentcloud/tmeet` 可执行文件，例如 `dist/tmeet-macOS-AppleSilicon`。
+该行加载期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出可执行文件的路径：`binDir` 中的 `tmeet`，或者默认使用当前平台已安装的 `@tencentcloud/tmeet` 可执行文件，例如 `dist/tmeet-macOS-AppleSilicon`。
 
 ##### 运行时上下文条目
 

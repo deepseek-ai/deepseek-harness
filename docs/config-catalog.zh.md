@@ -4061,13 +4061,17 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tencent-meeting`
 
-- `inject`: `skills` · `subprocess` · `systemPrompt`
-- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/tencent-meeting/src/index.ts:33`](../packages/connector/tencent-meeting/src/index.ts)
+- `inject`: `cliAccounts` · `upstreamSkills`
+- `source`: [`packages/connector/tencent-meeting/src/index.ts:30`](../packages/connector/tencent-meeting/src/index.ts)
 
 ```ts config-catalog
-/** Where tmeet and the upstream guide come from, a command's deadline, and a download's time limit. */
-export type Config = CliAccountConfig & UpstreamSkillsConfig
+/** Where tmeet and the upstream guide are. */
+export interface Config {
+  /** Absolute directory holding the `tmeet` executable; defaults to the installed `@tencentcloud/tmeet` executable for this platform. */
+  binDir?: string
+  /** Absolute directory holding the upstream guide at its repository paths; when set, nothing is downloaded. */
+  skillsDir?: string
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting -->
 

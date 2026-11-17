@@ -3,10 +3,18 @@
 import { accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name tmeet's guides run it by. */
 export const PROGRAM = 'tmeet'
+
+/**
+ * Name the executable file a `binDir` holds.
+ * @param platform - the Host platform.
+ * @returns `tmeet`, or `tmeet.exe` on Windows.
+ */
+export function executableFileName(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? `${PROGRAM}.exe` : PROGRAM
+}
 
 /** Platform executables in the package's `dist`, named as the package's own launcher maps them. */
 const PLATFORM_EXECUTABLES: Readonly<Partial<Record<string, string>>> = {
@@ -42,7 +50,7 @@ function platformExecutable(): string {
  */
 export function resolveCliExecutable(binDir: string | undefined): string {
   if (binDir !== undefined) {
-    const file = executableFileName(PROGRAM)
+    const file = executableFileName(process.platform)
     const executable = join(binDir, file)
     requireExecutable(executable, `set binDir to a directory containing an executable ${file}`)
     return executable
