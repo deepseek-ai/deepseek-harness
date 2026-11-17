@@ -99,7 +99,7 @@ describe('Loader tree mutation reports', () => {
 describe('Include patch data ownership', () => {
   it('detaches file entries even with no patches', () => {
     const data: EntryOptions[] = [{ id: 'x', name: 'example', config: { value: 1 } }]
-    const result = applyEntryPatches(data, undefined, vi.fn())
+    const result = applyEntryPatches(data, undefined, vi.fn()).data
     result[0]!.disabled = true
     ;(result[0]!.config as { value: number }).value = 2
     expect(data).toEqual([{ id: 'x', name: 'example', config: { value: 1 } }])
@@ -109,7 +109,7 @@ describe('Include patch data ownership', () => {
     const insert: EntryOptions[] = [{ id: 'g', name: 'group', group: true,
       config: [{ id: 'x', name: 'example', config: { value: 1 } }] }]
     const warn = vi.fn()
-    const result = applyEntryPatches([], [{ insert }, { id: 'x', disabled: true }], warn)
+    const result = applyEntryPatches([], [{ insert }, { id: 'x', disabled: true }], warn).data
     const children = result[0]!.config as Array<{ disabled?: boolean; config: { value: number } }>
     expect(children[0]!.disabled).toBe(true)
     children[0]!.config.value = 2

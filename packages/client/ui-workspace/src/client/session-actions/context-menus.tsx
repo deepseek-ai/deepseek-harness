@@ -2,13 +2,17 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { MenuContribution, ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {
   ArchiveSessionInjected, ForkSessionInjected, PinSessionInjected, RenameSessionInjected, SessionIdInjected,
 } from '../contract/slots.ts'
 
 type Actions = Omit<PinSessionInjected & ArchiveSessionInjected, 'hooks'>
   & ForkSessionInjected & RenameSessionInjected & SessionIdInjected
+  & { readonly markSession: (sessionId: SessionId, unread: boolean) => void }
 
 /**
  * Register built-in actions while retaining the legacy Slot for external components.
@@ -22,11 +26,12 @@ export function registerSessionMenus(ctx: Context, actions: Actions): void {
     order: number,
     endpoints: readonly RemoteEndpoint[],
     resolve: MenuContribution<'session'>['resolve'],
+    sources: readonly ObservableSnapshot<unknown>[] = [],
   ): void => {
     ctx.effect(() => ctx.contextMenus.register({
       id: `session.${id}`, target: 'session', order,
       observe: ({ sessionId }) => [
-        ctx.workspaces.list, ctx.locale,
+        ctx.workspaces.list, ctx.locale, ...sources,
         ...endpoints.map(action => ctx.remoteAccess.source('session', sessionId, action)),
       ],
       resolve,
@@ -48,6 +53,18 @@ export function registerSessionMenus(ctx: Context, actions: Actions): void {
     id: 'rename', label: t('rename'), icon: { key: 'workspace.rename' }, commandId: 'session.rename' as ShortcutCommandId,
     run: () => { actions.requestSessionRename(target.sessionId, target.displayTitle) },
   }] : [])
+  register('read-state', 250, ['sessionStatus/mark'], (target) => {
+    // Archived rows hide reminders and read as read, so they offer no reading mark.
+    if (archived(target) || !allowed(target, 'sessionStatus/mark')) return []
+    const status = ctx.uiSession.sessionStatus
+    const unread = status.getSnapshot().get(target.sessionId)?.completionUnread === true
+    return [{
+      id: 'mark', label: t(unread ? 'menu.markRead' : 'menu.markUnread'),
+      icon: { key: unread ? 'workspace.markRead' : 'workspace.markUnread' },
+      commandId: 'session.toggleRead' as ShortcutCommandId, disabled: !status.readingReady.getSnapshot(),
+      run: () => { actions.markSession(target.sessionId, !unread) },
+    }]
+  }, [ctx.uiSession.sessionStatus, ctx.uiSession.sessionStatus.readingReady])
   register('fork', 300, ['session/fork'], target => allowed(target, 'session/fork') ? [{
     id: 'fork', label: t('menu.fork'), icon: { key: 'workspace.fork' }, commandId: 'session.fork' as ShortcutCommandId,
     run: () => { actions.forkSession(target.sessionId) },

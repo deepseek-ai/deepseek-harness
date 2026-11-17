@@ -78,8 +78,8 @@ describe.skipIf(MODE === 'record').each([false, true])('web e2e: native credenti
         expect(Math.abs(rowBox.height - 40)).toBeLessThan(1)
         expect(Math.abs(menuBox.width - rowBox.width - 8)).toBeLessThan(1)
         const glyph = (await row.locator('svg').first().boundingBox())!
-        expect(Math.abs(glyph.width - 16)).toBeLessThan(1)
-        expect(Math.abs(glyph.height - 16)).toBeLessThan(1)
+        expect(Math.abs(glyph.width - 14)).toBeLessThan(1)
+        expect(Math.abs(glyph.height - 14)).toBeLessThan(1)
       }
       const menuAria = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(SIGNED_OUT_MENU_EXPECTED, menuAria, MODE)

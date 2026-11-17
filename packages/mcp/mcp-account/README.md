@@ -50,7 +50,7 @@ The returned disposer withdraws the account from every page.
 | Not listed yet | Checking | None |
 | Authorization waiting for the browser | Connecting | Open the authorization page, Cancel |
 | Authorization starting, exchanging, or saving the grant | Connecting | Cancel |
-| Connected | Connected | Sign out, after a confirmation |
+| Connected | Connected | Authorize again, which changes the account or workspace and keeps the saved grant until the new one is saved; Sign out, after a confirmation |
 | Connecting or reconnecting | Connecting | None |
 | Waiting for authorization because no grant exists | Disconnected | Connect; the activation prompt's Connect starts it too |
 | Waiting for authorization because the grant expired, no longer matches the settings, was rejected, or lacks a scope | Disconnected, with the reason in the detail | Connect again |

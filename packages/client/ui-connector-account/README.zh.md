@@ -84,7 +84,7 @@ export function apply(ctx: Context): void {
 
 Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账号来源，每条 `watch` 流在每次变化后读取每个账号的条目，并合并在下一次读取前到达的变化：键和包、文案、`present(view)`、进行中的操作，以及带成功文本的最新结果。`start` 和 `cancel` 按键路由到该账号的来源。
 
-[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。各界面收到 `start` 和 `cancel` 两个回调：它们调用 Remote，在 Host 拒绝或调用没有回应时 reject；按钮等待回调结果，并把启动的操作报告给 `BrowserAccounts`。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
+[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。各界面收到 `start` 和 `cancel` 两个回调：它们调用 Remote 并返回其结果；按钮把启动成功时返回的操作报告给 `BrowserAccounts`，结果为失败或调用被 reject 时报告失败提示。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
 
 | 文件 | 职责 |
 |---|---|
@@ -94,7 +94,7 @@ Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账
 | [`src/client/state.ts`](src/client/state.ts) | 流的 store、本浏览器发起的操作，以及它们的页面和提示 |
 | [`src/client/components.tsx`](src/client/components.tsx) | 各界面的插槽条目，以及按钮的 Remote 调用 |
 | [`src/client/locales.ts`](src/client/locales.ts) | 共用字典 |
-| [`src/client/types.ts`](src/client/types.ts) | 浏览器状态、提示、Remote 和 face 类型 |
+| [`src/client/types.ts`](src/client/types.ts) | 浏览器状态、提示和 face 类型 |
 
 </details>
 

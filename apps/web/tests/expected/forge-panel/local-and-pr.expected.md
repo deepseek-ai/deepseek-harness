@@ -1,21 +1,22 @@
-- text: feat 项目目录
-- button "复制项目目录路径"
-- button "本地变更"
-- text: HEAD → origin/main
-- button "查看本会话的变更：4 个文件，新增 4 行，删除 1 行": +4 −1 4 个文件
-- heading "本会话的变更请求 · 1" [level=3]
-- button "刷新状态"
-- list:
-  - listitem:
-    - img "变更请求状态：需要处理"
-    - link "Add the pull request panel":
-      - /url: https://github.com/octo/demo/pull/7
-    - text: "#7 feat → main"
-    - button "在浏览器中打开"
-    - button "复制变更请求链接"
-    - 'button "从本会话移除 #7"'
-    - 'button "收起 #7" [expanded]'
-    - button "检查 已加载 1 项检查，仍有更多"
-    - button "评审 等待评审"
-    - text: 合并 无冲突
-    - 'button "查看 #7 的变更：新增 128 行，删除 14 行"': 变更 +128 −14 1 条未解决讨论
+- complementary "会话面板":
+  - region "环境":
+    - heading "环境" [level=2]
+    - text: workspace {{cwd}} feat 项目目录
+    - button "本地变更 · 4 个文件，新增 4 行，删除 1 行": 本地变更 · 4 个文件
+    - text: +4 −1
+    - button "本地变更操作"
+  - region "变更请求":
+    - heading "变更请求" [level=2]
+    - text: "1"
+    - list:
+      - listitem:
+        - button "变更请求状态：需要处理 Add the pull request panel":
+          - img "变更请求状态：需要处理"
+          - text: Add the pull request panel
+        - text: "#7"
+        - button "#7 的操作"
+        - 'button "收起 #7" [expanded]'
+        - button "检查 已加载 1 项检查，仍有更多"
+        - button "评审 等待评审"
+        - text: 合并 无冲突
+        - 'button "查看 #7 的变更：新增 128 行，删除 14 行"': 变更 +128 −14 1 条未解决讨论

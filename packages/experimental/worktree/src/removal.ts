@@ -58,19 +58,19 @@ export async function checkoutIdentity(
  * The listing grows with the number of worktrees; it is streamed without an
  * output limit, and its entries are kept in memory while `target` is resolved.
  * @param ctx - execution-world filesystem provider.
- * @param request - saved checkout identity.
+ * @param repositoryRoot - a checkout of the repository whose worktrees are listed.
  * @param target - resolved checkout directory.
  * @param scan - streaming Git runner with the owner's policy.
  * @param signal - cancellation of the lookups.
  * @returns the porcelain fields of the matching entry, or undefined when none is registered.
  */
 export async function registration(
-  ctx: Context, request: RestoreWorktreeRequest, target: CheckoutIdentity['target'], scan: GitScan, signal: AbortSignal,
+  ctx: Context, repositoryRoot: string, target: CheckoutIdentity['target'], scan: GitScan, signal: AbortSignal,
 ): Promise<readonly string[] | undefined> {
   const entries: { path: string; fields: string[] }[] = []
   // Each entry of the -z porcelain listing starts with its worktree line and ends with an empty field.
   let fields: string[] = []
-  await scan(request.repositoryRoot, ['worktree', 'list', '--porcelain', '-z'], (field) => {
+  await scan(repositoryRoot, ['worktree', 'list', '--porcelain', '-z'], (field) => {
     if (field.startsWith('worktree ')) {
       fields = [field]
       entries.push({ path: field.slice('worktree '.length), fields })
@@ -78,7 +78,7 @@ export async function registration(
     return true
   })
   for (const entry of entries) {
-    const recorded = await ctx.fs.resolve(entry.path, { cwd: request.repositoryRoot, signal })
+    const recorded = await ctx.fs.resolve(entry.path, { cwd: repositoryRoot, signal })
     if (recorded.targetKey === target.targetKey) return entry.fields
   }
   return undefined
@@ -128,7 +128,7 @@ export async function inspectRemoval(
   const identity = await checkoutIdentity(ctx, directory, request, git.read, signal)
   if (identity === null) return false
   if ((await ctx.fs.lstat(path, undefined, signal))?.type !== 'directory') return false
-  const fields = await registration(ctx, request, identity.target, git.scan, signal)
+  const fields = await registration(ctx, request.repositoryRoot, identity.target, git.scan, signal)
   // The primary registration is excluded even when the configured pool contains it.
   if (fields === undefined || !fields.includes(`branch refs/heads/${branch}`)
     || fields.some(field => field === 'detached' || field.startsWith('locked') || field.startsWith('prunable'))) return false

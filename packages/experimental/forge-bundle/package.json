@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-forge-bundle",
   "description": "Experimental change request panel and worktree option for Sessions in Git repositories",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.4",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -42,7 +42,8 @@
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-worktree": "workspace:*"
+    "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
+    "@deepseek-ai/dsh-forge-gitlab": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

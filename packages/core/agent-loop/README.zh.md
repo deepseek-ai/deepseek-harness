@@ -107,13 +107,15 @@ const handle = await ctx.agents.create({
 
 ### 创建与拆除
 
+fork 创建按与直接回放完全相同的方式准备调用方的 `seed`，不打开也不 flush 父会话；`parentSource` 只指定父会话和截点。共享已存储前缀的后端在引用前自行排空父写者。
+
 新建和恢复共用一个受回滚保护的初始化流程：围绕已取得的 Session 构造具象 agent 与带作用域上下文；存储构造历史、进入 SessionStore 并完成 `session/created`；等待可选 setup 及其 commit；进入 AgentRegistry；等待串行 `agent/created` 监听器；随后释放已排队输入。调用方 Context 拥有事务和存活句柄；委派服务在 setup 期间绑定自己的运行时关系。Setup、commit、监听器失败或所有者 dispose 都会回滚已准备的资源。setup 期间 Session 可写；每次移除都会发出 `session/disposed`，包括 Agent 创建宣告前的 setup 失败。初始化失败保留恢复出的收件箱输入及已存储事件，并在释放自身作用域及已取得的写句柄后才拒绝。持久化层仍在创建写句柄时发生取消，可以更早拒绝；该句柄在创建完成后关闭。已送达的宣告仍可被观察，并有配对的销毁通知。Teardown 停止并排空驱动器、撤销作用域、关闭会话写路径、detach agent，再 detach 会话。每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
 
 loop 在发布工厂前等待必需的注册完成。它对模型选择和 inbox 句柄调用 `readerFor(session)`，将读取回调放入一个类型化对象传给驱动器；模型和 inbox 小组件接收各自的回调。工厂卸载时，全局注册可以先于 teardown 完成而消失；保留句柄在整个作用域清理期间仍可读取，包括作用域内 abort 监听器发起取消的时刻。调用方卸载、工厂卸载和句柄释放等待同一次 teardown。清队列错误不会跳过取消或等待已接纳工作，资源会保留到该工作结束。
 
 ### 持久化集成
 
-循环是会话写句柄在生产环境中的获取点。挂载 `ctx.sessionPersistence` 后，`create`/`createAgent` 调用 `persistence.create(header)`——在发布之前存储持久身份并取得写所有权——并通过句柄追加构造 seed；`resume` 先调用 `persistence.open(id, 'write')`（排除同 id 的并发恢复），通过句柄读取物理上有效的日志，并为在轮次中途崩溃的日志把 `interruptedTurnClosers` 作为普通批次追加——语义崩溃修复是 agent 层的职责，而非存储入口。入库前，`appendUnstoredSuffix` 存储包含 seed 标记的构造历史。随后 setup 通过实时事件流追加。从入库起，挂载的后端按会话 id 把该会话的 `session/event` 批次、`session/flush` 屏障与 `session/disposed` 退役路由进活跃写句柄；循环只通过它拥有的句柄触碰存储。在后端仍保持挂载时，teardown 会在驱动器提交收尾事件后关闭句柄；close 排空已路由的缓冲并释放写所有权。没有后端时，会话只存在于内存中，其余一切不变。
+循环是 Session 写句柄在生产环境中的获取点。全新创建通过取得的句柄存储构造历史；fork 创建向 `persistence.create()` 传入父引用、截点和构造完成的 log，该方法存储这些历史后才返回。SQLite 负责前缀共享、父写者排空与 Segment 创建；JSONL 复制整个 log。随后 setup 通过实时事件流追加。恢复先取得写句柄再读取历史，并将中断尾部的修复作为普通事件追加。后端将已发布 Session 的事件、flush 屏障和退役路由到活跃句柄。驱动器提交收尾事件后，teardown 关闭句柄；close 排空已路由的缓冲并释放所有权。没有后端时，Session 只存在于内存中。
 
 ### 轮次与步骤流程
 

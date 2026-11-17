@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-11-15-session-retain-facets-and-recent-views.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-15-session-retain-facets-and-recent-views.md
+/agent-note-session-retain-facets-and-recently-viewed-sessions:
+  en: 903aecad7bc8a610
+  zh: 17f8f0c420035cc1
+/agent-note-session-retain-facets-and-recently-viewed-sessions/problem:
+  en: 455344d0dc6aec78
+  zh: cd0b86cc1cd2cbe7
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision:
+  en: d1fa71821f857f8b
+  zh: 15308ccd85c6c25c
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision/connection-and-facets:
+  en: 6c72ad036c9f9834
+  zh: 0922647e1f58a811
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision/the-conversation-facet:
+  en: a6031fa553aae23b
+  zh: 77e534b656ae660e
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision/the-draft-reference:
+  en: db1266225cc204e9
+  zh: d786fe7fca2c783e
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision/reference-sources-and-facets:
+  en: cb761521ca56fe93
+  zh: 76f8797f4808407d
+/agent-note-session-retain-facets-and-recently-viewed-sessions/decision/recently-viewed-sessions-recentviews:
+  en: 1af8b25948c049f2
+  zh: 6444d8d9eacf6fc2
+/agent-note-session-retain-facets-and-recently-viewed-sessions/alternatives-considered:
+  en: 7a484119b745aee9
+  zh: 3092d3dbda8397cd
+/agent-note-session-retain-facets-and-recently-viewed-sessions/consequences:
+  en: 9ec4b80ad5f74041
+  zh: f20bc50bf5e4dd2c
+/agent-note-session-retain-facets-and-recently-viewed-sessions/testing:
+  en: 83e4d88dce18a4de
+  zh: 36bdf8f95c1fa373

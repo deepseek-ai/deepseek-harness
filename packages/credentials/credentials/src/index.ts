@@ -10,11 +10,13 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import type { CredentialInfo, CredentialKey, CredentialRecord, CredentialRef } from './types.ts'
 
 export type {
   ApiKeyRecord, CredentialInfo, CredentialKey, CredentialRecord, CredentialRef, GrantRecord,
 } from './types.ts'
+export * from './api-key.ts'
 
 const REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
@@ -149,6 +151,38 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     credentials: CredentialProvider
   }
+}
+
+/**
+ * Read one reference's current value through the mounted credentials service,
+ * or through the launch environment when the composition mounts no service. A
+ * mounted service is authoritative, including when it holds no value: the
+ * environment is read only when there is no service to ask, which is how
+ * one-shot compositions without the store authenticate from their launching
+ * shell. Empty values are absent. Store failures propagate; callers validate
+ * the value's format.
+ * @param ctx - context providing the optional credentials service and the launch environment.
+ * @param ref - the reference to read.
+ * @returns the value, or `undefined` while unconfigured.
+ */
+export async function resolveCredentialRef(ctx: Context, ref: CredentialRef): Promise<string | undefined> {
+  const credentials = ctx.get('credentials')
+  if (credentials !== undefined) return (await credentials.resolve(ref))?.value
+  const ambient = launchEnvironmentOf(ctx).get(ref)?.value
+  return ambient === undefined || ambient.length === 0 ? undefined : ambient
+}
+
+/**
+ * Report whether a reference is configured without reading its value, through
+ * the same source {@link resolveCredentialRef} reads. Store failures propagate.
+ * @param ctx - context providing the optional credentials service and the launch environment.
+ * @param ref - the reference to inspect.
+ * @returns whether the authoritative source holds a value for the reference.
+ */
+export async function credentialRefConfigured(ctx: Context, ref: CredentialRef): Promise<boolean> {
+  const credentials = ctx.get('credentials')
+  if (credentials !== undefined) return (await credentials.describe(ref)).configured
+  return (launchEnvironmentOf(ctx).get(ref)?.value.length ?? 0) > 0
 }
 
 /**

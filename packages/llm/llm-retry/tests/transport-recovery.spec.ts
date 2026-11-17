@@ -12,6 +12,7 @@ import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as Retry from '../src/index.ts'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 let context: Context | undefined
@@ -54,6 +55,7 @@ async function harness(
   vi.stubEnv('DEEPSEEK_API_KEY', 'mock-key')
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(LlmDeepSeek, {
     baseURL,
     streamIdleTimeoutMs: options.streamIdleTimeoutMs ?? 1_000,

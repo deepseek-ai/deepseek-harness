@@ -20,7 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-file-upload/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FileAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
   ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment, DraftFileUpload,
 } from './contract/slots.ts'
@@ -149,6 +149,9 @@ export class UnsupportedImageMediaTypeError extends Error {
   }
 }
 
+/** Upload concurrency while the Host sends no limit; the value the Client used before the field moved to the Host. */
+const ABSENT_UPLOAD_LIMIT = 2
+
 /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
@@ -168,7 +171,7 @@ export class ConversationController extends Service implements IConversation {
     readonly settle: () => void
   }> = []
   private activeFileUploads = 0
-  private readonly maxConcurrentFileUploads: number
+  private readonly maxConcurrentFileUploads: ObservableSnapshot<number | undefined>
 
   /**
    * @param ctx - owning root context (the plugin apply context; the service
@@ -180,12 +183,14 @@ export class ConversationController extends Service implements IConversation {
   constructor(ctx: Context, config: {
     input: SessionInputResolver
     blocks: ComposerBlocks
-    maxConcurrentFileUploads: number
+    /** Live upload concurrency limit, absent until the Host sends one; a raised limit starts queued uploads at once. */
+    maxConcurrentFileUploads: ObservableSnapshot<number | undefined>
   }) {
     super(ctx, 'conversation')
     this.input = config.input
     this.blocks = config.blocks
     this.maxConcurrentFileUploads = config.maxConcurrentFileUploads
+    ctx.effect(() => config.maxConcurrentFileUploads.subscribe(() => { this.pumpFileUploads() }), 'conversation: upload concurrency')
     ctx.effect(() => async () => {
       const operations = [...this.fileUploadOperations.values()]
       for (const operation of operations) operation.controller.abort()
@@ -442,7 +447,7 @@ export class ConversationController extends Service implements IConversation {
 
   /** Start queued upload Workers until the configured concurrency is occupied. */
   private pumpFileUploads(): void {
-    while (this.activeFileUploads < this.maxConcurrentFileUploads) {
+    while (this.activeFileUploads < (this.maxConcurrentFileUploads.getSnapshot() ?? ABSENT_UPLOAD_LIMIT)) {
       const task = this.fileUploadQueue.shift()
       if (task === undefined) return
       this.activeFileUploads += 1

@@ -52,7 +52,7 @@ The independent `dsh-web-search-deepseek` provider sends Messages search request
 
 **Keep the APIs inside the Messages provider behind a provider-local switch.** A switch inside the Messages provider cannot change fetch routing, so `web_fetch` would stay on HTTP unless the user also edited `web.fetchProvider`; it also ties the APIs' lifecycle to Messages search. Separate registrations let the web service's existing selection choose each provider, without coupling either API to the Messages provider.
 
-**Share one transport between Messages search and the new APIs.** A shared web transport would couple different request formats and failure mappings. Credential values instead come from the shared [`llm-deepseek` credential helpers](../../../../packages/llm/llm-deepseek/src/credential.ts); Messages search and the Search/Fetch API transports remain independent.
+**Share one transport between Messages search and the new APIs.** A shared web transport would couple different request formats and failure mappings. Credentials instead come from one service, `ctx.deepseekAuth`, which releases the request headers of the API key or the account sign-in; Messages search and the Search/Fetch API transports remain independent.
 
 **Split Search and Fetch into separate packages.** The guide serves both APIs from one base with one credential; separate packages would duplicate settings that address one deployment. Independent selection does not require separate packages, because each API registers its own provider id. Each operation lives in its own module, so either API can change without the other.
 

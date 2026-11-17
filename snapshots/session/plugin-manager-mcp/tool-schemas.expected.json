@@ -249,7 +249,7 @@
     },
     {
       "name": "plugin_manager",
-      "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
+      "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. The application field of a change result is authoritative: applied means the change is in effect and needs no restart; any other value carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -391,10 +391,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -420,10 +416,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -651,19 +643,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {
@@ -1000,7 +979,7 @@
       },
       {
         "name": "plugin_manager",
-        "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
+        "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. The application field of a change result is authoritative: applied means the change is in effect and needs no restart; any other value carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -1163,10 +1142,6 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "cwd": {
-              "type": "string",
-              "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-            },
             "description": {
               "type": "string",
               "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -1192,10 +1167,6 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "cwd": {
-              "type": "string",
-              "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-            },
             "description": {
               "type": "string",
               "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -1423,19 +1394,6 @@
             "script",
             "meta"
           ]
-        }
-      },
-      {
-        "name": "working_directory",
-        "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "cd": {
-              "type": "string",
-              "description": "Existing directory to enter. Omit to read the current directory."
-            }
-          }
         }
       },
       {

@@ -1,8 +1,8 @@
 /** Browser-side state and face of the accounts the Plugins page shows. */
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ConnectorAccountEntry, ConnectorAccountsView, ConnectorOperationId } from '../types.ts'
+import type { ConnectorAccountEntry, ConnectorOperationId } from '../types.ts'
 
 /** A transient outcome the page reports outside its own lifetime; `seq` distinguishes repeats. */
 export type ConnectorAccountNotice =
@@ -18,23 +18,16 @@ export interface ConnectorAccountsState {
   readonly notice: ConnectorAccountNotice | undefined
 }
 
-/** The `connectorAccounts` Remote methods the page uses. */
-export interface ConnectorAccountsRemote {
-  watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>
-  start(key: string, operation: string): Promise<RemoteResult<ConnectorOperationId>>
-  cancel(key: string, id: ConnectorOperationId): Promise<RemoteResult<void>>
-}
-
 /** The face every surface entry injects. */
 export interface ConnectorAccountFace {
   hooks: { connectorAccounts: HostObservable<ConnectorAccountsState> }
   /**
-   * Start an operation of an account on the Host. Resolves to the operation the Host started, and rejects when the Host
-   * refuses or the call does not answer.
+   * Start an operation of an account on the Host. The Remote result carries the operation the Host started, or the
+   * failure when the Host refuses or the call does not answer.
    */
-  readonly start: (key: string, operation: string) => Promise<ConnectorOperationId>
-  /** Cancel an account's operation on the Host; rejects like `start`. */
-  readonly cancel: (key: string, id: ConnectorOperationId) => Promise<void>
+  readonly start: ClientRemote['connectorAccounts']['start']
+  /** Cancel an account's operation on the Host; the Remote result carries a failure like `start`. */
+  readonly cancel: ClientRemote['connectorAccounts']['cancel']
   /** Pick the active language's entry of a registrant's text. */
   readonly resolveText: (text: LocalizedText) => string
   /** Remember an operation this browser started: its authorization page opens here, and its success is reported here. */

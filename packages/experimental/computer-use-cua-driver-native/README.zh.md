@@ -63,8 +63,11 @@ env -u NODE_USE_ENV_PROXY DSH_COMPUTER_USE_NATIVE_E2E=1 node node_modules/vitest
 | 文件 | 职责 |
 |---|---|
 | [src/index.ts](src/index.ts) | 原生运行时所有权、目录校验、工具注册和提供者指导文本 |
+| [src/error.ts](src/error.ts) | `CuaDriverError` 及其封闭代码列表 |
 
 工具定义复用现有 MCP 结果适配器。Cua Driver 的 JSON 目录决定 schema，其原始结果提供规范文本、结构化输出和图像字节。电脑操作服务只保存提供者名称并保证独占注册。
+
+原生调用被拒绝时抛出带 `CUA_DRIVER_FAILED` 的 `CuaDriverError`，保留 SDK 的消息并以其错误作为 `cause`；调用或提供者已取消时改为传播取消。原始结果不是 JSON 时抛出 `CUA_DRIVER_INVALID_RESULT`。结果中报告的上游工具拒绝仍由 MCP 结果适配器处理。
 
 </details>
 

@@ -50,6 +50,7 @@ export const remoteDefaultResponses: RemoteTable = {
     'session/follow',
   ],
   stream: {
+    'sessionStatus/follow': openStream([{ type: 'baseline', items: [] }]),
     // api-session-controller client `apply`: the control stream's opening baseline, then open.
     'session/control': openStream([{ type: 'baseline', value: { projections: {} } }]),
     // ui-settings-account shares the account snapshot across settings and the sidebar menu.
@@ -62,5 +63,7 @@ export const remoteDefaultResponses: RemoteTable = {
     'terminal/watch': openStream([[]]),
     // ui-connector-account `apply`: the registered connector accounts, none in a default composition, then open.
     'connectorAccounts/watch': openStream([{ accounts: [] }]),
+    // client-hmr browser `apply`: open without a baseline, so the page keeps the boot graph the harness composed.
+    'pluginEvents/follow': openStream(),
   },
 }

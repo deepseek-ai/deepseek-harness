@@ -1,0 +1,373 @@
+/* The panel floats in the Chat View's aside layer, a zero-height box across
+   the top of the Chat frame that passes pointer events through. The layer
+   inherits the scrollport's --dsh-conversation-viewport-height and
+   --dsh-composer-height and publishes --dsh-chat-aside-gutter, the inline
+   space between the transcript column and the frame's end edge. */
+
+/* The docked panel's inline metrics: 40px clear of the transcript column,
+   past its width handle, 8px from the end edge, and at least 300px wide. The
+   panel's width and the dock probe both derive from them, so the gutter that
+   docks the panel is exactly the one that holds its minimum width. */
+.panel,
+.dockProbe {
+  --panel-clear: 40px;
+  --panel-edge: 8px;
+  --panel-min-width: 300px;
+}
+
+.panel {
+  position: absolute;
+  top: 12px;
+  right: var(--panel-edge);
+  box-sizing: border-box;
+  width: clamp(
+    var(--panel-min-width),
+    calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge)),
+    360px
+  );
+  /* Stops above the composer stack, whose seat fades and takes presses across the body's full width. */
+  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The bar has a place of its own: the content keeps its width whether or not
+     the panel scrolls, and the end inset stays 8px. A transparent end border
+     over the panel's own background holds the bar 2px from the edge, as the
+     sidebar does, and the track margin keeps the thumb out of the rounded corners. */
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  --dsh-scrollbar-track-margin: 12px;
+  padding: 6px calc(8px - 2px - var(--dsh-scrollbar-width)) 6px 8px;
+  border: 0;
+  border-right: 2px solid transparent;
+  /* The standard menu tier: a compact summary surface, not an enclosing panel. */
+  border-radius: var(--dsw-radius-lg);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-panel);
+  pointer-events: auto;
+  animation: dsh-session-panel-enter 120ms ease-out;
+}
+
+/* Over the transcript the panel is narrower than docked, so it covers less of
+   the transcript, and takes the prominent elevation. */
+.panel[data-session-panel='overlay'] {
+  width: min(280px, calc(100% - 2 * var(--panel-edge)));
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* The dock probe tells the plugin whether the gutter holds the docked panel
+   without a pixel measurement: it is 1px wide from the gutter that fits the
+   panel's minimum width and 0 below it, a width under 0 being used as 0. A
+   size observer on it therefore reports only when the docking decision
+   flips, not while the window resizes on one side of it or the transcript
+   grows. It has no height and takes no pointer events. */
+.dockProbe {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px);
+  max-width: 1px;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.section {
+  padding: 4px 0 6px;
+}
+
+/* An empty body hides its section: a plain section renders into one outlet
+   anchor, and a shared section renders its own row outlet inside it. */
+.section:has(> .body > [data-slot]:empty),
+.section:has(> .body > [data-slot] > [data-slot]:only-child:empty) {
+  display: none;
+}
+
+.section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+  ~ .section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty)) {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 6px;
+}
+
+/* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
+.title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Takes what the title leaves and clips first, so long progress never squeezes the title. */
+.actions {
+  display: inline-flex;
+  flex: 1 1000 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.actions:has(> [data-slot]:empty) {
+  display: none;
+}
+
+@keyframes dsh-session-panel-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+/* Rows. The rows of every section share one look without sharing a
+   component: each contributor writes its row's markup and marks the parts,
+   and these rules lay them out.
+
+   [data-session-panel-row]        the row: one 28px line
+     [data-row-part='body']        the icon and the text; a <button> body is
+                                   the row's action, and its press area
+                                   covers the whole row
+       [data-row-part='icon']      a 16px glyph in the row ink
+       [data-row-part='content']   one line of text, clipped with an ellipsis
+       [data-row-part='lines']     in a two-line row, wraps the content and
+                                   the detail
+         [data-row-part='detail']  a second line in smaller tertiary type
+     [data-row-part='trailing']    a value or control after the text
+     [data-row-part='menu']        row actions, such as a More button
+
+   The icon's center sits 14px from the row's start and the menu's 14px from
+   its end, the columns the other panel rows align to. A row with an action
+   or a menu highlights as a whole; the trailing part and the menu sit above
+   the action's press area. A menu part that renders nothing counts as
+   absent: it takes no room and does not make the row highlight. A rule for
+   a part has the specificity of one class, so a row's own class adjusts it. */
+.panel :where([data-session-panel-row]) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='body']) {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body']) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body'])::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+}
+
+.panel :where([data-session-panel-row] > button[data-row-part='body']:focus-visible) {
+  outline: none;
+}
+
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:focus-visible)) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='icon']) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='icon']) svg {
+  width: 16px;
+  height: 16px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='content']) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A detail line under the content: the row grows by its 17px line and 4px
+   insets, and the icon keeps the first line's 20px box, so its center stays
+   level with that line. */
+.panel :where([data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail'])) {
+  align-items: flex-start;
+  height: auto;
+  padding: 4px 0;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='body']:has([data-row-part='detail']) > [data-row-part='icon']) {
+  height: 20px;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='lines']) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panel :where([data-session-panel-row] [data-row-part='detail']) {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='trailing'], [data-session-panel-row] > [data-row-part='menu']) {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='trailing']) {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* A 16px column, so the action's 24px target reaches past it without moving the glyph. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']) {
+  justify-content: center;
+  width: 16px;
+}
+
+/* A shared menu button renders nothing while its target has no menu entries. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']:empty) {
+  display: none;
+}
+
+/* Row actions share the row's highlight: the glyph darkens on hover, without a fill. */
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .panel :where([data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty)):hover) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .panel :where([data-session-panel-row] > [data-row-part='menu']) {
+    opacity: 0;
+  }
+
+  .panel :where([data-session-panel-row]:hover > [data-row-part='menu'], [data-session-panel-row]:focus-within > [data-row-part='menu']) {
+    opacity: 1;
+  }
+
+  .panel :where([data-session-panel-row] > [data-row-part='menu']) button:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* An open menu keeps its row highlighted and its trigger visible after the
+   pointer leaves for the menu. Only the menu part counts: a body button that
+   discloses something else carries aria-expanded too, and its row highlights
+   on hover alone. */
+.panel :where([data-session-panel-row]:has(> [data-row-part='menu'] [aria-expanded='true'])) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])) {
+  opacity: 1;
+}
+
+.panel :where([data-session-panel-row] > [data-row-part='menu']) button[aria-expanded='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:active)) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* A list's fold control (data-session-panel-row='fold'): the last row of a
+   list or of one of its groups, which shows the rows held back or folds them
+   again. It is quieter than a data row: the type of the counts beside the
+   section titles, with a 14px chevron in the icon column and the text where
+   the row names start. These rules follow the row rules they adjust, since
+   every rule for a part has the same specificity. */
+.panel :where([data-session-panel-row='fold']) {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel :where([data-session-panel-row='fold'] [data-row-part='icon']) svg {
+  width: 14px;
+  height: 14px;
+}
+
+.panel :where([data-session-panel-row='fold']:has(> button:focus-visible)) {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .panel :where([data-session-panel-row='fold']:hover) {
+    color: var(--dsw-alias-label-secondary);
+  }
+}

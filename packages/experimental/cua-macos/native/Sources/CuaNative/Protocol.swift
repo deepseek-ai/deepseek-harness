@@ -50,11 +50,13 @@ struct NativeFailure: Error, Sendable {
     let code: String
     let message: String
     let accessibilityError: Int32?
+    let attribute: String?
 
-    init(code: String, message: String, accessibilityError: Int32? = nil) {
+    init(code: String, message: String, accessibilityError: Int32? = nil, attribute: String? = nil) {
         self.code = code
         self.message = message
         self.accessibilityError = accessibilityError
+        self.attribute = attribute
     }
 }
 

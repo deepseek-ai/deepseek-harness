@@ -61,7 +61,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 ### 文件监听与 Client 插件下发
 
 - Worker 的 `fs.watch` 和 `fs.watchFile` 监听器在创建 watcher 时的异步上下文里运行，与 Node 从 watch 句柄派发事件一致，而不是在写入方的上下文里运行。因此 HMR 的配置 watcher 在写入方的 HMR 事务之外运行，事务内的配置写入不会让随后的重载因嵌套事务而失败。
-- `@deepseek-ai/dsh-client-hmr` 的浏览器部分在 shell 提供 `__DSH_TRANSPORT__.fetch` 时（Worker preview 隧道）经它读取 `/plugins/events`，否则经 `EventSource` 读取。因此在 Preview 里启用 bundle 后，其 Client 插件无需刷新页面即可挂载。
+- `@deepseek-ai/dsh-client-hmr` 的浏览器部分经页面 Connection 提供的 Remote 载体（包括 Worker preview 隧道）跟随 `pluginEvents/follow` Remote 流。因此在 Preview 里启用 bundle 后，其 Client 插件无需刷新页面即可挂载。
 
 ## 考虑过的替代方案
 
@@ -81,7 +81,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 
 ## 后果
 
-Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖；开任一 bundle 都没有被跳过的补丁。插件页和“设置 → 内置插件”列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
+Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖；开任一 bundle 都没有被跳过的补丁。插件页列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
 
 体积（MiB，实测）：基础镜像 9.20（打包期组合且 chunk 随启动下载时为 12.79，−28%），含 11 个 optional bundle；另有 5 个 lazy tar 共 4.45（pdf 2.88、excel 1.39、terminal 0.13、frontmatter 0.05、inspector 底部面板 0.00）。基础镜像不含懒加载 chunk，页面请求 chunk 时才拉取对应 archive。
 

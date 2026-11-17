@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/ptc-mcp-image-values/guide.md
+/:
+  en: 4ef7bb2332b41c50
+  zh: 64dc0fee94ec109f
+/admitted-mcp-image-blocks-become-ptc-image-values:
+  en: d6de4dbd1d9e5b97
+  zh: abfc0e17251123b4
+/admitted-mcp-image-blocks-become-ptc-image-values/change:
+  en: 49c1de6568812254
+  zh: e33b028fb5369be3
+/admitted-mcp-image-blocks-become-ptc-image-values/migration:
+  en: 7015ecfe11765993
+  zh: 677267091fa5458a

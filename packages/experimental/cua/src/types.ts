@@ -62,7 +62,7 @@ export interface CuaCoordinateOptions {
 export type CuaShowResult = z.output<typeof ShowResult>
 /** Modifiers attached to a window-directed pointer gesture. */
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
-/** Buttons supported by window-directed clicks and drags. */
+/** Buttons supported by window-directed mouse input. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
@@ -71,7 +71,7 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'> & CuaCoordinateOptions
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers' | 'useSystemPointer'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
 export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
@@ -89,8 +89,9 @@ export interface CuaSurface {
    */
   show(): Promise<CuaShowResult>
   /**
-   * Read the full accessibility tree, with menu contents collapsed by default.
+   * Read the accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
+   * Providers may mark unavailable branches whose contents are unknown and have no element ids.
    * @param options - Traversal limits, menu expansion and field detail options.
    * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
@@ -141,9 +142,8 @@ export interface CuaSurface {
   /**
    * Paste text or HTML at the target's current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
    * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @param options - Clipboard format.
    * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
@@ -151,7 +151,7 @@ export interface CuaSurface {
    * Press and release one key at the current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Provider-defined key name to press and release; not a chord.
-   * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
+   * @param modifiers - Modifier names held for this keystroke. The provider validates the names; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
@@ -191,6 +191,14 @@ export interface CuaWindow extends CuaSurface {
   mouseMove(target: CuaElementId | readonly [number, number],
     options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
+   * Send one mouse-button down or up event without moving the pointer.
+   * Does not send the opposite event; callers explicitly release a pressed button.
+   * @param mouseButton - Mouse button to press or release.
+   * @param direction - Explicit event direction.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up'): Promise<CuaActionResult>
+  /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
    * @param target - element id or [x,y].
@@ -208,7 +216,7 @@ export interface CuaWindow extends CuaSurface {
    * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting screenshot-local point or integer ratio.
    * @param to - destination in the same coordinate mode.
-   * @param options - button, modifiers and coordinate mode for the complete gesture.
+   * @param options - button, modifiers and coordinate mode. Only providers reporting systemPointer accept useSystemPointer.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>

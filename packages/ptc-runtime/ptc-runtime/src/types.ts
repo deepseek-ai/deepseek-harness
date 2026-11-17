@@ -18,11 +18,13 @@ export type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-rep
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
- * lossy or non-cloneable value with a descriptive error rather than corrupting
- * the run. No seam-level byte cap applies to a binding resolution. A rejection
- * of this function surfaces inside the program as a rejection of the
- * corresponding call.
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage and
+ * PtcInspectableValue values. An inspectable resolution delivers its JSON object
+ * or array to the program and uses its text only when that unchanged value is
+ * inspected directly. A runtime rejects a lossy or non-cloneable value with a
+ * descriptive error rather than corrupting the run. No seam-level byte cap
+ * applies to a binding resolution. A rejection of this function surfaces inside
+ * the program as a rejection of the corresponding call.
  */
 export type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
@@ -37,13 +39,11 @@ export type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | {
  * of a particular consumer such as PTC mode.
  */
 export interface PtcBindingErrorClass {
-  /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link PtcBindingNamespace.global}. */
+  /** Constructor global and resulting `Error.name`; same identifier rule as {@link PtcBindingNamespace.global}. */
   name: string
   /**
-   * Non-empty own property for the member name. The portable exclusion set is
-   * `RESERVED_ERROR_MEMBERS` plus dunder-form names (`__x__`, non-empty
-   * middle), enforced identically by every backend; any other name —
-   * identifiers or not — is accepted everywhere.
+   * Non-empty own property for the member name, excluding `name`, `message`,
+   * and `stack` (`RESERVED_ERROR_MEMBERS`). Other property names are accepted.
    */
   memberNameProperty: string
 }
@@ -57,14 +57,10 @@ export interface PtcBindingErrorClass {
  */
 export interface PtcBindingNamespace {
   /**
-   * The global identifier the program sees. Must match the LANGUAGE-PORTABLE
-   * identifier subset `[A-Za-z_][A-Za-z0-9_]*` and no language's reserved
-   * words, so the same namespace list works against every backend regardless
-   * of `language` — a JS-only spelling like `$tools` is always rejected.
-   * Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
-   * `__dsh_main__`) are also refused everywhere; see its declaration for the
-   * exact set and why each entry is reserved.
+   * The global identifier the program sees. Must match `[A-Za-z_$][A-Za-z0-9_$]*`
+   * and exclude ECMAScript keywords and strict-mode names (`RESERVED_BINDING_WORDS`).
+   * Runtime output globals (`console`, `inspect`, `Image` in `RESERVED_BINDING_GLOBALS`)
+   * are also refused.
    */
   global: string
   /** The callable members, keyed by the exact name the program calls. */
@@ -143,7 +139,7 @@ export interface PtcRunSandbox {
  * - `'abort'` — {@link PtcRunRequest.signal} fired.
  * - `'worker-exit'` — the execution substrate died without settling (e.g. OOM).
  * - `'invalid-output'` — the completion value was not lossless JSON.
- * - `'output-limit'` — the serialized outer logs/value/diagnostic exceeded the configured cap.
+ * - `'output-limit'` — the required completion value exceeded the configured cap.
  * - `'protocol'` — the program sent invalid or over-budget control traffic.
  * - `'sandbox-unavailable'` — required confinement could not be established.
  */
@@ -176,6 +172,8 @@ export interface PtcRunResult {
    * the outer result.
    */
   output: PtcOutput[]
+  /** Captured output or diagnostic text was truncated; execution still follows its normal completion, timeout and cancellation rules. */
+  outputTruncated?: boolean
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }

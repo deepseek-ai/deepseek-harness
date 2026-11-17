@@ -6,7 +6,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
@@ -98,6 +98,12 @@ export interface Workspace {
    * candidates. This does not admit new sessions or recreate directories.
    */
   readonly sessionIds: readonly SessionId[]
+
+  /**
+   * List the stored headers of the current members.
+   * @returns a new array with one header per entry of {@link sessionIds}, in the same order.
+   */
+  getSessionHeaders(): readonly SessionHeader[]
 
   /**
    * Replace the display title durably.

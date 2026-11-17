@@ -482,7 +482,7 @@ export class WorkerTunnel {
     const abort: AbortFrame = { t: 'abort', id }
     try {
       this.worker.postMessage(abort)
-    } catch {
+    } catch (_workerUnreachable) {
       // The operation is already locally terminal; worker failure is reported by its owning path.
     }
   }

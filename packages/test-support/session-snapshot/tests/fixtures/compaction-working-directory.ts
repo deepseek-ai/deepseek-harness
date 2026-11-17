@@ -11,6 +11,6 @@ export const name = 'compaction-working-directory'
  */
 export function apply(ctx: Context): void {
   ctx.on('agent/created', async ({ agent }) => {
-    agent.session.append('working-directory/change', { cwd: '/tmp' })
+    agent.session.append('workspace-root/change', { cwd: '/tmp' })
   })
 }

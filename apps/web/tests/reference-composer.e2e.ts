@@ -165,6 +165,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     // stays out of the menu golden.
     await mkdir(join(scaffold.workspaceCwd, 'workspace', 'folderx', 'nested'), { recursive: true })
     await writeFile(join(scaffold.workspaceCwd, 'workspace', 'folderx', 'nested', 'leaf.txt'), 'leaf fixture\n')
+    await writeFile(join(scaffold.workspaceCwd, 'workspace', 'folderx', 'nested', 'space name.txt'), 'space fixture\n')
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
@@ -428,5 +429,109 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['menu.expected.md', 'order.expected.md'])
+  })
+
+  it('adds a sidebar file after retained selection without sending and undoes it as one edit', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-reference-add-to-chat'))
+    const group = page.getByRole('treeitem', { name: /Ungrouped/ })
+    await group.waitFor({ timeout: 15_000 })
+    if (await group.getAttribute('aria-expanded') !== 'true') await group.click()
+    await page.locator(`[data-row-key="session:${TARGET_SESSION_ID}"]`).click()
+    await page.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'Research notes' }).waitFor()
+    const input = page.locator('[data-composer-input]').first()
+    const suggestions = page.getByRole('listbox', { name: 'Trigger suggestions' })
+    const directory = join(scaffold.workspaceCwd, 'workspace', 'folderx', 'nested')
+    const file = join(directory, 'space name.txt')
+    const sessionId = brandString<SessionId>(TARGET_SESSION_ID)
+    const beforeEvents = (await readPersistedEvents(scaffold, sessionId))
+      .filter(event => event.type === 'user/message' || event.type.startsWith('turn/'))
+    const beforeMessages = await page.locator('[data-chat-flow-kind="user"]').count()
+
+    // An absolute query compares the same resource spelling as the sidebar.
+    await replaceReferenceQuery(page, input, `@"${directory}/`)
+    const option = suggestions.getByRole('option', { name: /^space name\.txt/ })
+    await option.waitFor({ timeout: 15_000 })
+    await option.click()
+    const chip = input.locator('[data-composer-chip]')
+    await expect.poll(() => chip.textContent()).toBe('space name.txt')
+    const pickerAppearance = await chip.evaluate(node => ({
+      source: node.getAttribute('data-composer-chip'),
+      label: node.textContent,
+      icons: node.querySelectorAll('svg').length,
+    }))
+    await page.keyboard.press('ControlOrMeta+A')
+    // A page-local clipboard avoids interference with parallel browser workers.
+    const pickerClipboard = await input.evaluate((node) => {
+      const clipboardData = new DataTransfer()
+      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+      return clipboardData.getData('text/plain')
+    })
+    expect(pickerClipboard).toBe(`@"${file}" `)
+    await writeComposerDraft(page, input, '')
+
+    const column = page.locator('[data-rightbar-col]')
+    await page.locator('[data-sidebar-right-expand]').click()
+    await column.locator('[data-sidebar-right-guide-entry="files"]').click()
+    const navigator = column.locator('[data-files-navigator]:visible')
+    await navigator.waitFor()
+    for (const name of ['workspace', 'folderx', 'nested']) {
+      const folder = navigator.getByRole('button', { name, exact: true })
+      await folder.waitFor()
+      if (await folder.getAttribute('aria-expanded') !== 'true') await folder.click()
+    }
+    const row = navigator.getByRole('button', { name: 'space name.txt', exact: true })
+    await row.waitFor()
+    const draft = 'Review selected, then finish.'
+    await writeComposerDraft(page, input, draft)
+    const word = await input.evaluate((node) => {
+      const text = document.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode()
+      if (text === null) throw new Error('Composer draft has no text')
+      const range = document.createRange()
+      range.setStart(text, 'Review '.length)
+      range.setEnd(text, 'Review selected'.length)
+      const rect = range.getBoundingClientRect()
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    })
+    await page.mouse.dblclick(word.x, word.y)
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('selected')
+    // Copy observes the editor's committed selection, not only the native range.
+    await expect.poll(() => input.evaluate((node) => {
+      const clipboardData = new DataTransfer()
+      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+      return clipboardData.getData('text/plain')
+    })).toBe('selected')
+
+    await row.click({ button: 'right' })
+    const menu = page.getByRole('menu')
+    const action = menu.getByRole('menuitem', { name: 'Add to chat', exact: true })
+    await action.waitFor()
+    expect(await menu.getByRole('menuitem').last().textContent()).toBe('Add to chat')
+    expect(await action.isEnabled()).toBe(true)
+    await action.click()
+    await menu.waitFor({ state: 'hidden' })
+    await expect.poll(() => input.evaluate(node => node === document.activeElement)).toBe(true)
+    await expect.poll(() => input.textContent()).toBe('Review selected space name.txt , then finish.')
+    expect(await chip.evaluate(node => ({
+      source: node.getAttribute('data-composer-chip'),
+      label: node.textContent,
+      icons: node.querySelectorAll('svg').length,
+    }))).toEqual(pickerAppearance)
+    await page.keyboard.press('ControlOrMeta+A')
+    const menuClipboard = await input.evaluate((node) => {
+      const clipboardData = new DataTransfer()
+      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+      return clipboardData.getData('text/plain')
+    })
+    expect(menuClipboard).toBe(`Review selected ${pickerClipboard}, then finish.`)
+
+    await page.keyboard.press('ControlOrMeta+Z')
+    await expect.poll(() => input.textContent()).toBe(draft)
+    expect(await chip.count()).toBe(0)
+    expect(await input.evaluate(node => node === document.activeElement)).toBe(true)
+    expect(await page.locator('[data-chat-flow-kind="user"]').count()).toBe(beforeMessages)
+    expect((await readPersistedEvents(scaffold, sessionId))
+      .filter(event => event.type === 'user/message' || event.type.startsWith('turn/'))).toEqual(beforeEvents)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
   })
 })

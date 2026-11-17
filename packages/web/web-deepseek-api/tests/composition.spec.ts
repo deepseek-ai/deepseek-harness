@@ -10,13 +10,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 
 const cleanups: Array<() => Promise<void>> = []
 
@@ -27,6 +28,7 @@ afterEach(async () => {
 
 const MODULES = new Map<string, unknown>([
   ['@deepseek-ai/dsh-llm', LlmRuntime],
+  ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
   ['@deepseek-ai/dsh-llm-deepseek-api-key', Official],
   ['@deepseek-ai/dsh-llm-deepseek-account', Account],
   ['@deepseek-ai/dsh-web', WebRuntime],
@@ -44,12 +46,17 @@ interface Sent {
  * Boot the composition with a fixed launch environment and a stubbed network.
  * @param web - web-deepseek-api config.
  * @param environment - launch-environment variables.
+ * @param account - the sign-out signal of the stubbed account and the answer to Search requests, when not the default.
  * @returns the booted root context and the Search and Fetch API requests sent so far.
  */
-async function bootComposition(web: Record<string, unknown>, environment: Record<string, string>) {
+async function bootComposition(
+  web: Record<string, unknown>, environment: Record<string, string>,
+  account: { signedOut?: AbortSignal; search?: (signal: AbortSignal) => Promise<Response> } = {},
+) {
   // The providers and model listings dispatch to a string endpoint.
-  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.endsWith('/models')) return Response.json({ object: 'list', data: [] })
+    if (url.endsWith('/search') && account.search !== undefined) return await account.search(init!.signal!)
     return Response.json(url.endsWith('/search') ? { results: [] } : { content: '# Page' })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -64,6 +71,7 @@ async function bootComposition(web: Record<string, unknown>, environment: Record
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, JSON.stringify([
     { id: 'llm', name: '@deepseek-ai/dsh-llm' },
+    { id: 'deepseek-auth', name: '@deepseek-ai/dsh-deepseek-auth' },
     { id: 'llm-deepseek', name: '@deepseek-ai/dsh-llm-deepseek-api-key' },
     { id: 'llm-deepseek-account', name: '@deepseek-ai/dsh-llm-deepseek-account' },
     { id: 'web', name: '@deepseek-ai/dsh-web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } },
@@ -83,7 +91,9 @@ async function bootComposition(web: Record<string, unknown>, environment: Record
     }
     host.loader.internal = modules
     host.provide('launchEnvironment', createLaunchEnvironmentSnapshot([{ source: 'process', values: environment }]))
-    host.provide('deepseekAccount', { resolveToken: async () => 'account-token' } as Pick<DeepSeekAccount, 'resolveToken'> as DeepSeekAccount)
+    host.provide('deepseekAccount', accountStub({
+      token: () => 'account-token', ...account.signedOut === undefined ? {} : { signedOut: account.signedOut },
+    }))
   })
   cleanups.push(async () => { await ctx.fiber.dispose() })
   const sent = (): Sent[] => fetchMock.mock.calls.flatMap(([endpoint, init]) => {
@@ -145,6 +155,30 @@ describe('web-deepseek-api over the real model routes', () => {
       { endpoint: 'https://internal.deepseek.test/v1/tools/search', authorization: null, token: 'account-token' },
       { endpoint: 'https://internal.deepseek.test/v1/tools/fetch', authorization: 'Bearer chat-key', token: null },
     ])
+  })
+
+  it('ends an account-billed search in flight when the account signs out, with sign-in guidance', async () => {
+    const signedOut = new AbortController()
+    const sent = Promise.withResolvers<AbortSignal>()
+    const { ctx } = await bootComposition({ searchBilling: 'account' }, { DEEPSEEK_API_KEY: 'chat-key' }, {
+      signedOut: signedOut.signal,
+      search: (signal) => {
+        sent.resolve(signal)
+        return new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+        })
+      },
+    })
+    const search = ctx.web.search({ query: 'q' })
+    const request = await sent.promise
+    expect(request.aborted).toBe(false)
+    signedOut.abort()
+    await expect(search).rejects.toMatchObject({
+      code: 'WEB_PROVIDER_ERROR',
+      message: 'The DeepSeek account signed out before this web request finished. Guide the user to sign in to DeepSeek again;'
+        + ' the endpoint does not need changing.',
+    })
+    expect(request.aborted).toBe(true)
   })
 
   it('withholds API-key billing without a key despite a sign-in', async () => {

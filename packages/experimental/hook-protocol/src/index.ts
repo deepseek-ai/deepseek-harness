@@ -13,6 +13,7 @@ export type {
   MatcherGroup,
   MatcherMode,
 } from './types.ts'
+export { HOOK_BLOCKED, HOOK_DENIED, HOOK_ERROR_NAME } from './errors.ts'
 export { matcherDiagnostic, matchesMatcher, selectHookGroups } from './matcher.ts'
 export { parseHookOutput } from './codec.ts'
 export { DEFAULT_HOOK_TIMEOUT_MS, runHook } from './runner.ts'

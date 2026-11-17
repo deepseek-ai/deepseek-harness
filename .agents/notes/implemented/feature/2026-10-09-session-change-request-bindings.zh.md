@@ -30,4 +30,4 @@ Status: implemented
 
 ## Consequences
 
-在常见的 `gh pr create`、`gh pr view`、`gh pr edit`、`gh pr checkout` 与 `git push` 流程中，绑定无需模型配合即可出现，且不增加模型 token。通过脚本、别名或其他命令行工具运行的命令无法识别；在别处为某个分支打开的变更请求，要等到下一次推送、再次报告该分支或 `track` 之后才会出现。新的提供方在同一提供方契约之后加入自己的访问方式与 URL 形式，无需改变绑定规则或轮询。宿主需要为每个 GitHub 主机登录 `gh`。
+在常见的 `gh pr create`、`gh pr view`、`gh pr edit`、`gh pr checkout` 与 `git push` 流程中，绑定无需模型配合即可出现，且不增加模型 token。通过脚本、别名或其他命令行工具运行的命令无法识别；在别处为某个分支打开的变更请求，要等到下一次推送、再次报告该分支或 `track` 之后才会出现。新的提供方在同一提供方契约之后加入自己的访问方式与 URL 形式，并把其 CLI 的命令注册为[命令规则](2026-11-11-forge-provider-command-rules.zh.md)，无需改变轮询。宿主需要为每个 GitHub 主机登录 `gh`。

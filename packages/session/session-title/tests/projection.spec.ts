@@ -48,7 +48,7 @@ describe('title projection unit', () => {
     const firstSeq = appendTitle(session, 'First title')
     const secondSeq = appendTitle(session, 'Second title')
     session.append('turn/start', { turn: 1 })
-    expect(changes).toEqual([
+    expect(changes.filter(change => change.key === 'title')).toEqual([
       { key: 'title', value: 'First title', seq: firstSeq },
       { key: 'title', value: 'Second title', seq: secondSeq },
     ])

@@ -129,6 +129,10 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+.settingsMenu {
+  width: min(240px, calc(100vw - 24px));
+}
+
 .status,
 .empty {
   padding: 8px;
@@ -386,5 +390,5 @@
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
-  color: var(--dsw-alias-menu-icon);
+  color: var(--dsw-alias-label-tertiary);
 }

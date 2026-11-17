@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
-import { readDesktopPublishConfig, type DesktopPublishConfig } from '../scripts/desktop-publish-config.ts'
+import { readDesktopPublishConfig, type DesktopPublishConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 
 for (const platform of ['macos', 'windows'] as const) {
   for (const preset of ['test', 'production'] as const) {

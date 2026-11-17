@@ -7,7 +7,8 @@
   },
   "files": [
     "src/index.ts",
-    "src/config.ts"
+    "src/defaults.ts",
+    "src/types.ts"
   ],
   "references": [
     {
@@ -15,9 +16,6 @@
     },
     {
       "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../host/webserver"
     }
   ]
 }

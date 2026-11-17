@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-sdk-jsonrpc-server",
   "description": "Stdio JSON-RPC server plugin for out-of-process DeepSeek Harness SDK clients",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },
@@ -43,6 +43,7 @@
     "@deepseek-ai/dsh-goal": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
+    "@deepseek-ai/dsh-permission-presets": "workspace:*",
     "@deepseek-ai/dsh-schedule": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-sdk-protocol": "workspace:*",
@@ -50,7 +51,8 @@
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -63,6 +65,7 @@
     "@deepseek-ai/dsh-command-goal": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-goal": "workspace:*",
     "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
@@ -83,6 +86,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   }
 }

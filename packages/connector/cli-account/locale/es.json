@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Cuentas de aplicaciones CLI",
+    "description": "Indica al modelo la ruta de la CLI de cada complemento de aplicación CLI, ejecuta las operaciones de cuenta del complemento y muestra su cuenta en la página Complementos."
+  }
+}
