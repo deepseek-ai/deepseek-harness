@@ -347,6 +347,7 @@ export function apply(ctx: Context, config: Config): void {
         unregister()
       }
     })
+    // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
     mounted = { subagentProvider, definition, disposeTool }
   }
 
