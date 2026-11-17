@@ -1,6 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
-import { subagentModelSelectionProjectionDefinition } from '@deepseek-ai/dsh-tool-subagent/src/model-selection-state.ts'
+import type {} from '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -376,7 +376,7 @@ describe('the shipped Web composition', () => {
     }
   })
 
-  it('applies the default-off subagent model allowlist only to new sessions', async () => {
+  it('reads the default-off subagent model allowlist live for existing sessions', async () => {
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: false,
       allowedModels: [],
@@ -393,16 +393,17 @@ describe('the shipped Web composition', () => {
       sessionId: brandString<SessionId>('preset-model-selection-enabled'),
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
     })
-    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
     try {
       expect(toolNames(ctx, disabled.agent)).toContain('list_subagent_models')
       expect(toolParameterNames(ctx, disabled.agent, 'subagent')).toEqual(expect.arrayContaining([
         'model', 'provider', 'reasoning_effort',
       ]))
-      expect(policy.stateOf(disabled.agent.session)).toBeNull()
-      expect(policy.stateOf(enabled.agent.session)).toEqual([
+      expect(ctx.subagentModelSelection.allowedRoutes()).toEqual([
         { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       ])
+      for (const agent of [disabled.agent, enabled.agent]) {
+        expect(agent.session.snapshotEvents().some(event => event.type === 'subagent/model-selection-policy')).toBe(false)
+      }
       expect(toolNames(ctx, enabled.agent)).toContain('list_subagent_models')
       expect(toolParameterNames(ctx, enabled.agent, 'subagent')).toEqual(expect.arrayContaining([
         'model', 'provider', 'reasoning_effort',
@@ -411,7 +412,6 @@ describe('the shipped Web composition', () => {
         expect(toolParameterNames(ctx, agent, 'subagent_fork')).toEqual(['cwd', 'description', 'name', 'prompt'])
       }
     } finally {
-      await policy.dispose()
       await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, { enabled: false })
       await enabled.dispose()
       await disabled.dispose()
