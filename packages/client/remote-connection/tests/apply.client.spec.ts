@@ -144,6 +144,38 @@ describe('remote connection settings registration', () => {
     expect(slots.entries('shell.overlay')).toEqual([])
   })
 
+  it('keeps the clipboard unchanged when a registered copy action runs before the deployment is read', async () => {
+    const write = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } })
+    onTestFinished(() => {
+      if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    })
+    const response = Promise.withResolvers<undefined>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/status') await response.promise
+      return { ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+    })
+    let ctx: Context | undefined
+    try {
+      const runtime = await bench(call)
+      ctx = runtime.ctx
+      await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
+      const face = runtime.slots.spec('settings.remoteConnection.content')!.inject
+      expect(face.hooks.remoteConnection.getSnapshot().deployment).toBeNull()
+      const before = face.hooks.loginLink.getSnapshot()
+      await act(async () => { face.copyLink() })
+      expect(write).not.toHaveBeenCalled()
+      expect(face.hooks.loginLink.getSnapshot()).toBe(before)
+      expect(call).toHaveBeenCalledOnce()
+    } finally {
+      response.resolve(undefined)
+      await ctx?.fiber.dispose()
+    }
+  })
+
   it.each(['status', 'loginUrl'] as const)('aborts an outstanding %s RPC and drains plugin teardown without its network response', async (pendingEndpoint) => {
     const requestSignals: AbortSignal[] = []
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation((_channel, endpoint, _data, signal) => {
