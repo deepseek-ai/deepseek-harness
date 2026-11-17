@@ -380,6 +380,21 @@ describe('ImOutputRegistry buttons', () => {
     expect(harness.buttons).toHaveLength(1)
   })
 
+  it('ignores a stored message belonging to another chat when attributing an interaction', async () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    const foreign = harness.host({ key: 'foreign', output: 'probe', bindings: [{ chat: ImChatKey('fake:bot', 'elsewhere'), writable: true, home: true }] })
+    const foreignMsg = { ...inbound(), key: ImMessageKey('fake:bot', 'm-foreign'), chat: chatOf('elsewhere') }
+    // Simulate an alias collision where history.get(aliasKey) returns a message from another chat.
+    harness.messages.set(ImMessageKey('fake:bot', 'REFIDX_shared'), foreignMsg)
+    harness.sender.owners.set(foreignMsg.key, foreign.sessionId)
+
+    await harness.registry.button(click('dsh:plain', { message: 'REFIDX_shared' }))
+    expect(harness.buttons).toHaveLength(1)
+    expect(harness.buttons[0]?.message).toBeUndefined()
+    expect(harness.buttons[0]?.session).toBeUndefined()
+  })
+
   it('routes the stop button of a bound session to sessions.stop', async () => {
     const harness = booted()
     const hosted = harness.host({ output: 'probe' })

@@ -213,9 +213,10 @@ export class ImOutputRegistry implements ImOutputs {
     // next inbound frame is re-admitted against the current rules, so the controls have to be as well.
     if (!admitsChat(source, interaction.bot.id, interaction.chat)) return
     if (!allows(source.users, interaction.user.id)) return
-    const message = interaction.message === undefined
+    const candidate = interaction.message === undefined
       ? undefined
       : this.deps.im.history.get(ImMessageKey(interaction.bot.id, interaction.message.id))
+    const message = candidate?.chat.key === chat.key ? candidate : undefined
     const owner = message === undefined ? undefined : this.deps.sender.sessionOf(message.key)
     return { chat, ...message === undefined ? {} : { message }, ...owner === undefined ? {} : { session: owner } }
   }
