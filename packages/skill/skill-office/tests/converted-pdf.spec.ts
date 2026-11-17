@@ -1,4 +1,4 @@
-/** Conversion provenance the real Office PDF export lane asserts. */
+/** The temporary file and byte count a PDF conversion reports, which the real Office export lane asserts. */
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
