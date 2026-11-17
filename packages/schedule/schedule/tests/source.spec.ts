@@ -1,5 +1,5 @@
 /** Typed receiving endpoints share directed delivery, broadcast, and quiescent disposal. */
-import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, onTestFinished } from 'vitest'
 import { SourceError, SourceInput, SourceOutput } from '@deepseek-ai/dsh-schedule'
 import { AutomationSource } from '../src/source.ts'
 import type { AutomationConnection } from '../src/source-types.ts'
@@ -271,10 +271,16 @@ describe('source connections', () => {
     expect(values).toEqual([2])
   })
 
-  it('closes output synchronously after individually disposed owned inputs have drained', async () => {
+  it.each(['emit', 'fail'] as const)('closes output synchronously after individually disposed owned inputs %s and drain', async (outcome) => {
     const test = scope()
+    const failure = new Error('owned input rejected the value')
     const source = test.own(new class extends AutomationSource<number> {
-      open() { return this.createInput<number>(value => this.emit(value)) }
+      open() {
+        return this.createInput<number>(async (value) => {
+          if (outcome === 'fail') throw failure
+          await this.emit(value)
+        })
+      }
     }())
     const upstream = test.own(new ValueSource<number>())
     const values: number[] = []
@@ -283,42 +289,21 @@ describe('source connections', () => {
     for (const value of [1, 2, 3]) {
       const input = source.open()
       const connection = input.connect(upstream.output)
-      await connection.send(value)
+      const work = connection.send(value)
+      if (outcome === 'fail') await expect(work).rejects.toBe(failure)
+      else await work
       const closed = input.dispose()
       expect(input.dispose()).toBe(closed)
       await closed
     }
-    expect(values).toEqual([1, 2, 3])
+    const expected = outcome === 'emit' ? [1, 2, 3] : []
+    expect(values).toEqual(expected)
     const closing = test.track(source.dispose())
     expect(source.dispose()).toBe(closing)
     await expect(downstream.send(4)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
     await closing
-    expect(values).toEqual([1, 2, 3])
+    expect(values).toEqual(expected)
     expect(() => source.open()).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
-  })
-
-  it('retains an owned input after cleanup rejects and preserves the cleanup promise', async () => {
-    const test = scope()
-    const source = test.own(new class extends AutomationSource<number> {
-      open() { return this.createInput<number>(async () => {}) }
-    }())
-    const upstream = test.own(new ValueSource<number>())
-    const input = source.open()
-    const connection = input.connect(upstream.output)
-    const failure = new Error('input cleanup failed')
-    const failed = test.track(Promise.reject(failure))
-    const dispose = vi.spyOn(SourceInput.prototype, 'dispose').mockReturnValueOnce(failed)
-    onTestFinished(() => { dispose.mockRestore() })
-    try {
-      const closing = input.dispose()
-      expect(closing).toBe(failed)
-      await expect(closing).rejects.toBe(failure)
-    } finally {
-      dispose.mockRestore()
-    }
-    const closing = test.track(source.dispose())
-    await expect(connection.send(1)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
-    await closing
   })
 
   it.each(['emit', 'fail'] as const)('retains an individually closing owned input until it can %s and settle', async (outcome) => {

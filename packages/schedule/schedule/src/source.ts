@@ -13,8 +13,9 @@ export abstract class AutomationSource<T> {
 
   /**
    * Create an input owned by this Source; a composite can expose its bound connect function directly.
+   * Its drain resolves after accepted calls settle; receiver failures remain with the send or broadcast.
    * @param receive - Accepts typed upstream values, possibly emitting derived output before it settles.
-   * @returns The endpoint, owned until its drain succeeds and automatically drained before output closes.
+   * @returns The endpoint, owned until its drain completes and automatically drained before output closes.
    * @throws SourceError with SOURCE_CLOSED after this Source starts disposal.
    */
   protected createInput<Input>(receive: SourceReceiver<Input>): SourceInput<Input> {
@@ -23,10 +24,7 @@ export abstract class AutomationSource<T> {
     const input = new class extends SourceInput<Input> {
       override dispose(): Promise<void> {
         const closed = super.dispose()
-        void closed.then(
-          () => { inputs.delete(this) },
-          () => { /* Keep ownership; the returned promise reports cleanup failure. */ },
-        )
+        void closed.then(() => { inputs.delete(this) })
         return closed
       }
     }(receive)
