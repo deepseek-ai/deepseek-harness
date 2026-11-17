@@ -584,7 +584,10 @@ export class ImSessionHost implements ImSessions {
     this.index(record)
   }
 
-  /** Forget one delivery intent whose generation is gone, so no recovery pass retries it. */
+  /**
+   * Whether `sessionId` has an uncommitted reset receipt (`replaced === sessionId`), so `admit()` refuses with
+   * `unavailable` and keeps the intent pending until the reset advances.
+   */
   private hasPendingReset(sessionId: SessionId): boolean {
     for (const stored of this.resets.values()) {
       if (stored.replaced === sessionId) return true
@@ -592,6 +595,7 @@ export class ImSessionHost implements ImSessions {
     return false
   }
 
+  /** Forget one delivery intent whose generation is gone, so no recovery pass retries it. */
   private async discard(id: string): Promise<void> {
     await this.write(async () => {
       await this.domainOf().table('deliveries').delete(id)
