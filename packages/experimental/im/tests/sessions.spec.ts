@@ -533,27 +533,44 @@ describe('reset', () => {
   })
 
   it('serializes recover() behind an in-flight reset() without duplicating events or dropping concurrent bindings', async () => {
-    const harness = await booted()
-    const record = await harness.host.ensure(spec())
-
-    // Pause `reset()` after it wrote the reset receipt and is about to advance the generation, then trigger `retry()`
-    // and a concurrent `bind()` before letting `reset()` finish.
-    let resumeSave: (() => void) | undefined
-    const saveBlocked = new Promise<void>((resolve) => { resumeSave = resolve })
-    let sawResetReceipt = false
-    let bindPromise: Promise<void> | undefined
-    const onChanged = (change: { domain: string; table: string }) => {
-      if (!sawResetReceipt && change.domain === 'im_sessions' && change.table === 'resets') {
-        sawResetReceipt = true
-        harness.host.retry()
-        bindPromise = harness.host.bind(record.key, [{ chat: CHAT.key, writable: true, home: true }, { chat: ImChatKey('fake:bot', 'other'), writable: false }])
-        resumeSave?.()
+    const harness = await booted({ withoutStart: true })
+    const origOpen = harness.ctx.storageDomain.open.bind(harness.ctx.storageDomain)
+    let blockNextSessionPut = false
+    let onSessionPutBlocked: (() => void) | undefined
+    const sessionPutBlocked = new Promise<void>((resolve) => { onSessionPutBlocked = resolve })
+    let releaseSessionPut: (() => void) | undefined
+    const sessionPutGate = new Promise<void>((resolve) => { releaseSessionPut = resolve })
+    vi.spyOn(harness.ctx.storageDomain, 'open').mockImplementation(async (schema) => {
+      const domain = await origOpen(schema)
+      const sessionsTable = domain.table('sessions' as never) as { put: (k: unknown, v: unknown) => Promise<void> }
+      const origPut = sessionsTable.put.bind(sessionsTable)
+      sessionsTable.put = async (k, v) => {
+        if (blockNextSessionPut) {
+          blockNextSessionPut = false
+          onSessionPutBlocked?.()
+          await sessionPutGate
+        }
+        return origPut(k, v)
       }
-    }
-    harness.ctx.on('domain/changed', onChanged)
+      return domain
+    })
+    await harness.host.start()
 
+    const record = await harness.host.ensure(spec())
+    blockNextSessionPut = true
     const resetPromise = harness.host.reset(record.key, 'cmd', { operationId: 'op-concurrent', expectedGeneration: 0 })
-    await saveBlocked
+    await sessionPutBlocked
+
+    // `this.resets` now holds the receipt while `save(next)` is paused inside `reset()`'s write/serial lock.
+    harness.host.retry()
+    const bindPromise = harness.host.bind(record.key, [
+      { chat: CHAT.key, writable: true, home: true },
+      { chat: ImChatKey('fake:bot', 'other'), writable: false },
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+    releaseSessionPut?.()
+
     await resetPromise
     await bindPromise
     await harness.host.whenRecovered()
