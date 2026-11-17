@@ -101,6 +101,8 @@ interface PtcRunResult {
    * the outer result.
    */
   output: PtcOutput[]
+  /** Captured output or diagnostic text was truncated; execution still follows its normal completion, timeout and cancellation rules. */
+  outputTruncated?: boolean
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -202,7 +204,7 @@ declare class PtcInspectableValue {
 
 ## Captured output and the failure taxonomy
 
-`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; captured-output truncation is reported independently through `outputTruncated`, while required completion values remain lossless. See the [Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md) for budget priority and execution semantics.
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -239,7 +241,7 @@ Failure kinds are **orthogonal outcomes reported independently** (per [defensive
  * - `'abort'` — {@link PtcRunRequest.signal} fired.
  * - `'worker-exit'` — the execution substrate died without settling (e.g. OOM).
  * - `'invalid-output'` — the completion value was not lossless JSON.
- * - `'output-limit'` — the serialized outer logs/value/diagnostic exceeded the configured cap.
+ * - `'output-limit'` — the required completion value exceeded the configured cap.
  * - `'protocol'` — the program sent invalid or over-budget control traffic.
  * - `'sandbox-unavailable'` — required confinement could not be established.
  */

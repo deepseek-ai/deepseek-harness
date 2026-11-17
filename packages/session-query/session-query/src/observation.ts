@@ -22,6 +22,12 @@ export interface SessionObservation extends Disposable {
   /** Exact fork-inherited event count paired with {@link header}. */
   readonly inheritedEventCount: SessionLogOffsetType
   /**
+   * Cold observations only: how many of {@link events} are stored, before the
+   * interrupted-turn repairs the read appended in memory. A live observation
+   * omits it; every live event is stored or drained before a sharing fork.
+   */
+  readonly persistedEventCount?: SessionLogOffsetType
+  /**
    * Immutable contiguous events at {@link cursor}. A live observation
    * materializes this array on first read, so a consumer that reads only the
    * header, cursor, or projections never copies the log.
@@ -54,6 +60,7 @@ export interface SessionObservationOptions {
  * instance still reports the same revision.
  */
 interface PreparedEntry {
+  readonly persistedEventCount: SessionLogOffsetType
   /** Stable service identity whose `stat` produced this revision; proxy references are not instance identities. */
   readonly persistenceIdentity: symbol
   /** Durable revision observed by `stat` immediately before the log read. */
@@ -167,6 +174,7 @@ export class SessionObservationReader {
           )
         }
         entry = {
+          persistedEventCount: loaded.persistedEventCount,
           persistenceIdentity: persistence.identity,
           revision: snapshot.revision,
           session,
@@ -280,6 +288,7 @@ export class SessionObservationReader {
         source: 'prepared',
         header: entry.session.header,
         inheritedEventCount: entry.session.inheritedEventCount,
+        persistedEventCount: entry.persistedEventCount,
         events: entry.events,
         cursor: entry.events.at(-1)?.seq ?? -1,
         revision: entry.revision,

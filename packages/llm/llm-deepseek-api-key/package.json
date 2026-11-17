@@ -37,7 +37,8 @@
     "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
     "@deepseek-ai/dsh-launch-environment": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:~"
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -45,7 +46,8 @@
     "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
     "@deepseek-ai/dsh-launch-environment": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:~"
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis-plugin-loader": {

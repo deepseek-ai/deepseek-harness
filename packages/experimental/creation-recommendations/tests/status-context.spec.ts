@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
-import { fixture, callId, proposal, recordCard, ACTION } from './fixture.ts'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards'
+import { fixture, cardId, proposal, recordCard, ACTION } from './fixture.ts'
 import * as CreationRecommendations from '../src/index.ts'
 
 async function prepare(
@@ -94,11 +95,11 @@ it('reports installed and removed outcomes, including application errors, withou
   if (removed.kind !== 'enter') throw new Error('request was rejected')
   expect(JSON.stringify(removed.messages[0]!.content)).toContain('removed')
   enter(f.agent, removed)
-  recordCard(f.agent.session, { callId: brandString<ToolCallId>('older-card'), slot: 'page', phase: 'installed', application: 'failed' })
+  recordCard(f.agent.session, { cardId: brandString<ActionCardId>('older-card'), slot: 'page', phase: 'installed', application: 'failed' })
   const failedApplication = await prepare(f)
   if (failedApplication.kind !== 'enter') throw new Error('request was rejected')
   expect(JSON.stringify(failedApplication.messages[0]!.content)).toContain('failed')
-  expect(JSON.stringify(failedApplication.messages[0]!.content)).not.toContain(callId)
+  expect(JSON.stringify(failedApplication.messages[0]!.content)).not.toContain(cardId)
   expect(f.startActivation).toHaveBeenCalledOnce()
 })
 
@@ -111,17 +112,17 @@ it('keeps an unstarted proposal across later human messages and lets the next pr
   expect(f.current()).toBeUndefined()
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
   f.agent.session.append('turn/start', { turn: 2 })
-  await f.propose('call-creation-2', { ...proposal, title: 'Checklist' })
-  expect(f.current()).toEqual({ callId, phase: 'replaced' })
+  await f.propose('card-creation-2', { ...proposal, title: 'Checklist' })
+  expect(f.current()).toEqual({ cardId, phase: 'replaced' })
   // Replacement is the model's own choice, so no status notice is queued for it.
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
   expect(await f.act('create')).toEqual({
-    status: 'settled', decision: { callId, action: ACTION, phase: 'replaced' },
+    status: 'settled', decision: { cardId, action: ACTION, phase: 'replaced' },
   })
   await f.agentHandle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed: [...f.events] })
   expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({
-    status: 'settled', decision: { callId, action: ACTION, phase: 'replaced' },
+    status: 'settled', decision: { cardId, action: ACTION, phase: 'replaced' },
   })
   expect(f.startActivation).not.toHaveBeenCalled()
   expect(f.manager.installBundle).not.toHaveBeenCalled()

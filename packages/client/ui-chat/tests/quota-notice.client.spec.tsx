@@ -3,6 +3,7 @@
  * that outlives the Chat panel, and history scrollback never does.
  */
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -70,12 +71,12 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.declare({
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.approval.detail': { kind: 'single', scope: 'session' },
   })
-  const conversation = await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  const conversation = await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   let descriptor: Parameters<typeof runtime.ctx.uiSession.provide>[0] | undefined
   const provide = runtime.ctx.uiSession.provide.bind(runtime.ctx.uiSession)
   runtime.ctx.uiSession.provide = (next) => { descriptor ??= next; return provide(next) }

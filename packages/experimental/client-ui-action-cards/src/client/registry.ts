@@ -23,6 +23,8 @@ export interface ActionCardBodyProps<N extends Extract<keyof LocaleNamespaceMap,
   readonly sessionId: SessionId
   /** Title and folded brief rendered by the frame; the body places them in its layout. */
   readonly summary: ReactNode
+  /** The frame's title, folded brief and Not now, which the body renders instead of its layout when its schema rejects `details`. */
+  readonly fallback: ReactNode
   /** The frame's width-weighted text fold. */
   readonly Folded: ComponentType<FoldedTextProps>
   /**

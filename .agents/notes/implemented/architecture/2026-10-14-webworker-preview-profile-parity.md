@@ -61,7 +61,7 @@ The Worker's structural stubs throw errors carrying `ERR_FEATURE_UNAVAILABLE_ON_
 ### Watching and Client plugin delivery
 
 - Worker `fs.watch` and `fs.watchFile` listeners run in the async context where the watcher was created, as Node delivers watch events from the watch handle, not in the context of the code whose write produced the event. HMR's configuration watcher therefore runs outside the writer's HMR transaction, and a configuration write made inside a transaction does not make the follow-up reload fail as a nested transaction.
-- The browser half of `@deepseek-ai/dsh-client-hmr` reads `/plugins/events` through the page's `__DSH_TRANSPORT__.fetch` when a shell provides one (the Worker preview tunnel), otherwise through `EventSource`. The Client plugins of a bundle enabled in the Preview therefore mount without a page reload.
+- The browser half of `@deepseek-ai/dsh-client-hmr` follows the `pluginEvents/follow` Remote stream over the Remote carrier the page's Connection provides, including the Worker preview tunnel. The Client plugins of a bundle enabled in the Preview therefore mount without a page reload.
 
 ## Alternatives considered
 
