@@ -43,7 +43,7 @@ describe('the cordis-inspect-providers host entry', () => {
     await ctx.plugin(CordisInspectProviders)
     const agent = { ctx } as never
     const signal = new AbortController().signal
-    expect(await ctx.cordisInspect.query('host', 'Runtime', 'getVersion', undefined, agent, signal)).toEqual({ version: createRequire(import.meta.url)('@deepseek-ai/dsh-app-boot/package.json').version })
+    expect(await ctx.cordisInspect.query('host', 'Runtime', 'getVersion', undefined, agent, signal)).toEqual({ version: (createRequire(import.meta.url)('@deepseek-ai/dsh-app-boot/package.json') as { version: string }).version })
     await ctx.fiber.dispose()
   })
 
