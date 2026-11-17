@@ -860,7 +860,9 @@ export class SubagentManager {
         : await this.ownerCtx.agents.create({
           sessionId: childId,
           meta: create.meta,
-          ...(create.seed === undefined ? {} : { seed: create.seed }),
+          ...(create.seed === undefined ? {} : {
+            seed: create.seed, parentSource: { sessionId: create.parent.id, endSeq: SessionLogOffset(create.seed.length) },
+          }),
           inheritedEventCount: create.inheritedEventCount,
           agentOptions: inputs.agentOptions,
           signal: inputs.signal,

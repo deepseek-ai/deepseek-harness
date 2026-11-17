@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-17-sidebar-scrollbar-fade-in-css.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-17-sidebar-scrollbar-fade-in-css.md
+/agent-note-the-sidebar-scrollbar-s-delay-and-fade-live-in-a-css-transition:
+  en: 9b7623eb8949b421
+  zh: d70020274d864676
+/agent-note-the-sidebar-scrollbar-s-delay-and-fade-live-in-a-css-transition/problem:
+  en: 88d0ec7e97d4d94a
+  zh: 23f3baf3e0a8bdf2
+/agent-note-the-sidebar-scrollbar-s-delay-and-fade-live-in-a-css-transition/decision:
+  en: 5e1bbaf2825ceac7
+  zh: 7c39baf282e8d63b
+/agent-note-the-sidebar-scrollbar-s-delay-and-fade-live-in-a-css-transition/alternatives-considered:
+  en: 484736bb70e14bbc
+  zh: 9101a98c7f6be310
+/agent-note-the-sidebar-scrollbar-s-delay-and-fade-live-in-a-css-transition/consequences:
+  en: 63f48085261affd8
+  zh: 88db30f2ee8a8928

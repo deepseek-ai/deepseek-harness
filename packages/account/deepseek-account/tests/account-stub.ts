@@ -13,8 +13,8 @@ export interface AccountStubOptions {
 }
 
 /**
- * An account service releasing request credentials as the real one does: the token header, the bare token, the
- * sign-out signal, and an invalidation that reports no failure.
+ * An account service releasing request credentials as the real one does: the token header, the sign-out signal,
+ * and an invalidation that reports no failure.
  * @param options - token policy, rejection observer, and sign-out signal.
  * @returns the stand-in, typed as the service for `ctx.provide`.
  */
@@ -26,7 +26,6 @@ export function accountStub(options: AccountStubOptions): DeepSeekAccount {
       if (token === undefined || token.length === 0) return undefined
       return {
         headers: { [ACCOUNT_TOKEN_HEADER]: token },
-        value: token,
         revoked: signedOut,
         reject: async () => {
           try { await options.reject?.(token) }

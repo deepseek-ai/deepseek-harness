@@ -88,12 +88,23 @@ export interface CreateAgentOptions {
   /** Exact fork-inherited prefix length when the session metadata sets `isSeeded`. */
   readonly inheritedEventCount?: SessionLogOffset
   /**
-   * Initial replay/fork history, contiguous from seq 0 with lossless-JSON data.
-   * A fork supplies an exact parent prefix, its inherited marker, and closers
-   * for the open tail. Previously closed steps and turns remain unchanged.
-   * The factory validates and snapshots the seed before publication.
+   * Initial replay or restored history, contiguous from seq 0 with lossless-JSON
+   * data. The factory validates and snapshots these events before publication.
+   * A fork supplies the parent's stored prefix through `endSeq` as a live log
+   * or a persistence read returned it, then the child's own events.
    */
   readonly seed?: readonly SessionEvent[]
+  /**
+   * The parent a seeded fork shares its prefix with. The persistence backend
+   * stores the first `endSeq` seed events by reference or copy and rejects a
+   * parent whose stored history is shorter than `endSeq`.
+   */
+  readonly parentSource?: {
+    /** Parent Session identity. */
+    readonly sessionId: SessionId
+    /** Exclusive parent prefix length within `seed`, excluding read-time repairs. */
+    readonly endSeq: SessionLogOffset
+  }
   /** Route fallback and output controls; see {@link AgentOptions} for live accessor semantics. */
   readonly agentOptions?: AgentOptions
   /** Optional creation-only cancellation signal; detached before the returned handle becomes visible. */

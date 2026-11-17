@@ -20,6 +20,7 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as DeepSeekPluginPackageInventory from '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { sourceModuleLoader } from './helpers.ts'
@@ -100,6 +101,7 @@ async function loadComposition(
         '    debounceMs: 10',
       ]
       : [],
+    "- name: '@deepseek-ai/dsh-deepseek-auth'",
     '- id: llm-deepseek',
     "  name: '@deepseek-ai/dsh-llm-deepseek-api-key'",
     '  config:',
@@ -123,6 +125,7 @@ async function loadComposition(
     ['@deepseek-ai/dsh-session-log-deepseek', SessionLogDeepSeek],
     ['@deepseek-ai/dsh-plugin-package-inventory-deepseek', DeepSeekPluginPackageInventory],
     ['@deepseek-ai/dsh-credentials-local', LocalCredentialProvider],
+    ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
     ['@deepseek-ai/dsh-llm-deepseek-api-key', LlmDeepSeek],
   ])
   // The custom importer bypasses Node resolution; mirror the package manifests

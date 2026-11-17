@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/account/deepseek-auth/README.md
+/:
+  en: 72aa9af5bb4b9d47
+  zh: 0474d8db22dbf845
+/deepseek-ai-dsh-deepseek-auth:
+  en: 819d59b8b22bf985
+  zh: 3f919581e5639cca
+/deepseek-ai-dsh-deepseek-auth/summary:
+  en: 27b451d236a03881
+  zh: 2eb02aed4c4ab1b3
+/deepseek-ai-dsh-deepseek-auth/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-deepseek-auth/use-this-package:
+  en: 475c8fce4a8aa18f
+  zh: c5a2b3c20dc3ee53
+/deepseek-ai-dsh-deepseek-auth/use-this-package/when-to-use-it:
+  en: 5ae5865ce8e74ca9
+  zh: f35aa7f2742a1e76
+/deepseek-ai-dsh-deepseek-auth/use-this-package/authorizing-a-request:
+  en: 02b641a20536ed3e
+  zh: cf704140423f4091
+/deepseek-ai-dsh-deepseek-auth/use-this-package/where-each-kind-s-credential-and-deployment-come-from:
+  en: b909920465406991
+  zh: babec6024f3741a0
+/deepseek-ai-dsh-deepseek-auth/use-this-package/what-can-go-wrong:
+  en: 6b4a01982c7a435b
+  zh: 188c13fea190a619
+/deepseek-ai-dsh-deepseek-auth/understand-the-implementation:
+  en: 6133f3219e92d614
+  zh: d4f47c8fe96bbb83
+/deepseek-ai-dsh-deepseek-auth/understand-the-implementation/design-philosophy:
+  en: 781040be419e91c6
+  zh: fd7cfff0a180a6ca
+/deepseek-ai-dsh-deepseek-auth/understand-the-implementation/source-map:
+  en: 28159a33fcde18a3
+  zh: 8e29411be0a9efe7
+/deepseek-ai-dsh-deepseek-auth/understand-the-implementation/lifecycle:
+  en: 410428e4e26f97ee
+  zh: b0fff475dfebe3ad
+/deepseek-ai-dsh-deepseek-auth/further-exploration:
+  en: 4d9c163447511873
+  zh: 39cd847064374250
+/deepseek-ai-dsh-deepseek-auth/model-experience:
+  en: fe5289b96181fa86
+  zh: 186fd56ec8423081
+/deepseek-ai-dsh-deepseek-auth/model-experience/kv-cache-effect:
+  en: 8d28a9884785f30c
+  zh: b1c45c04e1a543d7
+/deepseek-ai-dsh-deepseek-auth/known-limitations-and-deferred-work:
+  en: d2fd57e36ce7b03a
+  zh: f105c8dbd169db9e
+/deepseek-ai-dsh-deepseek-auth/known-limitations-and-deferred-work/dev-note:
+  en: e3eca6e1556f695c
+  zh: 7234e0729568e2e9

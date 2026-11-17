@@ -1,7 +1,7 @@
 /** One-shot cold session read through the handle-based persistence seam. */
 
-import { interruptedTurnClosers } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset, SessionSeedEventState } from '@deepseek-ai/dsh-session'
+import { interruptedTurnClosers, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId, SessionSeedEventState } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import type { SessionHandleReadResult } from '@deepseek-ai/dsh-session-persistence'
 
@@ -13,6 +13,8 @@ export interface ColdSessionLog {
   readonly header: SessionHeader
   /** Exact fork-inherited event count paired with {@link header}. */
   readonly inheritedEventCount: SessionLogOffset
+  /** How many of {@link events} are stored; the rest are the synthetic interrupted-turn closers appended in memory. */
+  readonly persistedEventCount: SessionLogOffset
   /** Stored events plus deterministic in-memory closers for an interrupted final turn; nothing is written back. */
   readonly events: SessionEvent[]
 }
@@ -53,6 +55,7 @@ export async function readColdSessionLog(
     eventState: read.eventState,
     header: handle.header,
     inheritedEventCount: handle.inheritedEventCount,
+    persistedEventCount: SessionLogOffset(events.length),
     events: [...events, ...interruptedTurnClosers(events)],
   }
 }
