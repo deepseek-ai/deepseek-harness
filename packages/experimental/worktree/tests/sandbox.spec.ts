@@ -1,5 +1,6 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
@@ -110,6 +111,30 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === linked)).toBe(true)
     // The registration write lands in the shared Git directory outside the linked root; only the derived grant admits it.
     expect(confine.mock.calls.some(call => call[1].additionalWritableRoots?.includes(administration))).toBe(true)
+  })
+
+  it('fetches the remote base branch from a linked checkout under the granted shared Git administration directory', async () => {
+    root = await repository(process.cwd())
+    const clone = join(root, 'clone')
+    await git(root, 'clone', pathToFileURL(root).href, clone)
+    await git(clone, 'config', 'core.autocrlf', 'false')
+    const linked = join(clone, 'linked')
+    await git(clone, 'worktree', 'add', '-b', 'linked', linked)
+    await writeFile(join(root, 'tracked.txt'), 'remote\n')
+    await git(root, 'commit', '-am', 'remote')
+    const fetched = await git(root, 'rev-parse', 'HEAD')
+    ctx = await harness(linked, {}, 'workspace-write')
+    const agent = testAgent(ctx, linked)
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+
+    const created = await ctx.worktrees.create(agent, { name: 'fetched', from: 'refs/remotes/origin/main', fetch: true })
+
+    // The fetch writes the remote-tracking branch into the shared Git directory outside the linked root.
+    expect(created.baseCommit).toBe(fetched)
+    expect(await git(clone, 'rev-parse', 'refs/remotes/origin/main')).toBe(fetched)
+    const fetches = confine.mock.calls.filter(call => call[0].includes('fetch'))
+    expect(fetches).toHaveLength(1)
+    expect(fetches[0]![1]).toMatchObject({ mode: 'workspace-write', workspaceRoot: linked, additionalWritableRoots: [join(clone, '.git')] })
   })
 
   it('restores a removed worktree under the source checkout boundary while the Session root is the removed directory', async () => {

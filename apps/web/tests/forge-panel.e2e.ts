@@ -839,8 +839,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(baseCommit)
   const events = await readPersistedEvents(scaffold, sessionId)
   expect(worktreeRecords(events)).toEqual([
-    { action: 'request', from: 'main' },
-    { action: 'request', from: 'release' },
+    { action: 'request', from: 'refs/heads/main' },
+    { action: 'request', from: 'refs/heads/release' },
     { created: { path: directory, branch, baseCommit, repositoryRoot: project } },
   ])
   // The worktree existed before the turn, so the first model request carried its directory notice.
@@ -978,7 +978,9 @@ it.skipIf(MODE === 'record')('keeps the first message waiting when the worktree 
   if (session === undefined) throw new Error('The Session must stay loaded')
   expect(scaffold.ctx.workingDirectory.get(session)).toBe(project)
   const events = await readPersistedEvents(scaffold, sessionId)
-  expect(worktreeRecords(events)).toEqual([{ action: 'request', from: 'main' }, { action: 'request', from: 'release' }, { action: 'cancel' }])
+  expect(worktreeRecords(events)).toEqual([
+    { action: 'request', from: 'refs/heads/main' }, { action: 'request', from: 'refs/heads/release' }, { action: 'cancel' },
+  ])
   expect(events.filter(event => event.type === 'turn/start')).toHaveLength(1)
   expect(events.some(event => event.type === 'user/message' && event.data.source.kind === 'working-directory')).toBe(false)
   const checkout = (await showSessionPanel(page)).locator('[data-forge-checkout]')

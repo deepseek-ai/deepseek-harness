@@ -217,10 +217,33 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Only the branch names shorten; the number, checks, and flags keep whole words on one line. */
-.meta > :not(.ellipsis) {
+/* Only the branch names and the collapsed status line shorten; the number, checks, and flags keep whole words on one line. */
+.meta > :not(.ellipsis):not(.statusLine) {
   flex: none;
   white-space: nowrap;
+}
+
+/* The collapsed number and status: one line as wide as the row, so a change of its wording never resizes it. It clips
+   with an ellipsis and crawls with the title; its parts sit inline so the ellipsis cuts between characters. */
+.statusLine {
+  flex: 1;
+}
+
+.statusLine .dot {
+  margin: 0 6px;
+}
+
+.statusLine .ci {
+  display: inline;
+}
+
+.statusLine .checkGlyph {
+  margin-inline-end: 5px;
+  vertical-align: -2px;
+}
+
+.statusLine .flag {
+  margin-inline-start: 6px;
 }
 
 .finished {

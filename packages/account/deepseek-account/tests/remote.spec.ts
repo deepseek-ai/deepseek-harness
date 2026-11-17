@@ -3,7 +3,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
@@ -70,18 +69,16 @@ it('delivers expiry only to current subscribers and stops on disconnect or provi
   expect(await reopened).toEqual({ done: true, value: undefined })
 })
 
-it('reports running account requests and excludes absent, idle, and other-provider tasks', async () => {
-  const { ctx, account } = await fixture()
+it('reports running account work through registered reports and forgets disposed ones', async () => {
+  const { account } = await fixture()
   expect(account.hasRunningAccountTasks()).toBe(false)
-  const active: Array<Pick<Agent, 'status' | 'session'>> = []
-  const task = (status: Agent['status'], provider?: string): Pick<Agent, 'status' | 'session'> => ({
-    status, session: { requestContext: () => provider === undefined ? undefined : { provider, model: 'model' } } as Agent['session'],
-  })
-  ctx.provide('agents', { list: () => active } as Context['agents'])
-  active.push(task('running'), task('running', 'deepseek-official'), task('idle', 'deepseek-account'))
+  let running = false
+  const idle = account.registerRunningTaskReport(() => false)
+  const dispose = account.registerRunningTaskReport(() => running)
   expect(account.hasRunningAccountTasks()).toBe(false)
-  active.push(task('running', 'deepseek-account'))
+  running = true
   expect(account.hasRunningAccountTasks()).toBe(true)
-  active.pop()
+  dispose()
   expect(account.hasRunningAccountTasks()).toBe(false)
+  idle()
 })

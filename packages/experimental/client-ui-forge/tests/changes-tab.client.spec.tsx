@@ -224,6 +224,16 @@ function hostStream<F>(frames: readonly F[], failure?: unknown): HostStream<F> {
   }
 }
 
+/**
+ * Whether the view shows its reading state: the reading status above file card placeholders, with the files menu naming
+ * no count.
+ */
+function reading(view: ReturnType<typeof render>): boolean {
+  return view.queryByRole('status')?.textContent === en['diff.loading']
+    && view.container.querySelector('[data-forge-changes-skeleton]') !== null
+    && view.queryByRole('button', { name: en['diff.allFilesLoading'] }) !== null
+}
+
 /** Let the Remote reads the view awaits settle. */
 async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
@@ -576,9 +586,18 @@ describe('ChangesTab tooltips', () => {
 })
 
 describe('ChangesTab local reads', () => {
+  it('draws the placeholders of a changed file in two columns only while sides are split', async () => {
+    const m = mount({ state: null })
+    const columns = (): number => m.view.container.querySelectorAll('[data-forge-changes-skeleton] > :first-child > :last-child > *').length
+    expect(reading(m.view)).toBe(true)
+    expect(columns()).toBe(2)
+    act(() => { m.store.actions.toggledSplit(TAB) })
+    expect(columns()).toBe(1)
+  })
+
   it('waits for the panel state, then reads the branch scope and draws its files', async () => {
     const m = mount({ state: null })
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
     expect(m.view.container.querySelector('[data-forge-head]')?.textContent).toBe('HEAD')
     expect(m.faces.localDiff).not.toHaveBeenCalled()
@@ -627,7 +646,7 @@ describe('ChangesTab local reads', () => {
     fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'Staged' }))
     expect(m.store.getSnapshot().byTab[TAB]?.scope).toBe('staged')
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.view.getByText('The index compared with HEAD')).toBeTruthy()
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'staged' }, expect.any(AbortSignal))
     await settle()
@@ -858,7 +877,7 @@ describe('ChangesTab base branch', () => {
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     await settle()
     expect(m.paths()).toHaveLength(6)
 
@@ -1453,7 +1472,7 @@ describe('ChangesTab change requests', () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.staleHead) } })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.paths()).toEqual([])
 
     // A later status with the same head reads again, as when the host's answers disagreed for a moment.
@@ -1465,7 +1484,7 @@ describe('ChangesTab change requests', () => {
     act(() => { m.panel.set({ state: later(2, HEAD), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
 
     act(() => { m.panel.set({ state: later(3, 'b'.repeat(40)), disconnected: false }) })
     await settle()
@@ -1520,7 +1539,7 @@ describe('ChangesTab change requests', () => {
     const m = mount({ source, state: ready({ changeRequests: [entry(7, null)] }) })
     await settle()
     expect(m.faces.changeRequestDiff).not.toHaveBeenCalled()
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
     act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7))] }), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()

@@ -53,17 +53,19 @@ export function apply(ctx: Context): void {
       schema: ENTERED_SCHEMA,
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args, exec) {
+    async execute({ name, from }, exec) {
       if (exec.agent === undefined) throw new ToolContextUnavailableError('enter_worktree requires a calling agent')
       // A start revision asks for a new worktree, as does a call without a name.
-      if (args.name !== undefined && args.from === undefined) {
+      if (name !== undefined && from === undefined) {
         try {
-          return { ...await ctx.worktrees.enter(exec.agent, { name: args.name }, exec.signal), created: false }
+          return { ...await ctx.worktrees.enter(exec.agent, { name }, exec.signal), created: false }
         } catch (error) {
           if (!(error instanceof WorktreeError && error.code === 'WORKTREE_NOT_FOUND')) throw error
         }
       }
-      return { ...await ctx.worktrees.create(exec.agent, args, exec.signal), created: true }
+      // The parameter object is open, so only the declared fields reach the runtime; it never fetches for this tool.
+      const request = { ...name === undefined ? {} : { name }, ...from === undefined ? {} : { from } }
+      return { ...await ctx.worktrees.create(exec.agent, request, exec.signal), created: true }
     },
     presentCall: args => ({ card: 'generic', title: 'enter_worktree', rawInput: args }),
   }))
