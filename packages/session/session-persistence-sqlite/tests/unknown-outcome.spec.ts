@@ -41,7 +41,9 @@ it.each(['commit', 'rollback'] as const)('isolates every SQLite handle after an 
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
   const exec = DatabaseSync.prototype.exec
   const fault = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
-    if (sql === operation.toUpperCase()) throw new Error(`${operation} result unavailable`)
+    if (sql === operation.toUpperCase() || (operation === 'rollback' && sql === 'ROLLBACK TO batch; RELEASE batch')) {
+      throw new Error(`${operation} result unavailable`)
+    }
     exec.call(this, sql)
   })
   const event = { type: 'turn/start' as const, seq: SessionSeq(0), time: 0, data: { turn: 1 } }
