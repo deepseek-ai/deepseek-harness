@@ -1008,15 +1008,24 @@ describe('web e2e: one-use QR browser login', () => {
       const qrUrl = await createCode(page, section)
       await section.getByRole('button', { name: '取消', exact: true }).click()
       await section.getByRole('button', { name: '取消', exact: true }).waitFor({ state: 'detached' })
-      expect(await section.getByRole('region', { name: '二维码登录', exact: true }).getByRole('status').count()).toBe(0)
+      const qr = section.getByRole('region', { name: '二维码登录', exact: true })
+      expect(await qr.getByRole('status').count()).toBe(0)
+      expect(await qr.getByRole('button', { name: '生成二维码', exact: true }).isEnabled()).toBe(true)
+      expect(await qr.getByRole('button', { name: '重新生成', exact: true }).count()).toBe(0)
       expect(await section.getByRole('img').count()).toBe(0)
       await snapshot(page, secure, 'cancelled')
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) {
+        await mkdir(screenshots, { recursive: true })
+        await page.getByRole('dialog', { name: '设置', exact: true }).screenshot({ path: join(screenshots, 'cancelled-desktop.png') })
+      }
       const other = await phone.newPage()
       const refused = other.waitForResponse(response => new URL(response.url()).pathname === '/' && new URL(response.url()).search === '?login=qr'
         && response.request().method() === 'POST')
       await other.goto(qrUrl)
       expect((await refused).status()).toBe(410)
       expect((await phone.cookies()).filter(cookie => cookie.name.startsWith('dsh-remote-'))).toEqual([])
+      expect(await createCode(page, section)).not.toBe(qrUrl)
       await page.reload()
       await page.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
     } finally {

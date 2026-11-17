@@ -191,15 +191,20 @@ describe('Remote connection section', () => {
     expect(screen.getByRole('button', { name: en.regenerate })).toBeTruthy()
   })
 
-  it('closes the QR preview after cancellation without a success message', () => {
-    panel({ phase: 'cancelled' })
-    const qr = screen.getByRole('region', { name: en.qrTitle })
+  it.each(['en', 'zh'] as const)('offers QR generation after cancellation without a success message in %s', (language) => {
+    const copy = language === 'en' ? en : zh
+    const { create } = panel({ phase: 'cancelled' }, language)
+    const qr = screen.getByRole('region', { name: copy.qrTitle })
     expect(within(qr).queryByRole('img')).toBeNull()
     expect(within(qr).queryByRole('timer')).toBeNull()
     expect(within(qr).queryByRole('status')).toBeNull()
-    expect(within(qr).queryByText(en.warning)).toBeNull()
-    expect(within(qr).queryByRole('button', { name: en.cancel })).toBeNull()
-    expect(within(qr).getByRole('button', { name: en.regenerate })).toHaveProperty('disabled', false)
+    expect(within(qr).queryByText(copy.warning)).toBeNull()
+    expect(within(qr).queryByRole('button', { name: copy.cancel })).toBeNull()
+    expect(within(qr).queryByRole('button', { name: copy.regenerate })).toBeNull()
+    const generate = within(qr).getByRole('button', { name: copy.generate })
+    expect(generate).toHaveProperty('disabled', false)
+    fireEvent.click(generate)
+    expect(create).toHaveBeenCalledOnce()
   })
 
   it('keeps an uncertain code hidden and offers status recovery and cancellation', () => {

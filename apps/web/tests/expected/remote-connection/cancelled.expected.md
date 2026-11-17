@@ -7,4 +7,4 @@
     - button "复制链接"
   - region "二维码登录":
     - heading "二维码登录" [level=3]
-    - button "重新生成"
+    - button "生成二维码"

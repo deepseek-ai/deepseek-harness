@@ -50,7 +50,7 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
       <h3 className={css.methodTitle}>{t('qrTitle')}</h3>
       <div className={css.qrActions}>
         <Button variant="primary" size="sm" disabled={busy} onClick={create}>
-          {t(phase === 'ready' ? 'generate' : 'regenerate')}
+          {t(phase === 'ready' || phase === 'cancelled' ? 'generate' : 'regenerate')}
         </Button>
         {(ticket !== null || phase === 'creating') && <Button variant="outline" size="sm" disabled={busy} onClick={cancel}>{t('cancel')}</Button>}
       </div>
