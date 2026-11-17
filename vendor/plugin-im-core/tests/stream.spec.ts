@@ -938,7 +938,6 @@ describe('abort', () => {
         seenSignal?.addEventListener('abort', () => reject(seenSignal?.reason), { once: true })
       }),
       editPayload: async () => {},
-      recall: async () => {},
     }
     const stream = createMessageStream(fakeHost(createEditDriver<FakeTypes>(adapter, { limit: 5 })), { firstDelayMs: 0 })
     stream.update('hello')
