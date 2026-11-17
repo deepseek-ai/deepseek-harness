@@ -350,13 +350,13 @@ describe('bot.send', () => {
     const { adapter, bot } = await setup(TestAdapter, { idempotentSend: () => windowOpen })
     adapter.fail('sendPayload', new PlatformError('retryable', 'lost response', { published: 'unknown', retryAfterMs: 0 }), 1)
     const originalSend = adapter.sendPayload.bind(adapter)
-    vi.spyOn(adapter, 'sendPayload').mockImplementation(async (payload, t, ctx) => {
+    adapter.sendPayload = async (payload, t, ctx) => {
       try {
         return await originalSend(payload, t, ctx)
       } finally {
         windowOpen = false
       }
-    })
+    }
     await expect(bot.send(target, message(h('p', 'hi')))).rejects.toMatchObject({
       kind: 'retryable',
       published: 'unknown',

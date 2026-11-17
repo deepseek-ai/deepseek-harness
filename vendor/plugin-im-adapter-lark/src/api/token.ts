@@ -141,7 +141,7 @@ export class AccessToken {
         throw error.published === 'no'
           ? error
           : new LarkApiError(error.message, {
-              code: error.code, status: error.status, response: error.response, cause: error, published: 'no',
+              code: error.code, status: error.status, cause: error, published: 'no',
             })
       }
       throw new PlatformError('retryable', 'failed to obtain a Lark tenant access token', { cause: error, published: 'no' })
