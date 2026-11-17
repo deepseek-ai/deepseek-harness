@@ -14,7 +14,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImChatKey` | Global chat identity, `${bot}\|${chat.id}` |
 | `ImMessageKey` | Global message identity, `${bot}\|${message.id}` |
 | `ImChat` | An admitted chat: its key, the bot that serves it, the adapter's `ChatRef`, and the rule that admitted it |
-| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform` or `self`), and adapter referrer |
+| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform` or `self`), optional `aliases` (platform-local alternate message ids for alias lookup), and adapter referrer |
 | `ImCommand` | A slash command parsed from a message after stripping leading self-mentions: command name and raw input |
 | `ImOutcome` | Waterfall result: `handled` by a named plugin (with optional target session ids), or `ignored` (with optional reason) |
 | `ImMessageEvent` | Waterfall argument: the stored message, its source configuration, the bot, plus chat-bound `reply`, `send`, and idempotent `deliver` helpers |

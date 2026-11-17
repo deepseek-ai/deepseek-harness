@@ -14,7 +14,7 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImChatKey` | 全局聊天标识，格式为 `${bot}\|${chat.id}` |
 | `ImMessageKey` | 全局消息标识，格式为 `${bot}\|${message.id}` |
 | `ImChat` | 已接纳的聊天：全局键、所属机器人 id、适配器的 `ChatRef` 以及接纳它的规则 id |
-| `ImMessage` | 已存储的消息：全局键、入库时分配的聊天内递增 `seq`、聊天信息、话题线程、带 `self` 标记的发送者、消息元素树、纯文本、引用信息、提及信息、`addressed` 标记、可选的解析后 `command`、时间戳、来源途径 `via`（`platform` 或 `self`）以及适配器上下文 `referrer` |
+| `ImMessage` | 已存储的消息：全局键、入库时分配的聊天内递增 `seq`、聊天信息、话题线程、带 `self` 标记的发送者、消息元素树、纯文本、引用信息、提及信息、`addressed` 标记、可选的解析后 `command`、时间戳、来源途径 `via`（`platform` 或 `self`）、可选备用消息 id `aliases`（供按别名查找引用/读取）以及适配器上下文 `referrer` |
 | `ImCommand` | 去除开头的机器人自身提及后解析出的斜杠命令：命令名与原始参数文本 |
 | `ImOutcome` | 事件链的处理结果：由某个具名插件 `handled`（可附带目标会话 id 列表），或 `ignored`（可附带原因） |
 | `ImMessageEvent` | 事件链参数：已存消息、匹配的来源配置、机器人实例，以及绑定到该聊天的 `reply`、`send` 和幂等 `deliver` 方法 |
