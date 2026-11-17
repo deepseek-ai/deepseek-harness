@@ -282,7 +282,7 @@ describe('ImIntake admission', () => {
       status: 'sent',
       handle: {
         bot: bot.id,
-        target: { chat: CHAT },
+        target: { chat: { id: 'chat', type: 'group' } },
         mode: 'text',
         parts: [{ id: 'ROBOT1.0_own', kind: 'text', time: 1000, aliases: ['REFIDX_own'] }],
         createdAt: 1000,
