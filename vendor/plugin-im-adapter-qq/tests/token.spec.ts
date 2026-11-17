@@ -152,6 +152,23 @@ describe('AccessToken', () => {
 
     const empty = createToken(() => Promise.resolve({ access_token: '', expires_in: 0 }))
     await expect(empty.token.get()).rejects.toMatchObject({ kind: 'retryable', published: 'no' })
+
+    const rateLimited = createToken(() => Promise.reject(Object.assign(new Error('Too Many Requests'), {
+      response: new Response(null, { status: 429, headers: { 'retry-after': '4' } }),
+    })))
+    await expect(rateLimited.token.get()).rejects.toMatchObject({
+      kind: 'rate-limit',
+      published: 'no',
+      retryAfterMs: 4000,
+    })
+
+    const unauthorized = createToken(() => Promise.reject(Object.assign(new Error('Unauthorized'), {
+      response: new Response(null, { status: 401 }),
+    })))
+    await expect(unauthorized.token.get()).rejects.toMatchObject({
+      kind: 'permission',
+      published: 'no',
+    })
   })
 
   it('refetches after invalidate()', async () => {
