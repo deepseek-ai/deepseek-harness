@@ -249,6 +249,7 @@ export class ScheduleService extends TypertRemoteService {
   private notifications: Promise<void> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
   private webController: Context['sessionController'] | undefined
+  private readonly controllerChild: ReturnType<Context['inject']>
   private operation: {
     readonly settled: Promise<void>
     controller: Context['sessionController'] | undefined
@@ -261,7 +262,7 @@ export class ScheduleService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'schedule')
-    const controllerChild = ctx.inject(['sessionController'], (webCtx) => {
+    const controllerChild = this.controllerChild = ctx.inject(['sessionController'], (webCtx) => {
       webCtx.effect(() => {
         const controller = webCtx.sessionController
         this.webController = controller
@@ -333,7 +334,7 @@ export class ScheduleService extends TypertRemoteService {
         () => { this.emitChanged() },
         this.limits,
         async (sessionId) => {
-          const controller = this.borrowSessionController()
+          const controller = await this.borrowSessionController()
           if (controller === undefined) throw new Error('schedule: no Session activation provider')
           const resolved = await controller.resolveAgent(sessionId)
           if ('error' in resolved) throw resolved.error
@@ -845,10 +846,14 @@ export class ScheduleService extends TypertRemoteService {
     return removed
   }
 
-  /** Retain the first provider used by the current FIFO operation until its full persistence work settles. */
-  private borrowSessionController(): Context['sessionController'] | undefined {
-    assert(this.operation, 'Session controller access requires a serialized Schedule operation')
-    return this.operation.controller ??= this.webController
+  /** Join current dependency lifecycle before borrowing; retain that provider through the operation's persistence. */
+  private async borrowSessionController(): Promise<Context['sessionController'] | undefined> {
+    const operation = this.operation
+    assert(operation, 'Session controller access requires a serialized Schedule operation')
+    // A borrowed provider's cleanup can already be waiting for this operation to settle.
+    if (operation.controller !== undefined) return operation.controller
+    await this.controllerChild.await()
+    return operation.controller = this.webController
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {

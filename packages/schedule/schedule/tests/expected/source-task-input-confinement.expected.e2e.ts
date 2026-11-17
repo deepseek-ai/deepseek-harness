@@ -53,7 +53,7 @@ it.each(['read-only', 'workspace-write'] as const)(
           isError: false, errorName: undefined, errorCode: undefined, fileExists: true,
         }, 'the permission-only control must execute the real write successfully')
         assert.equal(await readFile(join(cwd, 'source-confinement-sentinel.txt'), 'utf8'), 'Source write reached the filesystem.\n')
-        assert.throws(() => assertSourceWriteDenied(observation), {
+        assert.throws(() => { assertSourceWriteDenied(observation) }, {
           name: 'AssertionError', code: 'ERR_ASSERTION',
           message: /Source-triggered write must be denied by the filesystem policy without creating a file/u,
         })

@@ -724,6 +724,68 @@ it('unloads an unused provider before releasing an unrelated FIFO write or its q
   }
 })
 
+it.each([false, true])('settles Source activation with the controller binding join bypassed=%s', async (bypassJoin) => {
+  const fibers: Fiber[] = []
+  const test = await setup(stored(), {
+    onContext: (ctx) => { ctx.on('internal/plugin', (fiber) => { fibers.push(fiber) }) },
+  })
+  const child = fibers.find(fiber => fiber.parent.fiber === test.fiber && Object.hasOwn(fiber.inject, 'sessionController'))
+  assert(child, 'Schedule must own its controller injection')
+  await child.await()
+  const entered = Promise.withResolvers<undefined>()
+  const release = releaseGate()
+  child.ctx.effect(() => async () => { entered.resolve(undefined); await release.promise })
+  const restarting = child.restart()
+  const joined = Promise.withResolvers<undefined>()
+  const awaitChild = child.await.bind(child)
+  const joining = vi.spyOn(child, 'await').mockImplementation(() => {
+    joined.resolve(undefined)
+    return bypassJoin ? Promise.resolve(child) : awaitChild()
+  })
+  let work: Promise<object> | undefined
+  try {
+    await entered.promise
+    expect(child.state).toBe(FiberState.UNLOADING)
+    expect(test.ctx.get('sessionController')).toBeDefined()
+    work = test.source.publish(INPUT).then(
+      () => ({ status: 'fulfilled' }),
+      (error: unknown) => ({ status: 'rejected', error }),
+    )
+    // Global provider visibility does not settle this dependency's owned cleanup and rebinding.
+    expect(await Promise.race([joined.promise.then(() => 'joined'), work])).toBe('joined')
+    expect(test.resolve).not.toHaveBeenCalled()
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
+    if (bypassJoin) {
+      expect(await work).toMatchObject({
+        status: 'rejected',
+        error: {
+          name: 'SourceError', code: 'SOURCE_DELIVERY_FAILED',
+          cause: { name: 'AggregateError', errors: [expect.objectContaining({
+            name: 'Error', message: 'schedule: no Session activation provider',
+          })] },
+        },
+      })
+      expect(child.state).toBe(FiberState.UNLOADING)
+    }
+    release.resolve(undefined)
+    await restarting
+    if (bypassJoin) {
+      expect(test.resolve).not.toHaveBeenCalled()
+      expect(test.agent.followup).not.toHaveBeenCalled()
+      expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
+      expect(taskTable(test.ctx).get(ID)?.deliveryHistory?.records).toHaveLength(0)
+    } else {
+      expect(await work).toEqual({ status: 'fulfilled' })
+      expect(test.agent.followup).toHaveBeenCalledOnce()
+      expect(taskTable(test.ctx).get(ID)?.deliveryHistory?.records).toHaveLength(1)
+    }
+  } finally {
+    release.resolve(undefined)
+    await Promise.allSettled([restarting, work])
+    joining.mockRestore()
+  }
+})
+
 it.each([
   ['new_once', 'create'], ['new_once', 'resolve'], ['new_once', 'flush'], ['new_once', 'receipt'], ['new', 'create'],
 ] as const)(

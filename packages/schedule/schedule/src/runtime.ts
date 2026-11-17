@@ -84,7 +84,7 @@ export class ScheduleRuntime {
    * @param changed - Publish a change that has no task write, such as an execution reaching whole-agent idle.
    * @param limits - Resolved retention and new-Session admission limits.
    * @param resolveAgent - Host fallback after embedding activation handlers delegate.
-   * @param sessionController - Creation provider retained by the embedding for the current transaction.
+   * @param sessionController - Acquire the creation provider, awaiting its binding and retaining it for this transaction.
    */
   constructor(
     private readonly ctx: Context,
@@ -94,7 +94,8 @@ export class ScheduleRuntime {
     private readonly changed: () => void,
     private readonly limits: ScheduleRuntimeLimits,
     private readonly resolveAgent: (sessionId: SessionIdType) => Promise<Agent>,
-    private readonly sessionController: () => Context['sessionController'] | undefined,
+    private readonly sessionController: () => Context['sessionController'] | undefined
+      | Promise<Context['sessionController'] | undefined>,
   ) {
     this.time = new TimeSource((error) => {
       this.ctx.logger.warn(`schedule: dispatch stopped: ${inspect(error)}`)
@@ -503,7 +504,7 @@ export class ScheduleRuntime {
 
   /** Create a reserved Session with the target's working directory and Agent preset, then resolve its live Agent. */
   private async createAgent(sessionId: SessionIdType, create: ScheduleSessionCreateSpec): Promise<Agent> {
-    const controller = this.sessionController()
+    const controller = await this.sessionController()
     if (controller === undefined) throw new Error('schedule: no Session creation provider')
     await controller.create({
       sessionId,
