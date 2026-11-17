@@ -33,6 +33,8 @@ flowchart LR
   svc_pluginManager["ctx.pluginManager<br/>Current-profile plugin and bundle management"]
   pkg_client_ui_connector_account["client-ui-connector-account"]
   svc_connectorAccounts["ctx.connectorAccounts<br/>Connector accounts on the Plugins page"]
+  pkg_cli_account["cli-account"]
+  svc_cliAccounts["ctx.cliAccounts<br/>Vendor CLIs and accounts of CLI app plugins"]
   pkg_plugin_market["plugin-market"]
   svc_pluginMarket["ctx.pluginMarket<br/>Plugin market index reader"]
   pkg_client_ui_plugin_market["client-ui-plugin-market"]
@@ -361,6 +363,7 @@ flowchart LR
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_browser_use --> svc_browserUse
+  pkg_cli_account --> svc_cliAccounts
   pkg_client_config --> svc_config
   pkg_client_connection --> svc_connection
   pkg_client_connection --> svc_connection_authentication
@@ -702,6 +705,7 @@ flowchart LR
 | `ctx.pluginRegistryProbe` | `core` | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | 在 Host 上并发比较公共安装源响应；初始安装源推荐由 Client 负责。 |
 | `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | 与 CLI 共享 profile 包操作，并向 Web 和 Agent 调用方分别报告持久状态与运行状态。 |
 | `ctx.connectorAccounts` | `service` | [`client-ui-connector-account`](../packages/client/ui-connector-account) | - | - | - | 保存 CLI 应用插件和 MCP 连接器注册的账号，并通过一个 Remote 把 Host 算好的展示内容提供给插件页；授权页和提示只出现在发起操作的浏览器中。 |
+| `ctx.cliAccounts` | `service` | [`cli-account`](../packages/connector/cli-account) | - | - | - | 保存每个 CLI 应用插件注册的内容：把 CLI 的绝对路径加入必需的运行时上下文，通过有时限的命令让插件的账号操作一次只执行一个，并在 `ctx.connectorAccounts` 这个注册表已加载时把账号注册进去。 |
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | 获取并校验用户配置的索引源；安装通过插件管理器完成。 |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | dsh launcher 提供纯数据形式的 profile 位置与组合输入；重载调度由 dsh-hmr 负责。 |
 | `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | 执行来源策略与共享 HTTP 请求分发；凭据验证归 ConnectionAuthentication，API 适配器注册端点和流。 |

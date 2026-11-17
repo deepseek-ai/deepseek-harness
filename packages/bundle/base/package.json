@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
     "@deepseek-ai/dsh-authorization": "workspace:*",
     "@deepseek-ai/dsh-bash-sandbox": "workspace:*",
+    "@deepseek-ai/dsh-cli-account": "workspace:*",
     "@deepseek-ai/dsh-command-compact": "workspace:*",
     "@deepseek-ai/dsh-command-feedback": "workspace:*",
     "@deepseek-ai/dsh-command-goal": "workspace:*",

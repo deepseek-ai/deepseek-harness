@@ -2572,6 +2572,9 @@ importers:
       '@deepseek-ai/dsh-bash-sandbox':
         specifier: workspace:*
         version: link:../../shell/bash-sandbox
+      '@deepseek-ai/dsh-cli-account':
+        specifier: workspace:*
+        version: link:../../connector/cli-account
       '@deepseek-ai/dsh-command-compact':
         specifier: workspace:*
         version: link:../../compaction/command-compact
@@ -7999,6 +8002,34 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
+
+  packages/connector/cli-account:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:*
+        version: link:../../util/timeout
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-ui-connector-account':
+        specifier: workspace:*
+        version: link:../../client/ui-connector-account
+      '@deepseek-ai/dsh-package-manifest':
+        specifier: workspace:*
+        version: link:../../util/package-manifest
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
 
   packages/context/agent-instructions:
     dependencies:

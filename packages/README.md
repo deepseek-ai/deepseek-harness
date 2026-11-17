@@ -49,6 +49,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`fs/`](fs/README.md) | Filesystem capability family: seam, local impl, model-facing file tools, discovery tools |
 | [`lsp/`](lsp/README.md) | LSP capability family: seam, generic stdio provider, and the `lsp` tool |
 | [`skill/`](skill/README.md) | Skill capability family: provider registry, local provider, model-facing catalog/loader |
+| [`connector/`](connector/README.md) | Plugins connecting third-party services through existing capabilities |
 | [`compaction/`](compaction/README.md) | Compaction capability family: Service Definition + basic provider + command Consumer |
 | [`context/`](context/README.md) | Model-visible request context: workspace instructions, time context, references |
 | [`subagent/`](subagent/README.md) | Subagent capability family: provider-registry contract and model-facing delegation tools |

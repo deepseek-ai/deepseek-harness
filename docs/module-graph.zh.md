@@ -244,6 +244,9 @@ flowchart TD
   subgraph group_computer_use["packages/computer-use"]
     pkg_computer_use["computer-use"]
   end
+  subgraph group_connector["packages/connector"]
+    pkg_cli_account["cli-account"]
+  end
   subgraph group_context["packages/context"]
     pkg_agent_instructions["agent-instructions"]
     pkg_file_reference["file-reference"]
@@ -598,6 +601,8 @@ flowchart TD
   pkg_deepseek_account --> pkg_util_values
   pkg_config_editor --> pkg_app_boot
   pkg_config_editor --> pkg_hmr
+  pkg_cli_account --> pkg_subprocess
+  pkg_cli_account --> pkg_system_prompt
   pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_speech_to_text --> pkg_settings
   pkg_experimental_translator --> pkg_credentials
@@ -1809,6 +1814,7 @@ flowchart TD
 | [`session-log-export`](../packages/session-query/session-log-export) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`deepseek-account`](../packages/account/deepseek-account) | `account` | [`authorization`](../packages/credentials/authorization), [`brand`](../packages/util/brand), [`credentials`](../packages/credentials/credentials), [`host-webserver`](../packages/host/webserver), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |
 | [`config-editor`](../packages/boot/config-editor) | `boot` | [`app-boot`](../packages/boot/app-boot), [`hmr`](../packages/boot/hmr) |
+| [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
 | [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-speech-to-text`](../packages/experimental/speech-to-text) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`experimental-translator`](../packages/experimental/translator) | `experimental` | [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |

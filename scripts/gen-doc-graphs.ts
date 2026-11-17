@@ -185,6 +185,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation.',
   },
   {
+    key: 'cliAccounts',
+    pkg: 'cli-account',
+    title: 'Vendor CLIs and accounts of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: adds the CLI\'s absolute path to required runtime context, runs the plugin\'s account operations one at a time through bounded commands, and registers the account with `ctx.connectorAccounts` while that registry is loaded.',
+  },
+  {
     key: 'pluginMarket',
     pkg: 'plugin-market',
     title: 'Plugin market index reader',

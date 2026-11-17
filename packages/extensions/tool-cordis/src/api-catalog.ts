@@ -593,6 +593,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cliAccounts',
+    summary: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    description: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    methods: [
+      {
+        signature: 'register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>',
+        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s CLI, account operations, and Plugins page text.' }],
+        returns: 'the handle for the plugin\'s own reads and updates of the account.',
+        throws: ['when the runtime-context name `<name>:cli` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -6526,8 +6540,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
   },
   {
+    name: 'CliAccountDictionaries',
+    declaration: 'export type CliAccountDictionaries<Key extends string> = {\n    readonly en: Readonly<Record<Key, string>>;\n} & {\n    readonly [language: string]: Readonly<Record<Key, string>>;\n};',
+  },
+  {
+    name: 'CliAccountHandle',
+    declaration: 'export interface CliAccountHandle<Account, Kind extends string, Phase extends string, Command extends string> {\n    snapshot(): CliAccountView<Account, Kind, Phase, Command>;\n    publish(account: Account): void;\n    refresh(): void;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'CliAccountRegistration',
+    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'CliAccountText',
+    declaration: 'export type CliAccountText<Key extends string> = (key: Key, params?: Readonly<Record<string, string>>) => LocalizedText;',
+  },
+  {
+    name: 'CliAccountView',
+    declaration: 'export type CliAccountView<Account, Kind extends string, Phase extends string, Command extends string = string> = ConnectorAccountView<Account, Kind, Phase | \'checking\' | \'cancelling\', CliCommandFailure<Command>>;',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
+    name: 'CliCommandResult',
+    declaration: 'export interface CliCommandResult {\n    readonly exitCode: number | null;\n    readonly stdout: string;\n    readonly stderr: string;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperationControl',
+    declaration: 'export interface CliOperationControl<Account, Phase extends string, Command extends string> {\n    stage(phase: Phase | \'checking\'): void;\n    offer(url: string): boolean;\n    run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>;\n    publish(account: Account): void;\n}',
+  },
+  {
+    name: 'CliPathContext',
+    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n    readonly ready?: () => boolean;\n}',
+  },
+  {
+    name: 'CliRunOptions',
+    declaration: 'export interface CliRunOptions {\n    readonly awaitsUser?: boolean;\n    readonly onLine?: (stream: \'stdout\' | \'stderr\', line: string) => void;\n}',
   },
   {
     name: 'CollectedOutput',

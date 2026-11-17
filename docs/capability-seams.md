@@ -31,6 +31,8 @@ flowchart LR
   svc_pluginManager["ctx.pluginManager<br/>Current-profile plugin and bundle management"]
   pkg_client_ui_connector_account["client-ui-connector-account"]
   svc_connectorAccounts["ctx.connectorAccounts<br/>Connector accounts on the Plugins page"]
+  pkg_cli_account["cli-account"]
+  svc_cliAccounts["ctx.cliAccounts<br/>Vendor CLIs and accounts of CLI app plugins"]
   pkg_plugin_market["plugin-market"]
   svc_pluginMarket["ctx.pluginMarket<br/>Plugin market index reader"]
   pkg_client_ui_plugin_market["client-ui-plugin-market"]
@@ -359,6 +361,7 @@ flowchart LR
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_browser_use --> svc_browserUse
+  pkg_cli_account --> svc_cliAccounts
   pkg_client_config --> svc_config
   pkg_client_connection --> svc_connection
   pkg_client_connection --> svc_connection_authentication
@@ -700,6 +703,7 @@ flowchart LR
 | `ctx.pluginRegistryProbe` | `core` | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | Races public registry responses on the Host; the Client owns the initial registry recommendation. |
 | `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers. |
 | `ctx.connectorAccounts` | `service` | [`client-ui-connector-account`](../packages/client/ui-connector-account) | - | - | - | Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation. |
+| `ctx.cliAccounts` | `service` | [`cli-account`](../packages/connector/cli-account) | - | - | - | Holds what each CLI app plugin registers: adds the CLI's absolute path to required runtime context, runs the plugin's account operations one at a time through bounded commands, and registers the account with `ctx.connectorAccounts` while that registry is loaded. |
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | Fetches and validates the index sources the user configures; installation goes through the plugin manager. |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | The dsh launcher supplies data-only profile locations and composition inputs; reload scheduling belongs to dsh-hmr. |
 | `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | Applies source policy and shared HTTP request dispatch; credential verification belongs to ConnectionAuthentication, and API adapters register endpoints and streams. |
