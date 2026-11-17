@@ -311,7 +311,7 @@ export async function sendMessagePayload(
     })
   }
   const time = Date.now()
-  const chatType: LarkChatKind = target.chat.type === 'direct' ? 'direct' : 'group'
+  const chatType: LarkChatKind = target.chat.type
   const referrer: LarkReferrer = {
     receivedAt: time,
     chatType,
