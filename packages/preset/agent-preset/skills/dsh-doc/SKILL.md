@@ -24,6 +24,7 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Find the installed version's documentation and package sources | `references/locate-docs.md` |
 | Build, install, enable, or debug a plugin or bundle | `references/plugin-development.md` |
 | Bundle manifest, locale resources, detail document, icons, installation, Host exports and Config | `references/host-plugin.md` |
+| Read the running DSH version; declare `engines.dsh` | `references/dsh-version.md` |
 | Bundle descriptions, optional single-image details, locale paths and preview verification | `references/plugin-details.md` |
 | Save plugin configuration or credentials | `references/configuration.md` |
 | Web UI: Client manifest, module loader, slot registration | `references/ui-plugin.md` |

@@ -1141,7 +1141,7 @@ describe('a user preset declared from the shipped cordis rows', () => {
         expect(listed.isError).toBe(false)
         const providers = (JSON.parse(resultText(listed)) as { providers: Array<{ id: string; platform: string }> }).providers
         expect(providers.filter(provider => provider.platform === 'host').map(provider => provider.id))
-          .toEqual(['Service', 'Event', 'Config', 'Tool'])
+          .toEqual(['Service', 'Event', 'Config', 'Runtime', 'Tool'])
 
         // The `Tool` provider is the one built over the host context: it
         // answers with the shared registry's view of the REQUESTING agent,
