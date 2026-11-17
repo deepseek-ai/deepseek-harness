@@ -4,6 +4,8 @@
     - listitem:
       - button "每日简报": 每日简报 汇总工作区最近的变化和待跟进的事，列出今天先做什么。 工作日 9:00
     - listitem:
+      - button "每周回顾": 每周回顾 回顾自己这周在工作区做的事，列出没收尾的事和下周先做什么。 周五 {{clock}}
+    - listitem:
       - button "Issue 扫描": Issue 扫描 把新开的 issue 分成 bug、需求、提问，标出重复的和需要回复的。 工作日 {{clock}}
     - listitem:
       - button "插件兼容检查": 插件兼容检查 DSH 出新版本时，检查已装的插件和自己做的插件要不要改。 每天 {{clock}}

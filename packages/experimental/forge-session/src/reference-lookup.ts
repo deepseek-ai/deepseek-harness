@@ -1,6 +1,7 @@
 /** Resolve unqualified CLI references in the shell execution world and persist only confirmed URLs. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-shell'
@@ -89,7 +90,7 @@ export function observeReferences(
       const argumentsResult = shellArguments.safeParse(exec.arguments)
       const shell = completedShell.safeParse(result.value)
       if (!argumentsResult.success || !shell.success) return []
-      const printed = result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+      const printed = extractTextContent(result.content, { separator: '\n' })
       const current = rules()
       const { command } = argumentsResult.data
       const evidence = current.evidence(command)

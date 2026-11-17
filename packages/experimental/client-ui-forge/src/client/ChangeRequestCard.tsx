@@ -1,13 +1,15 @@
 /**
  * One change request as a card: its one-line title links to the host and
  * crawls into view while the pointer rests on the card's head, a one-line
- * summary shows while collapsed, and while expanded one row per fact (checks,
- * review, merge state, the changed lines, which open its changes, and the
- * linked issues) above the merge action. Opening, copying, viewing changes,
- * marking a draft ready, and removing live in the card's actions menu.
+ * summary shows while collapsed, taking the short wording of failed checks
+ * while the full one does not fit and crawling with the title past that, and
+ * while expanded one row per fact (checks, review, merge state, the changed
+ * lines, which open its changes, and the linked issues) above the merge
+ * action. Opening, copying, viewing changes, marking a draft ready, and
+ * removing live in the card's actions menu.
  */
 
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
@@ -170,10 +172,14 @@ function finished(snapshot: ChangeRequestSnapshot, now: number, t: Translate): s
   return ago === undefined ? state : t('time.finished', { state, time: ago })
 }
 
-/** Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress. */
-function Summary({ snapshot, now, t }: {
+/**
+ * Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress.
+ * With `short`, failed checks take the wording without their count.
+ */
+function Summary({ snapshot, now, short, t }: {
   readonly snapshot: ChangeRequestSnapshot | null
   readonly now: number
+  readonly short: boolean
   readonly t: Translate
 }): ReactNode {
   if (snapshot === null) return <StateDot state="ongoing" size={11} />
@@ -187,12 +193,67 @@ function Summary({ snapshot, now, t }: {
       <span className={css.ci} data-tone={ci.kind === 'failed' ? 'error' : undefined}>
         {ci.kind !== 'none' && <CheckGlyph state={ci.kind === 'cancelled' ? 'cancelled' : ROLLUP[snapshot.checksRollup]} size={12} />}
         {ci.kind === 'failed'
-          ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
+          ? ci.count > 0 && !short ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
           : ci.kind === 'cancelled' ? t('change.ci.cancelled', { count: ci.count }) : t(`change.ci.${ci.kind}`)}
       </span>
       {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
     </>
   )
+}
+
+/**
+ * What the collapsed status line shows when its failed checks can take the shorter wording without their count: the full
+ * wording and the flag, which decide the line's width. Null for any other status, and where the language's short wording
+ * is no shorter.
+ * @param snapshot - change request status.
+ * @param t - copy.
+ * @returns the line's full text after the number, or null.
+ */
+function shortenable(snapshot: ChangeRequestSnapshot | null, t: Translate): string | null {
+  if (snapshot?.state !== 'open') return null
+  const ci = ciSummary(snapshot)
+  if (ci.kind !== 'failed' || ci.count === 0) return null
+  const full = t('change.ci.failed', { count: ci.count })
+  if (t('change.ci.failedUnlisted').length >= full.length) return null
+  const flag = flagOf(snapshot)
+  return flag === undefined ? full : `${full} ${t(`change.flag.${flag}`)}`
+}
+
+/**
+ * Whether the collapsed status line shows the short wording of failed checks: only while the line with the full wording
+ * does not fit. A change of the line's width, of the fonts, or of `full` shows the full wording again for one layout pass,
+ * which measures it and switches before the frame is painted.
+ * @param line - the clipping status line.
+ * @param full - the line's full text after the number, from {@link shortenable}; null measures nothing.
+ * @returns whether the line takes the short wording.
+ */
+function useShortWording(line: RefObject<HTMLElement | null>, full: string | null): boolean {
+  const [measured, setMeasured] = useState<{ readonly full: string | null; readonly short: boolean }>({ full: null, short: false })
+  const short = full !== null && measured.full === full && measured.short
+  useLayoutEffect(() => {
+    if (full === null || short) return
+    const element = line.current
+    /* v8 ignore next -- the status line is mounted whenever there is a full wording to measure */
+    if (element === null) return
+    if (element.scrollWidth > element.clientWidth) setMeasured({ full, short: true })
+  })
+  useEffect(() => {
+    if (full === null) return
+    const element = line.current
+    /* v8 ignore next -- the status line is mounted whenever there is a full wording to measure */
+    if (element === null) return
+    // A new object renders again even when the line already shows the full wording, so the layout effect measures.
+    const measure = (): void => { setMeasured({ full, short: false }) }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    const fonts = document.fonts
+    fonts.addEventListener('loadingdone', measure)
+    return () => {
+      observer.disconnect()
+      fonts.removeEventListener('loadingdone', measure)
+    }
+  }, [line, full])
+  return short
 }
 
 /** Expanded identity after the number: draft state and the head and base branches. */
@@ -432,11 +493,32 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
   const tone = toneOf(snapshot)
   const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
   const titleRef = useRef<HTMLSpanElement>(null)
-  const marquee = useHoverMarquee(titleRef)
+  const lineRef = useRef<HTMLSpanElement>(null)
+  const titleMarquee = useHoverMarquee(titleRef)
+  const lineMarquee = useHoverMarquee(lineRef)
+  // One hover on the head carries every text it clips: the title, and the collapsed number and status line.
+  const marquee = useMemo(() => ({
+    onPointerEnter: (event: PointerEvent): void => {
+      titleMarquee.onPointerEnter(event)
+      lineMarquee.onPointerEnter(event)
+    },
+    onPointerLeave: (): void => {
+      titleMarquee.onPointerLeave()
+      lineMarquee.onPointerLeave()
+    },
+  }), [titleMarquee, lineMarquee])
+  const short = useShortWording(lineRef, expanded || notice !== undefined ? null : shortenable(snapshot, t))
   // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
   const meta = expanded
     ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
-    : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
+    : notice === undefined ? <Summary snapshot={snapshot} now={now} short={short} t={t} /> : null
+  const parts = (
+    <>
+      {number !== null && <span>{t('change.number', { number })}</span>}
+      {number !== null && meta !== null && <span className={css.dot} aria-hidden="true">·</span>}
+      {meta}
+    </>
+  )
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
       <div className={css.changeHead} {...marquee}>
@@ -456,9 +538,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
           </a>
           {(number !== null || meta !== null) && (
             <div className={css.meta}>
-              {number !== null && <span>{t('change.number', { number })}</span>}
-              {number !== null && meta !== null && <span aria-hidden="true">·</span>}
-              {meta}
+              {expanded ? parts : <MarqueeText ref={lineRef} className={css.statusLine}>{parts}</MarqueeText>}
             </div>
           )}
         </div>

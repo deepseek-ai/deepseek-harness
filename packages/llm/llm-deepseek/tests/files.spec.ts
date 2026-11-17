@@ -28,7 +28,7 @@ function body(init: RequestInit | undefined): string {
   return init.body
 }
 const rejected = (message: string, status = 400) => new Response(JSON.stringify({ error: { type: 'invalid_request_error', message } }), { status })
-function harness(config: Config = {}) {
+function harness(config: Config = {}, revoked?: AbortSignal) {
   const ensureUploaded = vi.fn<DeepSeekFileStore['ensureUploaded']>(async image => ({
     record: { fileId: brandString<DeepSeekFileId>(image.attachment.attachmentId === ref.attachmentId ? 'file-a' : 'file-b') }, uploaded: false,
   } as Awaited<ReturnType<DeepSeekFileStore['ensureUploaded']>>))
@@ -40,7 +40,8 @@ function harness(config: Config = {}) {
   const prepare = vi.fn(prepareExtensions)
   const adapter = new DeepSeekAdapter({
     options: () => resolveAdapterOptions(Object.assign({ baseURL: 'https://gateway.example/custom' }, config)),
-    resolveAuth: async () => ({ headers: { 'x-api-key': 'test-key' } }), resolveUserId: () => 'test-user' as AnonymousUserId, resolveAttachments: () => attachments,
+    resolveAuth: async () => ({ headers: { 'x-api-key': 'test-key' }, value: 'test-key', ...revoked === undefined ? {} : { revoked } }),
+    resolveUserId: () => 'test-user' as AnonymousUserId, resolveAttachments: () => attachments,
     resolveImageAccess: () => ({ readonlyPath: '/workspace/image.png' }), resolveFiles: () => files, prepareExtensions: prepare,
   })
   return { adapter, ensureUploaded, invalidate, readImageRequest, prepare }
@@ -263,6 +264,23 @@ describe('Messages Files requests', () => {
     controller.abort()
     await result
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('ends a pending upload with its withdrawn credential and sends no request', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => success())
+    vi.stubGlobal('fetch', fetchImpl)
+    const withdrawn = new AbortController()
+    const h = harness({}, withdrawn.signal)
+    const uploading = Promise.withResolvers<undefined>()
+    h.ensureUploaded.mockImplementation(async (_version, _connection, _policy, signal) => new Promise((_resolve, reject) => {
+      signal!.addEventListener('abort', () => { reject(new Error('upload aborted', { cause: signal!.reason })) }, { once: true })
+      uploading.resolve(undefined)
+    }))
+    const result = expect(chunks(h.adapter.stream(request()))).rejects.toMatchObject({ code: 'TRANSPORT' })
+    await uploading.promise
+    withdrawn.abort()
+    await result
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('classifies Files recovery only from provider error fields', () => {

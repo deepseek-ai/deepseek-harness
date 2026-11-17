@@ -426,6 +426,93 @@ describe('creating and entering retained worktrees', () => {
   })
 })
 
+describe('fetching the remote base branch first', () => {
+  /** A clone of a new repository, which then gains a commit, a tag, and a branch that the clone has not fetched. */
+  async function behindClone(origin = 'origin'): Promise<{ upstream: string; clone: string; fetched: string }> {
+    const upstream = await repo()
+    const clone = join(upstream, 'clone')
+    await git(upstream, 'clone', '--origin', origin, pathToFileURL(upstream).href, clone)
+    // As `repository` does: a runner's global newline conversion would otherwise rewrite the files a worktree checks out.
+    await git(clone, 'config', 'core.autocrlf', 'false')
+    await writeFile(join(upstream, 'tracked.txt'), 'remote\n')
+    await git(upstream, 'commit', '-am', 'remote')
+    await git(upstream, 'tag', 'v1')
+    await git(upstream, 'branch', 'other')
+    return { upstream, clone, fetched: await git(upstream, 'rev-parse', 'HEAD') }
+  }
+
+  it('fetches only the chosen branch, without tags, then pins and checks out the fetched commit without an upstream', async () => {
+    const { clone, fetched } = await behindClone()
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+
+    const result = await ctx.worktrees.create(agent, { name: 'fresh', from: 'refs/remotes/origin/main', fetch: true }, undefined, (phase) => {
+      phases.push(phase)
+    })
+
+    expect(phases).toEqual(['fetch', 'prepare', 'checkout'])
+    expect(result.baseCommit).toBe(fetched)
+    expect(await git(clone, 'rev-parse', 'refs/remotes/origin/main')).toBe(fetched)
+    expect(await contents(join(result.path, 'tracked.txt'))).toBe('remote\n')
+    expect(await git(clone, 'tag', '--list')).toBe('')
+    expect(await git(clone, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/other')).toBe('')
+    expect(existsSync(join(clone, '.git', 'FETCH_HEAD'))).toBe(false)
+    await expect(git(clone, 'config', '--get', 'branch.fresh.merge')).rejects.toThrow()
+  })
+
+  it('fetches from the longest configured remote name that owns the branch', async () => {
+    const { upstream, clone, fetched } = await behindClone('team/fork')
+    // Newer `git remote add` refuses a name nested with another remote's, but configuration written earlier or by hand
+    // can hold both.
+    await git(clone, 'config', 'remote.team.url', join(upstream, 'missing.git'))
+    await git(clone, 'config', 'remote.team.fetch', '+refs/heads/*:refs/remotes/team/*')
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+
+    const result = await ctx.worktrees.create(agent, { name: 'forked', from: 'refs/remotes/team/fork/main', fetch: true })
+
+    expect(result.baseCommit).toBe(fetched)
+    expect(await git(clone, 'rev-parse', 'refs/remotes/team/fork/main')).toBe(fetched)
+  })
+
+  it('refuses a base that is not a remote-tracking branch of a configured remote', async () => {
+    const { clone } = await behindClone()
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+    const record = (phase: string): void => { phases.push(phase) }
+
+    await expect(ctx.worktrees.create(agent, { name: 'local', from: 'main', fetch: true }, undefined, record))
+      .rejects.toMatchObject({ code: 'WORKTREE_INVALID_ARGUMENT' })
+    expect(phases).toEqual([])
+    for (const from of ['refs/remotes/gone/main', 'refs/remotes/origin/']) {
+      await expect(ctx.worktrees.create(agent, { name: 'stray', from, fetch: true }, undefined, record))
+        .rejects.toMatchObject({ code: 'WORKTREE_INVALID_ARGUMENT', message: expect.stringContaining(from) as string })
+    }
+    expect(phases).toEqual(['fetch', 'fetch'])
+    expect(ctx.workingDirectory.get(agent.session)).toBe(clone)
+    expect(await git(clone, 'branch', '--list', 'stray')).toBe('')
+  })
+
+  it('reports a failed fetch without creating a branch, a checkout, or the pool', async () => {
+    const { upstream, clone } = await behindClone()
+    await git(clone, 'remote', 'set-url', 'origin', join(upstream, 'missing.git'))
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+
+    await expect(ctx.worktrees.create(agent, { name: 'offline', from: 'refs/remotes/origin/main', fetch: true }, undefined, (phase) => {
+      phases.push(phase)
+    })).rejects.toMatchObject({ code: 'WORKTREE_COMMAND_FAILED' })
+
+    expect(phases).toEqual(['fetch'])
+    expect(await git(clone, 'branch', '--list', 'offline')).toBe('')
+    expect(existsSync(join(clone, '.agents'))).toBe(false)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(clone)
+  })
+})
+
 describe('restoring removed worktrees', () => {
   /** The checkout directories Git registers for `root`, in Git's notation. */
   async function registered(root: string): Promise<string[]> {

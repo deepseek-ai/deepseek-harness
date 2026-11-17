@@ -34,7 +34,7 @@ kind: "package-bundle"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-调用 `create_worktree({ name?: string, from?: string })`。成功会返回规范化检出路径 `path`、新分支 `branch`、固定提交 `baseCommit` 和源仓库根目录 `repositoryRoot`，并改变调用 Session 的当前工作目录。离开时调用 `working_directory({ cd: path })`；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
+调用 `create_worktree({ name?: string, from?: string })`。工具只把这两个字段转给运行时，因此从不执行 fetch。成功会返回规范化检出路径 `path`、新分支 `branch`、固定提交 `baseCommit` 和源仓库根目录 `repositoryRoot`，并改变调用 Session 的当前工作目录。离开时调用 `working_directory({ cd: path })`；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
 
 -----
 

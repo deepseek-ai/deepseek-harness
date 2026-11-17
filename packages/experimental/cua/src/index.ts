@@ -72,9 +72,9 @@ export interface CuaConfig {
   maxResponseBytes: number
   /** Maximum installed application matches returned for one discovery query. */
   maxAppMatches: number
-  /** Maximum bytes preserved from the system clipboard during one paste. */
+  /** Provider-specific clipboard byte limit for paste. */
   maxClipboardBytes: number
-  /** Maximum wait for clipboard data consumption after the Paste command returns. */
+  /** Provider-specific paste wait budget in milliseconds. */
   pasteReadTimeoutMs: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
   maxRequestBytes: number

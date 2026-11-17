@@ -14,6 +14,7 @@ import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { ROOT_AGENT_NAME } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-agent-team'
 import { registerListAgents } from './list-agents.ts'
 import { registerWaitAgent } from './wait-agent.ts'
 
@@ -99,6 +100,11 @@ export function apply(ctx: Context, config: Config = {}): void {
         const guidance: string[] = []
         if (ctx.tools.get(sendMessage.name, scope, toolSet) === sendMessage) {
           guidance.push('To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).')
+          // Team mode coordinates results through shared tasks, so only plain delegation asks for a report.
+          if (names.parent !== undefined && ctx.get('agentTeams')?.isEnabled(agent) !== true) {
+            guidance.push('When you finish, use send_message to send a self-contained result to the agent that delegated you. '
+              + 'Message any agent as soon as a finding changes what it should do next; sending a message does not end your turn.')
+          }
         }
         if (ctx.tools.get(listAgents.name, scope, toolSet) === listAgents) {
           guidance.push('Use list_agents({}) to find your collaborator agents and their names.')
