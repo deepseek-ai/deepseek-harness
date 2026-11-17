@@ -802,6 +802,17 @@ describe('im_read_file', () => {
     expect(textOf(failed)).toContain('refused the download')
   })
 
+  it('converts FS_TOO_LARGE when staging a file to another execution world into a capacity error', async () => {
+    const remoteFs = fakeFs({ remote: true })
+    remoteFs.writeBytes = () => Promise.reject(new FsError('payload exceeds transport frame', 'FS_TOO_LARGE'))
+    const mounted = await mount({ fs: remoteFs })
+    mounted.im.media.items.set('1.2', {
+      ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
+    })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' })))
+      .toMatchObject({ status: 'error', code: 'capacity', message: 'payload exceeds transport frame' })
+  })
+
   it('enforces a session read-only sandbox override even when the deployment default is danger-full-access', async () => {
     const directory = await mkdtemp(join(outsideTempWorkspaceParent(), '.dsh-im-tools-'))
     try {

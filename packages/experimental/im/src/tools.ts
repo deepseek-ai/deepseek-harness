@@ -219,7 +219,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${stageName(item.ref.seq, item.ref.index, attachment.name)}`
         const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
         const policy = policyService?.resolve({ session: agent.session })
-        await scoped.fs.writeBytes(target, data, undefined, exec.signal, policy)
+        await withCapacityFsError(() => scoped.fs.writeBytes(target, data, undefined, exec.signal, policy))
         return {
           id: args.id,
           chat,
@@ -587,17 +587,21 @@ async function fileContent(
   if (fs.processPathFromHostPath(fs.processPath(target)) !== undefined) {
     return fileElement(name, fs.fileUrl(target), info.size)
   }
-  let data: Uint8Array
+  const data = await withCapacityFsError(() => fs.readBytes(target, signal, config.send.maxMediaBytes))
+  return fileElement(name, `data:${mediaTypeOf(extensionOf(name))};base64,${Buffer.from(data).toString('base64')}`,
+    data.byteLength)
+}
+
+/** Translate `FsError('FS_TOO_LARGE')` from cross-world transfers into `ImError('capacity')`. */
+async function withCapacityFsError<T>(operation: () => Promise<T>): Promise<T> {
   try {
-    data = await fs.readBytes(target, signal, config.send.maxMediaBytes)
+    return await operation()
   } catch (error: unknown) {
     if (error instanceof FsError && error.code === 'FS_TOO_LARGE') {
       throw new ImError('capacity', error.message, { cause: error })
     }
     throw error
   }
-  return fileElement(name, `data:${mediaTypeOf(extensionOf(name))};base64,${Buffer.from(data).toString('base64')}`,
-    data.byteLength)
 }
 
 /** Truncate one UTF-8 string so its byte length is at most `maxBytes` (`maxBytes > 0`). */
