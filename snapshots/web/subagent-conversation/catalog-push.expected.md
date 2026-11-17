@@ -1,3 +1,2 @@
 - heading "Subagents" [level=2]
 - text: 1 completed · 1 not running
-- button "Reorder Subagents"

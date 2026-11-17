@@ -20,7 +20,7 @@ import { PanelFold } from './PanelFold.tsx'
 import { ProjectRow } from './ProjectRow.tsx'
 import { SessionPanel } from './SessionPanel.tsx'
 import { SessionPanelToggle } from './SessionPanelToggle.tsx'
-import { sectionSource } from './sections.ts'
+import { ENVIRONMENT_SECTION_ID, sectionSource } from './sections.ts'
 import type { ProjectRowInjected, SessionPanelInjected, SessionPanelToggleInjected } from './slots.ts'
 import { SessionPanelState } from './visibility.ts'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type SessionPanelKey } from './locales.ts'
@@ -94,7 +94,7 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('conversation.session.panel.section', () => ctx.slots.register({
     name: 'conversation.session.panel.section',
-    id: 'environment',
+    id: ENVIRONMENT_SECTION_ID,
     order: 0,
     label: () => t('section.environment'),
     children: {

@@ -975,8 +975,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .getByText('Root-only shared task', { exact: true }).waitFor()
     const rootHeader = rootSection.getByRole('heading', { level: 2 }).locator('..')
     expect(await rootHeader.textContent()).toBe('Subagents1 completed\u2002·\u20021 not running')
-    // The section adds no control to its title row; the panel's own reorder handle is the row's only button.
-    expect(await rootHeader.locator('button:not([data-session-panel-grip])').count()).toBe(0)
+    expect(await rootHeader.getByRole('button').count()).toBe(0)
     const progress = await rootHeader.textContent()
     await page.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).click()
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor()

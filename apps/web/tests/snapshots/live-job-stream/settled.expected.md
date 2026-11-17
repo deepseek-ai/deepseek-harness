@@ -1,6 +1,5 @@
 - region "Background jobs":
   - heading "Background jobs" [level=2]
-  - button "Reorder Background jobs"
   - list:
     - listitem:
       - button "Finished 1" [expanded]

@@ -1,13 +1,11 @@
 /** Floating Session panel in the Chat View's aside: section titles drawn from the section roster, bodies from the section slot. */
-import {
-  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
-  type DragEvent, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FocusEvent, type ReactNode } from 'react'
 import {
   IconDragHandleOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, isBehindModal, observeComposition, Tooltip, useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
-import type { SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps } from './slots.ts'
+import { ENVIRONMENT_SECTION_ID } from './sections.ts'
+import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
 import { presentationOf } from './visibility.ts'
 import css from './SessionPanel.module.css'
 
@@ -91,55 +89,24 @@ function sectionHalf(event: DragEvent<HTMLElement>): DropTarget['placement'] {
 }
 
 /**
- * The id of the nearest section that shows before or after a section; CSS
- * hides a section whose body rendered nothing, and the reader cannot move a
- * section past one they do not see.
- * @param section - the section element to start from.
- * @param offset - -1 for the section before, 1 for the one after.
- * @returns the neighbor's id, or undefined at the panel's first or last shown section.
- */
-function shownNeighbor(section: Element, offset: -1 | 1): string | undefined {
-  let other = offset < 0 ? section.previousElementSibling : section.nextElementSibling
-  while (other !== null) {
-    const id = other.getAttribute('data-session-panel-section')
-    if (id !== null && getComputedStyle(other).display !== 'none') return id
-    other = offset < 0 ? other.previousElementSibling : other.nextElementSibling
-  }
-  return undefined
-}
-
-/**
- * Let the reader reorder the sections: by dragging a section's title row
- * onto the upper or lower half of another section, or with the arrow keys on
- * its drag handle. The drag is the browser's own, with an offscreen copy of
+ * Let the reader reorder the sections by dragging a section's title row onto
+ * another section. The drag is the browser's own, with an offscreen copy of
  * the title row as its image, and a drop moves the section through
- * `moveSection`. A keyboard move keeps focus on the moved section's handle.
- * @param panel - the panel element, which holds the sections.
- * @param sections - the roster in display order, whose change follows a move.
+ * `moveSection`: to the side of the target the pointer's half names, and
+ * always after Environment, whose own title row is no drag source.
  * @param moveSection - moves a section beside another.
- * @returns the section being dragged, where it would land, and the handlers for a section, its title row, and its handle.
+ * @returns the section being dragged, where it would land, and the handlers for a section and its title row.
  */
-function useSectionReorder(
-  panel: { readonly current: HTMLElement | null },
-  sections: readonly SessionPanelSectionEntry[],
-  moveSection: (id: string, target: string, placement: DropTarget['placement']) => void,
-) {
+function useSectionReorder(moveSection: (id: string, target: string, placement: DropTarget['placement']) => void) {
   const preview = useRowDragPreview(css.dragPreview as string)
   const [dragged, setDragged] = useState<string>()
   const [target, setTarget] = useState<DropTarget>()
-  const refocus = useRef<string>()
-  useLayoutEffect(() => {
-    const id = refocus.current
-    if (id === undefined) return
-    refocus.current = undefined
-    for (const section of panel.current?.querySelectorAll('[data-session-panel-section]') ?? []) {
-      if (section.getAttribute('data-session-panel-section') === id) section.querySelector<HTMLElement>('[data-session-panel-grip]')?.focus()
-    }
-  }, [panel, sections])
   const end = (): void => {
     setDragged(undefined)
     setTarget(undefined)
   }
+  const placementOver = (id: string, event: DragEvent<HTMLElement>): DropTarget['placement'] =>
+    id === ENVIRONMENT_SECTION_ID ? 'after' : sectionHalf(event)
   return {
     dragged,
     target,
@@ -148,7 +115,7 @@ function useSectionReorder(
         if (dragged === undefined) return
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
-        const placement = sectionHalf(event)
+        const placement = placementOver(id, event)
         setTarget(current => dragged === id
           ? undefined
           : current?.id === id && current.placement === placement ? current : { id, placement })
@@ -163,37 +130,24 @@ function useSectionReorder(
       onDrop: (event: DragEvent<HTMLElement>): void => {
         if (dragged === undefined) return
         event.preventDefault()
-        moveSection(dragged, id, sectionHalf(event))
+        moveSection(dragged, id, placementOver(id, event))
         end()
       },
     }),
-    head: (id: string) => ({
-      draggable: true,
-      onDragStart: (event: DragEvent<HTMLElement>): void => {
-        event.dataTransfer.effectAllowed = 'move'
-        event.dataTransfer.setData('application/x-dsh-session-panel-section', id)
-        setDragged(id)
-        preview.start(event)
+    head: (id: string) => id === ENVIRONMENT_SECTION_ID
+      ? {}
+      : {
+        draggable: true,
+        onDragStart: (event: DragEvent<HTMLElement>): void => {
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('application/x-dsh-session-panel-section', id)
+          setDragged(id)
+          preview.start(event)
+        },
+        onDragEnd: (): void => {
+          if (preview.clear()) end()
+        },
       },
-      onDragEnd: (): void => {
-        if (preview.clear()) end()
-      },
-    }),
-    grip: (id: string) => ({
-      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>): void => {
-        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-        event.preventDefault()
-        event.stopPropagation()
-        const section = event.currentTarget.closest('[data-session-panel-section]')
-        /* v8 ignore next -- a handle renders only inside its section. */
-        if (section === null) return
-        const offset = event.key === 'ArrowUp' ? -1 : 1
-        const neighbor = shownNeighbor(section, offset)
-        if (neighbor === undefined) return
-        refocus.current = id
-        moveSection(id, neighbor, offset < 0 ? 'before' : 'after')
-      },
-    }),
   }
 }
 
@@ -208,9 +162,9 @@ function useSectionReorder(
  * the pin and the docking preference are both on, the gutter probe carries
  * the mark that has the Conversation body keep the panel's room free. The
  * pin button shows where pressing it has an effect: on a docked panel, on an
- * overlay whose transcript can make room, and wherever the pin is on. Each
- * section's title row is draggable and ends with a drag handle, which
- * reorder the sections.
+ * overlay whose transcript can make room, and wherever the pin is on. The
+ * title row of every section but Environment is draggable, which reorders
+ * the sections, and holds a drag handle that its stylesheet shows on hover.
  * @param props - Session values, shared visibility, sections and their move action, the probes' room and their ref factory, the pin
  * action, and copy.
  * @returns the probes and, unless hidden, the panel.
@@ -235,7 +189,7 @@ export function SessionPanel({
   [presentation, dismissOverlay])
   useOverlayDismissal(panel, presentation === 'overlay', toggleElementId(sessionId), dismissOverlay)
   const focus = useFocusReturn(owner === undefined, toggleElementId(sessionId))
-  const reorder = useSectionReorder(panel, sections, moveSection)
+  const reorder = useSectionReorder(moveSection)
   return (
     <>
       <span
@@ -286,19 +240,11 @@ export function SessionPanel({
                   <div className={css.actions}>
                     {renderSlot('conversation.session.panel.section.actions', {}, { entryKey: section.id })}
                   </div>
-                  <Tooltip label={t('section.reorderHelp')} side="bottom" align="end" delayMs={500} portal>
-                    <button
-                      type="button"
-                      className={css.grip}
-                      aria-label={t('section.reorder', { name: section.label })}
-                      aria-keyshortcuts="ArrowUp ArrowDown"
-                      aria-description={t('section.reorderHelp')}
-                      data-session-panel-grip=""
-                      {...reorder.grip(section.id)}
-                    >
+                  {section.id !== ENVIRONMENT_SECTION_ID && (
+                    <span className={css.grip} aria-hidden="true" data-session-panel-grip="">
                       <IconDragHandleOutlineRegular size={14} />
-                    </button>
-                  </Tooltip>
+                    </span>
+                  )}
                 </div>
                 <div className={css.body}>
                   {renderSlot('conversation.session.panel.section', owner, { only: section.id })}

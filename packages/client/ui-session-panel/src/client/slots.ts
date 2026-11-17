@@ -17,9 +17,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * Sections of the Session panel. `id` addresses the section, `order` sorts
      * the sections ascending until the reader drags them into another order,
-     * and the required `label` is the section title, which the panel draws. A
-     * section with nothing to show renders nothing, and the panel hides its
-     * title with it.
+     * and the required `label` is the section title, which the panel draws.
+     * The built-in Environment section always shows first. A section with
+     * nothing to show renders nothing, and the panel hides its title with it.
      */
     'conversation.session.panel.section': {
       kind: 'list'
@@ -28,8 +28,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     }
     /**
      * Trailing content of one section title, such as a count, keyed by the
-     * section's `id`. The section's drag handle shows in its place while the
-     * title row is hovered, so it holds content to read, not a control to press.
+     * section's `id`. In every section but Environment the drag handle shows
+     * in its place while the title row is hovered, so it holds content to
+     * read, not a control to press.
      */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**
@@ -216,7 +217,9 @@ export interface SessionPanelInjected {
    */
   readonly closeOverlay: (sessionId: SessionId) => void
   /**
-   * Move a section beside another in every Session's panel; the order persists across reloads.
+   * Move a section beside another in every Session's panel; the order
+   * persists across reloads. Environment does not move, and a section always
+   * lands after it.
    * @param id - section to move.
    * @param target - section it lands beside.
    * @param placement - the side of the target it lands on.

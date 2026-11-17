@@ -6,6 +6,9 @@ import type { SessionPanelSectionEntry } from './slots.ts'
 
 const SECTION_SLOT = 'conversation.session.panel.section'
 
+/** Id of the built-in Environment section, which always shows first and cannot be moved. */
+export const ENVIRONMENT_SECTION_ID = 'environment'
+
 /** localStorage key of the section order the reader chose: section ids, first to last. */
 export const SECTION_ORDER_STORAGE_KEY = 'dsh.sessionPanel.sectionOrder'
 
@@ -34,39 +37,42 @@ export function projectSections(
 }
 
 /**
- * Put sections in the order the reader chose. The sections the choice names
- * come in its order; a section it does not name, such as one registered
- * since, follows the section it follows in the registered order, or leads
- * when nothing precedes it there. Ids the choice names that no section has
- * are ignored.
+ * Put sections in the order the reader chose, after the Environment section,
+ * which always comes first. The other sections the choice names come in its
+ * order; one it does not name, such as one registered since, follows the
+ * section it follows among them in the registered order, or leads them when
+ * nothing precedes it there. Ids the choice names that no section has are
+ * ignored, as is the place the choice gives Environment.
  * @param sections - sections in registered order.
  * @param preferred - section ids in the reader's order.
- * @returns the sections in display order; the same array when the choice names none of them.
+ * @returns the sections in display order; the same array when that is the registered order's.
  */
 export function orderSections(
   sections: readonly SessionPanelSectionEntry[], preferred: readonly string[],
 ): readonly SessionPanelSectionEntry[] {
-  const byId = new Map(sections.map(section => [section.id, section]))
+  const environment = sections.find(section => section.id === ENVIRONMENT_SECTION_ID)
+  const rest = environment === undefined ? sections : sections.filter(section => section !== environment)
+  const byId = new Map(rest.map(section => [section.id, section]))
   const ordered = [...new Set(preferred)].flatMap(id => byId.get(id) ?? [])
-  if (ordered.length === 0) return sections
+  if (ordered.length === 0) return environment === undefined || sections[0] === environment ? sections : [environment, ...rest]
   const named = new Set(ordered)
   let anchor: SessionPanelSectionEntry | undefined
-  for (const section of sections) {
+  for (const section of rest) {
     if (!named.has(section)) ordered.splice(anchor === undefined ? 0 : ordered.indexOf(anchor) + 1, 0, section)
     anchor = section
   }
-  return ordered
+  return environment === undefined ? ordered : [environment, ...ordered]
 }
 
 /** The section roster the panel draws, and the reader's reordering of it. */
 export interface SectionSource extends ObservableSnapshot<readonly SessionPanelSectionEntry[]> {
   /**
    * Move a section beside another and persist the resulting order of every
-   * live section. No effect when either id is not a live section or both are
-   * the same one.
+   * live section. No effect when either id is not a live section, both are
+   * the same one, or the section to move is Environment.
    * @param id - section to move.
    * @param target - section it lands beside.
-   * @param placement - the side of the target it lands on.
+   * @param placement - the side of the target it lands on; a section always lands after Environment.
    */
   readonly move: (id: string, target: string, placement: 'before' | 'after') => void
 }
@@ -111,9 +117,9 @@ export function sectionSource(ctx: ClientContext): SectionSource {
     },
     move: (id, target, placement) => {
       const ids = getSnapshot().map(section => section.id)
-      if (id === target || !ids.includes(id) || !ids.includes(target)) return
+      if (id === target || id === ENVIRONMENT_SECTION_ID || !ids.includes(id) || !ids.includes(target)) return
       const rest = ids.filter(other => other !== id)
-      rest.splice(rest.indexOf(target) + (placement === 'after' ? 1 : 0), 0, id)
+      rest.splice(rest.indexOf(target) + (placement === 'after' || target === ENVIRONMENT_SECTION_ID ? 1 : 0), 0, id)
       stored.set(rest)
     },
   }

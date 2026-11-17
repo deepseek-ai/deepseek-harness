@@ -106,24 +106,26 @@ describe('SessionPanel.module.css docking geometry', () => {
 })
 
 describe('SessionPanel.module.css section reordering', () => {
-  it('makes the title row a drag source and lays the handle over its end, on the More column, without taking room in the row', () => {
-    expect(declarationsOf('.head')).toMatchObject({ cursor: 'grab', position: 'relative' })
+  it('gives a draggable title row the grab cursor and lays the handle over its end, on the More column, without taking room', () => {
+    expect(declarationsOf('.head')['position']).toBe('relative')
+    expect(declarationsOf('.head')['cursor']).toBeUndefined()
+    expect(declarationsOf(".head[draggable='true']")).toEqual({ cursor: 'grab' })
     // Out of the row's flow: 2px in and 24px wide puts its center 14px from the row's end, the rows' More column.
     expect(declarationsOf('.grip')).toMatchObject({
-      'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px', 'margin': '0', 'cursor': 'grab',
-      'color': 'var(--dsw-alias-label-tertiary)', 'background': 'transparent', 'opacity': '0',
+      'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px',
+      'color': 'var(--dsw-alias-label-tertiary)', 'opacity': '0',
     })
   })
 
-  it('shows the handle in place of the trailing content on title-row hover, keyboard focus, and during a drag', () => {
-    expect(declarationsOf('.grip:focus-visible, .section[data-dragging] .grip')).toEqual({ opacity: '1' })
+  it('shows the handle in place of the trailing content on title-row hover and during a drag', () => {
+    expect(declarationsOf('.section[data-dragging] .grip')).toEqual({ opacity: '1' })
     // Hidden, not removed: the trailing content keeps its box, so the title beside it does not move.
-    expect(declarationsOf('.head:has(> .grip:focus-visible) > .actions, .section[data-dragging] > .head > .actions'))
-      .toEqual({ visibility: 'hidden' })
+    expect(declarationsOf('.section[data-dragging] > .head > .actions')).toEqual({ visibility: 'hidden' })
     // The pointer rules stay inside the hover media query, so a touch that latches hover shows no handle.
+    // A title row without a handle, Environment's, keeps its trailing content on hover.
     const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
     expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: 1;/)
-    expect(hover).toMatch(/\.head:hover > \.actions \{\s*visibility: hidden;/)
+    expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: hidden;/)
   })
 
   it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {

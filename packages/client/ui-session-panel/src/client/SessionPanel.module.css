@@ -195,7 +195,7 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-/* The title row is the section's drag source, and the box its drag handle is placed in. */
+/* The box a title row's drag handle is placed in. */
 .head {
   position: relative;
   display: flex;
@@ -203,6 +203,10 @@
   gap: 8px;
   min-height: 24px;
   padding: 0 6px;
+}
+
+/* A title row that is a section's drag source: every one but Environment's. */
+.head[draggable='true'] {
   cursor: grab;
 }
 
@@ -234,14 +238,14 @@
   display: none;
 }
 
-/* The drag handle lies over the end of the title row, in the column of the
-   rows' More buttons: a 24px target whose center is 14px from the row's
-   end. It takes no room in the row, so the title's trailing content runs to
-   the row's end as it does without the handle. The row's end shows one of
-   the two: the trailing content at rest, and the handle in its place while
-   the pointer is over the title row, while the handle has keyboard focus,
-   and during a drag. The hidden content keeps its box, so the title does not
-   move. */
+/* The drag handle lies over the end of a draggable title row, in the column
+   of the rows' More buttons: a 24px box whose center is 14px from the row's
+   end. It is a mark, not a control: the whole title row is the drag source.
+   It takes no room in the row, so the title's trailing content runs to the
+   row's end as it does without the handle. The row's end shows one of the
+   two: the trailing content at rest, and the handle in its place while the
+   pointer is over the title row and during a drag. The hidden content keeps
+   its box, so the title does not move. */
 .grip {
   position: absolute;
   top: 0;
@@ -251,26 +255,14 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-label-tertiary);
-  background: transparent;
-  cursor: grab;
   opacity: 0;
 }
 
-.grip:focus-visible {
-  outline-offset: -2px;
-}
-
-.grip:focus-visible,
 .section[data-dragging] .grip {
   opacity: 1;
 }
 
-.head:has(> .grip:focus-visible) > .actions,
 .section[data-dragging] > .head > .actions {
   visibility: hidden;
 }
@@ -280,12 +272,8 @@
     opacity: 1;
   }
 
-  .head:hover > .actions {
+  .head:hover:has(> .grip) > .actions {
     visibility: hidden;
-  }
-
-  .grip:hover {
-    color: var(--dsw-alias-label-primary);
   }
 }
 

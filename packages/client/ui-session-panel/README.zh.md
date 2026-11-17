@@ -47,14 +47,14 @@ kind: "package-reference"
 <a id="section-order"></a>
 ### 分栏顺序
 
-用户调整之前，分栏按 `order` 升序显示。每个分栏的标题行都可以拖动：指针移到标题行上时变为抓手，拖动图标浮现在行末，位于各行「更多」按钮所在的那一列。图标不占用标题行的空间：标题行末尾的内容（例如计数）一直排到行末。行末只显示两者之一：平时显示末尾的内容；指针位于标题行上、图标获得键盘焦点以及拖动期间，图标取而代之。拖动标题行时，该分栏变淡，指针下方的分栏在上边缘或下边缘显示一条 2px 的线，取决于指针位于它的上半还是下半；松开后被拖动的分栏移到那里。
+「环境」始终排在第一。用户调整之前，其余分栏按 `order` 升序显示。这些分栏的标题行都可以拖动：指针移到标题行上时变为抓手，行末出现拖动图标，位于各行「更多」按钮所在的那一列。图标只是标记，不是控件，也不占用标题行的空间：标题行末尾的内容（例如计数）一直排到行末。行末只显示两者之一：平时显示末尾的内容；指针位于标题行上以及拖动期间，图标取而代之。拖动标题行时，该分栏变淡，指针下方的分栏在上边缘或下边缘显示一条 2px 的线，取决于指针位于它的上半还是下半；松开后被拖动的分栏移到那里。指针在「环境」上方时，线始终在它的下边缘，因为分栏只能落在它之后。「环境」的标题行不能拖动，也没有拖动图标，因此行末只有[图钉](#the-pin)这一个控件。
 
-拖动图标是一个按钮，名称为「调整」加分栏标题，提示文字说明调整顺序的方式。焦点在它上面时，上下方向键让分栏越过最近一个显示着的分栏，焦点留在图标上。顺序是所有会话共用的一个偏好，以全部有效分栏（包括当前没有内容的分栏）的 id 列表存放在 `localStorage` 的 `dsh.sessionPanel.sectionOrder` 中。用户调整之后才注册的分栏，排在按注册顺序位于它前面的那个分栏之后。
+顺序是所有会话共用的一个偏好，保存在浏览器的 `localStorage` 中，键为 `dsh.sessionPanel.sectionOrder`，值是全部有效分栏（包括当前没有内容的分栏）的 id 组成的 JSON 数组。它属于页面所在的源：换一个浏览器、换一个浏览器配置，或访问另一个主机或端口上的 Web 服务，都从注册顺序开始；顺序不会发送到 Host。用户调整之后才注册的分栏，排在按注册顺序位于它前面的那个分栏之后。
 
 <a id="contribute-a-section"></a>
 ### 贡献分栏
 
-一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 在用户[调整分栏顺序](#section-order)之前决定升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的内容（例如计数）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`；悬停标题行时，[拖动图标](#section-order)取而代之显示，因此这里放供阅读的内容，不放需要点击的控件。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
+一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 在用户[调整分栏顺序](#section-order)之前决定升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的内容（例如计数）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`；除「环境」外，悬停标题行时由[拖动图标](#section-order)取而代之显示，因此这里放供阅读的内容，不放需要点击的控件。缺少 label 的分栏会报告到控制台，并且不显示。内置的分栏依次是「环境」（`order: 0`）、[forge 套件](../../experimental/client-ui-forge/README.zh.md)的「变更请求」（`100`）、[「子智能体」](../ui-subagent/README.zh.md)（`200`）、[「共享任务」](../ui-agent-team/README.zh.md)（`250`）和[「后台任务」](../ui-jobs/README.zh.md)（`300`）。
 
 多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`，其中的行与分栏收到相同的 owner props；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。forge 套件在 order 20 与 30 处添加检出行与本地变更行。拥有共享分栏的插件用同样方式声明自己的行 slot。
 
@@ -98,8 +98,8 @@ kind: "package-reference"
 | [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | 呈现方式、含图钉的共享可见性状态、空间探针与每个会话的停靠空间 |
-| [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影、用户保存的顺序，以及改变它的移动操作 |
-| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、探针、图钉、分栏标题及其拖动与键盘排序，以及 Esc 处理 |
+| [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影、用户保存的顺序（「环境」固定第一），以及改变它的移动操作 |
+| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、探针、图钉、分栏标题及其拖动排序，以及 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
 | [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、探针、图钉、向正文申请位置的规则，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
@@ -140,7 +140,8 @@ kind: "package-reference"
 - **嵌入的 Chat 视图不让位**——嵌入的正文跟随外框宽度，因此已固定的面板在其中只在留白本身放得下时停靠。
 - **没有运行环境行**——客户端没有区分本机、SSH 主机或沙箱模式的会话级信息，因此「环境」分栏只显示工作目录。
 - **不能隐藏分栏**——所有有内容的分栏都会显示；用户可以调整分栏顺序，但不能隐藏某个分栏。
-- **触摸输入无法拖动**——拖动使用浏览器的拖放，触摸不会触发拖放，而拖动图标的方向键需要键盘。
+- **调整顺序需要鼠标**——拖动使用浏览器的拖放，触摸不会触发拖放，面板也不提供用键盘调整顺序的方式。
+- **分栏顺序只保存在一个浏览器里**——它存放在 `localStorage` 中，不会随用户到另一个浏览器或设备。
 - **不能从其他视图切回 Chat**——`dsh-client-ui-conversation` 没有向插件开放视图选择，因此轨迹视图中的开关无法替用户切换到 Chat 视图。
 - **浮层会出现在其会话的每个 Chat 视图中**——每个 Chat 视图实例（主正文区或嵌入的）都会渲染侧边层，因此同一会话同时显示在主正文区和嵌入的对话中时，两处都会显示浮层。
 

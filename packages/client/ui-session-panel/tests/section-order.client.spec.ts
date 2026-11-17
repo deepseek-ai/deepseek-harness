@@ -62,10 +62,23 @@ describe('sectionSource order', () => {
     source.move('jobs', 'changes', 'before')
     expect(ids(source)).toEqual(['environment', 'jobs', 'changes', 'subagents'])
     expect(JSON.parse(localStorage.getItem(SECTION_ORDER_STORAGE_KEY) ?? 'null')).toEqual(['environment', 'jobs', 'changes', 'subagents'])
-    source.move('environment', 'changes', 'after')
-    expect(ids(source)).toEqual(['jobs', 'changes', 'environment', 'subagents'])
+    source.move('jobs', 'subagents', 'after')
+    expect(ids(source)).toEqual(['environment', 'changes', 'subagents', 'jobs'])
+    source.move('subagents', 'changes', 'before')
     // Another plugin instance, as after a reload, reads the same order.
-    expect(ids(sectionSource(contextOf([...REGISTERED]).ctx))).toEqual(['jobs', 'changes', 'environment', 'subagents'])
+    expect(ids(sectionSource(contextOf([...REGISTERED]).ctx))).toEqual(['environment', 'subagents', 'changes', 'jobs'])
+  })
+
+  it('never moves Environment, and lands a section after it on either side', () => {
+    const source = sectionSource(contextOf([...REGISTERED]).ctx)
+    const before = source.getSnapshot()
+    source.move('environment', 'jobs', 'after')
+    expect(source.getSnapshot()).toBe(before)
+    expect(localStorage.getItem(SECTION_ORDER_STORAGE_KEY)).toBeNull()
+    source.move('jobs', 'environment', 'before')
+    expect(ids(source)).toEqual(['environment', 'jobs', 'changes', 'subagents'])
+    source.move('subagents', 'environment', 'after')
+    expect(ids(source)).toEqual(['environment', 'subagents', 'jobs', 'changes'])
   })
 
   it('ignores a move onto the same section and a move that names a section that is not live', () => {
@@ -78,11 +91,11 @@ describe('sectionSource order', () => {
     expect(localStorage.getItem(SECTION_ORDER_STORAGE_KEY)).toBeNull()
   })
 
-  it('treats a stored value that is not a list as no choice, and skips entries that are not strings', () => {
+  it('treats a stored value that is not a list as no choice, skips entries that are not strings, and holds Environment first', () => {
     localStorage.setItem(SECTION_ORDER_STORAGE_KEY, '{"jobs":0}')
     expect(ids(sectionSource(contextOf([...REGISTERED]).ctx))).toEqual(['environment', 'changes', 'subagents', 'jobs'])
-    localStorage.setItem(SECTION_ORDER_STORAGE_KEY, '["jobs",7,null,"environment"]')
-    expect(ids(sectionSource(contextOf([...REGISTERED]).ctx))).toEqual(['jobs', 'environment', 'changes', 'subagents'])
+    localStorage.setItem(SECTION_ORDER_STORAGE_KEY, '["jobs",7,null,"subagents","environment"]')
+    expect(ids(sectionSource(contextOf([...REGISTERED]).ctx))).toEqual(['environment', 'changes', 'jobs', 'subagents'])
   })
 
   it('keeps the snapshot until the ledger, the locale, or the order changes, and notifies subscribers of each', () => {
@@ -93,7 +106,7 @@ describe('sectionSource order', () => {
     const off = source.subscribe(listener)
     const first = source.getSnapshot()
     expect(source.getSnapshot()).toBe(first)
-    source.move('jobs', 'environment', 'before')
+    source.move('jobs', 'changes', 'before')
     expect(listener).toHaveBeenCalledTimes(1)
     const moved = source.getSnapshot()
     expect(moved).not.toBe(first)
@@ -101,13 +114,13 @@ describe('sectionSource order', () => {
     entries.push(entry('tasks', 250))
     bench.bump()
     expect(listener).toHaveBeenCalledTimes(2)
-    expect(ids(source)).toEqual(['jobs', 'environment', 'changes', 'subagents', 'tasks'])
+    expect(ids(source)).toEqual(['environment', 'jobs', 'changes', 'subagents', 'tasks'])
     bench.relocalize()
     expect(listener).toHaveBeenCalledTimes(3)
     off()
     expect(bench.listeners()).toBe(0)
     source.move('tasks', 'jobs', 'before')
     expect(listener).toHaveBeenCalledTimes(3)
-    expect(ids(source)).toEqual(['tasks', 'jobs', 'environment', 'changes', 'subagents'])
+    expect(ids(source)).toEqual(['environment', 'tasks', 'jobs', 'changes', 'subagents'])
   })
 })

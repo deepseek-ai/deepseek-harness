@@ -488,7 +488,7 @@ describe('SessionPanel', () => {
     const THREE: readonly SessionPanelSectionEntry[] = [...SECTIONS, { id: 'jobs', label: '后台任务' }]
     const sectionOf = (id: string): HTMLElement => document.querySelector<HTMLElement>(`[data-session-panel-section="${id}"]`)!
     const headOf = (id: string): HTMLElement => sectionOf(id).firstElementChild as HTMLElement
-    const gripOf = (label: string): HTMLElement => screen.getByRole('button', { name: `调整「${label}」的顺序` })
+    const gripOf = (id: string): Element | null => headOf(id).querySelector('[data-session-panel-grip]')
     const transfer = () => ({
       setData: vi.fn(), effectAllowed: '', dropEffect: '',
       setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
@@ -513,23 +513,30 @@ describe('SessionPanel', () => {
     const marks = (): (string | null)[][] => ['environment', 'change-requests', 'jobs'].map(id => [
       sectionOf(id).getAttribute('data-dragging'), sectionOf(id).getAttribute('data-drop-target'),
     ])
-    function threeSections(visibility: SessionPanelVisibility = DOCKED) {
-      const base = panelProps(true, visibility)
+    const NONE = [[null, null], [null, null], [null, null]]
+    function threeSections() {
+      const base = panelProps(true, DOCKED)
       return { ...base, props: { ...base.props, useSections: selectorOf(THREE) } as SessionPanelProps }
     }
 
-    it('ends each title row with a named drag handle and makes the row the drag source', () => {
+    it('makes every title row but Environment a drag source that ends with a handle, which is a mark and no control', () => {
       const { props } = threeSections()
       render(<SessionPanel {...props} />)
-      const grip = gripOf('变更请求')
-      expect(grip.parentElement).toBe(headOf('change-requests'))
-      expect(headOf('change-requests').lastElementChild).toBe(grip)
-      expect(headOf('change-requests').draggable).toBe(true)
-      expect(grip.getAttribute('aria-keyshortcuts')).toBe('ArrowUp ArrowDown')
-      expect(grip.getAttribute('aria-description')).toBe('拖动排序，或用上下方向键调整顺序')
-      expect([gripOf('环境'), gripOf('后台任务')].every(other => other !== grip)).toBe(true)
-      expect(tooltipAfterHover(grip)).toEqual({ early: false, at500: true })
-      expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('拖动排序，或用上下方向键调整顺序')
+      for (const id of ['change-requests', 'jobs']) {
+        expect(headOf(id).draggable).toBe(true)
+        const grip = gripOf(id)!
+        expect(headOf(id).lastElementChild).toBe(grip)
+        expect([grip.tagName, grip.getAttribute('aria-hidden')]).toEqual(['SPAN', 'true'])
+      }
+      // The panel's only buttons are the pin and the control a section put in its own title row.
+      expect(screen.getAllByRole('button').map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['固定会话面板', '刷新'])
+      // Environment keeps its place: its title row is no drag source and has no handle.
+      expect(headOf('environment').draggable).toBe(false)
+      expect(gripOf('environment')).toBeNull()
+      const dataTransfer = transfer()
+      fireEvent.dragStart(headOf('environment'), { dataTransfer })
+      expect(dataTransfer.setData).not.toHaveBeenCalled()
+      expect(marks()).toEqual(NONE)
     })
 
     it('marks the dragged section and the edge it would land at, and moves it on the drop', () => {
@@ -547,23 +554,23 @@ describe('SessionPanel', () => {
       expect(dataTransfer.setDragImage.mock.calls[0]?.[0].textContent).toContain('后台任务')
       expect(marks()).toEqual([[null, null], [null, null], ['', null]])
 
-      const over = drag(sectionOf('environment'), 'dragOver', { y: 110 })
+      const over = drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
       expect(over.event.defaultPrevented).toBe(true)
       expect(over.dataTransfer.dropEffect).toBe('move')
-      expect(marks()).toEqual([[null, 'before'], [null, null], ['', null]])
-      drag(sectionOf('environment'), 'dragOver', { y: 110 })
-      drag(sectionOf('environment'), 'dragOver', { y: 130 })
-      expect(marks()).toEqual([[null, 'after'], [null, null], ['', null]])
+      expect(marks()).toEqual([[null, null], [null, 'before'], ['', null]])
+      drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
+      drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
+      expect(marks()).toEqual([[null, null], [null, 'after'], ['', null]])
       // A leave for a child of the same section keeps the mark; one whose pointer is outside the section clears it.
-      drag(sectionOf('environment'), 'dragLeave', { y: 120 })
-      expect(marks()[0]).toEqual([null, 'after'])
+      drag(sectionOf('change-requests'), 'dragLeave', { y: 160 })
+      expect(marks()[1]).toEqual([null, 'after'])
       // Another section's leave does not clear this one's mark.
-      drag(sectionOf('change-requests'), 'dragLeave', { y: 300 })
-      expect(marks()[0]).toEqual([null, 'after'])
-      for (const outside of [{ y: 99 }, { y: 140 }, { x: -1, y: 120 }, { x: 300, y: 120 }]) {
-        drag(sectionOf('environment'), 'dragOver', { y: 130 })
-        drag(sectionOf('environment'), 'dragLeave', outside)
-        expect(marks()[0]).toEqual([null, null])
+      drag(sectionOf('environment'), 'dragLeave', { y: 300 })
+      expect(marks()[1]).toEqual([null, 'after'])
+      for (const outside of [{ y: 139 }, { y: 180 }, { x: -1, y: 160 }, { x: 300, y: 160 }]) {
+        drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
+        drag(sectionOf('change-requests'), 'dragLeave', outside)
+        expect(marks()[1]).toEqual([null, null])
       }
       // Over the dragged section itself there is nowhere to land.
       drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
@@ -574,83 +581,46 @@ describe('SessionPanel', () => {
       const drop = drag(sectionOf('change-requests'), 'drop', { y: 150 })
       expect(drop.event.defaultPrevented).toBe(true)
       expect(moveSection.mock.calls).toEqual([['jobs', 'change-requests', 'before']])
-      expect(marks()).toEqual([[null, null], [null, null], [null, null]])
+      expect(marks()).toEqual(NONE)
       fireEvent.dragEnd(headOf('jobs'))
-      expect(marks()).toEqual([[null, null], [null, null], [null, null]])
+      expect(marks()).toEqual(NONE)
+    })
+
+    it('lands a section after Environment whichever half of it the pointer is over', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      place('environment', 100)
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer: transfer() })
+      drag(sectionOf('environment'), 'dragOver', { y: 105 })
+      expect(marks()[0]).toEqual([null, 'after'])
+      drag(sectionOf('environment'), 'dragOver', { y: 135 })
+      expect(marks()[0]).toEqual([null, 'after'])
+      drag(sectionOf('environment'), 'drop', { y: 105 })
+      expect(moveSection.mock.calls).toEqual([['jobs', 'environment', 'after']])
     })
 
     it('clears the marks when the drag ends without a drop', () => {
       const { props, moveSection } = threeSections()
       render(<SessionPanel {...props} />)
-      place('environment', 100)
+      place('change-requests', 140)
       fireEvent.dragStart(headOf('jobs'), { dataTransfer: transfer() })
-      drag(sectionOf('environment'), 'dragOver', { y: 130 })
+      drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
       fireEvent.dragEnd(headOf('jobs'))
-      expect(marks()).toEqual([[null, null], [null, null], [null, null]])
+      expect(marks()).toEqual(NONE)
       expect(moveSection).not.toHaveBeenCalled()
       // A drag end that this panel did not start changes nothing.
       fireEvent.dragEnd(headOf('jobs'))
-      expect(marks()).toEqual([[null, null], [null, null], [null, null]])
+      expect(marks()).toEqual(NONE)
     })
 
     it('ignores a drag that did not start on one of its title rows', () => {
       const { props, moveSection } = threeSections()
       render(<SessionPanel {...props} />)
-      place('environment', 100)
-      expect(drag(sectionOf('environment'), 'dragOver', { y: 110 }).event.defaultPrevented).toBe(false)
-      expect(drag(sectionOf('environment'), 'drop', { y: 110 }).event.defaultPrevented).toBe(false)
-      expect(marks()[0]).toEqual([null, null])
+      place('change-requests', 140)
+      expect(drag(sectionOf('change-requests'), 'dragOver', { y: 150 }).event.defaultPrevented).toBe(false)
+      expect(drag(sectionOf('change-requests'), 'drop', { y: 150 }).event.defaultPrevented).toBe(false)
+      expect(marks()).toEqual(NONE)
       expect(moveSection).not.toHaveBeenCalled()
-    })
-
-    it('moves a section past its shown neighbor with the arrow keys on its handle, skipping a hidden section', () => {
-      const { props, moveSection } = threeSections({ docks: true, pinned: true, overlay: null })
-      render(<SessionPanel {...props} />)
-      const up = createEvent.keyDown(gripOf('变更请求'), { key: 'ArrowUp' })
-      fireEvent(gripOf('变更请求'), up)
-      expect(up.defaultPrevented).toBe(true)
-      fireEvent.keyDown(gripOf('变更请求'), { key: 'ArrowDown' })
-      expect(moveSection.mock.calls).toEqual([['change-requests', 'environment', 'before'], ['change-requests', 'jobs', 'after']])
-      // The first and the last shown section have nowhere further to go; the pin before the first section is no section.
-      fireEvent.keyDown(gripOf('环境'), { key: 'ArrowUp' })
-      fireEvent.keyDown(gripOf('后台任务'), { key: 'ArrowDown' })
-      // Other keys are left alone.
-      const enter = createEvent.keyDown(gripOf('环境'), { key: 'Enter' })
-      fireEvent(gripOf('环境'), enter)
-      expect(enter.defaultPrevented).toBe(false)
-      expect(moveSection).toHaveBeenCalledTimes(2)
-      // CSS hides a section whose body rendered nothing: a move goes past it to the next shown one.
-      sectionOf('change-requests').style.display = 'none'
-      fireEvent.keyDown(gripOf('环境'), { key: 'ArrowDown' })
-      fireEvent.keyDown(gripOf('后台任务'), { key: 'ArrowUp' })
-      expect(moveSection.mock.calls.slice(2)).toEqual([['environment', 'jobs', 'after'], ['jobs', 'environment', 'before']])
-    })
-
-    it('keeps focus on the handle of a section the keyboard moved', () => {
-      const outside = document.createElement('button')
-      document.body.append(outside)
-      try {
-        const first = threeSections()
-        const view = render(<SessionPanel {...first.props} />)
-        gripOf('后台任务').focus()
-        fireEvent.keyDown(gripOf('后台任务'), { key: 'ArrowUp' })
-        // The move reorders the roster; a browser drops focus from a moved element.
-        outside.focus()
-        const moved = [THREE[0]!, THREE[2]!, THREE[1]!]
-        view.rerender(<SessionPanel {...first.props} useSections={selectorOf(moved)} />)
-        expect(document.activeElement).toBe(gripOf('后台任务'))
-        // A later roster change that no key caused moves no focus.
-        outside.focus()
-        view.rerender(<SessionPanel {...first.props} useSections={selectorOf(THREE)} />)
-        expect(document.activeElement).toBe(outside)
-        // The panel hid before the moved roster arrived: nothing to focus.
-        fireEvent.keyDown(gripOf('后台任务'), { key: 'ArrowUp' })
-        const hidden = panelProps(false, DOCKED)
-        view.rerender(<SessionPanel {...hidden.props} useSections={selectorOf(moved)} />)
-        expect(document.activeElement).toBe(outside)
-      } finally {
-        outside.remove()
-      }
     })
   })
 })

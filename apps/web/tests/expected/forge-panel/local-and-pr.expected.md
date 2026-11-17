@@ -1,7 +1,6 @@
 - complementary "会话面板":
   - region "环境":
     - heading "环境" [level=2]
-    - button "调整「环境」的顺序"
     - text: workspace {{cwd}} feat 项目目录
     - button "本地变更 · 4 个文件，新增 4 行，删除 1 行": 本地变更 · 4 个文件
     - text: +4 −1
@@ -9,7 +8,6 @@
   - region "变更请求":
     - heading "变更请求" [level=2]
     - text: "1"
-    - button "调整「变更请求」的顺序"
     - list:
       - listitem:
         - button "变更请求状态：需要处理 Add the pull request panel":

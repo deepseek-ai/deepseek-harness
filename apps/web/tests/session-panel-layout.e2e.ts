@@ -362,7 +362,7 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('reorders sections by dragging a title row or with the arrow keys on its handle, and keeps the order across a reload', async () => {
+  it('reorders sections by dragging a title row, keeps Environment first, and keeps the order across a reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-order'))
     await openSession()
     await setGutter(DOCK_GUTTER + 100)
@@ -383,7 +383,6 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     const panel = page.locator('[data-session-panel]')
     const section = (id: string) => panel.locator(`[data-session-panel-section="${id}"]`)
     const head = (id: string) => section(id).locator('h2').locator('..')
-    const grip = (id: string) => section(id).locator('[data-session-panel-grip]')
     /** The ids of the sections that show, top to bottom. */
     const order = (): Promise<(string | null)[]> => panel.evaluate(element => [...element.querySelectorAll('[data-session-panel-section]')]
       .filter(node => getComputedStyle(node).display !== 'none').map(node => node.getAttribute('data-session-panel-section')))
@@ -396,74 +395,87 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     // Over the title row the handle shows on the rows' More column in place of the count, which keeps its box.
     await page.mouse.move(5, 5)
     const handle = (id: string) => head(id).evaluate((element) => {
-      const button = element.querySelector<HTMLElement>('[data-session-panel-grip]')!
+      const mark = element.querySelector<HTMLElement>('[data-session-panel-grip]')!
       const trailing = element.children[1] as HTMLElement
       const box = element.getBoundingClientRect()
-      const target = button.getBoundingClientRect()
+      const target = mark.getBoundingClientRect()
       return {
         cursor: getComputedStyle(element).cursor,
-        opacity: getComputedStyle(button).opacity,
-        target: [target.width, target.height],
+        opacity: getComputedStyle(mark).opacity,
+        size: [target.width, target.height],
         center: box.right - (target.left + target.width / 2),
         trailing: trailing.textContent,
         trailingEnd: box.right - trailing.getBoundingClientRect().right,
         shown: getComputedStyle(trailing).visibility === 'visible',
       }
     })
-    const resting = { cursor: 'grab', target: [24, 24], center: 14, trailing: '1 external', trailingEnd: 6 }
+    const resting = { cursor: 'grab', size: [24, 24], center: 14, trailing: '1 external', trailingEnd: 6 }
     expect(await handle('subagents')).toEqual({ ...resting, opacity: '0', shown: true })
     await head('subagents').hover()
     await expect.poll(async () => (await handle('subagents')).opacity).toBe('1')
     expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', shown: false })
-    expect(await grip('background-jobs').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+    expect(await head('background-jobs').locator('[data-session-panel-grip]').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+    // Environment does not move: its title row is no drag source and has no handle, so only the pin sits at its end.
+    expect(await head('environment').evaluate(element => ({
+      draggable: (element as HTMLElement).draggable,
+      cursor: getComputedStyle(element).cursor,
+      handles: element.querySelectorAll('[data-session-panel-grip]').length,
+    }))).toEqual({ draggable: false, cursor: 'auto', handles: 0 })
+    // The handle is a mark: the panel's title rows hold no button for it.
+    expect(await panel.locator('h2 ~ [data-session-panel-grip]').evaluateAll(marks => marks.map(mark => mark.tagName))).toEqual(['SPAN', 'SPAN', 'SPAN'])
 
-    // Drag Background jobs by its title row onto the upper half of Environment.
-    const from = (await head('background-jobs').boundingBox())!
-    const onto = (await section('environment').boundingBox())!
-    await page.mouse.move(from.x + 40, from.y + from.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(from.x + 40, from.y - 12, { steps: 4 })
-    await page.mouse.move(onto.x + 40, onto.y + 6, { steps: 8 })
-    // A move onto a new element reports only the enter and the leave; one more within it reports the drag over it.
-    await page.mouse.move(onto.x + 42, onto.y + 6)
+    /** Drag a section's title row to a point `dy` below the top of another section, resting there. */
+    const dragOnto = async (from: string, onto: string, dy: number): Promise<void> => {
+      const source = (await head(from).boundingBox())!
+      const target = (await section(onto).boundingBox())!
+      await page.mouse.move(source.x + 40, source.y + source.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(source.x + 40, source.y - 12, { steps: 4 })
+      await page.mouse.move(target.x + 40, target.y + dy, { steps: 8 })
+      // A move onto a new element reports only the enter and the leave; one more within it reports the drag over it.
+      await page.mouse.move(target.x + 42, target.y + dy)
+    }
     const marks = () => panel.evaluate(element => [...element.querySelectorAll<HTMLElement>('[data-session-panel-section]')]
       .filter(node => getComputedStyle(node).display !== 'none')
       .map(node => [node.dataset['sessionPanelSection'], node.hasAttribute('data-dragging'), node.dataset['dropTarget'] ?? null]))
-    await expect.poll(marks).toEqual([['environment', false, 'before'], ['subagents', false, null], ['background-jobs', true, null]])
-    // The landing line: 2px in the accent color on Environment's top edge; the dragged section dims.
-    const line = await section('environment').evaluate((element) => {
+
+    // Drag Background jobs by its title row onto the upper half of Subagents.
+    await dragOnto('background-jobs', 'subagents', 6)
+    await expect.poll(marks).toEqual([['environment', false, null], ['subagents', false, 'before'], ['background-jobs', true, null]])
+    // The landing line: 2px in the accent color on Subagents' top edge; the dragged section dims.
+    const line = await section('subagents').evaluate((element) => {
       const style = getComputedStyle(element, '::after')
       return { height: style.height, top: style.top, painted: style.backgroundColor !== 'rgba(0, 0, 0, 0)' }
     })
     expect(line).toEqual({ height: '2px', top: '-1px', painted: true })
     expect(await section('background-jobs').evaluate(element => getComputedStyle(element).opacity)).toBe('0.5')
     await page.mouse.up()
-    await expect.poll(order).toEqual(['background-jobs', 'environment', 'subagents'])
+    await expect.poll(order).toEqual(['environment', 'background-jobs', 'subagents'])
     // The stored order names every live section, including Shared tasks, which shows nothing in this Session.
-    expect(await stored()).toEqual(['background-jobs', 'environment', 'subagents', 'shared-tasks'])
-    await expect.poll(marks).toEqual([['background-jobs', false, null], ['environment', false, null], ['subagents', false, null]])
-    // The pin stays on the first shown section's title line.
+    expect(await stored()).toEqual(['environment', 'background-jobs', 'subagents', 'shared-tasks'])
+    await expect.poll(marks).toEqual([['environment', false, null], ['background-jobs', false, null], ['subagents', false, null]])
+
+    // Over the upper half of Environment the line is on its bottom edge: a section lands after it, never before.
+    await dragOnto('subagents', 'environment', 6)
+    await expect.poll(marks).toEqual([['environment', false, 'after'], ['background-jobs', false, null], ['subagents', true, null]])
+    await page.mouse.up()
+    await expect.poll(order).toEqual(registered)
+    expect(await stored()).toEqual(['environment', 'subagents', 'background-jobs', 'shared-tasks'])
+    // The pin stays alone at the end of Environment's title line.
     expect((await pinning(page)).pin).toEqual({ pressed: 'false', target: [24, 24], center: 22, top: 10 })
 
     // The order survives a reload.
+    await dragOnto('background-jobs', 'subagents', 6)
+    await page.mouse.up()
+    await expect.poll(order).toEqual(['environment', 'background-jobs', 'subagents'])
     await page.reload({ waitUntil: 'load' })
     await openSeed(page)
     await shows(page, 'docked')
-    await expect.poll(order, { timeout: 20_000 }).toEqual(['background-jobs', 'environment', 'subagents'])
-
-    // The arrow keys on a handle move its section past one neighbor at a time, and focus stays on the handle.
-    await grip('background-jobs').focus()
+    await expect.poll(order, { timeout: 20_000 }).toEqual(['environment', 'background-jobs', 'subagents'])
+    // The arrow keys move nothing: only a drag reorders.
+    await head('background-jobs').click()
     await page.keyboard.press('ArrowDown')
-    await expect.poll(order).toEqual(['environment', 'background-jobs', 'subagents'])
-    await page.keyboard.press('ArrowDown')
-    await expect.poll(order).toEqual(registered)
-    expect(await page.evaluate(() => document.activeElement?.closest('[data-session-panel-section]')?.getAttribute('data-session-panel-section')))
-      .toBe('background-jobs')
-    // The last section has nowhere further to go.
-    await page.keyboard.press('ArrowDown')
-    expect(await order()).toEqual(registered)
-    // A keyboard move lands beside the shown neighbor, so the hidden section stays after it.
-    expect(await stored()).toEqual(['environment', 'subagents', 'background-jobs', 'shared-tasks'])
+    expect(await order()).toEqual(['environment', 'background-jobs', 'subagents'])
     expect(tripwire.pageErrors).toEqual([])
   })
 
