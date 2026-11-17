@@ -13,7 +13,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { apply as gatewayApply, inject as gatewayInject } from '@deepseek-ai/dsh-api-gateway/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from '@deepseek-ai/dsh-client-remote-connection/client'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import { apply, inject } from '../src/client/index.ts'
 
 afterEach(cleanup)
@@ -314,7 +314,7 @@ describe('remote connection settings registration', () => {
     const { ctx, slots } = await bench(call)
     render(slots.renderSlot('root', {}))
     const copy = await screen.findByRole('button', { name: zh.copyLink })
-    await vi.waitFor(() => { expect(copy).toHaveProperty('disabled', false) })
+    await screen.findByText(url)
     fireEvent.click(copy)
     await screen.findByText(zh.linkCopied)
     expect(write).toHaveBeenCalledWith(url)
@@ -324,7 +324,7 @@ describe('remote connection settings registration', () => {
     expect(screen.getByRole('alert').textContent).toBe(zh.linkCopied)
     fireEvent.click(screen.getByRole('button', { name: 'Toggle settings' }))
     write.mockRejectedValueOnce(new Error('clipboard permission'))
-    fireEvent.click(await screen.findByRole('button', { name: zh.copied }))
+    fireEvent.click(await screen.findByRole('button', { name: zh.copyLink }))
     await screen.findByText(zh.copyFailed)
     expect(screen.getByText(zh.linkWarning)).toBeTruthy()
     expect(screen.getByText(url)).toBeTruthy()
@@ -333,7 +333,7 @@ describe('remote connection settings registration', () => {
         : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
     }))
     act(() => { ctx.emit('connection/reset') })
-    await vi.waitFor(() => { expect(screen.getByRole('button', { name: zh.copyLink })).toHaveProperty('disabled', false) })
+    await screen.findByText(`${url}-new`)
     expect(screen.queryByText(zh.linkWarning)).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
     vi.useFakeTimers()
@@ -350,6 +350,13 @@ describe('remote connection settings registration', () => {
   })
 
   it('refreshes deployment on every reconnect and prefetches the login link once available', async () => {
+    const write = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } })
+    onTestFinished(() => {
+      if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    })
     let available = false
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
@@ -360,10 +367,16 @@ describe('remote connection settings registration', () => {
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(call).toHaveBeenCalledTimes(2) })
     expect(call.mock.calls.every(([, endpoint]) => endpoint === 'remoteConnection/status')).toBe(true)
+    const face = slots.spec('settings.remoteConnection.content')!.inject
+    await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.availability).toBe('untrusted-host') })
+    face.copyLink()
+    await vi.waitFor(() => { expect(write).toHaveBeenCalledExactlyOnceWith('https://host.example/') })
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().notice).toBe('linkCopied') })
+    expect(face.hooks.loginLink.getSnapshot().copied).toBe(false)
     available = true
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1) })
-    const face = slots.spec('settings.remoteConnection.content')!.inject
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().url).toBe('https://host.example/?token=private') })
     available = false
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.availability).toBe('untrusted-host') })
@@ -372,6 +385,51 @@ describe('remote connection settings registration', () => {
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(5) })
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2)
+    expect(face.hooks.loginLink.getSnapshot().url).toBe('https://host.example/?token=private')
+    face.copyLink()
+    await vi.waitFor(() => { expect(write).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().notice).toBe('linkCopied') })
+    expect(write).toHaveBeenLastCalledWith('https://host.example/')
+    expect(face.hooks.loginLink.getSnapshot().copied).toBe(false)
+  })
+
+  it.each(['en', 'zh'] as const)('copies the clean address after a credential read fails and reports clipboard outcomes in %s', async (language) => {
+    const copy = language === 'en' ? en : zh
+    const write = vi.fn<(text: string) => Promise<void>>().mockRejectedValueOnce(new Error('clipboard permission')).mockResolvedValue(undefined)
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } })
+    onTestFinished(() => {
+      if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    })
+    const url = 'https://host.example/'
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/loginUrl') throw new Error('credential transport unavailable')
+      return { ok: true, value: { url, availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+    })
+    const { slots, locale } = await bench(call)
+    locale.setLocale(language)
+    render(slots.renderSlot('root', {}))
+    const face = slots.spec('settings.remoteConnection.content')!.inject
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().phase).toBe('error') })
+    const address = within(screen.getByRole('region', { name: copy.addressTitle }))
+    const action = address.getByRole('button', { name: copy.copyLink })
+    expect(address.getByText(url)).toBeTruthy()
+    expect(address.queryByRole('alert')).toBeNull()
+    expect(address.queryByRole('button', { name: copy.retry })).toBeNull()
+    expect(action).toHaveProperty('disabled', false)
+    fireEvent.click(action)
+    await screen.findByText(copy.copyFailed)
+    expect(write).toHaveBeenLastCalledWith(url)
+    expect(screen.queryByText(copy.linkWarning)).toBeNull()
+    fireEvent.click(action)
+    await screen.findByText(copy.linkCopied)
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenLastCalledWith(url)
+    expect(address.getByRole('button', { name: copy.copyLink })).toBe(action)
+    expect(screen.queryByText(copy.linkWarning)).toBeNull()
+    expect(screen.getByRole('button', { name: copy.generate })).toHaveProperty('disabled', false)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
   })
 
   it('keeps plugin disposal pending until a clipboard write settles', async () => {

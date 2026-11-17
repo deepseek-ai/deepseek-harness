@@ -6,9 +6,9 @@ import type { RemoteConnectionApi } from './remote-connection-controller.ts'
 export interface LoginLinkState {
   /** Tokenized address displayed by the settings panel and used for explicit clipboard writes. */
   url: string | null
-  /** Loading failures remain retryable without affecting the QR invitation. */
+  /** Credential-read or clipboard activity; failed reads leave the clean address copyable. */
   phase: 'loading' | 'ready' | 'copying' | 'error'
-  /** Whether the current URL has been copied successfully. */
+  /** Whether the latest loaded credential URL has been copied successfully. */
   copied: boolean
   /** Transient clipboard outcome presented by the shell overlay. */
   notice: 'linkCopied' | 'copyFailed' | null
@@ -18,7 +18,7 @@ export interface LoginLinkState {
 
 /** Link actions and private state bound by the slot renderer. */
 export interface LoginLinkFace {
-  /** Copy the loaded credential without consuming or replacing a QR invitation. */
+  /** Copy the credential link or clean access address without changing a QR invitation. */
   copyLink: () => void
   /** Retry a failed login-link read. */
   reloadLink: () => void
@@ -40,8 +40,15 @@ export class LoginLinkController {
   /**
    * @param remote - owner-authenticated login-link reader.
    * @param write - clipboard writer returning true only after a successful write.
+   * @param accessAddress - current clean address, or null before an address has been read.
+   * @param canCopyCredential - whether the current deployment permits copying a credential link.
    */
-  constructor(private readonly remote: Pick<RemoteConnectionApi, 'loginUrl'>, private readonly write: (text: string) => Promise<boolean>) {}
+  constructor(
+    private readonly remote: Pick<RemoteConnectionApi, 'loginUrl'>,
+    private readonly write: (text: string) => Promise<boolean>,
+    private readonly accessAddress: () => string | null,
+    private readonly canCopyCredential: () => boolean,
+  ) {}
 
   /**
    * Bind stable actions and the shared feedback source.
@@ -83,14 +90,19 @@ export class LoginLinkController {
   }
 
   /**
-   * Write the cached URL directly from the user's gesture and report the actual result.
-   * @returns after clipboard completion; a failure leaves the URL available for retry.
+   * Copy the cached credential or current clean address directly from the user's gesture.
+   * @returns after clipboard completion; overlapping gestures share the write, and failures remain retryable.
    */
   copy(): Promise<void> {
-    const { url, phase } = this.store.getSnapshot()
-    if (!this.live || phase !== 'ready' || url === null) return Promise.resolve()
+    if (!this.live) return Promise.resolve()
+    if (this.copying !== undefined) return this.copying
+    const credentialUrl = this.canCopyCredential() ? this.store.getSnapshot().url : null
+    const url = credentialUrl ?? this.accessAddress()
+    if (url === null) return Promise.resolve()
+    const completion = Promise.withResolvers<void>()
+    this.copying = this.track(completion.promise.finally(() => { this.copying = undefined }))
     this.store.update((state) => { state.phase = 'copying'; state.notice = null })
-    this.copying = this.track(this.writeLink(url).finally(() => { this.copying = undefined }))
+    void this.writeLink(url, credentialUrl !== null).then(completion.resolve, completion.reject)
     return this.copying
   }
 
@@ -110,13 +122,13 @@ export class LoginLinkController {
     return operation
   }
 
-  private async writeLink(url: string): Promise<void> {
+  private async writeLink(url: string, credential: boolean): Promise<void> {
     let copied: boolean
     try { copied = await this.write(url) } catch (_clipboardFailure) { copied = false }
     if (!this.active()) return
     this.store.update((state) => {
       state.phase = 'ready'
-      state.copied ||= copied
+      state.copied ||= copied && credential && state.url === url
       state.notice = copied ? 'linkCopied' : 'copyFailed'
       state.sequence += 1
     })
@@ -128,11 +140,14 @@ export class LoginLinkController {
       if (!this.live) return
       this.store.update((state) => {
         state.url = result.ok ? result.value : null
-        state.phase = result.ok ? 'ready' : 'error'
+        state.phase = this.copying !== undefined ? 'copying' : result.ok ? 'ready' : 'error'
         if (state.url !== previousUrl) state.copied = false
       })
     } catch (_requestFailure) {
-      if (this.live) this.store.update((state) => { state.phase = 'error'; state.copied = false })
+      if (this.live) this.store.update((state) => {
+        state.phase = this.copying !== undefined ? 'copying' : 'error'
+        state.copied = false
+      })
     }
   }
 

@@ -3,9 +3,8 @@
   - paragraph: 通过以下方式，在其他设备上登录并使用 DeepSeek Harness。
   - region "访问地址":
     - heading "访问地址" [level=3]
-    - code: {{access-address}}
-    - button "重试"
-    - alert: 无法获取登录链接，请重试
+    - code: {{access-address}}?token={{login-token}}
+    - button "复制链接" [disabled]
   - region "二维码登录":
     - heading "二维码登录" [level=3]
     - button "生成二维码"

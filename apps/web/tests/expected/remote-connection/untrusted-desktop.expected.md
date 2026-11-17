@@ -5,3 +5,4 @@
   - region "访问地址":
     - heading "访问地址" [level=3]
     - code: {{access-address}}
+    - button "复制链接"

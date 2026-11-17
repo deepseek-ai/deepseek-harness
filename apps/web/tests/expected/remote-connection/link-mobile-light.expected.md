@@ -4,9 +4,9 @@
   - region "访问地址":
     - heading "访问地址" [level=3]
     - code: {{access-address}}?token={{login-token}}
-    - button "已复制"
+    - button "复制链接"
     - paragraph: 请勿公开分享登录链接
-    - paragraph: 持有此链接的人都可以直接登录，请仅发送给自己的设备，勿公开分享；重启服务后链接失效
+    - paragraph: 此链接包含登录凭据，能访问此地址的人可凭链接登录，请仅发送给自己的设备，勿公开分享；重启服务后链接失效
   - region "二维码登录":
     - heading "二维码登录" [level=3]
     - button "生成二维码"

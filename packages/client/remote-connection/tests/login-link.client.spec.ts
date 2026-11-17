@@ -1,15 +1,15 @@
 /** Login-link credentials stay in memory and clipboard feedback follows the actual write. */
-import { expect, it, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { LoginLinkController } from '../src/client/login-link-controller.ts'
 import type { RemoteConnectionApi } from '../src/client/remote-connection-controller.ts'
 
 const url = 'https://host.example/app/?token=private-login-token'
 
-function setup() {
+function setup(accessAddress: () => string | null = () => null, canCopyCredential: () => boolean = () => true) {
   const remote = { loginUrl: vi.fn<RemoteConnectionApi['loginUrl']>().mockResolvedValue({ ok: true, value: url }) }
   const write = vi.fn<(text: string) => Promise<boolean>>().mockResolvedValue(true)
-  const controller = new LoginLinkController(remote, write)
+  const controller = new LoginLinkController(remote, write, accessAddress, canCopyCredential)
   return { remote, write, controller, state: () => controller.store.getSnapshot() }
 }
 
@@ -65,13 +65,124 @@ it('keeps failed link reads retryable and shares an outstanding read', async () 
   await controller.dispose()
 })
 
+it('copies the clean address directly before any credential has loaded', async () => {
+  const address = 'http://127.0.0.1:5432/'
+  const { remote, write, controller, state } = setup(() => address)
+  const copying = controller.copy()
+  expect(write).toHaveBeenCalledExactlyOnceWith(address)
+  expect(remote.loginUrl).not.toHaveBeenCalled()
+  await copying
+  expect(state()).toMatchObject({ url: null, copied: false, notice: 'linkCopied' })
+  await controller.dispose()
+})
+
+it.each(['rejection', 'refusal'] as const)('copies the clean address after credential-read %s', async (outcome) => {
+  const address = 'https://host.example/app/'
+  const { remote, write, controller, state } = setup(() => address)
+  if (outcome === 'rejection') remote.loginUrl.mockRejectedValueOnce(new Error('connection unavailable'))
+  else remote.loginUrl.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'unavailable', {}) })
+  await controller.load()
+  expect(state()).toMatchObject({ phase: 'error', url: null, copied: false })
+  const copying = controller.copy()
+  expect(write).toHaveBeenCalledExactlyOnceWith(address)
+  await copying
+  expect(state()).toMatchObject({ copied: false, notice: 'linkCopied' })
+  expect(remote.loginUrl).toHaveBeenCalledOnce()
+  await controller.dispose()
+})
+
+it('uses the current clean address instead of a cached credential once deployment disallows it', async () => {
+  let address = 'https://host.example/app/'
+  let available = true
+  const { remote, write, controller, state } = setup(() => address, () => available)
+  await controller.load()
+  available = false
+  address = 'http://127.0.0.1:5432/'
+  await controller.copy()
+  expect(write).toHaveBeenCalledExactlyOnceWith(address)
+  expect(state()).toMatchObject({ url, copied: false, notice: 'linkCopied' })
+  expect(remote.loginUrl).toHaveBeenCalledOnce()
+  await controller.dispose()
+  await controller.copy()
+  expect(write).toHaveBeenCalledOnce()
+})
+
+it.each(['response', 'rejection', 'refusal'] as const)('keeps a plain-address copy busy when a credential-read %s arrives', async (outcome) => {
+  const address = 'https://host.example/app/'
+  const { remote, write, controller, state } = setup(() => address)
+  const reading = Promise.withResolvers<Awaited<ReturnType<RemoteConnectionApi['loginUrl']>>>()
+  const writing = Promise.withResolvers<boolean>()
+  onTestFinished(async () => {
+    reading.resolve({ ok: true, value: url })
+    writing.resolve(true)
+    await controller.dispose()
+  })
+  remote.loginUrl.mockReturnValueOnce(reading.promise)
+  write.mockReturnValueOnce(writing.promise)
+  const loading = controller.load()
+  const copying = controller.copy()
+  expect(write).toHaveBeenCalledExactlyOnceWith(address)
+  expect(controller.copy()).toBe(copying)
+  if (outcome === 'response') reading.resolve({ ok: true, value: url })
+  else if (outcome === 'rejection') reading.reject(new Error('connection unavailable'))
+  else reading.resolve({ ok: false, error: new RemoteError('gateway/internal', 'unavailable', {}) })
+  await loading
+  expect(state()).toMatchObject({ phase: 'copying', copied: false, notice: null })
+  expect(controller.copy()).toBe(copying)
+  expect(write).toHaveBeenCalledOnce()
+  writing.resolve(true)
+  await copying
+  expect(state()).toMatchObject({ phase: 'ready', copied: false, notice: 'linkCopied' })
+})
+
+it('does not attribute a plain-address copy to a credential that loads afterward', async () => {
+  const address = 'https://host.example/app/'
+  const { remote, write, controller, state } = setup(() => address)
+  const reading = Promise.withResolvers<Awaited<ReturnType<RemoteConnectionApi['loginUrl']>>>()
+  onTestFinished(async () => {
+    reading.resolve({ ok: true, value: url })
+    await controller.dispose()
+  })
+  remote.loginUrl.mockReturnValueOnce(reading.promise)
+  const loading = controller.load()
+  await controller.copy()
+  expect(write).toHaveBeenCalledExactlyOnceWith(address)
+  expect(state()).toMatchObject({ url: null, copied: false, notice: 'linkCopied' })
+  reading.resolve({ ok: true, value: url })
+  await loading
+  expect(state()).toMatchObject({ phase: 'ready', url, copied: false, notice: 'linkCopied' })
+})
+
+it('shares a copy reentered while its busy state is published', async () => {
+  const { write, controller, state } = setup()
+  await controller.load()
+  const writing = Promise.withResolvers<boolean>()
+  write.mockReturnValueOnce(writing.promise)
+  let duplicate: Promise<void> | undefined
+  const unsubscribe = controller.store.subscribe(() => {
+    if (state().phase === 'copying') duplicate = controller.copy()
+  })
+  onTestFinished(async () => {
+    unsubscribe()
+    writing.resolve(true)
+    await controller.dispose()
+  })
+  const copying = controller.copy()
+  expect(duplicate).toBe(copying)
+  expect(write).toHaveBeenCalledExactlyOnceWith(url)
+  writing.resolve(true)
+  await copying
+  expect(state()).toMatchObject({ copied: true, notice: 'linkCopied' })
+})
+
 it('prevents overlapping clipboard writes and ignores completion after disposal', async () => {
   const { write, controller, state } = setup()
   await controller.load()
   let finish!: (copied: boolean) => void
   write.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+  const copying = controller.copy()
+  expect(controller.copy()).toBe(copying)
   controller.inject().copyLink()
-  await controller.copy()
   const reloading = controller.load()
   expect(write).toHaveBeenCalledOnce()
   expect(state()).toMatchObject({ phase: 'copying', copied: false })
@@ -80,7 +191,7 @@ it('prevents overlapping clipboard writes and ignores completion after disposal'
   await Promise.resolve()
   expect(disposed).toBe(false)
   finish(true)
-  await Promise.all([reloading, disposal])
+  await Promise.all([copying, reloading, disposal])
   expect(disposed).toBe(true)
   expect(state()).toMatchObject({ url: null, copied: false, notice: null })
   await controller.load()

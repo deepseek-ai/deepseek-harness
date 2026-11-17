@@ -23,7 +23,7 @@ async function remoteSettings(page: Page): Promise<Locator> {
   const section = page.getByRole('region', { name: '远程连接', exact: true })
   await section.waitFor()
   const link = section.getByRole('region', { name: '访问地址', exact: true })
-  await expect.poll(() => link.getByRole('button', { name: /^(复制链接|重试)$/ }).isEnabled()).toBe(true)
+  await expect.poll(() => link.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
   return section
 }
 
@@ -43,7 +43,8 @@ async function createCode(page: Page, section: Locator): Promise<string> {
   return url
 }
 
-async function snapshot(page: Page, fixture: RemoteConnectionFixture, name: string): Promise<void> {
+async function snapshot(page: Page, fixture: RemoteConnectionFixture, name: string, addressUrl = fixture.authenticatedUrl): Promise<void> {
+  await expect.poll(() => page.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()).toBe(addressUrl)
   const aria = await captureStableAria(page, 'section[aria-label="远程连接"]', fixture.root, {
     replacements: [[fixture.authenticatedUrl, '{{access-address}}?token={{login-token}}'], [fixture.url, '{{access-address}}']],
   })
@@ -167,7 +168,9 @@ describe('web e2e: one-use QR browser login', () => {
       [{ width: 1200, height: 1000 }, 'light', 'desktop'],
       [MOBILE, 'dark', 'mobile-dark'],
     ] as const) {
-      const context = await localBrowser.newContext({ locale: ZH_BROWSER_LOCALE, viewport, colorScheme })
+      const context = await localBrowser.newContext({
+        locale: ZH_BROWSER_LOCALE, viewport, colorScheme, permissions: ['clipboard-read', 'clipboard-write'],
+      })
       try {
         const page = await context.newPage()
         const console = watchConsole(page)
@@ -185,7 +188,12 @@ describe('web e2e: one-use QR browser login', () => {
         expect(await address.getByText(warning, { exact: true }).count()).toBe(0)
         expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
         expect(await section.getByRole('img').count()).toBe(0)
-        expect(await address.getByRole('button').count()).toBe(0)
+        const copy = address.getByRole('button', { name: '复制链接', exact: true })
+        expect(await address.getByRole('button').count()).toBe(1)
+        await copy.click()
+        await page.getByText('链接已复制', { exact: true }).waitFor()
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plainUrl)
+        expect(await copy.isEnabled()).toBe(true)
         expect(await section.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
         expect(await section.getByText('请勿分享登录二维码', { exact: true }).count()).toBe(0)
         expect(new URL((await address.locator('code').textContent())!).searchParams.has('token')).toBe(false)
@@ -238,7 +246,7 @@ describe('web e2e: one-use QR browser login', () => {
     }
   })
 
-  it('retries in the copy button, shows a fading tokenized link, and keeps credential warnings independent', async () => {
+  it('copies the plain address after a failed read and restores the credential link on reload', async () => {
     const desktop = await browser.newContext({
       ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE, viewport: { width: 1200, height: 1000 },
       permissions: ['clipboard-read', 'clipboard-write'], colorScheme: 'light',
@@ -248,7 +256,9 @@ describe('web e2e: one-use QR browser login', () => {
       const page = await desktop.newPage()
       const console = watchConsole(page)
       let rejectLinkRead = true
+      let reads = 0
       await page.route('**/api/remoteConnection/loginUrl', (route) => {
+        reads += 1
         if (!rejectLinkRead) return route.continue()
         const request = route.request().postDataJSON() as { rpcId: string }
         return route.fulfill({ json: {
@@ -256,8 +266,10 @@ describe('web e2e: one-use QR browser login', () => {
           result: { ok: false, error: { code: 'gateway/internal', message: 'Fixture unavailable', details: {} } },
         } })
       })
+      const rejected = page.waitForResponse(response => new URL(response.url()).pathname === '/api/remoteConnection/loginUrl')
       await page.goto(secure.authenticatedUrl)
       const section = await remoteSettings(page)
+      await rejected
       const qrSection = section.getByRole('region', { name: '二维码登录', exact: true })
       const linkSection = section.getByRole('region', { name: '访问地址', exact: true })
       expect(await qrSection.count()).toBe(1)
@@ -275,11 +287,22 @@ describe('web e2e: one-use QR browser login', () => {
       }
       expect(await qrSection.locator('code').count()).toBe(0)
       expect(await linkSection.getByRole('button').count()).toBe(1)
-      await linkSection.getByText('无法获取登录链接，请重试', { exact: true }).waitFor()
-      await snapshot(page, secure, 'link-failed')
+      expect(await linkSection.locator('code').textContent()).toBe(secure.url)
+      expect(await section.getByRole('alert').count()).toBe(0)
+      expect(await section.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
+      expect(await section.getByText('无法获取登录链接，请重试', { exact: true }).count()).toBe(0)
+      await snapshot(page, secure, 'address-token-unavailable', secure.url)
+      const readsBeforeCopy = reads
+      await linkSection.getByRole('button', { name: '复制链接', exact: true }).click()
+      await page.getByText('链接已复制', { exact: true }).waitFor()
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(secure.url)
+      expect(reads).toBe(readsBeforeCopy)
+      expect(await linkSection.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+      await snapshot(page, secure, 'address-plain-copied', secure.url)
       rejectLinkRead = false
-      await linkSection.getByRole('button', { name: '重试', exact: true }).click()
-      await expect.poll(() => linkSection.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)
+      await page.reload()
+      await remoteSettings(page)
+      await expect.poll(() => linkSection.locator('code').textContent()).toBe(secure.authenticatedUrl)
       expect(await linkSection.getByRole('button').count()).toBe(1)
       const desktopLinkField = await linkSection.locator('code').locator('..').boundingBox()
       const desktopCopy = await linkSection.getByRole('button', { name: '复制链接', exact: true }).boundingBox()
@@ -319,7 +342,7 @@ describe('web e2e: one-use QR browser login', () => {
       await page.setViewportSize(MOBILE)
       await snapshot(page, secure, 'link-mobile-light')
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(MOBILE.width)
-      const copyBox = await linkSection.getByRole('button', { name: '已复制', exact: true }).boundingBox()
+      const copyBox = await linkSection.getByRole('button', { name: '复制链接', exact: true }).boundingBox()
       expect(copyBox).not.toBeNull()
       expect(copyBox!.x).toBeGreaterThanOrEqual(0)
       expect(copyBox!.x + copyBox!.width).toBeLessThanOrEqual(MOBILE.width)
@@ -339,7 +362,7 @@ describe('web e2e: one-use QR browser login', () => {
       await linkSection.getByText('请勿公开分享登录链接', { exact: true }).waitFor()
       await snapshot(page, secure, 'both-active')
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'both-desktop-light.png') })
-      await linkSection.getByRole('button', { name: '已复制', exact: true }).click()
+      await linkSection.getByRole('button', { name: '复制链接', exact: true }).click()
       await page.getByText('链接已复制', { exact: true }).waitFor()
       await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click()
       expect(await page.getByRole('dialog', { name: '设置', exact: true }).count()).toBe(0)
@@ -347,6 +370,118 @@ describe('web e2e: one-use QR browser login', () => {
       expect(console.pageErrors).toEqual([])
     } finally {
       await Promise.all([desktop.close(), phone.close()])
+    }
+  })
+
+  it('keeps copying busy while a Token read finishes and only warns after a credential copy', async () => {
+    const context = await browser.newContext({
+      ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE,
+      viewport: { width: 1200, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'],
+    })
+    let releaseRead!: () => void
+    const gate = new Promise<void>((resolve) => { releaseRead = resolve })
+    let pendingRead: Promise<void> | undefined
+    let readStarted!: () => void
+    const started = new Promise<void>((resolve) => { readStarted = resolve })
+    try {
+      const page = await context.newPage()
+      const console = watchConsole(page)
+      await page.route('**/api/remoteConnection/loginUrl', (route) => {
+        readStarted()
+        pendingRead = gate.then(() => route.continue())
+        return pendingRead
+      })
+      await page.goto(secure.authenticatedUrl)
+      const section = await remoteSettings(page)
+      await started
+      const address = section.getByRole('region', { name: '访问地址', exact: true })
+      expect(await address.locator('code').textContent()).toBe(secure.url)
+      await page.evaluate(() => {
+        const write = navigator.clipboard.writeText.bind(navigator.clipboard)
+        Object.defineProperty(navigator.clipboard, 'writeText', {
+          configurable: true,
+          value: async (text: string) => {
+            Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: write })
+            const released = new Promise<void>((resolve) => {
+              document.addEventListener('fixture-release-clipboard', () => { resolve() }, { once: true })
+            })
+            await write(text)
+            await released
+          },
+        })
+      })
+      const copy = address.getByRole('button', { name: '复制链接', exact: true })
+      await copy.click()
+      await expect.poll(() => copy.isEnabled()).toBe(false)
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(secure.url)
+      releaseRead()
+      await expect.poll(() => address.locator('code').textContent()).toBe(secure.authenticatedUrl)
+      expect(await copy.isEnabled()).toBe(false)
+      expect(await address.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+      await snapshot(page, secure, 'address-copying-after-token-load')
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) {
+        await mkdir(screenshots, { recursive: true })
+        await page.screenshot({ path: join(screenshots, 'address-copying-after-token-load.png') })
+      }
+      await page.evaluate(() => document.dispatchEvent(new Event('fixture-release-clipboard')))
+      await page.getByText('链接已复制', { exact: true }).waitFor()
+      expect(await copy.isEnabled()).toBe(true)
+      expect(await address.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(secure.url)
+      await snapshot(page, secure, 'address-plain-copied-after-token-load')
+      if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'address-plain-copied-after-token-load.png') })
+      await copy.click()
+      await address.getByText('请勿公开分享登录链接', { exact: true }).waitFor()
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(secure.authenticatedUrl)
+      expect(await copy.isEnabled()).toBe(true)
+      expect(console.pageErrors).toEqual([])
+    } finally {
+      releaseRead()
+      try {
+        await pendingRead
+      } finally {
+        await context.close()
+      }
+    }
+  })
+
+  it('keeps the address and copy label after both clipboard methods reject the write', async () => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, locale: ZH_BROWSER_LOCALE })
+    try {
+      const page = await context.newPage()
+      const console = watchConsole(page)
+      await page.goto(secure.authenticatedUrl)
+      const section = await remoteSettings(page)
+      const address = section.getByRole('region', { name: '访问地址', exact: true })
+      await expect.poll(() => address.locator('code').textContent()).toBe(secure.authenticatedUrl)
+      await page.evaluate(() => {
+        Object.defineProperty(navigator.clipboard, 'writeText', {
+          configurable: true, value: () => Promise.reject(new DOMException('Fixture clipboard denied', 'NotAllowedError')),
+        })
+        Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false })
+      })
+      const copy = address.getByRole('button', { name: '复制链接', exact: true })
+      const originalButton = await copy.elementHandle()
+      expect(originalButton).not.toBeNull()
+      await copy.click()
+      await page.getByText('无法复制登录链接，请检查剪贴板权限后重试', { exact: true }).waitFor()
+      expect(await copy.isEnabled()).toBe(true)
+      expect(await copy.evaluate((element, original) => element === original, originalButton)).toBe(true)
+      await copy.focus()
+      expect(await copy.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(await address.locator('code').textContent()).toBe(secure.authenticatedUrl)
+      expect(await address.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+      expect(await section.getByRole('alert').count()).toBe(0)
+      await snapshot(page, secure, 'address-clipboard-denied')
+      const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
+      if (screenshots !== undefined) {
+        await mkdir(screenshots, { recursive: true })
+        await page.screenshot({ path: join(screenshots, 'address-clipboard-denied.png') })
+      }
+      expect(console.pageErrors).toEqual([])
+    } finally {
+      await context.close()
     }
   })
 
@@ -364,13 +499,15 @@ describe('web e2e: one-use QR browser login', () => {
       await createCode(page, section)
       const qr = section.getByRole('region', { name: '二维码登录', exact: true })
       const link = section.getByRole('region', { name: '访问地址', exact: true })
+      await expect.poll(() => link.locator('code').textContent()).toBe(fixture.authenticatedUrl)
       const copy = link.getByRole('button', { name: '复制链接', exact: true })
+      await copy.scrollIntoViewIfNeeded()
       const beforeSection = await section.boundingBox()
       const beforeQr = await qr.boundingBox()
+      const beforeLink = await link.boundingBox()
       const beforeField = await link.locator('code').locator('..').boundingBox()
       const beforeCopy = await copy.boundingBox()
       const scrollport = page.getByRole('dialog', { name: '设置', exact: true }).locator('[data-slot="settings.section"]').locator('..')
-      const beforeLink = await link.boundingBox()
       const beforeGutter = await scrollport.evaluate(element => element.getBoundingClientRect().width - element.clientWidth)
       const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
       if (screenshots !== undefined) {
@@ -383,10 +520,10 @@ describe('web e2e: one-use QR browser login', () => {
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'copy-short-panel-after.png') })
       expect(beforeSection).not.toBeNull()
       expect(beforeQr).not.toBeNull()
+      expect(beforeLink).not.toBeNull()
       expect(beforeField).not.toBeNull()
       expect(beforeCopy).not.toBeNull()
       const gutterChange = await scrollport.evaluate(element => element.getBoundingClientRect().width - element.clientWidth) - beforeGutter
-      expect(beforeLink).not.toBeNull()
       expect((await section.boundingBox())!.width).toBe(beforeSection!.width - gutterChange)
       const afterQr = await qr.boundingBox()
       const afterLink = await link.boundingBox()
@@ -397,7 +534,7 @@ describe('web e2e: one-use QR browser login', () => {
         ...beforeQr!, y: beforeQr!.y + afterLink!.height - beforeLink!.height, width: beforeQr!.width - gutterChange,
       })
       expect(await link.locator('code').locator('..').boundingBox()).toEqual({ ...beforeField!, width: beforeField!.width - gutterChange })
-      expect(await link.getByRole('button', { name: '已复制', exact: true }).boundingBox()).toEqual({ ...beforeCopy!, x: beforeCopy!.x - gutterChange })
+      expect(await link.getByRole('button', { name: '复制链接', exact: true }).boundingBox()).toEqual({ ...beforeCopy!, x: beforeCopy!.x - gutterChange })
       expect(await qr.getByRole('img').count()).toBe(1)
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1200)
     } finally {
@@ -520,7 +657,7 @@ describe('web e2e: one-use QR browser login', () => {
       if (screenshots !== undefined) await returning.screenshot({ path: join(screenshots, 'qr-mobile-dark.png') })
       await mobileSection.getByRole('button', { name: '取消', exact: true }).click()
       await mobileSection.getByRole('button', { name: '取消', exact: true }).waitFor({ state: 'detached' })
-      expect(await mobileSection.getByRole('status').count()).toBe(0)
+      expect(await mobileSection.getByRole('region', { name: '二维码登录', exact: true }).getByRole('status').count()).toBe(0)
       expect(await mobileSection.getByRole('img').count()).toBe(0)
 
       const reusedPage = await stranger.newPage()
@@ -763,7 +900,7 @@ describe('web e2e: one-use QR browser login', () => {
       const qrUrl = await createCode(page, section)
       await section.getByRole('button', { name: '取消', exact: true }).click()
       await section.getByRole('button', { name: '取消', exact: true }).waitFor({ state: 'detached' })
-      expect(await section.getByRole('status').count()).toBe(0)
+      expect(await section.getByRole('region', { name: '二维码登录', exact: true }).getByRole('status').count()).toBe(0)
       expect(await section.getByRole('img').count()).toBe(0)
       await snapshot(page, secure, 'cancelled')
       const other = await phone.newPage()
@@ -809,6 +946,7 @@ describe('web e2e: one-use QR browser login', () => {
         .getByRole('button', { name: '远程连接', exact: true })
       const custom = page.getByRole('region', { name: '自定义远程连接', exact: true })
       const linkCard = section.getByRole('region', { name: '访问地址', exact: true })
+      await expect.poll(() => linkCard.locator('code').textContent()).toBe(scaffold.authenticatedUrl)
       expect(await nav.count()).toBe(1)
       expect(await svg.innerHTML()).toBe(initialSvg)
       expect(await section.getByRole('button', { name: '复制链接', exact: true }).isEnabled()).toBe(true)

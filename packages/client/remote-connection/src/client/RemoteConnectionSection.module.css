@@ -153,19 +153,6 @@
   white-space: nowrap;
 }
 
-.copyLabel {
-  display: grid;
-  justify-items: center;
-}
-
-.copyLabel > span {
-  grid-area: 1 / 1;
-}
-
-.copyLabelSizer {
-  visibility: hidden;
-}
-
 .qrDetails {
   display: flex;
   align-items: baseline;

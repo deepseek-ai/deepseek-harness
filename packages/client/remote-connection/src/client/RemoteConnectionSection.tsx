@@ -85,14 +85,13 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
   </section>
 }
 
-function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, reloadLink, reload }: Pick<RemoteConnectionSectionProps,
-  't' | 'useRemoteConnection' | 'useLoginLink' | 'copyLink' | 'reloadLink' | 'reload'>) {
+function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, reload }: Pick<RemoteConnectionSectionProps,
+  't' | 'useRemoteConnection' | 'useLoginLink' | 'copyLink' | 'reload'>) {
   const deployment = useRemoteConnection(state => state.deployment)
   const error = useRemoteConnection(state => state.error)
   const link = useLoginLink(state => state)
   const available = deployment?.availability === 'available'
   const http = deployment?.url.startsWith('http:') === true
-  const retryLink = link.phase === 'error'
   return <section className={css.card} aria-label={t('addressTitle')}>
     <header className={css.header}>
       <h3 className={css.methodTitle}>{t('addressTitle')}</h3>
@@ -105,17 +104,11 @@ function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, rel
       <div className={css.linkPreview}>
         <code className={css.linkUrl}>{(available ? link.url : null) ?? deployment.url}</code>
       </div>
-      {available && <Button variant="outline" size="sm" disabled={link.phase === 'loading' || link.phase === 'copying'}
-        onClick={retryLink ? reloadLink : copyLink}>
-        <span className={css.copyLabel}>
-          <span className={css.copyLabelSizer} aria-hidden="true">{t('copyLink')}</span>
-          <span className={css.copyLabelSizer} aria-hidden="true">{t('copying')}</span>
-          <span>{t(retryLink ? 'retry' : link.phase === 'copying' ? 'copying' : link.copied ? 'copied' : 'copyLink')}</span>
-        </span>
-      </Button>}
+      <Button variant="outline" size="sm" disabled={link.phase === 'copying'} onClick={copyLink}>
+        {t('copyLink')}
+      </Button>
     </div>}
-    {available && retryLink && <p className={css.error} role="alert">{t('linkFailed')}</p>}
-    {available && link.copied && <CredentialWarning t={t} http={http} method="link" />}
+    {available && link.url !== null && link.copied && <CredentialWarning t={t} http={http} method="link" />}
   </section>
 }
 

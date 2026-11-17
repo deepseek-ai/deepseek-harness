@@ -38,7 +38,9 @@ export async function apply(ctx: Context): Promise<void> {
   const t = ctx.locale.bind('remoteConnection')
   ctx.inject(['remote.remoteConnection'], (scope) => {
     const controller = new RemoteConnectionController(scope.remote.remoteConnection)
-    const link = new LoginLinkController(scope.remote.remoteConnection, writeClipboard)
+    const link = new LoginLinkController(scope.remote.remoteConnection, writeClipboard,
+      () => controller.store.getSnapshot().deployment?.url ?? null,
+      () => controller.store.getSnapshot().deployment?.availability === 'available')
     const invitationFace = controller.inject()
     const linkFace = link.inject()
     const face = { ...invitationFace, ...linkFace, hooks: { ...invitationFace.hooks, ...linkFace.hooks } }
