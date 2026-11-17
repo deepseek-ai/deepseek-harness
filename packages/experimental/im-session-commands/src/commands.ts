@@ -27,20 +27,20 @@ const BUILTINS: ReadonlySet<string> = new Set<string>(BUILTIN_ORDER)
 /** Durable receipt of one handled command message, keyed by `event.message.key`. */
 export interface StoredCommandReceipt {
   /** Exact reply content recorded before the first `event.reply` call so redeliveries replay identical text. */
-  reply: string | string[]
+  reply: string
   /** Hosted session ids the command acted on, when any. */
   sessions?: SessionId[]
   createdAt: number
 }
 
 interface DecidedCommand {
-  reply: string | string[]
+  reply: string
   sessions?: readonly SessionId[]
 }
 
 const storedSessionId = z.string().transform((value): SessionId => value as SessionId)
 const commandReceiptSchema = z.object({
-  reply: z.union([z.string(), z.array(z.string())]),
+  reply: z.string(),
   sessions: z.exactOptional(z.array(storedSessionId)),
   createdAt: z.number(),
 })

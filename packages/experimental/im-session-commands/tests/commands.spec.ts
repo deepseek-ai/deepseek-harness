@@ -49,11 +49,7 @@ async function running(harness: CommandsHarness, record: ImSessionRecord): Promi
 function lines(harness: CommandsHarness): string[] {
   const content = harness.replies.at(-1)?.content
   if (content === undefined) throw new Error('the plugin did not reply')
-  return typeof content === 'string'
-    ? content.split('\n')
-    : Array.isArray(content)
-      ? content.map(String)
-      : [String(content)]
+  return String(content).split('\n')
 }
 
 /** The text of the last reply when it is one string. */
