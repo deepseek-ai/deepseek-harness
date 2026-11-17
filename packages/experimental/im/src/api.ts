@@ -496,6 +496,12 @@ export interface ImSessions {
   /** Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. */
   deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>
   /**
+   * Session id of any generation of `key` (including generations retired by reset) that already admitted
+   * `deliveryId`, or `undefined` when none did. Dedupe window equals `config.retentionMs`, after which `recover()`
+   * prunes admitted delivery intents.
+   */
+  deliveredTo(key: string, deliveryId: string): SessionId | undefined
+  /**
    * Cancel + dispose the live agent and bump generation so the next `ensure()` creates a fresh session. Returns the
    * replaced `SessionId`, or `undefined` when `key` is not hosted (or already advanced past `expectedGeneration`).
    */

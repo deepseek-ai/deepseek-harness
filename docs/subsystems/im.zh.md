@@ -25,7 +25,7 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImSessionRecord` | 已存储的会话记录：包含 `ImSessionSpec`、派生的 `sessionId`、重置时递增的 `generation` 以及时间戳 |
 | `ImDelivery` | 持久化投递记录：幂等 id、投递模式、模型消息内容或待格式化的已存消息列表、触发消息、是否下载媒体以及可选头部文本 |
 | `ImDeliveryMode` | 投递模式：`steer` 加入正在运行的轮次或启动新轮次，`followup` 排队等待下一轮，`inject` 仅注入上下文而不唤醒空闲 agent |
-| `ImSessions` | 托管会话管理接口：`ensure`、`get`、`list`、`forChat`、`deliver`、`reset`、`bind`、`agent`、`of`、`stop` 与 `trigger` |
+| `ImSessions` | 托管会话管理接口：`ensure`、`get`、`list`、`forChat`、`deliver`、`deliveredTo`、`reset`、`bind`、`agent`、`of`、`stop` 与 `trigger` |
 | `ImResetOptions` | 会话重置选项：持久化回执幂等键 `operationId` 与乐观并发代次校验 `expectedGeneration` |
 | `ImSendOptions` | 消息发送选项：回执幂等键 `operationId`、被引用消息键、目标话题线程，以及用于权限校验和归属记录的 `session` |
 | `ImSendResult` | 发送结果（`confirmed`、`failed`、`uncertain` 或 `partial`），附带平台消息句柄、渲染报告、已存自身消息与错误信息 |

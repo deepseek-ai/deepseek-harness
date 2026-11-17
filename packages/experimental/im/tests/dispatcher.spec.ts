@@ -91,7 +91,7 @@ describe('default dispatcher configuration', () => {
   it('refuses a dispatcher without a composition field or with a relative cwd', () => {
     expect(() => Config({ defaultDispatch: { agentPreset: 'im' } })).toThrow()
     const config = Config({ defaultDispatch: { ...DISPATCHER, cwd: 'relative/dir' } }).defaultDispatch!
-    expect(() => new ImDispatcher(config, { ensure: vi.fn(), get: vi.fn(), of: vi.fn() })).toThrow(ImError)
+    expect(() => new ImDispatcher(config, { ensure: vi.fn(), get: vi.fn(), of: vi.fn(), deliveredTo: vi.fn() })).toThrow(ImError)
   })
 })
 

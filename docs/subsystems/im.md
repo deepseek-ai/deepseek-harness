@@ -25,7 +25,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImSessionRecord` | Stored session record: its spec plus the derived session id, generation counter, and timestamps |
 | `ImDelivery` | Durable delivery intent: idempotency id, delivery mode, content or stored messages to format, trigger message, optional media download flag, and optional header |
 | `ImDeliveryMode` | Delivery mode: `steer` joins a running turn or starts one, `followup` queues a turn, `inject` adds context without waking an idle agent |
-| `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
+| `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `deliveredTo`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
 | `ImResetOptions` | Session reset options: durable receipt `operationId` and optimistic `expectedGeneration` guard |
 | `ImSendOptions` | Outbound publication options: receipt `operationId`, quoted message key, target thread, and the session used for grant checks and attribution |
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |

@@ -279,7 +279,8 @@ export class ImSessionHost implements ImSessions {
 
   /**
    * Session id of any generation of `key` (including generations retired by reset) that already admitted
-   * `deliveryId`, or `undefined` when none did.
+   * `deliveryId`, or `undefined` when none did. Dedupe window equals `config.retentionMs`, after which `recover()`
+   * prunes admitted delivery intents.
    */
   deliveredTo(key: string, deliveryId: string): SessionId | undefined {
     const current = this.records.get(key)

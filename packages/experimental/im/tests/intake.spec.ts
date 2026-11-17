@@ -490,6 +490,7 @@ describe('ImIntake admission', () => {
     const dispatcher = new ImDispatcher(intake.config.defaultDispatch!, {
       get: () => undefined,
       of: () => undefined,
+      deliveredTo: () => undefined,
       ensure: async (spec) => {
         hosted = sessionIdOf(spec.key, 0)
         return { ...spec, sessionId: hosted, generation: 0, createdAt: 0, lastActiveAt: 0 }

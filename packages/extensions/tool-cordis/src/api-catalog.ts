@@ -7748,7 +7748,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImDispatcher',
-    declaration: 'export class ImDispatcher {\n    constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, \'ensure\' | \'get\' | \'of\'> & {\n        deliveredTo?: (key: string, deliveryId: string) => SessionId | undefined;\n    });\n    async handle(event: ImMessageEvent): Promise<ImOutcome>;\n    guidance(agent: Agent | undefined): string;\n}',
+    declaration: 'export class ImDispatcher {\n    constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, \'ensure\' | \'get\' | \'of\' | \'deliveredTo\'>);\n    async handle(event: ImMessageEvent): Promise<ImOutcome>;\n    guidance(agent: Agent | undefined): string;\n}',
   },
   {
     name: 'ImDispatcherConfig',
@@ -7876,7 +7876,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSessions',
-    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
+    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    deliveredTo(key: string, deliveryId: string): SessionId | undefined;\n    reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
   },
   {
     name: 'ImSessionSpec',
