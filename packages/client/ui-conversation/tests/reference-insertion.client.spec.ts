@@ -2,31 +2,39 @@
 /** Reference insertion from outside the composer follows Session, submission, and disposal state. */
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ComposerBlock } from '../src/client/contract/composer-blocks.ts'
 import type { ReferenceInsert } from '../src/client/contract/draft-editor.ts'
 import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
-import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
-import { sessionDraftEditable } from '../src/client/input/draft-editability.ts'
 
 const reference: ReferenceInsert = {
   source: 'reference', ref: '@"/work/a b.md"', label: 'a b.md', appearance: 'file', clipboardText: '@"/work/a b.md"',
 }
 
-function bench(sessionEditable?: ObservableSnapshot<boolean>) {
+type SessionGate = Pick<SessionSnapshot, 'removed' | 'subagent'>
+
+function bench(sources: { session?: SessionGate } = {}) {
   const pending = Promise.withResolvers<SubmitOutcome>()
   const sink = vi.fn(() => pending.promise)
+  const session = createSnapshotStore<SessionGate>(sources.session ?? { removed: false, subagent: null })
+  const block = createSnapshotStore<ComposerBlock | undefined>(undefined)
   const shell = new SessionInputShell({
     actx: {} as Context,
     defaultSink: sink,
     commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
-    ...(sessionEditable === undefined ? {} : { sessionEditable }),
+    session,
+    composerBlock: () => block,
   })
   onTestFinished(() => { shell.dispose() })
-  return { shell, sink, pending }
+  return { shell, sink, pending, session, block }
 }
+
+const child = (mode: 'one-shot' | 'continuable'): SessionGate['subagent'] => ({
+  address: { parentSessionId: 'parent' as SessionId, childSessionId: 'child' as SessionId, mode },
+})
 
 it('inserts references without attachments and locks while a submission owns the draft', async () => {
   const { shell, pending } = bench()
@@ -47,55 +55,43 @@ it('inserts references without attachments and locks while a submission owns the
   unsubscribe()
 })
 
-it('follows the Session policy and refuses after disposal', () => {
-  const editable = createSnapshotStore(false)
-  const { shell } = bench(editable)
+it('follows Session removal, subagent mode, and composer blocks', () => {
+  const { shell, session, block } = bench({ session: { removed: true, subagent: null } })
   const changed = vi.fn()
   const unsubscribe = shell.referenceInsertionAllowed.subscribe(changed)
   expect(shell.referenceInsertionAllowed.getSnapshot()).toBe(false)
   expect(shell.addReferences([reference])).toBe(false)
   expect(shell.snapshot.draft).toBe('')
-  editable.set(true)
+  session.set({ removed: false, subagent: child('one-shot') })
   expect(changed).toHaveBeenCalledOnce()
+  expect(shell.referenceInsertionAllowed.getSnapshot()).toBe(false)
+  session.set({ removed: false, subagent: child('continuable') })
   expect(shell.referenceInsertionAllowed.getSnapshot()).toBe(true)
+  block.set({ reason: 'Unavailable' })
+  expect(changed).toHaveBeenCalledTimes(3)
+  expect(shell.referenceInsertionAllowed.getSnapshot()).toBe(false)
+  block.set(undefined)
+  expect(shell.addReferences([reference])).toBe(true)
   unsubscribe()
-  editable.set(false)
-  expect(changed).toHaveBeenCalledOnce()
-  editable.set(true)
+  changed.mockClear()
+  session.set({ removed: true, subagent: null })
+  block.set({ reason: 'Unavailable' })
+  expect(changed).not.toHaveBeenCalled()
+})
+
+it('refuses after disposal and permits insertion without Session sources', () => {
+  const { shell } = bench()
   shell.dispose()
   expect(shell.referenceInsertionAllowed.getSnapshot()).toBe(false)
   expect(shell.addReferences([reference])).toBe(false)
-})
-
-it('derives Session editability from removal, subagent mode, and composer blocks', async () => {
-  const runtime = await SlotTestRuntime.create()
-  onTestFinished(() => runtime.dispose())
-  const id = 'target' as SessionId
-  await runtime.sessions.add({ id, summary: { cwd: '/workspace' } })
-  const owner = runtime.sessions.retain(id)
-  onTestFinished(() => { owner.release() })
-  const blocks = new ComposerBlockRegistry()
-  const editable = sessionDraftEditable(runtime.sessions.binding(id)!.session, () => blocks.storeFor(id))
-  const changed = vi.fn()
-  const unsubscribe = editable.subscribe(changed)
-  expect(editable.getSnapshot()).toBe(true)
-  blocks.set(id, { reason: 'Unavailable' })
-  expect(changed).toHaveBeenCalled()
-  expect(editable.getSnapshot()).toBe(false)
-  blocks.set(id, undefined)
-  await runtime.sessions.updateSessionSnapshot(id, (state) => {
-    state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'one-shot' } }
+  const bare = new SessionInputShell({
+    actx: {} as Context,
+    defaultSink: async () => ({ kind: 'success' }),
+    commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
   })
-  expect(editable.getSnapshot()).toBe(false)
-  await runtime.sessions.updateSessionSnapshot(id, (state) => {
-    state.subagent = { address: { parentSessionId: 'parent' as SessionId, childSessionId: id, mode: 'continuable' } }
-  })
-  expect(editable.getSnapshot()).toBe(true)
-  await runtime.sessions.updateSessionSnapshot(id, (state) => { state.removed = true })
-  expect(editable.getSnapshot()).toBe(false)
+  onTestFinished(() => { bare.dispose() })
+  const unsubscribe = bare.referenceInsertionAllowed.subscribe(() => {})
+  expect(bare.referenceInsertionAllowed.getSnapshot()).toBe(true)
+  expect(bare.addReferences([reference])).toBe(true)
   unsubscribe()
-  changed.mockClear()
-  blocks.set(id, { reason: 'Unavailable' })
-  await runtime.sessions.updateSessionSnapshot(id, (state) => { state.removed = false })
-  expect(changed).not.toHaveBeenCalled()
 })

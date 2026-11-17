@@ -5,7 +5,6 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { SessionInputShell } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/facade.ts'
 import { ComposerBlockRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/blocks.ts'
-import { sessionDraftEditable } from '@deepseek-ai/dsh-client-ui-conversation/src/client/input/draft-editability.ts'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -32,7 +31,8 @@ async function bench() {
   const shell = new SessionInputShell({
     actx: binding.ctx, defaultSink: sink,
     commandAttachments: { serialize: async () => [], release: () => {}, unsupportedNotice: token => token },
-    sessionEditable: sessionDraftEditable(binding.session, () => blocks.storeFor(id)),
+    session: binding.session,
+    composerBlock: () => blocks.storeFor(id),
   })
   onTestFinished(() => { shell.dispose() })
   const focus = vi.spyOn(shell, 'focus').mockImplementation(() => {})

@@ -10,6 +10,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   createSnapshotStore, type ObservableSnapshot, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
@@ -24,6 +25,7 @@ import type {
   ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, DraftInput, DraftSnapshot, ReferenceInsert, TokenSpan,
 } from '../contract/draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission, MessageSubmissionState } from '../contract/composer-submission.ts'
+import type { ComposerBlock } from '../contract/composer-blocks.ts'
 import { serializeDraftPrompt } from './prompt.ts'
 import { SubmitMachine } from './machine.ts'
 import { resolveDraftInput, snapshotDraft } from '../draft.ts'
@@ -71,8 +73,10 @@ export interface SessionInputDeps {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome>
-  /** Live Session and composer-block policy for quote and reference insertion; absent permits both. */
-  sessionEditable?: ObservableSnapshot<boolean> | undefined
+  /** Live Session whose removal and subagent mode gate quote and reference insertion; absent permits both. */
+  session?: ObservableSnapshot<Pick<SessionSnapshot, 'removed' | 'subagent'>> | undefined
+  /** The Session's composer block, resolved at each read and subscription; absent means never blocked. */
+  composerBlock?: (() => ObservableSnapshot<ComposerBlock | undefined>) | undefined
   /** Current localized quote removal copy. */
   quoteRemoveLabel?: () => string
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
@@ -140,13 +144,15 @@ export class SessionInputShell implements SessionInput {
   readonly state: SnapshotStore<InputState>
   /** @inheritdoc */
   readonly referenceInsertionAllowed: ObservableSnapshot<boolean> = {
-    getSnapshot: () => !this.disposed && !frozen(this.snapshot.phase) && this.deps.sessionEditable?.getSnapshot() !== false,
+    getSnapshot: () => !this.disposed && !frozen(this.snapshot.phase) && this.sessionAcceptsInsertion(),
     subscribe: (fn) => {
       const offState = this.state.subscribe(fn)
-      const offSession = this.deps.sessionEditable?.subscribe(fn)
+      const offSession = this.deps.session?.subscribe(fn)
+      const offBlock = this.deps.composerBlock?.().subscribe(fn)
       return () => {
         offState()
         offSession?.()
+        offBlock?.()
       }
     },
   }
@@ -254,7 +260,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the editable draft accepted the quote.
    */
   insertQuote(text: string, summary?: QuoteSummary): boolean {
-    if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.sessionEditable?.getSnapshot() === false || text.trim() === '') return false
+    if (this.disposed || this.snapshot.phase !== 'plain' || !this.sessionAcceptsInsertion() || text.trim() === '') return false
     const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' }, summary)
     if (inserted) this.focus()
     return inserted
@@ -341,6 +347,14 @@ export class SessionInputShell implements SessionInput {
 
   private draftInitializationBlocked(): boolean {
     return this.disposed || frozen(this.core.state.phase)
+  }
+
+  /** Whether the Session lets features outside the composer insert quotes or references. */
+  private sessionAcceptsInsertion(): boolean {
+    const session = this.deps.session?.getSnapshot()
+    if (session !== undefined && (session.removed
+      || (session.subagent !== null && session.subagent.address.mode !== 'continuable'))) return false
+    return this.deps.composerBlock?.().getSnapshot() === undefined
   }
 
   /** Append ordered attachment ids unless an admission transaction is locked. */
