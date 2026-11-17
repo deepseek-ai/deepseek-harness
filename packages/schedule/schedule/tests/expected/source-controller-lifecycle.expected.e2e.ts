@@ -72,7 +72,7 @@ function smokeOptions(
       }
       expect(report).toMatchObject({
         launch: { mode }, visibleAtGate: phase === 'after',
-        originalProviderUid: expect.any(Number), reservedSessionId: expect.any(String),
+        originalProviderUid: expect.any(Number) as number, reservedSessionId: expect.any(String) as string,
         providerClosed: disposition === 'dispose', creationAttempts: 1,
         task: { status: 'active', record: taskRecord },
       })
@@ -97,24 +97,24 @@ function smokeOptions(
               name: 'AggregateError',
               errors: [expect.objectContaining({
                 name: 'RemoteError', code: 'gateway/internal',
-                message: expect.stringContaining('failed to create session: Error: cannot create effect on inactive context'),
+                message: expect.stringContaining('failed to create session: Error: cannot create effect on inactive context') as string,
               })],
             },
           },
         },
         task: { status: 'active', record: taskRecord, target: { kind } },
-        pendingDelivery: kind === 'new' ? { targetSessionId: expect.any(String) } : null,
+        pendingDelivery: kind === 'new' ? { targetSessionId: expect.any(String) as string } : null,
         recovery: {
           beforeRetry: emptyDestination,
           outcome: { status: 'fulfilled' },
           persisted: true, liveAgent: true, inboxInsertions: 1, userMessages: 1,
           receipt: true, receiptCount: 1, creationAttempts: 2,
-          pendingDelivery: null, replacementProviderUid: expect.any(Number),
+          pendingDelivery: null, replacementProviderUid: expect.any(Number) as number,
           userTexts: [expect.stringContaining('source_input_json: "Inspect the replacement build."')],
           task: {
             status: 'active', record: taskRecord,
             target: { kind: kind === 'new_once' ? 'session' : 'new' },
-            lastDelivery: { targetSessionId: expect.any(String) },
+            lastDelivery: { targetSessionId: expect.any(String) as string },
           },
           fifoEdited: { title: 'Edited after failed creation' },
           fifoDeleted: { deleted: true },
