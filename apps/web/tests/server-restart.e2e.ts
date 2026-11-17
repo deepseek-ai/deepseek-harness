@@ -159,18 +159,20 @@ it.each([false, true])('keeps the same revision, Session and page across a serve
     })
     socket.on('framereceived', ({ payload }) => {
       if (typeof payload !== 'string') return
-      const message = JSON.parse(payload) as { type?: string; streamId: string; value?: { type?: string }; error?: unknown }
+      const message = JSON.parse(payload) as {
+        type?: string
+        streamId: string
+        value?: { type?: string; graph?: typeof graphs[number] }
+        error?: unknown
+      }
       if (message.type === 'error') streamErrors.push(message.error)
-      if (message.type === 'item' && message.value?.type === 'ready') readyFrames++
-      if (message.type === 'item' && endpoints.get(message.streamId) === 'session/follow'
-        && message.value?.type === 'snapshot') sessionBaselines++
+      if (message.type !== 'item') return
+      const endpoint = endpoints.get(message.streamId)
+      if (message.value?.type === 'ready') readyFrames++
+      if (endpoint === 'session/follow' && message.value?.type === 'snapshot') sessionBaselines++
+      // Every plugin-events stream generation opens with a baseline graph; later graph changes arrive as `graph`.
+      if (endpoint === 'pluginEvents/follow' && message.value?.graph !== undefined) graphs.push(message.value.graph)
     })
-  })
-  const network = await page.context().newCDPSession(page)
-  await network.send('Network.enable')
-  network.on('Network.eventSourceMessageReceived', (event) => {
-    const message = JSON.parse(event.data) as { type?: string; graph: typeof graphs[number] }
-    if (message.type === 'graph') graphs.push(message.graph)
   })
   onTestFailed(async () => {
     await saveFailureShot(page, 'web-server-restart-' + scenarioId)

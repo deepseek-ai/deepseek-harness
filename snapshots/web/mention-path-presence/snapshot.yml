@@ -1,0 +1,7 @@
+version: 1
+scenario: mention-path-presence
+profile: web
+composition: web-default
+recording: authored
+header:
+  class: web-default

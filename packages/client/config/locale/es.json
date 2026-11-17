@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Tipos de configuración sincronizada",
+    "description": "Tipos para leer la configuración en vivo del Host en los plugins del navegador."
+  }
+}

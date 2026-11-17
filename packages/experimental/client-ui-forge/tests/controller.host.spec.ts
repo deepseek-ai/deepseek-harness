@@ -60,6 +60,9 @@ function reader(opened: Bench): Follower {
 
 const ready = (state: ForgePanelState): boolean => state.checkout.state === 'ready' && state.readiness !== null
 
+/** Text of a notice a plugin queues for the next step, as the approval service does after a policy change. */
+const POLICY_NOTICE = 'The user changed the approval policy from "ask the user for approval" to "never ask the user for approval".'
+
 /** Worktree facts of a Session without a worktree service, request, or creation, whose checkout can host a worktree. */
 const UNAVAILABLE = {
   editable: false, blocker: null, namePrefix: 'dsh-', request: null, created: null, creation: null, failure: null, missing: null,
@@ -1255,6 +1258,31 @@ describe('forgePanel worktree creation while a message waits', () => {
     ])
   })
 
+  it('creates no worktree for a notice queued for the next step, and creates it when the first message arrives', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    await opened.ctx.forgePanel.requestWorktree(opened.session, null, null, signal)
+    const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+    const policy = prompt(POLICY_NOTICE)
+
+    opened.agent.inject(policy)
+    const afterNotice = maintenance.mock.calls.length
+    const untouched = worktreeState(opened).created
+    sendPrompt(opened.agent, 'first')
+    await opened.agent.whenIdle()
+
+    const created = worktreeState(opened)?.created ?? null
+    expect(afterNotice).toBe(0)
+    expect(untouched).toBeNull()
+    expect(maintenance).toHaveBeenCalledTimes(1)
+    expect(created?.repositoryRoot).toBe(repo)
+    expect(opened.agent.wakes).toBe(1)
+    expect(opened.agent.inbox.nextStep).toEqual([policy, notice(created?.path ?? '')])
+    expect(queued(opened)).toEqual(['first'])
+  })
+
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
@@ -1650,6 +1678,23 @@ describe('forgePanel removed worktrees', () => {
     expect(opened.agent.wakes).toBe(5)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(queued(opened)).toEqual(['before', 'first', 'inside', 'removed', 'outside'])
+  })
+
+  it('starts no check of a removed worktree for a notice queued for the next step', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const created = await startInWorktree(opened)
+    await rm(created.path, { recursive: true, force: true })
+    const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+
+    opened.agent.inject(prompt(POLICY_NOTICE))
+    const afterNotice = maintenance.mock.calls.length
+    sendPrompt(opened.agent, 'removed')
+    await vi.waitFor(async () => { await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal)).resolves.toBeUndefined() })
+    await opened.agent.whenIdle()
+
+    expect(afterNotice).toBe(0)
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
   it('leaves a worktree whose directory exists unchanged', async () => {

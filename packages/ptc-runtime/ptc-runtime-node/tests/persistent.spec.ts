@@ -354,25 +354,25 @@ describe.each([
     expect((await run('42', { timeoutMs: null })).value).toBe(42)
   })
 
-  it.each(['throw new Error("long diagnostic ".repeat(1000))', '"large completion".repeat(1000)'])('clears retained state after a final output overflow: %s', async (program) => {
+  it.each([['throw new Error("long diagnostic ".repeat(1000))', 'exception'], ['"large completion".repeat(1000)', 'output-limit']])('retains state after oversized terminal output: %s', async (program, kind) => {
     const { run } = await setup({ maxOutputBytes: 100 })
     await run('let retained = true;')
     const result = await run(program)
-    expect(result.error?.kind).toBe('output-limit')
-    expect(result.error?.message).toContain('retained variables were cleared')
+    expect(result.error?.kind).toBe(kind)
     const outputBytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(outputBytes).toBeLessThanOrEqual(100)
-    expect((await run('typeof retained')).value).toBe('undefined')
+    expect((await run('typeof retained')).value).toBe('boolean')
   })
 
-  it('bounds type-stripping diagnostics and clears the owner after a parse-output overflow', async () => {
+  it('bounds type-stripping diagnostics without clearing retained variables', async () => {
     const { run } = await setup({ maxOutputBytes: 32 })
     await run('let retained = true;')
     const result = await run('const =')
-    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error?.kind).toBe('exception')
+    expect(result.outputTruncated).toBe(true)
     const outputBytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(outputBytes).toBeLessThanOrEqual(32)
-    expect((await run('typeof retained')).value).toBe('undefined')
+    expect((await run('typeof retained')).value).toBe('boolean')
   })
 
   it('accepts an embedded carrier for a packaged host', async () => {
@@ -389,10 +389,10 @@ describe.each([
     }
   })
 
-  it('bounds output and clears state after an overflow', async () => {
+  it('bounds output and retains state after truncation', async () => {
     const { run } = await setup({ maxOutputBytes: 100 })
-    expect((await run('let retained = true; inspect("x".repeat(1000))')).error?.kind).toBe('output-limit')
-    expect((await run('typeof retained')).value).toBe('undefined')
+    expect(await run('let retained = true; inspect("x".repeat(1000))')).toMatchObject({ outputTruncated: true })
+    expect((await run('typeof retained')).value).toBe('boolean')
   })
 })
 

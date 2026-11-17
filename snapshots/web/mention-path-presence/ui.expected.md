@@ -1,0 +1,29 @@
+- banner:
+  - navigation "Session hierarchy": "@ceshi @随便写点文字 @LICENSE @doc"
+  - text: Standard mode
+  - button "Session panel"
+  - button "More actions"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - button "More conversation views"
+- text: "@ceshi @随便写点文字"
+- button "LICENSE"
+- text: docs mail@host {{clock}}
+- button "Copy"
+- status: Completed
+- button "Completed in {{duration}}"
+- paragraph: Reference display checked.
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "1 turns 1 steps · {{throughput}} tok/s": 1 turns 1 steps{{throughput}} tok/s
+- button "261 tok · Cache hit 0%": 261 tokCache hit 0%
+- button "0% of context used": 0%

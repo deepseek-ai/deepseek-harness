@@ -42,6 +42,7 @@ type Step = { id: string; order: number }
 /** Slot-content stand-ins: the shell renders whatever the seats contribute. */
 const SEAT_CONTENT: Record<string, string> = {
   'settings.trigger': 'Settings',
+  'settings.notice': 'Account notice',
   'settings.header': 'Settings Title',
   'settings.action': 'Open configuration file',
   'settings.close': 'Close',
@@ -165,6 +166,7 @@ function mount({
     desktopUpdate = next
     view.rerender(<SettingsRoot {...props} />)
   }
+  const setWide = (next: boolean) => { view.rerender(<SettingsRoot {...props} wide={next} />) }
   const setShortcuts = (next: readonly ShortcutCatalogEntry[]) => {
     shortcuts = next
     view.rerender(<SettingsRoot {...props} />)
@@ -178,7 +180,7 @@ function mount({
   }
   return {
     view, renderSlot, renderFactorySlot, bump, listeners, reconnect,
-    setConnectionState, setDesktopUpdate, setShortcuts, setOnboardingActive,
+    setConnectionState, setDesktopUpdate, setShortcuts, setOnboardingActive, setWide,
   }
 }
 
@@ -557,4 +559,25 @@ it('passes current Settings key labels to the launcher and removes them when unb
 
   setShortcuts([{ ...row, keys: [], aria: undefined, binding: null, modified: true }])
   expect(launcher()).not.toHaveProperty('settingsShortcut')
+})
+
+it('renders the notice row before the launcher row and opens the requested section', () => {
+  const { renderSlot } = mount({ rows: [{ id: 'general', order: 0, label: 'General' }, { id: 'account', order: 1, label: 'Account' }] })
+  const notice = screen.getByText('Account notice').parentElement!
+  expect(notice.nextElementSibling?.contains(screen.getByRole('button', { name: 'Settings' }))).toBe(true)
+  const owner = renderSlot.mock.calls.find(call => call[0] === 'settings.notice')!
+  act(() => { (owner[1] as { openSettings: (sectionId?: string) => void }).openSettings('account') })
+  expect(screen.getByTestId('section-account')).toBeTruthy()
+})
+
+it('hides the notice row in the collapsed rail and keeps the same node', () => {
+  const { setWide } = mount()
+  const notice = screen.getByText('Account notice').parentElement!
+  expect(notice.hidden).toBe(false)
+  setWide(false)
+  expect(screen.getByText('Account notice').parentElement).toBe(notice)
+  expect(notice.hidden).toBe(true)
+  setWide(true)
+  expect(screen.getByText('Account notice').parentElement).toBe(notice)
+  expect(notice.hidden).toBe(false)
 })
