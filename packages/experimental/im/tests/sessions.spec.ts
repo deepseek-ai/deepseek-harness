@@ -498,6 +498,39 @@ describe('reset', () => {
     expect(harness.host.get(record.key)?.generation).toBe(1)
     expect(harness.resets).toHaveLength(1)
   })
+
+  it('completes uncommitted reset receipts during recover() before admitting pending deliveries', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+
+    // Record an unadmitted delivery for generation 0 directly in the deliveries table (simulating a crash mid-deliver).
+    const deliveryId = `${record.sessionId}|pending-1`
+    first.pool.media.get('im_sessions')?.tables.get('deliveries')?.set(deliveryId, {
+      session: record.sessionId,
+      delivery: { id: 'pending-1', mode: 'steer', content: [{ type: 'text', text: 'stale' }] },
+      createdAt: Date.now(),
+      admitted: false,
+    })
+
+    // Write the reset receipt but fail the subsequent `save(next)` so generation 0 remains on disk.
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-crash', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool })
+    await second.host.whenRecovered()
+    expect(second.host.get(record.key)?.generation).toBe(1)
+    expect(second.host.pendingDeliveries()).toBe(0)
+    expect(second.resets).toHaveLength(1)
+    expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
+  })
 })
 
 describe('ephemeral sessions', () => {

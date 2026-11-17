@@ -359,22 +359,8 @@ export class ImSessionHost implements ImSessions {
           await this.domainOf().table('resets').put(receiptKey, receipt)
           this.resets.set(receiptKey, receipt)
         }
-        const undelivered: string[] = []
-        for (const [id, stored] of this.deliveries) {
-          if (stored.session === latest.sessionId && !stored.admitted) undelivered.push(id)
-        }
-        if (undelivered.length > 0) {
-          await this.domainOf().table('deliveries').deleteMany(undelivered)
-          for (const id of undelivered) this.deliveries.delete(id)
-        }
-        const generation = latest.generation + 1
-        const sessionId = sessionIdOf(key, generation)
-        const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
-        await this.save(next)
-        this.ids.delete(latest.sessionId)
-        this.retired.add(latest.sessionId)
-        this.triggers.delete(latest.sessionId)
-        return { replaced: latest.sessionId, advanced: { old: latest, record: next } }
+        const advanced = await this.advanceGeneration(latest, now)
+        return { replaced: latest.sessionId, advanced }
       })
     })
     // Announced after the serial operation settled: a listener may call back into this host.
@@ -419,7 +405,38 @@ export class ImSessionHost implements ImSessions {
 
   // -------------------------------------------------------------------------------------------------------------
 
+  private async advanceGeneration(
+    latest: ImSessionRecord,
+    now: number,
+  ): Promise<{ old: ImSessionRecord; record: ImSessionRecord }> {
+    const undelivered: string[] = []
+    for (const [id, stored] of this.deliveries) {
+      if (stored.session === latest.sessionId && !stored.admitted) undelivered.push(id)
+    }
+    if (undelivered.length > 0) {
+      await this.domainOf().table('deliveries').deleteMany(undelivered)
+      for (const id of undelivered) this.deliveries.delete(id)
+    }
+    const generation = latest.generation + 1
+    const sessionId = sessionIdOf(latest.key, generation)
+    const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
+    await this.save(next)
+    this.ids.delete(latest.sessionId)
+    this.retired.add(latest.sessionId)
+    this.triggers.delete(latest.sessionId)
+    return { old: latest, record: next }
+  }
+
   private async recover(): Promise<void> {
+    // Finish any committed reset receipt whose generation advance never persisted before admitting pending deliveries,
+    // so deliveries queued for the replaced generation are discarded instead of executing in the old session.
+    for (const stored of this.resets.values()) {
+      const current = this.hosted(stored.replaced)
+      if (current === undefined) continue
+      const advanced = await this.write(() => this.advanceGeneration(current, Date.now()))
+      this.ctx.emit('im/session/reset', advanced.old, 'recover')
+      this.ctx.emit('im/session/created', advanced.record)
+    }
     for (const [id, stored] of [...this.deliveries]) {
       if (stored.admitted) continue
       try {
