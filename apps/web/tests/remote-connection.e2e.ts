@@ -98,14 +98,14 @@ async function assertQrDetails(section: Locator): Promise<void> {
   expect(bannerBox!.y - detailsBox!.y - detailsBox!.height).toBeCloseTo(28)
 }
 
-async function headingTypography(heading: Locator) {
+async function headingTypography(heading: Locator, introGap: number) {
   const intro = heading.locator('..').locator(':scope > p').first()
   await intro.waitFor()
   const headingBox = await heading.boundingBox()
   const introBox = await intro.boundingBox()
   expect(headingBox).not.toBeNull()
   expect(introBox).not.toBeNull()
-  expect(introBox!.y - headingBox!.y - headingBox!.height).toBeCloseTo(12)
+  expect(introBox!.y - headingBox!.y - headingBox!.height).toBeCloseTo(introGap)
   expect(introBox!.x).toBe(headingBox!.x)
   const typography = (element: HTMLElement | SVGElement) => {
     const style = getComputedStyle(element)
@@ -420,7 +420,7 @@ describe('web e2e: one-use QR browser login', () => {
         await page.emulateMedia({ colorScheme })
         await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme)
         await dialog.getByRole('button', { name: '模型', exact: true }).click()
-        const models = await headingTypography(dialog.getByRole('heading', { name: '模型', level: 2, exact: true }))
+        const models = await headingTypography(dialog.getByRole('heading', { name: '模型', level: 2, exact: true }), 4)
         expect(models.title).toMatchObject({ fontSize: '16px', lineHeight: '24px', fontWeight: '500' })
         expect(models.intro).toMatchObject({ fontSize: '14px', lineHeight: '22px' })
         const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
@@ -430,12 +430,12 @@ describe('web e2e: one-use QR browser login', () => {
         }
         await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).click()
         await dialog.locator('[data-agent-preset-id]').first().waitFor()
-        expect(await headingTypography(dialog.getByRole('heading', { name: 'Agent 预设', level: 2, exact: true }))).toEqual(models)
+        expect(await headingTypography(dialog.getByRole('heading', { name: 'Agent 预设', level: 2, exact: true }), 4)).toEqual(models)
         if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, `typography-presets-${suffix}.png`) })
         await dialog.getByRole('button', { name: '远程连接', exact: true }).click()
         const section = dialog.getByRole('region', { name: '远程连接', exact: true })
         await section.getByText('通过以下方式，在其他设备上登录并使用 DeepSeek Harness。', { exact: true }).waitFor()
-        expect(await headingTypography(section.getByRole('heading', { name: '远程连接', level: 2, exact: true }))).toEqual(models)
+        expect(await headingTypography(section.getByRole('heading', { name: '远程连接', level: 2, exact: true }), 12)).toEqual(models)
         await assertAddressLayout(section, true)
         if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, `typography-remote-${suffix}.png`) })
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
