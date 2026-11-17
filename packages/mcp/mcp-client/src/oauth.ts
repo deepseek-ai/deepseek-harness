@@ -187,47 +187,51 @@ export class McpOAuthAuthorization {
     const path = '/mcp/oauth/callback/' + createHash('sha256').update(this.credentials.key).digest('hex')
     try {
       const redirectUri = webServer.getOrigin() + path
+      const redirect = new URL(redirectUri)
       attempt.removeCallback = this.ctx.effect(() => {
-        const remove = webServer.register({
-          kind: 'exact', path,
-          handler: (req, res) => {
-            const reply = (status: number, page: keyof typeof CALLBACK_PAGES = 'incomplete'): void => {
-              res.writeHead(status, {
-                'cache-control': 'no-store',
-                'content-type': 'text/html; charset=utf-8',
-                'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
-              }).end(CALLBACK_PAGES[page])
-            }
-            const parameters = new URL(req.url as string, 'http://127.0.0.1').searchParams
-            const receivedState = parameters.get('state') ?? ''
-            const validState = Buffer.byteLength(receivedState) === Buffer.byteLength(state)
-              && timingSafeEqual(Buffer.from(receivedState), Buffer.from(state))
-            if (req.method !== 'GET' || !validState || parameters.getAll('state').length !== 1
-              || parameters.getAll('iss').length > 1 || parameters.getAll('code').length > 1
-              || parameters.getAll('error').length > 1 || parameters.has('code') === parameters.has('error')
-              || parameters.get('code') === '' || parameters.get('error') === '') {
-              reply(400); return
-            }
-            if (signal.aborted || consumed || attempt.view.phase !== 'waiting-browser') { reply(410); return }
-            try {
-              validateAuthorizationResponseIssuer({
-                iss: parameters.get('iss') ?? undefined,
-                expectedIssuer: discovery?.authorizationServerMetadata?.issuer,
-                issParameterSupported: discovery?.authorizationServerMetadata?.authorization_response_iss_parameter_supported === true,
-              })
-            } catch { reply(400); return }
-            consumed = true
-            const authorizationCode = parameters.get('code')
-            if (authorizationCode === null) {
-              if (parameters.get('error') === 'access_denied') attempt.controller.abort()
-              else if (parameters.get('error') === OAuthErrorCode.InvalidClient) code.reject(new OAuthError(OAuthErrorCode.InvalidClient, 'MCP OAuth client registration was rejected'))
-              else code.reject(new McpLocalError('MCP OAuth authorization was rejected', 'MCP_OAUTH_FAILED'))
-              reply(200)
-              return
-            }
-            code.resolve({ code: authorizationCode, iss: parameters.get('iss') ?? undefined })
-            reply(200, 'received')
-          },
+        // The authorization server's redirect is a cross-site navigation, which route admission refuses,
+        // so the callback answers before route selection and only for the redirect URI's own authority and path.
+        const remove = this.ctx.on('webserver/request', async (req, res, next) => {
+          let received: URL
+          try { received = new URL(req.url ?? '/', `${redirect.protocol}//${req.headers.host ?? ''}`) }
+          catch { await next(); return }
+          if (received.origin !== redirect.origin || received.pathname !== redirect.pathname) { await next(); return }
+          const reply = (status: number, page: keyof typeof CALLBACK_PAGES = 'incomplete'): void => {
+            res.writeHead(status, {
+              'cache-control': 'no-store',
+              'content-type': 'text/html; charset=utf-8',
+              'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
+            }).end(CALLBACK_PAGES[page])
+          }
+          const parameters = received.searchParams
+          const receivedState = parameters.get('state') ?? ''
+          const validState = Buffer.byteLength(receivedState) === Buffer.byteLength(state)
+            && timingSafeEqual(Buffer.from(receivedState), Buffer.from(state))
+          if (req.method !== 'GET' || !validState || parameters.getAll('state').length !== 1
+            || parameters.getAll('iss').length > 1 || parameters.getAll('code').length > 1
+            || parameters.getAll('error').length > 1 || parameters.has('code') === parameters.has('error')
+            || parameters.get('code') === '' || parameters.get('error') === '') {
+            reply(400); return
+          }
+          if (signal.aborted || consumed || attempt.view.phase !== 'waiting-browser') { reply(410); return }
+          try {
+            validateAuthorizationResponseIssuer({
+              iss: parameters.get('iss') ?? undefined,
+              expectedIssuer: discovery?.authorizationServerMetadata?.issuer,
+              issParameterSupported: discovery?.authorizationServerMetadata?.authorization_response_iss_parameter_supported === true,
+            })
+          } catch { reply(400); return }
+          consumed = true
+          const authorizationCode = parameters.get('code')
+          if (authorizationCode === null) {
+            if (parameters.get('error') === 'access_denied') attempt.controller.abort()
+            else if (parameters.get('error') === OAuthErrorCode.InvalidClient) code.reject(new OAuthError(OAuthErrorCode.InvalidClient, 'MCP OAuth client registration was rejected'))
+            else code.reject(new McpLocalError('MCP OAuth authorization was rejected', 'MCP_OAUTH_FAILED'))
+            reply(200)
+            return
+          }
+          code.resolve({ code: authorizationCode, iss: parameters.get('iss') ?? undefined })
+          reply(200, 'received')
         })
         return async () => {
           attempt.controller.abort()
