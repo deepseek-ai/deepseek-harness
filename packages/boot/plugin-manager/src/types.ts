@@ -318,15 +318,6 @@ export type PluginVersionList =
     readonly attempts: readonly RegistryAttempt[]
   }
 
-/** Which bundles a bundle listing reads. */
-export interface ListBundlesOptions {
-  /**
-   * Package names to read; absent reads every bundle. A name the full listing would not include is omitted, and each
-   * named bundle's record is the one the full listing contains.
-   */
-  readonly names?: readonly string[]
-}
-
 /** Where a version listing asks. */
 export interface ListVersionsOptions {
   /** The registry asked first; absent, the one this process last installed the package from, else the configured one. */

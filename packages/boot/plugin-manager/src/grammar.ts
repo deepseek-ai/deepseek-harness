@@ -24,10 +24,10 @@ export interface PluginMentionMatch {
   readonly label: string
 }
 
-/** Text after canonical mentions were folded to `@label`, with the references in appearance order. */
-export interface ParsedPluginMentions {
-  readonly text: string
-  readonly references: readonly { readonly packageName: string; readonly label: string }[]
+/** One cited plugin package with the label its mention displays. */
+export interface PluginMentionReference {
+  readonly packageName: string
+  readonly label: string
 }
 
 /** Escape `\` and `]` in a mention label. */
@@ -90,18 +90,14 @@ export function packageNameOfPluginMention(mention: string): string | undefined 
 }
 
 /**
- * Fold canonical mentions into readable `@label` text and collect their references.
+ * Collect the plugins that canonical mentions cite; the text itself is left unchanged.
  * @param text - user text that may cite plugins.
- * @returns readable text and references in appearance order.
+ * @returns references in appearance order.
  */
-export function parsePluginMentions(text: string): ParsedPluginMentions {
-  const references: { packageName: string; label: string }[] = []
-  let rendered = ''
-  let cursor = 0
-  for (let match = nextPluginMention(text); match !== undefined; match = nextPluginMention(text, cursor)) {
-    rendered += `${text.slice(cursor, match.start)}@${match.label}`
-    cursor = match.end
+export function parsePluginMentions(text: string): PluginMentionReference[] {
+  const references: PluginMentionReference[] = []
+  for (let match = nextPluginMention(text); match !== undefined; match = nextPluginMention(text, match.end)) {
     references.push({ packageName: match.packageName, label: match.label })
   }
-  return { text: rendered + text.slice(cursor), references }
+  return references
 }

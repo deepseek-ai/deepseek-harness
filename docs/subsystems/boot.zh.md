@@ -284,13 +284,12 @@ Manage profile files and apply their declared reload lifecycle.
 
 /** Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names.
  * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
- * @param options - `names` limits the listing to those package names.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or
  *   installation manifest cannot be read; Remote callers receive `gateway/internal`.
  */
-@Remote listBundles(options?: ListBundlesOptions): Promise<BundleInfo[]>
+@Remote listBundles(): Promise<BundleInfo[]>
 
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.

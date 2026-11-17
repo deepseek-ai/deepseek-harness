@@ -164,26 +164,24 @@ describe('plugin reference expansion', () => {
     expect(listBundles).not.toHaveBeenCalled()
   })
 
-  it('folds the mention and appends one plugin-reference context message', async () => {
+  it('keeps the cited message as written and appends one plugin-reference context message', async () => {
     const original = message(`Use ${mention} and ${mention} now`)
     const expanded = await expandPluginReferenceMessages(undefined, [original], new AbortController().signal, source)
     expect(expanded).toHaveLength(2)
-    expect(expanded[0]?.id).toBe(original.id)
-    expect(expanded[0]?.content).toEqual([{ type: 'text', text: 'Use @Acme and @Acme now' }])
+    expect(expanded[0]).toBe(original)
     expect(expanded[1]?.source).toEqual({
       kind: 'plugin-reference', form: 'recall', version: 1, packages: [{ packageName: '@acme/plugin', label: 'Acme' }],
     })
   })
 
-  it('leaves non-text blocks and messages that cite nothing as they were', async () => {
+  it('reads mentions only from text blocks', async () => {
     const quiet = message('no mention here')
     const mixed = createUserMessage({
       source: { kind: 'user' },
-      content: [{ type: 'text', text: formatPluginMention({ packageName: '@acme/plugin' }) }, { type: 'reasoning', text: 'thinking' }],
+      content: [{ type: 'reasoning', text: mention }, { type: 'text', text: formatPluginMention({ packageName: '@acme/plugin' }) }],
     })
     const expanded = await expandPluginReferenceMessages(undefined, [quiet, mixed], new AbortController().signal, source)
-    expect(expanded[0]).toBe(quiet)
-    expect(expanded[1]?.content).toEqual([{ type: 'text', text: '@@acme/plugin' }, { type: 'reasoning', text: 'thinking' }])
+    expect(expanded.slice(0, 2)).toEqual([quiet, mixed])
     expect(expanded[2]?.source).toMatchObject({ packages: [{ packageName: '@acme/plugin', label: '@acme/plugin' }] })
   })
 

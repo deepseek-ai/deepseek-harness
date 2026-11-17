@@ -4495,7 +4495,7 @@ One of:
 
 SHA-256: `c3d334fed2811d7264ea32af2d527b3e48acc7e99cac9eb63f2a829d4e0b256e`
 
-Sources: [`packages/boot/plugin-manager/src/plugin-reference.ts:28`](../packages/boot/plugin-manager/src/plugin-reference.ts)
+Sources: [`packages/boot/plugin-manager/src/plugin-reference.ts:25`](../packages/boot/plugin-manager/src/plugin-reference.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -8009,7 +8009,7 @@ Sources: [`packages/session/working-directory/src/index.ts:49`](../packages/sess
 
 SHA-256: `0b9e308d7aefb1a32dc31c3d661b1af1a8c870d6f81a93f811d4900a6ae42f68`
 
-Sources: [`packages/boot/plugin-manager/src/plugin-reference.ts:32`](../packages/boot/plugin-manager/src/plugin-reference.ts)
+Sources: [`packages/boot/plugin-manager/src/plugin-reference.ts:29`](../packages/boot/plugin-manager/src/plugin-reference.ts)
 
 | Property | Presence | Type |
 |---|---|---|

@@ -4497,7 +4497,7 @@ SHA-256: `3bd652ebfa8726b3ce3937a4f1bd2759e02f86b3a08a20f9e41a8513656fbc5f`
 
 SHA-256: `c3d334fed2811d7264ea32af2d527b3e48acc7e99cac9eb63f2a829d4e0b256e`
 
-来源：[`packages/boot/plugin-manager/src/plugin-reference.ts:28`](../packages/boot/plugin-manager/src/plugin-reference.ts)
+来源：[`packages/boot/plugin-manager/src/plugin-reference.ts:25`](../packages/boot/plugin-manager/src/plugin-reference.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -8011,7 +8011,7 @@ SHA-256: `2235d957bf4b7c6cf959231d480f0ba1f3a6d72d82981493fb6c7c963021d3d5`
 
 SHA-256: `0b9e308d7aefb1a32dc31c3d661b1af1a8c870d6f81a93f811d4900a6ae42f68`
 
-来源：[`packages/boot/plugin-manager/src/plugin-reference.ts:32`](../packages/boot/plugin-manager/src/plugin-reference.ts)
+来源：[`packages/boot/plugin-manager/src/plugin-reference.ts:29`](../packages/boot/plugin-manager/src/plugin-reference.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

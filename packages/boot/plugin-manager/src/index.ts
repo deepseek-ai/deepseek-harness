@@ -42,8 +42,7 @@ import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
 import type {
-  BundleDetail, BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListBundlesOptions,
-  ListVersionsOptions, ManagementError,
+  BundleDetail, BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, ManagementError,
   PackageResult, PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginUpdateStep, PluginVersion, PluginVersionList, Registry,
   RegistryAttempt, UpdateBundleOptions,
@@ -400,7 +399,7 @@ export class PluginManager extends TypertRemoteService {
     ctx.effect(() => installPluginReference(
       ctx,
       {
-        listBundles: names => this.listBundles({ names }),
+        listBundles: names => Promise.resolve().then(() => this.listing(new Set(names))),
         readInventory: () => readPluginInventory(ctx),
         bundleDir: name => resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir),
         profile: this.profile,
@@ -431,7 +430,7 @@ export class PluginManager extends TypertRemoteService {
   }
 
   private async listedBundle(name: string): Promise<BundleInfo> {
-    const bundle = (await this.listBundles({ names: [name] })).find(candidate => candidate.name === name)
+    const bundle = (await this.listBundles()).find(candidate => candidate.name === name)
     if (bundle === undefined) throw new RemoteError('plugin-manager/unknown-bundle', `No such bundle: ${name}`, { name })
     return bundle
   }
@@ -508,21 +507,22 @@ export class PluginManager extends TypertRemoteService {
 
   /** Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names.
    * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
-   * @param options - `names` limits the listing to those package names.
    * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
    * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
    * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or
    *   installation manifest cannot be read; Remote callers receive `gateway/internal`.
    */
   @Remote
-  listBundles(options?: ListBundlesOptions): Promise<BundleInfo[]> {
+  listBundles(): Promise<BundleInfo[]> {
     // The profile reads throw synchronously; starting from a resolved promise reports that as a rejection.
-    return Promise.resolve().then(() => {
-      const only = options?.names === undefined ? undefined : new Set(options.names)
-      return this.readBundles(only).map((bundle) => {
-        const target = updateRefusal(bundle, bundle.name)
-        return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
-      })
+    return Promise.resolve().then(() => this.listing())
+  }
+
+  /** The `listBundles()` records, limited to `only` when given; each named record equals its full-listing record. */
+  private listing(only?: ReadonlySet<string>): BundleInfo[] {
+    return this.readBundles(only).map((bundle) => {
+      const target = updateRefusal(bundle, bundle.name)
+      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
     })
   }
 
@@ -703,7 +703,7 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList> {
-    const target = updateRefusal((await this.listBundles({ names: [name] })).find(bundle => bundle.name === name), name)
+    const target = updateRefusal(this.listing(new Set([name])).find(bundle => bundle.name === name), name)
     if (typeof target === 'string') return { status: 'refused', problem: 'not-updatable', reason: target, attempts: [] }
     if (target.kind === 'git') return { status: 'refused', problem: 'not-updatable', reason: `${name} is installed from Git, which lists no versions`, attempts: [] }
     const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
@@ -766,7 +766,7 @@ export class PluginManager extends TypertRemoteService {
       if (requestId !== undefined) this.ownerContext.emit('plugin-manager/update-state', { requestId, step })
     }
     announce('checking')
-    const target = updateRefusal((await this.listBundles({ names: [name] })).find(item => item.name === name), name)
+    const target = updateRefusal(this.listing(new Set([name])).find(item => item.name === name), name)
     const from = typeof target === 'string' ? '' : target.installed
     const refusedBefore = (error: ManagementError): PluginUpdateResult => ({
       from, to: version, step: 'check',
@@ -1173,7 +1173,7 @@ export class PluginManager extends TypertRemoteService {
   removeBundle(name: string): Promise<ChangeResult> {
     return this.change(async (result) => {
       const installed = await this.configure(async () => {
-        const bundle = (await this.listBundles({ names: [name] })).find(item => item.name === name)
+        const bundle = this.listing(new Set([name])).find(item => item.name === name)
         if (bundle === undefined || !bundle.removable) throw new ManagementFailure('not-removable')
         if (this.ownerContext.get('hmr') === undefined && (this.profile.startedBundles.includes(name)
           || (bundle.error === undefined && this.bundleRows(name).some(row => [...this.ctx.loader.entries()]

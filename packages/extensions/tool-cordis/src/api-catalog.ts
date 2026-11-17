@@ -2632,9 +2632,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
-        signature: '@Remote listBundles(options?: ListBundlesOptions): Promise<BundleInfo[]>',
+        signature: '@Remote listBundles(): Promise<BundleInfo[]>',
         description: 'Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names. A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.',
-        parameters: [{ name: 'options', description: '`names` limits the listing to those package names.' }],
+        parameters: [],
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
         throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or installation manifest cannot be read; Remote callers receive `gateway/internal`.'],
       },
@@ -7821,10 +7821,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'KvUnitDescriptor',
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
-  },
-  {
-    name: 'ListBundlesOptions',
-    declaration: 'export interface ListBundlesOptions {\n    readonly names?: readonly string[];\n}',
   },
   {
     name: 'ListVersionsOptions',

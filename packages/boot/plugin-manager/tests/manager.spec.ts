@@ -2562,18 +2562,52 @@ it('reports profile read, lock, and disposal failures with error codes', async (
   expect(readFileSync(manifest, 'utf8')).toBe(saved)
 })
 
-it('lists only the named bundles, each as the full listing reports it', async () => {
-  const { manager } = await fixture('startup')
+it('describes each cited bundle from its full-listing record', async () => {
+  const { ctx, profile, manager } = await fixture('startup')
   const all = await manager.listBundles()
+  // Every branch the full listing produces, cited alone: protected, catalog-only, and errored records included.
   expect(all.map(bundle => bundle.name)).toEqual(expect.arrayContaining(['core', 'extra']))
-  expect(await manager.listBundles({})).toEqual(all)
-  // Every branch the full listing produces, read alone: protected, catalog-only, and errored records included.
   expect(all.some(bundle => bundle.readOnlyReason !== undefined)).toBe(true)
   expect(all.some(bundle => bundle.availability === 'missing')).toBe(true)
-  for (const bundle of all) expect(await manager.listBundles({ names: [bundle.name] })).toEqual([bundle])
-  expect(await manager.listBundles({ names: ['extra', 'not-listed', 'core'] })).toEqual(all.filter(bundle => bundle.name === 'core' || bundle.name === 'extra'))
-  expect(await manager.listBundles({ names: ['not-listed'] })).toEqual([])
-  expect(await manager.listBundles({ names: [] })).toEqual([])
+  const id = SessionId('cited-plugin-records')
+  const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd: profile.cwd })
+  const agent = { id, ctx, session } as Agent
+  for (const bundle of [...all, { name: 'not-listed' }]) {
+    const cited = createUserMessage({
+      source: { kind: 'user' },
+      content: [{ type: 'text', text: formatPluginMention({ packageName: bundle.name, label: 'Cited' }) }],
+    })
+    const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+      messages: [cited], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
+    }, () => Promise.resolve({ kind: 'enter' as const, messages: [cited] }))
+    if (decision.kind !== 'enter') throw new Error('expected the step to enter')
+    const block = decision.messages[1]?.content[0]
+    if (block?.type !== 'text') throw new Error('expected plugin context text')
+    const payload: unknown = JSON.parse(block.text.split('<referenced-plugins>\n')[1]!.split('\n</referenced-plugins>')[0]!)
+    const expected = 'availability' in bundle
+      ? {
+        availability: bundle.availability, installed: bundle.installed, selected: bundle.enabled,
+        rowCount: bundle.rows.length, ...(bundle.version === undefined ? {} : { version: bundle.version }),
+      }
+      : { error: 'not a bundle in this profile' }
+    expect(payload).toMatchObject({ plugins: [{ packageName: bundle.name, ...expected }] })
+  }
+  // Several names in one step are read together and described in citation order.
+  const names = ['extra', 'not-listed', 'core']
+  const several = createUserMessage({
+    source: { kind: 'user' },
+    content: [{ type: 'text', text: names.map(packageName => formatPluginMention({ packageName })).join(' ') }],
+  })
+  const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+    messages: [several], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
+  }, () => Promise.resolve({ kind: 'enter' as const, messages: [several] }))
+  if (decision.kind !== 'enter') throw new Error('expected the step to enter')
+  const block = decision.messages[1]?.content[0]
+  if (block?.type !== 'text') throw new Error('expected plugin context text')
+  const payload = JSON.parse(block.text.split('<referenced-plugins>\n')[1]!.split('\n</referenced-plugins>')[0]!) as { plugins: { packageName: string; error?: string }[] }
+  expect(payload.plugins.map(plugin => [plugin.packageName, plugin.error])).toEqual([
+    ['extra', undefined], ['not-listed', 'not a bundle in this profile'], ['core', undefined],
+  ])
 })
 
 it('still enters a cited step when the profile cannot be read, describing the read failure', async () => {
@@ -2609,7 +2643,7 @@ it('expands a cited installed bundle into model context before the step', async 
     messages: [cited], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
   }, () => Promise.resolve({ kind: 'enter' as const, messages: [cited] }))
   if (decision.kind !== 'enter') throw new Error('expected the step to enter')
-  expect(decision.messages[0]?.content).toEqual([{ type: 'text', text: 'Change @Extra please' }])
+  expect(decision.messages[0]).toBe(cited)
   const context = decision.messages[1]
   expect(context?.source).toEqual({ kind: 'plugin-reference', form: 'recall', version: 1, packages: [{ packageName: 'extra', label: 'Extra' }] })
   const block = context?.content[0]

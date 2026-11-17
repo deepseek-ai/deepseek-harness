@@ -1128,7 +1128,7 @@ export class PluginManagerController {
           continue
         }
         const [bundles, plugins] = await Promise.all([
-          this.ctx.remote.pluginManager.listBundles({}),
+          this.ctx.remote.pluginManager.listBundles(),
           this.ctx.remote.pluginManager.listPlugins(),
         ])
         if (generation !== this.generation) return

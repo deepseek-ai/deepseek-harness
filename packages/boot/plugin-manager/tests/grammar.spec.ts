@@ -8,10 +8,7 @@ describe('plugin reference grammar', () => {
   it('round-trips a package and an escaped label through a canonical mention', () => {
     const mention = formatPluginMention({ packageName: '@acme/plugin', label: 'Acme [plugin] \\ one' })
     expect(mention).toBe('@[Acme [plugin\\] \\\\ one](dsh-plugin:@acme/plugin)')
-    expect(parsePluginMentions(`Use ${mention} now`)).toEqual({
-      text: 'Use @Acme [plugin] \\ one now',
-      references: [{ packageName: '@acme/plugin', label: 'Acme [plugin] \\ one' }],
-    })
+    expect(parsePluginMentions(`Use ${mention} now`)).toEqual([{ packageName: '@acme/plugin', label: 'Acme [plugin] \\ one' }])
     expect(formatPluginMention({ packageName: '@acme/plugin' })).toBe('@[@acme/plugin](dsh-plugin:@acme/plugin)')
   })
 
@@ -23,11 +20,8 @@ describe('plugin reference grammar', () => {
 
   it('leaves a mention whose URI names no bare package as ordinary text', () => {
     const text = 'A @[bad](dsh-plugin:INVALID) and @[ok](dsh-plugin:@acme/plugin) end'
-    expect(parsePluginMentions(text)).toEqual({
-      text: 'A @[bad](dsh-plugin:INVALID) and @ok end',
-      references: [{ packageName: '@acme/plugin', label: 'ok' }],
-    })
-    expect(parsePluginMentions('no mention')).toEqual({ text: 'no mention', references: [] })
+    expect(parsePluginMentions(text)).toEqual([{ packageName: '@acme/plugin', label: 'ok' }])
+    expect(parsePluginMentions('no mention')).toEqual([])
   })
 
   it('locates the nearest mention at or after an offset', () => {
