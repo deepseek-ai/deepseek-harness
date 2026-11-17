@@ -189,9 +189,10 @@ export class WsClient extends WsClientBase<QQBot> {
       }))
     }
     const close = ({ code }: WebSocket.CloseEvent) => {
+      socket.removeEventListener('close', close)
       this.stopHeartbeat()
- // 4006/4007 (bad session id / bad sequence) and the other 4xxx codes outside the resumable pair mean the
- // session is unusable: identify again on the next socket instead of resuming into the same failure.
+      // 4006/4007 (bad session id / bad sequence) and the other 4xxx codes outside the resumable pair mean the
+      // session is unusable: identify again on the next socket instead of resuming into the same failure.
       if (code >= 4000 && !RESUMABLE_CLOSE_CODES.includes(code)) this.dropSession()
     }
     const cleanup = () => {
@@ -200,7 +201,7 @@ export class WsClient extends WsClientBase<QQBot> {
     }
     signal.addEventListener('abort', cleanup, { once: true })
     socket.addEventListener('message', receive)
-    socket.addEventListener('close', close, { once: true })
+    socket.addEventListener('close', close)
   }
 
  // -------------------------------------------------------------------------------------------------------------
